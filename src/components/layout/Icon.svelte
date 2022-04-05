@@ -1,9 +1,9 @@
 <script>
-    export let size = '1.2rem'
+    export let size = 1.2
     export let style = ''
 </script>
 
-<div class="icon" style={`width:${size}; height:${size}; ${style}`} on:click>
+<div class="icon" style={`width:${size}rem; height:${size}rem; ${style}`} on:click>
     <slot />
 </div>
 

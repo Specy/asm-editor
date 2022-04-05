@@ -2,7 +2,6 @@
 	import FaExclamationCircle from 'svelte-icons/fa/FaExclamationCircle.svelte'
 	import FaCheckCircle from 'svelte-icons/fa/FaCheckCircle.svelte'
 	import FaRegCircle from 'svelte-icons/fa/FaRegCircle.svelte'
-	import { theme } from '$stores/theme';
 	type statusType = '' | 'correct' | 'wrong'
 	export let title = ''
 	export let value = ''
@@ -17,7 +16,7 @@
 
 <div class="input-wrapper">
 	<div>{title}</div>
-	<div class="input-row" class:dark={$theme === 'dark'}>
+	<div class="input-row">
 		<input
 			bind:value
 			class="form-input"
@@ -45,11 +44,8 @@
 		display: flex;
 		align-items: center;
 		border-radius: 0.4rem;
-		background-color: rgba(214, 214, 214, 0.5);
 		padding: 0.2rem;
 		margin-top: 0.2rem;
-	}
-	.dark{
 		background-color: rgba(47, 51, 53, 0.5);
 		> input {
 			color: #bfbfbf;

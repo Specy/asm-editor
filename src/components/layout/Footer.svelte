@@ -1,14 +1,6 @@
 <script lang="ts">
 	import FaGithub from 'svelte-icons/fa/FaGithub.svelte'
 	import FaDiscord from 'svelte-icons/fa/FaDiscord.svelte'
-	import { theme } from '$stores/theme'
-	import FaSun from 'svelte-icons/fa/FaSun.svelte'
-	import FaMoon from 'svelte-icons/fa/FaMoon.svelte'
-	
-	function toggleTheme() {
-		if ($theme === 'dark') return theme.set('light')
-		theme.set('dark')
-	}
 </script>
 
 <footer class="footer">
@@ -31,13 +23,6 @@
 				<a href="https://portfolio.specy.app" target="_blank"> Portfolio </a>
 			</div>
 			<div class="icon-wrapper">
-				<div class="icon" on:click={toggleTheme}>
-					{#if $theme === 'light'}
-						<FaSun />
-					{:else}
-						<FaMoon />
-					{/if}
-				</div>
 
 				<a class="icon" href="https://github.com/Specy/soundboard" target="_blank">
 					<FaGithub />

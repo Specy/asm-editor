@@ -1,6 +1,9 @@
 {
-  "name": "svelte-template",
+  "name": "m68k-client",
   "version": "0.0.1",
+  "engines": {
+    "node": "16.13.0"
+  },
   "scripts": {
     "dev": "svelte-kit dev ",
     "devHost": "svelte-kit dev --host",
@@ -14,6 +17,7 @@
   "devDependencies": {
     "@sveltejs/adapter-static": "^1.0.0-next.21",
     "@sveltejs/kit": "next",
+    "@types/color": "^3.0.3",
     "@types/cookie": "^0.4.1",
     "@typescript-eslint/eslint-plugin": "^4.31.1",
     "@typescript-eslint/parser": "^4.31.1",
@@ -31,12 +35,10 @@
   "type": "module",
   "dependencies": {
     "@fontsource/fira-mono": "^4.5.0",
-    "@lukeed/uuid": "^2.0.0",
-    "axios": "^0.24.0",
-    "axios-auth-refresh": "^3.2.1",
-    "cookie": "^0.4.1",
-    "email-validator": "^2.0.4",
-    "sass": "^1.43.2",
+    "clone-deep": "^4.0.1",
+    "color": "^4.2.1",
+    "dexie": "^3.2.1",
+    "sass": "^1.49.11",
     "svelte-icons": "^2.1.0"
   }
 }

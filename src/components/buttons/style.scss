@@ -1,5 +1,4 @@
 .btn {
-    width: 100%;
     padding: 0.5rem 1rem;
     border-radius: 0.4rem;
     color: white;
@@ -9,6 +8,7 @@
     font-size: 1rem;
     justify-content: center;
     border: none;
+    width: fit-content;
     cursor: pointer;
 }
 .btn:hover {

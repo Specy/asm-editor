@@ -2,8 +2,7 @@
 
 </script>
 
-<title> Editor </title>
 
-A
 <style lang="scss">
+
 </style>

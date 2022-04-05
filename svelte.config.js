@@ -5,8 +5,11 @@ import {resolve} from 'path'
 const config = {
 	preprocess: preprocess(),
 	kit: {
-		target: '#svelte',
 		adapter: adapter(),
+		prerender: {
+			enabled:true,
+			default:true
+		},
 		vite: {
 			resolve: {
 				alias: {

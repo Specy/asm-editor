@@ -2,9 +2,8 @@
 	import MdClose from 'svelte-icons/md/MdClose.svelte'
 	import MdMenu from 'svelte-icons/md/MdMenu.svelte'
 	import { page } from '$app/stores'
-	import { theme } from '$stores/theme'
-	let currentPath = $page.path
-	$: currentPath = $page.path
+	let currentPath = $page.url.pathname
+	$: currentPath = $page.url.pathname
 	let scrollY = 0
 	let lastPosition = 10
 	let navHidden = false
@@ -24,9 +23,9 @@
 </script>
 
 <svelte:window bind:scrollY />
-<nav class="nav" class:navDark={$theme === 'dark'}>
+<nav class="nav">
 	<div class="desktop-menu">
-		<div class="links" class:whiteText={$theme === 'dark'}>
+		<div class="links">
 			{#each paths as path}
 				<a 
 					href={path.href} 
@@ -36,7 +35,7 @@
 		</div>
 	</div>
 
-	<div class="mobile-menu" class:navHidden class:mobileMenuDark={$theme === 'dark'}>
+	<div class="mobile-menu" class:navHidden>
 		<div class="mobile-row">
 			<div style="font-size: 1.1rem; display:flex; align-items:center">
 			</div>
@@ -46,7 +45,6 @@
 						menuOpen = !menuOpen
 					}}
 					style="height:2rem"
-					class:darkIcon={$theme === 'dark'}
 				>
 					{#if menuOpen}
 						<MdClose />
@@ -57,7 +55,7 @@
 			</div>
 		</div>
 
-		<div class="links-mobile" class:menuOpen class:mobileMenuDark={$theme === 'dark'}>
+		<div class="links-mobile" class:menuOpen>
 			{#each paths as path}
 				<a 
 					on:click={() => (menuOpen = false)}
@@ -89,22 +87,19 @@
 		top: 0;
 		right: 0;
 		padding-bottom: 0;
-		background-color: #f7faff;
 		opacity: 0.98;
 		width: 100%;
 		display: none;
 		flex-direction: column;
 		transition: all 0.2s ease-out;
-
-		transform: translateY(0);
-	}
-	.mobileMenuDark {
 		background-color: rgba(29, 32, 33, 0.9);
 		color: #bfbfbf;
 		> * {
 			color: #bfbfbf;
 		}
+		transform: translateY(0);
 	}
+
 	.navHidden {
 		transform: translateY(-5rem);
 		transition: all 0.4s ease-out;
@@ -160,12 +155,10 @@
 		padding: 1.5rem 2rem;
 		display: flex;
 		z-index: 10;
-		background-color: $main;
+		background-color: $dark;
+
 		justify-content: space-between;
 		align-items: center;
-	}
-	.navDark {
-		background-color: $dark;
 	}
 	.darkIcon {
 		color: #bfbfbf;

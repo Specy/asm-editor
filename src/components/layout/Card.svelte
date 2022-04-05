@@ -1,6 +1,6 @@
 <script>
-    import { theme } from "$stores/theme";
-	export let morePadding = false
+    import { theme } from "$stores/themeStore";
+	ex$stores/themeStorePadding = false
     export let style = ''
 </script>
 
