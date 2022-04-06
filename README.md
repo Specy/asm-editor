@@ -1,8 +1,10 @@
-# Svelte template
-This is the template i use when i create a new website with svelte, it includes:
+# Asm editor 
 
-* Some standard components like buttons, inputs and form validation
-* Page transition and layout components
-* Navbar and Footer
-* Notification toast and theming stores
-* Ready to use JWT auth axios library
+A webapp made with sveltekit to write and run m68k and mips (coming soon).
+Uses monaco-editor for the code editing and a [JavaScript interpreter](https://github.com/Nazgot/M68K-JS-Interpreter)
+
+## Features 
+* Simple code completition and full syntax highlighting
+* Step through or run the program 
+* Inspect the value of each register and find what the instruction changed 
+* Create new projects and manage rhem all in the webapp 
