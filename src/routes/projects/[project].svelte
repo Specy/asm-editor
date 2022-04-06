@@ -13,6 +13,9 @@
 	onDestroy(unsubscribe)
 </script>
 
+<title>
+    {project.name}
+</title>
 <div class="project">
     {#if project}
         <ProjectEdit 

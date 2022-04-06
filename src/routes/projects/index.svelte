@@ -5,7 +5,9 @@
 	const { projects } = ProjectStore
 </script>
 
-
+<title>
+    Projects
+</title>
 <div class="project-display">
     <div class="content">
         <div class="top-row">

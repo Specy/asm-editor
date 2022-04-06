@@ -7,7 +7,7 @@ import ButtonLink from '$cmp/buttons/ButtonLink.svelte';
 
 </script>
 
-<title> Editor </title>
+<title> Welcome </title>
 
 <div class="main">
 	<div class="background" />

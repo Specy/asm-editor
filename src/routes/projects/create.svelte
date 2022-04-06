@@ -31,6 +31,9 @@ import Textarea from '$cmp/inputs/Textarea.svelte';
 	}
 </script>
 
+<title>
+	Create Project
+</title>
 <div class="create-project">
 	<div class="content">
 		<Title>Create new project</Title>
