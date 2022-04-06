@@ -19,7 +19,7 @@
                         style="margin-left: 1rem" 
                         bg="var(--secondary)" 
                         color="var(--secondary-text)"
-                        href=""https://github.com/Specy/asm-editor"
+                        href="https://github.com/Specy/asm-editor"
                   >
 					<Icon>
 						<FaGithub />
