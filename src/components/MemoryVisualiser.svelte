@@ -5,13 +5,13 @@ import RegisterDiff from './RegisterDiff.svelte'
 </script>
 
 <div class="register-grid">
-    <div>
+    <div class='register-grid-title'>
         Name
-    </div>
-    <div>
+    </div >
+    <div class='register-grid-title'>
         Value
     </div>
-    <div>
+    <div class='register-grid-title'>
         Hex
     </div>
 	{#each registers as register (register.name)}
@@ -40,10 +40,13 @@ import RegisterDiff from './RegisterDiff.svelte'
     .register-grid{
         display: grid;
         grid-template-columns:1fr 3fr 3fr;
-        grid-gap: 1rem;
+        align-items: space-between;
+        justify-items: center;
+        gap: 0.5rem;
         margin-bottom: 1rem;
-        
-
+        .register-grid-title{
+            margin-bottom: 0.7rem;
+        }
         .register-name{
             font-weight: bold;
         }
@@ -53,9 +56,7 @@ import RegisterDiff from './RegisterDiff.svelte'
         .register-hex{
             display: flex;
             gap: 0.3rem;
-            justify-content: space-between;
 
         }
-
     }
 </style>

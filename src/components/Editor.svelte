@@ -7,6 +7,7 @@
 	import { M68KLanguage, M68KCompletition } from '$lib/M68K-language';
 	let el: HTMLDivElement
 	let editor: monaco.editor.IStandaloneCodeEditor
+	export let disabled = false
 	let Monaco
 	export let project: Project
     export let highlightedLine: number
@@ -51,6 +52,7 @@
 			editor.revealLineInCenter(highlightedLine)
 		}
     }
+	$: editor?.updateOptions({readOnly: disabled})
 </script>
 <svelte:window on:resize={() => {
 		if(editor) editor.layout()

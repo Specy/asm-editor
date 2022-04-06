@@ -23,6 +23,7 @@
 	}
 	.tooltip-base {
 		position: relative;
+		width: fit-content;
 	}
 	.old-value {
 		display: none;

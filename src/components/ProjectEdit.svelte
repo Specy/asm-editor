@@ -2,29 +2,34 @@
 	import Editor from '$cmp/Editor.svelte'
 	import Button from '$cmp/buttons/Button.svelte'
 	import { M68KEmulator } from '$lib/M68KEmulator'
-	import RegisterVisualiser from '$cmp/RegisterVisualiser.svelte'
+	import MemoryVisualiser from '$cmp/MemoryVisualiser.svelte'
 	import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
 	import { createEventDispatcher } from 'svelte'
 	import type { Project } from '$lib/Project'
 	import FaSave from 'svelte-icons/fa/FaSave.svelte'
 	import Icon from './layout/Icon.svelte'
-	import { goto } from '$app/navigation';
-	import { Prompt } from './prompt';
-	export let project:Project
+	import { goto } from '$app/navigation'
+	import { Prompt } from './prompt'
+	import { toast } from './toast'
+	import ErrorVisualiser from '$cmp/ErrorVisualiser.svelte'
+	export let project: Project
 	const saveDispatch = createEventDispatcher<{ save: Project }>()
 	const emulator = M68KEmulator(project.code || '')
 
-	async function checkIfSaved(e: Event){
-		if($emulator.code !== project.code){
+	async function checkIfSaved(e: Event) {
+		if ($emulator.code !== project.code) {
 			e.preventDefault()
-			const result = await  Prompt.askText('You have unsaved changes, do you want to leave?','confirm')
-			if(result) goto('/projects')
+			const result = await Prompt.askText(
+				'You have unsaved changes, do you want to leave?',
+				'confirm'
+			)
+			if (result) goto('/projects')
 		}
 	}
 </script>
+
 <header class="project-header">
 	<div class="row">
-
 		<a href="/projects" on:click={checkIfSaved}>
 			<Icon size={2}>
 				<FaAngleLeft />
@@ -39,7 +44,7 @@
 				saveDispatch('save', project)
 			}}
 			hasIcon
-			style='padding:0; width:2.2rem; height:2.2rem'
+			style="padding:0; width:2.2rem; height:2.2rem"
 		>
 			<Icon>
 				<FaSave />
@@ -51,28 +56,42 @@
 <div class="editor-registers-wrapper">
 	<div class="editor-wrapper">
 		<div class="editor-corners">
-			<Editor bind:project highlightedLine={$emulator.line} />
+			<Editor bind:project highlightedLine={$emulator.line} disabled={$emulator.line >= 0} />
 		</div>
 		<div class="project-controls">
 			{#if $emulator.line < 0}
 				<Button
+					style="width: 4rem;"
 					on:click={() => {
-						emulator.setCode(project.code)
-						emulator.run()
+						try {
+							emulator.setCode(project.code)
+							emulator.run()
+						} catch (e) {
+							toast.error('Error executing code')
+						}
 					}}
 				>
 					Run
 				</Button>
 				<Button
+					style="width: 4rem;"
 					on:click={() => {
-						emulator.setCode(project.code)
-						emulator.step()
+						try{
+							emulator.setCode(project.code)
+							emulator.step()
+						}catch(e){
+							toast.error("Error executing code")
+						}
+
 					}}
 				>
 					Build
 				</Button>
 			{:else}
 				<Button
+					style="width: 4rem;"
+					bg="var(--accent2)"
+					color="var(--accent2-text)"
 					on:click={() => {
 						emulator.setCode(project.code)
 					}}
@@ -80,8 +99,13 @@
 					Stop
 				</Button>
 				<Button
+					style="width: 4rem;"
 					on:click={() => {
-						emulator.step()
+						try{
+							emulator.step()
+						}catch(e){
+							toast.error("Error executing code")
+						}
 					}}
 				>
 					Step
@@ -89,11 +113,14 @@
 			{/if}
 		</div>
 	</div>
-	<div class="registers-wrapper">
-		<RegisterVisualiser registers={$emulator.registers} />
+	<div class="right-side">
+		<ErrorVisualiser errors={$emulator.errors} />
+
+		<div class="registers-wrapper">
+			<MemoryVisualiser registers={$emulator.registers} />
+		</div>
 	</div>
 </div>
-
 
 <style lang="scss">
 	.project-header {
@@ -104,7 +131,7 @@
 		.row {
 			display: flex;
 			align-items: center;
-			h1{
+			h1 {
 				white-space: nowrap;
 				overflow: hidden;
 				text-overflow: ellipsis;
@@ -121,9 +148,10 @@
 			display: flex;
 			overflow: hidden;
 		}
-		.editor-wrapper{
+
+		.editor-wrapper {
 			flex-direction: column;
-			.editor-corners{
+			.editor-corners {
 				display: flex;
 				overflow: hidden;
 				flex: 1;
@@ -132,22 +160,29 @@
 			}
 		}
 		.registers-wrapper {
-			margin-left: 1rem;
 			border-radius: 0.5rem;
 			flex-direction: column;
 			align-items: center;
+			margin-top: 1rem;
 		}
 	}
-	@media screen and (max-width: 700px){
-		.editor-wrapper{
+	.right-side {
+		margin-left: 1rem;
+	}
+	@media screen and (max-width: 700px) {
+		.editor-wrapper {
 			height: 60vh;
 		}
-		.editor-registers-wrapper{
+		.editor-registers-wrapper {
 			grid-template-columns: 1fr;
 		}
 		.registers-wrapper {
-			margin-left: 0;
 			margin-top: 1rem;
+		}
+		.right-side {
+			margin: 0;
+			margin-top: 1rem;
+			margin-bottom: 1rem;
 		}
 	}
 	.project-controls {

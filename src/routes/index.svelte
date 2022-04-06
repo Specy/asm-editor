@@ -1,8 +1,6 @@
 <script lang="ts">
-	import Button from '$cmp/buttons/Button.svelte'
-import ButtonLink from '$cmp/buttons/ButtonLink.svelte';
+	import ButtonLink from '$cmp/buttons/ButtonLink.svelte';
 	import Icon from '$cmp/layout/Icon.svelte'
-	import { onMount } from 'svelte'
 	import FaGithub from 'svelte-icons/fa/FaGithub.svelte'
 
 </script>
