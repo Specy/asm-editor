@@ -1,17 +1,13 @@
 <script lang="ts">
 	import Editor from '$cmp/Editor.svelte'
-	import { ProjectStore } from '$stores/projectsStore'
 	import Button from '$cmp/buttons/Button.svelte'
-	import { toast } from '$cmp/toast'
 	import { M68KEmulator } from '$lib/M68KEmulator'
 	import RegisterVisualiser from '$cmp/RegisterVisualiser.svelte'
 	import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
 	import { createEventDispatcher } from 'svelte'
 	import type { Project } from '$lib/Project'
 	import Icon from './layout/Icon.svelte'
-	import { browser } from '$app/env';
-	export let id
-	export let project
+	export let project:Project
 	const saveDispatch = createEventDispatcher<{ save: Project }>()
 	const emulator = M68KEmulator(project.code || '')
 

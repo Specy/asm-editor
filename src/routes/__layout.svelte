@@ -5,6 +5,12 @@
 	import { page } from '$app/stores'
 	import ThemeProvider from '$cmp/ThemeProvider.svelte'
 	import PromptProvider from '$cmp/PromptProvider.svelte'
+	import { registerServiceWorker } from '$lib/register-sw'
+	import { onMount } from 'svelte';
+
+	onMount(() => {
+		registerServiceWorker()
+	})
 </script>
 
 <ThemeProvider>
