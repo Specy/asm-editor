@@ -6,6 +6,7 @@
     import FaTrashAlt from 'svelte-icons/fa/FaTrashAlt.svelte'
 import Icon from './layout/Icon.svelte';
 import { Prompt } from './prompt';
+import ButtonLink from './buttons/ButtonLink.svelte';
 	export let project: Project
 	let textContent = project.name || 'Unnamed'
     let descriptionContent = project.description || ''
@@ -61,9 +62,9 @@ import { Prompt } from './prompt';
                 </Icon>
             </button>
 
-            <Button bg='var(--accent2)' color='var(--accent2-text)'>
-                <a href={`/projects/${project.id}`}> Open </a>
-            </Button>
+            <ButtonLink bg='var(--accent2)' color='var(--accent2-text)' href={`/projects/${project.id}`}>
+                Open
+            </ButtonLink>
         </div>
 
     </div>

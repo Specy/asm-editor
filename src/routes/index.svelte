@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Button from '$cmp/buttons/Button.svelte'
+import ButtonLink from '$cmp/buttons/ButtonLink.svelte';
 	import Icon from '$cmp/layout/Icon.svelte'
 	import { onMount } from 'svelte'
 	import FaGithub from 'svelte-icons/fa/FaGithub.svelte'
@@ -13,16 +14,19 @@
 	<div class="content">
 		<div class="welcome-title">The all in one web editor for M68K</div>
 		<div style="display: flex ;">
-			<Button>
-				<a href="/projects" style="color: var(--accent-text)"> Go to the editor </a>
-			</Button>
-			<Button style="margin-left: 1rem" bg="var(--secondary)" color="var(--secondary-text)">
-				<a href="https://github.com/Specy/m68k-interpreter-client">
+			<ButtonLink href="/projects" color="var(--accent-text)">
+                        Go to the editor
+			</ButtonLink>
+			<ButtonLink 
+                        style="margin-left: 1rem" 
+                        bg="var(--secondary)" 
+                        color="var(--secondary-text)"
+                        href="https://github.com/Specy/m68k-interpreter-client"
+                  >
 					<Icon>
 						<FaGithub />
 					</Icon>
-				</a>
-			</Button>
+			</ButtonLink>
 		</div>
 	</div>
 </div>
