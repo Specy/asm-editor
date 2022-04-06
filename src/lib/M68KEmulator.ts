@@ -15,6 +15,7 @@ type EmulatorStore = {
     registers: Register[]
     terminated: boolean
     line: number,
+    code: string
 }
 
 const registerName = ['D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'A0', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7',]
@@ -22,7 +23,8 @@ export function M68KEmulator(code: string, haltLimit = 1000000) {
     const { subscribe, set, update } = writable<EmulatorStore>({
         registers: [],
         terminated: false,
-        line: -1
+        line: -1,
+        code: ''
     })
     let emulator = new Emulator()
     function setCode(code: string) {
@@ -31,6 +33,7 @@ export function M68KEmulator(code: string, haltLimit = 1000000) {
         update(data => { 
             data.terminated = false
             data.line = -1
+            data.code = code
             return data
         })
     }

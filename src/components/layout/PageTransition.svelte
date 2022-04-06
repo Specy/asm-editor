@@ -6,8 +6,15 @@ import { afterNavigate, beforeNavigate } from '$app/navigation';
 
 	let status = ''
 	let timeout = setTimeout(() =>{}, 0)
+	let timeout2 = setTimeout(() =>{}, 0)
 	function handleProgress(s){
-		if(s === 'started') status = 'progress-70'
+		if(s === 'started'){
+			status = 'progress-70'
+			clearTimeout(timeout2)
+			timeout2 = setTimeout(() => {
+				status = ''
+			},5000)
+		}
 		if(s === 'ended'){
 			status = 'progress-finish'
 			clearTimeout(timeout)

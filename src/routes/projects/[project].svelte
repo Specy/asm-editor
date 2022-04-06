@@ -14,13 +14,17 @@
 </script>
 
 <title>
-    {project.name}
+    {project?.name}
 </title>
+<svelte:window on:beforeunload={(e) => {
+        e.preventDefault()
+        e.returnValue = 'You have unsaved changes'
+    }}
+/>
 <div class="project">
     {#if project}
         <ProjectEdit 
             bind:project={project} 
-            id={ID} 
             on:save={({detail}) => {
                 ProjectStore.save(detail)
                 toast.success('Project saved')

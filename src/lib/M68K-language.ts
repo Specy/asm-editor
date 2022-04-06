@@ -1,3 +1,7 @@
+const arithmetic = ["add","addi","adda","sub","subi","suba","mulu","muls","divu","divs"]
+const logic = ["not","and","andi","or","ori","eor","eori"]
+const special = ["move","movea","exg","clr","swap","neg"]
+const withDescriptors = ["add","sub","divs","move"]
 export const M68KLanguage = {
 	defaultToken: '',
 	ignoreCase: false,
@@ -5,7 +9,7 @@ export const M68KLanguage = {
 
 	regEx: /\/(?!\/\/)(?:[^/\\]|\\.)*\/[igm]*/,
 
-	keywords: ["add","addi","adda","sub","subi","suba","mulu","muls","divu","divs","not","and","andi","or","ori","eor","eori","move","movea","exg","clr","swap","neg","ext","lsl","lsr","asl","asr","rol","ror","cmp","cmpa","cmpi","tst","jmp","bra","jsr","rts","bsr","beq","bne","bge","bgt","ble","blt"],
+	keywords: [...arithmetic,...logic,...special,"ext","lsl","lsr","asl","asr","rol","ror","cmp","cmpa","cmpi","tst","jmp","bra","jsr","rts","bsr","beq","bne","bge","bgt","ble","blt"],
 	// we include these common regular expressions
 	symbols: /[.,:]+/,
 	escapes: /\\(?:[abfnrtv\\"'$]|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
@@ -147,3 +151,57 @@ export const M68KLanguage = {
 		]
 	}
 };
+
+export function M68KCompletition(monaco){
+	return {
+		triggerCharacters: ['.',' ','\t','\n','deleteLeft'],
+		provideCompletionItems: (model, position) => {
+			const data = model.getValueInRange({startLineNumber: position.lineNumber, startColumn: 1, endLineNumber: position.lineNumber, endColumn: position.column})
+			let suggestions = []
+			if(withDescriptors.includes(data.trim().replace('.', ''))){
+				const kind = monaco.languages.CompletionItemKind.Enum
+				suggestions = suggestions.concat(...[
+					{
+						kind,
+						label: 'l', 
+						documentation: "Select all bits of the register",
+						insertText: 'l'
+					},{
+						kind,
+						label: 'w',
+						documentation: "Select first part of the register",
+						insertText: 'w'
+					},{
+						kind,
+						label: 'b',
+						documentation: "Select first 8 bits of the register",
+						insertText: 'b'
+					},
+				])
+			}
+			if(data.trim().length === 0 ){
+				suggestions = suggestions.concat(...M68KLanguage.keywords.map(keyword => {
+					return {
+						kind: monaco.languages.CompletionItemKind.Keyword,
+						label: keyword,
+						insertText: keyword,
+					}
+				}))
+			}
+
+			if(data.trim()){
+				suggestions = suggestions.concat(...M68KLanguage.keywords.filter(keyword => keyword.startsWith(data.trim()))
+				.map(keyword => {
+					return {
+						kind: monaco.languages.CompletionItemKind.Keyword,
+						label: keyword,
+						insertText: keyword,
+					}
+				}))
+			}
+			return {
+				suggestions
+			}
+		}
+	}
+}

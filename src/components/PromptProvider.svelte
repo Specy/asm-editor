@@ -59,7 +59,7 @@
 		backdrop-filter: blur(3px);
 		border-radius: 0.5rem;
 		background-color: rgba(var(--RGB-secondary), 0.8);
-		box-shadow: 1px 1px 5px rgba(69, 69, 89, 0.25);
+		box-shadow: 0 3px 10px rgb(0 0 0 / 20%);
 		z-index: 20;
         padding: 0.4rem;
 		transition: transform 0.3s ease-out;

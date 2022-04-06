@@ -6,15 +6,26 @@
 	import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
 	import { createEventDispatcher } from 'svelte'
 	import type { Project } from '$lib/Project'
+	import FaSave from 'svelte-icons/fa/FaSave.svelte'
 	import Icon from './layout/Icon.svelte'
+	import { goto } from '$app/navigation';
+	import { Prompt } from './prompt';
 	export let project:Project
 	const saveDispatch = createEventDispatcher<{ save: Project }>()
 	const emulator = M68KEmulator(project.code || '')
 
+	async function checkIfSaved(e: Event){
+		if($emulator.code !== project.code){
+			e.preventDefault()
+			const result = await  Prompt.askText('You have unsaved changes, do you want to leave?','confirm')
+			if(result) goto('/projects')
+		}
+	}
 </script>
 <header class="project-header">
 	<div class="row">
-		<a href="/projects">
+
+		<a href="/projects" on:click={checkIfSaved}>
 			<Icon size={2}>
 				<FaAngleLeft />
 			</Icon>
@@ -24,10 +35,15 @@
 	<div class="row">
 		<Button
 			on:click={() => {
+				emulator.setCode(project.code)
 				saveDispatch('save', project)
 			}}
+			hasIcon
+			style='padding:0; width:2.2rem; height:2.2rem'
 		>
-			Save
+			<Icon>
+				<FaSave />
+			</Icon>
 		</Button>
 	</div>
 </header>
@@ -112,6 +128,7 @@
 				overflow: hidden;
 				flex: 1;
 				border-radius: 0.5rem;
+				box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
 			}
 		}
 		.registers-wrapper {

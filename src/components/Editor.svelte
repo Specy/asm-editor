@@ -1,11 +1,10 @@
 <script lang="ts">
-	import { onDestroy, onMount } from 'svelte'
+	import { onMount } from 'svelte'
 	import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
-
+	import type monaco from 'monaco-editor';
 	import type { Project } from '$lib/Project'
     import { baseTheme } from '$lib/editorTheme';
-import { M68KLanguage } from '$lib/M68K-language';
-import Logger from './misc/Logger.svelte';
+	import { M68KLanguage, M68KCompletition } from '$lib/M68K-language';
 	let el: HTMLDivElement
 	let editor: monaco.editor.IStandaloneCodeEditor
 	let Monaco
@@ -23,6 +22,7 @@ import Logger from './misc/Logger.svelte';
         Monaco.editor.defineTheme('custom-theme',baseTheme)
 		Monaco.languages.register({id: 'm68k'})
 		Monaco.languages.setMonarchTokensProvider('m68k',M68KLanguage)
+		Monaco.languages.registerCompletionItemProvider('m68k',M68KCompletition(Monaco))
 		editor = Monaco.editor.create(el, {
 			value: project.code,
 			language: 'm68k',
@@ -40,16 +40,14 @@ import Logger from './misc/Logger.svelte';
 	})
     $ : {
         if(editor){
-			decorations = editor.deltaDecorations(decorations, highlightedLine >= 0 ? 
-				[{
-					range: new Monaco.Range(highlightedLine, 0, highlightedLine, 0),
-					options: {
-						className: 'selected-line',
-						inlineClassName: 'selected-line-text',
-						isWholeLine: true,
-					}
+			decorations = editor.deltaDecorations(decorations, highlightedLine >= 0 ? [{
+				range: new Monaco.Range(highlightedLine, 0, highlightedLine, 0),
+				options: {
+					className: 'selected-line',
+					inlineClassName: 'selected-line-text',
+					isWholeLine: true,
+				}
 			}] : [])
-
 			editor.revealLineInCenter(highlightedLine)
 		}
     }
@@ -63,7 +61,6 @@ import Logger from './misc/Logger.svelte';
 <style>
 	:global(.selected-line){
 		background-color: var(--accent);
-
 	}
 	:global(.selected-line-text){
 		color: var(--accent-text) !important;

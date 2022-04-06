@@ -3,6 +3,7 @@ import { writable, Writable } from "svelte/store"
 
 type PromptType = 'text' | 'confirm'
 export class PromptClass{
+    //TODO convert this into a single store
     promise: Writable<Promise<string | boolean> | null>
     private resolve: (value: string | boolean) => void | null
     question: Writable<string>
