@@ -9,12 +9,13 @@
 	import { createEventDispatcher } from 'svelte'
 	import type { Project } from '$lib/Project'
 	import Icon from './layout/Icon.svelte'
+	import { browser } from '$app/env';
 	export let id
 	export let project
 	const saveDispatch = createEventDispatcher<{ save: Project }>()
 	const emulator = M68KEmulator(project.code || '')
-</script>
 
+</script>
 <header class="project-header">
 	<div class="row">
 		<a href="/projects">
