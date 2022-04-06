@@ -6,6 +6,7 @@ export interface ProjectData{
     updatedAt: number
     name: string
     description: string
+    id: string
 }
 
 
@@ -14,17 +15,20 @@ export class Project{
     createdAt = 0
     updatedAt = 0
     name = ""
+    language = "m68k"
     description = ""
+    id = ""
     constructor(data?: Partial<ProjectData>){
         Object.assign(this, data || {})
     }
-    toObject(){
+    toObject(): ProjectData{
         return {
             code: this.code,
             createdAt: this.createdAt,
             updatedAt: this.updatedAt,
             name: this.name,
-            description: this.description
+            description: this.description,
+            id: this.id
         }
     }
     static from(data: Partial<ProjectData>){

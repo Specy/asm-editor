@@ -1,5 +1,6 @@
 <script type="ts">
-    import { ThemeProp, ThemeStore } from '$stores/themeStore' 
+    import { ThemeProp, ThemeStore } from '$stores/themeStore'
+    import { TinyColor } from '@ctrl/tinycolor';  
     import { onMount } from 'svelte';
     let theme: ThemeProp[] = []
     onMount(() => {
@@ -11,7 +12,10 @@
 
 
 <div style={`
-    ${theme.map(({ name, color }) => `--${name}: ${color};`).join('\n')}
+    ${theme.map(({ name, color }) => `
+    --${name}: ${color};
+    --${name}-text: ${new TinyColor(color).isDark() ? 'white' : '#181818'};
+    `).join('\n')}
 `}>
     <slot></slot>
 </div>

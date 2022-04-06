@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Prompt } from '$cmp/prompt'
 	import { ThemeStore } from '$stores/themeStore'
-	import Color from 'color'
+	import { TinyColor } from '@ctrl/tinycolor';
 import Button from './buttons/Button.svelte'
 	const { question, cancellable, placeholder, promise } = Prompt
 
@@ -11,13 +11,13 @@ import Button from './buttons/Button.svelte'
 	}
 	let primary = ThemeStore.get('secondary')
 
-	let color = new Color($primary.color).fade(0.2).lighten(0.2)
-	$: color = new Color($primary.color).fade(0.2).lighten(0.2)
+	let color = new TinyColor($primary.color).setAlpha(0.2).lighten(0.2)
+	$: color = new TinyColor($primary.color).setAlpha(0.2).lighten(0.2)
 </script>
 
 <slot />
-{#if true}
-	<div class="prompt-wrapper" style={`background-color:${color.hex()};`}>
+{#if $promise}
+	<div class="prompt-wrapper" style={`background-color:${color.toRgb()};`}>
 		<div class="prompt-text">
 			{$question}sfdf
 		</div>

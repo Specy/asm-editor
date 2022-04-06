@@ -1,6 +1,7 @@
+import { browser } from "$app/env"
 import { db } from "$lib/db"
-import { Project } from "$lib/Project"
-import { writable, Writable } from "svelte/store"
+import type { Project } from "$lib/Project"
+import { get, writable, Writable } from "svelte/store"
 
 
 
@@ -8,14 +9,24 @@ export class ProjectStoreClass{
     projects: Writable<Project[]>
     constructor(){
         this.projects = writable([])
+        if(browser) this.load()
     }
     async load(){
         const projects = await db.getProjects()
         this.projects.set(projects)
     }
-    createProject(){
-        const project = new Project()
-        this.projects.update(projects => [...projects, project])
+    async addProject(project: Project): Promise<Project>{
+        const result = await db.addProject(project)
+        await this.load()
+        return result 
+    }
+    async save(project: Project): Promise<Project>{
+        const result = await db.updateProject(project)
+        await this.load()
+        return result 
+    }
+    getProject(id: string){
+        return get(this.projects).find(project => project.id === id)
     }
 }
 

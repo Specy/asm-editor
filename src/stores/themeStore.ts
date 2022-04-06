@@ -1,14 +1,16 @@
+import { TinyColor } from '@ctrl/tinycolor';
 
-import Color from 'Color'
 import cloneDeep from 'clone-deep'
 import { get, Writable, writable } from 'svelte/store'
+
+
 const themeObject = {
     primary: {
-        color: '#1E2035',
+        color: '#171A21',
         name: 'primary'
     },
     secondary: {
-        color: '#28294c',
+        color: '#212630',
         name: 'secondary'
     },
     tertiary: {
@@ -20,7 +22,7 @@ const themeObject = {
         name: 'main-text'
     },
     accent: {
-        color: '#6E98F6',
+        color: '#F2A65A',
         name: 'accent'
     },
     hint: {
@@ -74,8 +76,8 @@ export class ThemeStoreClass{
     get(key: ThemeKeys): Writable<ThemeProp>{
         return get(this.theme)[key]
     }
-    getColor(key: ThemeKeys): Color{
-        return new Color(get(this.get(key)).color)
+    getColor(key: ThemeKeys): TinyColor{
+        return new TinyColor(get(this.get(key)).color)
     }
 }
 

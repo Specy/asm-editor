@@ -5,13 +5,15 @@
 	const { projects } = ProjectStore
 </script>
 
-<Button>Create project</Button>
+<a href="/projects/create">
+    Create project
+</a>
 
 {#each $projects as project}
-    <div>
-        <h1>{project.name}</h1>
+    <a href={`/projects/${project.id}`}>
+         <h1>{project.name}</h1>
         <p>{project.description}</p>
-    </div>
+    </a>
 {/each}
 
 <style lang="scss">

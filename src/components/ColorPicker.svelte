@@ -1,9 +1,10 @@
 <script>
 	export let value = ''
-    import Color from 'color'
-    let color = new Color(value)
+    import { TinyColor } from '@ctrl/tinycolor';
 
-    $: color = new Color(value)
+    let color = new TinyColor(value)
+
+    $: color = new TinyColor(value)
 </script>
 
 <input 
