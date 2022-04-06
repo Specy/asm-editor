@@ -30,8 +30,8 @@ export class Db extends Dexie{
         await this.projects.add(project.toObject())
         return project
     }
-    async removeProject(project: Project): Promise<any>{
-        //d
+    async deleteProject(project: Project): Promise<any>{
+        return this.projects.delete(project.id)
     }
     updateProject(project: Project): Promise<any>{
         return this.projects.put(project.toObject())

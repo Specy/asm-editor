@@ -23,7 +23,6 @@
 		padding: 0.5rem 1rem;
 		border-radius: 0.4rem;
 		color: var(--accent-text);
-		background-color: var(--accent);
 		text-align: center;
 		display: flex;
 		transition: all 0.2s;

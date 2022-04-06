@@ -37,47 +37,50 @@
 
 <div class="editor-registers-wrapper">
 	<div class="editor-wrapper">
-		<Editor bind:project highlightedLine={$emulator.line} />
+		<div class="editor-corners">
+			<Editor bind:project highlightedLine={$emulator.line} />
+		</div>
+		<div class="project-controls">
+			{#if $emulator.line < 0}
+				<Button
+					on:click={() => {
+						emulator.setCode(project.code)
+						emulator.run()
+					}}
+				>
+					Run
+				</Button>
+				<Button
+					on:click={() => {
+						emulator.setCode(project.code)
+						emulator.step()
+					}}
+				>
+					Build
+				</Button>
+			{:else}
+				<Button
+					on:click={() => {
+						emulator.setCode(project.code)
+					}}
+				>
+					Stop
+				</Button>
+				<Button
+					on:click={() => {
+						emulator.step()
+					}}
+				>
+					Step
+				</Button>
+			{/if}
+		</div>
 	</div>
 	<div class="registers-wrapper">
 		<RegisterVisualiser registers={$emulator.registers} />
 	</div>
 </div>
-<div class="project-controls">
-	{#if $emulator.line < 0}
-		<Button
-			on:click={() => {
-				emulator.setCode(project.code)
-				emulator.run()
-			}}
-		>
-			Run
-		</Button>
-		<Button
-			on:click={() => {
-				emulator.setCode(project.code)
-				emulator.step()
-			}}
-		>
-			Build
-		</Button>
-	{:else}
-		<Button
-			on:click={() => {
-				emulator.setCode(project.code)
-			}}
-		>
-			Stop
-		</Button>
-		<Button
-			on:click={() => {
-				emulator.step()
-			}}
-		>
-			Step
-		</Button>
-	{/if}
-</div>
+
 
 <style lang="scss">
 	.project-header {
@@ -88,23 +91,49 @@
 		.row {
 			display: flex;
 			align-items: center;
+			h1{
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+			}
 		}
 	}
 	.editor-registers-wrapper {
 		display: grid;
-		grid-template-columns: 6fr 2fr;
+		grid-template-columns: 6fr 3fr;
 		width: 100%;
 		flex: 1;
 		.editor-wrapper,
 		.registers-wrapper {
 			display: flex;
 			overflow: hidden;
-			border-radius: 0.5rem;
+		}
+		.editor-wrapper{
+			flex-direction: column;
+			.editor-corners{
+				display: flex;
+				overflow: hidden;
+				flex: 1;
+				border-radius: 0.5rem;
+			}
 		}
 		.registers-wrapper {
 			margin-left: 1rem;
+			border-radius: 0.5rem;
 			flex-direction: column;
 			align-items: center;
+		}
+	}
+	@media screen and (max-width: 700px){
+		.editor-wrapper{
+			height: 60vh;
+		}
+		.editor-registers-wrapper{
+			grid-template-columns: 1fr;
+		}
+		.registers-wrapper {
+			margin-left: 0;
+			margin-top: 1rem;
 		}
 	}
 	.project-controls {

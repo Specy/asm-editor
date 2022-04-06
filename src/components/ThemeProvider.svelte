@@ -14,7 +14,8 @@
 <div style={`
     ${theme.map(({ name, color }) => `
     --${name}: ${color};
-    --${name}-text: ${new TinyColor(color).isDark() ? 'white' : '#181818'};
+    --${name}-text: ${new TinyColor(color).isDark() ? '#dbdbdb' : '#181818'};
+    --RGB-${name}: ${new TinyColor(color).toRgbString().match(/(\s*\d+\s*),(\s*\d+\s*),(\s*\d+\s*)/)[0]};
     `).join('\n')}
 `}>
     <slot></slot>

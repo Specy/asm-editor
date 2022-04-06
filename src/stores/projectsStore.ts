@@ -21,9 +21,14 @@ export class ProjectStoreClass{
         return result 
     }
     async save(project: Project): Promise<Project>{
+        project.updatedAt = new Date().getTime()
         const result = await db.updateProject(project)
         await this.load()
         return result 
+    }
+    async delete(project:Project): Promise<void>{
+        await db.deleteProject(project)
+        await this.load()
     }
     getProject(id: string){
         return get(this.projects).find(project => project.id === id)

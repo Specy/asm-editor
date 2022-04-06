@@ -1,34 +1,47 @@
 <script lang="ts">
 	import { Prompt } from '$cmp/prompt'
-	import { ThemeStore } from '$stores/themeStore'
-	import { TinyColor } from '@ctrl/tinycolor';
-import Button from './buttons/Button.svelte'
-	const { question, cancellable, placeholder, promise } = Prompt
+	import { fade } from 'svelte/transition';
 
-	let answer = ''
-	$: {
-		if ($promise) answer = ''
-	}
-	let primary = ThemeStore.get('secondary')
 
-	let color = new TinyColor($primary.color).setAlpha(0.2).lighten(0.2)
-	$: color = new TinyColor($primary.color).setAlpha(0.2).lighten(0.2)
+	import Button from './buttons/Button.svelte'
+	import Input from './inputs/Input.svelte';
+	const { question, cancellable, placeholder, promise, type,answer } = Prompt
+
+	let value = ''
+	$: if ($promise) value = ''
+	
 </script>
 
 <slot />
 {#if $promise}
-	<div class="prompt-wrapper" style={`background-color:${color.toRgb()};`}>
+	<div class="prompt-wrapper" out:fade={{duration: 150}}>
 		<div class="prompt-text">
-			{$question}sfdf
+			{$question}
 		</div>
-		<input type="text" placeholder={$placeholder} bind:value={answer} class="prompt-input" />
+		{#if $type === 'text'}
+			<Input 
+				bind:value
+				hideStatus
+				style="color: var(--primary-text); background-color: var(--primary);"
+			/>
+		{/if}
+
         <div class="prompt-row">
-            <Button>
-                Cancel
-            </Button>
-            <Button>
-                Ok
-            </Button>
+			{#if $type === 'text'}
+				<Button bg="var(--secondary)" color="var(--secondary-text)" disabled={!$cancellable}>
+					Cancel
+				</Button>
+				<Button on:click={() => answer(value)}>
+					Ok
+				</Button>
+			{:else}
+				<Button on:click={() => answer(false)} bg='var(--secondary)' color='var(--secondary-text)'>
+					Cancel
+				</Button>
+				<Button on:click={() => answer(true)} bg='var(--red)' color='var(--red-text)'>
+					Yes
+				</Button>
+			{/if}
         </div>
 
 	</div>
@@ -42,15 +55,16 @@ import Button from './buttons/Button.svelte'
 		overflow: hidden;
 		max-height: 10rem;
 		width: 20rem;
-		color: #bfbfbf;
+		color: var(--primary-text);
 		backdrop-filter: blur(3px);
 		border-radius: 0.5rem;
+		background-color: rgba(var(--RGB-secondary), 0.8);
 		box-shadow: 1px 1px 5px rgba(69, 69, 89, 0.25);
 		z-index: 20;
         padding: 0.4rem;
 		transition: transform 0.3s ease-out;
 		flex-direction: column;
-		animation: slideIn 0.4s ease-out;
+		animation: slideIn 0.25s ease-out;
 		animation-fill-mode: forwards;
 		transform: translateX(calc(50vw - 50%));
 	}
@@ -74,7 +88,7 @@ import Button from './buttons/Button.svelte'
 	}
     .prompt-row{
         display: flex;
-        margin-top: 1rem;
+        margin-top: 0.5rem;
         justify-content: space-between;
     }
 	.close-icon {
@@ -102,7 +116,7 @@ import Button from './buttons/Button.svelte'
 		border-bottom: solid 1px var(--accent);
 	}
 	.prompt-text {
-		padding: 0.7rem;
+		padding: 0.3rem;
 		font-size: 0.9rem;
 		display: flex;
 		margin-top: auto;

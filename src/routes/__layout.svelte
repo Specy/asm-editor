@@ -1,6 +1,6 @@
 <script lang="ts">
 	import '../global.css'
-	import ErrorLogger from '$cmp/misc/ErrorLogger.svelte'
+	import ErrorLogger from '$cmp/misc/Logger.svelte'
 	import PageTransition from '$cmp/layout/PageTransition.svelte'
 	import { page } from '$app/stores'
 	import ThemeProvider from '$cmp/ThemeProvider.svelte'

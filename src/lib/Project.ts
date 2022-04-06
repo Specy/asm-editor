@@ -9,6 +9,13 @@ export interface ProjectData{
     id: string
 }
 
+const baseM68k = 
+`
+ORG    $1000
+START:
+
+END:
+`.trim()
 
 export class Project{
     code = ""
@@ -19,6 +26,7 @@ export class Project{
     description = ""
     id = ""
     constructor(data?: Partial<ProjectData>){
+        this.code = this.language === 'm68k' ? baseM68k : ''
         Object.assign(this, data || {})
     }
     toObject(): ProjectData{
@@ -31,7 +39,7 @@ export class Project{
             id: this.id
         }
     }
-    static from(data: Partial<ProjectData>){
+    static from(data: Partial<ProjectData>): Project{
         const project = new Project()
         Object.assign(project, data)
         return project

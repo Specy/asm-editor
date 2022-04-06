@@ -25,8 +25,12 @@ const themeObject = {
         color: '#F2A65A',
         name: 'accent'
     },
+    accent2: {
+        color: '#596c6a',
+        name: 'accent2',
+    },
     hint: {
-        color: '#737373',
+        color: '#939393',
         name: 'hint'
     },
     red: {

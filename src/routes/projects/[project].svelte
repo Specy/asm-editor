@@ -4,15 +4,12 @@
 	import { ProjectStore } from '$stores/projectsStore'
 	import { onDestroy } from 'svelte'
 	import { toast } from '$cmp/toast'
-	import { M68KEmulator } from '$lib/M68KEmulator'
     import ProjectEdit from '$cmp/ProjectEdit.svelte'
 	let ID = $page.params.project
 	let project: Project = ProjectStore.getProject(ID)
-	const emulator = M68KEmulator(project?.code || '')
 	let unsubscribe = ProjectStore.projects.subscribe(() => {
 		project = ProjectStore.getProject(ID)
 	})
-
 	onDestroy(unsubscribe)
 </script>
 
@@ -38,6 +35,6 @@
         padding: 1rem;
         display: flex;
         flex-direction: column;
-        height: 100vh;
+        height: 100%;
     }
 </style>

@@ -5,6 +5,7 @@
 	import type { Project } from '$lib/Project'
     import { baseTheme } from '$lib/editorTheme';
 import { M68KLanguage } from '$lib/M68K-language';
+import Logger from './misc/Logger.svelte';
 	let el: HTMLDivElement
 	let editor: monaco.editor.IStandaloneCodeEditor
 	let Monaco
@@ -45,13 +46,18 @@ import { M68KLanguage } from '$lib/M68K-language';
 					options: {
 						className: 'selected-line',
 						inlineClassName: 'selected-line-text',
-						isWholeLine: true
+						isWholeLine: true,
 					}
 			}] : [])
+
 			editor.revealLineInCenter(highlightedLine)
 		}
     }
 </script>
+<svelte:window on:resize={() => {
+		if(editor) editor.layout()
+	}}
+/>
 <div bind:this={el} class="editor" />
 
 <style>

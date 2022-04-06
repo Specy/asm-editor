@@ -1,8 +1,10 @@
 <script lang="ts">
-	import { toast } from '../toast'
+	import { toast } from '$cmp/toast'
+	import Icon from '$cmp/layout/Icon.svelte'
 	import FaTimes from 'svelte-icons/fa/FaTimes.svelte'
+
 	const { title, duration, message, visible, closeToast, color } = toast
-	let toastVisible = false
+	let toastVisible = false  
 	$: toastVisible = $visible
 </script>
 
@@ -12,9 +14,9 @@
 		<div>
 			{$title}
 		</div>
-		<div class="close-icon" on:click={closeToast}>
+		<Icon on:click={closeToast}>
 			<FaTimes />
-		</div>
+		</Icon>
 	</div>
 	<div class="toast-text">
 		{$message}
@@ -28,7 +30,6 @@
 </div>
 
 <style lang="scss">
-	@import '../../variables.scss';
 	.toast-wrapper {
 		display: flex;
 		position: fixed;
@@ -38,9 +39,9 @@
 		max-height: 10rem;
 		width: 20rem;
 		color: #bfbfbf;
-		background-color: rgba(29, 32, 33, 0.8);
+		background-color: rgba(var(--RGB-secondary), 0.8);
 		backdrop-filter: blur(3px);
-		border-radius: 0.5rem;
+		border-radius: 0.4rem;
 		box-shadow: 1px 1px 5px rgba(69, 69, 89, 0.25);
 		z-index: 20;
 		transform: translateY(-13rem);
@@ -57,34 +58,33 @@
 	.toast-progress div {
 		width: 100%;
 		height: 0.2rem;
-		background-color: $accent;
+		background-color: var(--accent);
 	}
 	.toast-progress-bar {
 		width: 0% !important;
 	}
 	.close-icon {
-		color: $textDark;
+		color: var(--secondary-text);
 		width: 1.2rem;
 		padding-top: 0.2rem;
 		height: 1.2rem;
 		cursor: pointer;
 	}
 	.close-icon:hover {
-		color: $accent;
+		color: var(--accent);
 	}
 
 	.toast-title {
 		width: 100%;
 		display: flex;
-		padding: 0.8rem;
-		padding-top: 0.4rem;
+		padding: 0.4rem 0.4rem 0.4rem 0.6rem;
+
 		justify-content: space-between;
 		flex-direction: row;
 		font-size: 1.1rem;
 		align-items: flex-start;
-		padding-bottom: 0.2rem;
 		margin-bottom: 0.2rem;
-		border-bottom: solid 1px $accent;
+		border-bottom: solid 1px var(--accent);
 	}
 	.toast-text {
 		padding: 0.7rem;

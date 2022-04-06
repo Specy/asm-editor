@@ -6,23 +6,31 @@
 	export let title = ''
 	export let value = ''
 	export let status: statusType = ''
+	export let style = ''
 	$: if (value === '') status = ''
 	export let type = 'text'
-	export let hideStatus = false
+	export let hideStatus = true
 	const setType = (node) => {
 		node.type = type
 	}
 </script>
 
 <div class="input-wrapper">
-	<div>{title}</div>
-	<div class="input-row">
+	{#if title}
+		<div>{title}</div>
+	{/if}
+	<div class="input-row" {style}>
 		<input
 			bind:value
 			class="form-input"
 			use:setType
 			placeholder={title.toUpperCase()}
-			style={hideStatus ? 'border:none;' : '' + value === '' ? ' border: none;' : ''}
+			style={hideStatus 
+				? 'border:none;' 
+				: '' + value === '' 
+					? ' border: none;' 
+					: ''
+			}
 		/>
 		{#if !hideStatus}
 			<div class={status + ' icon-wrapper'}>
@@ -45,8 +53,8 @@
 		align-items: center;
 		border-radius: 0.4rem;
 		padding: 0.2rem;
-		margin-top: 0.2rem;
-		background-color: rgba(47, 51, 53, 0.5);
+		margin-top: 0.3rem;
+		background-color: var(--secondary);
 		> input {
 			color: #bfbfbf;
 		}

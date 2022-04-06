@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Register } from '$lib/M68KEmulator'
+import RegisterDiff from './RegisterDiff.svelte'
 	export let registers: Register[] = []
 </script>
 
@@ -14,19 +15,23 @@
         Hex
     </div>
 	{#each registers as register (register.name)}
-            <div class="register-name">
+            <div class="register-name" >
                 {register.name}
             </div>
-            <div class="register-value">
-                {register.value}
+            <div class="register-value" >
+                <RegisterDiff 
+                    value={register.value}
+                    diff={register.diff.value}
+                />
             </div>
             <div class="register-hex">
-                <code>
-                    {register.hex[0]}
-                </code>
-                <code>
-                    {register.hex[1]}
-                </code>
+                {#each register.hex as hex,i}
+                    <RegisterDiff 
+                        value={hex}
+                        diff={register.diff.hex[i]}
+                        monospaced
+                    />
+                {/each}
             </div>
 	{/each}
 </div>
@@ -34,10 +39,11 @@
 <style lang="scss">
     .register-grid{
         display: grid;
-        grid-template-columns:repeat(3, auto);
+        grid-template-columns:1fr 3fr 3fr;
         grid-gap: 1rem;
         margin-bottom: 1rem;
         
+
         .register-name{
             font-weight: bold;
         }
@@ -48,9 +54,8 @@
             display: flex;
             gap: 0.3rem;
             justify-content: space-between;
-            code{
-                font-family: "Lucida Console", "Menlo", "Monaco", "Courier", monospace;
-            }
+
         }
+
     }
 </style>

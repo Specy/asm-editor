@@ -6,11 +6,15 @@ export type Register = {
     value: number,
     name: string,
     hex: RegisterHex
+    diff:{
+        value: number,
+        hex: RegisterHex
+    }
 }
 type EmulatorStore = {
     registers: Register[]
     terminated: boolean
-    line: number
+    line: number,
 }
 
 const registerName = ['D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'A0', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7',]
@@ -33,10 +37,15 @@ export function M68KEmulator(code: string, haltLimit = 1000000) {
     function setRegisters() {
         const registers = Array.from(emulator.registers).map((reg, i) => {
             const hex = (reg >>> 0).toString(16).padStart(8, '0')
+            const hexArray = [hex.slice(0,4), hex.slice(4,8)] as RegisterHex
             return {
                 value: reg as number,
                 name: registerName[i],
-                hex: [hex.slice(0,4), hex.slice(4,8)] as RegisterHex
+                hex: hexArray,
+                diff:{
+                    value: reg as number,
+                    hex: hexArray
+                }
             }
         })
         update(data => {
@@ -49,7 +58,9 @@ export function M68KEmulator(code: string, haltLimit = 1000000) {
             const { registers } = data
             
             Array.from(emulator.registers).forEach((reg, i) => {
-                if (registers[i].value !== reg) {
+                registers[i].diff.value = registers[i].value
+                registers[i].diff.hex = registers[i].hex
+                if (registers[i].value !== reg) { 
                     registers[i].value = reg
                     const hex = (reg >>> 0).toString(16).padStart(8, '0')
                     registers[i].hex = [hex.slice(0,4), hex.slice(4,8)] as RegisterHex

@@ -1,4 +1,6 @@
 <script>
+import { afterNavigate, beforeNavigate } from '$app/navigation';
+
 	import { fly } from 'svelte/transition'
 	export let refresh = ''
 
@@ -14,33 +16,35 @@
 			},200)
 		}
 	}
+	beforeNavigate(() => {
+		handleProgress('started')
+	})
+	afterNavigate(() => {
+		handleProgress('ended')
+	})
 </script>
 
-<svelte:window
-    on:sveltekit:navigation-start={() => handleProgress('started')}
-    on:sveltekit:navigation-end={() => handleProgress('ended')}
-/>
 {#key refresh}
-	<div class={`progress ${status}`}>
+	<div class={`progress ${status}`} ></div>
 
-	</div>
 	<div in:fly={{ x: -50, duration: 500 }} class="page">
 		<slot />
 	</div>
 {/key}
 
 <style lang="scss">
-    @import "../../variables.scss";
 
 	.page {
 		display: flex;
 		flex-direction: column;
 		flex: 1;
+		height: 100%;
+		max-height: 100%;
 	}
 	.progress{
 		height: 4px;
 		width: 0%;
-		background-color: $accent;
+		background-color: var(--accent);
 		position: absolute;
 		z-index: 1000;
 	}
