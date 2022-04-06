@@ -1,0 +1,39 @@
+{
+    "name": "ASM Editor",
+    "short_name": "ASM Editor",
+    "theme_color": "#f2a65a",
+    "background_color": "#171a21",
+    "display": "fullscreen",
+    "scope": "/",
+    "start_url": "/",
+    "description": "Write and run M68K and MIPS code on your browser. View registers and step through your program",
+    "screenshots": [
+        {
+            "src": "/images/ASM-editor.png",
+            "type": "image/png",
+            "sizes": "1345x850"
+        }
+    ],
+    "icons": [
+        {
+            "src": "/images/icon-192x192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "/images/icon-256x256.png",
+            "sizes": "256x256",
+            "type": "image/png"
+        },
+        {
+            "src": "/images/icon-384x384.png",
+            "sizes": "384x384",
+            "type": "image/png"
+        },
+        {
+            "src": "/images/icon-512x512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}
