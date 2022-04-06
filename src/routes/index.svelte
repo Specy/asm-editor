@@ -19,7 +19,7 @@
                         style="margin-left: 1rem" 
                         bg="var(--secondary)" 
                         color="var(--secondary-text)"
-                        href="https://github.com/Specy/m68k-interpreter-client"
+                        href=""https://github.com/Specy/asm-editor"
                   >
 					<Icon>
 						<FaGithub />
