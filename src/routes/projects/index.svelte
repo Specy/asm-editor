@@ -1,8 +1,11 @@
 <script lang="ts">
-	import Button from '$cmp/buttons/Button.svelte'
 	import { ProjectStore } from '$stores/projectsStore'
     import ProjectCard from '$cmp/ProjectCard.svelte'
+    import { onMount } from 'svelte';
 	const { projects } = ProjectStore
+    onMount(() => {
+        ProjectStore.load()
+    })
 </script>
 
 <title>

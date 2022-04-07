@@ -11,12 +11,21 @@ export type Register = {
         hex: RegisterHex
     }
 }
+type MemoryElement = {
+    address: number,
+    value: number,
+    oldValue: number,
+}
 type EmulatorStore = {
     registers: Register[]
     terminated: boolean
     line: number,
     code: string,
-    errors: string[]
+    errors: string[],
+    numOfLines: number,
+    memory: {
+        [key in string]: number
+    }
 }
 
 const registerName = ['A0', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7']
@@ -26,7 +35,9 @@ export function M68KEmulator(code: string, haltLimit = 1000000) {
         terminated: false,
         line: -1,
         code: '',
-        errors: []
+        errors: [],
+        numOfLines: 0,
+        memory: {}
     })
     let emulator = new Emulator()
     function setCode(code: string) {
@@ -37,6 +48,7 @@ export function M68KEmulator(code: string, haltLimit = 1000000) {
             data.line = -1
             data.code = code
             data.errors = []
+            data.numOfLines = 0
             return data
         })
     }
@@ -75,6 +87,12 @@ export function M68KEmulator(code: string, haltLimit = 1000000) {
             return data
         })
     }
+    function updateMemory(){
+        update(data => {
+            data.memory = emulator.memory.memory
+            return data
+        })
+    }
     function run() {
         let i = 0
         let hasError = false
@@ -88,14 +106,24 @@ export function M68KEmulator(code: string, haltLimit = 1000000) {
             hasError = true
         }
         updateRegisters()
+        updateData()
+        updateMemory()
+        if (hasError) throw new Error('Program terminated with error')
+        return emulator
+    }
+    function undo(){
+        emulator.undoFromStack()
+        updateRegisters()
+        updateData()
+    }
+    function updateData(){
         update(data => {
             data.terminated = true
             data.line = emulator.line
             data.errors = emulator.errors
+            data.numOfLines = emulator.instructions.length
             return data
         })
-        if (hasError) throw new Error('Program terminated with error')
-        return emulator
     }
     function step() {
         if (emulator.errors.length) return
@@ -109,12 +137,8 @@ export function M68KEmulator(code: string, haltLimit = 1000000) {
         }
 
         updateRegisters()
-        update(data => {
-            data.terminated = done
-            data.line = emulator.line
-            data.errors = emulator.errors
-            return data
-        })
+        updateMemory()
+        updateData()
         if (hasError) throw new Error('Program terminated with error')
         return done
     }
@@ -124,6 +148,7 @@ export function M68KEmulator(code: string, haltLimit = 1000000) {
         subscribe,
         setCode,
         run,
-        step
+        step,
+        undo
     }
 }

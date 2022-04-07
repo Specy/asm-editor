@@ -56,7 +56,11 @@
 <div class="editor-registers-wrapper">
 	<div class="editor-wrapper">
 		<div class="editor-corners">
-			<Editor bind:project highlightedLine={$emulator.line} disabled={$emulator.line >= 0} />
+			<Editor 
+				bind:project highlightedLine={$emulator.line} 
+				disabled={$emulator.line >= 0} 
+				hasError={$emulator.errors.length > 0}
+			/>
 		</div>
 		<div class="project-controls">
 			{#if $emulator.line < 0}
@@ -100,6 +104,7 @@
 				</Button>
 				<Button
 					style="width: 4rem;"
+					disabled={$emulator.numOfLines <= $emulator.line}
 					on:click={() => {
 						try{
 							emulator.step()
@@ -109,6 +114,19 @@
 					}}
 				>
 					Step
+				</Button>
+				<Button
+					style="width: 4rem;"
+					disabled={$emulator.line <= 1}
+					on:click={() => {
+						try{
+							emulator.undo()
+						}catch(e){
+							toast.error("Error executing code")
+						}
+					}}
+				>
+					Undo
 				</Button>
 			{/if}
 		</div>
