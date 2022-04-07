@@ -94,8 +94,7 @@
 			{:else}
 				<Button
 					style="width: 4rem;"
-					bg="var(--accent2)"
-					color="var(--accent2-text)"
+					cssVar='accent2'
 					on:click={() => {
 						emulator.setCode(project.code)
 					}}
@@ -135,7 +134,7 @@
 		<ErrorVisualiser errors={$emulator.errors} />
 
 		<div class="registers-wrapper">
-			<MemoryVisualiser registers={$emulator.registers} />
+			<MemoryVisualiser registers={$emulator.registers} memory={$emulator.memory}/>
 		</div>
 	</div>
 </div>
@@ -178,14 +177,18 @@
 			}
 		}
 		.registers-wrapper {
+			display: flex;
 			border-radius: 0.5rem;
 			flex-direction: column;
 			align-items: center;
 			margin-top: 1rem;
+			flex:1;
 		}
 	}
 	.right-side {
 		margin-left: 1rem;
+		display: flex;
+		flex-direction: column;
 	}
 	@media screen and (max-width: 700px) {
 		.editor-wrapper {

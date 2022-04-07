@@ -13,6 +13,10 @@ const themeObject = {
         color: '#212630',
         name: 'secondary'
     },
+    secondaryDarker: {
+        color: '#1D2026',
+        name: 'secondary-darker'
+    },
     tertiary: {
         color: '#E0E0E0',
         name: 'tertiary'
@@ -55,11 +59,11 @@ export class ThemeStoreClass{
         const base = cloneDeep(themeObject)
         const listened = {} as { [key in ThemeKeys]: Writable<ThemeProp> }
         Object.entries(base).forEach(([key, value]) => {
-            //@ts-ignore
+            //@ts-ignore doesnt like that i set the key
             listened[key] = writable({
-                //@ts-ignore
+                //@ts-ignore value is an object
                 ...value, 
-                //@ts-ignore
+                //@ts-ignore value is unknown
                 color: value.color
             })
         })

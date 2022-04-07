@@ -16,6 +16,9 @@ type MemoryElement = {
     value: number,
     oldValue: number,
 }
+export type Memory = {
+    [key in string]: string
+}
 type EmulatorStore = {
     registers: Register[]
     terminated: boolean
@@ -23,9 +26,7 @@ type EmulatorStore = {
     code: string,
     errors: string[],
     numOfLines: number,
-    memory: {
-        [key in string]: number
-    }
+    memory: Memory
 }
 
 const registerName = ['A0', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7']
@@ -49,6 +50,7 @@ export function M68KEmulator(code: string, haltLimit = 1000000) {
             data.code = code
             data.errors = []
             data.numOfLines = 0
+            data.registers = []
             return data
         })
     }
@@ -74,7 +76,6 @@ export function M68KEmulator(code: string, haltLimit = 1000000) {
     function updateRegisters() {
         update(data => {
             const { registers } = data
-
             Array.from(emulator.registers).forEach((reg, i) => {
                 registers[i].diff.value = registers[i].value
                 registers[i].diff.hex = registers[i].hex
@@ -152,3 +153,4 @@ export function M68KEmulator(code: string, haltLimit = 1000000) {
         undo
     }
 }
+

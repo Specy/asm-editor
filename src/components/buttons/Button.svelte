@@ -4,13 +4,20 @@
 	export let style = ''
 	export let bg = 'var(--accent)'	
 	export let hasIcon = false
+	export let cssVar = ''
+
+	let finalColor = ''
+	$: finalColor = cssVar 
+		? `background-color: var(--${cssVar}); color: var(--${cssVar}-text);` 
+		: `background-color: ${bg}; color: ${color};`
+
 </script>
 
 <button
 	type="button"
 	class="btn"
 	class:hasIcon
-	style={`background-color: ${bg}; color: ${color}; ${style}`}
+	style={`${finalColor} ${style}; `}
 	{disabled}
 	on:click
 >
@@ -29,6 +36,7 @@
 		justify-content: center;
 		border: none;
 		width: fit-content;
+		user-select: none;
 		cursor: pointer;
 	}
 	.btn:hover {
