@@ -39,13 +39,15 @@ import RegisterDiff from './RegisterDiff.svelte'
 <style lang="scss">
     .register-grid{
         display: grid;
-        grid-template-columns:1fr 3fr 3fr;
+        grid-template-columns: auto auto auto;
         align-items: space-between;
-        justify-items: center;
+        justify-content: space-between;
+        min-width: 60%;
         gap: 0.5rem;
         margin-bottom: 1rem;
         .register-grid-title{
             margin-bottom: 0.7rem;
+            text-align: center;
         }
         .register-name{
             font-weight: bold;
@@ -56,7 +58,9 @@ import RegisterDiff from './RegisterDiff.svelte'
         .register-hex{
             display: flex;
             gap: 0.3rem;
-
+        }
+        @media screen and (max-width: 700px) {
+            width: unset
         }
     }
 </style>

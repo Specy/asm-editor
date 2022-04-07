@@ -19,11 +19,12 @@
 		align-items: center;
 		border-radius: 0.2rem;
 		padding: 0 0.1rem;
-        width: 100%;
+		text-align: center;
+		justify-content: center;
 	}
 	.tooltip-base {
 		position: relative;
-		width: fit-content;
+		width: 100%;
 	}
 	.old-value {
 		display: none;
