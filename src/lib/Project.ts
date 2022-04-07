@@ -14,7 +14,7 @@ const baseM68k =
 ORG    $1000
 START:
 
-END:
+END
 `.trim()
 
 export class Project{
