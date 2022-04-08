@@ -40,7 +40,6 @@ class MonacoLoader {
 	registerLanguages = () => {
 		this.dispose()
 		const { monaco } = this
-		console.log(this)
 		if(!monaco) return
 		//@ts-ignore custom language
 		this.toDispose.push(monaco.languages.setMonarchTokensProvider('m68k', M68KLanguage))

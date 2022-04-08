@@ -33,7 +33,6 @@
 			project.code = editor.getValue()
 		}))
 		return () => {
-			console.log(toDispose)
 			toDispose.forEach(d => d.dispose())
 			Monaco.dispose()
 			editor.dispose()
