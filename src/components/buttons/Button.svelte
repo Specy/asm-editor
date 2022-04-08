@@ -33,6 +33,7 @@
 		display: flex;
 		transition: all 0.2s;
 		font-size: 1rem;
+		align-items: center;
 		justify-content: center;
 		border: none;
 		width: fit-content;

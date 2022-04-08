@@ -2,6 +2,7 @@
     import { ThemeProp, ThemeStore } from '$stores/themeStore'
     import { TinyColor } from '@ctrl/tinycolor';  
     import { onMount } from 'svelte';
+    export let style = ''
     let theme: ThemeProp[] = []
     onMount(() => {
         ThemeStore.theme.subscribe(() => {
@@ -17,6 +18,7 @@
     --${name}-text: ${new TinyColor(color).isDark() ? '#dbdbdb' : '#181818'};
     --RGB-${name}: ${new TinyColor(color).toRgbString().match(/(\s*\d+\s*),(\s*\d+\s*),(\s*\d+\s*)/)[0]};
     `).join('\n')}
+    ${style}
 `}>
     <slot></slot>
 </div>

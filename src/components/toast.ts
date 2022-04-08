@@ -3,53 +3,61 @@ enum Colors {
     Green = "rgb(85, 143, 144)",
     Red = "#B33A3A",
     Orange = "#FFA500",
-    Hint = "#b00752"
+    Hint = "var(--accent)"
 }
+
+
 function Toast() {
-    const title = writable("")
-    const message = writable("")
-    const duration = writable(3000)
-    const visible = writable(false)
-    const color = writable("")
-    let timeout = setTimeout(() => { }, 10)
-    function execute(text: string, time: number, colorName: Colors) {
-        color.set(colorName)
-        message.set(text)
-        duration.set(time)
+    const { set, update, subscribe } = writable({
+        title: '',
+        message: '',
+        duration: 3000,
+        visible: false,
+        color: '',
+        id: 0
+    })
+    let id = 0
+    let timeout
+    function execute(message: string, duration: number, color: Colors, title = '') {
+        update(data => {
+            id++
+            return {
+                ...data,
+                title,
+                color,
+                message,
+                duration,
+                visible: true,
+                id
+            }
+        })
+
         clearTimeout(timeout)
-        visible.set(true)
-        timeout = setTimeout(() => {
-            visible.set(false)
-            duration.set(0)
-        }, time)
+        timeout = setTimeout(close, duration)
     }
     function error(text: string, timeout = 3000) {
-        title.set("Error")
-        execute(text, timeout, Colors.Red)
+        execute(text, timeout, Colors.Red, "Error")
     }
     function success(text: string, timeout = 3000) {
-        title.set("Success")
-        execute(text, timeout, Colors.Green)
+        execute(text, timeout, Colors.Green, "Success")
     }
     function warn(text: string, timeout = 3000) {
-        title.set("Warning")
-        execute(text, timeout, Colors.Orange)
+        execute(text, timeout, Colors.Orange, "Warning")
     }
     function log(text: string, timeout = 5000) {
-        title.set("Warning")
-        execute(text, timeout, Colors.Hint)
+        execute(text, timeout, Colors.Hint, "Warning")
     }
-    function closeToast() {
-        duration.set(0)
+    function close() {
+        update(data => {
+            return { ...data, visible: false, duration: 0}
+        })
         clearTimeout(timeout)
-        visible.set(false)
     }
-    function custom(textTitle: string, text: string, timeout = 3000) {
-        title.set(textTitle)
-        execute(text, timeout, Colors.Hint)
+    function custom(title: string, text: string, timeout = 3000) {
+        execute(text, timeout, Colors.Hint, title)
     }
     return {
-        title, message, duration, error, success, custom, visible, closeToast, log, warn, color
+        error, success, custom, closeToast: close, log, warn, subscribe
     }
 }
 

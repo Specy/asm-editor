@@ -3,9 +3,9 @@
 	import { TimeFormat } from '$lib/dateFormatter'
 	import { ProjectStore } from '$stores/projectsStore'
 	import FaTrashAlt from 'svelte-icons/fa/FaTrashAlt.svelte'
-	import Icon from './layout/Icon.svelte'
-	import { Prompt } from './prompt'
-	import ButtonLink from './buttons/ButtonLink.svelte'
+	import Icon from '$cmp/layout/Icon.svelte'
+	import { Prompt } from '$cmp/prompt'
+	import ButtonLink from '$cmp/buttons/ButtonLink.svelte'
 	export let project: Project
 	let textContent = project.name || 'Unnamed'
 	let descriptionContent = project.description || ''

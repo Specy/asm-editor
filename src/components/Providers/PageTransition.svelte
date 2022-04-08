@@ -1,5 +1,6 @@
 <script>
 import { afterNavigate, beforeNavigate } from '$app/navigation';
+import RgbLine from '$cmp/misc/RgbLine.svelte';
 
 	import { fly } from 'svelte/transition'
 	export let refresh = ''
@@ -32,7 +33,11 @@ import { afterNavigate, beforeNavigate } from '$app/navigation';
 </script>
 
 {#key refresh}
-	<div class={`progress ${status}`} ></div>
+	<div class={`progress`} >
+		<div class={status}>
+			<RgbLine />
+		</div>
+	</div>
 
 	<div in:fly={{ x: -50, duration: 500 }} class="page">
 		<slot />
@@ -45,23 +50,44 @@ import { afterNavigate, beforeNavigate } from '$app/navigation';
 		display: flex;
 		flex-direction: column;
 		flex: 1;
-		height: 100%;
-		max-height: 100%;
 	}
 	.progress{
 		height: 4px;
-		width: 0%;
-		background-color: var(--accent);
+		width: 100%;
 		position: absolute;
 		z-index: 1000;
+		overflow: hidden;
+		> div {
+			border-radius: 1rem;
+			transform: translateX(-110%);
+		}
+		.progress-70{
+			animation: progressTo70 1s ease-out; 
+			animation-fill-mode: forwards;
+		}
+		.progress-finish{
+			animation: progressToFinish 0.2s ease-out;
+			animation-fill-mode: forwards;
+		}
+		@keyframes progressTo70 {
+			from{
+				transform: translateX(-100%);
+				opacity: 0.5;
+			}	
+			to{
+				opacity: 1;
+				transform: translateX(-30%);
+			}
+		}
+		@keyframes progressToFinish {
+			from{
+				transform: translateX(-30%);
+			}	
+			to{
+				transform: translateX(0%);
+				opacity: 0.4;
+			}
+		}
 	}
-	.progress-70{
-		width: 70%;
-		transition: all 1s;
-	}
-	.progress-finish{
-		transition: all 0.2s;
-		width: 100%;
-		background-color: transparent;
-	}
+
 </style>

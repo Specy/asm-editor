@@ -4,7 +4,7 @@
 	import { ProjectStore } from '$stores/projectsStore'
 	import { onDestroy } from 'svelte'
 	import { toast } from '$cmp/toast'
-	import ProjectEdit from '$cmp/ProjectEdit.svelte'
+	import ProjectEdit from '$cmp/Project/Edit.svelte'
 	let ID = $page.params.project
 	let project: Project = ProjectStore.getProject(ID)
 	let unsubscribe = ProjectStore.projects.subscribe(() => {
@@ -34,16 +34,26 @@
 			}}
 		/>
 	{:else}
-		<h1>Loading...</h1>
+		<h1 class="loading">
+			Loading...
+		</h1>
 	{/if}
 </div>
 
 <style lang="scss">
 	.project {
-		padding: 1rem;
+		padding: 0.8rem;
 		display: flex;
 		flex-direction: column;
 		height: 100%;
 		max-height: 100%;
+	}
+	.loading{
+		width:100%;
+		height: 100%;
+		display:flex;
+		font-size: 3rem;
+		justify-content:center;
+		align-items: center;
 	}
 </style>

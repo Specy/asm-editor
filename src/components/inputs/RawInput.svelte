@@ -20,16 +20,17 @@
 		display: flex;
 		align-items: center;
 		border-radius: 0.4rem;
-		padding: 0.4rem 1rem;
+		padding: 0.4rem 0.8rem;
         font-size: 0.9rem;
 		background-color: var(--secondary);
 		> input {
+			width: 100%;
 			color: #bfbfbf;
 		}
 	}
     .label{
-       margin-right: 0.5rem; 
-       padding: 0.3rem 0.5rem 0.3rem 0; 
+       margin-right: 0.4rem; 
+       padding: 0.3rem 0.4rem 0.3rem 0; 
        border-right: solid 1px gray;
     }
 	.form-input {

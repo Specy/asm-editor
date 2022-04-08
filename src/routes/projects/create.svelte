@@ -53,7 +53,8 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		padding: 2rem;
+		height: 100%;
+		padding-top: 2rem;
 		.content {
 			max-width: 40rem;
 		}

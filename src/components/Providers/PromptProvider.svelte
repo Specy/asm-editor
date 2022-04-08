@@ -3,8 +3,8 @@
 	import { fade } from 'svelte/transition';
 
 
-	import Button from './buttons/Button.svelte'
-	import Input from './inputs/Input.svelte';
+	import Button from '../buttons/Button.svelte'
+	import Input from '../inputs/Input.svelte';
 	const { question, cancellable, placeholder, promise, type,answer } = Prompt
 
 	let value = ''
@@ -28,17 +28,17 @@
 
         <div class="prompt-row">
 			{#if $type === 'text'}
-				<Button bg="var(--secondary)" color="var(--secondary-text)" disabled={!$cancellable}>
+				<Button cssVar='secondary' disabled={!$cancellable}>
 					Cancel
 				</Button>
 				<Button on:click={() => answer(value)}>
 					Ok
 				</Button>
 			{:else}
-				<Button on:click={() => answer(false)} bg='var(--secondary)' color='var(--secondary-text)'>
+				<Button on:click={() => answer(false)} cssVar='secondary'>
 					Cancel
 				</Button>
-				<Button on:click={() => answer(true)} bg='var(--red)' color='var(--red-text)'>
+				<Button on:click={() => answer(true)} cssVar='red'>
 					Yes
 				</Button>
 			{/if}
@@ -61,7 +61,7 @@
 		background-color: rgba(var(--RGB-secondary), 0.8);
 		box-shadow: 0 3px 10px rgb(0 0 0 / 20%);
 		z-index: 20;
-        padding: 0.4rem;
+        padding: 0.5rem;
 		transition: transform 0.3s ease-out;
 		flex-direction: column;
 		animation: slideIn 0.25s ease-out;

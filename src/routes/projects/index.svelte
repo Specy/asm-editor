@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { ProjectStore } from '$stores/projectsStore'
-    import ProjectCard from '$cmp/ProjectCard.svelte'
+    import ProjectCard from '$cmp/Project/Card.svelte'
     import { onMount } from 'svelte';
 	const { projects } = ProjectStore
     onMount(() => {
@@ -20,7 +20,6 @@
             <a href="/projects/create" class="create-button">
                 Create
             </a>
-
         </div>
         {#if $projects.length === 0}
             <h3 style="margin-top: 4rem; margin-left: 2rem; font-weight:unset">
@@ -34,6 +33,7 @@
         </div>
 
     </div>
+
 </div>
 
 <style lang="scss">
@@ -48,8 +48,6 @@
         flex-direction: column;
         align-items: center;
         height: 100%;
-        overflow-y: auto;
-        padding: 2rem;
     }
     .project-grid{
         display: grid;

@@ -8,11 +8,13 @@
 	import { createEventDispatcher } from 'svelte'
 	import type { Project } from '$lib/Project'
 	import FaSave from 'svelte-icons/fa/FaSave.svelte'
-	import Icon from './layout/Icon.svelte'
+	import Icon from '$cmp/layout/Icon.svelte'
 	import { goto } from '$app/navigation'
-	import { Prompt } from './prompt'
-	import { toast } from './toast'
+	import { Prompt } from '$cmp/prompt'
+	import { toast } from '$cmp/toast'
 	import ErrorVisualiser from '$cmp/ErrorVisualiser.svelte'
+	import Controls from './Controls.svelte'
+
 	export let project: Project
 	const saveDispatch = createEventDispatcher<{ save: Project }>()
 	const emulator =
@@ -59,8 +61,8 @@
 
 <div class="editor-registers-wrapper">
 	<div class="editor-wrapper">
-		<div 
-			class="editor-corners" 
+		<div
+			class="editor-border"
 			class:gradientBorder={$emulator.line >= 0}
 			class:redBorder={$emulator.errors.length > 0}
 		>
@@ -71,80 +73,48 @@
 				hasError={$emulator.errors.length > 0}
 			/>
 		</div>
-		<div class="project-controls">
-			{#if $emulator.line < 0}
-				<Button
-					style="width: 4rem;"
-					on:click={() => {
-						try {
-							emulator.setCode(project.code)
-							emulator.run()
-						} catch (e) {
-							console.error(e)
-							toast.error('Error executing code')
-						}
-					}}
-				>
-					Run
-				</Button>
-				<Button
-					style="width: 4rem;"
-					on:click={() => {
-						try {
-							emulator.setCode(project.code)
-							emulator.step()
-						} catch (e) {
-							console.error(e)
-							toast.error('Error executing code')
-						}
-					}}
-				>
-					Build
-				</Button>
-			{:else}
-				<Button
-					style="width: 4rem;"
-					cssVar="accent2"
-					on:click={() => {
-						emulator.setCode(project.code)
-					}}
-				>
-					Stop
-				</Button>
-				<Button
-					style="width: 4rem;"
-					disabled={$emulator.numOfLines <= $emulator.line}
-					on:click={() => {
-						try {
-							emulator.step()
-						} catch (e) {
-							console.error(e)
-							toast.error('Error executing code')
-						}
-					}}
-				>
-					Step
-				</Button>
-				<Button
-					style="width: 4rem;"
-					disabled={$emulator.line <= 1}
-					on:click={() => {
-						try {
-							emulator.undo()
-						} catch (e) {
-							console.error(e)
-							toast.error('Error executing code')
-						}
-					}}
-				>
-					Undo
-				</Button>
-			{/if}
-		</div>
+		<Controls
+			line={$emulator.line}
+			numOfLines={$emulator.numOfLines}
+			on:run={() => {
+				try {
+					emulator.setCode(project.code)
+					emulator.run()
+				} catch (e) {
+					console.error(e)
+					toast.error('Error executing code')
+				}
+			}}
+			on:build={() => {
+				try {
+					emulator.setCode(project.code)
+					emulator.step()
+				} catch (e) {
+					console.error(e)
+					toast.error('Error executing code')
+				}
+			}}
+			on:step={() => {
+				try {
+					emulator.step()
+				} catch (e) {
+					console.error(e)
+					toast.error('Error executing code')
+				}
+			}}
+			on:stop={() => emulator.setCode(project.code)}
+			on:undo={() => {
+				try {
+					emulator.undo()
+				} catch (e) {
+					console.error(e)
+					toast.error('Error executing code')
+				}
+			}}
+		/>
 	</div>
 	<div class="right-side">
 		<ErrorVisualiser errors={$emulator.errors} />
-
 		<div class="registers-wrapper">
 			<MemoryVisualiser registers={$emulator.registers} memory={$emulator.memory} />
 		</div>
@@ -180,7 +150,7 @@
 
 		.editor-wrapper {
 			flex-direction: column;
-			.editor-corners {
+			.editor-border {
 				display: flex;
 				overflow: hidden;
 				flex: 1;
@@ -194,6 +164,9 @@
 			align-items: center;
 			margin-top: 1rem;
 			flex: 1;
+		}
+		@media screen and (max-width: 900px){
+			grid-template-columns: 6fr 4fr;	
 		}
 	}
 	.right-side {
@@ -216,8 +189,9 @@
 		}
 		.right-side {
 			margin: 0;
+			padding: 0.2rem;
 			margin-top: 1rem;
-			margin-bottom: 1rem;
+
 			max-height: unset;
 		}
 	}
@@ -268,10 +242,5 @@
 			background: linear-gradient(60deg, hsl(359, 85%, 66%), hsl(0, 85%, 66%));
 		}
 	}
-	.project-controls {
-		margin-top: 1rem;
-		display: flex;
-		gap: 0.5rem;
-		padding-left: 0.2rem;
-	}
+
 </style>

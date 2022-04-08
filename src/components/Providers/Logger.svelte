@@ -1,33 +1,39 @@
 <script lang="ts">
 	import { toast } from '$cmp/toast'
+	import { fly } from 'svelte/transition';
 	import Icon from '$cmp/layout/Icon.svelte'
 	import FaTimes from 'svelte-icons/fa/FaTimes.svelte'
 
-	const { title, duration, message, visible, closeToast, color } = toast
-	let toastVisible = false  
-	$: toastVisible = $visible
 </script>
 
 <slot />
-<div class="toast-wrapper" class:toastVisible>
-	<div class="toast-title">
-		<div>
-			{$title}
+{#key $toast.id}
+	<div class="toast-wrapper" class:toastVisible={$toast.visible} in:fly={{y: -100}}>
+		<div 
+			class="toast-title"
+			style={`border-color:${$toast.color}`}
+		>
+			<div>
+				{$toast.title}
+			</div>
+			<Icon on:click={toast.closeToast}>
+				<FaTimes />
+			</Icon>
 		</div>
-		<Icon on:click={closeToast}>
-			<FaTimes />
-		</Icon>
+		<div class="toast-text">
+			{$toast.message}
+		</div>
+		<div class="toast-progress">
+			<div
+				class='toast-progress-bar'
+				style={`
+					animation-duration: ${$toast.duration}ms; 
+					background-color: ${$toast.color};
+				`}
+			/>
+		</div>
 	</div>
-	<div class="toast-text">
-		{$message}
-	</div>
-	<div class="toast-progress">
-		<div
-			class={$visible ? 'toast-progress-bar' : ''}
-			style={`transition: all ${$duration}ms linear; background-color: ${$color}`}
-		/>
-	</div>
-</div>
+{/key}
 
 <style lang="scss">
 	.toast-wrapper {
@@ -35,33 +41,47 @@
 		position: fixed;
 		right: 1rem;
 		top: 1rem;
-		overflow: hidden;
 		max-height: 10rem;
 		width: 20rem;
 		color: #bfbfbf;
-		background-color: rgba(var(--RGB-secondary), 0.8);
+		background-color: rgba(var(--RGB-secondary), 0.85);
 		backdrop-filter: blur(3px);
 		border-radius: 0.4rem;
-		box-shadow: 1px 1px 5px rgba(69, 69, 89, 0.25);
+		box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
 		z-index: 20;
-		transform: translateY(-13rem);
 		transition: transform 0.3s ease-out;
+		animation: animateIn 0.3s ease-out;
+		transform: translateY(calc(-100% - 1rem));
 		flex-direction: column;
+		padding: 0.6rem;
+		padding-top: 0.1rem;
 	}
+
 	.toastVisible {
 		transform: translateY(0);
 	}
 	.toast-progress {
 		width: 100%;
 		height: 0.2rem;
+		border-radius: 1rem;
+		overflow: hidden;
 	}
-	.toast-progress div {
+	.toast-progress-bar{
+		animation-name: mergeToZero;
+		animation-timing-function: linear;
+		animation-fill-mode: forwards;
 		width: 100%;
+		
 		height: 0.2rem;
-		background-color: var(--accent);
+
 	}
-	.toast-progress-bar {
-		width: 0% !important;
+	@keyframes mergeToZero{
+		from {
+			transform: translateX(0);
+		}
+		to {
+			transform: translateX(-100%);
+		}
 	}
 	.close-icon {
 		color: var(--secondary-text);
@@ -77,7 +97,7 @@
 	.toast-title {
 		width: 100%;
 		display: flex;
-		padding: 0.4rem 0.4rem 0.4rem 0.6rem;
+		padding: 0.4rem 0rem 0.4rem 0.6rem;
 
 		justify-content: space-between;
 		flex-direction: row;

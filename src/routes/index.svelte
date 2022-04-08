@@ -2,6 +2,7 @@
 	import ButtonLink from '$cmp/buttons/ButtonLink.svelte';
 	import Icon from '$cmp/layout/Icon.svelte'
 	import FaGithub from 'svelte-icons/fa/FaGithub.svelte'
+	let frequency = 0.09
 
 </script>
 
@@ -32,17 +33,16 @@
 <filter id="filter">
 	<feTurbulence
 		id="turbulence"
-		type="turbulence"
-		baseFrequency="0.05"
+		type="fractalNoise"
+		baseFrequency={frequency}
 		numOctaves="2"
 		result="turbulence"
 	/>
 	<feDisplacementMap
 		in2="turbulence"
 		in="SourceGraphic"
-		scale="50"
-
-		xChannelSelector="R"
+		scale="70"
+		xChannelSelector="G"
 		yChannelSelector="G"
 	/>
 </filter>
@@ -74,34 +74,19 @@
 		}
 		.background {
 			width: 97%;
-			height: 95%;
-			margin-top: 1vh;
-			margin-left: 0.5vw;
-			top: 0;
-			left: 0;
+			height: 94%;
+			top: 3%;
+			left: 1.5%;
 			filter: url(#filter);
 			position: absolute;
 			background-color: var(--primary);
 		}
-
-		@media screen and (max-width: 800px) {
+		@media screen and (max-width: 800px){
 			.background {
-				margin-left: 1vw;
-				width: 95%;
-			}
-		}
-		@media screen and (max-width: 600px) {
-			.background {
-				margin-top: 1vh;
-				margin-left: 1vw;
-				width: 93%;
-			}
-		}
-		@media screen and (max-width: 400px) {
-			.background {
-				margin-top: 1vh;
-				margin-left: 0vw;
-				width: 93%;
+				width: 92%;
+				height: 94%;
+				top: 3%;
+				left: 4%;
 			}
 		}
 	}
@@ -116,7 +101,9 @@
 		.welcome-title {
 			font-size: 2.5rem;
 		}
+
 	}
+
 	@keyframes gradient {
 		0% {
 			background-position: 0% 50%;

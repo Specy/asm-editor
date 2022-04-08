@@ -1,0 +1,70 @@
+<script lang="ts">
+	import { createEventDispatcher } from 'svelte'
+	import Button from '$cmp/buttons/Button.svelte'
+    import FaPlay from 'svelte-icons/fa/FaPlay.svelte'
+    import FaWrench from 'svelte-icons/fa/FaWrench.svelte'
+    import Icon from '$cmp/layout/Icon.svelte'
+    import FaStepForward from 'svelte-icons/fa/FaStepForward.svelte'
+    import FaStop from 'svelte-icons/fa/FaStop.svelte'
+    import FaUndo from 'svelte-icons/fa/FaUndo.svelte'
+	const dispatch = createEventDispatcher()
+	export let numOfLines:number
+	export let line:number
+</script>
+
+<div class="project-controls">
+	{#if line < 0}
+		<Button style="width: 5.5rem; padding: 0.5rem 0" on:click={() => dispatch('run')}>
+            <Icon size={1} style='margin-right: 0.4rem;'>
+                <FaPlay />
+            </Icon>
+            Run
+        </Button>
+		<Button style="width: 5.5rem; padding: 0.5rem 0" on:click={() => dispatch('step')}>
+            <Icon size={1} style='margin-right: 0.4rem;'>
+                <FaWrench />
+            </Icon>
+			Build
+		</Button>
+	{:else}
+		<Button
+            style="width: 5.5rem; padding: 0.5rem 0"
+			cssVar="accent2"
+			on:click={() => dispatch('stop')}
+		>
+            <Icon size={1} style='margin-right: 0.4rem;'>
+                <FaStop />
+            </Icon>
+			Stop
+		</Button>
+		<Button
+            style="width: 5.5rem; padding: 0.5rem 0"
+			disabled={numOfLines <= line}
+			on:click={() => dispatch('step')}
+		>
+            <Icon size={1} style='margin-right: 0.4rem;'>
+                <FaStepForward />
+            </Icon>
+			Step
+		</Button>
+		<Button
+            style="width: 5.5rem; padding: 0.5rem 0"
+			disabled={line <= 1}
+			on:click={() => dispatch('undo')}
+		>
+            <Icon size={1} style='margin-right: 0.4rem;'>
+                <FaUndo />
+            </Icon>
+			Undo
+		</Button>
+	{/if}
+</div>
+
+<style lang="scss">
+	.project-controls {
+		margin-top: 1rem;
+		display: flex;
+		gap: 0.5rem;
+		padding-left: 0.2rem;
+	}
+</style>
