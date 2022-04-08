@@ -1,6 +1,7 @@
 <script lang="ts">
 	import FaGithub from 'svelte-icons/fa/FaGithub.svelte'
 	import FaRegCopyright from 'svelte-icons/fa/FaRegCopyright.svelte'
+	import Kofi from '$cmp/KoFi.svelte'
 	import Icon from './Icon.svelte'
 	import { toast } from '$cmp/toast'
     import { page } from '$app/stores';
@@ -21,6 +22,11 @@
 				</a>
 
 				<div class="icon-wrapper">
+					<a class="icon" href="https://ko-fi.com/specy">
+						<Icon size={2}>
+							<Kofi />	
+						</Icon>
+					</a>
 					<div class="icon">
 						<Icon size={2}
 							on:click={() =>
@@ -34,7 +40,10 @@
 						</Icon>
 					</div>
 					<a class="icon" href="https://github.com/Specy/soundboard" target="_blank">
-						<FaGithub />
+						<Icon size={2}>
+							<FaGithub />
+
+						</Icon>
 					</a>
 				</div>
 			</div>

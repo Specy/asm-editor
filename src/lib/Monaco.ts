@@ -9,24 +9,25 @@ export type MonacoType = typeof monaco
 class MonacoLoader {
 	private monaco: MonacoType;
 	loading: Promise<MonacoType>;
+	toDispose: monaco.IDisposable[] = [];
 	constructor() {
 		if (browser) this.load()
+	}
+	dispose = () => {
+		console.log('Disposed')
+		this.toDispose.forEach(d => d.dispose())
 	}
 	async load(): Promise<MonacoType> {
 		if (this.loading) return this.loading
 		this.loading = import('monaco-editor')
-		const monaco = await this.loading
+		const monaco: MonacoType = await this.loading
 		//@ts-ignore custom theme
 		monaco.editor.defineTheme('custom-theme', baseTheme)
 		monaco.languages.register({ id: 'm68k' })
-		//@ts-ignore custom language
-		monaco.languages.setMonarchTokensProvider('m68k', M68KLanguage)
-		//@ts-ignore custom language
-		monaco.languages.setMonarchTokensProvider('mips', MIPSLanguage)
-		monaco.languages.registerCompletionItemProvider('m68k', M68KCompletition(monaco))
-		monaco.languages.registerCompletionItemProvider('mips', MIPSCompletition(monaco))
 
 		this.monaco = monaco
+		this.registerLanguages()
+
 		// @ts-ignore add worker
 		self.MonacoEnvironment = {
 			getWorker: function (_moduleId: any, label: string) {
@@ -36,6 +37,19 @@ class MonacoLoader {
 		return monaco
 	}
 
+	registerLanguages = () => {
+		this.dispose()
+		const { monaco } = this
+		console.log(this)
+		if(!monaco) return
+		//@ts-ignore custom language
+		this.toDispose.push(monaco.languages.setMonarchTokensProvider('m68k', M68KLanguage))
+		//@ts-ignore custom language
+		this.toDispose.push(monaco.languages.setMonarchTokensProvider('mips', MIPSLanguage))
+		this.toDispose.push(monaco.languages.registerCompletionItemProvider('m68k', M68KCompletition(monaco)))
+		this.toDispose.push(monaco.languages.registerCompletionItemProvider('mips', MIPSCompletition(monaco)))
+
+	}
 	async get() {
 		if (this.monaco) return this.monaco
 		await this.load()

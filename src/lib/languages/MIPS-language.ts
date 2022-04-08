@@ -3,11 +3,13 @@ import type { MonacoType } from "$lib/Monaco";
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
+function toMap(arr){
+    return Object.fromEntries(arr.map(e => [e,true]))
+}
+
 const registers = ["zero", "at", "v0", "v1", "a0", "a1", "a2", "a3", "t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7", "s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7", "t8", "t9", "k0", "k1", "gp", "sp", "fp", "ra"]
 const registersRegex = new RegExp(`\\$(${registers.join('|')})`, 'g')
-
-const keywords = [
-    'add',
+const arithmetic = ['add',
     'addu',
     'addi',
     'addiu',
@@ -16,7 +18,10 @@ const keywords = [
     'div',
     'divu',
     'mult',
-    'multu',
+    'multu']
+const arithmeticMap = toMap(arithmetic)
+const keywords = [
+    ...arithmetic,
     'nor',
     'or',
     'ori',
@@ -210,45 +215,106 @@ export const MIPSLanguage = {
 };
 
 
-export function MIPSCompletition(monaco: MonacoType){
-	return {
-		triggerCharacters: ['.',' ','\t','\n','deleteLeft','$'],
-		provideCompletionItems: (model, position) => {
-			const data: string = model.getValueInRange({startLineNumber: position.lineNumber, startColumn: 1, endLineNumber: position.lineNumber, endColumn: position.column})
-			let suggestions = []
-            const lastCharacter = data.substr(data.length - 1)
-
-            if(lastCharacter === '$'){
+export function MIPSCompletition(monaco: MonacoType) {
+    return {
+        triggerCharacters: ['.', ' ', '\t', '\n', 'deleteLeft', '$'],
+        provideCompletionItems: (model, position) => {
+            const data: string = model.getValueInRange({ startLineNumber: position.lineNumber, startColumn: 1, endLineNumber: position.lineNumber, endColumn: position.column })
+            const lastCharacter = data.substring(data.length - 1, data.length)
+            let suggestions = []
+            const trimmed = data.trim()
+            if (lastCharacter === '$') {
                 suggestions = suggestions.concat(...registers.map(register => {
                     return {
                         kind: monaco.languages.CompletionItemKind.Variable,
                         label: register,
                         insertText: register
-                    }   
+                    }
                 }))
             }
-			if(data.trim().length === 0 ){
-				suggestions = suggestions.concat(...MIPSLanguage.keywords.map(keyword => {
-					return {
-						kind: monaco.languages.CompletionItemKind.Keyword,
-						label: keyword,
-						insertText: keyword,
-					}
-				}))
-			}
-			if(data.trim()){
-				suggestions = suggestions.concat(...MIPSLanguage.keywords.filter(keyword => keyword.startsWith(data.trimStart()))
-				.map(keyword => {
-					return {
-						kind: monaco.languages.CompletionItemKind.Keyword,
-						label: keyword,
-						insertText: keyword,
-					}
-				}))
-			}
-			return {
-				suggestions
-			}
-		}
-	}
+            if (trimmed.length === 0) {
+                suggestions = suggestions.concat(...MIPSLanguage.keywords.map(keyword => {
+                    return {
+                        kind: monaco.languages.CompletionItemKind.Function,
+                        label: keyword,
+                        insertText: keyword,
+                    }
+                }))
+            }
+            if (arithmeticMap[trimmed] && (lastCharacter === ' ' || lastCharacter === ',')) {
+                suggestions = suggestions.concat(...registers.map(register => {
+                    return {
+                        kind: monaco.languages.CompletionItemKind.Variable,
+                        label: register,
+                        insertText: `$${lastCharacter === ' ' ? register + ', ' : register}`
+                    }
+
+                }))
+            }
+            if (trimmed) {
+                suggestions = suggestions.concat(...MIPSLanguage.keywords.filter(keyword => keyword.startsWith(data.trimStart()))
+                    .map(keyword => {
+                        return {
+                            kind: monaco.languages.CompletionItemKind.Function,
+                            label: keyword,
+                            insertText: keyword,
+                        }
+                    }))
+            }
+            return {
+                suggestions
+            }
+        },
+        resolveCompletionItem(item, token) {
+            return CompletitionMap[item.label]
+        }
+    }
+}
+
+const CompletitionMap = {
+    li: {
+        detail: 'li <dest>, <number>',
+        documentation: 'Loads a number into a register'
+    },
+    move: {
+        detail: 'move <dest>, <reg>',
+        documentation: 'Copies the content of <reg> to <dest>'
+    },
+    add: {
+        detail: 'add <dest>, <reg>, <reg/number> ',
+        documentation: 'Adds <reg/number> to <reg> and stores the result in <dest>'
+    },
+    sub: {
+        detail: 'sub <dest>, <reg>, <reg/number>',
+        documentation: 'Subtracts <reg/number> from <reg> and stores the result in <dest>'
+    },
+    div: {
+        detail: 'div <dest>, <reg>, <reg/number |OR| div <dividing>, <divisor>',
+        documentation: `With 3 arguments: Divides <reg/number> by <reg> and stores the result in <dest>
+                        With 2 arguments: Divides <dividing> by <divisor> and stores the reminder in HI and result in LO`
+    },
+    mul: {
+        detail: 'mul <dest>, <reg>, <reg/number>',
+        documentation: 'Multiplies <reg/number> and <reg> and stores the result in <dest>'
+    },
+    mfhi: {
+        detail: 'mfhi <dest> | copies content of HI to <dest>',
+        documentation: 'Copies content of HI to <dest>'
+    },
+    mflo: {
+        detail: 'mflo <dest> | copies content of LO to <dest>',
+        documentation: 'Copies content of LO to <dest>'
+    },
+    mthi: {
+        detail: 'mthi <reg/number> | copies content of <reg/number> to HI',
+        documentation: 'Copies content of <reg/number> to HI'
+    },
+    mtlo: {
+        detail: 'mtlo <reg/number> | copies content of <reg/number> to LO',
+        documentation: 'Copies content of <reg/number> to LO'
+    },
+    mult: {
+        detail: 'mult <reg>, <reg> | multiplies <reg> and <reg> and stores the result in HI and LO',
+        documentation: 'Multiplies <reg> and <reg> and stores the result in HI and LO'
+    }
 }

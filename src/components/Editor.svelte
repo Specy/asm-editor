@@ -11,7 +11,9 @@
 	let editor: monaco.editor.IStandaloneCodeEditor
 	let monacoInstance: MonacoType
 	let decorations = []
+	const toDispose = []
 	onMount(async () => {
+		Monaco.registerLanguages()
 		monacoInstance = await Monaco.get()
 		editor = monacoInstance.editor.create(el, {
 			value: project.code,
@@ -20,13 +22,22 @@
 			minimap: { enabled: false },
 			scrollbar: {
 				vertical: 'auto',
-				horizontal: 'hidden'
-			}
+				horizontal: 'hidden',
+			},
+			cursorBlinking: 'phase',
+			fontSize: 16,
+
+			smoothScrolling: true,
 		})
-		editor.getModel().onDidChangeContent(() => {
+		toDispose.push(editor.getModel().onDidChangeContent(() => {
 			project.code = editor.getValue()
-		})
-		return editor.dispose
+		}))
+		return () => {
+			console.log(toDispose)
+			toDispose.forEach(d => d.dispose())
+			Monaco.dispose()
+			editor.dispose()
+		}
 	})
 	$: {
 		if (editor) {
@@ -39,7 +50,8 @@
 								options: {
 									className: hasError ? 'error-line' : 'selected-line',
 									inlineClassName: 'selected-line-text',
-									isWholeLine: true
+									isWholeLine: true,
+								
 								}
 							}
 					  ]
@@ -56,6 +68,11 @@
 		if (editor) editor.layout()
 	}}
 />
+{#if !editor}
+	<h1 class="loading">
+		Loading editor...
+	</h1>
+{/if}
 <div bind:this={el} class="editor" />
 
 <style lang="scss">
@@ -86,14 +103,36 @@
 	:global(.find-widget.visible) {
 		transform: translateY(0) !important;
 	}
-	.editor {
+
+	.editor{
 		display: flex;
 		flex: 1;
 		z-index: 2;
 		border-radius: 0.4rem;
 		overflow: hidden;
 		box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
-
 	}
+	.loading{
+		display: flex;
+		width: calc(100% - 0.4rem);
+		height: calc(100% - 0.4rem);
+		justify-content: center;
+		align-items: center;
+		background-color: var(--secondary);
+		border-radius: 0.4rem;
+		animation: infinite 3s pulse ease-in-out;
+		position: absolute;
+	}
+	@keyframes pulse {
+		0%{
+			background-color: var(--secondary);
+		}
+		50%{
+			background-color: var(--primary);
+		}
+		100%{
+			background-color: var(--secondary);
 
+		}
+	}
 </style>

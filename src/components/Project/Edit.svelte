@@ -151,6 +151,7 @@
 		.editor-wrapper {
 			flex-direction: column;
 			.editor-border {
+				position: relative;
 				display: flex;
 				overflow: hidden;
 				flex: 1;

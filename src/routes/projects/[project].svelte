@@ -14,7 +14,7 @@
 </script>
 
 <title>
-	{project?.name}
+	{project?.name || 'Unnamed'}
 </title>
 <svelte:window
 	on:beforeunload={(e) => {

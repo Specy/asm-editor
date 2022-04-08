@@ -14,7 +14,7 @@
 	export let currentAddress = 0
 	let hexAddress = '00000000'
 	type DataType = 'register' | 'memory'
-	let type: DataType = 'memory'
+	let type: DataType = 'register'
 	const ADDRESSES_PER_PAGE = 16
 	let visibleAddresses = new Array(ADDRESSES_PER_PAGE).fill(0)
 	$: visibleAddresses = new Array(ADDRESSES_PER_PAGE).fill(0).map((_, i) => currentAddress + i)

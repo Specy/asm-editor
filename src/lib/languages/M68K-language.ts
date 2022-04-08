@@ -5,6 +5,13 @@ const logic = ["not","and","andi","or","ori","eor","eori"]
 const special = ["move","movea","exg","clr","swap","neg"]
 const withDescriptors = ["add","sub","divs","move"]
 const registers = ["d0","d1","d2","d3","d4","d5","d6","d7","a0","a1","a2","a3","a4","a5","a6","a7"]
+const registersMap = toMap(registers)
+const withDescriptorsMap = toMap(withDescriptors)
+const arithmeticMap = toMap(arithmetic)
+function toMap(arr){
+    return Object.fromEntries(arr.map(e => [e,true]))
+}
+
 export const M68KLanguage = {
 	defaultToken: '',
 	ignoreCase: false,
@@ -157,12 +164,23 @@ export const M68KLanguage = {
 
 export function M68KCompletition(monaco: MonacoType){
 	return {
-		triggerCharacters: ['.',' ','\t','\n','deleteLeft'],
+		triggerCharacters: ['.',' ','\t','\n','deleteLeft','Tab','$','#'],
 		provideCompletionItems: (model, position) => {
 			const data:string = model.getValueInRange({startLineNumber: position.lineNumber, startColumn: 1, endLineNumber: position.lineNumber, endColumn: position.column})
-			const lastCharacter = data.substr(data.length - 1)
+			const lastCharacter = data.substring(data.length - 1, data.length)
 			let suggestions = []
-			if(lastCharacter === '$'){
+			const trimmed = data.trim()
+			if(lastCharacter === '#'){
+				const numerical = ['$','%','#']
+				suggestions = suggestions.concat(...numerical.map(numerical => {
+					return {
+						kind: monaco.languages.CompletionItemKind.Unit,
+						label: numerical,
+						insertText: numerical !== '#' ? numerical : '',
+					}
+				}))
+			}
+			if(lastCharacter === '$' && !trimmed.endsWith('#$')){
                 suggestions = suggestions.concat(...registers.map(register => {
                     return {
                         kind: monaco.languages.CompletionItemKind.Variable,
@@ -171,50 +189,107 @@ export function M68KCompletition(monaco: MonacoType){
                     }   
                 }))
             }
-			if(withDescriptors.includes(data.trim().replace('.', ''))){
+			if(lastCharacter !== ' ' && withDescriptorsMap[trimmed.replace('.', '')]){
 				const kind = monaco.languages.CompletionItemKind.Enum
 				suggestions = suggestions.concat(...[
 					{
 						kind,
 						label: 'l', 
 						documentation: "Select all bits of the register",
-						insertText: 'l'
+						insertText: 'l '
 					},{
 						kind,
 						label: 'w',
 						documentation: "Select first part of the register",
-						insertText: 'w'
+						insertText: 'w '
 					},{
 						kind,
 						label: 'b',
 						documentation: "Select first 8 bits of the register",
-						insertText: 'b'
+						insertText: 'b '
 					},
 				])
 			}
-			if(data.trim().length === 0 ){
+			if(trimmed.length === 0 && data){
 				suggestions = suggestions.concat(...M68KLanguage.keywords.map(keyword => {
 					return {
-						kind: monaco.languages.CompletionItemKind.Keyword,
+						kind: monaco.languages.CompletionItemKind.Function,
 						label: keyword,
-						insertText: keyword,
+						insertText: keyword + ' ',
 					}
 				}))
 			}
+			if(arithmeticMap[trimmed] && (lastCharacter === ' ' || lastCharacter === ',') ){
+				suggestions = suggestions.concat(...registers.map(register => {
+					return {
+						kind: monaco.languages.CompletionItemKind.Variable,
+						label: register,
+						insertText: `$${lastCharacter === ' ' ? register + ', ' : register }`
+					}
 
-			if(data.trim()){
+				}))
+			}
+			if(trimmed){
 				suggestions = suggestions.concat(...M68KLanguage.keywords.filter(keyword => keyword.startsWith(data.trimStart()))
 				.map(keyword => {
 					return {
-						kind: monaco.languages.CompletionItemKind.Keyword,
+						kind: monaco.languages.CompletionItemKind.Function,
 						label: keyword,
-						insertText: keyword,
+						insertText: keyword + ' ',
 					}
 				}))
 			}
 			return {
 				suggestions
 			}
+		},
+		resolveCompletionItem(item, token){
+			return {
+				...CompletitionMap[item.label],
+				...item,
+				preselect: true
+			}
 		}
+	}
+}
+
+
+const CompletitionMap = {
+	l:{
+		detail: 'Select all 32 bits of the register',
+	},
+	w:{
+		detail: 'Selects first 16 bits of the register',
+	},
+	b:{
+		detail: 'Selects first 8 bits of the register',
+	},
+	add: {
+		detail: 'add <reg/num>, <dest>',
+		documentation: "Adds the first register to the second register, stores result in the second register"
+	},
+	sub: {
+		detail: 'sub <reg/num>, <dest> | subtracts numbers',
+		documentation: 'Subtracts the first register from the second register, stores result in the second register'
+	},
+	divs: {
+		detail: 'divs <reg/num>, <dest> | divides numbers',
+		documentation: 'Divides the first register by the second register, stores result in the second register'
+	},
+	muls: {
+		detail: 'muls <reg/num>, <dest> | multiplies numbers',
+		documentation: 'Multiplies the first register by the second register, stores result in the second register'
+	},
+	swap:{
+		detail: 'swap <reg> swaps the two words of the register',
+		documentation: 'Swaps the two words of the register es: "FFFF 0000" -> "0000 FFFF"'
+	},
+	exg: {
+		detail: 'exg <reg1>, <reg2> | exchanges the two registers',
+		documentation: 'Exchanges the content of the two registers'
+	},
+	neg: {
+		detail: 'neg <reg> | negates register',
+		documentation: 'Negates the register, es: "1234" -> "-1234"'
 	}
 }

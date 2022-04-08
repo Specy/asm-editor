@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation'
 
 	import Button from '$cmp/buttons/Button.svelte'
+import ButtonLink from '$cmp/buttons/ButtonLink.svelte'
 	import Input from '$cmp/inputs/Input.svelte'
 	import Select from '$cmp/inputs/Select.svelte'
 	import Textarea from '$cmp/inputs/Textarea.svelte'
@@ -41,9 +42,9 @@
 			<Textarea title="Description" bind:value={description} />
 			<Select title="Language" options={['M68K', 'MIPS']} bind:value={language} />
 		</Form>
-		<div style="display:flex; justify-content: space-between; align-items:center">
-			<a href="/projects"> Cancel </a>
-			<Button on:click={create} style="margin-left: auto; margin-top: 1rem;">Create</Button>
+		<div style="display:flex; justify-content: space-between; align-items:center; margin-top: 1rem;">
+			<ButtonLink href="/projects" cssVar='primary'> Cancel </ButtonLink>
+			<Button on:click={create}>Create</Button>
 		</div>
 	</div>
 </div>

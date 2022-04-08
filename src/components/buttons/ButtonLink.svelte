@@ -5,13 +5,19 @@
 	export let style = ''
 	export let bg = 'var(--accent)'	
 	export let hasIcon = false
+
+	export let cssVar = ''
+	let finalColor = ''
+	$: finalColor = cssVar 
+		? `background-color: var(--${cssVar}); color: var(--${cssVar}-text);` 
+		: `background-color: ${bg}; color: ${color};`
 </script>
 
 <a
 	class="link-button"
 	class:hasIcon
     {href}
-	style={`background-color: ${bg}; color: ${color}; ${style}`}
+	style={`${finalColor} ${style}; `}
 	{disabled}
 	on:click
 >

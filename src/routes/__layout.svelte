@@ -6,11 +6,14 @@
 	import ThemeProvider from '$cmp/Providers/ThemeProvider.svelte'
 	import PromptProvider from '$cmp/Providers/PromptProvider.svelte'
 	import { registerServiceWorker } from '$lib/register-sw'
-	import { onMount } from 'svelte';
+	import { onMount } from 'svelte'
 	import Footer from '$cmp/layout/Footer.svelte'
+	import { Monaco } from '$lib/Monaco'
 
 	onMount(() => {
 		registerServiceWorker()
+		Monaco.load()
+		return Monaco.dispose
 	})
 </script>
 
@@ -20,7 +23,7 @@
 			<PageTransition refresh={$page.url.pathname}>
 				<slot />
 			</PageTransition>
-			<Footer pages={['/projects','/projects/create']} />
+			<Footer pages={['/projects', '/projects/create']} />
 		</PromptProvider>
 	</ErrorLogger>
 </ThemeProvider>
