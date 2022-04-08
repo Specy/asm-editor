@@ -33,14 +33,16 @@
 			decorations = editor.deltaDecorations(
 				decorations,
 				highlightedLine > 0
-					? [{
-						range: new monacoInstance.Range(highlightedLine, 0, highlightedLine, 0),
-						options: {
-							className: hasError ? 'error-line' : 'selected-line',
-							inlineClassName: 'selected-line-text',
-							isWholeLine: true
-						}
-					}]
+					? [
+							{
+								range: new monacoInstance.Range(highlightedLine, 0, highlightedLine, 0),
+								options: {
+									className: hasError ? 'error-line' : 'selected-line',
+									inlineClassName: 'selected-line-text',
+									isWholeLine: true
+								}
+							}
+					  ]
 					: []
 			)
 			editor.revealLineInCenter(highlightedLine)
@@ -56,7 +58,7 @@
 />
 <div bind:this={el} class="editor" />
 
-<style>
+<style lang="scss">
 	:global(.selected-line) {
 		background-color: var(--accent);
 	}
@@ -87,5 +89,15 @@
 	.editor {
 		display: flex;
 		flex: 1;
+		z-index: 2;
+		border-radius: 0.3rem;
+		overflow: hidden;
+		box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
+
+	}
+	@keyframes moveGradient {
+		50% {
+			background-position: 100% 50%;
+		}
 	}
 </style>

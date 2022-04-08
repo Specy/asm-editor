@@ -17,6 +17,8 @@ module.exports = {
 		  'error',
 		  {'ts-ignore': 'allow-with-description'},
 		],
+		'@typescript-eslint/explicit-module-boundary-types': 'off',
+		'no-useless-escape': 'off'
 	  },
 	env: {
 		browser: true,

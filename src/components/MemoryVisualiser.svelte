@@ -148,11 +148,13 @@
 	.register-grid {
 		display: grid;
 		grid-template-columns: auto auto auto;
-		justify-content: space-between;
-		min-width: 60%;
-		row-gap: 0.5rem;
+		justify-content: center;
+		width: 100%;
+		row-gap: 0.4rem;
+		font-size: 0.9rem;
 		column-gap: 1rem;
 		margin-bottom: 1rem;
+		overflow-y: auto;
 		flex: 1;
 		.register-grid-title {
 			margin-bottom: 0.7rem;

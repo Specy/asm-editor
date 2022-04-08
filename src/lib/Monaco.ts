@@ -1,8 +1,9 @@
 import { browser } from '$app/env';
 import { baseTheme } from '$lib/editorTheme';
-import { M68KLanguage, M68KCompletition } from '$lib/M68K-language';
+import { M68KLanguage, M68KCompletition } from '$lib/languages/M68K-language';
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import type monaco from 'monaco-editor'
+import { MIPSLanguage, MIPSCompletition } from '$lib/languages/MIPS-language';
 
 export type MonacoType = typeof monaco
 class MonacoLoader {
@@ -20,7 +21,11 @@ class MonacoLoader {
 		monaco.languages.register({ id: 'm68k' })
 		//@ts-ignore custom language
 		monaco.languages.setMonarchTokensProvider('m68k', M68KLanguage)
+		//@ts-ignore custom language
+		monaco.languages.setMonarchTokensProvider('mips', MIPSLanguage)
 		monaco.languages.registerCompletionItemProvider('m68k', M68KCompletition(monaco))
+		monaco.languages.registerCompletionItemProvider('mips', MIPSCompletition(monaco))
+
 		this.monaco = monaco
 		// @ts-ignore add worker
 		self.MonacoEnvironment = {

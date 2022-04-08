@@ -1,5 +1,5 @@
 
-
+export type AvailableLanguages = 'M68K' | 'MIPS'
 export interface ProjectData{
     code: string
     createdAt: number
@@ -7,6 +7,7 @@ export interface ProjectData{
     name: string
     description: string
     id: string
+    language: AvailableLanguages
 }
 
 const baseM68k = 
@@ -16,18 +17,22 @@ START:
 
 END
 `.trim()
+const baseMIPS = 
+`
+START:
 
+`.trim()
 export class Project{
     code = ""
     createdAt = 0
     updatedAt = 0
     name = ""
-    language = "m68k"
+    language:AvailableLanguages = "M68K"
     description = ""
     id = ""
     constructor(data?: Partial<ProjectData>){
-        this.code = this.language === 'm68k' ? baseM68k : ''
         Object.assign(this, data || {})
+        this.code = this.language === 'M68K' ? baseM68k : baseMIPS
     }
     toObject(): ProjectData{
         return {
@@ -35,6 +40,7 @@ export class Project{
             createdAt: this.createdAt,
             updatedAt: this.updatedAt,
             name: this.name,
+            language: this.language,
             description: this.description,
             id: this.id
         }

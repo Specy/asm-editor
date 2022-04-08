@@ -1,7 +1,10 @@
+import type { MonacoType } from "$lib/Monaco"
+
 const arithmetic = ["add","addi","adda","sub","subi","suba","mulu","muls","divu","divs"]
 const logic = ["not","and","andi","or","ori","eor","eori"]
 const special = ["move","movea","exg","clr","swap","neg"]
 const withDescriptors = ["add","sub","divs","move"]
+const registers = ["d0","d1","d2","d3","d4","d5","d6","d7","a0","a1","a2","a3","a4","a5","a6","a7"]
 export const M68KLanguage = {
 	defaultToken: '',
 	ignoreCase: false,
@@ -152,12 +155,22 @@ export const M68KLanguage = {
 	}
 };
 
-export function M68KCompletition(monaco){
+export function M68KCompletition(monaco: MonacoType){
 	return {
 		triggerCharacters: ['.',' ','\t','\n','deleteLeft'],
 		provideCompletionItems: (model, position) => {
-			const data = model.getValueInRange({startLineNumber: position.lineNumber, startColumn: 1, endLineNumber: position.lineNumber, endColumn: position.column})
+			const data:string = model.getValueInRange({startLineNumber: position.lineNumber, startColumn: 1, endLineNumber: position.lineNumber, endColumn: position.column})
+			const lastCharacter = data.substr(data.length - 1)
 			let suggestions = []
+			if(lastCharacter === '$'){
+                suggestions = suggestions.concat(...registers.map(register => {
+                    return {
+                        kind: monaco.languages.CompletionItemKind.Variable,
+                        label: register,
+                        insertText: register
+                    }   
+                }))
+            }
 			if(withDescriptors.includes(data.trim().replace('.', ''))){
 				const kind = monaco.languages.CompletionItemKind.Enum
 				suggestions = suggestions.concat(...[
@@ -190,7 +203,7 @@ export function M68KCompletition(monaco){
 			}
 
 			if(data.trim()){
-				suggestions = suggestions.concat(...M68KLanguage.keywords.filter(keyword => keyword.startsWith(data.trim()))
+				suggestions = suggestions.concat(...M68KLanguage.keywords.filter(keyword => keyword.startsWith(data.trimStart()))
 				.map(keyword => {
 					return {
 						kind: monaco.languages.CompletionItemKind.Keyword,

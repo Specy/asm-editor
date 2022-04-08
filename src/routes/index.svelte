@@ -10,7 +10,7 @@
 <div class="main">
 	<div class="background" />
 	<div class="content">
-		<div class="welcome-title">The all in one web editor for M68K</div>
+		<div class="welcome-title">The all in one web editor for M68K and MIPS</div>
 		<div style="display: flex ;">
 			<ButtonLink href="/projects" color="var(--accent-text)">
                         Go to the editor

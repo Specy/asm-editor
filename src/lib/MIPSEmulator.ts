@@ -1,6 +1,5 @@
 import { writable } from "svelte/store"
-import { Emulator } from 'm68k-js'
-
+import { MIPSProgram } from '$lib/MIPSInterpreter'
 type RegisterHex = [hi: string, lo: string]
 export type Register = {
     value: number,
@@ -24,8 +23,8 @@ type EmulatorStore = {
     memory: Memory
 }
 
-const registerName = ['A0', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7']
-export function M68KEmulator(code: string, haltLimit = 1000000) {
+const registerName = ["zero", "at", "v0", "v1", "a0", "a1", "a2", "a3", "t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7", "s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7", "t8", "t9", "k0", "k1", "gp", "sp", "fp", "ra"]
+export function MIPSEmulator(code: string, haltLimit = 1000000) {
     const { subscribe, set, update } = writable<EmulatorStore>({
         registers: [],
         terminated: false,
@@ -35,9 +34,9 @@ export function M68KEmulator(code: string, haltLimit = 1000000) {
         numOfLines: 0,
         memory: {}
     })
-    let emulator = new Emulator()
+    let emulator = new MIPSProgram('')
     function setCode(code: string) {
-        emulator = new Emulator(code)
+        emulator = new MIPSProgram(code)
         update(data => {
             data.terminated = false
             data.line = -1
@@ -70,7 +69,7 @@ export function M68KEmulator(code: string, haltLimit = 1000000) {
     }
     function updateRegisters() {
         update(data => {
-            if(data.registers.length === 0) return data
+            if (data.registers.length === 0) return data
             const { registers } = data
             Array.from(emulator.registers).forEach((reg, i) => {
                 registers[i].diff.value = registers[i].value
@@ -84,7 +83,7 @@ export function M68KEmulator(code: string, haltLimit = 1000000) {
             return data
         })
     }
-    function updateMemory(){
+    function updateMemory() {
         update(data => {
             data.memory = emulator.memory.memory
             return data
@@ -94,7 +93,8 @@ export function M68KEmulator(code: string, haltLimit = 1000000) {
         let i = 0
         let hasError = false
         try {
-            while (!emulator.emulationStep()) {
+            while (emulator.pc / 4 < emulator.insns.length) {
+                emulator.step()
                 if (i++ > haltLimit) throw new Error('Halt limit reached')
                 if (emulator.errors.length) break
             }
@@ -108,17 +108,17 @@ export function M68KEmulator(code: string, haltLimit = 1000000) {
         if (hasError) throw new Error('Program terminated with error')
         return emulator
     }
-    function undo(){
-        emulator.undoFromStack()
+    function undo() {
+        //emulator.undoFromStack()
         updateRegisters()
         updateData()
     }
-    function updateData(){
+    function updateData() {
         update(data => {
             data.terminated = true
             data.line = emulator.line
             data.errors = emulator.errors
-            data.numOfLines = emulator.instructions.length
+            data.numOfLines = emulator.insns.length
             return data
         })
     }
@@ -127,7 +127,8 @@ export function M68KEmulator(code: string, haltLimit = 1000000) {
         let hasError = false
         let done = false
         try {
-            done = emulator.emulationStep()
+            emulator.step()
+            done = emulator.pc / 4 < emulator.insns.length
         } catch (e) {
             console.error(e)
             hasError = true

@@ -10,7 +10,7 @@
     <div>{title}</div>
     <select bind:value {style}>
         {#each options as option,i}
-            <option value={option} disabled={disabled[i] === undefined}>
+            <option value={option} disabled={disabled[i] !== undefined}>
                 {option}
             </option>
         {/each}
