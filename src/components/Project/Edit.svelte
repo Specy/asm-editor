@@ -82,16 +82,16 @@
 					emulator.run()
 				} catch (e) {
 					console.error(e)
-					toast.error('Error executing code')
+					toast.error('Error executing code. ' + e.message)
 				}
 			}}
 			on:build={() => {
 				try {
 					emulator.setCode(project.code)
-					emulator.step()
+					emulator.step()	
 				} catch (e) {
 					console.error(e)
-					toast.error('Error executing code')
+					toast.error('Error executing code. ' + e.message)
 				}
 			}}
 			on:step={() => {
@@ -99,7 +99,7 @@
 					emulator.step()
 				} catch (e) {
 					console.error(e)
-					toast.error('Error executing code')
+					toast.error('Error executing code. ' + e.message)
 				}
 			}}
 			on:stop={() => emulator.setCode(project.code)}
@@ -108,7 +108,7 @@
 					emulator.undo()
 				} catch (e) {
 					console.error(e)
-					toast.error('Error executing code')
+					toast.error('Error executing code. ' + e.message)
 				}
 			}}
 		/>

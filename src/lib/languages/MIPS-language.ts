@@ -216,42 +216,57 @@ export const MIPSLanguage = {
 
 
 export const MIPSFormatter = {
-	provideDocumentFormattingEdits(model) {
-		const text = model.getValue();
-		const lines = text.split('\n');
-		const parsed = lines.map(line => {
+    provideDocumentFormattingEdits(model) {
+        const text = model.getValue();
+        const lines = text.split('\n');
+        const parsed = lines.map(line => {
             let formatted = ''
-            try{
+            try {
                 const [args] = parseArgs(line)
                 if (keywordsMap[args[0]?.value]) formatted += `	${args.shift()?.value} `
-                formatted += args.map(a => a.value + (a.boundary?.trim() || '')).join(' ')
-            }catch(e){
+                formatted += args.map(a =>  (a.boundary?.trim() || '') + a.value).join(' ')
+            } catch (e) {
                 console.error(e)
                 return line
             }
-			return formatted
-		})
-		return [{
-			text: parsed.join('\n'),
-			range: model.getFullModelRange()
-		}]
-	}
+            return formatted
+        })
+        return [{
+            text: parsed.join('\n'),
+            range: model.getFullModelRange()
+        }]
+    }
 }
 type Arg = {
-	value: string
-	boundary: string
+    value: string
+    boundary: string
 }
+
+
+const instructions = {
+    add: {
+        description: '"add <num/reg>, <dest>" Adds two numbers and stores in the second register',
+        parameters: [
+            {
+                type: 'register/number'
+            }, {
+                type: 'register'
+            }
+        ]
+    }
+}
+
 function parseArgs(data): [Arg[], string[]] {
-	const trimmed = data.trim();
-	const boundaries = data.trimEnd().match(/[\s,]+/g) || []
-	const args = trimmed.split(/[\s,]+/g).map((value, i) => {
-		const data = {
-			value: value.trim(),
-			boundary: boundaries[i],
-		}
-		return data
-	})
-	return [args, boundaries]
+    const trimmed = data.trim();
+    const boundaries = data.trimEnd().match(/[\s,]+/g) || []
+    const args = trimmed.split(/[\s,]+/g).map((value, i) => {
+        const data = {
+            value: value.trim(),
+            boundary: boundaries[i],
+        }
+        return data
+    })
+    return [args, boundaries]
 }
 export function MIPSCompletition(monaco: MonacoType) {
     return {

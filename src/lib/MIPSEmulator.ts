@@ -24,7 +24,7 @@ type EmulatorStore = {
 }
 
 const registerName = ["zero", "at", "v0", "v1", "a0", "a1", "a2", "a3", "t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7", "s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7", "t8", "t9", "k0", "k1", "gp", "sp", "fp", "ra"]
-export function MIPSEmulator(code: string, haltLimit = 1000000) {
+export function MIPSEmulator(code: string, haltLimit = 100000) {
     const { subscribe, set, update } = writable<EmulatorStore>({
         registers: [],
         terminated: false,
@@ -41,12 +41,13 @@ export function MIPSEmulator(code: string, haltLimit = 1000000) {
             data.terminated = false
             data.line = -1
             data.code = code
-            data.errors = []
+            data.errors = emulator.errors
             data.numOfLines = 0
             data.registers = []
             return data
         })
         setRegisters()
+        updateRegisters()
     }
     function setRegisters() {
         const registers = Array.from(emulator.registers).map((reg, i) => {
@@ -91,7 +92,7 @@ export function MIPSEmulator(code: string, haltLimit = 1000000) {
     }
     function run() {
         let i = 0
-        let hasError = false
+        let error:Error
         try {
             while (emulator.pc / 4 < emulator.insns.length) {
                 emulator.step()
@@ -100,12 +101,15 @@ export function MIPSEmulator(code: string, haltLimit = 1000000) {
             }
         } catch (e) {
             console.error(e)
-            hasError = true
+            error = e
         }
         updateRegisters()
         updateData()
         updateMemory()
-        if (hasError) throw new Error('Program terminated with error')
+        if (error){
+            addError(error?.message)
+            throw error
+        }
         return emulator
     }
     function undo() {
@@ -122,22 +126,32 @@ export function MIPSEmulator(code: string, haltLimit = 1000000) {
             return data
         })
     }
+    function addError(error:string){
+        update(data => {
+            data.errors.push(error)
+            return data
+        })
+    }
+
     function step() {
         if (emulator.errors.length) return
-        let hasError = false
+        let error:Error
         let done = false
         try {
             emulator.step()
             done = emulator.pc / 4 < emulator.insns.length
         } catch (e) {
             console.error(e)
-            hasError = true
+            error = e
         }
 
         updateRegisters()
         updateMemory()
         updateData()
-        if (hasError) throw new Error('Program terminated with error')
+        if (error) {
+            addError(error?.message)
+            throw error
+        }
         return done
     }
 

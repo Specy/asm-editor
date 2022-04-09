@@ -20,7 +20,7 @@
             </Icon>
             Run
         </Button>
-		<Button style="width: 5.5rem; padding: 0.5rem 0" on:click={() => dispatch('step')}>
+		<Button style="width: 5.5rem; padding: 0.5rem 0" on:click={() => dispatch('build')}>
             <Icon size={1} style='margin-right: 0.4rem;'>
                 <FaWrench />
             </Icon>
