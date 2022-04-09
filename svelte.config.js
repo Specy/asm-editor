@@ -6,7 +6,7 @@ const config = {
 	preprocess: preprocess(),
 	kit: {
 		adapter: adapter({
-			fallback: '/'
+			fallback: '200.html'
 		}),
 		prerender: {
 			enabled:true,
