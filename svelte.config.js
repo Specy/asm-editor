@@ -5,7 +5,9 @@ import {resolve} from 'path'
 const config = {
 	preprocess: preprocess(),
 	kit: {
-		adapter: adapter(),
+		adapter: adapter({
+			fallback: '/'
+		}),
 		prerender: {
 			enabled:true,
 			default:true

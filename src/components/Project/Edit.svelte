@@ -157,6 +157,7 @@
 				flex: 1;
 				padding: 0.2rem;
 				border-radius: 0.5rem;
+				max-height: calc(90vh - 5.4rem);
 			}
 		}
 		.registers-wrapper {

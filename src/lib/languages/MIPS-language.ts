@@ -3,8 +3,8 @@ import type { MonacoType } from "$lib/Monaco";
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-function toMap(arr){
-    return Object.fromEntries(arr.map(e => [e,true]))
+function toMap(arr) {
+    return Object.fromEntries(arr.map(e => [e, true]))
 }
 
 const registers = ["zero", "at", "v0", "v1", "a0", "a1", "a2", "a3", "t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7", "s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7", "t8", "t9", "k0", "k1", "gp", "sp", "fp", "ra"]
@@ -20,6 +20,7 @@ const arithmetic = ['add',
     'mult',
     'multu']
 const arithmeticMap = toMap(arithmetic)
+
 const keywords = [
     ...arithmetic,
     'nor',
@@ -66,11 +67,10 @@ const keywords = [
     'mthi',
     'mtlo',
     'move',
-    '.data',
-    '.text',
     'syscall',
     'trap',
 ]
+const keywordsMap = toMap(keywords)
 export const MIPSLanguage = {
     defaultToken: '',
     ignoreCase: false,
@@ -78,7 +78,7 @@ export const MIPSLanguage = {
 
     regEx: /\/(?!\/\/)(?:[^\/\\]|\\.)*\/[igm]*/,
 
-    keywords,
+    keywords: [...keywords, '.data', '.text'],
 
     // we include these common regular expressions
     symbols: /[.,:]+/,
@@ -215,6 +215,44 @@ export const MIPSLanguage = {
 };
 
 
+export const MIPSFormatter = {
+	provideDocumentFormattingEdits(model) {
+		const text = model.getValue();
+		const lines = text.split('\n');
+		const parsed = lines.map(line => {
+            let formatted = ''
+            try{
+                const [args] = parseArgs(line)
+                if (keywordsMap[args[0]?.value]) formatted += `	${args.shift()?.value} `
+                formatted += args.map(a => a.value + (a.boundary?.trim() || '')).join(' ')
+            }catch(e){
+                console.error(e)
+                return line
+            }
+			return formatted
+		})
+		return [{
+			text: parsed.join('\n'),
+			range: model.getFullModelRange()
+		}]
+	}
+}
+type Arg = {
+	value: string
+	boundary: string
+}
+function parseArgs(data): [Arg[], string[]] {
+	const trimmed = data.trim();
+	const boundaries = data.trimEnd().match(/[\s,]+/g) || []
+	const args = trimmed.split(/[\s,]+/g).map((value, i) => {
+		const data = {
+			value: value.trim(),
+			boundary: boundaries[i],
+		}
+		return data
+	})
+	return [args, boundaries]
+}
 export function MIPSCompletition(monaco: MonacoType) {
     return {
         triggerCharacters: ['.', ' ', '\t', '\n', 'deleteLeft', '$'],
@@ -223,7 +261,21 @@ export function MIPSCompletition(monaco: MonacoType) {
             const lastCharacter = data.substring(data.length - 1, data.length)
             let suggestions = []
             const trimmed = data.trim()
-            if (lastCharacter === '$') {
+            const [args, boundaries] = parseArgs(data)
+            function addNumerical() {
+                suggestions.push({
+                    label: '<num>',
+                    kind: monaco.languages.CompletionItemKind.Value,
+                    insertText: '',
+                    documentation: "Decimal number",
+                }, {
+                    label: '0x<num>',
+                    insertText: '0x',
+                    kind: monaco.languages.CompletionItemKind.Value,
+                    documentation: "Hexadecimal number",
+                })
+            }
+            function addRegisters() {
                 suggestions = suggestions.concat(...registers.map(register => {
                     return {
                         kind: monaco.languages.CompletionItemKind.Variable,
@@ -232,8 +284,12 @@ export function MIPSCompletition(monaco: MonacoType) {
                     }
                 }))
             }
+            if (lastCharacter === '$') {
+                addRegisters()
+            }
+            // if wrote only space or tab, suggest keywords
             if (trimmed.length === 0) {
-                suggestions = suggestions.concat(...MIPSLanguage.keywords.map(keyword => {
+                suggestions = suggestions.concat(...keywords.map(keyword => {
                     return {
                         kind: monaco.languages.CompletionItemKind.Function,
                         label: keyword,
@@ -241,18 +297,13 @@ export function MIPSCompletition(monaco: MonacoType) {
                     }
                 }))
             }
-            if (arithmeticMap[trimmed] && (lastCharacter === ' ' || lastCharacter === ',')) {
-                suggestions = suggestions.concat(...registers.map(register => {
-                    return {
-                        kind: monaco.languages.CompletionItemKind.Variable,
-                        label: register,
-                        insertText: `$${lastCharacter === ' ' ? register + ', ' : register}`
-                    }
-
-                }))
+            //if wrote a keyword and wants to add register
+            if (keywordsMap[args[0]?.value] && (lastCharacter === ' ' || lastCharacter === ',')) {
+                addRegisters()
+                addNumerical()
             }
             if (trimmed) {
-                suggestions = suggestions.concat(...MIPSLanguage.keywords.filter(keyword => keyword.startsWith(data.trimStart()))
+                suggestions = suggestions.concat(...keywords.filter(keyword => keyword.startsWith(data.trimStart()))
                     .map(keyword => {
                         return {
                             kind: monaco.languages.CompletionItemKind.Function,

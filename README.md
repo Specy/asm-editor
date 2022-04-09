@@ -10,3 +10,4 @@ Uses monaco-editor for the code editing, [M68K interpreter](https://github.com/N
 * Inspect the value of each register and find what the instruction changed 
 * Inspect the memory and look what was used
 * Create new projects and manage them all in the webapp 
+* Format the code

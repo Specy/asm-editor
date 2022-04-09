@@ -1,15 +1,15 @@
 import type { MonacoType } from "$lib/Monaco"
 
-const arithmetic = ["add","addi","adda","sub","subi","suba","mulu","muls","divu","divs"]
-const logic = ["not","and","andi","or","ori","eor","eori"]
-const special = ["move","movea","exg","clr","swap","neg"]
-const withDescriptors = ["add","sub","divs","move"]
-const registers = ["d0","d1","d2","d3","d4","d5","d6","d7","a0","a1","a2","a3","a4","a5","a6","a7"]
+const arithmetic = ["add", "addi", "adda", "sub", "subi", "suba", "mulu", "muls", "divu", "divs"]
+const logic = ["not", "and", "andi", "or", "ori", "eor", "eori"]
+const special = ["move", "movea", "exg", "clr", "swap", "neg"]
+const withDescriptors = ["add", "sub", "divs", "move"]
+const registers = ["d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7"]
 const registersMap = toMap(registers)
 const withDescriptorsMap = toMap(withDescriptors)
 const arithmeticMap = toMap(arithmetic)
-function toMap(arr){
-    return Object.fromEntries(arr.map(e => [e,true]))
+function toMap(arr) {
+	return Object.fromEntries(arr.map(e => [e, true]))
 }
 
 export const M68KLanguage = {
@@ -19,7 +19,7 @@ export const M68KLanguage = {
 
 	regEx: /\/(?!\/\/)(?:[^/\\]|\\.)*\/[igm]*/,
 
-	keywords: [...arithmetic,...logic,...special,"ext","lsl","lsr","asl","asr","rol","ror","cmp","cmpa","cmpi","tst","jmp","bra","jsr","rts","bsr","beq","bne","bge","bgt","ble","blt"],
+	keywords: [...arithmetic, ...logic, ...special, "ext", "lsl", "lsr", "asl", "asr", "rol", "ror", "cmp", "cmpa", "cmpi", "tst", "jmp", "bra", "jsr", "rts", "bsr", "beq", "bne", "bge", "bgt", "ble", "blt"],
 	// we include these common regular expressions
 	symbols: /[.,:]+/,
 	escapes: /\\(?:[abfnrtv\\"'$]|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
@@ -27,9 +27,9 @@ export const M68KLanguage = {
 	// The main tokenizer for our languages
 	tokenizer: {
 		root: [
-            //data registers
-            [/\b(D0|D1|D2|D3|D4|D5|D6|D7|d0|d1|d2|d3|d4|d5|d6|d7)/, 'data-register'],
-            [/\b(A0|A1|A2|A3|A4|A5|A6|A7|a0|a1|a2|a3|a4|a5|a6|a7)/, 'address-register'],
+			//data registers
+			[/\b(D0|D1|D2|D3|D4|D5|D6|D7|d0|d1|d2|d3|d4|d5|d6|d7)/, 'data-register'],
+			[/\b(A0|A1|A2|A3|A4|A5|A6|A7|a0|a1|a2|a3|a4|a5|a6|a7)/, 'address-register'],
 
 			// identifiers and keywords
 			[/\$[a-zA-Z_]\w*/, 'variable.predefined'],
@@ -43,14 +43,14 @@ export const M68KLanguage = {
 					}
 				}
 			],
-            
+
 			// whitespace
 			[/[ \t\r\n]+/, ''],
-            
-            
+
+
 
 			// Comments
-			[/;.*$/, 'comment'],
+			[/\*.*$/, 'comment'],
 
 			// regular expressions
 			['///', { token: 'regexp', next: '@hereregexp' }],
@@ -63,11 +63,11 @@ export const M68KLanguage = {
 			[/@symbols/, 'delimiter'],
 
 			// numbers
-            [/#%[0-1]+/, 'number.binary'],
+			[/#%[0-1]+/, 'number.binary'],
 			[/\d+[eE]([-+]?\d+)?/, 'number.float'],
 			[/\d+\.\d+([eE][-+]?\d+)?/, 'number.float'],
 			[/#\$[0-9a-fA-F]+/, 'number.hex'],
-            [/#0x[A-F0-9]+/, 'number.hex'],
+			[/#0x[A-F0-9]+/, 'number.hex'],
 			[/0[0-7]+(?!\d)/, 'number.octal'],
 			[/#[-+]?[0-9]+/, 'number'],
 
@@ -148,8 +148,8 @@ export const M68KLanguage = {
 		],
 
 		comment: [
-			[/[^;]+/, 'comment'],
-			[/;/, 'comment']
+			[/[^\*]+/, 'comment'],
+			[/\*/, 'comment']
 		],
 
 		hereregexp: [
@@ -161,48 +161,98 @@ export const M68KLanguage = {
 		]
 	}
 };
+export const M68KFormatter = {
+	provideDocumentFormattingEdits(model) {
+		const text = model.getValue();
+		const lines = text.split('\n');
+		const parsed = lines.map(line => {
+            let formatted = ''
+            try{
+                const [args] = parseArgs(line)
+                if (keywordsMap[args[0]?.value]) formatted += `	${args.shift()?.value} `
+                formatted += args.map(a => a.value + (a.boundary?.trim() || '')).join(' ')
+            }catch(e){
+                console.error(e)
+                return line
+            }
+			return formatted
+		})
+		return [{
+			text: parsed.join('\n'),
+			range: model.getFullModelRange()
+		}]
+	}
+}
 
-export function M68KCompletition(monaco: MonacoType){
+type Arg = {
+	value: string
+	boundary: string
+}
+function parseArgs(data): [Arg[], string[]] {
+	const trimmed = data.trim();
+	const boundaries = data.trimEnd().match(/[\s,]+/g) || []
+	const args = trimmed.split(/[\s,]+/g).map((value, i) => {
+		const data = {
+			value: value.trim(),
+			boundary: boundaries[i],
+		}
+		return data
+	})
+	return [args, boundaries]
+}
+
+const keywordsMap = toMap(M68KLanguage.keywords)
+export function M68KCompletition(monaco: MonacoType) {
 	return {
-		triggerCharacters: ['.',' ','\t','\n','deleteLeft','Tab','$','#'],
+		triggerCharacters: ['.', ',', ' ', '\t', '\n', 'deleteLeft', 'Tab', '$', '#'],
 		provideCompletionItems: (model, position) => {
-			const data:string = model.getValueInRange({startLineNumber: position.lineNumber, startColumn: 1, endLineNumber: position.lineNumber, endColumn: position.column})
+			const data: string = model.getValueInRange({ startLineNumber: position.lineNumber, startColumn: 1, endLineNumber: position.lineNumber, endColumn: position.column })
 			const lastCharacter = data.substring(data.length - 1, data.length)
 			let suggestions = []
 			const trimmed = data.trim()
-			if(lastCharacter === '#'){
-				const numerical = ['$','%','#']
-				suggestions = suggestions.concat(...numerical.map(numerical => {
+			const [args, boundaries] = parseArgs(data)
+			const lastArg = args.length ? args[args.length - 1] : null
+			//numeric values
+			function addNumerical() {
+				const numericals = ['$', '%', '#']
+				suggestions = suggestions.concat(...numericals.map(numerical => {
 					return {
 						kind: monaco.languages.CompletionItemKind.Unit,
 						label: numerical,
-						insertText: numerical !== '#' ? numerical : '',
+						insertText: numerical === '#' && lastCharacter === '#'
+							? ''
+							: numerical !== '#' ? '#' + numerical : numerical,
 					}
 				}))
 			}
-			if(lastCharacter === '$' && !trimmed.endsWith('#$')){
-                suggestions = suggestions.concat(...registers.map(register => {
-                    return {
-                        kind: monaco.languages.CompletionItemKind.Variable,
-                        label: register,
-                        insertText: register
-                    }   
-                }))
-            }
-			if(lastCharacter !== ' ' && withDescriptorsMap[trimmed.replace('.', '')]){
+			function addRegisters() {
+				suggestions = suggestions.concat(...registers.map(register => {
+					return {
+						kind: monaco.languages.CompletionItemKind.Variable,
+						label: register,
+						insertText: register
+					}
+				}))
+			}
+			if (lastCharacter === '#') {
+				addNumerical()
+			}
+
+			//Description completition
+			if (lastCharacter !== ' ' && withDescriptorsMap[trimmed.replace('.', '')]) {
 				const kind = monaco.languages.CompletionItemKind.Enum
 				suggestions = suggestions.concat(...[
 					{
 						kind,
-						label: 'l', 
+						label: 'l',
 						documentation: "Select all bits of the register",
 						insertText: 'l '
-					},{
+					}, {
 						kind,
 						label: 'w',
 						documentation: "Select first part of the register",
 						insertText: 'w '
-					},{
+					}, {
 						kind,
 						label: 'b',
 						documentation: "Select first 8 bits of the register",
@@ -210,40 +260,41 @@ export function M68KCompletition(monaco: MonacoType){
 					},
 				])
 			}
-			if(trimmed.length === 0 && data){
+			//if wrote a space, suggest the instructions
+			if (trimmed.length === 0 && data) {
 				suggestions = suggestions.concat(...M68KLanguage.keywords.map(keyword => {
 					return {
 						kind: monaco.languages.CompletionItemKind.Function,
 						label: keyword,
-						insertText: keyword + ' ',
+						insertText: keyword,
 					}
 				}))
 			}
-			if(arithmeticMap[trimmed] && (lastCharacter === ' ' || lastCharacter === ',') ){
-				suggestions = suggestions.concat(...registers.map(register => {
-					return {
-						kind: monaco.languages.CompletionItemKind.Variable,
-						label: register,
-						insertText: `$${lastCharacter === ' ' ? register + ', ' : register }`
-					}
-
-				}))
+			//if it wrote a instruction, suggest the registers and numbers
+			if (keywordsMap[args[0]?.value] && (lastCharacter === ' ' || lastCharacter === ',')) {
+				addNumerical()
+				addRegisters()
 			}
-			if(trimmed){
+			//suggest registers completition
+			if (args.length > 1 && lastCharacter === 'a' || lastCharacter === 'd') {
+				addRegisters()
+			}
+			//keyword suggestion
+			if (trimmed) {
 				suggestions = suggestions.concat(...M68KLanguage.keywords.filter(keyword => keyword.startsWith(data.trimStart()))
-				.map(keyword => {
-					return {
-						kind: monaco.languages.CompletionItemKind.Function,
-						label: keyword,
-						insertText: keyword + ' ',
-					}
-				}))
+					.map(keyword => {
+						return {
+							kind: monaco.languages.CompletionItemKind.Function,
+							label: keyword,
+							insertText: keyword + ' ',
+						}
+					}))
 			}
 			return {
 				suggestions
 			}
 		},
-		resolveCompletionItem(item, token){
+		resolveCompletionItem(item, token) {
 			return {
 				...CompletitionMap[item.label],
 				...item,
@@ -255,13 +306,13 @@ export function M68KCompletition(monaco: MonacoType){
 
 
 const CompletitionMap = {
-	l:{
+	l: {
 		detail: 'Select all 32 bits of the register',
 	},
-	w:{
+	w: {
 		detail: 'Selects first 16 bits of the register',
 	},
-	b:{
+	b: {
 		detail: 'Selects first 8 bits of the register',
 	},
 	add: {
@@ -280,7 +331,7 @@ const CompletitionMap = {
 		detail: 'muls <reg/num>, <dest> | multiplies numbers',
 		documentation: 'Multiplies the first register by the second register, stores result in the second register'
 	},
-	swap:{
+	swap: {
 		detail: 'swap <reg> swaps the two words of the register',
 		documentation: 'Swaps the two words of the register es: "FFFF 0000" -> "0000 FFFF"'
 	},
@@ -291,5 +342,17 @@ const CompletitionMap = {
 	neg: {
 		detail: 'neg <reg> | negates register',
 		documentation: 'Negates the register, es: "1234" -> "-1234"'
+	},
+	'#': {
+		detail: '#<num> | decimal number',
+		documentation: 'Decimal immediate number'
+	},
+	'$': {
+		detail: '$<num> | hexadecimal number',
+		documentation: 'Hexadecimal immediate number'
+	},
+	'%': {
+		detail: '%<num> | binary number',
+		documentation: 'Binary immediate number'
 	}
 }
