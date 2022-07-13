@@ -39,7 +39,7 @@
 							<FaRegCopyright />
 						</Icon>
 					</div>
-					<a class="icon" href="https://github.com/Specy/soundboard" target="_blank">
+					<a class="icon" href="https://github.com/Specy/asm-editor" target="_blank">
 						<Icon size={2}>
 							<FaGithub />
 
