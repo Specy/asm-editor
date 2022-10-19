@@ -1,5 +1,6 @@
 <script type="ts">
-    import { ThemeProp, ThemeStore } from '$stores/themeStore'
+    import { ThemeStore } from '$stores/themeStore'
+    import type { ThemeProp } from '$stores/themeStore'
     import { TinyColor } from '@ctrl/tinycolor';  
     import { onMount } from 'svelte';
     export let style = ''

@@ -1,7 +1,9 @@
-import { writable } from "svelte/store"
-import { Emulator } from 'm68k-js'
-
-type RegisterHex = [hi: string, lo: string]
+import { get, writable } from "svelte/store"
+import { InterpreterStatus, type Interrupt } from "s68k"
+import { S68k, Interpreter, SemanticError } from "s68k"
+import { MEMORY_SIZE, PAGE_SIZE } from "$lib/Config"
+import { Prompt } from "$cmp/prompt"
+export type RegisterHex = [hi: string, lo: string]
 export type Register = {
     value: number,
     name: string,
@@ -11,46 +13,103 @@ export type Register = {
         hex: RegisterHex
     }
 }
-export type Memory = {
-    [key in string]: string
-}
-type EmulatorStore = {
-    registers: Register[]
-    terminated: boolean
-    line: number,
-    code: string,
-    errors: string[],
-    numOfLines: number,
-    memory: Memory
+export type StatusRegister = {
+    name: string
+    value: number
 }
 
-const registerName = ['A0', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7']
-export function M68KEmulator(code: string, haltLimit = 100000) {
+export type EmulatorStore = {
+    registers: Register[],
+    errors: string[]
+    compilerErrors: SemanticError[]
+    terminated: boolean
+    interrupt?: Interrupt
+    statusRegister?: StatusRegister[]
+    line: number,
+    code: string,
+    sp: number,
+    stdOut: string,
+    currentMemoryAddress: number,
+    currentMemoryPage: Uint8Array
+}
+const registerName = ['D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'A0', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7']
+export function M68KEmulator(baseCode: string, haltLimit = 100000) {
     const { subscribe, set, update } = writable<EmulatorStore>({
         registers: [],
         terminated: false,
         line: -1,
-        code: '',
+        code: baseCode,
+        statusRegister: ["X", "N", "Z", "V", "C"].map(n => ({ name: n, value: 0 })),
+        compilerErrors: [],
         errors: [],
-        numOfLines: 0,
-        memory: {}
+        sp: 0,
+        stdOut: "",
+        currentMemoryAddress: 0,
+        currentMemoryPage: new Uint8Array(PAGE_SIZE).fill(0xFF),
+        interrupt: undefined
     })
-    let emulator = new Emulator()
-    function setCode(code: string) {
-        emulator = new Emulator(code)
-        update(data => {
-            data.terminated = false
-            data.line = -1
-            data.code = code
-            data.errors = []
-            data.numOfLines = 0
-            data.registers = []
-            return data
+    let s68k: S68k | null = null
+    let interpreter: Interpreter | null = null
+    clear()
+    function compile(): Promise<void> {
+        return new Promise((res, re) => {
+            const state = get({ subscribe })
+            s68k = new S68k(state.code)
+            const errors = s68k.semanticCheck()
+            clear()
+            if (errors.length > 0) {
+                s68k = null
+                interpreter = null
+                return update(s => ({ ...s, compilerErrors: errors }))
+            }
+            interpreter = s68k.createInterpreter(MEMORY_SIZE)
+            res()
         })
-        setRegisters()
     }
-    function setRegisters() {
-        const registers = Array.from(emulator.registers).map((reg, i) => {
+    function setCode(code: string) {
+        update(state => {
+            return {
+                ...state,
+                code
+            }
+        })
+    }
+    function clear() {
+        setRegisters(new Array(registerName.length).fill(0))
+        updateStatusRegisters(new Array(5).fill(0))
+        update(state => {
+            return {
+                ...state,
+                terminated: false,
+                line: -1,
+                stdOut: "",
+                code: state.code,
+                errors: [],
+                compilerErrors: [],
+                currentMemoryPage: new Uint8Array(PAGE_SIZE).fill(0xFF),
+                currentMemoryAddress: 0x1000,
+            }
+        })
+    }
+    function getRegistersValue() {
+        if (!interpreter) return []
+        const cpu = interpreter.getCpuSnapshot()
+        return cpu.getRegistersValues()
+    }
+    function updateStatusRegisters(override?: number[]) {
+        const flags = (override ?? interpreter?.getFlagsAsArray().map(f => f ? 1 : 0) ?? new Array(5).fill(0))
+        update(state => {
+            return {
+                ...state,
+                statusRegister: state.statusRegister.map(s => ({ ...s, value: flags.shift() ?? -1 }))
+            }
+        })
+    }
+    function setRegisters(override?: number[]) {
+        if (!interpreter && !override) {
+            override = new Array(registerName.length).fill(0)
+        }
+        const registers = (override ?? getRegistersValue()).map((reg, i) => {
             const hex = (reg >>> 0).toString(16).padStart(8, '0')
             const hexArray = [hex.slice(0, 4), hex.slice(4, 8)] as RegisterHex
             return {
@@ -70,9 +129,9 @@ export function M68KEmulator(code: string, haltLimit = 100000) {
     }
     function updateRegisters() {
         update(data => {
-            if(data.registers.length === 0) return data
+            if (data.registers.length === 0) return data
             const { registers } = data
-            Array.from(emulator.registers).forEach((reg, i) => {
+            getRegistersValue().forEach((reg, i) => {
                 registers[i].diff.value = registers[i].value
                 registers[i].diff.hex = registers[i].hex
                 if (registers[i].value !== reg) {
@@ -84,59 +143,44 @@ export function M68KEmulator(code: string, haltLimit = 100000) {
             return data
         })
     }
-    function updateMemory(){
+    function updateMemory() {
+        if (!interpreter) return
         update(data => {
-            data.memory = emulator.memory.memory
+            const memory = interpreter.readMemoryBytes(data.currentMemoryAddress, PAGE_SIZE)
+            data.currentMemoryPage = memory
             return data
         })
     }
-    function run() {
-        let i = 0
-        let error
-        try {
-            while (!emulator.emulationStep()) {
-                if (i++ > haltLimit) throw new Error('Halt limit reached')
-                if (emulator.errors.length) break
-            }
-        } catch (e) {
-            console.error(e)
-            error = e
-        }
-        updateRegisters()
-        updateData()
-        updateMemory()
-        if (error){
-            addError(error?.message)
-            throw error
-        }
-        return emulator
-    }
-    function undo(){
-        emulator.undoFromStack()
-        updateRegisters()
-        updateData()
-    }
-    function updateData(){
+    function updateData() {
         update(data => {
-            data.terminated = true
-            data.line = emulator.line
-            data.errors = emulator.errors
-            data.numOfLines = emulator.instructions.length
+            data.terminated = interpreter.hasReachedBottom()
+            data.line = interpreter.getCurrentLineIndex()
             return data
         })
     }
-    function addError(error:string){
+    function addError(error: string) {
         update(data => {
             data.errors.push(error)
             return data
         })
     }
-    function step() {
-        if (emulator.errors.length) return
-        let error:Error
-        let done = false
+    async function step() {
+        let error: Error
         try {
-            done = emulator.emulationStep()
+            if (!interpreter) throw new Error("Interpreter not initialized")
+            interpreter.step()
+            switch (interpreter.getStatus()) {
+                case InterpreterStatus.Interrupt: {
+                    const interrupt = interpreter.getCurrentInterrupt()
+                    update(d => ({...d, interrupt}))
+                    await handleInterrupt(interrupt)
+                    break
+                }
+            }
+            update(data => {
+                data.line = interpreter.getCurrentLineIndex()
+                return data
+            })
         } catch (e) {
             console.error(e)
             error = e
@@ -144,20 +188,113 @@ export function M68KEmulator(code: string, haltLimit = 100000) {
         updateRegisters()
         updateMemory()
         updateData()
+
         if (error) {
             addError(error?.message)
             throw error
         }
-        return done
+        return interpreter.getStatus() != InterpreterStatus.Running
     }
 
-    setRegisters()
+    async function handleInterrupt(interrupt:Interrupt | null){
+        if(!interrupt || !interpreter) throw new Error("Expected interrupt")
+        update(data => {
+            data.interrupt = interrupt
+            return data
+        })
+
+        switch (interrupt.type){
+            case "DisplayStringWithCRLF":{
+                update(d => ({...d, stdOut: d.stdOut + interrupt.value + "\n"}))
+                interpreter.answerInterrupt({type: interrupt.type})
+                break
+            }
+            case "DisplayStringWithoutCRLF": 
+            case "DisplayChar":
+            case "DisplayNumber": {
+                update(d => ({ ...d, stdOut: d.stdOut + interrupt.value }))
+                interpreter.answerInterrupt({type: interrupt.type})
+                break
+            }
+            case "ReadChar": {
+                const char = (await Prompt.askText("Enter a character", "text") as string)[0]
+                interpreter.answerInterrupt({type: interrupt.type, value: char})
+                break
+            }
+            case "ReadNumber": {
+                const number = Number(await Prompt.askText("Enter a number", "text"))
+                interpreter.answerInterrupt({type: interrupt.type, value: number})
+                break
+            }
+            case "ReadKeyboardString": {
+                const string = await Prompt.askText("Enter a string", "text") as string
+                interpreter.answerInterrupt({type: interrupt.type, value: string})
+                break
+            }
+            case "GetTime": {
+                interpreter.answerInterrupt({type: interrupt.type, value: Date.now()})
+                break
+            }
+            case "Terminate": {
+                interpreter.answerInterrupt({type: interrupt.type})
+            }
+        }
+    }
+    async function run() {
+        let i = 0
+        let error
+        try {
+            if (!interpreter) throw new Error("Interpreter not initialized")
+            while (!interpreter.hasTerminated()) {
+                interpreter.step()
+                switch (interpreter.getStatus()) {
+                    case InterpreterStatus.Terminated:
+                    case InterpreterStatus.TerminatedWithException: {
+                        update(data => {
+                            data.terminated = true,
+                            data.errors.push("Program terminated with errors")
+                            return data
+                        })
+                        break
+                    }
+                    case InterpreterStatus.Interrupt: {
+                        await handleInterrupt(interpreter.getCurrentInterrupt())
+                    }
+                }
+                if (i++ > haltLimit) throw new Error('Halt limit reached')
+            }
+            update(data => {
+                data.line = interpreter.getCurrentLineIndex()
+                return data
+            })
+        } catch (e) {
+            console.error(e)
+            error = e
+        }
+        updateRegisters()
+        updateData()
+        updateMemory()
+
+        if (error) {
+            addError(error?.message)
+            throw error
+        }
+        return interpreter.getStatus()
+    }
+    function setCurrentMemoryAddress(address: number) {
+        update(data => {
+            data.currentMemoryAddress = address
+            data.currentMemoryPage = interpreter?.readMemoryBytes(address, 16 * 16) ?? new Uint8Array(PAGE_SIZE).fill(0xFF)
+            return data
+        })
+    }
     return {
         subscribe,
-        setCode,
-        run,
+        compile,
         step,
-        undo
+        run,
+        setCurrentMemoryAddress,
+        setCode,
+        clear
     }
 }
-

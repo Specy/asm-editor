@@ -8,7 +8,7 @@
 	const { question, cancellable, placeholder, promise, type,answer } = Prompt
 
 	let value = ''
-	$: if ($promise) value = ''
+	$: if (!$promise) value = ''
 	
 </script>
 

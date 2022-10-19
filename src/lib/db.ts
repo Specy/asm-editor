@@ -1,6 +1,6 @@
 import Dexie from 'dexie'
 import type { Table } from 'dexie'
-import { ProjectData, Project } from './Project'
+import { Project, type ProjectData } from './Project'
 
 function id(length = 7) {
     let result = '';
@@ -30,10 +30,10 @@ export class Db extends Dexie{
         await this.projects.add(project.toObject())
         return project
     }
-    async deleteProject(project: Project): Promise<any>{
+    async deleteProject(project: Project): Promise<void>{
         return this.projects.delete(project.id)
     }
-    updateProject(project: Project): Promise<any>{
+    updateProject(project: Project): Promise<unknown>{
         return this.projects.put(project.toObject())
     }
 }

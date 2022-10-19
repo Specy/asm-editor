@@ -1,60 +1,87 @@
 <script lang="ts">
-	import type { Memory, Register } from '$lib/M68KEmulator'
+	import type { Register, StatusRegister } from '$lib/M68KEmulator'
 	import Button from './buttons/Button.svelte'
 	import RawInput from './inputs/RawInput.svelte'
-	import RegisterDiff from './RegisterDiff.svelte'
+	import RegisterDiff from './ValueDiff.svelte'
 	import FaSearch from 'svelte-icons/fa/FaSearch.svelte'
 	import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
 	import FaAngleRight from 'svelte-icons/fa/FaAngleRight.svelte'
 	import { fade } from 'svelte/transition'
 	import Icon from './layout/Icon.svelte'
 	import Form from './misc/Form.svelte'
+	import { MEMORY_SIZE, PAGE_ELEMENT_SIZE, PAGE_SIZE } from '$lib/Config'
+	import { createEventDispatcher } from 'svelte'
+	import { clamp } from '$lib/utils'
 	export let registers: Register[] = []
-	export let memory: Memory = {}
-	export let currentAddress = 0
+	export let memory: Uint8Array
+	export let currentAddress: number
+	export let sp: number
+	export let statusCodes: StatusRegister[]
 	let hexAddress = '00000000'
-	type DataType = 'register' | 'memory'
-	let type: DataType = 'register'
-	const ADDRESSES_PER_PAGE = 16
-	let visibleAddresses = new Array(ADDRESSES_PER_PAGE).fill(0)
-	$: visibleAddresses = new Array(ADDRESSES_PER_PAGE).fill(0).map((_, i) => currentAddress + i)
-	$: hexAddress = (currentAddress >>> 0).toString(16).padStart(8, '0')
+	let visibleAddresses = new Array(PAGE_ELEMENT_SIZE).fill(0)
+	$: visibleAddresses = new Array(PAGE_ELEMENT_SIZE)
+		.fill(0)
+		.map((_, i) => currentAddress + i * PAGE_ELEMENT_SIZE)
 
 	function searchAddress() {
 		const newAddress = parseInt(hexAddress, 16)
-		if (newAddress > 0) currentAddress = newAddress
+		hexAddress = currentAddress.toString(16)
+		updateAddress(newAddress)
 	}
+	function updateAddress(value: number) {
+		const clampedSize = value - (value % PAGE_SIZE)
+		currentAddress = clamp(clampedSize, 0, MEMORY_SIZE)
+	}
+	const dispatcher = createEventDispatcher<{ addressChange: number }>()
+	$: dispatcher('addressChange', currentAddress)
+	$: hexAddress = currentAddress.toString(16)
 </script>
 
-{#if type === 'register'}
-	<div class="register-grid" in:fade={{ duration: 400 }}>
-		<div class="register-grid-title">Name</div>
-		<div class="register-grid-title">Value</div>
-		<div class="register-grid-title">Hex</div>
-		{#each registers as register (register.name)}
-			<div class="register-name">
-				{register.name}
-			</div>
-			<div class="register-value">
-				<RegisterDiff value={register.value} diff={register.diff.value} />
-			</div>
-			<div class="register-hex">
-				{#each register.hex as hex, i}
-					<RegisterDiff value={hex} diff={register.diff.hex[i]} monospaced />
-				{/each}
-			</div>
-		{/each}
+<div class="memory">
+	<div class="column" style="margin-right: 0.5rem;">
+		<div class="status-codes" >
+			{#each statusCodes as el, i (i)}
+				<div class="column">
+					<div>
+						{el.name}
+					</div>
+					<div>
+						{el.value}
+					</div>
+				</div>
+			{/each}
+		</div>
+		
+		<div class="registers">
+			{#each registers as register (register.name)}
+				<div class="register-name">
+					{register.name}
+				</div>
+				<div class="register-hex">
+					{#each register.hex as hex, i}
+						<RegisterDiff
+							style="padding:0.2rem"
+							value={hex}
+							hoverValue={parseInt(hex, 16)}
+							diff={register.diff.hex[i]}
+							monospaced
+						/>
+					{/each}
+				</div>
+			{/each}
+		</div>
 	</div>
-{:else}
-	<div class="address-wrapper" in:fade={{ duration: 400 }}>
+
+	<div class="address-wrapper">
 		<Form style="width:100%" on:submit={searchAddress}>
 			<div class="address-search">
 				<RawInput bind:value={hexAddress} label="Address" style="flex:1; padding-right: 0" />
 				<Button
 					on:click={searchAddress}
 					hasIcon
-					style="padding:0; width:1.9rem; height:2.4rem; margin-left: 0.4rem"
+					style="padding:0 0.5rem; height:2.4rem; margin-left: 0.4rem"
 					cssVar="primary"
+					active={parseInt(hexAddress, 16) !== currentAddress}
 				>
 					<Icon size={1}>
 						<FaSearch />
@@ -62,13 +89,9 @@
 				</Button>
 
 				<Button
-					on:click={() => {
-						if (currentAddress - ADDRESSES_PER_PAGE >= 0) {
-							currentAddress -= ADDRESSES_PER_PAGE
-						}
-					}}
+					on:click={() => updateAddress(currentAddress - PAGE_SIZE)}
 					hasIcon
-					style="padding:0; width:1.9rem; height:2.4rem"
+					style="padding:0 0.5rem; height:2.4rem"
 					cssVar="primary"
 				>
 					<Icon size={1.4}>
@@ -77,13 +100,9 @@
 				</Button>
 
 				<Button
-					on:click={() => {
-						if (currentAddress + ADDRESSES_PER_PAGE < 4294967295) {
-							currentAddress += ADDRESSES_PER_PAGE
-						}
-					}}
+					on:click={() => updateAddress(currentAddress + PAGE_SIZE)}
 					hasIcon
-					style="padding:0; width:1.9rem; height:2.4rem"
+					style="padding:0 0.5rem; height:2.4rem"
 					cssVar="primary"
 				>
 					<Icon size={1.4}>
@@ -92,43 +111,104 @@
 				</Button>
 			</div>
 		</Form>
-
 		<div class="memory-grid">
-			<div class="memory-grid-title">Address</div>
-			<div>Decimal</div>
-			<div>Char</div>
-			{#each visibleAddresses as address (address)}
-				<div class="memory-grid-address">
-					0x{(address >>> 0).toString(16).padStart(8, '0')}
-				</div>
-				<div class="memory-grid-value">
-					<RegisterDiff value={Number(memory[address]) || 0} diff={0} />
-				</div>
-				<div class="memory-grid-value">
-					<RegisterDiff value={String.fromCharCode(Number(memory[address]) || 0)} diff={'\x00'} />
-				</div>
-			{/each}
+			<div class="memory-offsets">
+				{#each new Array(PAGE_ELEMENT_SIZE).fill(0) as _, offset}
+					<div>
+						{offset.toString(16).toUpperCase().padStart(2, '0')}
+					</div>
+				{/each}
+			</div>
+			<div class="memory-addresses">
+				{#each visibleAddresses as address (address)}
+					<div class="memory-grid-address">
+						{address.toString(16).padStart(4, '0').toUpperCase()}
+					</div>
+				{/each}
+			</div>
+			<div class="memory-numbers">
+				{#each memory as word, i}
+					<RegisterDiff
+						value={word.toString(16).toUpperCase()}
+						diff={'FF'}
+						style={`padding: 0.35rem; ${
+							currentAddress + i == sp
+								? ' background-color: var(--accent2); color: var(--accent2-text);'
+								: ''
+						}`}
+						hoverValue={word}
+					/>
+				{/each}
+			</div>
 		</div>
 	</div>
-{/if}
-<div class="data-type-selector">
-	<Button
-		style="width: 100%"
-		cssVar={type === 'register' ? 'accent' : 'accent2'}
-		on:click={() => (type = 'register')}
-	>
-		Registers
-	</Button>
-	<Button
-		style="width: 100%"
-		cssVar={type === 'memory' ? 'accent' : 'accent2'}
-		on:click={() => (type = 'memory')}
-	>
-		Memory
-	</Button>
 </div>
 
 <style lang="scss">
+	.memory {
+		display: flex;
+	}
+	.memory-grid {
+		display: grid;
+		font-family: monospace;
+		font-size: 1rem;
+		grid-template-columns: min-content;
+		grid-template-rows: min-content;
+		grid-template-areas:
+			'b a a a a'
+			'b c c c c'
+			'b c c c c'
+			'b c c c c'
+			'b c c c c';
+		background-color: #2f4457;
+		height: 100%;
+		margin-top: 0.5rem;
+		color: #f5f5f5;
+		border-radius: 0.5rem;
+		overflow: hidden;
+	}
+	.status-codes {
+		display: flex;
+		background-color: var(--secondary);
+		color: var(--secondary-color);
+		gap: 0.3rem;
+		margin-bottom: 0.5rem;
+		justify-content: space-around;
+		padding: 0.3rem;
+		border-radius: 0.4rem;
+	}
+	.memory-numbers {
+		grid-area: c;
+		color: var(--text-darker);
+		display: grid;
+		padding-right: 0.3rem;
+		padding-bottom: 0.2rem;
+		background-color: var(--secondary);
+		border-top-left-radius: 0.2rem;
+		grid-template-columns: repeat(16, 1fr);
+		grid-template-rows: repeat(16, 1fr);
+	}
+
+	.memory-offsets {
+		padding-right: 0.4rem;
+		gap: 0.2rem;
+		display: flex;
+		grid-area: a;
+		height: 2rem;
+		align-items: center;
+		justify-content: space-around;
+	}
+
+	.memory-addresses {
+		margin-top: 2rem;
+		padding: 0 0.5rem;
+		padding-bottom: 0.2rem;
+		display: flex;
+		flex-direction: column;
+		justify-content: space-around;
+		grid-area: b;
+	}
+
 	.address-wrapper {
 		display: flex;
 		flex-direction: column;
@@ -137,10 +217,9 @@
 		flex: 1;
 	}
 	.memory-grid-address {
-		font-family: 'Lucida Console', 'Menlo', 'Monaco', 'Courier', monospace;
+		font-family: monospace;
 	}
 	.address-search {
-		margin-bottom: 1rem;
 		display: flex;
 		align-items: center;
 		width: 100%;
@@ -154,43 +233,32 @@
 		padding-top: 1rem;
 		justify-content: space-around;
 	}
-	.memory-grid {
+	.registers {
 		display: grid;
-		grid-template-columns: auto auto auto;
-		justify-content: space-between;
-		min-width: 70%;
-		height: 100%;
-		row-gap: 0.5rem;
-		column-gap: 1rem;
-	}
-	.register-grid {
-		display: grid;
-		grid-template-columns: auto auto auto;
-		justify-content: center;
-		width: 100%;
-		row-gap: 0.4rem;
-		font-size: 0.9rem;
-		column-gap: 3vw;
-		margin-bottom: 1rem;
-		overflow-y: auto;
+		background-color: var(--secondary);
+		padding: 0.5rem;
+		border-radius: 0.5rem;
+		grid-template-columns: auto 1fr;
+		grid-template-rows: auto;
+		flex-direction: column;
+		gap: 0.4rem;
+		align-items: center;
+		font-size: 1rem;
 		flex: 1;
-		.register-grid-title {
-			margin-bottom: 0.7rem;
-			text-align: center;
-		}
-		.register-name {
-			font-weight: bold;
-		}
-		.register-value {
-			font-weight: bold;
-		}
-		.register-hex {
-			display: flex;
-			gap: 0.3rem;
-		}
 		@media screen and (max-width: 700px) {
 			width: unset;
-			column-gap: 10vw;
 		}
+	}
+
+	.register-name {
+		font-weight: bold;
+		padding-right: 0.2rem;
+		border-right: solid 2px #2f4457;
+	}
+	.register-value {
+		font-weight: bold;
+	}
+	.register-hex {
+		display: flex;
 	}
 </style>

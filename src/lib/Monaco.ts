@@ -1,4 +1,4 @@
-import { browser } from '$app/env';
+import { browser } from '$app/environment';
 import { baseTheme } from '$lib/editorTheme';
 import { M68KLanguage, M68KCompletition, M68KFormatter } from '$lib/languages/M68K-language';
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
@@ -14,7 +14,6 @@ class MonacoLoader {
 		if (browser) this.load()
 	}
 	dispose = () => {
-		console.log('Disposed')
 		this.toDispose.forEach(d => d.dispose())
 	}
 	async load(): Promise<MonacoType> {

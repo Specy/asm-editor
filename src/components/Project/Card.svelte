@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Project } from '$lib/Project'
-	import { TimeFormat } from '$lib/dateFormatter'
+	import timeAgo from "s-ago"
 	import { ProjectStore } from '$stores/projectsStore'
 	import FaTrashAlt from 'svelte-icons/fa/FaTrashAlt.svelte'
 	import Icon from '$cmp/layout/Icon.svelte'
@@ -36,11 +36,11 @@
 	<div class="project-dates">
 		<div>Created</div>
 		<div>
-			{TimeFormat.format(project.createdAt, 'mini')} ago
+			{timeAgo(new Date(project.createdAt))} ago
 		</div>
 		<div>Edited</div>
 		<div>
-			{TimeFormat.format(project.updatedAt, 'mini')} ago
+			{timeAgo(new Date(project.updatedAt))} ago
 		</div>
 	</div>
 	<div class="project-footer">

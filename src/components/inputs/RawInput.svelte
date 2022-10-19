@@ -11,7 +11,7 @@
             {label}
         </div>
     {/if}
-	<input bind:value class="form-input" {placeholder}  />
+	<input bind:value class="form-input" {placeholder} />
 </div>
 
 <style lang="scss">

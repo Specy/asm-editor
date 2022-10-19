@@ -75,20 +75,22 @@
 		</div>
 		<Controls
 			line={$emulator.line}
-			numOfLines={$emulator.numOfLines}
-			on:run={() => {
+			numOfLines={project.code.length}
+			on:run={async () => {
 				try {
 					emulator.setCode(project.code)
+					await emulator.compile()
 					emulator.run()
 				} catch (e) {
 					console.error(e)
 					toast.error('Error executing code. ' + e.message)
 				}
 			}}
-			on:build={() => {
+			on:build={async () => {
 				try {
 					emulator.setCode(project.code)
-					emulator.step()	
+					await emulator.compile()
+					emulator.step()
 				} catch (e) {
 					console.error(e)
 					toast.error('Error executing code. ' + e.message)
@@ -102,10 +104,10 @@
 					toast.error('Error executing code. ' + e.message)
 				}
 			}}
-			on:stop={() => emulator.setCode(project.code)}
+			on:stop={() => emulator.clear()}
 			on:undo={() => {
 				try {
-					emulator.undo()
+					//emulator.undo()
 				} catch (e) {
 					console.error(e)
 					toast.error('Error executing code. ' + e.message)
@@ -114,9 +116,22 @@
 		/>
 	</div>
 	<div class="right-side">
-		<ErrorVisualiser errors={$emulator.errors} />
 		<div class="registers-wrapper">
-			<MemoryVisualiser registers={$emulator.registers} memory={$emulator.memory} />
+			<MemoryVisualiser
+				registers={$emulator.registers}
+				statusCodes={$emulator.statusRegister}
+				memory={$emulator.currentMemoryPage}	
+				currentAddress={$emulator.currentMemoryAddress}
+				sp={$emulator.sp}
+				on:addressChange={(e) => {
+					emulator.setCurrentMemoryAddress(e.detail)
+				}}
+			/>
+		</div>
+		<div class="std-out">
+			{$emulator.compilerErrors.map(e => e.getMessage()).join("\n")}
+			{$emulator.errors.join("\n")}
+			{$emulator.stdOut}
 		</div>
 	</div>
 </div>
@@ -125,7 +140,7 @@
 	.project-header {
 		display: flex;
 		justify-content: space-between;
-		margin-bottom: 1rem;
+		margin-bottom: 0.4rem;
 
 		.row {
 			display: flex;
@@ -137,9 +152,17 @@
 			}
 		}
 	}
+	.std-out {
+		display: flex;
+		padding: 0.4rem;
+		border-radius: 0.5rem;
+		flex: 1;
+		overflow-y: auto;
+		margin-top: 0.5rem;
+		background-color: var(--secondary);
+	}
 	.editor-registers-wrapper {
-		display: grid;
-		grid-template-columns: 6fr 3fr;
+		display: flex;
 		width: 100%;
 		flex: 1;
 		.editor-wrapper,
@@ -150,6 +173,7 @@
 
 		.editor-wrapper {
 			flex-direction: column;
+			flex: 1;
 			.editor-border {
 				position: relative;
 				display: flex;
@@ -157,27 +181,23 @@
 				flex: 1;
 				padding: 0.2rem;
 				border-radius: 0.5rem;
-				max-height: calc(90vh - 5.4rem);
 			}
 		}
 		.registers-wrapper {
 			display: flex;
 			flex-direction: column;
 			align-items: center;
-			margin-top: 1rem;
-			flex: 1;
 		}
-		@media screen and (max-width: 900px){
-			grid-template-columns: 6fr 4fr;	
+		@media screen and (max-width: 900px) {
+			grid-template-columns: 6fr 4fr;
 		}
 	}
 	.right-side {
-		margin-left: 1rem;
+		margin-left: 0.5rem;
 		padding-top: 0.2rem;
 		display: flex;
 		overflow-y: auto;
 		flex-direction: column;
-		max-height: calc(100vh - 5.4rem);
 	}
 	@media screen and (max-width: 700px) {
 		.editor-wrapper {
@@ -193,7 +213,6 @@
 			margin: 0;
 			padding: 0.2rem;
 			margin-top: 1rem;
-
 			max-height: unset;
 		}
 	}
@@ -244,5 +263,4 @@
 			background: linear-gradient(60deg, hsl(359, 85%, 66%), hsl(0, 85%, 66%));
 		}
 	}
-
 </style>

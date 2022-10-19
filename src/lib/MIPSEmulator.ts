@@ -1,53 +1,44 @@
 import { writable } from "svelte/store"
 import { MIPSProgram } from '$lib/MIPSInterpreter'
-type RegisterHex = [hi: string, lo: string]
-export type Register = {
-    value: number,
-    name: string,
-    hex: RegisterHex
-    diff: {
-        value: number,
-        hex: RegisterHex
-    }
-}
-export type Memory = {
-    [key in string]: string
-}
-type EmulatorStore = {
-    registers: Register[]
-    terminated: boolean
-    line: number,
-    code: string,
-    errors: string[],
-    numOfLines: number,
-    memory: Memory
-}
+import type { EmulatorStore, RegisterHex } from "./M68KEmulator"
+import { PAGE_SIZE } from "$lib/Config"
+
 
 const registerName = ["zero", "at", "v0", "v1", "a0", "a1", "a2", "a3", "t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7", "s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7", "t8", "t9", "k0", "k1", "gp", "sp", "fp", "ra"]
-export function MIPSEmulator(code: string, haltLimit = 100000) {
+export function MIPSEmulator(baseCode: string, haltLimit = 100000) {
     const { subscribe, set, update } = writable<EmulatorStore>({
         registers: [],
         terminated: false,
         line: -1,
-        code: '',
-        errors: [],
-        numOfLines: 0,
-        memory: {}
+        code: baseCode,
+        compilerErrors: [],
+        sp: 0,
+        stdOut: "",
+        currentMemoryAddress: 0,
+        currentMemoryPage: new Uint8Array(0),
+        interrupt: undefined
     })
-    let emulator = new MIPSProgram('')
-    function setCode(code: string) {
-        emulator = new MIPSProgram(code)
-        update(data => {
-            data.terminated = false
-            data.line = -1
-            data.code = code
-            data.errors = emulator.errors
-            data.numOfLines = 0
-            data.registers = []
-            return data
+    function compile(){
+        update(state => {
+            emulator = new MIPSProgram(state.code)
+            return {
+                ...state, 
+                terminated: false,
+                line: -1,
+                code: state.code,
+                compilerErrors: [],
+                registers: [],
+            }
         })
-        setRegisters()
-        updateRegisters()
+    }
+    let emulator = new MIPSProgram('')
+    function setCode(code: string){
+        update(state => {
+            return {
+                ...state,
+                code
+            }
+        })
     }
     function setRegisters() {
         const registers = Array.from(emulator.registers).map((reg, i) => {
@@ -85,8 +76,21 @@ export function MIPSEmulator(code: string, haltLimit = 100000) {
         })
     }
     function updateMemory() {
+        const newMemory = new Uint8Array(PAGE_SIZE)
         update(data => {
-            data.memory = emulator.memory.memory
+            data.currentMemoryPage =  newMemory.map((_, i) => 
+                emulator?.memory[i] ?? 0
+            )
+            return data
+        })
+    }
+    function setCurrentMemoryAddress(address: number){
+        const newMemory = new Uint8Array(PAGE_SIZE)
+        update(data => {
+            data.currentMemoryAddress = address
+            data.currentMemoryPage = newMemory.map((_, i) => 
+            emulator?.memory[i] ?? 0
+        )
             return data
         })
     }
@@ -112,23 +116,17 @@ export function MIPSEmulator(code: string, haltLimit = 100000) {
         }
         return emulator
     }
-    function undo() {
-        //emulator.undoFromStack()
-        updateRegisters()
-        updateData()
-    }
     function updateData() {
         update(data => {
             data.terminated = true
             data.line = emulator.line
-            data.errors = emulator.errors
-            data.numOfLines = emulator.insns.length
+            data.compilerErrors = emulator.errors
             return data
         })
     }
     function addError(error:string){
         update(data => {
-            data.errors.push(error)
+            data.compilerErrors.push(error)
             return data
         })
     }
@@ -156,12 +154,16 @@ export function MIPSEmulator(code: string, haltLimit = 100000) {
     }
 
     setRegisters()
+    function clear(){
+        console.log("Implement")
+    }
     return {
         subscribe,
-        setCode,
-        run,
+        compile,
         step,
-        undo
+        run,
+        setCurrentMemoryAddress,
+        setCode,
+        clear
     }
 }
-

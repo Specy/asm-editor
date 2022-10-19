@@ -1,8 +1,8 @@
-import { browser } from "$app/env"
+import { browser } from "$app/environment"
 import { db } from "$lib/db"
 import type { Project } from "$lib/Project"
-import { get, writable, Writable } from "svelte/store"
-
+import { get, writable } from "svelte/store"
+import type { Writable } from "svelte/store"
 
 
 export class ProjectStoreClass{
@@ -20,11 +20,10 @@ export class ProjectStoreClass{
         await this.load()
         return result 
     }
-    async save(project: Project): Promise<Project>{
+    async save(project: Project): Promise<void>{
         project.updatedAt = new Date().getTime()
-        const result = await db.updateProject(project)
+        await db.updateProject(project)
         await this.load()
-        return result 
     }
     async delete(project:Project): Promise<void>{
         await db.deleteProject(project)

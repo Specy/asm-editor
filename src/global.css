@@ -38,6 +38,14 @@ input:disabled{
 	display: flex;
 	flex-direction: column;
 }
+
+.column{
+	display: flex;
+	flex-direction: column;
+}
+.row{
+	display: flex;
+}
 ::-webkit-scrollbar {
 	width: 5px;
 	background: rgba(44, 44, 44, 0.9);

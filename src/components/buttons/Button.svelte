@@ -1,11 +1,11 @@
-<script>
+<script lang="ts">
 	export let disabled = false
 	export let color = 'var(--accent-text)'
 	export let style = ''
 	export let bg = 'var(--accent)'	
 	export let hasIcon = false
 	export let cssVar = ''
-
+	export let active = false
 	let finalColor = ''
 	$: finalColor = cssVar 
 		? `background-color: var(--${cssVar}); color: var(--${cssVar}-text);` 
@@ -20,6 +20,7 @@
 	style={`${finalColor} ${style}; `}
 	{disabled}
 	on:click
+	class:active
 >
 	<slot />
 </button>
@@ -39,6 +40,10 @@
 		width: fit-content;
 		user-select: none;
 		cursor: pointer;
+	}
+	.active{
+		background-color: var(--accent) !important;
+		color: var(--accent-text) !important;
 	}
 	.btn:hover {
 		filter: brightness(1.2);

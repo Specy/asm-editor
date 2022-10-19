@@ -47,6 +47,7 @@
             </Icon>
 			Step
 		</Button>
+		<!--
 		<Button
             style="width: 5.5rem; padding: 0.5rem 0"
 			disabled={line <= 1}
@@ -57,12 +58,14 @@
             </Icon>
 			Undo
 		</Button>
+		-->
+
 	{/if}
 </div>
 
 <style lang="scss">
 	.project-controls {
-		margin-top: 1rem;
+		margin-top: 0.5rem;
 		display: flex;
 		gap: 0.5rem;
 		padding-left: 0.2rem;

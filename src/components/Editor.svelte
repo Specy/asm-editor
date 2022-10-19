@@ -2,11 +2,13 @@
 	import { onMount } from 'svelte'
 	import type monaco from 'monaco-editor'
 	import type { Project } from '$lib/Project'
-	import { Monaco, MonacoType } from '$lib/Monaco'
+	import { Monaco } from '$lib/Monaco'
+	import type { MonacoType } from '$lib/Monaco'
 	export let disabled = false
 	export let project: Project
 	export let highlightedLine: number
 	export let hasError = false
+	
 	let el: HTMLDivElement
 	let editor: monaco.editor.IStandaloneCodeEditor
 	let monacoInstance: MonacoType
@@ -72,7 +74,12 @@
 		Loading editor...
 	</h1>
 {/if}
-<div bind:this={el} class="editor" />
+<div class="editor">
+	<div bind:this={el} class="editor-inner" >
+
+	</div>	 
+</div>
+
 
 <style lang="scss">
 	:global(.selected-line) {
@@ -105,11 +112,17 @@
 
 	.editor{
 		display: flex;
+		position: relative;
 		flex: 1;
 		z-index: 2;
 		border-radius: 0.4rem;
 		overflow: hidden;
 		box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
+	}
+	.editor-inner{
+		position: relative;
+		flex: 1;
+		display: flex;		
 	}
 	.loading{
 		display: flex;

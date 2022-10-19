@@ -1,8 +1,8 @@
 import { TinyColor } from '@ctrl/tinycolor';
 
 import cloneDeep from 'clone-deep'
-import { get, Writable, writable } from 'svelte/store'
-
+import { get, writable } from 'svelte/store'
+import type { Writable } from "svelte/store"
 
 const themeObject = {
     primary: {
@@ -24,6 +24,10 @@ const themeObject = {
     mainText: {
         color: '#f1f1f1',
         name: 'main-text'
+    },
+    textDarker: {
+        color: '#c1c1c1',
+        name: 'text-darker'
     },
     accent: {
         color: '#F2A65A',
