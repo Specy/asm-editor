@@ -39,7 +39,7 @@ import RgbLine from '$cmp/misc/RgbLine.svelte';
 		</div>
 	</div>
 
-	<div in:fly={{ x: -50, duration: 500 }} class="page">
+	<div in:fly={{ x: -30, duration: 500 }} class="page">
 		<slot />
 	</div>
 {/key}

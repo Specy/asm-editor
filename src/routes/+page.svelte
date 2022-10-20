@@ -1,9 +1,8 @@
 <script lang="ts">
-	import ButtonLink from '$cmp/buttons/ButtonLink.svelte';
+	import ButtonLink from '$cmp/buttons/ButtonLink.svelte'
 	import Icon from '$cmp/layout/Icon.svelte'
 	import FaGithub from 'svelte-icons/fa/FaGithub.svelte'
 	let frequency = 0.09
-
 </script>
 
 <title> Welcome </title>
@@ -11,20 +10,24 @@
 <div class="main">
 	<div class="background" />
 	<div class="content">
-		<div class="welcome-title">The all in one web editor for M68K and MIPS</div>
+		<div class="welcome-title">The all in one web editor for M68K</div>
 		<div style="display: flex ;">
-			<ButtonLink href="/projects" color="var(--accent-text)">
-                        Go to the editor
+			<ButtonLink
+				href="/projects"
+				color="var(--accent-text)"
+				style="box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);"
+			>
+				Go to the editor
 			</ButtonLink>
-			<ButtonLink 
-                        style="margin-left: 1rem" 
-                        bg="var(--secondary)" 
-                        color="var(--secondary-text)"
-                        href="https://github.com/Specy/asm-editor"
-                  >
-					<Icon>
-						<FaGithub />
-					</Icon>
+			<ButtonLink
+				style="margin-left: 1rem; box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);"
+				bg="var(--secondary)"
+				color="var(--secondary-text)"
+				href="https://github.com/Specy/asm-editor"
+			>
+				<Icon>
+					<FaGithub />
+				</Icon>
 			</ButtonLink>
 		</div>
 	</div>
@@ -52,6 +55,7 @@
 		font-size: 3rem;
 		text-align: center;
 		margin-bottom: 2rem;
+		text-shadow: 2px 2px 12px rgb(36 36 36);
 	}
 	.main {
 		display: flex;
@@ -62,7 +66,6 @@
 		background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
 		background-size: 400% 400%;
 		animation: gradient 15s ease infinite;
-		background-color: white;
 		.content {
 			max-width: 80vw;
 			height: 100%;
@@ -81,7 +84,7 @@
 			position: absolute;
 			background-color: var(--primary);
 		}
-		@media screen and (max-width: 800px){
+		@media screen and (max-width: 800px) {
 			.background {
 				width: 92%;
 				height: 94%;
@@ -101,7 +104,6 @@
 		.welcome-title {
 			font-size: 2.5rem;
 		}
-
 	}
 
 	@keyframes gradient {

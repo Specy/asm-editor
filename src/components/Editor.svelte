@@ -1,41 +1,48 @@
 <script lang="ts">
-	import { onMount } from 'svelte'
+	import { createEventDispatcher, onMount } from 'svelte'
 	import type monaco from 'monaco-editor'
-	import type { Project } from '$lib/Project'
+	import type { AvailableLanguages } from '$lib/Project'
 	import { Monaco } from '$lib/Monaco'
 	import type { MonacoType } from '$lib/Monaco'
+	import type { MonacoError } from '$lib/M68KEmulator'
 	export let disabled = false
-	export let project: Project
+	export let code: string
 	export let highlightedLine: number
 	export let hasError = false
-	
+	export let language: AvailableLanguages
+	export let errors: MonacoError[]
 	let el: HTMLDivElement
 	let editor: monaco.editor.IStandaloneCodeEditor
 	let monacoInstance: MonacoType
 	let decorations = []
 	const toDispose = []
+	const dispatcher = createEventDispatcher<{ change: string }>()
+
 	onMount(async () => {
 		Monaco.registerLanguages()
 		monacoInstance = await Monaco.get()
 		editor = monacoInstance.editor.create(el, {
-			value: project.code,
-			language: project.language.toLowerCase(),
+			value: code,
+			language: language.toLowerCase(),
 			theme: 'custom-theme',
 			minimap: { enabled: false },
 			scrollbar: {
 				vertical: 'auto',
-				horizontal: 'hidden',
+				horizontal: 'auto'
 			},
 			cursorBlinking: 'phase',
 			fontSize: 16,
 
-			smoothScrolling: true,
+			smoothScrolling: true
 		})
-		toDispose.push(editor.getModel().onDidChangeContent(() => {
-			project.code = editor.getValue()
-		}))
+		toDispose.push(
+			editor.getModel().onDidChangeContent(() => {
+				code = editor.getValue()
+				dispatcher('change', code)
+			})
+		)
 		return () => {
-			toDispose.forEach(d => d.dispose())
+			toDispose.forEach((d) => d.dispose())
 			Monaco.dispose()
 			editor.dispose()
 		}
@@ -51,14 +58,29 @@
 								options: {
 									className: hasError ? 'error-line' : 'selected-line',
 									inlineClassName: 'selected-line-text',
-									isWholeLine: true,
-								
+									isWholeLine: true
 								}
 							}
 					  ]
 					: []
 			)
 			editor.revealLineInCenter(highlightedLine)
+		}
+	}
+	$: {
+		if (editor) {
+			monacoInstance.editor.setModelMarkers(
+				editor.getModel(),
+				language,
+				errors.map((e) => ({
+					severity: monacoInstance.MarkerSeverity.Error,
+					message: e.message,
+					startLineNumber: e.lineIndex + 1,
+					startColumn: 0,
+					endLineNumber: e.lineIndex,
+					endColumn: 100
+				}))
+			)
 		}
 	}
 	$: editor?.updateOptions({ readOnly: disabled })
@@ -70,16 +92,11 @@
 	}}
 />
 {#if !editor}
-	<h1 class="loading">
-		Loading editor...
-	</h1>
+	<h1 class="loading">Loading editor...</h1>
 {/if}
 <div class="editor">
-	<div bind:this={el} class="editor-inner" >
-
-	</div>	 
+	<div bind:this={el} class="editor-inner" />
 </div>
-
 
 <style lang="scss">
 	:global(.selected-line) {
@@ -110,7 +127,7 @@
 		transform: translateY(0) !important;
 	}
 
-	.editor{
+	.editor {
 		display: flex;
 		position: relative;
 		flex: 1;
@@ -119,12 +136,12 @@
 		overflow: hidden;
 		box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
 	}
-	.editor-inner{
+	.editor-inner {
 		position: relative;
 		flex: 1;
-		display: flex;		
+		display: flex;
 	}
-	.loading{
+	.loading {
 		display: flex;
 		width: calc(100% - 0.4rem);
 		height: calc(100% - 0.4rem);
@@ -136,15 +153,14 @@
 		position: absolute;
 	}
 	@keyframes pulse {
-		0%{
+		0% {
 			background-color: var(--secondary);
 		}
-		50%{
+		50% {
 			background-color: var(--primary);
 		}
-		100%{
+		100% {
 			background-color: var(--secondary);
-
 		}
 	}
 </style>

@@ -6,6 +6,7 @@
 	import Icon from '$cmp/layout/Icon.svelte'
 	import { Prompt } from '$cmp/prompt'
 	import ButtonLink from '$cmp/buttons/ButtonLink.svelte'
+	import { fly } from 'svelte/transition'
 	export let project: Project
 	let textContent = project.name || 'Unnamed'
 	let descriptionContent = project.description || ''
@@ -36,11 +37,11 @@
 	<div class="project-dates">
 		<div>Created</div>
 		<div>
-			{timeAgo(new Date(project.createdAt))} ago
+			{timeAgo(new Date(project.createdAt))}
 		</div>
 		<div>Edited</div>
 		<div>
-			{timeAgo(new Date(project.updatedAt))} ago
+			{timeAgo(new Date(project.updatedAt))}
 		</div>
 	</div>
 	<div class="project-footer">
@@ -79,7 +80,6 @@
 		font-size: 0.8rem;
 		display: grid;
 		grid-template-columns: 1fr 1fr;
-		width: fit-content;
 		margin-left: 0.4rem;
 		column-gap: 0.5rem;
 		row-gap: 0.3rem;

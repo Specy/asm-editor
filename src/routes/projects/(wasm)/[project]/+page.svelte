@@ -4,7 +4,7 @@
 	import { ProjectStore } from '$stores/projectsStore'
 	import { onDestroy } from 'svelte'
 	import { toast } from '$cmp/toast'
-	import ProjectEdit from '$cmp/Project/Edit.svelte'
+	import ProjectEdit from '$cmp/Project/ProjectEditor.svelte'
 	let ID = $page.params.project
 	let project: Project = ProjectStore.getProject(ID)
 	let unsubscribe = ProjectStore.projects.subscribe(() => {
@@ -30,7 +30,7 @@
 			bind:project
 			on:save={({ detail }) => {
 				ProjectStore.save(detail)
-				toast.success('Project saved')
+				toast.logPill('Project saved')
 			}}
 		/>
 	{:else}

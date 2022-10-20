@@ -2,19 +2,20 @@
 	export let diff: string | number
 	export let style: string = ''
 	export let value: string | number
+	export let hasSoftDiff: boolean | undefined = undefined
 	export let hoverValue: string | number = ''
 	export let monospaced = false
 </script>
 
-<span class:modified={diff !== value} class="tooltip-base" class:monospaced {style}>
+<span class:modified={diff !== value} class:softDiff={hasSoftDiff === true} class="tooltip-base" class:monospaced {style}>
 	{value}
 	<div class="hover-element">
 		{#if hoverValue !== ''}
-			<div class:monospaced>
+			<div class:monospaced style="user-select: all;">
 				{hoverValue}
 			</div>
 		{/if}
-		{#if diff === value}
+		{#if diff !== value}
 			<div class="old-value" class:monospaced>
 				{diff}
 			</div>
@@ -29,19 +30,25 @@
 		border-radius: 0.2rem;
 		text-align: center;
 		justify-content: center;
+		cursor: default;
 	}
 	.tooltip-base {
 		position: relative;
 	}
+	.softDiff{
+		background-color: var(--primary);
+	}
 	.hover-element {
 		display: none;
 		flex-direction: column;
-		background-color: var(--secondary);
-		color: var(--secondary-text);
+		min-width: 100%;
+		background-color: var(--secondary-attention);
+		color: var(--secondary-attention-text);
 		border-radius: 0.2rem;
 		position: absolute;
-		cursor: default;
-		top: -1rem;
+		cursor: text;
+		box-shadow: rgba(0, 0, 0, 0.4) 0px 2px 2px;
+		top: -1.1rem;
 		padding: 0.2rem;
 	}
 	.old-value{

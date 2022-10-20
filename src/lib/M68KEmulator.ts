@@ -1,8 +1,9 @@
 import { get, writable } from "svelte/store"
 import { InterpreterStatus, type Interrupt } from "s68k"
-import { S68k, Interpreter, SemanticError } from "s68k"
+import { S68k, Interpreter } from "s68k"
 import { MEMORY_SIZE, PAGE_SIZE } from "$lib/Config"
 import { Prompt } from "$cmp/prompt"
+import { createDebouncer } from "./utils"
 export type RegisterHex = [hi: string, lo: string]
 export type Register = {
     value: number,
@@ -17,11 +18,16 @@ export type StatusRegister = {
     name: string
     value: number
 }
-
+export type MonacoError = {
+    lineIndex: number
+    line: any
+    message: string
+    formatted: string
+}
 export type EmulatorStore = {
     registers: Register[],
     errors: string[]
-    compilerErrors: SemanticError[]
+    compilerErrors: MonacoError[]
     terminated: boolean
     interrupt?: Interrupt
     statusRegister?: StatusRegister[]
@@ -30,8 +36,13 @@ export type EmulatorStore = {
     sp: number,
     stdOut: string,
     currentMemoryAddress: number,
-    currentMemoryPage: Uint8Array
+    currentMemoryPage: DiffedMemory
 }
+export type DiffedMemory =  {
+    current: Uint8Array
+    prevState: Uint8Array
+}
+
 const registerName = ['D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'A0', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7']
 export function M68KEmulator(baseCode: string, haltLimit = 100000) {
     const { subscribe, set, update } = writable<EmulatorStore>({
@@ -45,17 +56,27 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
         sp: 0,
         stdOut: "",
         currentMemoryAddress: 0,
-        currentMemoryPage: new Uint8Array(PAGE_SIZE).fill(0xFF),
+        currentMemoryPage: {
+            current: new Uint8Array(PAGE_SIZE).fill(0xFF),
+            prevState: new Uint8Array(PAGE_SIZE).fill(0xFF)
+        },
         interrupt: undefined
     })
     let s68k: S68k | null = null
     let interpreter: Interpreter | null = null
-    clear()
+    const debouncer = createDebouncer(1000)
     function compile(): Promise<void> {
-        return new Promise((res, re) => {
+        return new Promise(res => {
             const state = get({ subscribe })
             s68k = new S68k(state.code)
-            const errors = s68k.semanticCheck()
+            const errors = s68k.semanticCheck().map(e => {
+                return {
+                    line: e.getLine(),
+                    lineIndex: e.getLineIndex(),
+                    message: e.getError(),
+                    formatted: e.getMessage()
+                } as MonacoError
+            })
             clear()
             if (errors.length > 0) {
                 s68k = null
@@ -66,13 +87,22 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
             res()
         })
     }
-    function setCode(code: string) {
-        update(state => {
+
+    function semanticCheck(code?: string){
+        code = code || get({ subscribe }).code
+        const errors = S68k.semanticCheck(code).map(e => {
             return {
-                ...state,
-                code
-            }
+                line: e.getLine(),
+                lineIndex: e.getLineIndex(),
+                message: e.getError(),
+                formatted: e.getMessage()
+            } as MonacoError
         })
+        update(s => ({ ...s, code, compilerErrors: errors }))
+    }
+    function setCode(code: string) {
+        update(s => ({...s, code}))
+        debouncer(semanticCheck)
     }
     function clear() {
         setRegisters(new Array(registerName.length).fill(0))
@@ -86,7 +116,10 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
                 code: state.code,
                 errors: [],
                 compilerErrors: [],
-                currentMemoryPage: new Uint8Array(PAGE_SIZE).fill(0xFF),
+                currentMemoryPage: {
+                    current: new Uint8Array(PAGE_SIZE).fill(0xFF),
+                    prevState: new Uint8Array(PAGE_SIZE).fill(0xFF)
+                },
                 currentMemoryAddress: 0x1000,
             }
         })
@@ -140,14 +173,17 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
                     registers[i].hex = [hex.slice(0, 4), hex.slice(4, 8)] as RegisterHex
                 }
             })
+            data.sp = registers[registers.length - 1].value
             return data
         })
     }
     function updateMemory() {
         if (!interpreter) return
         update(data => {
+            const temp = data.currentMemoryPage.current
             const memory = interpreter.readMemoryBytes(data.currentMemoryAddress, PAGE_SIZE)
-            data.currentMemoryPage = memory
+            data.currentMemoryPage.current = memory
+            data.currentMemoryPage.prevState = temp
             return data
         })
     }
@@ -190,7 +226,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
         updateData()
 
         if (error) {
-            addError(error?.message)
+            addError(error?.message ?? JSON.stringify(error))
             throw error
         }
         return interpreter.getStatus() != InterpreterStatus.Running
@@ -248,10 +284,13 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
             while (!interpreter.hasTerminated()) {
                 interpreter.step()
                 switch (interpreter.getStatus()) {
-                    case InterpreterStatus.Terminated:
+                    case InterpreterStatus.Terminated:{
+                        update(d => ({...d, terminated: true}))
+                        break
+                    }
                     case InterpreterStatus.TerminatedWithException: {
                         update(data => {
-                            data.terminated = true,
+                            data.terminated = true
                             data.errors.push("Program terminated with errors")
                             return data
                         })
@@ -276,7 +315,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
         updateMemory()
 
         if (error) {
-            addError(error?.message)
+            addError(error?.message ?? JSON.stringify(error))
             throw error
         }
         return interpreter.getStatus()
@@ -284,10 +323,15 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
     function setCurrentMemoryAddress(address: number) {
         update(data => {
             data.currentMemoryAddress = address
-            data.currentMemoryPage = interpreter?.readMemoryBytes(address, 16 * 16) ?? new Uint8Array(PAGE_SIZE).fill(0xFF)
+            data.currentMemoryPage.current = interpreter?.readMemoryBytes(address, 16 * 16) ?? new Uint8Array(PAGE_SIZE).fill(0xFF)
+            data.currentMemoryPage.prevState = data.currentMemoryPage.current
             return data
         })
     }
+
+
+    clear()
+    semanticCheck()
     return {
         subscribe,
         compile,

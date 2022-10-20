@@ -171,6 +171,30 @@
     "magic-string" "^0.26.5"
     "svelte-hmr" "^0.15.0"
 
+"@swc/core-win32-x64-msvc@1.3.9":
+  "integrity" "sha512-moKi2prCKzYnXXlrLf5nwAN4uGSm4YpsW2xzYiZWJJDRqu74VoUWoDkG25jalHTfN/PSBQg4dkFWhhUe89JJVw=="
+  "resolved" "https://registry.npmjs.org/@swc/core-win32-x64-msvc/-/core-win32-x64-msvc-1.3.9.tgz"
+  "version" "1.3.9"
+
+"@swc/core@^1.2.147":
+  "integrity" "sha512-PCRCO9vIoEX3FyS3z/FkWVYJzuspUq0LLaWdK3L30+KQDtH29K+LQdRc2Dzin2MU5MpY4bSHydAwl9M6cmZ9OA=="
+  "resolved" "https://registry.npmjs.org/@swc/core/-/core-1.3.9.tgz"
+  "version" "1.3.9"
+  optionalDependencies:
+    "@swc/core-android-arm-eabi" "1.3.9"
+    "@swc/core-android-arm64" "1.3.9"
+    "@swc/core-darwin-arm64" "1.3.9"
+    "@swc/core-darwin-x64" "1.3.9"
+    "@swc/core-freebsd-x64" "1.3.9"
+    "@swc/core-linux-arm-gnueabihf" "1.3.9"
+    "@swc/core-linux-arm64-gnu" "1.3.9"
+    "@swc/core-linux-arm64-musl" "1.3.9"
+    "@swc/core-linux-x64-gnu" "1.3.9"
+    "@swc/core-linux-x64-musl" "1.3.9"
+    "@swc/core-win32-arm64-msvc" "1.3.9"
+    "@swc/core-win32-ia32-msvc" "1.3.9"
+    "@swc/core-win32-x64-msvc" "1.3.9"
+
 "@types/color-convert@*":
   "integrity" "sha512-m7GG7IKKGuJUXvkZ1qqG3ChccdIM/qBBo913z+Xft0nKCX4hAU/IxKwZBU4cpRZ7GS5kV4vOblUkILtSShCPXQ=="
   "resolved" "https://registry.npmjs.org/@types/color-convert/-/color-convert-2.0.0.tgz"
@@ -1594,10 +1618,10 @@
   "resolved" "https://registry.npmjs.org/s-ago/-/s-ago-2.2.0.tgz"
   "version" "2.2.0"
 
-"s68k@^1.1.2":
-  "integrity" "sha512-b7bYM3wCM5qWpbDM1+lY60l+oEFgBXuHHsogcW9T+MCAkii+xDNl7rKddr4RllnWVR7mLgTC3jVYejHLk6Xf4A=="
-  "resolved" "https://registry.npmjs.org/s68k/-/s68k-1.1.2.tgz"
-  "version" "1.1.2"
+"s68k@^1.1.3":
+  "integrity" "sha512-gTUHHtcVMxUY87Wgp414Y+1a8llQS53vgB/cHotLC0JXTu3b/6hVqY7hSg1LEpzTCpNaeLrpvW6filo0Y19r0Q=="
+  "resolved" "https://registry.npmjs.org/s68k/-/s68k-1.1.3.tgz"
+  "version" "1.1.3"
   dependencies:
     "ts-loader" "^9.4.1"
 
@@ -1973,6 +1997,13 @@
   "resolved" "https://registry.npmjs.org/v8-compile-cache/-/v8-compile-cache-2.3.0.tgz"
   "version" "2.3.0"
 
+"vite-plugin-top-level-await@^1.1.1":
+  "integrity" "sha512-il7YijMxjvQxx33I/mf5n+xUJscxcTqRSwPGck/jw92hUyGwjsJnIBYBcKRS+vhOtsJ5g+8xANoBEKx9G1NSEQ=="
+  "resolved" "https://registry.npmjs.org/vite-plugin-top-level-await/-/vite-plugin-top-level-await-1.1.1.tgz"
+  "version" "1.1.1"
+  dependencies:
+    "@swc/core" "^1.2.147"
+
 "vite-plugin-wasm@^3.0.0":
   "integrity" "sha512-lOqR2waEZSl3xAlGoiAqSrPXoxZqTfTYPIuCLVATZSsegJ8zmD1M0GPPN7PGfAzex2KeJLCCxdmbHFVMRN+4pA=="
   "resolved" "https://registry.npmjs.org/vite-plugin-wasm/-/vite-plugin-wasm-3.0.0.tgz"
@@ -1980,7 +2011,7 @@
   dependencies:
     "vite" "^3"
 
-"vite@^3", "vite@^3.0.0", "vite@^3.1.0":
+"vite@^3", "vite@^3.0.0", "vite@^3.1.0", "vite@>=2.8":
   "integrity" "sha512-m7jJe3nufUbuOfotkntGFupinL/fmuTNuQmiVE7cH2IZMuf4UbfbGYMUT3jVWgGYuRVLY9j8NnrRqgw5rr5QTg=="
   "resolved" "https://registry.npmjs.org/vite/-/vite-3.1.8.tgz"
   "version" "3.1.8"

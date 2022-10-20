@@ -23,12 +23,12 @@
 
 				<div class="icon-wrapper">
 					<a class="icon" href="https://ko-fi.com/specy">
-						<Icon size={2}>
+						<Icon size={1.6}>
 							<Kofi />	
 						</Icon>
 					</a>
 					<div class="icon">
-						<Icon size={2}
+						<Icon size={1.6}
 							on:click={() =>
 								toast.custom(
 									'Copyright',
@@ -40,9 +40,8 @@
 						</Icon>
 					</div>
 					<a class="icon" href="https://github.com/Specy/asm-editor" target="_blank">
-						<Icon size={2}>
+						<Icon size={1.6}>
 							<FaGithub />
-
 						</Icon>
 					</a>
 				</div>
@@ -79,13 +78,12 @@
 		> .icon {
 			display: flex;
 			align-items: center;
-			width: 2rem;
-			color: #bfbfbf;
+			color: var(--primary-text);
 			margin-left: 1rem;
 			cursor: pointer;
-			transition: all 0.4s;
+			transition: all 0.3s;
 			&:hover{
-				transform: rotate(30deg) scale(1.1);
+				transform: rotate(25deg) scale(1.1);
 			}
 		}
 	}

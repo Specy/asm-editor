@@ -46,8 +46,8 @@ class MonacoLoader {
 		this.toDispose.push(monaco.languages.setMonarchTokensProvider('mips', MIPSLanguage))
 		this.toDispose.push(monaco.languages.registerCompletionItemProvider('m68k', M68KCompletition(monaco)))
 		this.toDispose.push(monaco.languages.registerCompletionItemProvider('mips', MIPSCompletition(monaco)))
-		this.toDispose.push(monaco.languages.registerDocumentFormattingEditProvider('m68k', M68KFormatter))
-		this.toDispose.push(monaco.languages.registerDocumentFormattingEditProvider('mips', MIPSFormatter))
+		//this.toDispose.push(monaco.languages.registerDocumentFormattingEditProvider('m68k', M68KFormatter))
+		//this.toDispose.push(monaco.languages.registerDocumentFormattingEditProvider('mips', MIPSFormatter))
 
 	}
 	async get() {

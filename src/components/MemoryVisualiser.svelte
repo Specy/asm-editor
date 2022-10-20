@@ -1,19 +1,18 @@
 <script lang="ts">
-	import type { Register, StatusRegister } from '$lib/M68KEmulator'
+	import type { DiffedMemory, Register, StatusRegister } from '$lib/M68KEmulator'
 	import Button from './buttons/Button.svelte'
 	import RawInput from './inputs/RawInput.svelte'
-	import RegisterDiff from './ValueDiff.svelte'
+	import ValueDiff from './ValueDiff.svelte'
 	import FaSearch from 'svelte-icons/fa/FaSearch.svelte'
 	import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
 	import FaAngleRight from 'svelte-icons/fa/FaAngleRight.svelte'
-	import { fade } from 'svelte/transition'
 	import Icon from './layout/Icon.svelte'
 	import Form from './misc/Form.svelte'
 	import { MEMORY_SIZE, PAGE_ELEMENT_SIZE, PAGE_SIZE } from '$lib/Config'
 	import { createEventDispatcher } from 'svelte'
 	import { clamp } from '$lib/utils'
 	export let registers: Register[] = []
-	export let memory: Uint8Array
+	export let memory: DiffedMemory
 	export let currentAddress: number
 	export let sp: number
 	export let statusCodes: StatusRegister[]
@@ -32,14 +31,17 @@
 		const clampedSize = value - (value % PAGE_SIZE)
 		currentAddress = clamp(clampedSize, 0, MEMORY_SIZE)
 	}
-	const dispatcher = createEventDispatcher<{ addressChange: number }>()
+	const dispatcher = createEventDispatcher<{
+		addressChange: number
+		registerClick: Register
+	}>()
 	$: dispatcher('addressChange', currentAddress)
 	$: hexAddress = currentAddress.toString(16)
 </script>
 
 <div class="memory">
 	<div class="column" style="margin-right: 0.5rem;">
-		<div class="status-codes" >
+		<div class="status-codes">
 			{#each statusCodes as el, i (i)}
 				<div class="column">
 					<div>
@@ -51,15 +53,20 @@
 				</div>
 			{/each}
 		</div>
-		
+
 		<div class="registers">
-			{#each registers as register (register.name)}
-				<div class="register-name">
-					{register.name}
+			{#each registers as register, i (register.name)}
+				<div class="register-wrapper">
+					<div class="hover-register-value">
+						{register.value}
+					</div>
+					<button class="register-name" on:click={() => dispatcher('registerClick', register)}>
+						{register.name}
+					</button>
 				</div>
 				<div class="register-hex">
 					{#each register.hex as hex, i}
-						<RegisterDiff
+						<ValueDiff
 							style="padding:0.2rem"
 							value={hex}
 							hoverValue={parseInt(hex, 16)}
@@ -127,16 +134,18 @@
 				{/each}
 			</div>
 			<div class="memory-numbers">
-				{#each memory as word, i}
-					<RegisterDiff
+				{#each memory.current as word, i}
+					<ValueDiff
 						value={word.toString(16).toUpperCase()}
-						diff={'FF'}
-						style={`padding: 0.35rem; ${
-							currentAddress + i == sp
+						diff={memory.prevState[i]?.toString(16).toUpperCase() ?? 'FF'}
+						hasSoftDiff={word.toString(16).toUpperCase() !== 'FF'}
+						style={`padding: 0.3rem;  ${
+							currentAddress + i === sp
 								? ' background-color: var(--accent2); color: var(--accent2-text);'
-								: ''
+								: 'border-radius: 0;'
 						}`}
 						hoverValue={word}
+						monospaced
 					/>
 				{/each}
 			</div>
@@ -160,17 +169,19 @@
 			'b c c c c'
 			'b c c c c'
 			'b c c c c';
-		background-color: #2f4457;
+		background-color: var(--secondary-attention);
 		height: 100%;
 		margin-top: 0.5rem;
-		color: #f5f5f5;
+		color: var(--secondary-attention-text);
 		border-radius: 0.5rem;
+		padding-right: 0.3rem;
+		padding-bottom: 0.3rem;
 		overflow: hidden;
 	}
 	.status-codes {
 		display: flex;
 		background-color: var(--secondary);
-		color: var(--secondary-color);
+		color: var(--secondary-text);
 		gap: 0.3rem;
 		margin-bottom: 0.5rem;
 		justify-content: space-around;
@@ -181,16 +192,13 @@
 		grid-area: c;
 		color: var(--text-darker);
 		display: grid;
-		padding-right: 0.3rem;
-		padding-bottom: 0.2rem;
 		background-color: var(--secondary);
-		border-top-left-radius: 0.2rem;
+		border-radius: 0.3rem;
+		width: min-content;
 		grid-template-columns: repeat(16, 1fr);
 		grid-template-rows: repeat(16, 1fr);
 	}
-
 	.memory-offsets {
-		padding-right: 0.4rem;
 		gap: 0.2rem;
 		display: flex;
 		grid-area: a;
@@ -202,7 +210,6 @@
 	.memory-addresses {
 		margin-top: 2rem;
 		padding: 0 0.5rem;
-		padding-bottom: 0.2rem;
 		display: flex;
 		flex-direction: column;
 		justify-content: space-around;
@@ -241,7 +248,7 @@
 		grid-template-columns: auto 1fr;
 		grid-template-rows: auto;
 		flex-direction: column;
-		gap: 0.4rem;
+		gap: 0.2rem;
 		align-items: center;
 		font-size: 1rem;
 		flex: 1;
@@ -250,15 +257,53 @@
 		}
 	}
 
+	.hover-register-value {
+		display: none;
+		min-width: 100%;
+		background-color: var(--secondary-attention);
+		color: var(--secondary-attention-text);
+		border-radius: 0.2rem;
+		position: absolute;
+		cursor: text;
+		user-select: all;
+		font-family: monospace;
+		font-size: 1rem;
+		box-shadow: rgba(0, 0, 0, 0.4) 0px 0px 6px;
+		left: 1.6rem;
+		z-index: 2;
+		top: 0;
+		height: 100%;
+		padding: 0 0.7rem;
+		align-items: center;
+		font-weight: normal;
+	}
+	.register-wrapper{
+		position: relative;
+		&:hover .hover-register-value {
+			display: flex;
+		}
+	}
 	.register-name {
 		font-weight: bold;
-		padding-right: 0.2rem;
-		border-right: solid 2px #2f4457;
+		padding: 0.2rem;
+		border-radius: 0.2rem;
+		border: none;
+		width: 1.6rem;
+		background: transparent;
+		color: var(--secondary-text);
+		cursor: pointer;
+		&:hover {
+			background-color: var(--accent2);
+		}
+
 	}
 	.register-value {
 		font-weight: bold;
 	}
 	.register-hex {
 		display: flex;
+		padding-left: 0.2rem;
+		gap: 0.1rem;
+		border-left: solid 0.1rem var(--secondary-attention);
 	}
 </style>

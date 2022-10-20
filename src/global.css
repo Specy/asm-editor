@@ -1,11 +1,14 @@
 @font-face {
 	font-family: Orienta;
-	src: url(/Orienta-Regular.ttf);
+	src: url(/fonts/Orienta-Regular.ttf);
+}
+@font-face {
+	font-family: FiraCode;
+	src: url(/fonts/FiraCode-Medium.woff2);
 }
 * {
 	margin: 0;
 	padding: 0;
-	font-family: Orienta;
 	border: none;
 	box-sizing: border-box;
 	-webkit-tap-highlight-color: transparent;
@@ -19,6 +22,7 @@ html {
     color: #f0f0f0;
 	width: 100%;
 	display: flex;
+	font-family: Orienta;
 	flex-direction: column;
 	overflow-x: hidden;
 }
@@ -47,7 +51,8 @@ input:disabled{
 	display: flex;
 }
 ::-webkit-scrollbar {
-	width: 5px;
+	width: 0.3rem;
+	height: 0.4rem;
 	background: rgba(44, 44, 44, 0.9);
 }
 

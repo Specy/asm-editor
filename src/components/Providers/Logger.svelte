@@ -1,38 +1,40 @@
 <script lang="ts">
-	import { toast } from '$cmp/toast'
-	import { fly } from 'svelte/transition';
+	import { toast, ToastType } from '$cmp/toast'
+	import { fly } from 'svelte/transition'
 	import Icon from '$cmp/layout/Icon.svelte'
 	import FaTimes from 'svelte-icons/fa/FaTimes.svelte'
-
 </script>
 
 <slot />
 {#key $toast.id}
-	<div class="toast-wrapper" class:toastVisible={$toast.visible} in:fly={{y: -100}}>
-		<div 
-			class="toast-title"
-			style={`border-color:${$toast.color}`}
-		>
-			<div>
-				{$toast.title}
+	{#if $toast.type === ToastType.Toast}
+		<div class="toast-wrapper" class:toastVisible={$toast.visible} in:fly={{ y: -100 }}>
+			<div class="toast-title" style={`border-color:${$toast.color}`}>
+				<div>
+					{$toast.title}
+				</div>
+				<Icon on:click={toast.closeToast}>
+					<FaTimes />
+				</Icon>
 			</div>
-			<Icon on:click={toast.closeToast}>
-				<FaTimes />
-			</Icon>
-		</div>
-		<div class="toast-text">
-			{$toast.message}
-		</div>
-		<div class="toast-progress">
-			<div
-				class='toast-progress-bar'
-				style={`
+			<div class="toast-text">
+				{$toast.message}
+			</div>
+			<div class="toast-progress">
+				<div
+					class="toast-progress-bar"
+					style={`
 					animation-duration: ${$toast.duration}ms; 
 					background-color: ${$toast.color};
 				`}
-			/>
+				/>
+			</div>
 		</div>
-	</div>
+		{:else}
+		<div class="pill" class:pillVisible={$toast.visible} in:fly={{ y: -100 }}>
+			{$toast.message}
+		</div>
+	{/if}
 {/key}
 
 <style lang="scss">
@@ -56,7 +58,22 @@
 		padding: 0.6rem;
 		padding-top: 0.1rem;
 	}
-
+	.pill{
+		position: absolute;
+		left: 50vw;
+		top: 0.6rem;
+		padding: 0.6rem 2rem;  
+		border-radius: 10rem;
+		background-color: rgba(var(--RGB-secondary), 0.85);
+		backdrop-filter: blur(3px);
+		box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
+		z-index: 20;
+		transition: transform 0.3s ease-out;
+		transform: translateY(calc(-100% - 1rem)) translateX(-50%);
+	}
+	.pillVisible{
+		transform: translateY(0) translateX(-50%);
+	}
 	.toastVisible {
 		transform: translateY(0);
 	}
@@ -66,16 +83,15 @@
 		border-radius: 1rem;
 		overflow: hidden;
 	}
-	.toast-progress-bar{
+	.toast-progress-bar {
 		animation-name: mergeToZero;
 		animation-timing-function: linear;
 		animation-fill-mode: forwards;
 		width: 100%;
-		
-		height: 0.2rem;
 
+		height: 0.2rem;
 	}
-	@keyframes mergeToZero{
+	@keyframes mergeToZero {
 		from {
 			transform: translateX(0);
 		}

@@ -5,6 +5,7 @@ const logic = ["not", "and", "andi", "or", "ori", "eor", "eori"]
 const special = ["move", "movea", "exg", "clr", "swap", "neg"]
 const withDescriptors = ["add", "sub", "divs", "move"]
 const registers = ["d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7"]
+const others = ["ext", "lsl", "lsr", "asl", "asr", "rol", "ror", "cmp", "cmpa", "cmpi", "tst", "jmp", "bra", "jsr", "rts", "bsr", "beq", "bne", "bge", "bgt", "ble", "blt"]
 const registersMap = toMap(registers)
 const withDescriptorsMap = toMap(withDescriptors)
 const arithmeticMap = toMap(arithmetic)
@@ -19,7 +20,7 @@ export const M68KLanguage = {
 
 	regEx: /\/(?!\/\/)(?:[^/\\]|\\.)*\/[igm]*/,
 
-	keywords: [...arithmetic, ...logic, ...special, "ext", "lsl", "lsr", "asl", "asr", "rol", "ror", "cmp", "cmpa", "cmpi", "tst", "jmp", "bra", "jsr", "rts", "bsr", "beq", "bne", "bge", "bgt", "ble", "blt"],
+	keywords: [...arithmetic, ...logic, ...special, ...others, ...[...arithmetic, ...logic, ...special, ...others].map(s => s.toUpperCase())],
 	// we include these common regular expressions
 	symbols: /[.,:]+/,
 	escapes: /\\(?:[abfnrtv\\"'$]|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,

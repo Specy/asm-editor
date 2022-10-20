@@ -17,6 +17,10 @@ const themeObject = {
         color: '#1D2026',
         name: 'secondary-darker'
     },
+    secondaryAttention:  {
+        color: '#2d3950',
+        name: 'secondary-attention'
+    },
     tertiary: {
         color: '#E0E0E0',
         name: 'tertiary'

@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation'
 
 	import Button from '$cmp/buttons/Button.svelte'
-import ButtonLink from '$cmp/buttons/ButtonLink.svelte'
+	import ButtonLink from '$cmp/buttons/ButtonLink.svelte'
 	import Input from '$cmp/inputs/Input.svelte'
 	import Select from '$cmp/inputs/Select.svelte'
 	import Textarea from '$cmp/inputs/Textarea.svelte'
@@ -24,8 +24,8 @@ import ButtonLink from '$cmp/buttons/ButtonLink.svelte'
 		})
 		try {
 			await ProjectStore.addProject(project)
-			toast.success('Project created')
-			goto(`./${project.id}`)
+			toast.logPill('Project created')
+			goto("/projects")
 		} catch (e) {
 			console.error(e)
 			toast.error('Error creating project')
@@ -40,10 +40,12 @@ import ButtonLink from '$cmp/buttons/ButtonLink.svelte'
 		<Form style="display: grid; gap: 1.2rem; margin:0.5rem 0" on:submit={create}>
 			<Input title="Name" bind:value={name} />
 			<Textarea title="Description" bind:value={description} />
-			<Select title="Language" options={['M68K', 'MIPS']} bind:value={language} />
+			<Select title="Language" options={['M68K']} bind:value={language} />
 		</Form>
-		<div style="display:flex; justify-content: space-between; align-items:center; margin-top: 1rem;">
-			<ButtonLink href="/projects" cssVar='primary'> Cancel </ButtonLink>
+		<div
+			style="display:flex; justify-content: space-between; align-items:center; margin-top: 1rem;"
+		>
+			<ButtonLink href="/projects" cssVar="primary">Cancel</ButtonLink>
 			<Button on:click={create}>Create</Button>
 		</div>
 	</div>

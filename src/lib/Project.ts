@@ -12,10 +12,11 @@ export interface ProjectData{
 
 const baseM68k = 
 `
-ORG    $1000
+ORG $1000
 START:
+    * Write here your code
 
-END
+END: * Jump here to end the program
 `.trim()
 const baseMIPS = 
 `

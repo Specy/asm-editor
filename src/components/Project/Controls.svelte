@@ -10,17 +10,18 @@
 	const dispatch = createEventDispatcher()
 	export let numOfLines:number
 	export let line:number
+	export let disabled: boolean
 </script>
 
 <div class="project-controls">
 	{#if line < 0}
-		<Button style="width: 5.5rem; padding: 0.5rem 0" on:click={() => dispatch('run')}>
+		<Button style="width: 5.5rem; padding: 0.5rem 0" on:click={() => dispatch('run')} {disabled}>
             <Icon size={1} style='margin-right: 0.4rem;'>
                 <FaPlay />
             </Icon>
             Run
         </Button>
-		<Button style="width: 5.5rem; padding: 0.5rem 0" on:click={() => dispatch('build')}>
+		<Button style="width: 5.5rem; padding: 0.5rem 0" on:click={() => dispatch('build')} {disabled}>
             <Icon size={1} style='margin-right: 0.4rem;'>
                 <FaWrench />
             </Icon>

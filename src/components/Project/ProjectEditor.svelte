@@ -14,6 +14,7 @@
 	import { toast } from '$cmp/toast'
 	import ErrorVisualiser from '$cmp/ErrorVisualiser.svelte'
 	import Controls from './Controls.svelte'
+	import StdOut from '$cmp/StdOut.svelte'
 
 	export let project: Project
 	const saveDispatch = createEventDispatcher<{ save: Project }>()
@@ -59,7 +60,7 @@
 	</div>
 </header>
 
-<div class="editor-registers-wrapper">
+<div class="editor-memory-wrapper">
 	<div class="editor-wrapper">
 		<div
 			class="editor-border"
@@ -67,13 +68,19 @@
 			class:redBorder={$emulator.errors.length > 0}
 		>
 			<Editor
-				bind:project
+				on:change={(d) => {
+					emulator.setCode(d.detail)
+				}}
+				errors={$emulator.compilerErrors}
+				bind:code={project.code}
+				language={project.language}
 				highlightedLine={$emulator.line}
 				disabled={$emulator.line >= 0}
 				hasError={$emulator.errors.length > 0}
 			/>
 		</div>
 		<Controls
+			disabled={$emulator.compilerErrors.length > 0}
 			line={$emulator.line}
 			numOfLines={project.code.length}
 			on:run={async () => {
@@ -116,23 +123,25 @@
 		/>
 	</div>
 	<div class="right-side">
-		<div class="registers-wrapper">
+		<div class="memory-wrapper">
 			<MemoryVisualiser
 				registers={$emulator.registers}
 				statusCodes={$emulator.statusRegister}
-				memory={$emulator.currentMemoryPage}	
+				memory={$emulator.currentMemoryPage}
 				currentAddress={$emulator.currentMemoryAddress}
 				sp={$emulator.sp}
+				on:registerClick={(e) => {
+					emulator.setCurrentMemoryAddress(e.detail.value)
+				}}
 				on:addressChange={(e) => {
 					emulator.setCurrentMemoryAddress(e.detail)
 				}}
 			/>
 		</div>
-		<div class="std-out">
-			{$emulator.compilerErrors.map(e => e.getMessage()).join("\n")}
-			{$emulator.errors.join("\n")}
-			{$emulator.stdOut}
-		</div>
+		<StdOut
+			stdOut={`${$emulator.errors.join('\n')}\n ${$emulator.stdOut}`}
+			compilerErrors={$emulator.compilerErrors}
+		/>
 	</div>
 </div>
 
@@ -152,21 +161,12 @@
 			}
 		}
 	}
-	.std-out {
+
+	.editor-memory-wrapper {
 		display: flex;
-		padding: 0.4rem;
-		border-radius: 0.5rem;
-		flex: 1;
-		overflow-y: auto;
-		margin-top: 0.5rem;
-		background-color: var(--secondary);
-	}
-	.editor-registers-wrapper {
-		display: flex;
-		width: 100%;
 		flex: 1;
 		.editor-wrapper,
-		.registers-wrapper {
+		.memory-wrapper {
 			display: flex;
 			overflow: hidden;
 		}
@@ -174,6 +174,9 @@
 		.editor-wrapper {
 			flex-direction: column;
 			flex: 1;
+			@media screen and (max-width: 1000px) {
+				min-height: 70vh;
+			}
 			.editor-border {
 				position: relative;
 				display: flex;
@@ -183,30 +186,29 @@
 				border-radius: 0.5rem;
 			}
 		}
-		.registers-wrapper {
-			display: flex;
-			flex-direction: column;
-			align-items: center;
+		.memory-wrapper {
+			@media screen and (max-width: 1000px) {
+				width: 90vw;
+				overflow-x: auto;
+			}
 		}
-		@media screen and (max-width: 900px) {
-			grid-template-columns: 6fr 4fr;
+		@media screen and (max-width: 1000px) {
+			flex-direction: column;
 		}
 	}
 	.right-side {
 		margin-left: 0.5rem;
+		width: min-content;
 		padding-top: 0.2rem;
 		display: flex;
 		overflow-y: auto;
 		flex-direction: column;
 	}
-	@media screen and (max-width: 700px) {
-		.editor-wrapper {
-			height: 60vh;
-		}
-		.editor-registers-wrapper {
+	@media screen and (max-width: 900px) {
+		.editor-memory-wrapper {
 			grid-template-columns: 1fr;
 		}
-		.registers-wrapper {
+		.memory-wrapper {
 			margin-top: 1rem;
 		}
 		.right-side {
@@ -214,6 +216,7 @@
 			padding: 0.2rem;
 			margin-top: 1rem;
 			max-height: unset;
+			flex-direction: column-reverse;
 		}
 	}
 
