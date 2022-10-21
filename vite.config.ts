@@ -8,6 +8,9 @@ const config: UserConfig = {
 	server: {
 		port: 3000,
 	},
+	build: {
+		target: "esnext"
+	},
 	resolve: {
 		alias: {
 			$cmp: resolve('./src/components/'),
@@ -23,8 +26,8 @@ const config: UserConfig = {
 	  },
 	plugins: [
 		sveltekit(),
+		//topLevelAwait(), gives issues with dynamic route
 		wasm(),
-		topLevelAwait()
 	],
 };
 
