@@ -15,6 +15,7 @@ export function MIPSEmulator(baseCode: string, haltLimit = 100000) {
         sp: 0,
         stdOut: "",
         currentMemoryAddress: 0,
+        breakpoints: [],
         currentMemoryPage: new Uint8Array(0),
         interrupt: undefined
     })
@@ -29,6 +30,14 @@ export function MIPSEmulator(baseCode: string, haltLimit = 100000) {
                 compilerErrors: [],
                 registers: [],
             }
+        })
+    }
+    function toggleBreakpoint(line: number) {
+        update(s => {
+            const index = s.breakpoints.indexOf(line)
+            if (index === -1) s.breakpoints.push(line)
+            else s.breakpoints.splice(index, 1)
+            return s
         })
     }
     let emulator = new MIPSProgram('')
@@ -164,6 +173,7 @@ export function MIPSEmulator(baseCode: string, haltLimit = 100000) {
         run,
         setCurrentMemoryAddress,
         setCode,
-        clear
+        clear,
+        toggleBreakpoint
     }
 }

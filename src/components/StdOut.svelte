@@ -50,7 +50,7 @@
     }
 	.std-out {
 		display: flex;
-		padding: 0.4rem;
+		padding: 0.6rem;
 		position: relative;
 		border-radius: 0.5rem;
 		flex: 1;

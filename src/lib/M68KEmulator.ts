@@ -3,7 +3,7 @@ import { InterpreterStatus, type Interrupt } from "s68k"
 import { S68k, Interpreter } from "s68k"
 import { MEMORY_SIZE, PAGE_SIZE } from "$lib/Config"
 import { Prompt } from "$cmp/prompt"
-import { createDebouncer } from "./utils"
+import { createDebouncer, getErrorMessage } from "./utils"
 export type RegisterHex = [hi: string, lo: string]
 export type Register = {
     value: number,
@@ -35,6 +35,8 @@ export type EmulatorStore = {
     code: string,
     sp: number,
     stdOut: string,
+    canExecute: boolean,
+    breakpoints: number[],
     currentMemoryAddress: number,
     currentMemoryPage: DiffedMemory
 }
@@ -55,6 +57,8 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
         errors: [],
         sp: 0,
         stdOut: "",
+        canExecute: false,
+        breakpoints: [],
         currentMemoryAddress: 0,
         currentMemoryPage: {
             current: new Uint8Array(PAGE_SIZE).fill(0xFF),
@@ -66,28 +70,44 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
     let interpreter: Interpreter | null = null
     const debouncer = createDebouncer(500)
     function compile(): Promise<void> {
-        return new Promise(res => {
-            const state = get({ subscribe })
-            s68k = new S68k(state.code)
-            const errors = s68k.semanticCheck().map(e => {
-                return {
-                    line: e.getLine(),
-                    lineIndex: e.getLineIndex(),
-                    message: e.getError(),
-                    formatted: e.getMessage()
-                } as MonacoError
-            })
-            clear()
-            if (errors.length > 0) {
-                s68k = null
-                interpreter = null
-                return update(s => ({ ...s, compilerErrors: errors }))
+        return new Promise((res, rej) => {
+            try{
+                clear()
+                const state = get({ subscribe })
+                s68k = new S68k(state.code)
+                const errors = s68k.semanticCheck().map(e => {
+                    return {
+                        line: e.getLine(),
+                        lineIndex: e.getLineIndex(),
+                        message: e.getError(),
+                        formatted: e.getMessage()
+                    } as MonacoError
+                })
+                if (errors.length > 0) {
+                    s68k = null
+                    interpreter = null
+                    return update(s => ({ ...s, compilerErrors: errors }))
+                }
+                interpreter = s68k.createInterpreter(MEMORY_SIZE)
+                update(s => ({...s, canExecute: true}))
+                res()
+            }catch(e){
+                console.error(e)
+                addError(getErrorMessage(e))
+                rej(e)
             }
-            interpreter = s68k.createInterpreter(MEMORY_SIZE)
-            res()
+
         })
     }
 
+    function toggleBreakpoint(line: number) {
+        update(s => {
+            const index = s.breakpoints.indexOf(line)
+            if (index === -1) s.breakpoints.push(line)
+            else s.breakpoints.splice(index, 1)
+            return s
+        })
+    }
     function semanticCheck(code?: string) {
         code = code || get({ subscribe }).code
         const errors = S68k.semanticCheck(code).map(e => (
@@ -114,7 +134,9 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
                 line: -1,
                 stdOut: "",
                 code: state.code,
+                interrupt: undefined,
                 errors: [],
+                canExecute: false,
                 compilerErrors: [],
                 currentMemoryPage: {
                     current: new Uint8Array(PAGE_SIZE).fill(0xFF),
@@ -190,22 +212,22 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
     function updateData() {
         update(data => {
             data.terminated = interpreter.hasReachedBottom()
-            data.line = interpreter.getCurrentLineIndex()
             return data
         })
     }
     function addError(error: string) {
         update(data => {
-            data.errors.push(error)
+            data.errors = [...data.errors, error]
             return data
         })
     }
     async function step() {
-        let error: Error
+        let lastLine = -1
         try {
             if (!interpreter) throw new Error("Interpreter not initialized")
-            interpreter.step()
-            switch (interpreter.getStatus()) {
+            lastLine = interpreter.getCurrentLineIndex()
+            const [ins] = interpreter.step()
+            switch (interpreter.getStatus()) {  
                 case InterpreterStatus.Interrupt: {
                     const interrupt = interpreter.getCurrentInterrupt()
                     update(d => ({ ...d, interrupt }))
@@ -214,21 +236,18 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
                 }
             }
             update(data => {
-                data.line = interpreter.getCurrentLineIndex()
+                data.line = ins.parsed_line.line_index
                 return data
             })
         } catch (e) {
             console.error(e)
-            error = e
+            addError(getErrorMessage(e))
+            update(d => ({ ...d, terminated: true, line: lastLine }))
+            throw e
         }
         updateRegisters()
         updateMemory()
         updateData()
-
-        if (error) {
-            addError(error?.message ?? JSON.stringify(error))
-            throw error
-        }
         return interpreter.getStatus() != InterpreterStatus.Running
     }
 
@@ -238,7 +257,6 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
             data.interrupt = interrupt
             return data
         })
-
         switch (interrupt.type) {
             case "DisplayStringWithCRLF": {
                 update(d => ({ ...d, stdOut: d.stdOut + interrupt.value + "\n" }))
@@ -254,11 +272,13 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
             }
             case "ReadChar": {
                 const char = (await Prompt.askText("Enter a character", "text") as string)[0]
+                if(!char) throw new Error("Expected a character")
                 interpreter.answerInterrupt({ type: interrupt.type, value: char })
                 break
             }
             case "ReadNumber": {
                 const number = Number(await Prompt.askText("Enter a number", "text"))
+                if(Number.isNaN(number)) throw new Error("Invalid number")
                 interpreter.answerInterrupt({ type: interrupt.type, value: number })
                 break
             }
@@ -275,28 +295,37 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
                 interpreter.answerInterrupt({ type: interrupt.type })
             }
         }
+        update(data => {
+            data.interrupt = undefined
+            return data
+        })
     }
     async function run() {
         let i = 0
-        let error
+        const breakpoints = new Map(get({subscribe}).breakpoints.map(e => [e, true]))
+        let lastLine = -1
         try {
             if (!interpreter) throw new Error("Interpreter not initialized")
             while (!interpreter.hasTerminated()) {
-                interpreter.step()
+                lastLine = interpreter.getCurrentLineIndex()
+                if(breakpoints.get(lastLine)) break
+                const [ins] = interpreter.step()
                 switch (interpreter.getStatus()) {
                     case InterpreterStatus.Terminated: {
-                        update(d => ({ ...d, terminated: true }))
+                        update(d => ({ ...d, terminated: true, line: ins.parsed_line.line_index }))
                         break
                     }
                     case InterpreterStatus.TerminatedWithException: {
                         update(data => {
                             data.terminated = true
+                            data.line = ins.parsed_line.line_index
                             data.errors.push("Program terminated with errors")
                             return data
                         })
                         break
                     }
                     case InterpreterStatus.Interrupt: {
+                        update(d => ({ ...d, line: ins.parsed_line.line_index }))
                         await handleInterrupt(interpreter.getCurrentInterrupt())
                     }
                 }
@@ -308,16 +337,12 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
             })
         } catch (e) {
             console.error(e)
-            error = e
+            addError(getErrorMessage(e))
+            update(d => ({ ...d, terminated: true,  line: lastLine}))
         }
         updateRegisters()
         updateData()
         updateMemory()
-
-        if (error) {
-            addError(error?.message ?? JSON.stringify(error))
-            throw error
-        }
         return interpreter.getStatus()
     }
     function setCurrentMemoryAddress(address: number) {
@@ -339,6 +364,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
         run,
         setCurrentMemoryAddress,
         setCode,
-        clear
+        clear,
+        toggleBreakpoint
     }
 }

@@ -12,3 +12,10 @@ export function createDebouncer(delay:number){
     }
 }
 
+export function getErrorMessage(error: any): string{
+    if(typeof error !== "object"){
+        return error
+    }
+    if(error.message) return error.message
+    return JSON.stringify(error)
+}

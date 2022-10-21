@@ -1,50 +1,54 @@
 <script lang="ts">
 	import { createEventDispatcher } from 'svelte'
 	import Button from '$cmp/buttons/Button.svelte'
-    import FaPlay from 'svelte-icons/fa/FaPlay.svelte'
-    import FaWrench from 'svelte-icons/fa/FaWrench.svelte'
-    import Icon from '$cmp/layout/Icon.svelte'
-    import FaStepForward from 'svelte-icons/fa/FaStepForward.svelte'
-    import FaStop from 'svelte-icons/fa/FaStop.svelte'
+	import FaPlay from 'svelte-icons/fa/FaPlay.svelte'
+	import FaWrench from 'svelte-icons/fa/FaWrench.svelte'
+	import Icon from '$cmp/layout/Icon.svelte'
+	import FaStepForward from 'svelte-icons/fa/FaStepForward.svelte'
+	import FaStop from 'svelte-icons/fa/FaStop.svelte'
 	const dispatch = createEventDispatcher()
-	export let terminated: boolean
-	export let line:number
-	export let disabled: boolean
+	export let executionDisabled: boolean
+	export let hasCompiled: boolean
+	export let buildDisabled: boolean
 </script>
 
 <div class="project-controls">
-	{#if line < 0}
-		<Button style="width: 5.5rem; padding: 0.5rem 0" on:click={() => dispatch('run')} {disabled}>
-            <Icon size={1} style='margin-right: 0.4rem;'>
-                <FaPlay />
-            </Icon>
-            Run
-        </Button>
-		<Button style="width: 5.5rem; padding: 0.5rem 0" on:click={() => dispatch('build')} {disabled}>
-            <Icon size={1} style='margin-right: 0.4rem;'>
-                <FaWrench />
-            </Icon>
+	{#if !hasCompiled}
+		<Button style="width: 5.5rem; padding: 0.5rem 0" on:click={() => dispatch('build')} disabled={buildDisabled}>
+			<Icon size={1} style="margin-right: 0.4rem;">
+				<FaWrench />
+			</Icon>
 			Build
 		</Button>
 	{:else}
 		<Button
-            style="width: 5.5rem; padding: 0.5rem 0"
+			style="width: 5.5rem; padding: 0.5rem 0"
 			cssVar="accent2"
 			on:click={() => dispatch('stop')}
 		>
-            <Icon size={1} style='margin-right: 0.4rem;'>
-                <FaStop />
-            </Icon>
+			<Icon size={1} style="margin-right: 0.4rem;">
+				<FaStop />
+			</Icon>
 			Stop
 		</Button>
 		<Button
-            style="width: 5.5rem; padding: 0.5rem 0"
-			disabled={terminated}
+			style="width: 5.5rem; padding: 0.5rem 0"
+			on:click={() => dispatch('run')}
+			disabled={executionDisabled}
+		>
+			<Icon size={1} style="margin-right: 0.4rem;">
+				<FaPlay />
+			</Icon>
+			Run
+		</Button>
+		<Button
+			style="width: 5.5rem; padding: 0.5rem 0"
+			disabled={executionDisabled}
 			on:click={() => dispatch('step')}
 		>
-            <Icon size={1} style='margin-right: 0.4rem;'>
-                <FaStepForward />
-            </Icon>
+			<Icon size={1} style="margin-right: 0.4rem;">
+				<FaStepForward />
+			</Icon>
 			Step
 		</Button>
 		<!--
@@ -59,7 +63,6 @@
 			Undo
 		</Button>
 		-->
-
 	{/if}
 </div>
 

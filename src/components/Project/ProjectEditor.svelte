@@ -14,7 +14,7 @@
 	import { toast } from '$cmp/toast'
 	import Controls from './Controls.svelte'
 	import StdOut from '$cmp/StdOut.svelte'
-	import { clamp } from '$lib/utils'
+	import { clamp, getErrorMessage } from '$lib/utils'
 	import { MEMORY_SIZE, PAGE_SIZE } from '$lib/Config'
 
 	export let project: Project
@@ -69,11 +69,15 @@
 			class:redBorder={$emulator.errors.length > 0}
 		>
 			<Editor
-				on:change={(d) => {
+				on:change={d => {
 					emulator.setCode(d.detail)
 				}}
-				errors={$emulator.compilerErrors}
+				on:breakpointPress={d => {
+					emulator.toggleBreakpoint(d.detail - 1)
+				}}
 				bind:code={project.code}
+				breakpoints={$emulator.breakpoints}
+				errors={$emulator.compilerErrors}
 				language={project.language}
 				highlightedLine={$emulator.line}
 				disabled={$emulator.line >= 0}
@@ -81,27 +85,24 @@
 			/>
 		</div>
 		<Controls
-			terminated={$emulator.terminated}
-			disabled={$emulator.compilerErrors.length > 0}
-			line={$emulator.line}
+			executionDisabled={$emulator.terminated || $emulator.interrupt !== undefined}
+			buildDisabled={$emulator.compilerErrors.length > 0}
+			hasCompiled={$emulator.canExecute}
 			on:run={async () => {
 				try {
-					emulator.setCode(project.code)
-					await emulator.compile()
-					emulator.run()
+					emulator.run()	
 				} catch (e) {
 					console.error(e)
-					toast.error('Error executing code. ' + e.message)
+					toast.error('Error executing code. ' + getErrorMessage(e))
 				}
 			}}
 			on:build={async () => {
 				try {
 					emulator.setCode(project.code)
 					await emulator.compile()
-					emulator.step()
 				} catch (e) {
 					console.error(e)
-					toast.error('Error executing code. ' + e.message)
+					toast.error('Error compiling code. ' + getErrorMessage(e))
 				}
 			}}
 			on:step={() => {
@@ -109,18 +110,10 @@
 					emulator.step()
 				} catch (e) {
 					console.error(e)
-					toast.error('Error executing code. ' + e.message)
+					toast.error('Error executing code. ' + getErrorMessage(e))
 				}
 			}}
 			on:stop={() => emulator.clear()}
-			on:undo={() => {
-				try {
-					//emulator.undo()
-				} catch (e) {
-					console.error(e)
-					toast.error('Error executing code. ' + e.message)
-				}
-			}}
 		/>
 	</div>
 	<div class="right-side">

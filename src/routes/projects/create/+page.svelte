@@ -25,7 +25,7 @@
 		try {
 			await ProjectStore.addProject(project)
 			toast.logPill('Project created')
-			goto("/projects")
+			goto(`/projects/${project.id}`)
 		} catch (e) {
 			console.error(e)
 			toast.error('Error creating project')

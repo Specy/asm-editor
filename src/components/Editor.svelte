@@ -11,13 +11,17 @@
 	export let hasError = false
 	export let language: AvailableLanguages
 	export let errors: MonacoError[]
+	export let breakpoints: number[]
 	let el: HTMLDivElement
 	let mockEditor: HTMLDivElement
 	let editor: monaco.editor.IStandaloneCodeEditor
 	let monacoInstance: MonacoType
 	let decorations = []
 	const toDispose = []
-	const dispatcher = createEventDispatcher<{ change: string }>()
+	const dispatcher = createEventDispatcher<{
+		change: string
+		breakpointPress: number
+	}>()
 
 	onMount(async () => {
 		Monaco.registerLanguages()
@@ -31,21 +35,27 @@
 				vertical: 'auto',
 				horizontal: 'auto'
 			},
+			glyphMargin: true,
 			cursorBlinking: 'phase',
 			fontSize: 16,
-
 			smoothScrolling: true
 		})
 		const observer = new ResizeObserver(() => {
 			if (!mockEditor) return
 			const bounds = mockEditor.getBoundingClientRect()
-			console.log("resize")
 			editor.layout({
 				width: bounds.width,
 				height: bounds.height
 			})
 		})
 		observer.observe(mockEditor)
+		toDispose.push(
+			editor.onMouseDown((e) => {
+				if (e.target.type === monacoInstance.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
+					dispatcher('breakpointPress', e.target.position.lineNumber)
+				}
+			})
+		)
 		toDispose.push(() => observer.disconnect())
 		toDispose.push(
 			editor.getModel().onDidChangeContent(() => {
@@ -61,12 +71,11 @@
 	})
 	$: {
 		if (editor) {
-			decorations = editor.deltaDecorations(
-				decorations,
-				highlightedLine > 0
+			decorations = editor.deltaDecorations(decorations, [
+				...(highlightedLine > 0
 					? [
 							{
-								range: new monacoInstance.Range(highlightedLine, 0, highlightedLine, 0),
+								range: new monacoInstance.Range(highlightedLine + 1, 0, highlightedLine + 1, 0),
 								options: {
 									className: hasError ? 'error-line' : 'selected-line',
 									inlineClassName: 'selected-line-text',
@@ -74,8 +83,18 @@
 								}
 							}
 					  ]
-					: []
-			)
+					: []),
+				...breakpoints.map((e) => ({
+					range: new monacoInstance.Range(e + 1, 0, e + 1, 0),
+					options: {
+						glyphMarginClassName: 'breakpoint-glyph'
+					}
+				}))
+			])
+		}
+	}
+	$: {
+		if (editor && highlightedLine > 0) {
 			editor.revealLineInCenter(highlightedLine)
 		}
 	}
@@ -97,7 +116,6 @@
 	}
 	$: editor?.updateOptions({ readOnly: disabled })
 </script>
-
 
 <div bind:this={mockEditor} class="mock-editor">
 	{#if !editor}
@@ -137,6 +155,14 @@
 	.mock-editor {
 		display: flex;
 		flex: 1;
+	}
+	:global(.breakpoint-glyph) {
+		width: calc(22px - 0.6rem) !important;
+		height: calc(22px - 0.6rem) !important;
+		margin-top: 0.3rem;
+		margin-left: 0.6rem;
+		background-color: var(--accent);
+		border-radius: 1rem;
 	}
 	.editor {
 		display: flex;
