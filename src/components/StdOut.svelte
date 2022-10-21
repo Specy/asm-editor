@@ -59,6 +59,7 @@
 		background-color: var(--secondary);
 		@media screen and (max-width: 1000px) {
 				min-height: 4rem;
+				width: 100%;
 			}
 	}
 </style>

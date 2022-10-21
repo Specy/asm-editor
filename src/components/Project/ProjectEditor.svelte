@@ -191,8 +191,9 @@
 		}
 		.memory-wrapper {
 			@media screen and (max-width: 1000px) {
-				width: 90vw;
+				margin-top: 1rem;
 				overflow-x: auto;
+				width: 100%;
 			}
 		}
 		@media screen and (max-width: 1000px) {
@@ -207,18 +208,17 @@
 		overflow-y: auto;
 		flex-direction: column;
 	}
-	@media screen and (max-width: 900px) {
+	@media screen and (max-width: 1000px) {
 		.editor-memory-wrapper {
 			grid-template-columns: 1fr;
-		}
-		.memory-wrapper {
-			margin-top: 1rem;
 		}
 		.right-side {
 			margin: 0;
 			padding: 0.2rem;
 			margin-top: 1rem;
+			width: unset;
 			max-height: unset;
+			align-items: center;
 			flex-direction: column-reverse;
 		}
 	}

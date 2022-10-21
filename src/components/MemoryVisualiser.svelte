@@ -252,7 +252,7 @@
 		align-items: center;
 		font-size: 1rem;
 		flex: 1;
-		@media screen and (max-width: 700px) {
+		@media screen and (max-width: 1000px) {
 			width: unset;
 		}
 	}

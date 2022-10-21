@@ -12,6 +12,7 @@
 	export let language: AvailableLanguages
 	export let errors: MonacoError[]
 	let el: HTMLDivElement
+	let mockEditor: HTMLDivElement
 	let editor: monaco.editor.IStandaloneCodeEditor
 	let monacoInstance: MonacoType
 	let decorations = []
@@ -35,6 +36,17 @@
 
 			smoothScrolling: true
 		})
+		const observer = new ResizeObserver(() => {
+			if (!mockEditor) return
+			const bounds = mockEditor.getBoundingClientRect()
+			console.log("resize")
+			editor.layout({
+				width: bounds.width,
+				height: bounds.height
+			})
+		})
+		observer.observe(mockEditor)
+		toDispose.push(() => observer.disconnect())
 		toDispose.push(
 			editor.getModel().onDidChangeContent(() => {
 				code = editor.getValue()
@@ -86,17 +98,13 @@
 	$: editor?.updateOptions({ readOnly: disabled })
 </script>
 
-<svelte:window
-	on:resize={() => {
-		if (editor) editor.layout()
-	}}
-/>
-{#if !editor}
-	<h1 class="loading">Loading editor...</h1>
-{/if}
-<div class="editor">
-	<div bind:this={el} class="editor-inner" />
+
+<div bind:this={mockEditor} class="mock-editor">
+	{#if !editor}
+		<h1 class="loading">Loading editor...</h1>
+	{/if}
 </div>
+<div bind:this={el} class="editor" />
 
 <style lang="scss">
 	:global(.selected-line) {
@@ -126,21 +134,20 @@
 	:global(.find-widget.visible) {
 		transform: translateY(0) !important;
 	}
-
+	.mock-editor {
+		display: flex;
+		flex: 1;
+	}
 	.editor {
 		display: flex;
-		position: relative;
+		position: absolute;
 		flex: 1;
 		z-index: 2;
 		border-radius: 0.4rem;
 		overflow: hidden;
 		box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
 	}
-	.editor-inner {
-		position: relative;
-		flex: 1;
-		display: flex;
-	}
+
 	.loading {
 		display: flex;
 		width: calc(100% - 0.4rem);
