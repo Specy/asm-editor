@@ -6,9 +6,8 @@
     import Icon from '$cmp/layout/Icon.svelte'
     import FaStepForward from 'svelte-icons/fa/FaStepForward.svelte'
     import FaStop from 'svelte-icons/fa/FaStop.svelte'
-    import FaUndo from 'svelte-icons/fa/FaUndo.svelte'
 	const dispatch = createEventDispatcher()
-	export let numOfLines:number
+	export let terminated: boolean
 	export let line:number
 	export let disabled: boolean
 </script>
@@ -40,7 +39,7 @@
 		</Button>
 		<Button
             style="width: 5.5rem; padding: 0.5rem 0"
-			disabled={numOfLines <= line}
+			disabled={terminated}
 			on:click={() => dispatch('step')}
 		>
             <Icon size={1} style='margin-right: 0.4rem;'>

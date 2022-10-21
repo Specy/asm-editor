@@ -12,9 +12,10 @@
 	import { goto } from '$app/navigation'
 	import { Prompt } from '$cmp/prompt'
 	import { toast } from '$cmp/toast'
-	import ErrorVisualiser from '$cmp/ErrorVisualiser.svelte'
 	import Controls from './Controls.svelte'
 	import StdOut from '$cmp/StdOut.svelte'
+	import { clamp } from '$lib/utils'
+	import { MEMORY_SIZE, PAGE_SIZE } from '$lib/Config'
 
 	export let project: Project
 	const saveDispatch = createEventDispatcher<{ save: Project }>()
@@ -80,9 +81,9 @@
 			/>
 		</div>
 		<Controls
+			terminated={$emulator.terminated}
 			disabled={$emulator.compilerErrors.length > 0}
 			line={$emulator.line}
-			numOfLines={project.code.length}
 			on:run={async () => {
 				try {
 					emulator.setCode(project.code)
@@ -131,7 +132,9 @@
 				currentAddress={$emulator.currentMemoryAddress}
 				sp={$emulator.sp}
 				on:registerClick={(e) => {
-					emulator.setCurrentMemoryAddress(e.detail.value)
+					const value = e.detail.value
+					const clampedSize = value - (value % PAGE_SIZE)
+					emulator.setCurrentMemoryAddress(clamp(clampedSize, 0, MEMORY_SIZE))
 				}}
 				on:addressChange={(e) => {
 					emulator.setCurrentMemoryAddress(e.detail)

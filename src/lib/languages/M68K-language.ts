@@ -1,14 +1,13 @@
 import type { MonacoType } from "$lib/Monaco"
 
-const arithmetic = ["add", "addi", "adda", "sub", "subi", "suba", "mulu", "muls", "divu", "divs"]
-const logic = ["not", "and", "andi", "or", "ori", "eor", "eori"]
-const special = ["move", "movea", "exg", "clr", "swap", "neg"]
-const withDescriptors = ["add", "sub", "divs", "move"]
+const arithmetic = ["add", "sub", "suba", "adda", "divs", "divu", "muls", "mulu"]
+const logic = ["tst", "cmp", "not", "or", "and", "eor", "lsl", "lsr", "asr", "asl", "rol", "ror", "btst", "bclr", "bchg", "bset"]
+const special = ["clr", "exg", "neg", "ext", "swap", "move", "trap"]
 const registers = ["d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7"]
-const others = ["ext", "lsl", "lsr", "asl", "asr", "rol", "ror", "cmp", "cmpa", "cmpi", "tst", "jmp", "bra", "jsr", "rts", "bsr", "beq", "bne", "bge", "bgt", "ble", "blt"]
-const registersMap = toMap(registers)
+const others = ["scc", "scs", "seq", "sne", "sge", "sgt", "sle", "sls", "slt", "shi", "smi", "spl", "svc", "svs", "sf", "st", "beq", "bne", "blt", "ble", "bgt", "bge", "blo", "bls", "bhi", "bhs", "bsr", "bra", "jsr", "rts"]
+
+const withDescriptors = ["move", "add", "sub", "adda", "suba", "clr", "neg", "ext", "tst", "cmp", "not", "or", "and", "eor", "lsl", "lsr", "asr", "asl", "rol", "ror",]
 const withDescriptorsMap = toMap(withDescriptors)
-const arithmeticMap = toMap(arithmetic)
 function toMap(arr) {
 	return Object.fromEntries(arr.map(e => [e, true]))
 }
@@ -44,25 +43,17 @@ export const M68KLanguage = {
 					}
 				}
 			],
-
 			// whitespace
 			[/[ \t\r\n]+/, ''],
-
-
-
 			// Comments
 			[/\*.*$/, 'comment'],
-
 			// regular expressions
 			['///', { token: 'regexp', next: '@hereregexp' }],
-
 			[/^(\s*)(@regEx)/, ['', 'regexp']],
 			[/(,)(\s*)(@regEx)/, ['delimiter', '', 'regexp']],
 			[/(:)(\s*)(@regEx)/, ['delimiter', '', 'regexp']],
-
 			// delimiters
 			[/@symbols/, 'delimiter'],
-
 			// numbers
 			[/#%[0-1]+/, 'number.binary'],
 			[/\d+[eE]([-+]?\d+)?/, 'number.float'],
@@ -71,10 +62,8 @@ export const M68KLanguage = {
 			[/#0x[A-F0-9]+/, 'number.hex'],
 			[/0[0-7]+(?!\d)/, 'number.octal'],
 			[/#[-+]?[0-9]+/, 'number'],
-
 			// delimiter: after number because of .\d floats
 			[/[,.]/, 'delimiter'],
-
 			// strings:
 			[/"""/, 'string', '@herestring."""'],
 			[/'''/, 'string', "@herestring.'''"],
@@ -97,7 +86,6 @@ export const M68KLanguage = {
 				}
 			]
 		],
-
 		string: [
 			[/[^"'#\\]+/, 'string'],
 			[/@escapes/, 'string.escape'],
@@ -167,15 +155,15 @@ export const M68KFormatter = {
 		const text = model.getValue();
 		const lines = text.split('\n');
 		const parsed = lines.map(line => {
-            let formatted = ''
-            try{
-                const [args] = parseArgs(line)
-                if (keywordsMap[args[0]?.value]) formatted += `	${args.shift()?.value} `
-                formatted += args.map(a => a.value + (a.boundary?.trim() || '')).join(' ')
-            }catch(e){
-                console.error(e)
-                return line
-            }
+			let formatted = ''
+			try {
+				const [args] = parseArgs(line)
+				if (keywordsMap[args[0]?.value]) formatted += `	${args.shift()?.value} `
+				formatted += args.map(a => a.value + (a.boundary?.trim() || '')).join(' ')
+			} catch (e) {
+				console.error(e)
+				return line
+			}
 			return formatted
 		})
 		return [{

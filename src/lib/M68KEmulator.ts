@@ -38,7 +38,7 @@ export type EmulatorStore = {
     currentMemoryAddress: number,
     currentMemoryPage: DiffedMemory
 }
-export type DiffedMemory =  {
+export type DiffedMemory = {
     current: Uint8Array
     prevState: Uint8Array
 }
@@ -64,7 +64,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
     })
     let s68k: S68k | null = null
     let interpreter: Interpreter | null = null
-    const debouncer = createDebouncer(1000)
+    const debouncer = createDebouncer(500)
     function compile(): Promise<void> {
         return new Promise(res => {
             const state = get({ subscribe })
@@ -88,20 +88,20 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
         })
     }
 
-    function semanticCheck(code?: string){
+    function semanticCheck(code?: string) {
         code = code || get({ subscribe }).code
-        const errors = S68k.semanticCheck(code).map(e => {
-            return {
+        const errors = S68k.semanticCheck(code).map(e => (
+            {
                 line: e.getLine(),
                 lineIndex: e.getLineIndex(),
                 message: e.getError(),
                 formatted: e.getMessage()
             } as MonacoError
-        })
+        ))
         update(s => ({ ...s, code, compilerErrors: errors }))
     }
     function setCode(code: string) {
-        update(s => ({...s, code}))
+        update(s => ({ ...s, code }))
         debouncer(semanticCheck)
     }
     function clear() {
@@ -208,7 +208,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
             switch (interpreter.getStatus()) {
                 case InterpreterStatus.Interrupt: {
                     const interrupt = interpreter.getCurrentInterrupt()
-                    update(d => ({...d, interrupt}))
+                    update(d => ({ ...d, interrupt }))
                     await handleInterrupt(interrupt)
                     break
                 }
@@ -232,47 +232,47 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
         return interpreter.getStatus() != InterpreterStatus.Running
     }
 
-    async function handleInterrupt(interrupt:Interrupt | null){
-        if(!interrupt || !interpreter) throw new Error("Expected interrupt")
+    async function handleInterrupt(interrupt: Interrupt | null) {
+        if (!interrupt || !interpreter) throw new Error("Expected interrupt")
         update(data => {
             data.interrupt = interrupt
             return data
         })
 
-        switch (interrupt.type){
-            case "DisplayStringWithCRLF":{
-                update(d => ({...d, stdOut: d.stdOut + interrupt.value + "\n"}))
-                interpreter.answerInterrupt({type: interrupt.type})
+        switch (interrupt.type) {
+            case "DisplayStringWithCRLF": {
+                update(d => ({ ...d, stdOut: d.stdOut + interrupt.value + "\n" }))
+                interpreter.answerInterrupt({ type: interrupt.type })
                 break
             }
-            case "DisplayStringWithoutCRLF": 
+            case "DisplayStringWithoutCRLF":
             case "DisplayChar":
             case "DisplayNumber": {
                 update(d => ({ ...d, stdOut: d.stdOut + interrupt.value }))
-                interpreter.answerInterrupt({type: interrupt.type})
+                interpreter.answerInterrupt({ type: interrupt.type })
                 break
             }
             case "ReadChar": {
                 const char = (await Prompt.askText("Enter a character", "text") as string)[0]
-                interpreter.answerInterrupt({type: interrupt.type, value: char})
+                interpreter.answerInterrupt({ type: interrupt.type, value: char })
                 break
             }
             case "ReadNumber": {
                 const number = Number(await Prompt.askText("Enter a number", "text"))
-                interpreter.answerInterrupt({type: interrupt.type, value: number})
+                interpreter.answerInterrupt({ type: interrupt.type, value: number })
                 break
             }
             case "ReadKeyboardString": {
                 const string = await Prompt.askText("Enter a string", "text") as string
-                interpreter.answerInterrupt({type: interrupt.type, value: string})
+                interpreter.answerInterrupt({ type: interrupt.type, value: string })
                 break
             }
             case "GetTime": {
-                interpreter.answerInterrupt({type: interrupt.type, value: Date.now()})
+                interpreter.answerInterrupt({ type: interrupt.type, value: Date.now() })
                 break
             }
             case "Terminate": {
-                interpreter.answerInterrupt({type: interrupt.type})
+                interpreter.answerInterrupt({ type: interrupt.type })
             }
         }
     }
@@ -284,8 +284,8 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
             while (!interpreter.hasTerminated()) {
                 interpreter.step()
                 switch (interpreter.getStatus()) {
-                    case InterpreterStatus.Terminated:{
-                        update(d => ({...d, terminated: true}))
+                    case InterpreterStatus.Terminated: {
+                        update(d => ({ ...d, terminated: true }))
                         break
                     }
                     case InterpreterStatus.TerminatedWithException: {
