@@ -40,8 +40,8 @@
 		display: none;
 		flex-direction: column;
 		min-width: 100%;
-		background-color: var(--secondary-attention);
-		color: var(--secondary-attention-text);
+		background-color: var(--tertiary);
+		color: var(--tertiary-text);
 		border-radius: 0.2rem;
 		position: absolute;
 		cursor: text;

@@ -24,10 +24,10 @@ function createValue<T>(name: string, value: T) {
     } as SettingValue<T>
 }
 const baseValues: SettingValues = {
-    useDecimalAsDefault: createValue("Use decimal as default", false)
+    useDecimalAsDefault: createValue("Use decimal as default for registers", false)
 }
 
-const CURRENT_VERSION = "1.0.2"
+const CURRENT_VERSION = "1.0.3"
 function createSettingsStore() {
     const { subscribe, update, set } = writable<Settings>({
         meta: {

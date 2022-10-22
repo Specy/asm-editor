@@ -254,11 +254,11 @@ export const baseTheme = {
   "colors": {
     "editor.foreground": "#CDCDCD",
     "editor.background": ThemeStore.getColor('secondary').toHexString(),
-    "editor.selectionBackground": "#1b455c",
-    "editor.lineHighlightBackground": "#94bfbe17",
+    "editor.selectionBackground": ThemeStore.getColor("tertiary").lighten(2).toHexString(),
+    "editor.lineHighlightBackground": ThemeStore.getColor('secondary').lighten(5).toHexString(),
     "editorCursor.foreground": ThemeStore.getColor('accent').toHexString(),
-    "editorWhitespace.foreground": "#CDCDCD1A",
-    "editorWidget.background": "#1a3e51",
-    "input.background": "#2b5f7a",
+    "editorWhitespace.foreground": "#CDCDCD2A",
+    "editorWidget.background": ThemeStore.getColor("tertiary").toHexString(),
+    "input.background": ThemeStore.getColor("tertiary").lighten(10).toHexString(),
   }
 }

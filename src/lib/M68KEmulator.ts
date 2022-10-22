@@ -71,7 +71,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
     const debouncer = createDebouncer(500)
     function compile(): Promise<void> {
         return new Promise((res, rej) => {
-            try{
+            try {
                 clear()
                 const state = get({ subscribe })
                 s68k = new S68k(state.code)
@@ -89,9 +89,9 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
                     return update(s => ({ ...s, compilerErrors: errors }))
                 }
                 interpreter = s68k.createInterpreter(MEMORY_SIZE)
-                update(s => ({...s, canExecute: true}))
+                update(s => ({ ...s, canExecute: true }))
                 res()
-            }catch(e){
+            } catch (e) {
                 console.error(e)
                 addError(getErrorMessage(e))
                 rej(e)
@@ -177,10 +177,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
                 }
             }
         })
-        update(data => {
-            data.registers = registers
-            return data
-        })
+        update(d => ({ ...d, registers}))
     }
     function updateRegisters() {
         update(data => {
@@ -227,7 +224,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
             if (!interpreter) throw new Error("Interpreter not initialized")
             lastLine = interpreter.getCurrentLineIndex()
             const [ins] = interpreter.step()
-            switch (interpreter.getStatus()) {  
+            switch (interpreter.getStatus()) {
                 case InterpreterStatus.Interrupt: {
                     const interrupt = interpreter.getCurrentInterrupt()
                     update(d => ({ ...d, interrupt }))
@@ -253,46 +250,45 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
 
     async function handleInterrupt(interrupt: Interrupt | null) {
         if (!interrupt || !interpreter) throw new Error("Expected interrupt")
-        update(data => {
-            data.interrupt = interrupt
-            return data
-        })
-        switch (interrupt.type) {
+        update(d => ({ ...d, interrupt }))
+        const { type  } = interrupt
+        switch (type) {
             case "DisplayStringWithCRLF": {
                 update(d => ({ ...d, stdOut: d.stdOut + interrupt.value + "\n" }))
-                interpreter.answerInterrupt({ type: interrupt.type })
+                interpreter.answerInterrupt({ type })
                 break
             }
             case "DisplayStringWithoutCRLF":
             case "DisplayChar":
             case "DisplayNumber": {
                 update(d => ({ ...d, stdOut: d.stdOut + interrupt.value }))
-                interpreter.answerInterrupt({ type: interrupt.type })
+                interpreter.answerInterrupt({ type })
                 break
             }
             case "ReadChar": {
                 const char = (await Prompt.askText("Enter a character", "text") as string)[0]
-                if(!char) throw new Error("Expected a character")
-                interpreter.answerInterrupt({ type: interrupt.type, value: char })
+                if (!char) throw new Error("Expected a character")
+                interpreter.answerInterrupt({ type, value: char })
                 break
             }
             case "ReadNumber": {
                 const number = Number(await Prompt.askText("Enter a number", "text"))
-                if(Number.isNaN(number)) throw new Error("Invalid number")
-                interpreter.answerInterrupt({ type: interrupt.type, value: number })
+                if (Number.isNaN(number)) throw new Error("Invalid number")
+                interpreter.answerInterrupt({ type, value: number })
                 break
             }
             case "ReadKeyboardString": {
                 const string = await Prompt.askText("Enter a string", "text") as string
-                interpreter.answerInterrupt({ type: interrupt.type, value: string })
+                interpreter.answerInterrupt({ type , value: string })
                 break
             }
             case "GetTime": {
-                interpreter.answerInterrupt({ type: interrupt.type, value: Date.now() })
+                interpreter.answerInterrupt({ type, value: Date.now() })
                 break
             }
             case "Terminate": {
-                interpreter.answerInterrupt({ type: interrupt.type })
+                interpreter.answerInterrupt({ type })
+                break
             }
         }
         update(data => {
@@ -302,13 +298,13 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
     }
     async function run() {
         let i = 0
-        const breakpoints = new Map(get({subscribe}).breakpoints.map(e => [e, true]))
+        const breakpoints = new Map(get({ subscribe }).breakpoints.map(e => [e, true]))
         let lastLine = -1
         try {
             if (!interpreter) throw new Error("Interpreter not initialized")
             while (!interpreter.hasTerminated()) {
                 lastLine = interpreter.getCurrentLineIndex()
-                if(breakpoints.get(lastLine) && i > 0) break
+                if (breakpoints.get(lastLine) && i > 0) break
                 const [ins] = interpreter.step()
                 switch (interpreter.getStatus()) {
                     case InterpreterStatus.Terminated: {
@@ -338,7 +334,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
         } catch (e) {
             console.error(e)
             addError(getErrorMessage(e))
-            update(d => ({ ...d, terminated: true,  line: lastLine}))
+            update(d => ({ ...d, terminated: true, line: lastLine }))
         }
         updateRegisters()
         updateData()

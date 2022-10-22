@@ -9,6 +9,7 @@
 	export let style = ''
 	$: if (value === '') status = ''
 	export let type = 'text'
+	export let placeholder = ""
 	export let hideStatus = true
 	const setType = (node) => {
 		node.type = type
@@ -24,7 +25,8 @@
 			bind:value
 			class="form-input"
 			use:setType
-			placeholder={title.toUpperCase()}
+			on:change
+			placeholder={placeholder ?? title.toUpperCase()}
 			style={hideStatus 
 				? 'border:none;' 
 				: '' + value === '' 
@@ -53,7 +55,6 @@
 		align-items: center;
 		border-radius: 0.4rem;
 		padding: 0.2rem;
-		margin-top: 0.3rem;
 		background-color: var(--secondary);
 		> input {
 			color: #bfbfbf;

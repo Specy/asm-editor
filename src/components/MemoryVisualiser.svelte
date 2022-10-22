@@ -178,10 +178,10 @@
 			'b c c c c'
 			'b c c c c'
 			'b c c c c';
-		background-color: var(--secondary-attention);
+		background-color: var(--tertiary);
 		height: 100%;
 		margin-top: 0.5rem;
-		color: var(--secondary-attention-text);
+		color: var(--tertiary-text);
 		border-radius: 0.5rem;
 		padding-right: 0.3rem;
 		padding-bottom: 0.3rem;
@@ -269,8 +269,8 @@
 	.hover-register-value {
 		display: none;
 		min-width: 100%;
-		background-color: var(--secondary-attention);
-		color: var(--secondary-attention-text);
+		background-color: var(--tertiary);
+		color: var(--tertiary-text);
 		border-radius: 0.2rem;
 		position: absolute;
 		cursor: text;
@@ -313,6 +313,6 @@
 		justify-content: space-between;
 		padding-left: 0.2rem;
 		gap: 0.1rem;
-		border-left: solid 0.1rem var(--secondary-attention);
+		border-left: solid 0.1rem var(--tertiary);
 	}
 </style>

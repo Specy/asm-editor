@@ -11,7 +11,7 @@ const withDescriptorsMap = toMap(withDescriptors)
 function toMap(arr) {
 	return Object.fromEntries(arr.map(e => [e, true]))
 }
-const instructions = [...arithmetic, ...logic, ...special, ...others]
+export const M68kInstructions = [...arithmetic, ...logic, ...special, ...others]
 export const M68KLanguage = {
 	defaultToken: '',
 	ignoreCase: false,
@@ -19,7 +19,7 @@ export const M68KLanguage = {
 
 	regEx: /\/(?!\/\/)(?:[^/\\]|\\.)*\/[igm]*/,
 
-	keywords: [...instructions, ...instructions.map(s => s.toUpperCase())],
+	keywords: [...M68kInstructions, ...M68kInstructions.map(s => s.toUpperCase())],
 	// we include these common regular expressions
 	symbols: /[.,:]+/,
 	escapes: /\\(?:[abfnrtv\\"'$]|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
@@ -251,7 +251,7 @@ export function M68KCompletition(monaco: MonacoType) {
 			}
 			//if wrote a space, suggest the instructions
 			if (trimmed.length === 0 && data) {
-				suggestions = suggestions.concat(...instructions.map(keyword => {
+				suggestions = suggestions.concat(...M68kInstructions.map(keyword => {
 					return {
 						kind: monaco.languages.CompletionItemKind.Function,
 						label: keyword,
@@ -270,7 +270,7 @@ export function M68KCompletition(monaco: MonacoType) {
 			}
 			//keyword suggestion
 			if (trimmed) {
-				suggestions = suggestions.concat(...instructions.filter(keyword => keyword.startsWith(data.trimStart()))
+				suggestions = suggestions.concat(...M68kInstructions.filter(keyword => keyword.startsWith(data.trimStart()))
 					.map(keyword => {
 						return {
 							kind: monaco.languages.CompletionItemKind.Function,

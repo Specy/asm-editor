@@ -2,56 +2,107 @@
 	import Editor from '$cmp/Editor.svelte'
 	import Button from '$cmp/buttons/Button.svelte'
 	import { M68KEmulator } from '$lib/M68KEmulator'
-	import { MIPSEmulator } from '$lib/MIPSEmulator'
 	import MemoryVisualiser from '$cmp/MemoryVisualiser.svelte'
 	import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
-	import { createEventDispatcher } from 'svelte'
+	import { createEventDispatcher, onMount } from 'svelte'
 	import type { Project } from '$lib/Project'
 	import FaSave from 'svelte-icons/fa/FaSave.svelte'
 	import FaCog from 'svelte-icons/fa/FaCog.svelte'
 	import Icon from '$cmp/layout/Icon.svelte'
-	import { goto } from '$app/navigation'
-	import { Prompt } from '$cmp/prompt'
 	import { toast } from '$cmp/toast'
 	import Controls from './Controls.svelte'
 	import StdOut from '$cmp/StdOut.svelte'
 	import { clamp, getErrorMessage } from '$lib/utils'
 	import { MEMORY_SIZE, PAGE_SIZE } from '$lib/Config'
 	import Settings from './Settings.svelte'
+	import M68KDocumentation from '$cmp/M68KDocumentation.svelte'
+	import FaBook from 'svelte-icons/fa/FaBook.svelte'
+	import { ShortcutAction, shortcutsStore } from '$stores/shortcutsStore'
 	export let project: Project
 	let settingsVisible = false
-	const saveDispatch = createEventDispatcher<{ save: Project }>()
-	const emulator =
-		project.language === 'M68K'
-			? M68KEmulator(project.code || '')
-			: MIPSEmulator(project.code || '')
+	let documentationVisible = false
+	const dispatcher = createEventDispatcher<{ save: Project }>()
+	const emulator = M68KEmulator(project.code || '')
 
-	async function checkIfSaved(e: Event) {
-		if ($emulator.code !== project.code) {
-			e.preventDefault()
-			const result = await Prompt.askText(
-				'You have unsaved changes, do you want to leave?',
-				'confirm'
-			)
-			if (result) goto('/projects')
+	onMount(() => {
+		function handler(e: KeyboardEvent) {
+			const code = e.code
+			if (e.repeat && code !== "ArrowDown") return
+			//@ts-ignore ignore all events coming from the editor
+			if(e.composedPath().some((el) => el?.className?.includes("monaco-editor"))) {
+				//@ts-ignore if escape, then blur the editor
+				if(code === "Escape") e.target?.blur()
+				return
+			}
+			switch (shortcutsStore.get(code, e.shiftKey)) {
+				case ShortcutAction.ToggleDocs: {
+					documentationVisible = !documentationVisible
+					break
+				}
+				case ShortcutAction.ToggleSettings: {
+					settingsVisible = !settingsVisible
+					break
+				}
+				case ShortcutAction.BuildCode: {
+					emulator.setCode(project.code)
+					emulator.compile()
+					break
+				}
+				case ShortcutAction.RunCode: {
+					if ($emulator.terminated || $emulator.interrupt !== undefined || !$emulator.canExecute)
+						break
+					emulator.run()
+					break
+				}
+				case ShortcutAction.SaveCode: {
+					dispatcher('save', project)
+					break
+				}
+				case ShortcutAction.ClearExecution: {
+					emulator.clear()
+					break
+				}
+				case ShortcutAction.Step: {
+					if ($emulator.terminated || $emulator.interrupt !== undefined || !$emulator.canExecute)
+						break
+					emulator.step()
+					break
+				}
+			}
 		}
-	}
+		window.addEventListener('keydown', handler)
+		return () => window.removeEventListener('keydown', handler)
+	})
 </script>
 
 <header class="project-header">
 	<div class="row">
-		<a href="/projects" on:click={checkIfSaved}>
+		<a href="/projects" on:click={() => dispatcher('save', project)}>
 			<Icon size={2}>
 				<FaAngleLeft />
 			</Icon>
 		</a>
-		<h1>{project.name}</h1>
+		<h1 style="font-size: 1.6rem; margin-left: 0.4rem">{project.name}</h1>
 	</div>
 
 	<div class="row" style="gap: 0.5rem;">
 		<Button
 			on:click={() => {
+				documentationVisible = !documentationVisible
+				settingsVisible = false
+			}}
+			hasIcon
+			cssVar="accent2"
+			style="padding:0; width:2.2rem; height:2.2rem"
+		>
+			<Icon>
+				<FaBook />
+			</Icon>
+		</Button>
+		<Button
+			on:click={() => {
 				settingsVisible = !settingsVisible
+				documentationVisible = false
 			}}
 			hasIcon
 			cssVar="accent2"
@@ -64,7 +115,7 @@
 		<Button
 			on:click={() => {
 				emulator.setCode(project.code)
-				saveDispatch('save', project)
+				dispatcher('save', project)
 			}}
 			cssVar="accent2"
 			hasIcon
@@ -75,9 +126,8 @@
 			</Icon>
 		</Button>
 	</div>
-	<Settings 
-		bind:visible={settingsVisible}
-	/>
+	<Settings bind:visible={settingsVisible} />
+	<M68KDocumentation bind:visible={documentationVisible} />
 </header>
 
 <div class="editor-memory-wrapper">
@@ -88,10 +138,10 @@
 			class:redBorder={$emulator.errors.length > 0}
 		>
 			<Editor
-				on:change={d => {
+				on:change={(d) => {
 					emulator.setCode(d.detail)
 				}}
-				on:breakpointPress={d => {
+				on:breakpointPress={(d) => {
 					emulator.toggleBreakpoint(d.detail - 1)
 				}}
 				bind:code={project.code}
@@ -109,7 +159,7 @@
 			hasCompiled={$emulator.canExecute}
 			on:run={async () => {
 				try {
-					emulator.run()	
+					emulator.run()
 				} catch (e) {
 					console.error(e)
 					toast.error('Error executing code. ' + getErrorMessage(e))
