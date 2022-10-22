@@ -152,14 +152,17 @@
 	:global(.find-widget.visible) {
 		transform: translateY(0) !important;
 	}
+
 	.mock-editor {
 		display: flex;
 		flex: 1;
 	}
+	
 	:global(.breakpoint-glyph) {
 		width: calc(22px - 0.6rem) !important;
 		height: calc(22px - 0.6rem) !important;
 		margin-top: 0.3rem;
+		cursor: pointer;
 		margin-left: 0.6rem;
 		background-color: var(--accent);
 		border-radius: 1rem;

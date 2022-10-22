@@ -15,6 +15,7 @@
 	export let memory: DiffedMemory
 	export let currentAddress: number
 	export let sp: number
+	import { settingsStore } from '$stores/settingsStore'
 	export let statusCodes: StatusRegister[]
 	let hexAddress = '00000000'
 	let visibleAddresses = new Array(PAGE_ELEMENT_SIZE).fill(0)
@@ -36,6 +37,8 @@
 		registerClick: Register
 	}>()
 	$: dispatcher('addressChange', currentAddress)
+	let usesHex = !$settingsStore.values.useDecimalAsDefault.value
+	$: usesHex = !$settingsStore.values.useDecimalAsDefault.value
 	$: hexAddress = currentAddress.toString(16)
 </script>
 
@@ -55,10 +58,14 @@
 		</div>
 
 		<div class="registers">
-			{#each registers as register, i (register.name)}
+			{#each registers as register (register.name)}
 				<div class="register-wrapper">
 					<div class="hover-register-value">
-						{register.value}
+						{#if usesHex}
+							{register.value}
+						{:else}
+							{register.value.toString(16).padStart(8, '0')}
+						{/if}
 					</div>
 					<button class="register-name" on:click={() => dispatcher('registerClick', register)}>
 						{register.name}
@@ -67,10 +74,12 @@
 				<div class="register-hex">
 					{#each register.hex as hex, i}
 						<ValueDiff
-							style="padding:0.2rem"
-							value={hex}
-							hoverValue={parseInt(hex, 16)}
-							diff={register.diff.hex[i]}
+							style={'padding:0.2rem; '}
+							value={usesHex ? hex : parseInt(hex, 16).toString().padStart(5, '0')}
+							hoverValue={usesHex ? parseInt(hex, 16) : hex}
+							diff={usesHex
+								? register.diff.hex[i]
+								: parseInt(register.diff.hex[i], 16).toString().padStart(5, '0')}
 							monospaced
 						/>
 					{/each}
@@ -277,7 +286,7 @@
 		align-items: center;
 		font-weight: normal;
 	}
-	.register-wrapper{
+	.register-wrapper {
 		position: relative;
 		&:hover .hover-register-value {
 			display: flex;
@@ -295,13 +304,13 @@
 		&:hover {
 			background-color: var(--accent2);
 		}
-
 	}
 	.register-value {
 		font-weight: bold;
 	}
 	.register-hex {
 		display: flex;
+		justify-content: space-between;
 		padding-left: 0.2rem;
 		gap: 0.1rem;
 		border-left: solid 0.1rem var(--secondary-attention);

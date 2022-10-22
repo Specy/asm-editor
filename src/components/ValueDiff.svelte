@@ -7,7 +7,7 @@
 	export let monospaced = false
 </script>
 
-<span class:modified={diff !== value} class:softDiff={hasSoftDiff === true} class="tooltip-base" class:monospaced {style}>
+<div class:modified={diff !== value} class:softDiff={hasSoftDiff === true} class="tooltip-base" class:monospaced {style}>
 	{value}
 	<div class="hover-element">
 		{#if hoverValue !== ''}
@@ -21,19 +21,17 @@
 			</div>
 		{/if}
 	</div>
-</span>
+</div>
 
 <style lang="scss">
-	span {
+	.tooltip-base {
+		position: relative;
 		display: flex;
 		align-items: center;
 		border-radius: 0.2rem;
 		text-align: center;
 		justify-content: center;
 		cursor: default;
-	}
-	.tooltip-base {
-		position: relative;
 	}
 	.softDiff{
 		background-color: var(--primary);
@@ -57,10 +55,10 @@
 	.monospaced {
 		font-family: monospace;
 	}
-	span:hover {
+	.tooltip-base:hover {
 		filter: brightness(1.1);
 	}
-	span:hover .hover-element {
+	.tooltip-base:hover .hover-element {
 		display: flex;
 	}
 	.modified {

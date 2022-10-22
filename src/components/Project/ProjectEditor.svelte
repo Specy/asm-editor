@@ -8,6 +8,7 @@
 	import { createEventDispatcher } from 'svelte'
 	import type { Project } from '$lib/Project'
 	import FaSave from 'svelte-icons/fa/FaSave.svelte'
+	import FaCog from 'svelte-icons/fa/FaCog.svelte'
 	import Icon from '$cmp/layout/Icon.svelte'
 	import { goto } from '$app/navigation'
 	import { Prompt } from '$cmp/prompt'
@@ -16,8 +17,9 @@
 	import StdOut from '$cmp/StdOut.svelte'
 	import { clamp, getErrorMessage } from '$lib/utils'
 	import { MEMORY_SIZE, PAGE_SIZE } from '$lib/Config'
-
+	import Settings from './Settings.svelte'
 	export let project: Project
+	let settingsVisible = false
 	const saveDispatch = createEventDispatcher<{ save: Project }>()
 	const emulator =
 		project.language === 'M68K'
@@ -45,12 +47,26 @@
 		</a>
 		<h1>{project.name}</h1>
 	</div>
-	<div class="row">
+
+	<div class="row" style="gap: 0.5rem;">
+		<Button
+			on:click={() => {
+				settingsVisible = !settingsVisible
+			}}
+			hasIcon
+			cssVar="accent2"
+			style="padding:0; width:2.2rem; height:2.2rem"
+		>
+			<Icon>
+				<FaCog />
+			</Icon>
+		</Button>
 		<Button
 			on:click={() => {
 				emulator.setCode(project.code)
 				saveDispatch('save', project)
 			}}
+			cssVar="accent2"
 			hasIcon
 			style="padding:0; width:2.2rem; height:2.2rem"
 		>
@@ -59,6 +75,9 @@
 			</Icon>
 		</Button>
 	</div>
+	<Settings 
+		bind:visible={settingsVisible}
+	/>
 </header>
 
 <div class="editor-memory-wrapper">
