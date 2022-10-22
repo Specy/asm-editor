@@ -308,7 +308,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
             if (!interpreter) throw new Error("Interpreter not initialized")
             while (!interpreter.hasTerminated()) {
                 lastLine = interpreter.getCurrentLineIndex()
-                if(breakpoints.get(lastLine)) break
+                if(breakpoints.get(lastLine) && i > 0) break
                 const [ins] = interpreter.step()
                 switch (interpreter.getStatus()) {
                     case InterpreterStatus.Terminated: {
