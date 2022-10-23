@@ -38,7 +38,7 @@
     "dexie": "^3.2.1",
     "monaco-editor": "^0.33.0",
     "s-ago": "^2.2.0",
-    "s68k": "^1.1.5",
+    "s68k": "^1.2.2",
     "sass": "^1.49.11",
     "svelte-icons": "^2.1.0",
     "vite-plugin-top-level-await": "^1.2.1",

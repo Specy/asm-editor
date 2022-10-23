@@ -1345,10 +1345,10 @@
   "resolved" "https://registry.npmjs.org/s-ago/-/s-ago-2.2.0.tgz"
   "version" "2.2.0"
 
-"s68k@^1.1.5":
-  "integrity" "sha512-zWeSaIMoVpnHpIQYAY3pvZA5Q0zg26SnTsyM9XkFU1dI5TB57xDQlxH6TdJ+tk48pH9ryn5sSI46Nx6KWiU0Ww=="
-  "resolved" "https://registry.npmjs.org/s68k/-/s68k-1.1.5.tgz"
-  "version" "1.1.5"
+"s68k@^1.2.2":
+  "integrity" "sha512-Bvav5L2ClUDlOhZ4yQdOUbKBACy3Fu1ULMus1kTB8Gcyb1cwYcLFpPSzJvr0AUwqknXWGLoE3ne8Hq6xSrtb2w=="
+  "resolved" "https://registry.npmjs.org/s68k/-/s68k-1.2.2.tgz"
+  "version" "1.2.2"
 
 "sade@^1.7.4", "sade@^1.8.1":
   "integrity" "sha512-xal3CZX1Xlo/k4ApwCFrHVACi9fBqJ7V+mwhBsuf/1IOKbBy098Fex+Wa/5QMubw09pSZ/u8EY8PWgevJsXp1A=="

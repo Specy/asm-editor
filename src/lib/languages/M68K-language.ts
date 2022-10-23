@@ -1,13 +1,16 @@
 import type { MonacoType } from "$lib/Monaco"
+import { S68k } from "s68k"
+import { AddressingMode, fromSizesToString, fromSizeToString, getAddressingModeNames, getInstructionDocumentation } from "./M68K-documentation"
+
+
+//TODO ALL OF THIS IS CRAP, IT NEEDS TO BE REDONE FROM 0
+
 
 const arithmetic = ["add", "sub", "suba", "adda", "divs", "divu", "muls", "mulu"]
 const logic = ["tst", "cmp", "not", "or", "and", "eor", "lsl", "lsr", "asr", "asl", "rol", "ror", "btst", "bclr", "bchg", "bset"]
 const special = ["clr", "exg", "neg", "ext", "swap", "move", "trap"]
-const registers = ["d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7"]
 const others = ["scc", "scs", "seq", "sne", "sge", "sgt", "sle", "sls", "slt", "shi", "smi", "spl", "svc", "svs", "sf", "st", "beq", "bne", "blt", "ble", "bgt", "bge", "blo", "bls", "bhi", "bhs", "bsr", "bra", "jsr", "rts"]
 
-const withDescriptors = ["move", "add", "sub", "adda", "suba", "clr", "neg", "ext", "tst", "cmp", "not", "or", "and", "eor", "lsl", "lsr", "asr", "asl", "rol", "ror",]
-const withDescriptorsMap = toMap(withDescriptors)
 function toMap(arr) {
 	return Object.fromEntries(arr.map(e => [e, true]))
 }
@@ -20,16 +23,14 @@ export const M68KLanguage = {
 	regEx: /\/(?!\/\/)(?:[^/\\]|\\.)*\/[igm]*/,
 
 	keywords: [...M68kInstructions, ...M68kInstructions.map(s => s.toUpperCase())],
-	// we include these common regular expressions
 	symbols: /[.,:]+/,
 	escapes: /\\(?:[abfnrtv\\"'$]|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
 
-	// The main tokenizer for our languages
 	tokenizer: {
 		root: [
 			//data registers
-			[/\b(D0|D1|D2|D3|D4|D5|D6|D7|d0|d1|d2|d3|d4|d5|d6|d7)/, 'data-register'],
-			[/\b(A0|A1|A2|A3|A4|A5|A6|A7|a0|a1|a2|a3|a4|a5|a6|a7)/, 'address-register'],
+			[/(d|D)\d/, 'data-register'],
+			[/(a\d|A\d|sp)/, 'address-register'],
 
 			// identifiers and keywords
 			[/\$[a-zA-Z_]\w*/, 'variable.predefined'],
@@ -47,6 +48,7 @@ export const M68KLanguage = {
 			[/[ \t\r\n]+/, ''],
 			// Comments
 			[/\*.*$/, 'comment'],
+			[/\;.*$/, 'comment'],
 			// regular expressions
 			['///', { token: 'regexp', next: '@hereregexp' }],
 			[/^(\s*)(@regEx)/, ['', 'regexp']],
@@ -56,12 +58,10 @@ export const M68KLanguage = {
 			[/@symbols/, 'delimiter'],
 			// numbers
 			[/#%[0-1]+/, 'number.binary'],
-			[/\d+[eE]([-+]?\d+)?/, 'number.float'],
-			[/\d+\.\d+([eE][-+]?\d+)?/, 'number.float'],
 			[/#\$[0-9a-fA-F]+/, 'number.hex'],
-			[/#0x[A-F0-9]+/, 'number.hex'],
-			[/0[0-7]+(?!\d)/, 'number.octal'],
+			[/#@[0-7]+(?!\d)/, 'number.octal'],
 			[/#[-+]?[0-9]+/, 'number'],
+			[/#'.'/, "number.char"],
 			// delimiter: after number because of .\d floats
 			[/[,.]/, 'delimiter'],
 			// strings:
@@ -138,40 +138,19 @@ export const M68KLanguage = {
 
 		comment: [
 			[/[^\*]+/, 'comment'],
-			[/\*/, 'comment']
+			[/\*/, 'comment'],
+			[/[^\;]+/, 'comment'],
+			[/\;/, 'comment']
 		],
 
 		hereregexp: [
 			[/[^\\/#]+/, 'regexp'],
 			[/\\./, 'regexp'],
-			[/#.*$/, 'comment'],
 			['///[igm]*', { token: 'regexp', next: '@pop' }],
 			[/\//, 'regexp']
 		]
 	}
 };
-export const M68KFormatter = {
-	provideDocumentFormattingEdits(model) {
-		const text = model.getValue();
-		const lines = text.split('\n');
-		const parsed = lines.map(line => {
-			let formatted = ''
-			try {
-				const [args] = parseArgs(line)
-				if (keywordsMap[args[0]?.value]) formatted += `	${args.shift()?.value} `
-				formatted += args.map(a => a.value + (a.boundary?.trim() || '')).join(' ')
-			} catch (e) {
-				console.error(e)
-				return line
-			}
-			return formatted
-		})
-		return [{
-			text: parsed.join('\n'),
-			range: model.getFullModelRange()
-		}]
-	}
-}
 
 type Arg = {
 	value: string
@@ -191,7 +170,7 @@ function parseArgs(data): [Arg[], string[]] {
 }
 
 const keywordsMap = toMap(M68KLanguage.keywords)
-export function M68KCompletition(monaco: MonacoType) {
+export function createM68KCompletition(monaco: MonacoType) {
 	return {
 		triggerCharacters: ['.', ',', ' ', '\t', '\n', 'deleteLeft', 'Tab', '$', '#'],
 		provideCompletionItems: (model, position) => {
@@ -199,59 +178,46 @@ export function M68KCompletition(monaco: MonacoType) {
 			const lastCharacter = data.substring(data.length - 1, data.length)
 			let suggestions = []
 			const trimmed = data.trim()
-			const [args, boundaries] = parseArgs(data)
-			const lastArg = args.length ? args[args.length - 1] : null
+			const [args] = parseArgs(data)
+
 			//numeric values
 			function addNumerical() {
-				const numericals = ['$', '%', '#']
-				suggestions = suggestions.concat(...numericals.map(numerical => {
+				const numericals = ['$', '%', '#', "@"]
+					suggestions.push(...numericals.map(numerical => {
 					return {
 						kind: monaco.languages.CompletionItemKind.Unit,
 						label: numerical,
 						insertText: numerical === '#' && lastCharacter === '#'
 							? ''
-							: numerical !== '#' ? '#' + numerical : numerical,
+							: numerical,
 					}
 				}))
 			}
-			function addRegisters() {
-				suggestions = suggestions.concat(...registers.map(register => {
-					return {
-						kind: monaco.languages.CompletionItemKind.Variable,
-						label: register,
-						insertText: register
-					}
-				}))
-			}
+
 			if (lastCharacter === '#') {
 				addNumerical()
 			}
-
-			//Description completition
-			if (lastCharacter !== ' ' && withDescriptorsMap[trimmed.replace('.', '')]) {
-				const kind = monaco.languages.CompletionItemKind.Enum
-				suggestions = suggestions.concat(...[
-					{
-						kind,
-						label: 'l',
-						documentation: "Select all bits of the register",
-						insertText: 'l '
-					}, {
-						kind,
-						label: 'w',
-						documentation: "Select first part of the register",
-						insertText: 'w '
-					}, {
-						kind,
-						label: 'b',
-						documentation: "Select first 8 bits of the register",
-						insertText: 'b '
-					},
-				])
+			const firstArgDoc = getInstructionDocumentation(args[0]?.value.split(".")[0].toLowerCase())
+			//Add instruction descriptions completition if the first word is an instruction
+			if (lastCharacter !== ' ' && args.length === 1) {
+				if (firstArgDoc && firstArgDoc.sizes.length) {
+					const descriptorSuggestions = firstArgDoc.sizes.map(size => {
+						const name = fromSizeToString(size)
+						const doc = DescriptionsMap[fromSizeToString(size)]
+						if (!doc) return
+						return {
+							...doc,
+							kind: monaco.languages.CompletionItemKind.Enum,
+							label: name
+						}
+					}).filter(Boolean)
+					suggestions = suggestions.concat(...descriptorSuggestions)
+				}
 			}
+
 			//if wrote a space, suggest the instructions
 			if (trimmed.length === 0 && data) {
-				suggestions = suggestions.concat(...M68kInstructions.map(keyword => {
+				suggestions.push(...M68kInstructions.map(keyword => {
 					return {
 						kind: monaco.languages.CompletionItemKind.Function,
 						label: keyword,
@@ -260,22 +226,19 @@ export function M68KCompletition(monaco: MonacoType) {
 				}))
 			}
 			//if it wrote a instruction, suggest the registers and numbers
-			if (keywordsMap[args[0]?.value] && (lastCharacter === ' ' || lastCharacter === ',')) {
-				addNumerical()
-				addRegisters()
-			}
-			//suggest registers completition
-			if (args.length > 1 && lastCharacter === 'a' || lastCharacter === 'd') {
-				addRegisters()
+			if (firstArgDoc && (lastCharacter === ' ' || lastCharacter === ',')) {
+				const position = args.filter(e => e.value).length - 1
+				const addressingModes = getAddressingModes(firstArgDoc.args[position], monaco)
+				suggestions.push(...addressingModes)
 			}
 			//keyword suggestion
 			if (trimmed) {
-				suggestions = suggestions.concat(...M68kInstructions.filter(keyword => keyword.startsWith(data.trimStart()))
+				suggestions.push(...M68kInstructions.filter(keyword => keyword.startsWith(data.trimStart()))
 					.map(keyword => {
 						return {
 							kind: monaco.languages.CompletionItemKind.Function,
 							label: keyword,
-							insertText: keyword + ' ',
+							insertText: keyword,
 						}
 					}))
 			}
@@ -294,6 +257,128 @@ export function M68KCompletition(monaco: MonacoType) {
 }
 
 
+
+
+export function createM68kHoverProvider(monaco: MonacoType) {
+	return {
+		provideHover: (model, position, token) => {
+			const range = new monaco.Range(
+				position.lineNumber,
+				1,
+				position.lineNumber,
+				1000
+			)
+
+			const line = model.getValueInRange(range).trim()
+			const parsed = S68k.lexOne(line).parsed
+			const word = model.getWordAtPosition(position)?.word
+			if (parsed.type === 'Instruction') {
+				const documentation = getInstructionDocumentation(word?.toLowerCase())
+				if (!documentation) return { range, contents: [] }
+				return {
+					range,
+					contents: [
+						{
+							value: `
+							**${word}**
+							${documentation.args.map((e, i) => `\n**Op ${i + 1}:** ${getAddressingModeNames(e)}`).join("\n")}
+						`.trim()
+						},
+						{ value: `**Sizes:** ${documentation.sizes.length ? fromSizesToString(documentation.sizes) : "Not sized"}` },
+						{ value: documentation.description ?? "No description" },
+						{ value: `${documentation.example ?? "No examples"}` }
+					]
+				}
+			}
+			return {
+				range,
+				contents: []
+			};
+		}
+	}
+}
+
+
+const DescriptionsMap = {
+	l: {
+		documentation: "Select all bits of the register",
+		insertText: 'l '
+	},
+	w: {
+		documentation: "Select first part of the register",
+		insertText: 'w '
+	},
+	b: {
+		documentation: "Select first 8 bits of the register",
+		insertText: 'b '
+	},
+}
+
+
+
+function getAddressingModes(am: AddressingMode[], monaco: MonacoType) {
+	const amMap = new Map(am.map(e => [e, true]))
+	const res = []
+	if (amMap.has(AddressingMode.AddressRegister)) {
+		res.push({
+			kind: monaco.languages.CompletionItemKind.Variable,
+			label: "An",
+			insertText: "a"
+		})
+	}
+	if(amMap.has(AddressingMode.DataRegister)){
+		res.push({
+			kind: monaco.languages.CompletionItemKind.Variable,
+			label: "Dn",
+			insertText: "d"
+		})
+	}
+	if(amMap.has(AddressingMode.Immediate)){
+		res.push({
+			kind: monaco.languages.CompletionItemKind.Value,
+			label: "#",
+			insertText: "#"
+		})
+	}
+	if(amMap.has(AddressingMode.EffectiveAddress)){
+		res.push({
+			kind: monaco.languages.CompletionItemKind.Value,
+			label: "EA",
+			insertText: ""
+		})
+	}
+	if(amMap.has(AddressingMode.Indirect)){
+		res.push({
+			kind: monaco.languages.CompletionItemKind.Value,
+			label: "(An)",
+			insertText: "()"
+		})
+	}
+	if(amMap.has(AddressingMode.IndirectWithPredecrement)){
+		res.push({
+			kind: monaco.languages.CompletionItemKind.Value,
+			label: "-(An)",
+			insertText: "-()"
+		})
+	}
+	if(amMap.has(AddressingMode.IndirectWithPostincrement)){
+		res.push({
+			kind: monaco.languages.CompletionItemKind.Value,
+			label: "(An)+",
+			insertText: "()+"
+		})
+	}
+	if(amMap.has(AddressingMode.IndirectWithDisplacement)){
+		res.push({
+			kind: monaco.languages.CompletionItemKind.Value,
+			label: "(d16, An)",
+			insertText: "(,)"
+		})
+	}
+	return res
+}
+
+
 const CompletitionMap = {
 	l: {
 		detail: 'Select all 32 bits of the register',
@@ -304,41 +389,39 @@ const CompletitionMap = {
 	b: {
 		detail: 'Selects first 8 bits of the register',
 	},
-	add: {
-		detail: 'add <reg/num>, <dest>',
-		documentation: "Adds the first register to the second register, stores result in the second register"
+	An: {
+		detail: 'Address register',
 	},
-	sub: {
-		detail: 'sub <reg/num>, <dest> | subtracts numbers',
-		documentation: 'Subtracts the first register from the second register, stores result in the second register'
+	Dn: {
+		detail: 'Data register',
 	},
-	divs: {
-		detail: 'divs <reg/num>, <dest> | divides numbers',
-		documentation: 'Divides the first register by the second register, stores result in the second register'
+	EA: {
+		detail: 'Effective address',
 	},
-	muls: {
-		detail: 'muls <reg/num>, <dest> | multiplies numbers',
-		documentation: 'Multiplies the first register by the second register, stores result in the second register'
+	"(An)": {
+		detail: 'Indirect',
 	},
-	swap: {
-		detail: 'swap <reg> swaps the two words of the register',
-		documentation: 'Swaps the two words of the register es: "FFFF 0000" -> "0000 FFFF"'
+	"-(An)": {
+		detail: 'Indirect with predecrement',
 	},
-	exg: {
-		detail: 'exg <reg1>, <reg2> | exchanges the two registers',
-		documentation: 'Exchanges the content of the two registers'
+	"(An)+": {
+		detail: 'Indirect with postincrement',
 	},
-	neg: {
-		detail: 'neg <reg> | negates register',
-		documentation: 'Negates the register, es: "1234" -> "-1234"'
+	"(d16, An)": {
+		detail: 'Indirect with displacement',
 	},
+
 	'#': {
-		detail: '#<num> | decimal number',
-		documentation: 'Decimal immediate number'
+		detail: '#<num/label> | decimal number or label',
+		documentation: 'Decimal immediate number or label'
 	},
 	'$': {
 		detail: '$<num> | hexadecimal number',
 		documentation: 'Hexadecimal immediate number'
+	},
+	'@': {
+		detail: '@<num> | octal number',
+		documentation: 'Octal immediate number'
 	},
 	'%': {
 		detail: '%<num> | binary number',

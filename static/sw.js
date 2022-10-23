@@ -10,7 +10,6 @@ workbox.routing.registerRoute(
 
 self.addEventListener('install', (evt) => {
   console.log('[ServiceWorker] Install');
-
   self.skipWaiting();
 });
 

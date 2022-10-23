@@ -1,9 +1,8 @@
 import { browser } from '$app/environment';
 import { baseTheme } from '$lib/editorTheme';
-import { M68KLanguage, M68KCompletition, M68KFormatter } from '$lib/languages/M68K-language';
+import { M68KLanguage, createM68KCompletition, createM68kHoverProvider } from '$lib/languages/M68K-language';
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import type monaco from 'monaco-editor'
-import { MIPSLanguage, MIPSCompletition, MIPSFormatter } from '$lib/languages/MIPS-language';
 
 export type MonacoType = typeof monaco
 class MonacoLoader {
@@ -42,12 +41,8 @@ class MonacoLoader {
 		if(!monaco) return
 		//@ts-ignore custom language
 		this.toDispose.push(monaco.languages.setMonarchTokensProvider('m68k', M68KLanguage))
-		//@ts-ignore custom language
-		this.toDispose.push(monaco.languages.setMonarchTokensProvider('mips', MIPSLanguage))
-		this.toDispose.push(monaco.languages.registerCompletionItemProvider('m68k', M68KCompletition(monaco)))
-		this.toDispose.push(monaco.languages.registerCompletionItemProvider('mips', MIPSCompletition(monaco)))
-		//this.toDispose.push(monaco.languages.registerDocumentFormattingEditProvider('m68k', M68KFormatter))
-		//this.toDispose.push(monaco.languages.registerDocumentFormattingEditProvider('mips', MIPSFormatter))
+		this.toDispose.push(monaco.languages.registerCompletionItemProvider('m68k', createM68KCompletition(monaco)))
+		this.toDispose.push(monaco.languages.registerHoverProvider('m68k', createM68kHoverProvider(monaco)))
 
 	}
 	async get() {

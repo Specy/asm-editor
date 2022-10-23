@@ -1,7 +1,7 @@
 # Asm editor 
 
 A webapp made with sveltekit and rust webassembly to write and run m68k assembly code.
-Uses monaco-editor for the editor, [WASM M68K interpreter](https://github.com/Specy/s68k) 
+Uses monaco-editor for the editor, and my [WASM M68K interpreter](https://github.com/Specy/s68k) to run the code
 
 ## Features 
 * Simple code completition and full syntax highlighting
@@ -11,3 +11,4 @@ Uses monaco-editor for the editor, [WASM M68K interpreter](https://github.com/Sp
 * Inspect the memory and see which was changed with each instruction
 * Create new projects and manage them all in the webapp 
 * Integrated IDE with semantic checks and useful errors to help you learn assembly
+* Integrated documentation and intellisense with addressing modes, descriptions and examples
