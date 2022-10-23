@@ -5,12 +5,19 @@
 	import { onDestroy } from 'svelte'
 	import { toast } from '$cmp/toast'
 	import ProjectEdit from '$cmp/Project/ProjectEditor.svelte'
+	import { Monaco } from '$lib/Monaco'
+	import { onMount } from 'svelte'
 	let ID = $page.params.project
 	let project: Project = ProjectStore.getProject(ID)
 	let unsubscribe = ProjectStore.projects.subscribe(() => {
 		project = ProjectStore.getProject(ID)
 	})
 	onDestroy(unsubscribe)
+
+	onMount(() => {
+		Monaco.load()
+		return Monaco.dispose
+	})
 </script>
 
 <title>

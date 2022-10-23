@@ -1,6 +1,6 @@
 import type { MonacoType } from "$lib/Monaco"
 import { S68k } from "s68k"
-import { AddressingMode, fromSizesToString, fromSizeToString, getAddressingModeNames, getInstructionDocumentation } from "./M68K-documentation"
+import { AddressingMode, branchConditions, fromSizesToString, fromSizeToString, getAddressingModeNames, getInstructionDocumentation, setConditions } from "./M68K-documentation"
 
 
 //TODO ALL OF THIS IS CRAP, IT NEEDS TO BE REDONE FROM 0
@@ -9,7 +9,7 @@ import { AddressingMode, fromSizesToString, fromSizeToString, getAddressingModeN
 const arithmetic = ["add", "sub", "suba", "adda", "divs", "divu", "muls", "mulu"]
 const logic = ["tst", "cmp", "not", "or", "and", "eor", "lsl", "lsr", "asr", "asl", "rol", "ror", "btst", "bclr", "bchg", "bset"]
 const special = ["clr", "exg", "neg", "ext", "swap", "move", "trap"]
-const others = ["scc", "scs", "seq", "sne", "sge", "sgt", "sle", "sls", "slt", "shi", "smi", "spl", "svc", "svs", "sf", "st", "beq", "bne", "blt", "ble", "bgt", "bge", "blo", "bls", "bhi", "bhs", "bsr", "bra", "jsr", "rts"]
+const others = [...setConditions.map(e => `s${e}`), ...branchConditions.map(e => `b${e}`), "bsr", "bra", "jsr", "rts"]
 
 function toMap(arr) {
 	return Object.fromEntries(arr.map(e => [e, true]))
@@ -183,7 +183,7 @@ export function createM68KCompletition(monaco: MonacoType) {
 			//numeric values
 			function addNumerical() {
 				const numericals = ['$', '%', '#', "@"]
-					suggestions.push(...numericals.map(numerical => {
+				suggestions.push(...numericals.map(numerical => {
 					return {
 						kind: monaco.languages.CompletionItemKind.Unit,
 						label: numerical,
@@ -326,52 +326,52 @@ function getAddressingModes(am: AddressingMode[], monaco: MonacoType) {
 			insertText: "a"
 		})
 	}
-	if(amMap.has(AddressingMode.DataRegister)){
+	if (amMap.has(AddressingMode.DataRegister)) {
 		res.push({
 			kind: monaco.languages.CompletionItemKind.Variable,
 			label: "Dn",
 			insertText: "d"
 		})
 	}
-	if(amMap.has(AddressingMode.Immediate)){
+	if (amMap.has(AddressingMode.Immediate)) {
 		res.push({
 			kind: monaco.languages.CompletionItemKind.Value,
 			label: "#",
 			insertText: "#"
 		})
 	}
-	if(amMap.has(AddressingMode.EffectiveAddress)){
+	if (amMap.has(AddressingMode.EffectiveAddress)) {
 		res.push({
 			kind: monaco.languages.CompletionItemKind.Value,
 			label: "EA",
 			insertText: ""
 		})
 	}
-	if(amMap.has(AddressingMode.Indirect)){
+	if (amMap.has(AddressingMode.Indirect)) {
 		res.push({
 			kind: monaco.languages.CompletionItemKind.Value,
 			label: "(An)",
 			insertText: "()"
 		})
 	}
-	if(amMap.has(AddressingMode.IndirectWithPredecrement)){
+	if (amMap.has(AddressingMode.IndirectWithPredecrement)) {
 		res.push({
 			kind: monaco.languages.CompletionItemKind.Value,
 			label: "-(An)",
 			insertText: "-()"
 		})
 	}
-	if(amMap.has(AddressingMode.IndirectWithPostincrement)){
+	if (amMap.has(AddressingMode.IndirectWithPostincrement)) {
 		res.push({
 			kind: monaco.languages.CompletionItemKind.Value,
 			label: "(An)+",
 			insertText: "()+"
 		})
 	}
-	if(amMap.has(AddressingMode.IndirectWithDisplacement)){
+	if (amMap.has(AddressingMode.IndirectWithDisplacement)) {
 		res.push({
 			kind: monaco.languages.CompletionItemKind.Value,
-			label: "(d16, An)",
+			label: "(An, Dn/An)",
 			insertText: "(,)"
 		})
 	}
@@ -407,8 +407,8 @@ const CompletitionMap = {
 	"(An)+": {
 		detail: 'Indirect with postincrement',
 	},
-	"(d16, An)": {
-		detail: 'Indirect with displacement',
+	"(An, Dn/An)": {
+		detail: 'Indirect base with displacement',
 	},
 
 	'#': {

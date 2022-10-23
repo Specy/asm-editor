@@ -259,6 +259,7 @@ export const baseTheme = {
     "editorCursor.foreground": ThemeStore.getColor('accent').toHexString(),
     "editorWhitespace.foreground": "#CDCDCD2A",
     "editorWidget.background": ThemeStore.getColor("tertiary").toHexString(),
+    'editorSuggestWidget.selectedBackground': ThemeStore.getColor("accent2").darken(5).toHexString(),
     "input.background": ThemeStore.getColor("tertiary").lighten(10).toHexString(),
   }
 }

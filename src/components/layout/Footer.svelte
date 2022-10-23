@@ -94,7 +94,7 @@
 
 	.footer-line {
 		width: 100%;
-		height: 0.2rem;
+		height: 0.3rem;
 		border-radius: 1rem;
 		margin-bottom: 1rem;
 		background: linear-gradient(
@@ -126,12 +126,10 @@
 		align-items: center;
 	}
 	.footer-inner {
-		height: 7rem;
 		background-color: var(--primary);
 		color: var(--primary-text);
 		justify-content: center;
-		padding: 1.5rem;
-		padding-bottom: 0rem;
+		padding: 1rem 1.5rem;
 		display: flex;
 		z-index: 2;
 		flex-direction: column;

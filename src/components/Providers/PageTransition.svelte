@@ -1,27 +1,27 @@
-<script>
-import { afterNavigate, beforeNavigate } from '$app/navigation';
-import RgbLine from '$cmp/misc/RgbLine.svelte';
-
+<script lang="ts">
+	import { afterNavigate, beforeNavigate } from '$app/navigation'
+	import RgbLine from '$cmp/misc/RgbLine.svelte'
+	import type { Timer } from '$lib/utils'
 	import { fly } from 'svelte/transition'
 	export let refresh = ''
 
 	let status = ''
-	let timeout = setTimeout(() =>{}, 0)
-	let timeout2 = setTimeout(() =>{}, 0)
-	function handleProgress(s){
-		if(s === 'started'){
+	let timeout: Timer
+	let timeout2: Timer
+	function handleProgress(s: string) {
+		if (s === 'started') {
 			status = 'progress-70'
 			clearTimeout(timeout2)
 			timeout2 = setTimeout(() => {
 				status = ''
-			},5000)
+			}, 5000)
 		}
-		if(s === 'ended'){
+		if (s === 'ended') {
 			status = 'progress-finish'
 			clearTimeout(timeout)
 			timeout = setTimeout(() => {
 				status = ''
-			},200)
+			}, 200)
 		}
 	}
 	beforeNavigate(() => {
@@ -33,9 +33,9 @@ import RgbLine from '$cmp/misc/RgbLine.svelte';
 </script>
 
 {#key refresh}
-	<div class={`progress`} >
+	<div class={`progress`}>
 		<div class={status}>
-			<RgbLine />
+			<RgbLine height="0.3rem" />
 		</div>
 	</div>
 
@@ -45,13 +45,12 @@ import RgbLine from '$cmp/misc/RgbLine.svelte';
 {/key}
 
 <style lang="scss">
-
 	.page {
 		display: flex;
 		flex-direction: column;
 		flex: 1;
 	}
-	.progress{
+	.progress {
 		height: 4px;
 		width: 100%;
 		position: absolute;
@@ -61,33 +60,32 @@ import RgbLine from '$cmp/misc/RgbLine.svelte';
 			border-radius: 1rem;
 			transform: translateX(-110%);
 		}
-		.progress-70{
-			animation: progressTo70 1s ease-out; 
+		.progress-70 {
+			animation: progressTo70 1s ease-out;
 			animation-fill-mode: forwards;
 		}
-		.progress-finish{
+		.progress-finish {
 			animation: progressToFinish 0.2s ease-out;
 			animation-fill-mode: forwards;
 		}
 		@keyframes progressTo70 {
-			from{
+			from {
 				transform: translateX(-100%);
 				opacity: 0.5;
-			}	
-			to{
+			}
+			to {
 				opacity: 1;
 				transform: translateX(-30%);
 			}
 		}
 		@keyframes progressToFinish {
-			from{
+			from {
 				transform: translateX(-30%);
-			}	
-			to{
+			}
+			to {
 				transform: translateX(0%);
 				opacity: 0.4;
 			}
 		}
 	}
-
 </style>

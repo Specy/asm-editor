@@ -92,11 +92,10 @@ export type InstructionDocumentation = {
 
 type InstructionName = string;
 
-const conditions = ["t", "f", "hi", "ls", "cc", "cs", "ne", "eq", "vc", "vs", "pl", "mi", "ge", "lt", "gt", "le"];
-const conditionsMap = new Map<string, string>(conditions.map(c => [c, c]));
-const conditionsDescriptions = new Map<string, string>([
-    ["t", "True"],
-    ["f", "False"],
+export const branchConditions = ["hi", "ls", "cc", "cs", "ne", "eq", "vc", "vs", "pl", "mi", "ge", "lt", "gt", "le"];
+
+const branchConditionsMap = new Map<string, string>(branchConditions.map(c => [c, c]));
+const branchConditionsDescriptions = new Map<string, string>([
     ["hi", "Unsigned higher"],
     ["ls", "Unsigned lower or same"],
     ["cc", "Carry clear"],
@@ -111,6 +110,12 @@ const conditionsDescriptions = new Map<string, string>([
     ["lt", "Less than"],
     ["gt", "Greater than"],
     ["le", "Less than or equal"],
+])
+export const setConditions = [...branchConditions, "t", "f"];
+const setConditionsDescriptions = new Map<string, string>([
+    ["t", "True"],
+    ["f", "False"],
+    ...branchConditionsDescriptions.entries(),
 ])
 const directions = ["l", "r"]
 const directionsMap = new Map<string, string>(directions.map(d => [d, d]));
@@ -189,6 +194,8 @@ export const M68kDocumentation: Record<InstructionName, InstructionDocumentation
     "jmp": makeIns("jmp", [ONLY_In_OR_Id_OR_Ea], NO_SIZE, desc.jmp),
     "jsr": makeIns("jsr", [ONLY_In_OR_Id_OR_Ea], NO_SIZE, desc.jsr),
     "bra": makeIns("bra", [ONLY_Ea], NO_SIZE, desc.bra),
+    "rts": makeIns("rts", [], NO_SIZE, desc.rts),
+    "bsr": makeIns("bsr", [ONLY_Ea], NO_SIZE, desc.bsr),
     "trap": makeIns("trap", [ONLY_Im], NO_SIZE, desc.trap),
     "asd": makeIns("asd", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.asd),
     "lsd": makeIns("lsd", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.lsd),
@@ -197,7 +204,6 @@ export const M68kDocumentation: Record<InstructionName, InstructionDocumentation
     "bchg": makeIns("bchg", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.bchg),
     "bclr": makeIns("bclr", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.bclr),
     "bset": makeIns("bset", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.bset),
-    "rts": makeIns("rts", [], NO_SIZE, desc.rts),
 }
 
 
@@ -206,21 +212,21 @@ export function getInstructionDocumentation(instructionName: InstructionName): I
     if (!instructionName) return undefined
     if (instructionName.startsWith("b")) {
         const sub = instructionName.substring(1)
-        if (conditionsMap.has(sub)) {
+        if (branchConditionsMap.has(sub)) {
             const ins = M68kDocumentation['bcc']
             if (!ins) return ins
             ins.name = "b" + sub
-            ins.description = ins.description.replace("{condition code}", `"${conditionsDescriptions.get(sub)}"`)
+            ins.description = ins.description.replace("{condition code}", `"${branchConditionsDescriptions.get(sub)}"`)
             return ins
         }
     }
     if (instructionName.startsWith("s")) {
         const sub = instructionName.substring(1)
-        if (conditionsMap.has(sub)) {
+        if (setConditionsDescriptions.has(sub)) {
             const ins = cloneDeep(M68kDocumentation['scc'])
             if (!ins) return ins
             ins.name = "s" + sub
-            ins.description = ins.description.replace("{condition code}", `"${conditionsDescriptions.get(sub)}"`)
+            ins.description = ins.description.replace("{condition code}", `"${branchConditionsDescriptions.get(sub)}"`)
             return ins
         }
     }

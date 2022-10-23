@@ -5,6 +5,7 @@ import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import type monaco from 'monaco-editor'
 
 export type MonacoType = typeof monaco
+
 class MonacoLoader {
 	private monaco: MonacoType;
 	loading: Promise<MonacoType>;
@@ -51,6 +52,5 @@ class MonacoLoader {
 		return this.monaco
 	}
 }
-
 
 export const Monaco = new MonacoLoader()

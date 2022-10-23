@@ -139,12 +139,26 @@
 		top: 1rem !important;
 		right: 1rem !important;
 	}
+	:global(.editor-widget.suggest-widget) {
+		border-radius: 0.3rem !important;
+		overflow: hidden;
+	}
 	:global(.monaco-editor-overlaymessage .message) {
 		border-radius: 0.3rem !important;
 		border-bottom-left-radius: 0 !important;
 	}
 	:global(.monaco-inputbox) {
 		border-radius: 0.2rem;
+	}
+
+	:global(.monaco-hover){
+		border-radius: 0.3rem;
+		box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
+		border: 1px solid var(--accent2) !important;
+
+	}
+	:global(.monaco-editor .monaco-hover .hover-row:not(:first-child):not(:empty)){
+		border-top: 1px solid var(--accent2) !important;
 	}
 	:global(.find-widget) {
 		transform: translateY(calc(-100% - 1.2rem)) !important;
