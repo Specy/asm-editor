@@ -2,10 +2,12 @@
 	font-family: Orienta;
 	src: url(/fonts/Orienta-Regular.ttf);
 }
+
 @font-face {
 	font-family: FiraCode;
 	src: url(/fonts/FiraCode-Medium.woff2);
 }
+
 * {
 	margin: 0;
 	padding: 0;
@@ -14,12 +16,13 @@
 	-webkit-tap-highlight-color: transparent;
 	outline: none;
 }
+
 body,
 html {
 	min-height: 100%;
 	height: 100%;
 	background-color: #171A21;
-    color: #f0f0f0;
+	color: #f0f0f0;
 	width: 100%;
 	display: flex;
 	font-family: Orienta;
@@ -27,15 +30,16 @@ html {
 	overflow-x: hidden;
 }
 
-a{
-    text-decoration: none;
+a {
+	text-decoration: none;
 	color: inherit;
 }
 
-input:disabled{
+input:disabled {
 	cursor: not-allowed !important;
-	filter: saturate(0.6)!important;
+	filter: saturate(0.6) !important;
 }
+
 #svelte {
 	min-height: 100%;
 	height: 100%;
@@ -43,23 +47,28 @@ input:disabled{
 	flex-direction: column;
 }
 
-.column{
+.column {
 	display: flex;
 	flex-direction: column;
 }
-.row{
+
+.row {
 	display: flex;
 }
-.align-center{
+
+.align-center {
 	align-items: center;
 }
-.justify-center{
+
+.justify-center {
 	justify-items: center;
 }
-.flex-center{
+
+.flex-center {
 	align-items: center;
 	justify-content: center;
 }
+
 ::-webkit-scrollbar {
 	width: 0.3rem;
 	height: 0.4rem;

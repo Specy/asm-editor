@@ -5,14 +5,14 @@
 	import Icon from './Icon.svelte'
 	import { toast } from '$cmp/toast'
     import { page } from '$app/stores';
+	import AnimatedRgbLine from '$cmp/misc/AnimatedRgbLine.svelte'
 	export let pages = []
-
 </script>
 
 {#if pages.includes($page.url.pathname)}
 	<footer class="footer">
 		<div class="footer-inner">
-			<div class="footer-line" />
+			<AnimatedRgbLine />
 			<div class="footer-justify">
 				<a class="logo-wrapper" href="https://specy.app">
 					<div class="logo-content">
@@ -92,36 +92,10 @@
 		width: 100%;
 	}
 
-	.footer-line {
-		width: 100%;
-		height: 0.3rem;
-		border-radius: 1rem;
-		margin-bottom: 1rem;
-		background: linear-gradient(
-			60deg,
-			hsl(224, 85%, 66%),
-			hsl(269, 85%, 66%),
-			hsl(314, 85%, 66%),
-			hsl(359, 85%, 66%),
-			hsl(44, 85%, 66%),
-			hsl(89, 85%, 66%),
-			hsl(134, 85%, 66%),
-			hsl(179, 85%, 66%)
-		);
-		background-size: 300% 300%;
-		background-position: 0 50%;
-        animation: moveLine 10s ease-in-out alternate infinite;
-	}
-    @keyframes moveLine{
-        0%{
-            background-position: 0% 50%;
-        }
-        100%{
-            background-position: 100% 50%;
-        }
-    }
 	.footer-justify {
 		display: flex;
+		margin-top: 1rem;
+
 		justify-content: space-between;
 		align-items: center;
 	}
