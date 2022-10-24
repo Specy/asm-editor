@@ -9,7 +9,7 @@
     "description": "Write and run M68K and MIPS code on your browser. View registers and step through your program",
     "screenshots": [
         {
-            "src": "/images/ASM-editor.png",
+            "src": "/images/ASM-editor.webp",
             "type": "image/png",
             "sizes": "1607x928"
         }

@@ -8,6 +8,7 @@
 	let status = ''
 	let timeout: Timer
 	let timeout2: Timer
+	let goingBack = false
 	function handleProgress(s: string) {
 		if (s === 'started') {
 			status = 'progress-70'
@@ -24,7 +25,25 @@
 			}, 200)
 		}
 	}
-	beforeNavigate(() => {
+
+	function removeRoot(url: string) {
+		return url.replace(/^\/+/, '')
+	}
+
+	beforeNavigate((n) => {
+		try {
+			const params = n.to.url.searchParams
+			const back = params?.get('b')
+			if (back) {
+				goingBack = back === '1' ?? false
+			} else {
+				const from = removeRoot(n.from.url.pathname)
+				const to = removeRoot(n.to.url.pathname)
+				goingBack = from.split('/').length >= to.split('/').length && from !== ''
+			}
+		} catch (e) {
+			console.error(e)
+		}
 		handleProgress('started')
 	})
 	afterNavigate(() => {
@@ -39,7 +58,7 @@
 		</div>
 	</div>
 
-	<div in:fly={{ x: -30, duration: 500 }} class="page">
+	<div in:fly={{ x: goingBack ? 30 : -30, duration: 500 }} class="page">
 		<slot />
 	</div>
 {/key}

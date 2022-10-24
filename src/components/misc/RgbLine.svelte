@@ -1,16 +1,13 @@
 <script lang="ts">
-    export let width = '100%'
-    export let height = '0.2rem'
-    export let style = ''
+	export let width = '100%'
+	export let height = '0.2rem'
+	export let style = ''
 </script>
 
-<div class="rgb-line" style={` height: ${height}; width: ${width}; ${style}`}>
-
-</div>
-
+<div class="rgb-line" style={` height: ${height}; width: ${width}; ${style}`} />
 
 <style>
-    .rgb-line {
+	.rgb-line {
 		border-radius: 1rem;
 		background: linear-gradient(
 			60deg,

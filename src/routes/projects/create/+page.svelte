@@ -10,7 +10,9 @@
 	import Form from '$cmp/misc/Form.svelte'
 	import { toast } from '$cmp/toast'
 	import { Project, type AvailableLanguages } from '$lib/Project'
+	import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
 	import { ProjectStore } from '$stores/projectsStore'
+	import Icon from '$cmp/layout/Icon.svelte'
 	let name = ''
 	let description = ''
 	let language: AvailableLanguages = 'M68K'
@@ -36,7 +38,16 @@
 <title> Create Project </title>
 <div class="create-project">
 	<div class="content">
-		<Title>Create new project</Title>
+		<div class="row top-title">
+			<a href="/projects" class="go-back">
+				<Button hasIcon cssVar='primary' style='padding: 0.4rem'>
+					<Icon size={2}>
+						<FaAngleLeft />
+					</Icon>
+				</Button>
+			</a>
+			<Title>Create new project</Title>
+		</div>
 		<Form style="display: grid; gap: 1.2rem; margin:0.5rem 0" on:submit={create}>
 			<Input title="Name" bind:value={name} />
 			<Textarea title="Description" bind:value={description} />
@@ -66,6 +77,16 @@
 			.content {
 				width: 100%;
 			}
+		}
+	}
+	.top-title {
+		align-items: center;
+	}
+	@media screen and (min-width: 400px) {
+		.go-back {
+			position: absolute;
+			top: 1rem;
+			left: 1rem;
 		}
 	}
 </style>
