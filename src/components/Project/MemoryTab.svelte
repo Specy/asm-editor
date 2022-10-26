@@ -79,6 +79,7 @@
 		height: 1.6rem;
 		transition: all 0.2s ease-out;
 		align-items: center;
+
 		background-color: var(--secondary);
 		position: relative;
 		border-top-left-radius: 0.4rem;
@@ -88,6 +89,7 @@
 			width: 0;
 
 			min-width: 8rem;
+
 			border-bottom-left-radius: 0.4rem;
 			border-color: var(--accent2);
 			border-bottom-right-radius: 0.4rem;

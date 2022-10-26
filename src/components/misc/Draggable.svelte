@@ -7,6 +7,7 @@
 	export let top = 16
 	export let hiddenOnMobile = false
 	export let clampPosition = true
+
 	let moving = false
 	let bounds: DOMRect = new DOMRect(0, 0, 0, 0)
 	const debouncer = createDebouncer(100)
@@ -37,6 +38,7 @@
 	class="draggable"
 	bind:this={ref}
 >
+
 	<div class="row" on:pointerdown={() => (moving = true)} style="cursor: move;">
 		<slot name="header" />
 	</div>
@@ -53,6 +55,11 @@
 	}
 	@media screen and (max-width: 400px) {
 		.draggable {
+			display: var(--hidden-on-mobile);
+		}
+	}
+	@media screen and (max-width:400px){
+		.draggable{
 			display: var(--hidden-on-mobile);
 		}
 	}
