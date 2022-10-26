@@ -22,7 +22,7 @@
 	}>()
 </script>
 
-<Draggable>
+<Draggable hiddenOnMobile >
 	<div slot="header" class="tab-header row" class:hidden>
 		<Icon size={1.2}>
 			<FaGripHorizontal />
@@ -67,18 +67,19 @@
 		padding: 0.2rem;
 		display: flex;
 		flex: 1;
-		min-width: 14rem;
+		min-width: 12rem;
 		margin-bottom: -0.1rem;
 		box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
 		justify-content: center;
 		z-index: 2;
-		transition: all 0.3s;
+		transition: all 0.5s;
 		background-color: var(--secondary);
 		position: relative;
 		border-top-left-radius: 0.4rem;
 		border-top-right-radius: 0.4rem;
         border: 0.1rem solid transparent;
 		&.hidden {
+			min-width: 7rem;
 			border-bottom-left-radius: 0.4rem;
             border-color: var(--accent2);
 			border-bottom-right-radius: 0.4rem;
