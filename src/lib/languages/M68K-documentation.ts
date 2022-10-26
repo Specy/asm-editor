@@ -11,6 +11,8 @@ export enum AddressingMode {
     Immediate = 64,
     EffectiveAddress = 128,
 }
+
+
 export function addressingModeToString(addressingMode: AddressingMode): string {
     switch (addressingMode) {
         case AddressingMode.DataRegister:
@@ -94,8 +96,8 @@ type InstructionName = string;
 
 export const branchConditions = ["hi", "ls", "cc", "cs", "ne", "eq", "vc", "vs", "pl", "mi", "ge", "lt", "gt", "le"];
 
-const branchConditionsMap = new Map<string, string>(branchConditions.map(c => [c, c]));
-const branchConditionsDescriptions = new Map<string, string>([
+export const branchConditionsMap = new Map<string, string>(branchConditions.map(c => [c, c]));
+export const branchConditionsDescriptions = new Map<string, string>([
     ["hi", "Unsigned higher"],
     ["ls", "Unsigned lower or same"],
     ["cc", "Carry clear"],
@@ -117,9 +119,9 @@ const setConditionsDescriptions = new Map<string, string>([
     ["f", "False"],
     ...branchConditionsDescriptions.entries(),
 ])
-const directions = ["l", "r"]
-const directionsMap = new Map<string, string>(directions.map(d => [d, d]));
-const directionsDescriptions = new Map<string, string>([
+export const directions = ["l", "r"]
+export const directionsMap = new Map<string, string>(directions.map(d => [d, d]));
+export const directionsDescriptions = new Map<string, string>([
     ["l", "Left"],
     ["r", "Right"],
 ])

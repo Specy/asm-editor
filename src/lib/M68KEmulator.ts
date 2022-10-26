@@ -4,6 +4,7 @@ import { S68k, Interpreter } from "s68k"
 import { MEMORY_SIZE, PAGE_SIZE, PAGE_ELEMENT_SIZE } from "$lib/Config"
 import { Prompt } from "$cmp/prompt"
 import { createDebouncer, getErrorMessage } from "./utils"
+import { settingsStore } from "$stores/settingsStore"
 export type RegisterHex = [hi: string, lo: string]
 export type Register = {
     value: number,
@@ -97,6 +98,10 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
         },
         interrupt: undefined
     })
+    let current = get({ subscribe })
+    let settings = get(settingsStore)
+    settingsStore.subscribe(s => settings = s)
+    subscribe(s => current = s)
     let s68k: S68k | null = null
     let interpreter: Interpreter | null = null
     const debouncer = createDebouncer(500)
@@ -104,8 +109,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
         return new Promise((res, rej) => {
             try {
                 clear()
-                const state = get({ subscribe })
-                s68k = new S68k(state.code)
+                s68k = new S68k(current.code)
                 const errors = s68k.semanticCheck().map(e => {
                     return {
                         line: e.getLine(),
@@ -120,6 +124,8 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
                     return update(s => ({ ...s, compilerErrors: errors }))
                 }
                 interpreter = s68k.createInterpreter(MEMORY_SIZE)
+                const stackTab = current.memory.tabs.find(e => e.name === "Stack")
+                if (stackTab) stackTab.address = interpreter.getSp() - stackTab.pageSize
                 update(s => ({ ...s, canExecute: true }))
                 res()
             } catch (e) {
@@ -182,6 +188,12 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
         if (!interpreter) return []
         const cpu = interpreter.getCpuSnapshot()
         return cpu.getRegistersValues()
+    }
+    function scrollStackTab() {
+        if (!settings.values.autoScrollStackTab.value || !interpreter) return
+        const stackTab = current.memory.tabs.find(e => e.name === "Stack")
+        const sp = interpreter.getSp()
+        if (stackTab) stackTab.address = sp - (sp % stackTab.pageSize)
     }
     function updateStatusRegisters(override?: number[]) {
         const flags = (override ?? interpreter?.getFlagsAsArray().map(f => f ? 1 : 0) ?? new Array(5).fill(0))
@@ -283,6 +295,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
         updateRegisters()
         updateMemory()
         updateData()
+        scrollStackTab()
         return interpreter.getStatus() != InterpreterStatus.Running
     }
 
@@ -377,6 +390,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
         updateRegisters()
         updateData()
         updateMemory()
+        scrollStackTab()
         return interpreter.getStatus()
     }
     function setGlobalMemoryAddress(address: number) {

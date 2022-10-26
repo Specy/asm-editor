@@ -17,6 +17,9 @@
 	outline: none;
 }
 
+.wrap{
+	flex-wrap: wrap;
+}
 body,
 html {
 	min-height: 100%;

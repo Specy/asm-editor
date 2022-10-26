@@ -1,27 +1,42 @@
 <script lang="ts">
-	import { onMount } from "svelte"
+	import { clamp, createDebouncer } from '$lib/utils'
 
+	let ref: HTMLElement
 
-    let ref: HTMLElement
-
-	export let left = 100
+	export let left = 300
 	export let top = 16
+	export let hiddenOnMobile = false
+	export let clampPosition = true
 	let moving = false
-
-
-    onMount(() => {
-        left = window.innerWidth / 1.4 - ref.offsetWidth / 2
-    })
+	let bounds: DOMRect = new DOMRect(0, 0, 0, 0)
+	const debouncer = createDebouncer(100)
+	let observer = new ResizeObserver(() =>
+		debouncer(() => {
+			if(!ref) return
+			bounds = ref.getBoundingClientRect()
+		})
+	)
+	$: {
+		observer.disconnect()
+		if (ref) observer.observe(ref)
+	}
 	function onMouseMove(e: PointerEvent) {
 		if (moving) {
 			left += e.movementX
 			top += e.movementY
+			if (clampPosition) {
+				top = clamp(top, 0, Number.MAX_SAFE_INTEGER)
+				left = clamp(left, 0, window.innerWidth - bounds.width)
+			}
 		}
 	}
-
 </script>
 
-<div style="left: {left}px; top: {top}px;" class="draggable" bind:this={ref}>
+<div
+	style={`left: ${left}px; top: ${top}px; --hidden-on-mobile: ${hiddenOnMobile ? 'none' : 'flex'}`}
+	class="draggable"
+	bind:this={ref}
+>
 	<div class="row" on:pointerdown={() => (moving = true)} style="cursor: move;">
 		<slot name="header" />
 	</div>
@@ -34,6 +49,11 @@
 	.draggable {
 		user-select: none;
 		position: absolute;
-        z-index: 10;
+		z-index: 10;
+	}
+	@media screen and (max-width: 400px) {
+		.draggable {
+			display: var(--hidden-on-mobile);
+		}
 	}
 </style>
