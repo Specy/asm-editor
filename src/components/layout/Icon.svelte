@@ -4,7 +4,7 @@
     export let hoverable = false
 </script>
 
-<div class="icon" style={`width:${size}rem; min-width: ${size}; height:${size}rem; ${style};`} on:click>
+<div class="icon" style={`width:${size}rem; min-width: ${size}rem; height:${size}rem; ${style};`} on:click>
     <slot />
 </div>
 

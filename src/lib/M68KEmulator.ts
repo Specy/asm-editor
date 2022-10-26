@@ -1,7 +1,7 @@
 import { get, writable } from "svelte/store"
-import { InterpreterStatus, type Interrupt } from "s68k"
+import { InterpreterStatus, type Interrupt, type ParsedLine } from "s68k"
 import { S68k, Interpreter } from "s68k"
-import { MEMORY_SIZE, PAGE_SIZE } from "$lib/Config"
+import { MEMORY_SIZE, PAGE_SIZE, PAGE_ELEMENT_SIZE } from "$lib/Config"
 import { Prompt } from "$cmp/prompt"
 import { createDebouncer, getErrorMessage } from "./utils"
 export type RegisterHex = [hi: string, lo: string]
@@ -20,10 +20,22 @@ export type StatusRegister = {
 }
 export type MonacoError = {
     lineIndex: number
-    line: any
+    line: ParsedLine
     message: string
     formatted: string
 }
+
+export type MemoryTab = {
+    id: number
+    name: string
+    address: number
+    rowSize: number
+    pageSize: number
+    data: DiffedMemory
+}
+
+
+
 export type EmulatorStore = {
     registers: Register[],
     errors: string[]
@@ -37,13 +49,31 @@ export type EmulatorStore = {
     stdOut: string,
     canExecute: boolean,
     breakpoints: number[],
-    currentMemoryAddress: number,
-    currentMemoryPage: DiffedMemory
+    memory: {
+        global: MemoryTab
+        tabs: MemoryTab[]
+    }
 }
 export type DiffedMemory = {
     current: Uint8Array
     prevState: Uint8Array
 }
+
+let currentTabId = 0
+function createMemoryTab(pageSize: number, name: string, address: number, rowSize: number): MemoryTab {
+    return {
+        name,
+        address,
+        id: currentTabId++,
+        rowSize,
+        pageSize,
+        data: {
+            current: new Uint8Array(pageSize).fill(0xFF),
+            prevState: new Uint8Array(pageSize).fill(0xFF)
+        }
+    }
+}
+
 
 const registerName = ['D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'A0', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7']
 export function M68KEmulator(baseCode: string, haltLimit = 100000) {
@@ -59,10 +89,11 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
         stdOut: "",
         canExecute: false,
         breakpoints: [],
-        currentMemoryAddress: 0,
-        currentMemoryPage: {
-            current: new Uint8Array(PAGE_SIZE).fill(0xFF),
-            prevState: new Uint8Array(PAGE_SIZE).fill(0xFF)
+        memory: {
+            global: createMemoryTab(PAGE_SIZE, "Global", 0x1000, PAGE_ELEMENT_SIZE),
+            tabs: [
+                createMemoryTab(8 * 4, "Stack", 0x2000, 4),
+            ]
         },
         interrupt: undefined
     })
@@ -138,11 +169,12 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
                 errors: [],
                 canExecute: false,
                 compilerErrors: [],
-                currentMemoryPage: {
-                    current: new Uint8Array(PAGE_SIZE).fill(0xFF),
-                    prevState: new Uint8Array(PAGE_SIZE).fill(0xFF)
+                memory: {
+                    global: createMemoryTab(PAGE_SIZE, "Global", 0x1000, PAGE_ELEMENT_SIZE),
+                    tabs: [
+                        createMemoryTab(8 * 4, "Stack", 0x2000, 4),
+                    ]
                 },
-                currentMemoryAddress: 0x1000,
             }
         })
     }
@@ -177,7 +209,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
                 }
             }
         })
-        update(d => ({ ...d, registers}))
+        update(d => ({ ...d, registers }))
     }
     function updateRegisters() {
         update(data => {
@@ -199,10 +231,16 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
     function updateMemory() {
         if (!interpreter) return
         update(data => {
-            const temp = data.currentMemoryPage.current
-            const memory = interpreter.readMemoryBytes(data.currentMemoryAddress, PAGE_SIZE)
-            data.currentMemoryPage.current = memory
-            data.currentMemoryPage.prevState = temp
+            const temp = data.memory.global.data.current
+            const memory = interpreter.readMemoryBytes(data.memory.global.address, data.memory.global.pageSize)
+            data.memory.global.data.current = memory
+            data.memory.global.data.prevState = temp
+            data.memory.tabs.forEach(tab => {
+                const temp = tab.data.current
+                const memory = interpreter.readMemoryBytes(tab.address, tab.pageSize)
+                tab.data.current = memory
+                tab.data.prevState = temp
+            })
             return data
         })
     }
@@ -251,7 +289,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
     async function handleInterrupt(interrupt: Interrupt | null) {
         if (!interrupt || !interpreter) throw new Error("Expected interrupt")
         update(d => ({ ...d, interrupt }))
-        const { type  } = interrupt
+        const { type } = interrupt
         switch (type) {
             case "DisplayStringWithCRLF": {
                 update(d => ({ ...d, stdOut: d.stdOut + interrupt.value + "\n" }))
@@ -279,7 +317,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
             }
             case "ReadKeyboardString": {
                 const string = await Prompt.askText("Enter a string", "text") as string
-                interpreter.answerInterrupt({ type , value: string })
+                interpreter.answerInterrupt({ type, value: string })
                 break
             }
             case "GetTime": {
@@ -341,15 +379,24 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
         updateMemory()
         return interpreter.getStatus()
     }
-    function setCurrentMemoryAddress(address: number) {
+    function setGlobalMemoryAddress(address: number) {
         update(data => {
-            data.currentMemoryAddress = address
-            data.currentMemoryPage.current = interpreter?.readMemoryBytes(address, 16 * 16) ?? new Uint8Array(PAGE_SIZE).fill(0xFF)
-            data.currentMemoryPage.prevState = data.currentMemoryPage.current
+            data.memory.global.address = address
+            data.memory.global.data.current = interpreter?.readMemoryBytes(address, data.memory.global.pageSize) ?? new Uint8Array(data.memory.global.pageSize).fill(0xFF)
+            data.memory.global.data.prevState = data.memory.global.data.current
             return data
         })
     }
-
+    function setTabMemoryAddress(address: number, tabId: number) {
+        update(data => {
+            const tab = data.memory.tabs.find(e => e.id == tabId)
+            if (!tab) return data
+            tab.address = address
+            tab.data.current = interpreter?.readMemoryBytes(address, tab.pageSize) ?? new Uint8Array(tab.pageSize).fill(0xFF)
+            tab.data.prevState = tab.data.current
+            return data
+        })
+    }
 
     clear()
     semanticCheck()
@@ -358,9 +405,10 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
         compile,
         step,
         run,
-        setCurrentMemoryAddress,
+        setGlobalMemoryAddress,
         setCode,
         clear,
+        setTabMemoryAddress,
         toggleBreakpoint
     }
 }

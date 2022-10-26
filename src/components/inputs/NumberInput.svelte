@@ -15,7 +15,6 @@
 </div>
 
 <style lang="scss">
-	@import '../../variables.scss';
 	.form-input {
 		display: flex;
 		align-items: center;
