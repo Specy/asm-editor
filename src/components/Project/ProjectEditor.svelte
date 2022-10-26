@@ -21,10 +21,8 @@
 	import RegistersVisualiser from './RegistersVisualiser.svelte'
 	import StatusCodesVisualiser from './StatusCodesVisualiser.svelte'
 	import MemoryControls from './MemoryControls.svelte'
-	import Draggable from '$cmp/misc/Draggable.svelte'
 	export let project: Project
 	let settingsVisible = false
-	import FaGripHorizontal from 'svelte-icons/fa/FaGripHorizontal.svelte'
 	import MemoryTab from './MemoryTab.svelte'
 	let documentationVisible = false
 	const dispatcher = createEventDispatcher<{ save: Project }>()

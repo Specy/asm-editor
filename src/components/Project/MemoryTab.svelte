@@ -22,14 +22,18 @@
 	}>()
 </script>
 
-<Draggable hiddenOnMobile >
+<Draggable hiddenOnMobile>
 	<div slot="header" class="tab-header row" class:hidden>
-		<Icon size={1.2}>
+		<Icon size={1.2} style="cursor:inherit">
 			<FaGripHorizontal />
 		</Icon>
 		<div class="float-right">
-			<Button style="padding: 0.1rem 0.3rem" cssVar="secondary">
-				<Icon size={1} on:click={() => (hidden = !hidden)}>
+			<Button
+				style="padding: 0.2rem 0.3rem; height: 1.4rem; border-radius: 0.3rem"
+				cssVar="secondary"
+				on:click={() => (hidden = !hidden)}
+			>
+				<Icon size={1.1}>
 					{#if !hidden}
 						<FaEye />
 					{:else}
@@ -40,7 +44,7 @@
 		</div>
 	</div>
 	{#if !hidden}
-		<div class="tab" in:fly={{ y: -20, duration: 250 }} out:fly={{ y: -20, duration: 250 }}>
+		<div class="tab" in:fly={{ x: -10, duration: 400 }} out:fly={{ x: -10, duration: 300 }}>
 			<MemoryControls
 				bytesPerPage={tab.pageSize}
 				memorySize={MEMORY_SIZE}
@@ -64,30 +68,36 @@
 
 <style lang="scss">
 	.tab-header {
-		padding: 0.2rem;
 		display: flex;
-		flex: 1;
 		min-width: 12rem;
+		width: 100%;
+
 		margin-bottom: -0.1rem;
 		box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
 		justify-content: center;
 		z-index: 2;
-		transition: all 0.5s;
+		height: 1.6rem;
+		transition: all 0.2s ease-out;
+		align-items: center;
+
 		background-color: var(--secondary);
 		position: relative;
 		border-top-left-radius: 0.4rem;
 		border-top-right-radius: 0.4rem;
-        border: 0.1rem solid transparent;
+		border: 0.1rem solid transparent;
 		&.hidden {
-			min-width: 7rem;
+			width: 0;
+
+			min-width: 8rem;
+
 			border-bottom-left-radius: 0.4rem;
-            border-color: var(--accent2);
+			border-color: var(--accent2);
 			border-bottom-right-radius: 0.4rem;
 		}
 	}
 	.float-right {
 		position: absolute;
-		right: 0.2rem;
+		right: 0rem;
 	}
 	.tab {
 		background-color: var(--primary);
