@@ -19,3 +19,7 @@ export function getErrorMessage(error: any): string{
     if(error.message) return error.message
     return JSON.stringify(error)
 }
+
+export function delay(ms:number){
+    return new Promise(resolve => setTimeout(resolve, ms))
+}

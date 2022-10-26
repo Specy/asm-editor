@@ -2,7 +2,7 @@
 	import Editor from '$cmp/Editor.svelte'
 	import Button from '$cmp/buttons/Button.svelte'
 	import { M68KEmulator } from '$lib/M68KEmulator'
-	import MemoryVisualiser from '$cmp/MemoryVisualiser.svelte'
+	import MemoryVisualiser from '$cmp/Project/MemoryVisualiser.svelte'
 	import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
 	import { createEventDispatcher, onMount } from 'svelte'
 	import type { Project } from '$lib/Project'
@@ -12,14 +12,20 @@
 	import { toast } from '$cmp/toast'
 	import Controls from './Controls.svelte'
 	import StdOut from '$cmp/StdOut.svelte'
-	import { clamp, getErrorMessage } from '$lib/utils'
-	import { MEMORY_SIZE, PAGE_SIZE } from '$lib/Config'
+	import { clamp, delay, getErrorMessage } from '$lib/utils'
+	import { MEMORY_SIZE, PAGE_ELEMENT_SIZE, PAGE_SIZE } from '$lib/Config'
 	import Settings from './Settings.svelte'
 	import M68KDocumentation from '$cmp/M68KDocumentation.svelte'
 	import FaBook from 'svelte-icons/fa/FaBook.svelte'
 	import { ShortcutAction, shortcutsStore } from '$stores/shortcutsStore'
+	import RegistersVisualiser from './RegistersVisualiser.svelte'
+	import StatusCodesVisualiser from './StatusCodesVisualiser.svelte'
+	import MemoryControls from './MemoryControls.svelte'
+	import Draggable from '$cmp/misc/Draggable.svelte'
 	export let project: Project
 	let settingsVisible = false
+	import FaGripHorizontal from 'svelte-icons/fa/FaGripHorizontal.svelte'
+	import MemoryTab from './MemoryTab.svelte'
 	let documentationVisible = false
 	const dispatcher = createEventDispatcher<{ save: Project }>()
 	const emulator = M68KEmulator(project.code || '')
@@ -27,11 +33,11 @@
 	onMount(() => {
 		function handler(e: KeyboardEvent) {
 			const code = e.code
-			if (e.repeat && code !== "ArrowDown") return
+			if (e.repeat && code !== 'ArrowDown') return
 			//@ts-ignore ignore all events coming from the editor
-			if(e.composedPath().some((el) => el?.className?.includes("monaco-editor"))) {
+			if (e.composedPath().some((el) => el?.className?.includes('monaco-editor'))) {
 				//@ts-ignore if escape, then blur the editor
-				if(code === "Escape") e.target?.blur()
+				if (code === 'Escape') e.target?.blur()
 				return
 			}
 			switch (shortcutsStore.get(code, e.shiftKey)) {
@@ -153,6 +159,7 @@
 				hasError={$emulator.errors.length > 0}
 			/>
 		</div>
+
 		<Controls
 			executionDisabled={$emulator.terminated || $emulator.interrupt !== undefined}
 			buildDisabled={$emulator.compilerErrors.length > 0}
@@ -187,21 +194,44 @@
 	</div>
 	<div class="right-side">
 		<div class="memory-wrapper">
-			<MemoryVisualiser
-				registers={$emulator.registers}
-				statusCodes={$emulator.statusRegister}
-				memory={$emulator.currentMemoryPage}
-				currentAddress={$emulator.currentMemoryAddress}
-				sp={$emulator.sp}
-				on:registerClick={(e) => {
-					const value = e.detail.value
-					const clampedSize = value - (value % PAGE_SIZE)
-					emulator.setCurrentMemoryAddress(clamp(clampedSize, 0, MEMORY_SIZE))
-				}}
-				on:addressChange={(e) => {
-					emulator.setCurrentMemoryAddress(e.detail)
-				}}
-			/>
+			<div class="column" style="margin-right: 0.5rem;">
+				<StatusCodesVisualiser statusCodes={$emulator.statusRegister} />
+				<RegistersVisualiser
+					registers={$emulator.registers}
+					on:registerClick={async (e) => {
+						const value = e.detail.value
+						const clampedSize = value - (value % $emulator.memory.global.pageSize)
+						emulator.setGlobalMemoryAddress(clamp(clampedSize, 0, MEMORY_SIZE))
+					}}
+				/>
+			</div>
+			{#each $emulator.memory.tabs as tab}
+				<MemoryTab
+					{tab}
+					sp={$emulator.sp}
+					on:addressChange={(e) => {
+						const { tab, address } = e.detail
+						emulator.setTabMemoryAddress(address, tab.id)
+					}}
+				/>
+			{/each}
+			<div class="column">
+				<MemoryControls
+					bytesPerPage={$emulator.memory.global.pageSize}
+					memorySize={MEMORY_SIZE}
+					currentAddress={$emulator.memory.global.address}
+					on:addressChange={async (e) => {
+						emulator.setGlobalMemoryAddress(e.detail)
+					}}
+				/>
+				<MemoryVisualiser
+					bytesPerRow={$emulator.memory.global.rowSize}
+					pageSize={$emulator.memory.global.pageSize}
+					memory={$emulator.memory.global.data}
+					currentAddress={$emulator.memory.global.address}
+					sp={$emulator.sp}
+				/>
+			</div>
 		</div>
 		<StdOut
 			stdOut={`${$emulator.errors.join('\n')}\n ${$emulator.stdOut}`}
