@@ -9,6 +9,7 @@ import { AddressingMode, branchConditions, fromSizesToString, fromSizeToString, 
 const arithmetic = ["add", "sub", "suba", "adda", "divs", "divu", "muls", "mulu"]
 const logic = ["tst", "cmp", "not", "or", "and", "eor", "lsl", "lsr", "asr", "asl", "rol", "ror", "btst", "bclr", "bchg", "bset"]
 const special = ["clr", "exg", "neg", "ext", "swap", "move", "trap"]
+const directives = ["org", "equ", "dcb", "ds", "dc"]
 const others = [...setConditions.map(e => `s${e}`), ...branchConditions.map(e => `b${e}`), "bsr", "bra", "jsr", "rts"]
 
 function toMap(arr) {
@@ -17,23 +18,21 @@ function toMap(arr) {
 export const M68kInstructions = [...arithmetic, ...logic, ...special, ...others]
 export const M68KLanguage = {
 	defaultToken: '',
-	ignoreCase: false,
+	ignoreCase: true,
 	tokenPostfix: '.m68k',
 
 	regEx: /\/(?!\/\/)(?:[^/\\]|\\.)*\/[igm]*/,
 
-	keywords: [...M68kInstructions, ...M68kInstructions.map(s => s.toUpperCase())],
+	keywords: [...M68kInstructions],
 	symbols: /[.,:]+/,
 	escapes: /\\(?:[abfnrtv\\"'$]|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
 
 	tokenizer: {
 		root: [
-			//data registers
 			[/(d|D)\d/, 'data-register'],
 			[/(a\d|A\d|sp)/, 'address-register'],
-
-			// identifiers and keywords
-			[/\$[a-zA-Z_]\w*/, 'variable.predefined'],
+			[new RegExp(`(${directives.join("|")})`), 'directive'],
+			[/\w*:/, 'label'],
 			[
 				/[.a-zA-Z_]\w*/,
 				{
@@ -57,11 +56,12 @@ export const M68KLanguage = {
 			// delimiters
 			[/@symbols/, 'delimiter'],
 			// numbers
-			[/#%[0-1]+/, 'number.binary'],
-			[/#\$[0-9a-fA-F]+/, 'number.hex'],
-			[/#@[0-7]+(?!\d)/, 'number.octal'],
-			[/#[-+]?[0-9]+/, 'number'],
-			[/#'.'/, "number.char"],
+			[/#/, 'number.immediate'],
+			[/%[0-1]+/, 'number'],
+			[/\$[0-9a-fA-F]+/, 'number'],
+			[/@[0-7]+(?!\d)/, 'number'],
+			[/[-+]?[0-9]+/, 'number'],
+			[/'.'/, "number"],
 			// delimiter: after number because of .\d floats
 			[/[,.]/, 'delimiter'],
 			// strings:

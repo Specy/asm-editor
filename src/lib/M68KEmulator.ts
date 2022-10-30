@@ -126,7 +126,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
                 interpreter = s68k.createInterpreter(MEMORY_SIZE)
                 const stackTab = current.memory.tabs.find(e => e.name === "Stack")
                 if (stackTab) stackTab.address = interpreter.getSp() - stackTab.pageSize
-                update(s => ({ ...s, canExecute: true }))
+                update(s => ({ ...s, canExecute: true, terminated: interpreter.getStatus() !== InterpreterStatus.Running }))
                 res()
             } catch (e) {
                 console.error(e)
