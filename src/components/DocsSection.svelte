@@ -11,7 +11,7 @@
 		<Icon style={`transform: rotate(${open ? 90 : 0}deg); transition: all 0.2s cubic-bezier(.54,.9,0,.97); color: var(--accent); `} size={1.6}>
 			<FaAngleRight />
 		</Icon>
-		<div>
+		<div style="text-align: left;">
 			{name}
 		</div>
 	</button>

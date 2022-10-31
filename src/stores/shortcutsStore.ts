@@ -17,8 +17,8 @@ type Shortcut = {
     defaultValue: string
     id: number
 }
-function createShortcut(type: ShortcutAction, defaultValue: string, description:string, id: number): Shortcut {
-    return { type, description , defaultValue, id};
+function createShortcut(type: ShortcutAction, defaultValue: string, description: string, id: number): Shortcut {
+    return { type, description, defaultValue, id };
 }
 type StoredSettings = {
     meta: {
@@ -27,36 +27,36 @@ type StoredSettings = {
     shortcuts: Array<[string, Shortcut]>
 }
 const shortcuts = new Map([
-    ["Shift+KeyS", createShortcut(ShortcutAction.SaveCode, "Shift+KeyS", "Save code",1)],
-    ["Shift+KeyD", createShortcut(ShortcutAction.ToggleDocs, "Shift+KeyD", "Toggle docs",2)],
-    ["Shift+KeyP", createShortcut(ShortcutAction.ToggleSettings, "Shift+KeyP", "Toggle settings",3)],
-    ["Shift+KeyR", createShortcut(ShortcutAction.RunCode, "Shift+KeyR", "Run code",4)],
-    ["Shift+KeyB", createShortcut(ShortcutAction.BuildCode, "Shift+KeyB", "Build code",5)],
-    ["Shift+KeyC", createShortcut(ShortcutAction.ClearExecution, "Shift+KeyC", "Clear execution",6)],
-    ["Shift+ArrowDown", createShortcut(ShortcutAction.Step, "Shift+ArrowDown", "Step",7)],
+    ["ShiftLeft+KeyS", createShortcut(ShortcutAction.SaveCode, "ShiftLeft+KeyS", "Save code", 1)],
+    ["ShiftLeft+KeyD", createShortcut(ShortcutAction.ToggleDocs, "ShiftLeft+KeyD", "Toggle docs", 2)],
+    ["ShiftLeft+KeyP", createShortcut(ShortcutAction.ToggleSettings, "ShiftLeft+KeyP", "Toggle settings", 3)],
+    ["ShiftLeft+KeyR", createShortcut(ShortcutAction.RunCode, "ShiftLeft+KeyR", "Run code", 4)],
+    ["ShiftLeft+KeyB", createShortcut(ShortcutAction.BuildCode, "ShiftLeft+KeyB", "Build code", 5)],
+    ["ShiftLeft+KeyC", createShortcut(ShortcutAction.ClearExecution, "ShiftLeft+KeyC", "Clear execution", 6)],
+    ["ShiftLeft+ArrowDown", createShortcut(ShortcutAction.Step, "ShiftLeft+ArrowDown", "Step", 7)],
 ]);
 const CURRENT_VERSION = "1.0.0";
 
 
 function createShortcutStore() {
 
-    const { subscribe, set, update } = writable(shortcuts);
+    const { subscribe, update } = writable(shortcuts);
 
-    function get(key: string, shift = true): Shortcut | undefined {
-        return shortcuts.get(`${shift ? "Shift+" : ""}${key}`);
+    function get(key: string): Shortcut | undefined {
+        return shortcuts.get(key);
     }
-    function updateKey(prev:string, next: string) {
+    function updateKey(prev: string, next: string) {
         update((shortcuts) => {
             const shortcut = shortcuts.get(prev);
             if (shortcut && !shortcuts.has(next)) {
                 shortcuts.set(next, shortcut);
                 shortcuts.delete(prev);
             }
-            return shortcuts;   
+            return shortcuts;
         });
         saveStorage()
     }
-    function saveStorage(){
+    function saveStorage() {
         const storedSettings: StoredSettings = {
             meta: {
                 version: CURRENT_VERSION
@@ -65,16 +65,19 @@ function createShortcutStore() {
         }
         localStorage.setItem("shortcuts", JSON.stringify(storedSettings));
     }
-    function loadFromStorage(){
+    function loadFromStorage() {
         const storedShortcuts = localStorage.getItem("shortcuts");
         if (storedShortcuts) {
             const storedSettings: StoredSettings = JSON.parse(storedShortcuts);
             if (storedSettings.meta.version === CURRENT_VERSION) {
-                set(new Map(storedSettings.shortcuts));
+                shortcuts.clear()
+                storedSettings.shortcuts.forEach(([key, shortcut]) => {
+                    shortcuts.set(key, shortcut);
+                });
             }
         }
     }
-    if(browser) loadFromStorage()
+    if (browser) loadFromStorage()
     return {
         subscribe,
         get,

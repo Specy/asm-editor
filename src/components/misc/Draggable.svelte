@@ -51,7 +51,7 @@
 	.draggable {
 		user-select: none;
 		position: absolute;
-		z-index: 10;
+		z-index: 2;
 	}
 	@media screen and (max-width: 400px) {
 		.draggable {

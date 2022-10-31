@@ -67,7 +67,7 @@
 		<div slot="title">Documentation</div>
 		<div class="description">
 			The editor comes with a built-in documentation for the M68K instruction set including the
-			valid addressing modes for each instruction, examples and details.
+			valid addressing modes, description, examples for each instruction and directive.
 		</div>
 	</MainPageSection>
 	<MainPageSection id="codeCompletion" imageUrl="/images/ASM-CodeCompletion.webp" reverse>
@@ -79,10 +79,10 @@
 		</div>
 	</MainPageSection>
 	<MainPageSection id="tools" imageUrl="/images/ASM-Tools.webp">
-		<div slot="title">Tools</div>
+		<div slot="title">Tools & Customisation</div>
 		<div class="description">
-			Feature rich tools to help you debug your code, includes breakpoints, stepping,
-			register/memory diffing, decimal/hexadecimal view, stdout/stdin/errors and more.
+			Feature rich tools to help you debug your code. Includes breakpoints, stepping,
+			register/memory diffing, decimal/hexadecimal conversions, stdout/stdin/errors, customisable shortcuts and settings.
 		</div>
 	</MainPageSection>
 </div>

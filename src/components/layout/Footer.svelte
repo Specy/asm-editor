@@ -39,7 +39,7 @@
 							<FaRegCopyright />
 						</Icon>
 					</div>
-					<a class="icon" href="https://github.com/Specy/asm-editor" target="_blank">
+					<a class="icon" href="https://github.com/Specy/asm-editor" target="_blank"  rel="noreferrer">
 						<Icon size={1.6}>
 							<FaGithub />
 						</Icon>
@@ -108,17 +108,11 @@
 		z-index: 2;
 		flex-direction: column;
 	}
-	.logo-mobile {
-		display: none;
-	}
 	@media (max-width: 480px) {
 		.footer-inner {
 			padding: 1rem;
 			padding-top: 2rem;
 			height: unset;
-		}
-		.copyright {
-			margin-top: 1.2rem;
 		}
 		.logo-content {
 			> .logo {

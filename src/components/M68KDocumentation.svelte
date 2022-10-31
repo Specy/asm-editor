@@ -302,7 +302,7 @@
 	}
 	.sub-title {
 		font-size: 1.3rem;
-		margin-right: 0.4rem;
+ 		margin-right: 0.4rem;
 	}
 
 	.instruction-addressing-modes {

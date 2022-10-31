@@ -30,56 +30,73 @@
 	let shortcutsVisible = false
 	const dispatcher = createEventDispatcher<{ save: Project }>()
 	const emulator = M68KEmulator(project.code || '')
-
-	onMount(() => {
-		function handler(e: KeyboardEvent) {
-			const code = e.code
-			//@ts-
-			if (e.repeat && code !== 'ArrowDown') return
+	const pressedKeys = new Map<String, boolean>()
+	function handleKeyDown(e: KeyboardEvent) {
+		pressedKeys.set(e.code, true)
+		const code = Array.from(pressedKeys.keys()).join('+')
+		const shortcut = shortcutsStore.get(code)
+		if (e.repeat && shortcut?.type !== ShortcutAction.Step) return
+		if (
 			//@ts-ignore ignore all events coming from the editor and inputs
-			if (e.target.tagName === "INPUT" || e.composedPath().some((el) => el?.className?.includes('monaco-editor'))) {
-				//@ts-ignore if escape, then blur the editor
-				if (code === 'Escape') e.target?.blur()
-				return
+			e.target.tagName === 'INPUT' ||
+			//@ts-ignore ignore all events coming from the editor and inputs
+			e.composedPath().some((el) => el?.className?.includes('monaco-editor'))
+		) {
+			//@ts-ignore if escape, then blur the editor
+			if (e.code === 'Escape') e.target?.blur()
+			return
+		}
+		switch (shortcut?.type) {
+			case ShortcutAction.ToggleDocs: {
+				documentationVisible = !documentationVisible
+				break
 			}
-			switch (shortcutsStore.get(code, e.shiftKey)?.type) {
-				case ShortcutAction.ToggleDocs: {
-					documentationVisible = !documentationVisible
+			case ShortcutAction.ToggleSettings: {
+				settingsVisible = !settingsVisible
+				break
+			}
+			case ShortcutAction.BuildCode: {
+				emulator.setCode(project.code)
+				emulator.compile()
+				break
+			}
+			case ShortcutAction.RunCode: {
+				if ($emulator.terminated || $emulator.interrupt !== undefined || !$emulator.canExecute)
 					break
-				}
-				case ShortcutAction.ToggleSettings: {
-					settingsVisible = !settingsVisible
+				emulator.run()
+				break
+			}
+			case ShortcutAction.SaveCode: {
+				dispatcher('save', project)
+				break
+			}
+			case ShortcutAction.ClearExecution: {
+				emulator.clear()
+				break
+			}
+			case ShortcutAction.Step: {
+				if ($emulator.terminated || $emulator.interrupt !== undefined || !$emulator.canExecute)
 					break
-				}
-				case ShortcutAction.BuildCode: {
-					emulator.setCode(project.code)
-					emulator.compile()
-					break
-				}
-				case ShortcutAction.RunCode: {
-					if ($emulator.terminated || $emulator.interrupt !== undefined || !$emulator.canExecute)
-						break
-					emulator.run()
-					break
-				}
-				case ShortcutAction.SaveCode: {
-					dispatcher('save', project)
-					break
-				}
-				case ShortcutAction.ClearExecution: {
-					emulator.clear()
-					break
-				}
-				case ShortcutAction.Step: {
-					if ($emulator.terminated || $emulator.interrupt !== undefined || !$emulator.canExecute)
-						break
-					emulator.step()
-					break
-				}
+				emulator.step()
+				break
 			}
 		}
-		window.addEventListener('keydown', handler)
-		return () => window.removeEventListener('keydown', handler)
+	}
+	function handleKeyUp(e: KeyboardEvent){
+		pressedKeys.delete(e.code)
+	}
+	function clearPressed(){
+			pressedKeys.clear()
+		}
+	onMount(() => {
+		window.addEventListener('keydown', handleKeyDown)
+		window.addEventListener('keyup', handleKeyUp)
+		window.addEventListener('blur', clearPressed)
+		return () => {
+			window.removeEventListener('keydown', handleKeyDown)
+			window.removeEventListener('keyup', handleKeyUp)
+			window.removeEventListener('blur', clearPressed)
+		}
 	})
 </script>
 
@@ -105,7 +122,7 @@
 			style="padding:0; width:2.2rem; height:2.2rem"
 		>
 			<Icon>
-				<FaKeyboard/>
+				<FaKeyboard />
 			</Icon>
 		</Button>
 		<Button
