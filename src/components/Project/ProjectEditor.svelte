@@ -5,6 +5,7 @@
 	import MemoryVisualiser from '$cmp/Project/MemoryVisualiser.svelte'
 	import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
 	import { createEventDispatcher, onMount } from 'svelte'
+	import FaKeyboard from 'svelte-icons/fa/FaKeyboard.svelte'
 	import type { Project } from '$lib/Project'
 	import FaSave from 'svelte-icons/fa/FaSave.svelte'
 	import FaCog from 'svelte-icons/fa/FaCog.svelte'
@@ -12,8 +13,8 @@
 	import { toast } from '$cmp/toast'
 	import Controls from './Controls.svelte'
 	import StdOut from '$cmp/StdOut.svelte'
-	import { clamp, delay, getErrorMessage } from '$lib/utils'
-	import { MEMORY_SIZE, PAGE_ELEMENT_SIZE, PAGE_SIZE } from '$lib/Config'
+	import { clamp, getErrorMessage } from '$lib/utils'
+	import { MEMORY_SIZE } from '$lib/Config'
 	import Settings from './Settings.svelte'
 	import M68KDocumentation from '$cmp/M68KDocumentation.svelte'
 	import FaBook from 'svelte-icons/fa/FaBook.svelte'
@@ -22,23 +23,26 @@
 	import StatusCodesVisualiser from './StatusCodesVisualiser.svelte'
 	import MemoryControls from './MemoryControls.svelte'
 	export let project: Project
-	let settingsVisible = false
 	import MemoryTab from './MemoryTab.svelte'
+	import ShortcutEditor from '$cmp/ShortcutEditor.svelte'
+	let settingsVisible = false
 	let documentationVisible = false
+	let shortcutsVisible = false
 	const dispatcher = createEventDispatcher<{ save: Project }>()
 	const emulator = M68KEmulator(project.code || '')
 
 	onMount(() => {
 		function handler(e: KeyboardEvent) {
 			const code = e.code
+			//@ts-
 			if (e.repeat && code !== 'ArrowDown') return
-			//@ts-ignore ignore all events coming from the editor
-			if (e.composedPath().some((el) => el?.className?.includes('monaco-editor'))) {
+			//@ts-ignore ignore all events coming from the editor and inputs
+			if (e.target.tagName === "INPUT" || e.composedPath().some((el) => el?.className?.includes('monaco-editor'))) {
 				//@ts-ignore if escape, then blur the editor
 				if (code === 'Escape') e.target?.blur()
 				return
 			}
-			switch (shortcutsStore.get(code, e.shiftKey)) {
+			switch (shortcutsStore.get(code, e.shiftKey)?.type) {
 				case ShortcutAction.ToggleDocs: {
 					documentationVisible = !documentationVisible
 					break
@@ -92,8 +96,23 @@
 	<div class="row" style="gap: 0.5rem;">
 		<Button
 			on:click={() => {
+				shortcutsVisible = !shortcutsVisible
+				documentationVisible = false
+				settingsVisible = false
+			}}
+			hasIcon
+			cssVar="accent2"
+			style="padding:0; width:2.2rem; height:2.2rem"
+		>
+			<Icon>
+				<FaKeyboard/>
+			</Icon>
+		</Button>
+		<Button
+			on:click={() => {
 				documentationVisible = !documentationVisible
 				settingsVisible = false
+				shortcutsVisible = false
 			}}
 			hasIcon
 			cssVar="accent2"
@@ -107,6 +126,7 @@
 			on:click={() => {
 				settingsVisible = !settingsVisible
 				documentationVisible = false
+				shortcutsVisible = false
 			}}
 			hasIcon
 			cssVar="accent2"
@@ -130,6 +150,7 @@
 			</Icon>
 		</Button>
 	</div>
+	<ShortcutEditor bind:visible={shortcutsVisible} />
 	<Settings bind:visible={settingsVisible} />
 	<M68KDocumentation bind:visible={documentationVisible} />
 </header>
@@ -138,7 +159,7 @@
 	<div class="editor-wrapper">
 		<div
 			class="editor-border"
-			class:gradientBorder={$emulator.line >= 0}
+			class:gradientBorder={$emulator.canExecute}
 			class:redBorder={$emulator.errors.length > 0}
 		>
 			<Editor
@@ -153,7 +174,7 @@
 				errors={$emulator.compilerErrors}
 				language={project.language}
 				highlightedLine={$emulator.line}
-				disabled={$emulator.line >= 0}
+				disabled={$emulator.canExecute}
 				hasError={$emulator.errors.length > 0}
 			/>
 		</div>

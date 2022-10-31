@@ -162,7 +162,14 @@ const desc = {
     "jsr": "Jumps to the specified address and stores the return address in the stack",
     "trap": "Executes a trap, the value of the operand is used as the trap number, only #15 is supported",
 }
-
+const dirsDesc = {
+    "dc": "Defines constants, following the directive there can be a list of constants separated by commas, the size of each constant depends on the selected size. If no size is selected, the size is determined by the value of the constant. If the constant is a string, it will be stored as a sequence of bytes, if it is a number, it will be stored as a sequence of words",
+    "ds": "Defines a space in memory of N elements, the size of each element depends on the specified size, the content of the space is undefined",
+    "dcb": "Defines a space in memory of N elements, the size of each element depends on the specified size, the content of the space is initialized to the second operand",
+    "org": "Sets the current position in memory for the following instructions",
+    "equ": "Defines a constant that will be replaced by the value when the program is assembled",
+    
+}
 
 export function getAddressingModeNames(addressingModes: AddressingMode[]): string {
     const args = addressingModes.map(am => addressingModeToString(am))
@@ -170,42 +177,50 @@ export function getAddressingModeNames(addressingModes: AddressingMode[]): strin
     return args.filter((value, index, self) => self.indexOf(value) === index).join("/");
 }
 
+export const M68KDirectiveDocumentation = {
+    "dc": makeDirective("dc", ANY_SIZE, dirsDesc.dc, "dc.b 4, %10, $F, @8, 'a', some_label"),
+    "ds": makeDirective("ds",  ANY_SIZE, dirsDesc.ds, "ds.l 100"),
+    "dcb": makeDirective("dcb", ANY_SIZE, dirsDesc.dcb, "dcb.b 50, 1"),
+    "org": makeDirective("org", NO_SIZE,  dirsDesc.org, "org $1000"),
+    "equ": makeDirective("equ", NO_SIZE, dirsDesc.equ, "name equ 10"),
+}
+export const M68KDirectiveDocumentationList = Object.values(M68KDirectiveDocumentation)
 export const M68kDocumentation: Record<InstructionName, InstructionDocumentation> = {
-    "move": makeIns("move", [ANY, NO_Im], ANY_SIZE, desc.move),
-    "add": makeIns("add", [ANY, NO_Im], ANY_SIZE, desc.add),
-    "sub": makeIns("sub", [ANY, NO_Im], ANY_SIZE, desc.sub),
-    "adda": makeIns("adda", [ANY, ONLY_Ad], ANY_SIZE, desc.adda),
-    "suba": makeIns("suba", [ANY, ONLY_Ad], ANY_SIZE, desc.suba),
-    "divs": makeIns("divs", [NO_Ad, ONLY_Da], NO_SIZE, desc.divs),
-    "divu": makeIns("divu", [NO_Ad, ONLY_Da], NO_SIZE, desc.divu),
-    "muls": makeIns("muls", [NO_Ad, ONLY_Da], NO_SIZE, desc.muls),
-    "mulu": makeIns("mulu", [NO_Ad, ONLY_Da], NO_SIZE, desc.mulu),
-    "swap": makeIns("swap", [ONLY_Da], NO_SIZE, desc.swap),
-    "clr": makeIns("clr", [ONLY_Da_OR_In], ANY_SIZE, desc.clr),
-    "exg": makeIns("exg", [ONLY_REG, ONLY_REG], NO_SIZE, desc.exg),
-    "neg": makeIns("neg", [ONLY_Da_OR_In_OR_Ea], ANY_SIZE, desc.neg),
-    "ext": makeIns("ext", [ONLY_Da], ONLY_LONG_OR_WORD, desc.ext),
-    "tst": makeIns("tst", [NO_Im], ANY_SIZE, desc.tst),
-    "cmp": makeIns("cmp", [ANY, NO_Im], ANY_SIZE, desc.cmp),
-    "bcc": makeIns("bcc", [ONLY_Ea], NO_SIZE, desc.bcc),
-    "scc": makeIns("scc", [NO_Ad_AND_NO_Im], NO_SIZE, desc.scc),
-    "not": makeIns("not", [NO_Ad_AND_NO_Im], ANY_SIZE, desc.not),
-    "or": makeIns("or", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.or),
-    "and": makeIns("and", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.and),
-    "eor": makeIns("eor", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.eor),
-    "jmp": makeIns("jmp", [ONLY_In_OR_Id_OR_Ea], NO_SIZE, desc.jmp),
-    "jsr": makeIns("jsr", [ONLY_In_OR_Id_OR_Ea], NO_SIZE, desc.jsr),
-    "bra": makeIns("bra", [ONLY_Ea], NO_SIZE, desc.bra),
-    "rts": makeIns("rts", [], NO_SIZE, desc.rts),
-    "bsr": makeIns("bsr", [ONLY_Ea], NO_SIZE, desc.bsr),
-    "trap": makeIns("trap", [ONLY_Im], NO_SIZE, desc.trap),
-    "asd": makeIns("asd", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.asd),
-    "lsd": makeIns("lsd", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.lsd),
-    "rod": makeIns("rod", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.rod),
-    "btst": makeIns("btst", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.btst),
-    "bchg": makeIns("bchg", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.bchg),
-    "bclr": makeIns("bclr", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.bclr),
-    "bset": makeIns("bset", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.bset),
+    "move": makeIns("move", [ANY, NO_Im], ANY_SIZE, desc.move, "move.b #10, d0"),
+    "add": makeIns("add", [ANY, NO_Im], ANY_SIZE, desc.add, "add.l (a4, d3), d1"),
+    "sub": makeIns("sub", [ANY, NO_Im], ANY_SIZE, desc.sub, "sub.w $1000, d1"),
+    "adda": makeIns("adda", [ANY, ONLY_Ad], ANY_SIZE, desc.adda, "adda.l d0, a0"),
+    "suba": makeIns("suba", [ANY, ONLY_Ad], ANY_SIZE, desc.suba, "suba.w #$FF, a1"),
+    "divs": makeIns("divs", [NO_Ad, ONLY_Da], NO_SIZE, desc.divs, "divs.w #%101, d1"),
+    "divu": makeIns("divu", [NO_Ad, ONLY_Da], NO_SIZE, desc.divu, "divu.w #@4, d1"),
+    "muls": makeIns("muls", [NO_Ad, ONLY_Da], NO_SIZE, desc.muls, "muls.w d0, d1"),
+    "mulu": makeIns("mulu", [NO_Ad, ONLY_Da], NO_SIZE, desc.mulu, "mulu.w d5, d2"),
+    "swap": makeIns("swap", [ONLY_Da], NO_SIZE, desc.swap, "swap d0"),
+    "clr": makeIns("clr", [ONLY_Da_OR_In], ANY_SIZE, desc.clr, "clr.b d0"),
+    "exg": makeIns("exg", [ONLY_REG, ONLY_REG], NO_SIZE, desc.exg, "exg d0, a1"),
+    "neg": makeIns("neg", [ONLY_Da_OR_In_OR_Ea], ANY_SIZE, desc.neg, "neg.l d0"),
+    "ext": makeIns("ext", [ONLY_Da], ONLY_LONG_OR_WORD, desc.ext, "ext.w d0"),
+    "tst": makeIns("tst", [NO_Im], ANY_SIZE, desc.tst, "tst.b (a0)"),
+    "cmp": makeIns("cmp", [ANY, NO_Im], ANY_SIZE, desc.cmp, "cmp.l -(sp), (a0)"),
+    "bcc": makeIns("bcc", [ONLY_Ea], NO_SIZE, desc.bcc, "b<cc> label ; where cc is one of the condition codes"),
+    "scc": makeIns("scc", [NO_Ad_AND_NO_Im], NO_SIZE, desc.scc, "s<cc>.b d0 ; where cc is one of the condition codes"),
+    "not": makeIns("not", [NO_Ad_AND_NO_Im], ANY_SIZE, desc.not, "not.b d0"),
+    "or": makeIns("or", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.or, "or.l #$FF, d1"),
+    "and": makeIns("and", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.and, "and.l #%10110, d1"),
+    "eor": makeIns("eor", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.eor, "eor.l d0, d1"),
+    "jmp": makeIns("jmp", [ONLY_In_OR_Id_OR_Ea], NO_SIZE, desc.jmp, "jmp (a0)"),
+    "jsr": makeIns("jsr", [ONLY_In_OR_Id_OR_Ea], NO_SIZE, desc.jsr, "jsr (sp)"),
+    "bra": makeIns("bra", [ONLY_Ea], NO_SIZE, desc.bra, "bra $2000"),
+    "rts": makeIns("rts", [], NO_SIZE, desc.rts, "rts"),
+    "bsr": makeIns("bsr", [ONLY_Ea], NO_SIZE, desc.bsr, "bsr label"),
+    "trap": makeIns("trap", [ONLY_Im], NO_SIZE, desc.trap, "trap #15"),
+    "asd": makeIns("asd", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.asd, "as<d>.b d0, d1 ; where d is either (l)eft or (r)ight"),
+    "lsd": makeIns("lsd", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.lsd, "ls<d>.b d0, d1 ; where d is either (l)eft or (r)ight"),
+    "rod": makeIns("rod", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.rod, "ro<d>.b d0, d1 ; where d is either (l)eft or (r)ight"),
+    "btst": makeIns("btst", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.btst, "btst #4, d0"),
+    "bchg": makeIns("bchg", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.bchg, "bchg #%101, d3"),
+    "bclr": makeIns("bclr", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.bclr, "bclr d2, d7"),
+    "bset": makeIns("bset", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.bset, "bset #1, d1"),
 }
 
 
@@ -266,10 +281,19 @@ export function getInstructionDocumentation(instructionName: InstructionName): I
 }
 
 
-export const instructionsDocumentationList = Object.keys(M68kDocumentation).map(k => M68kDocumentation[k as InstructionName])
+export const instructionsDocumentationList = Object.values(M68kDocumentation)
 
 
 function makeIns(name: string, args: AddressingMode[][], sizes: Size[], description?: string, example?: string): InstructionDocumentation {
     return { name, args, sizes, description, example };
 }
 
+type DirectiveDocumentation = {
+    name: string;
+    description?: string;
+    example?: string;
+    sizes: Size[];
+}
+function makeDirective(name: string, sizes:Size[], description?: string, example?: string): DirectiveDocumentation {
+    return { name, description, example, sizes };
+}

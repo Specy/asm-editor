@@ -32,6 +32,7 @@
         font-weight: bold;
         font-size: 1.2rem;
 		padding: 0.6rem;
+		gap: 0.4rem;
         padding-left: 1rem;
 		justify-content: space-between;
         flex-wrap: wrap;

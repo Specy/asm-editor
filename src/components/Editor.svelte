@@ -116,7 +116,7 @@
 	}
 	$: editor?.updateOptions({ readOnly: disabled })
 </script>
-
+	
 <div bind:this={mockEditor} class="mock-editor">
 	{#if !editor}
 		<h1 class="loading">Loading editor...</h1>

@@ -9,32 +9,36 @@
 		directionsDescriptions,
 		fromSizesToString,
 		getAddressingModeNames,
-		instructionsDocumentationList
+		instructionsDocumentationList,
+		M68KDirectiveDocumentationList
 	} from '$lib/languages/M68K-documentation'
 	import Input from './inputs/Input.svelte'
 	import DocsOperand from './DocsOperand.svelte'
+	import stringSimilarity from "string-similarity"
 	import DocsSection from './DocsSection.svelte'
 	export let visible: boolean
 	let wrapper: HTMLDivElement
 	let searchValue = ''
 
 	function includesText(nodes: NodeListOf<Element>, text: string) {
-		return Array.from(nodes).find((el) => el.innerHTML.toLowerCase().includes(text))
+		const texts = Array.from(nodes).map((node) => node.textContent)
+		const match = stringSimilarity.findBestMatch(text, texts)
+		return nodes[match.bestMatchIndex]
 	}
 	$: {
 		if (visible && wrapper) {
 			const els = wrapper.querySelectorAll('.sub-title')
-			const el = includesText(els, searchValue.toLowerCase())
+			const el = includesText(els, searchValue)
 			if (el) {
 				el.scrollIntoView({ inline: 'nearest' })
 			} else {
-				const descr = wrapper.querySelectorAll('.sub-description')
-				const el = includesText(descr, searchValue.toLowerCase())
+				const descr = wrapper.querySelectorAll('.sub-description')	
+				const el = includesText(descr, searchValue)
 				if (el) {
 					el.scrollIntoView({ inline: 'nearest' })
 				} else {
 					const titles = wrapper.querySelectorAll('.section-title')
-					const el = includesText(titles, searchValue.toLowerCase())
+					const el = includesText(titles, searchValue)
 					el.scrollIntoView({ inline: 'nearest' })
 				}
 			}
@@ -42,7 +46,7 @@
 	}
 </script>
 
-<FloatingContainer bind:visible title="M68K Documentation" style="width: 40rem">
+<FloatingContainer bind:visible title="M68K Documentation" style="width: 45rem">
 	<div class="search-bar" slot="header">
 		<Input
 			bind:value={searchValue}
@@ -57,7 +61,9 @@
 					<div class="sub-title">Direct</div>
 					<div class="sub-description">
 						Gets the content in the register directly. (the SP register is an alias of the a7)
-						<br /> Ex: d0, a0, sp
+					</div>
+					<div class="example">
+						Ex| d0, a0, sp
 					</div>
 					<div class="row gap-03 wrap">
 						<DocsOperand
@@ -77,7 +83,9 @@
 						register specified. Specifiying an offset by writing a number before the (), the
 						addressing mode becomes indirect with displacement and the final address to read the
 						memory will be (address + offset).
-						<br /> Ex: (a0), 4(sp)
+					</div>
+					<div class="example">
+						Ex| (a0), 4(sp)
 					</div>
 					<div class="row">
 						<DocsOperand
@@ -96,7 +104,9 @@
 						of the instruction. In the documentation, wherever there is {addressingModeToString(
 							AddressingMode.Indirect
 						)}, this addressing mode is valid too
-						<br /> Ex: (a0)+, -(sp)
+					</div>
+					<div class="example">
+						Ex| (a0)+, -(sp)
 					</div>
 					<div class="row gap-03 wrap">
 						<DocsOperand
@@ -115,7 +125,9 @@
 						Represents a numerical value, it can be a number or a label. When the program is
 						assembled, the labels will be converted to the address of the label. Immediate values
 						can be represented in many bases. (replace {`<num>`} with the actual number)
-						<br /> Ex: #1000, #$FF, #@14, #%10010, #'a'
+					</div>
+					<div class="example">
+						Ex| #1000, #$FF, #@14, #%10010, #'a', #label
 					</div>
 					<div class="row gap-03 wrap">
 						<DocsOperand
@@ -135,7 +147,9 @@
 						Represents the address of the memory where the data is stored. It can be a label or a
 						number. When the program is assembled, the labels will be converted to the address of
 						the label.
-						<br /> Ex: $1000, some_label
+					</div>
+					<div class="example">
+						Ex| $1000, some_label, 140, %101010, @22, 'e'
 					</div>
 					<div class="row gap-03 wrap">
 						<DocsOperand
@@ -155,7 +169,9 @@
 						In the documentation, wherever there is {addressingModeToString(
 							AddressingMode.Indirect
 						)}, this addressing mode is valid too
-						<br /> Ex: 4(a0, d2), (sp, a0)
+					</div>
+					<div class="example">
+						Ex| 4(a0, d2), (sp, a0)
 					</div>
 					<div class="row gap-03 wrap">
 						<DocsOperand
@@ -191,9 +207,8 @@
 							<span class="sub-description">{ins.description}</span>
 						{/if}
 						{#if ins.example}
-							<div>Example</div>
-							<span class="instruction-example">
-								{ins.example}
+							<span class="example">
+								Ex| {ins.example}
 							</span>
 						{/if}
 					</div>
@@ -214,15 +229,56 @@
 				{/each}
 			</div>
 		</DocsSection>
+		<DocsSection name="Directives">
+			<div class="column sub-section">
+				{#each M68KDirectiveDocumentationList as dir}
+					<div class="instruction">
+						<div class="row align-center">
+							<div class="sub-title">
+								{dir.name}
+							</div>
+							{#if dir.sizes.length}
+								<span style="font-size: 0.9rem;">
+									({fromSizesToString(dir.sizes)})
+								</span>
+							{/if}
+						</div>
+						{#if dir.description}
+							<span class="sub-description">{dir.description}</span>
+						{/if}
+						{#if dir.example}
+							<span class="example">
+								{dir.example}
+							</span>
+						{/if}
+					</div>
+				{/each}
+			</div>
+		</DocsSection>
+		<DocsSection name="Assembler features">
+			<div class="column gap-03">
+				<div class="sub-title">Immediate and absolute arithmetics</div>
+				<div class="sub-description">
+					Indirect and absolute values allow for very basic expressions to be used
+					<b>WARNING</b> This does not follow the order of operations, calculations are done from right to left,
+					so for example #10*2+3 will be calculated as #10*(2+3)
+				</div>
+				<div class="example">
+					#label+2, #$F*10, #450-%1010, #@5834/4.
+				</div>
+			</div>
+		</DocsSection>
 	</div>
 </FloatingContainer>
 
 <style>
 	.docs-list {
 		display: flex;
-		padding: 0.8rem;
+		padding: 0.6rem;
+		padding-left: 0.4rem;
+		padding-top: 1.2rem;
 		flex-direction: column;
-		height: 75vh;
+		height: 80vh;
 		gap: 1.4rem;
 		overflow-y: auto;
 		font-family: FiraCode;
@@ -235,6 +291,7 @@
 	.search-bar {
 		max-width: 15rem;
 	}
+
 	.instruction {
 		display: flex;
 		flex-direction: column;
@@ -252,7 +309,7 @@
 		flex-wrap: wrap;
 		gap: 0.3rem;
 	}
-	.sub-description {
+	.sub-description, .example{
 		padding: 0.6rem 0.8rem;
 		background-color: rgba(var(--RGB-secondary), 0.7);
 		line-height: 1.4rem;

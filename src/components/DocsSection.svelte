@@ -1,6 +1,5 @@
 <script lang="ts">
 	import FaAngleRight from 'svelte-icons/fa/FaAngleRight.svelte'
-	import Button from './buttons/Button.svelte'
 	import Icon from './layout/Icon.svelte'
 
 	export let name: string
@@ -8,16 +7,14 @@
 </script>
 
 <div class="section" class:open>
-	<div class="section-title">
+	<button class="section-title" on:click={() => (open = !open)}>
+		<Icon style={`transform: rotate(${open ? 90 : 0}deg); transition: all 0.2s cubic-bezier(.54,.9,0,.97); color: var(--accent); `} size={1.6}>
+			<FaAngleRight />
+		</Icon>
 		<div>
 			{name}
 		</div>
-		<Button on:click={() => (open = !open)} hasIcon cssVar="tertiary" style="padding: 0.2rem">
-			<Icon style={`transform: rotate(${open ? 90 : 0}deg); transition: all 0.2s;`} size={1.6}>
-				<FaAngleRight />
-			</Icon>
-		</Button>
-	</div>
+	</button>
 	<div class="column sub-section-content" class:open>
 		<slot />
 	</div>
@@ -28,20 +25,38 @@
 		font-size: 1.5rem;
 		display: flex;
 		gap: 0.4rem;
+		cursor: pointer;
+		background-color: transparent;
+		font-family: FiraCode;
+		color: var(--secondary-text);
+		font-weight: bold;
 		align-items: center;
 	}
 	.section {
 		display: flex;
 		flex-direction: column;
-		gap: 0.4rem;
+		gap: 0.8rem;
 	}
 	.sub-section-content {
-        display: none;
-        padding-left: 0.8rem;
+		display: none;
+		padding-left: 1rem;
+		margin-left: 0.7rem;
 		gap: 0.8rem;
 		border-left: 0.2rem solid var(--secondary);
-        &.open {
+		opacity: 0;
+		&.open {
 			display: flex;
+			animation: fade-in 0.2s forwards;
+		}
+	}
+	@keyframes fade-in{
+		from {
+			opacity: 0;
+			transform: translateX(-1rem);
+		}
+		to {
+			opacity: 1;
+			transform: translateX(0);
 		}
 	}
 </style>

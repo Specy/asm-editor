@@ -26,6 +26,7 @@
 			class="form-input"
 			use:setType
 			on:change
+			on:blur
 			placeholder={placeholder ?? title.toUpperCase()}
 			style={hideStatus 
 				? 'border:none;' 
