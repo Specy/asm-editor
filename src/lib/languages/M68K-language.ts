@@ -169,7 +169,6 @@ function parseArgs(data): [Arg[], string[]] {
 	return [args, boundaries]
 }
 
-const keywordsMap = toMap(M68KLanguage.keywords)
 export function createM68KCompletition(monaco: MonacoType) {
 	return {
 		triggerCharacters: ['.', ',', ' ', '\t', '\n', 'deleteLeft', 'Tab', '$', '#'],

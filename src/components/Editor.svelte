@@ -103,20 +103,24 @@
 			monacoInstance.editor.setModelMarkers(
 				editor.getModel(),
 				language,
-				errors.map((e) => ({
-					severity: monacoInstance.MarkerSeverity.Error,
-					message: e.message,
-					startLineNumber: e.lineIndex + 1,
-					startColumn: 0,
-					endLineNumber: e.lineIndex,
-					endColumn: 100
-				}))
+				errors.map((e) => {
+					const line = e.line.line
+					const position = line.length - line.trimStart().length + 1
+					return {
+						severity: monacoInstance.MarkerSeverity.Error,
+						message: e.message,
+						startLineNumber: e.lineIndex + 1,
+						startColumn: position,
+						endLineNumber: e.lineIndex,
+						endColumn: 100
+					}
+				})
 			)
 		}
 	}
 	$: editor?.updateOptions({ readOnly: disabled })
 </script>
-	
+
 <div bind:this={mockEditor} class="mock-editor">
 	{#if !editor}
 		<h1 class="loading">Loading editor...</h1>
@@ -151,13 +155,12 @@
 		border-radius: 0.2rem;
 	}
 
-	:global(.monaco-hover){
+	:global(.monaco-hover) {
 		border-radius: 0.3rem;
 		box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
 		border: 1px solid var(--accent2) !important;
-
 	}
-	:global(.monaco-editor .monaco-hover .hover-row:not(:first-child):not(:empty)){
+	:global(.monaco-editor .monaco-hover .hover-row:not(:first-child):not(:empty)) {
 		border-top: 1px solid var(--accent2) !important;
 	}
 	:global(.find-widget) {
@@ -171,7 +174,7 @@
 		display: flex;
 		flex: 1;
 	}
-	
+
 	:global(.breakpoint-glyph) {
 		width: calc(22px - 0.6rem) !important;
 		height: calc(22px - 0.6rem) !important;

@@ -124,10 +124,11 @@
 					<div class="sub-description">
 						Represents a numerical value, it can be a number or a label. When the program is
 						assembled, the labels will be converted to the address of the label. Immediate values
-						can be represented in many bases. (replace {`<num>`} with the actual number)
+						can be represented in many bases. (replace {`<num>`} with the actual number).
+						Note, a string will be represented as a list of bytes.
 					</div>
 					<div class="example">
-						Ex| #1000, #$FF, #@14, #%10010, #'a', #label
+						Ex| #1000, #$FF, #@14, #%10010, #'a', #'hey', #label
 					</div>
 					<div class="row gap-03 wrap">
 						<DocsOperand
@@ -138,7 +139,7 @@
 						<DocsOperand name="#$<num>" content="Hexadecimal" />
 						<DocsOperand name="#@<num>" content="Octal" />
 						<DocsOperand name="#%<num>" content="Binary" />
-						<DocsOperand name="#'<char>" content="Character" />
+						<DocsOperand name="#'<char/string>" content="Text" />
 					</div>
 				</div>
 				<div class="column gap-03">
@@ -156,7 +157,7 @@
 							name={addressingModeToString(AddressingMode.EffectiveAddress)}
 							content="Effective address"
 						/>
-						<DocsOperand name="<label>" content="Label effective address" />
+						<DocsOperand name="<ea>" content="Effective address" />
 					</div>
 				</div>
 				<div class="column gap-03">
