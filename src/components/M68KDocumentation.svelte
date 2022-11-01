@@ -311,6 +311,7 @@
 		gap: 0.3rem;
 	}
 	.sub-description, .example{
+		white-space: pre-line;
 		padding: 0.6rem 0.8rem;
 		background-color: rgba(var(--RGB-secondary), 0.7);
 		line-height: 1.4rem;

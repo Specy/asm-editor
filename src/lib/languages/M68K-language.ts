@@ -427,3 +427,4 @@ const CompletitionMap = {
 		documentation: 'Binary immediate number'
 	}
 }
+

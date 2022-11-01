@@ -160,7 +160,19 @@ const desc = {
     "bsr": "Branches to the specified address and stores the return address in the stack",
     "rts": "Returns from a subroutine, pops the return address from the stack and jumps to it",
     "jsr": "Jumps to the specified address and stores the return address in the stack",
-    "trap": "Executes a trap, the value of the operand is used as the trap number, only #15 is supported",
+    "trap": `
+        Executes a trap, the value of the operand is used as the trap number, only #15 is supported.
+        The register d0 will be used as the trap type which are: 
+        0: Print string at address of a1, then prints a new line.
+        1: Print string at address of a1.   
+        2: Read string from keyboard, writes at address of a1.
+        3: Print number at d1.
+        4: Read number, writes to d1.
+        5: Read character, writes to d1.
+        6: Print character at d1.
+        7: Terminate
+        8: Get time, writes to d1
+    `,
 }
 const dirsDesc = {
     "dc": "Defines constants, following the directive there can be a list of constants separated by commas, the size of each constant depends on the selected size. If no size is selected, the size is determined by the value of the constant. If the constant is a string, it will be stored as a sequence of bytes, if it is a number, it will be stored as a sequence of words",
@@ -178,7 +190,7 @@ export function getAddressingModeNames(addressingModes: AddressingMode[]): strin
 }
 
 export const M68KDirectiveDocumentation = {
-    "dc": makeDirective("dc", ANY_SIZE, dirsDesc.dc, "dc.b 4, %10, $F, @8, 'a', some_label"),
+    "dc": makeDirective("dc", ANY_SIZE, dirsDesc.dc, "dc.b 'Hello world!', 4, %10, $F, @8, 'a', some_label"),
     "ds": makeDirective("ds",  ANY_SIZE, dirsDesc.ds, "ds.l 100"),
     "dcb": makeDirective("dcb", ANY_SIZE, dirsDesc.dcb, "dcb.b 50, 1"),
     "org": makeDirective("org", NO_SIZE,  dirsDesc.org, "org $1000"),
