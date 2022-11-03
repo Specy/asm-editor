@@ -36,9 +36,6 @@
 		animation: infinite bounce 1.5s;
 		transform-origin: bottom;
 	}
-	.go-back-text {
-		color: var(--accent);
-	}
 	.center-wrapper {
 		display: flex;
 		justify-content: center;

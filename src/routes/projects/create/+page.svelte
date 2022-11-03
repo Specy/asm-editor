@@ -8,7 +8,7 @@
 	import Textarea from '$cmp/inputs/Textarea.svelte'
 	import Title from '$cmp/layout/Title.svelte'
 	import Form from '$cmp/misc/Form.svelte'
-	import { toast } from '$cmp/toast'
+	import { toast } from '$stores/toast'
 	import { Project, type AvailableLanguages } from '$lib/Project'
 	import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
 	import { ProjectStore } from '$stores/projectsStore'

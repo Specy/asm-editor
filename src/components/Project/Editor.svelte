@@ -4,7 +4,7 @@
 	import type { AvailableLanguages } from '$lib/Project'
 	import { Monaco } from '$lib/Monaco'
 	import type { MonacoType } from '$lib/Monaco'
-	import type { MonacoError } from '$lib/M68KEmulator'
+	import type { MonacoError } from '$lib/languages/M68KEmulator'
 	export let disabled = false
 	export let code: string
 	export let highlightedLine: number

@@ -1,6 +1,6 @@
 <script lang="ts">
-	import ValueDiff from '$cmp/ValueDiff.svelte'
-	import type { Register } from '$lib/M68KEmulator'
+	import ValueDiff from '$cmp/project/ValueDiff.svelte'
+	import type { Register } from '$lib/languages/M68KEmulator'
 	export let registers: Register[] = []
 	import { settingsStore } from '$stores/settingsStore'
 	import { createEventDispatcher } from 'svelte'
@@ -97,9 +97,6 @@
 		&:hover {
 			background-color: var(--accent2);
 		}
-	}
-	.register-value {
-		font-weight: bold;
 	}
 	.register-hex {
 		display: flex;

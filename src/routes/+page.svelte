@@ -1,12 +1,12 @@
 <script lang="ts">
 	import ButtonLink from '$cmp/buttons/ButtonLink.svelte'
 	import Icon from '$cmp/layout/Icon.svelte'
-	import MainPageLinkPreview from '$cmp/main/MainPageLinkPreview.svelte'
+	import MainPageLinkPreview from '$cmp/main/HeroLink.svelte'
 	import FaGithub from 'svelte-icons/fa/FaGithub.svelte'
 	import FaBook from 'svelte-icons/fa/FaBook.svelte'
 	import FaSearch from 'svelte-icons/fa/FaSearch.svelte'
 	import FaTools from 'svelte-icons/fa/FaTools.svelte'
-	import MainPageSection from '$cmp/main/MainPageSection.svelte'
+	import MainPageSection from '$cmp/main/HeroSection.svelte'
 	import AnimatedRgbLine from '$cmp/misc/AnimatedRgbLine.svelte'
 </script>
 
@@ -108,11 +108,6 @@
 		align-items: center;
 		background-color: rgba(var(--RGB-primary), 0.94);
 		z-index: 2;
-	}
-	.section {
-		padding: 2rem;
-		display: flex;
-		flex: 1;
 	}
 	:global(body) {
 		scroll-behavior: smooth;

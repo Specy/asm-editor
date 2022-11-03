@@ -1,11 +1,12 @@
 <script lang="ts">
 	import { ProjectStore } from '$stores/projectsStore'
-	import ProjectCard from '$cmp/Project/Card.svelte'
+	import ProjectCard from '$cmp/project/Card.svelte'
 	import { onMount } from 'svelte'
 	import Button from '$cmp/buttons/Button.svelte'
 	import Icon from '$cmp/layout/Icon.svelte'
 	import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
 	import Title from '$cmp/layout/Title.svelte'
+	import ButtonLink from '$cmp/buttons/ButtonLink.svelte'
 	const { projects } = ProjectStore
 	onMount(() => {
 		ProjectStore.load()
@@ -26,7 +27,7 @@
 				</a>
 				<Title style="margin: 0">Your projects</Title>
 			</div>
-			<a href="/projects/create" class="create-button"> Create </a>
+			<ButtonLink href="/projects/create"> Create </ButtonLink>
 		</div>
 		{#if $projects.length === 0}
 			<h3 style="margin-top: 4rem; margin-left: 2rem; font-weight:unset">
@@ -66,6 +67,7 @@
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 1rem;
+		margin-bottom: 2rem;
 		justify-content: space-between;
 	}
 	.create-button {

@@ -50,7 +50,6 @@
 </div>
 
 <style lang="scss">
-	@import '../../variables.scss';
 	.input-row {
 		display: flex;
 		align-items: center;

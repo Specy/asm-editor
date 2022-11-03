@@ -2,8 +2,8 @@ import { get, writable } from "svelte/store"
 import { InterpreterStatus, type Interrupt, type ParsedLine } from "s68k"
 import { S68k, Interpreter } from "s68k"
 import { MEMORY_SIZE, PAGE_SIZE, PAGE_ELEMENT_SIZE } from "$lib/Config"
-import { Prompt } from "$cmp/prompt"
-import { createDebouncer, getErrorMessage } from "./utils"
+import { Prompt } from "$stores/prompt"
+import { createDebouncer, getErrorMessage } from "../utils"
 import { settingsStore } from "$stores/settingsStore"
 export type RegisterHex = [hi: string, lo: string]
 export type Register = {
@@ -127,6 +127,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
                 const stackTab = current.memory.tabs.find(e => e.name === "Stack")
                 if (stackTab) stackTab.address = interpreter.getSp() - stackTab.pageSize
                 update(s => ({ ...s, canExecute: true, terminated: interpreter.getStatus() !== InterpreterStatus.Running }))
+                updateMemory()
                 res()
             } catch (e) {
                 console.error(e)

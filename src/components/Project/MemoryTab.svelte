@@ -3,7 +3,7 @@
 	import Icon from '$cmp/layout/Icon.svelte'
 	import Draggable from '$cmp/misc/Draggable.svelte'
 	import { MEMORY_SIZE } from '$lib/Config'
-	import type { MemoryTab } from '$lib/M68KEmulator'
+	import type { MemoryTab } from '$lib/languages/M68KEmulator'
 	import { createEventDispatcher } from 'svelte'
 	import FaEye from 'svelte-icons/fa/FaEye.svelte'
 	import FaEyeSlash from 'svelte-icons/fa/FaEyeSlash.svelte'

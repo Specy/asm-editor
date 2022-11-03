@@ -1,9 +1,9 @@
 <script lang="ts">
 	import FaGithub from 'svelte-icons/fa/FaGithub.svelte'
 	import FaRegCopyright from 'svelte-icons/fa/FaRegCopyright.svelte'
-	import Kofi from '$cmp/KoFi.svelte'
+	import Kofi from '$cmp/misc/KoFi.svelte'
 	import Icon from './Icon.svelte'
-	import { toast } from '$cmp/toast'
+	import { toast } from '$stores/toast'
     import { page } from '$app/stores';
 	import AnimatedRgbLine from '$cmp/misc/AnimatedRgbLine.svelte'
 	export let pages = []

@@ -3,8 +3,8 @@
 	import type { Project } from '$lib/Project'
 	import { ProjectStore } from '$stores/projectsStore'
 	import { onDestroy } from 'svelte'
-	import { toast } from '$cmp/toast'
-	import ProjectEdit from '$cmp/Project/ProjectEditor.svelte'
+	import { toast } from '$stores/toast'
+	import ProjectEdit from '$cmp/project/ProjectEditor.svelte'
 	import { Monaco } from '$lib/Monaco'
 	import { onMount } from 'svelte'
 	let ID = $page.params.project

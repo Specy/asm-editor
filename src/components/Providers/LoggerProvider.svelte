@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { toast, ToastType } from '$cmp/toast'
+	import { toast, ToastType } from '$stores/toast'
 	import { fly } from 'svelte/transition'
 	import Icon from '$cmp/layout/Icon.svelte'
 	import FaTimes from 'svelte-icons/fa/FaTimes.svelte'
@@ -99,17 +99,6 @@
 			transform: translateX(-100%);
 		}
 	}
-	.close-icon {
-		color: var(--secondary-text);
-		width: 1.2rem;
-		padding-top: 0.2rem;
-		height: 1.2rem;
-		cursor: pointer;
-	}
-	.close-icon:hover {
-		color: var(--accent);
-	}
-
 	.toast-title {
 		width: 100%;
 		display: flex;

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import FloatingContainer from './FloatingContainer.svelte'
+	import FloatingContainer from '../layout/FloatingContainer.svelte'
 	import {
 		AddressingMode,
 		addressingModeToString,
@@ -12,7 +12,7 @@
 		instructionsDocumentationList,
 		M68KDirectiveDocumentationList
 	} from '$lib/languages/M68K-documentation'
-	import Input from './inputs/Input.svelte'
+	import Input from '$cmp/inputs/Input.svelte'
 	import DocsOperand from './DocsOperand.svelte'
 	import stringSimilarity from "string-similarity"
 	import DocsSection from './DocsSection.svelte'

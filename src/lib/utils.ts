@@ -11,7 +11,16 @@ export function createDebouncer(delay:number){
         timeoutId = setTimeout(callback, delay)
     }
 }
-
+export default function blobDownloader(blob:Blob,fileName:string){
+    const a = document.createElement('a')
+    a.style.display = 'none'
+    document.body.appendChild(a)
+    a.href = URL.createObjectURL(blob)
+    a.download = fileName
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(a.href)
+}
 export function getErrorMessage(error: any): string{
     if(typeof error !== "object"){
         return error

@@ -2,7 +2,7 @@
 	export let errors: string[] = []
 	import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
 	import FaAngleRight from 'svelte-icons/fa/FaAngleRight.svelte'
-	import Icon from './layout/Icon.svelte'
+	import Icon from '../layout/Icon.svelte'
 	let index = 0
 	$: if (errors) index = 0
 </script>

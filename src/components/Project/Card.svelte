@@ -4,7 +4,7 @@
 	import { ProjectStore } from '$stores/projectsStore'
 	import FaTrashAlt from 'svelte-icons/fa/FaTrashAlt.svelte'
 	import Icon from '$cmp/layout/Icon.svelte'
-	import { Prompt } from '$cmp/prompt'
+	import { Prompt } from '$stores/prompt'
 	import ButtonLink from '$cmp/buttons/ButtonLink.svelte'
 	import { fly } from 'svelte/transition'
 	export let project: Project

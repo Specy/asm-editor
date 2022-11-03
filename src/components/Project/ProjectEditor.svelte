@@ -1,8 +1,8 @@
 <script lang="ts">
-	import Editor from '$cmp/Editor.svelte'
+	import Editor from '$cmp/project/Editor.svelte'
 	import Button from '$cmp/buttons/Button.svelte'
-	import { M68KEmulator } from '$lib/M68KEmulator'
-	import MemoryVisualiser from '$cmp/Project/MemoryVisualiser.svelte'
+	import { M68KEmulator } from '$lib/languages/M68KEmulator'
+	import MemoryVisualiser from '$cmp/project/MemoryVisualiser.svelte'
 	import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
 	import { createEventDispatcher, onMount } from 'svelte'
 	import FaKeyboard from 'svelte-icons/fa/FaKeyboard.svelte'
@@ -10,13 +10,13 @@
 	import FaSave from 'svelte-icons/fa/FaSave.svelte'
 	import FaCog from 'svelte-icons/fa/FaCog.svelte'
 	import Icon from '$cmp/layout/Icon.svelte'
-	import { toast } from '$cmp/toast'
+	import { toast } from '$stores/toast'
 	import Controls from './Controls.svelte'
-	import StdOut from '$cmp/StdOut.svelte'
+	import StdOut from '$cmp/project/StdOut.svelte'
 	import { clamp, getErrorMessage } from '$lib/utils'
 	import { MEMORY_SIZE } from '$lib/Config'
 	import Settings from './Settings.svelte'
-	import M68KDocumentation from '$cmp/M68KDocumentation.svelte'
+	import M68KDocumentation from '$cmp/project/M68KDocumentation.svelte'
 	import FaBook from 'svelte-icons/fa/FaBook.svelte'
 	import { ShortcutAction, shortcutsStore } from '$stores/shortcutsStore'
 	import RegistersVisualiser from './RegistersVisualiser.svelte'
@@ -24,7 +24,7 @@
 	import MemoryControls from './MemoryControls.svelte'
 	export let project: Project
 	import MemoryTab from './MemoryTab.svelte'
-	import ShortcutEditor from '$cmp/ShortcutEditor.svelte'
+	import ShortcutEditor from '$cmp/project/ShortcutEditor.svelte'
 	let settingsVisible = false
 	let documentationVisible = false
 	let shortcutsVisible = false

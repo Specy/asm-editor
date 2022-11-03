@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { MonacoError } from '$lib/M68KEmulator'
+	import type { MonacoError } from '$lib/languages/M68KEmulator'
 	export let stdOut: string
 	export let compilerErrors: MonacoError[] = []
 	import FaExclamationTriangle from 'svelte-icons/fa/FaExclamationTriangle.svelte'

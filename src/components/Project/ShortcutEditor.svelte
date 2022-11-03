@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { shortcutsStore } from '$stores/shortcutsStore'
-	import Button from './buttons/Button.svelte'
-	import FloatingContainer from './FloatingContainer.svelte'
-	import Icon from './layout/Icon.svelte'
+	import Button from '../buttons/Button.svelte'
+	import FloatingContainer from '../layout/FloatingContainer.svelte'
+	import Icon from '../layout/Icon.svelte'
 	import FaCheck from 'svelte-icons/fa/FaCheck.svelte'
 	import FaUndo from 'svelte-icons/fa/FaUndo.svelte'
 	import { onMount } from 'svelte'

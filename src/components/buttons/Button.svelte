@@ -4,20 +4,15 @@
 	export let style = ''
 	export let bg = 'var(--accent)'	
 	export let hasIcon = false
-	export let cssVar = ''
+	export let cssVar = 'unset'
 	export let active = false
-	let finalColor = ''
-	$: finalColor = cssVar 
-		? `background-color: var(--${cssVar}); color: var(--${cssVar}-text);` 
-		: `background-color: ${bg}; color: ${color};`
-
 </script>
 
 <button
 	type="button"
 	class="btn"
 	class:hasIcon
-	style={`${finalColor} ${style}; `}
+	style={`--btn-color:var(--${cssVar},${bg}); --btn-text:var(--${cssVar}-text,${color});${style}; `}
 	{disabled}
 	on:click
 	class:active
@@ -29,24 +24,26 @@
 	.btn {
 		padding: 0.5rem 1rem;
 		border-radius: 0.4rem;
-		color: var(--accent-text);
+		color: var(--btn-text, --accent-text);
+		background-color: var(--btn-color, --accent);
 		text-align: center;
 		display: flex;
-		transition: all 0.2s;
+		transition: all 0.3s;
 		font-size: 1rem;
 		align-items: center;
 		justify-content: center;
 		border: none;
 		width: fit-content;
 		user-select: none;
+		position: relative;
 		cursor: pointer;
 	}
 	.active{
-		background-color: var(--accent) !important;
-		color: var(--accent-text) !important;
+		background-color: var(--accent);
+		color: var(--accent-text);
 	}
 	.btn:hover {
-		filter: brightness(1.2);
+		filter:brightness(1.2)
 	}
 	.btn:disabled {
 		opacity: 0.5;

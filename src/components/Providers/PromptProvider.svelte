@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Prompt } from '$cmp/prompt'
+	import { Prompt } from '$stores/prompt'
 	import { fade } from 'svelte/transition';
 
 
@@ -78,43 +78,11 @@
 			opacity: 1;
 		}
 	}
-
-	.prompt-input {
-		display: flex;
-		width: 100%;
-        height: 2rem;
-        border-radius: 0.3rem;
-		background-color: var(--primary);
-	}
     .prompt-row{
         display: flex;
         margin-top: 0.5rem;
         justify-content: space-between;
     }
-	.close-icon {
-		color: var(--accent);
-		width: 1.2rem;
-		padding-top: 0.2rem;
-		height: 1.2rem;
-		cursor: pointer;
-	}
-	.close-icon:hover {
-		color: var(--accent);
-	}
-
-	.prompt-title {
-		width: 100%;
-		display: flex;
-		padding: 0.8rem;
-		padding-top: 0.4rem;
-		justify-content: space-between;
-		flex-direction: row;
-		font-size: 1.1rem;
-		align-items: flex-start;
-		padding-bottom: 0.2rem;
-		margin-bottom: 0.2rem;
-		border-bottom: solid 1px var(--accent);
-	}
 	.prompt-text {
 		padding: 0.3rem;
 		font-size: 0.9rem;

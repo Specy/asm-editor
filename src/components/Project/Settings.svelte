@@ -1,7 +1,7 @@
 <script lang="ts">
     import Setting from './Setting.svelte';
     import { settingsStore } from '$stores/settingsStore';
-	import FloatingContainer from '$cmp/FloatingContainer.svelte'
+	import FloatingContainer from '$cmp/layout/FloatingContainer.svelte'
 	export let visible: boolean
 </script>
 

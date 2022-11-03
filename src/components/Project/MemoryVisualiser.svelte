@@ -1,15 +1,39 @@
 <script lang="ts">
-	import type { DiffedMemory } from '$lib/M68KEmulator'
-	import ValueDiff from '../ValueDiff.svelte'
+	import Button from '$cmp/buttons/Button.svelte'
+	import Icon from '$cmp/layout/Icon.svelte'
+import type { DiffedMemory } from '$lib/languages/M68KEmulator'
+	import ValueDiff from './ValueDiff.svelte'
 	export let memory: DiffedMemory
 	export let currentAddress: number
 	export let sp: number
 	export let pageSize: number
 	export let bytesPerRow: number
+	import MdTextFields from 'svelte-icons/md/MdTextFields.svelte'
+	import { clamp } from '$lib/utils'
+	enum DisplayType {
+		Hex,
+		Char,
+		Decimal
+	}
+	let type = DisplayType.Hex
 	let visibleAddresses = new Array(pageSize / bytesPerRow).fill(0)
 	$: visibleAddresses = new Array(pageSize / bytesPerRow)
 		.fill(0)
 		.map((_, i) => currentAddress + i * bytesPerRow)
+
+
+		function getTextFromValue(value: number, padding?: number, typeOverride?: DisplayType) {
+			switch(typeOverride ?? type){
+				case DisplayType.Hex:
+					return value.toString(16).padStart(padding ?? 0, '0').toUpperCase()
+				case DisplayType.Char:
+					return String.fromCharCode(clamp(value, 0, 127))
+				case DisplayType.Decimal:
+					return value.toString().padStart(padding ?? 2, '0')
+				default: 
+					return value.toString()
+			}
+		}
 </script>
 
 <div class="memory-grid"
@@ -18,24 +42,36 @@
 	<div class="memory-offsets">
 		{#each new Array(bytesPerRow).fill(0) as _, offset}
 			<div>
-				{offset.toString(16).toUpperCase().padStart(2, '0')}
+				{getTextFromValue(offset, 2, DisplayType.Hex)}
 			</div>
 		{/each}
 	</div>
 	<div class="memory-addresses">
+		<div class="row" style="padding: 0.25rem; height:2rem; align-items:center">
+			<Button 
+				style="padding: 0.2rem; border-radius: 0.35rem; height:fit-content"
+				on:click={() => type = type === DisplayType.Hex ? DisplayType.Char : DisplayType.Hex}
+				active={type === DisplayType.Char}
+				cssVar="accent2"
+			>
+				<Icon size={1}>	
+					<MdTextFields />
+				</Icon>
+			</Button>
+		</div>
 		{#each visibleAddresses as address (address)}
 			<div class="memory-grid-address">
-				{address.toString(16).padStart(4, '0').toUpperCase()}
+				{getTextFromValue(address, 4, DisplayType.Hex)}
 			</div>
 		{/each}
 	</div>
 	<div class="memory-numbers">
 		{#each memory.current as word, i}
 			<ValueDiff
-				value={word.toString(16).toUpperCase()}
-				diff={memory.prevState[i]?.toString(16).toUpperCase() ?? 'FF'}
-				hasSoftDiff={word.toString(16).toUpperCase() !== 'FF'}
-				style={`padding: 0.3rem;  ${
+				value={getTextFromValue(word, 0, type)}
+				diff={getTextFromValue(memory.prevState[i] ?? 0xFF, 0, type)}
+				hasSoftDiff={word !== 0xFF}
+				style={`padding: 0.3rem; min-width: calc(0.6rem + 2ch); ${
 					currentAddress + i === sp
 						? ' background-color: var(--accent2); color: var(--accent2-text);'
 						: 'border-radius: 0;'
@@ -88,25 +124,17 @@
 	}
 
 	.memory-addresses {
-		margin-top: 2rem;
-		padding: 0 0.5rem;
 		display: flex;
 		flex-direction: column;
-		justify-content: space-around;
 		grid-area: b;
 	}
 
 	.memory-grid-address {
 		font-family: monospace;
-	}
-
-	.data-type-selector {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 1rem;
-		width: 100%;
-		margin-top: auto;
-		padding-top: 1rem;
-		justify-content: space-around;
+		padding: 0 0.5rem ;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex: 1;
 	}
 </style>

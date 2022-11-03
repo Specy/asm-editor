@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { StatusRegister } from '$lib/M68KEmulator'
+	import type { StatusRegister } from '$lib/languages/M68KEmulator'
 
 	export let statusCodes: StatusRegister[]
 </script>
