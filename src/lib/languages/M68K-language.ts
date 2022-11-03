@@ -12,10 +12,9 @@ const special = ["clr", "exg", "neg", "ext", "swap", "move", "trap"]
 const directives = ["org", "equ", "dcb", "ds", "dc"]
 const others = [...setConditions.map(e => `s${e}`), ...branchConditions.map(e => `b${e}`), "bsr", "bra", "jsr", "rts"]
 
-function toMap(arr) {
-	return Object.fromEntries(arr.map(e => [e, true]))
-}
 export const M68kInstructions = [...arithmetic, ...logic, ...special, ...others]
+const formattableTokens = [...M68kInstructions, ...directives]
+const formattableTokensMap = new Map(formattableTokens.map(e => [e, true]))
 export const M68KLanguage = {
 	defaultToken: '',
 	ignoreCase: true,
@@ -29,6 +28,7 @@ export const M68KLanguage = {
 
 	tokenizer: {
 		root: [
+			//[/('.+'|\w+)[\+\-\/\*]('.+'|\w+)/, 'arithmetical-operation'],
 			[/(d|D)\d/, 'data-register'],
 			[/(a\d|A\d|sp)/, 'address-register'],
 			[new RegExp(`(${directives.join("|")})`), 'directive'],
@@ -43,14 +43,13 @@ export const M68KLanguage = {
 					}
 				}
 			],
+			//technically not correct as it includes the spaces
+			[/\W+(\*|;).*$/, 'comment'],
 			// whitespace
 			[/[ \t\r\n]+/, ''],
 			// Comments
-			[/\W\*.*$/, 'comment'],
-			[/\;.*$/, 'comment'],
+			[/^(\*|;).*$/, 'comment'],
 			// regular expressions
-			['///', { token: 'regexp', next: '@hereregexp' }],
-			[/^(\s*)(@regEx)/, ['', 'regexp']],
 			[/(,)(\s*)(@regEx)/, ['delimiter', '', 'regexp']],
 			[/(:)(\s*)(@regEx)/, ['delimiter', '', 'regexp']],
 			// delimiters
@@ -136,13 +135,6 @@ export const M68KLanguage = {
 			[/#/, 'string']
 		],
 
-		comment: [
-			[/[^\*]+/, 'comment'],
-			[/\*/, 'comment'],
-			[/[^\;]+/, 'comment'],
-			[/\;/, 'comment']
-		],
-
 		hereregexp: [
 			[/[^\\/#]+/, 'regexp'],
 			[/\\./, 'regexp'],
@@ -168,10 +160,43 @@ function parseArgs(data): [Arg[], string[]] {
 	})
 	return [args, boundaries]
 }
+export function createM68kFormatter(monaco: MonacoType) {
+	return {
+		provideDocumentFormattingEdits: (model) => {
+			//this just formats arguments and labels
+			const text = model.getValue() as string;
+			const lines = text.split(/\r?\n/g);
 
+			const formatted = lines.map(line => {
+				const chars = line.split('');
+				for (let i = 0; i < chars.length; i++) {
+					if (chars[i] === ':' && i + 1 < chars.length && !chars[i + 1].match(/\s/)) {
+						chars.splice(i + 1, 0, '\t');
+						i--
+					}
+					if (chars[i] === ',' && i + 1 < chars.length && !chars[i + 1].match(/\s/)) {
+						chars.splice(i + 1, 0, ' ');
+						i--
+					}
+				}
+				//ugly way to get the first instruction
+				const arg = line.split(" ")?.[0]?.split(".")?.[0];
+				if (formattableTokensMap.has(arg?.toLowerCase())) {
+					chars.unshift('\t');
+				}
+				return chars.join('');
+			})
+			return [{
+				text: formatted.join('\n'),
+				range: model.getFullModelRange()
+			}]
+		}
+	}
+
+}
 export function createM68KCompletition(monaco: MonacoType) {
 	return {
-		triggerCharacters: ['.', ',', ' ', '\t', '\n', 'deleteLeft', 'Tab', '$', '#'],
+		triggerCharacters: ['.', ',', ' ', 'deleteLeft', 'tab', '$', '#'],
 		provideCompletionItems: (model, position) => {
 			const data: string = model.getValueInRange({ startLineNumber: position.lineNumber, startColumn: 1, endLineNumber: position.lineNumber, endColumn: position.column })
 			const lastCharacter = data.substring(data.length - 1, data.length)
@@ -220,7 +245,7 @@ export function createM68KCompletition(monaco: MonacoType) {
 					return {
 						kind: monaco.languages.CompletionItemKind.Function,
 						label: keyword,
-						insertText: keyword,
+						insertText: "",
 					}
 				}))
 			}
@@ -316,6 +341,7 @@ const DescriptionsMap = {
 
 
 function getAddressingModes(am: AddressingMode[], monaco: MonacoType) {
+	if (!am) return []
 	const amMap = new Map(am.map(e => [e, true]))
 	const res = []
 	if (amMap.has(AddressingMode.AddressRegister)) {

@@ -147,15 +147,21 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
     }
     function semanticCheck(code?: string) {
         code = code || get({ subscribe }).code
-        const errors = S68k.semanticCheck(code).map(e => (
-            {
-                line: e.getLine(),
-                lineIndex: e.getLineIndex(),
-                message: e.getError(),
-                formatted: e.getMessage()
-            } as MonacoError
-        ))
-        update(s => ({ ...s, code, compilerErrors: errors }))
+        try{
+            const errors = S68k.semanticCheck(code).map(e => (
+                {
+                    line: e.getLine(),
+                    lineIndex: e.getLineIndex(),
+                    message: e.getError(),
+                    formatted: e.getMessage()
+                } as MonacoError
+            ))
+            update(s => ({ ...s, code, compilerErrors: errors }))
+        }catch(e){
+            console.error(e)
+            addError(getErrorMessage(e))
+        }
+
     }
     function setCode(code: string) {
         update(s => ({ ...s, code }))

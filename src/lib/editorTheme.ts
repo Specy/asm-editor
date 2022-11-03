@@ -255,10 +255,16 @@ export const baseTheme = {
 		}, {
 			"foreground": "47d3a8",
 			"token": "number.immediate"
-		},{
+		}, {
 			"fontStyle": 'underline',
 			"token": 'label'
 		}
+		/*
+		,{
+			"token": "arithmetical-operation",
+			"foreground": "47d3a8"
+		}
+		*/
 	],
 	"colors": {
 		"editor.foreground": "#CDCDCD",

@@ -82,7 +82,7 @@
 		<div slot="title">Tools & Customisation</div>
 		<div class="description">
 			Feature rich tools to help you debug your code. Includes breakpoints, stepping,
-			register/memory diffing, decimal/hexadecimal conversions, stdout/stdin/errors, customisable shortcuts and settings.
+			register/memory diffing, decimal/hexadecimal conversions, stdout/stdin/errors, customisable shortcuts and settings, formatter and more.
 		</div>
 	</MainPageSection>
 </div>

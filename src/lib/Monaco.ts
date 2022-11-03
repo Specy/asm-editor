@@ -1,6 +1,6 @@
 import { browser } from '$app/environment';
 import { baseTheme } from '$lib/editorTheme';
-import { M68KLanguage, createM68KCompletition, createM68kHoverProvider } from '$lib/languages/M68K-language';
+import { M68KLanguage, createM68KCompletition, createM68kHoverProvider, createM68kFormatter } from '$lib/languages/M68K-language';
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import type monaco from 'monaco-editor'
 
@@ -44,6 +44,7 @@ class MonacoLoader {
 		this.toDispose.push(monaco.languages.setMonarchTokensProvider('m68k', M68KLanguage))
 		this.toDispose.push(monaco.languages.registerCompletionItemProvider('m68k', createM68KCompletition(monaco)))
 		this.toDispose.push(monaco.languages.registerHoverProvider('m68k', createM68kHoverProvider(monaco)))
+		this.toDispose.push(monaco.languages.registerDocumentFormattingEditProvider('m68k', createM68kFormatter(monaco)))
 
 	}
 	async get() {
