@@ -46,7 +46,7 @@ export const M68KLanguage = {
 			// whitespace
 			[/[ \t\r\n]+/, ''],
 			// Comments
-			[/\*.*$/, 'comment'],
+			[/\W\*.*$/, 'comment'],
 			[/\;.*$/, 'comment'],
 			// regular expressions
 			['///', { token: 'regexp', next: '@hereregexp' }],
