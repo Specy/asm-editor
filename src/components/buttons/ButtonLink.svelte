@@ -38,10 +38,6 @@
 		position: relative;
 		cursor: pointer;
 	}
-	.active{
-		background-color: var(--btn-color,--accent) !important;
-		color: var(--btn-text,--accent-text) !important;
-	}
 	.btn:hover {
 		filter: brightness(1.2);
 	}
