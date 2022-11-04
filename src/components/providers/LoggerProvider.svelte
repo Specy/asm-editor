@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { toast, ToastType } from '$stores/toast'
+	import { toast, ToastType } from '$stores/toastStore'
 	import { fly } from 'svelte/transition'
 	import Icon from '$cmp/layout/Icon.svelte'
 	import FaTimes from 'svelte-icons/fa/FaTimes.svelte'

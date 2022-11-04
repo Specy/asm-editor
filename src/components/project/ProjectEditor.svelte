@@ -10,7 +10,7 @@
 	import FaSave from 'svelte-icons/fa/FaSave.svelte'
 	import FaCog from 'svelte-icons/fa/FaCog.svelte'
 	import Icon from '$cmp/layout/Icon.svelte'
-	import { toast } from '$stores/toast'
+	import { toast } from '$stores/toastStore'
 	import Controls from './Controls.svelte'
 	import StdOut from '$cmp/project/StdOut.svelte'
 	import { clamp, getErrorMessage } from '$lib/utils'
@@ -28,7 +28,7 @@
 	let settingsVisible = false
 	let documentationVisible = false
 	let shortcutsVisible = false
-	const dispatcher = createEventDispatcher<{ save: Project }>()
+	const dispatcher = createEventDispatcher<{ save: Project, wantsToLeave:void }>()
 	const emulator = M68KEmulator(project.code || '')
 	const pressedKeys = new Map<String, boolean>()
 	function handleKeyDown(e: KeyboardEvent) {
@@ -102,7 +102,10 @@
 
 <header class="project-header">
 	<div class="row">
-		<a href="/projects" on:click={() => dispatcher('save', project)}>
+		<a href="/projects" on:click={(e) => {
+			e.preventDefault()
+			dispatcher('wantsToLeave')
+		}}>
 			<Icon size={2}>
 				<FaAngleLeft />
 			</Icon>

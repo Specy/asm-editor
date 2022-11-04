@@ -1,8 +1,8 @@
 import { get, writable } from "svelte/store"
 import { InterpreterStatus, type Interrupt, type ParsedLine } from "s68k"
 import { S68k, Interpreter } from "s68k"
-import { MEMORY_SIZE, PAGE_SIZE, PAGE_ELEMENT_SIZE } from "$lib/Config"
-import { Prompt } from "$stores/prompt"
+import { MEMORY_SIZE, PAGE_SIZE, PAGE_ELEMENTS_PER_ROW } from "$lib/Config"
+import { Prompt } from "$stores/promptStore"
 import { createDebouncer, getErrorMessage } from "../utils"
 import { settingsStore } from "$stores/settingsStore"
 export type RegisterHex = [hi: string, lo: string]
@@ -91,7 +91,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
         canExecute: false,
         breakpoints: [],
         memory: {
-            global: createMemoryTab(PAGE_SIZE, "Global", 0x1000, PAGE_ELEMENT_SIZE),
+            global: createMemoryTab(PAGE_SIZE, "Global", 0x1000, PAGE_ELEMENTS_PER_ROW),
             tabs: [
                 createMemoryTab(8 * 4, "Stack", 0x2000, 4),
             ]
@@ -183,7 +183,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
                 canExecute: false,
                 compilerErrors: [],
                 memory: {
-                    global: createMemoryTab(PAGE_SIZE, "Global", 0x1000, PAGE_ELEMENT_SIZE),
+                    global: createMemoryTab(PAGE_SIZE, "Global", 0x1000, PAGE_ELEMENTS_PER_ROW),
                     tabs: [
                         createMemoryTab(8 * 4, "Stack", 0x2000, 4),
                     ]
@@ -324,19 +324,19 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
                 break
             }
             case "ReadChar": {
-                const char = (await Prompt.askText("Enter a character", "text") as string)[0]
+                const char = (await Prompt.askText("Enter a character") as string)[0]
                 if (!char) throw new Error("Expected a character")
                 interpreter.answerInterrupt({ type, value: char })
                 break
             }
             case "ReadNumber": {
-                const number = Number(await Prompt.askText("Enter a number", "text"))
+                const number = Number(await Prompt.askText("Enter a number"))
                 if (Number.isNaN(number)) throw new Error("Invalid number")
                 interpreter.answerInterrupt({ type, value: number })
                 break
             }
             case "ReadKeyboardString": {
-                const string = await Prompt.askText("Enter a string", "text") as string
+                const string = await Prompt.askText("Enter a string") as string
                 interpreter.answerInterrupt({ type, value: string })
                 break
             }

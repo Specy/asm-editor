@@ -1,12 +1,11 @@
 <script lang="ts">
 	import type { Project } from '$lib/Project'
-	import timeAgo from "s-ago"
+	import timeAgo from 's-ago'
 	import { ProjectStore } from '$stores/projectsStore'
 	import FaTrashAlt from 'svelte-icons/fa/FaTrashAlt.svelte'
 	import Icon from '$cmp/layout/Icon.svelte'
-	import { Prompt } from '$stores/prompt'
+	import { Prompt, PromptType } from '$stores/promptStore'
 	import ButtonLink from '$cmp/buttons/ButtonLink.svelte'
-	import { fly } from 'svelte/transition'
 	export let project: Project
 	let textContent = project.name || 'Unnamed'
 	let descriptionContent = project.description || ''
@@ -16,10 +15,7 @@
 		ProjectStore.save(project)
 	}
 	async function deleteProject() {
-		const result = await Prompt.askText(
-			`Are you sure you want to delete "${project.name}"?`,
-			'confirm'
-		)
+		const result = await Prompt.confirm(`Are you sure you want to delete "${project.name}"?`)
 		if (!result) return
 		ProjectStore.delete(project)
 	}

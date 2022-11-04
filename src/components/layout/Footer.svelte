@@ -3,7 +3,7 @@
 	import FaRegCopyright from 'svelte-icons/fa/FaRegCopyright.svelte'
 	import Kofi from '$cmp/misc/KoFi.svelte'
 	import Icon from './Icon.svelte'
-	import { toast } from '$stores/toast'
+	import { toast } from '$stores/toastStore'
     import { page } from '$app/stores';
 	import AnimatedRgbLine from '$cmp/misc/AnimatedRgbLine.svelte'
 	export let pages = []

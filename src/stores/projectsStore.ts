@@ -32,6 +32,9 @@ export class ProjectStoreClass{
     getProject(id: string){
         return get(this.projects).find(project => project.id === id)
     }
+    getProjectFromDb(id: string){
+        return db.getProject(id)
+    }
 }
 
 export const ProjectStore = new ProjectStoreClass()

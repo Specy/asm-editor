@@ -25,6 +25,10 @@ export class Db extends Dexie{
            return Project.from(project)
         })
     }
+    async getProject(id: string): Promise<Project>{
+        const project = await this.projects.get(id)
+        return Project.from(project)
+    }
     async addProject(project: Project): Promise<Project>{
         project.id = id()
         await this.projects.add(project.toObject())

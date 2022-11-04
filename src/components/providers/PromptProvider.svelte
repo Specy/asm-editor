@@ -1,24 +1,23 @@
 <script lang="ts">
-	import { Prompt } from '$stores/prompt'
+	import { Prompt, PromptType } from '$stores/promptStore'
 	import { fade } from 'svelte/transition';
 
 
 	import Button from '../buttons/Button.svelte'
 	import Input from '../inputs/Input.svelte';
-	const { question, cancellable, placeholder, promise, type,answer } = Prompt
 
 	let value = ''
-	$: if (!$promise) value = ''
+	$: if (!$Prompt.promise) value = ''
 	
 </script>
 
 <slot />
-{#if $promise}
+{#if $Prompt.promise}
 	<div class="prompt-wrapper" out:fade={{duration: 150}}>
 		<div class="prompt-text">
-			{$question}
+			{$Prompt.question}
 		</div>
-		{#if $type === 'text'}
+		{#if $Prompt.type === PromptType.Text}
 			<Input 
 				bind:value
 				hideStatus
@@ -27,18 +26,18 @@
 		{/if}
 
         <div class="prompt-row">
-			{#if $type === 'text'}
-				<Button cssVar='secondary' disabled={!$cancellable}>
+			{#if $Prompt.type === PromptType.Text}
+				<Button cssVar='secondary' disabled={!$Prompt.cancellable}>
 					Cancel
 				</Button>
-				<Button on:click={() => answer(value)}>
+				<Button on:click={() => Prompt.answer(value)}>
 					Ok
 				</Button>
 			{:else}
-				<Button on:click={() => answer(false)} cssVar='secondary'>
+				<Button on:click={() => Prompt.answer((false))} cssVar='secondary'>
 					Cancel
 				</Button>
-				<Button on:click={() => answer(true)} cssVar='red'>
+				<Button on:click={() => Prompt.answer((true))} cssVar='accent2'>
 					Yes
 				</Button>
 			{/if}
