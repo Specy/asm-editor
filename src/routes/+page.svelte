@@ -39,28 +39,29 @@
 		</div>
 	</div>
 	<AnimatedRgbLine height="0.5rem" style="border-radius: 0;" />
-	<div class="links-row">
-		<div />
-		<MainPageLinkPreview href="#documentation">
-			<div slot="icon">
-				<FaBook />
-			</div>
-			<div slot="description">Documentation</div>
-		</MainPageLinkPreview>
-		<MainPageLinkPreview href="#codeCompletion">
-			<div slot="icon">
-				<FaSearch />
-			</div>
-			<div slot="description">Code completion</div>
-		</MainPageLinkPreview>
-		<MainPageLinkPreview href="#tools">
-			<div slot="icon">
-				<FaTools />
-			</div>
-			<div slot="description">Tools</div>
-		</MainPageLinkPreview>
-		<div />
+	<div class="links-row-wrapper">
+		<div class="links-row">
+			<MainPageLinkPreview href="#documentation">
+				<div slot="icon">
+					<FaBook />
+				</div>
+				<div slot="description">Documentation</div>
+			</MainPageLinkPreview>
+			<MainPageLinkPreview href="#codeCompletion">
+				<div slot="icon">
+					<FaSearch />
+				</div>
+				<div slot="description">Code completion</div>
+			</MainPageLinkPreview>
+			<MainPageLinkPreview href="#tools">
+				<div slot="icon">
+					<FaTools />
+				</div>
+				<div slot="description">Tools</div>
+			</MainPageLinkPreview>
+		</div>
 	</div>
+
 </div>
 <div class="column sections-wrapper">
 	<MainPageSection id="documentation" imageUrl="/images/ASM-Documentation.webp">
@@ -112,17 +113,17 @@
 	:global(body) {
 		scroll-behavior: smooth;
 	}
-	.links-row {
+	.links-row-wrapper{
 		background-color: var(--secondary);
-		display: grid;
-		grid-template-columns: repeat(5, 1fr);
-		grid-template-rows: 1fr;
+		display: flex;
 		justify-content: center;
-		@media screen and (max-width: 400px) {
+	}
+	.links-row {
+		display: grid;
+		grid-template-columns: repeat(3,1fr);
+		@media screen and (max-width: 650px) {
 			display: flex;
-			justify-content: unset;
 			flex-wrap: wrap;
-
 		}
 	}
 	.main {
@@ -158,7 +159,7 @@
 		border: solid 0.1rem var(--accent);
 	}
 
-	@media screen and (max-width: 400px) {
+	@media screen and (max-width: 650px) {
 		.main {
 			.content {
 				width: 100%;

@@ -74,7 +74,7 @@
 		padding: 1rem;
 		font-weight: bold;
 	}
-	@media screen and (max-width: 400px) {
+	@media screen and (max-width: 650px) {
 		.reverse{
 			background-color: unset;
 		}

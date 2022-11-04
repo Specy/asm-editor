@@ -56,7 +56,7 @@
 		align-items: center;
 		height: 100%;
 	}
-	@media screen and (min-width: 400px) {
+	@media screen and (min-width: 650px) {
 		.go-back {
 			position: absolute;
 			top: 1rem;
@@ -76,7 +76,7 @@
 		max-width: 40rem;
 		width: 100%;
 	}
-	@media screen and (max-width: 700px) {
+	@media screen and (max-width: 650px) {
 		.top-row {
 			margin-top: 1rem;
 		}

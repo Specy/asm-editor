@@ -72,7 +72,7 @@
 		.content {
 			max-width: 40rem;
 		}
-		@media screen and (max-width: 400px) {
+		@media screen and (max-width: 650px) {
 			padding: 1rem;
 			.content {
 				width: 100%;
@@ -82,7 +82,7 @@
 	.top-title {
 		align-items: center;
 	}
-	@media screen and (min-width: 400px) {
+	@media screen and (min-width: 650px) {
 		.go-back {
 			position: absolute;
 			top: 1rem;

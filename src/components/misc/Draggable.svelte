@@ -13,7 +13,7 @@
 	const debouncer = createDebouncer(100)
 	let observer = new ResizeObserver(() =>
 		debouncer(() => {
-			if(!ref) return
+			if (!ref) return
 			bounds = ref.getBoundingClientRect()
 		})
 	)
@@ -38,7 +38,6 @@
 	class="draggable"
 	bind:this={ref}
 >
-
 	<div class="row" on:pointerdown={() => (moving = true)} style="cursor: move;">
 		<slot name="header" />
 	</div>
@@ -53,13 +52,8 @@
 		position: absolute;
 		z-index: 2;
 	}
-	@media screen and (max-width: 400px) {
+	@media (hover: none) {
 		.draggable {
-			display: var(--hidden-on-mobile);
-		}
-	}
-	@media screen and (max-width:400px){
-		.draggable{
 			display: var(--hidden-on-mobile);
 		}
 	}
