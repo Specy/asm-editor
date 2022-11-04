@@ -44,7 +44,6 @@
             filter: brightness(1.2);
         }
 	}
-
     .compilerErrorsShown{
         background-color: var(--accent2);
     }
@@ -52,6 +51,7 @@
 		display: flex;
 		padding: 0.6rem;
 		position: relative;
+		word-break: break-all;
 		border-radius: 0.5rem;
 		flex: 1;
 		overflow-y: auto;

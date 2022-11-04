@@ -44,7 +44,7 @@ export const M68KLanguage = {
 				}
 			],
 			//technically not correct as it includes the spaces
-			[/\W+(\*|;).*$/, 'comment'],
+			[/\s+(\*|;).*$/, 'comment'],
 			// whitespace
 			[/[ \t\r\n]+/, ''],
 			// Comments

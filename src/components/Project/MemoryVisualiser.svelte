@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Button from '$cmp/buttons/Button.svelte'
 	import Icon from '$cmp/layout/Icon.svelte'
-import type { DiffedMemory } from '$lib/languages/M68KEmulator'
+	import type { DiffedMemory } from '$lib/languages/M68KEmulator'
 	import ValueDiff from './ValueDiff.svelte'
 	export let memory: DiffedMemory
 	export let currentAddress: number
@@ -21,24 +21,25 @@ import type { DiffedMemory } from '$lib/languages/M68KEmulator'
 		.fill(0)
 		.map((_, i) => currentAddress + i * bytesPerRow)
 
-
-		function getTextFromValue(value: number, padding?: number, typeOverride?: DisplayType) {
-			switch(typeOverride ?? type){
-				case DisplayType.Hex:
-					return value.toString(16).padStart(padding ?? 0, '0').toUpperCase()
-				case DisplayType.Char:
-					return String.fromCharCode(clamp(value, 0, 127))
-				case DisplayType.Decimal:
-					return value.toString().padStart(padding ?? 2, '0')
-				default: 
-					return value.toString()
-			}
+	function getTextFromValue(value: number, padding?: number, typeOverride?: DisplayType) {
+		switch (typeOverride ?? type) {
+			case DisplayType.Hex:
+				return value
+					.toString(16)
+					.padStart(padding ?? 0, '0')
+					.toUpperCase()
+			case DisplayType.Char:
+				//hides last extended ascii to have prettier view
+				return value === 0xff ? '' : String.fromCharCode(value)
+			case DisplayType.Decimal:
+				return value.toString().padStart(padding ?? 2, '0')
+			default:
+				return value.toString()
 		}
+	}
 </script>
 
-<div class="memory-grid"
-	style={`--bytesPerRow: ${bytesPerRow}`}
->
+<div class="memory-grid" style={`--bytesPerRow: ${bytesPerRow}`}>
 	<div class="memory-offsets">
 		{#each new Array(bytesPerRow).fill(0) as _, offset}
 			<div>
@@ -48,13 +49,13 @@ import type { DiffedMemory } from '$lib/languages/M68KEmulator'
 	</div>
 	<div class="memory-addresses">
 		<div class="row" style="padding: 0.25rem; height:2rem; align-items:center">
-			<Button 
+			<Button
 				style="padding: 0.2rem; border-radius: 0.35rem; height:fit-content"
-				on:click={() => type = type === DisplayType.Hex ? DisplayType.Char : DisplayType.Hex}
+				on:click={() => (type = type === DisplayType.Hex ? DisplayType.Char : DisplayType.Hex)}
 				active={type === DisplayType.Char}
 				cssVar="accent2"
 			>
-				<Icon size={1}>	
+				<Icon size={1}>
 					<MdTextFields />
 				</Icon>
 			</Button>
@@ -69,9 +70,9 @@ import type { DiffedMemory } from '$lib/languages/M68KEmulator'
 		{#each memory.current as word, i}
 			<ValueDiff
 				value={getTextFromValue(word, 0, type)}
-				diff={getTextFromValue(memory.prevState[i] ?? 0xFF, 0, type)}
-				hasSoftDiff={word !== 0xFF}
-				style={`padding: 0.3rem; min-width: calc(0.6rem + 2ch); ${
+				diff={getTextFromValue(memory.prevState[i] ?? 0xff, 0, type)}
+				hasSoftDiff={word !== 0xff}
+				style={`padding: 0.3rem; min-width: calc(0.6rem + 2ch); height: calc(2ch + 0.65rem); ${
 					currentAddress + i === sp
 						? ' background-color: var(--accent2); color: var(--accent2-text);'
 						: 'border-radius: 0;'
@@ -131,7 +132,7 @@ import type { DiffedMemory } from '$lib/languages/M68KEmulator'
 
 	.memory-grid-address {
 		font-family: monospace;
-		padding: 0 0.5rem ;
+		padding: 0 0.5rem;
 		display: flex;
 		align-items: center;
 		justify-content: center;
