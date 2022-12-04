@@ -121,7 +121,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
                 if (errors.length > 0) {
                     s68k = null
                     interpreter = null
-                    return update(s => ({ ...s, compilerErrors: errors }))
+                    return update(s => ({ ...s, compilerErrors: errors}))
                 }
                 interpreter = s68k.createInterpreter(MEMORY_SIZE)
                 const stackTab = current.memory.tabs.find(e => e.name === "Stack")
@@ -130,11 +130,9 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
                 updateMemory()
                 res()
             } catch (e) {
-                console.error(e)
                 addError(getErrorMessage(e))
                 rej(e)
             }
-
         })
     }
 
@@ -146,6 +144,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
             return s
         })
     }
+
     function semanticCheck(code?: string) {
         code = code || get({ subscribe }).code
         try{
@@ -157,17 +156,18 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
                     formatted: e.getMessage()
                 } as MonacoError
             ))
-            update(s => ({ ...s, code, compilerErrors: errors }))
+            update(s => ({ ...s, code, compilerErrors: errors, errors: [] }))
         }catch(e){
             console.error(e)
             addError(getErrorMessage(e))
         }
-
     }
+
     function setCode(code: string) {
         update(s => ({ ...s, code }))
         debouncer(semanticCheck)
     }
+
     function clear() {
         setRegisters(new Array(registerName.length).fill(0))
         updateStatusRegisters(new Array(5).fill(0))
@@ -191,11 +191,13 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
             }
         })
     }
+
     function getRegistersValue() {
         if (!interpreter) return []
         const cpu = interpreter.getCpuSnapshot()
         return cpu.getRegistersValues()
     }
+    
     function scrollStackTab() {
         if (!settings.values.autoScrollStackTab.value || !interpreter) return
         const stackTab = current.memory.tabs.find(e => e.name === "Stack")

@@ -260,12 +260,10 @@
 			<div class="column gap-03">
 				<div class="sub-title">Immediate and absolute arithmetics</div>
 				<div class="sub-description">
-					Indirect and absolute values allow for very basic expressions to be used
-					<b>WARNING</b> This does not follow the order of operations, calculations are done from right to left,
-					so for example #10*2+3 will be calculated as #10*(2+3)
+					Indirect and absolute values allow expressions to be used, it will be calculated at assemble time.
 				</div>
 				<div class="example">
-					#label+2, #$F*10, #450-%1010, #@5834/4.
+					#label+2, #$F*10, #450-%1010, #@5834/4, #($FF+%1010)*3
 				</div>
 			</div>
 		</DocsSection>
