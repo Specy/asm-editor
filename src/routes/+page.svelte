@@ -22,6 +22,7 @@
 					href="/projects"
 					color="var(--accent-text)"
 					style="box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);"
+					title="Open the editor"
 				>
 					Go to the editor
 				</ButtonLink>
@@ -30,6 +31,7 @@
 					bg="var(--secondary)"
 					color="var(--secondary-text)"
 					href="https://github.com/Specy/asm-editor"
+					title="Open the project on github"
 				>
 					<Icon>
 						<FaGithub />

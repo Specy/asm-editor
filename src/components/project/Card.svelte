@@ -45,13 +45,13 @@
 			{project.language.toUpperCase()}
 		</div>
 		<div style="display: flex;">
-			<button class="trash-icon" on:click={deleteProject}>
+			<button class="trash-icon" on:click={deleteProject} title="Delete this project">
 				<Icon>
 					<FaTrashAlt />
 				</Icon>
 			</button>
 
-			<ButtonLink bg="var(--accent2)" color="var(--accent2-text)" href={`/projects/${project.id}`}>
+			<ButtonLink bg="var(--accent2)" color="var(--accent2-text)" href={`/projects/${project.id}`} title="Open this project">
 				Open
 			</ButtonLink>
 		</div>

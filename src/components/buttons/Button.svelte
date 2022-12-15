@@ -6,12 +6,14 @@
 	export let hasIcon = false
 	export let cssVar = 'unset'
 	export let active = false
+	export let title
 </script>
 
 <button
 	type="button"
 	class="btn"
 	class:hasIcon
+	{title}
 	style={`--btn-color:var(--${cssVar},${bg}); --btn-text:var(--${cssVar}-text,${color});${style}; `}
 	{disabled}
 	on:click

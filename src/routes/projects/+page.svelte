@@ -18,8 +18,8 @@
 	<div class="content">
 		<div class="top-row">
 			<div class="row" style="align-items: center;">
-				<a href="/" class="go-back">
-					<Button hasIcon cssVar="primary" style="padding: 0.4rem">
+				<a href="/" class="go-back" title="Go to the main page">
+					<Button hasIcon cssVar="primary" style="padding: 0.4rem" title="Go to the main page">
 						<Icon size={2}>
 							<FaAngleLeft />
 						</Icon>
@@ -27,7 +27,7 @@
 				</a>
 				<Title style="margin: 0">Your projects</Title>
 			</div>
-			<ButtonLink href="/projects/create"> Create </ButtonLink>
+			<ButtonLink href="/projects/create" title="Create a new project"> Create </ButtonLink>
 		</div>
 		{#if $projects.length === 0}
 			<h3 style="margin-top: 4rem; margin-left: 2rem; font-weight:unset">

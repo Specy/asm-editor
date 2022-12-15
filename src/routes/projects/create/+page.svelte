@@ -39,7 +39,7 @@
 <div class="create-project">
 	<div class="content">
 		<div class="row top-title">
-			<a href="/projects" class="go-back">
+			<a href="/projects" class="go-back" title="Go to the projects page">
 				<Button hasIcon cssVar='primary' style='padding: 0.4rem'>
 					<Icon size={2}>
 						<FaAngleLeft />
@@ -56,7 +56,7 @@
 		<div
 			style="display:flex; justify-content: space-between; align-items:center; margin-top: 1rem;"
 		>
-			<ButtonLink href="/projects" cssVar="primary">Cancel</ButtonLink>
+			<ButtonLink href="/projects" cssVar="primary" title="Cancel new project">Cancel</ButtonLink>
 			<Button on:click={create}>Create</Button>
 		</div>
 	</div>

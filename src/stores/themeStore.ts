@@ -34,9 +34,9 @@ const themeObject = {
         name: 'accent'
     },
     accent2: {
-        color: '#596c6a',
+        color: '#38454f',
         name: 'accent2',
-    },
+    },  
     hint: {
         color: '#939393',
         name: 'hint'

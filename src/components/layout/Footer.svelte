@@ -14,7 +14,7 @@
 		<div class="footer-inner">
 			<AnimatedRgbLine />
 			<div class="footer-justify">
-				<a class="logo-wrapper" href="https://specy.app">
+				<a class="logo-wrapper" href="https://specy.app" title="View my other websites">
 					<div class="logo-content">
 						<img src="/images/logo.png" alt="logo" class="logo" />
 						<div>Specy</div>
@@ -22,7 +22,7 @@
 				</a>
 
 				<div class="icon-wrapper">
-					<a class="icon" href="https://ko-fi.com/specy">
+					<a class="icon" href="https://ko-fi.com/specy" title="Donate on kofi">
 						<Icon size={1.6}>
 							<Kofi />	
 						</Icon>
@@ -39,7 +39,7 @@
 							<FaRegCopyright />
 						</Icon>
 					</div>
-					<a class="icon" href="https://github.com/Specy/asm-editor" target="_blank"  rel="noreferrer">
+					<a class="icon" href="https://github.com/Specy/asm-editor" target="_blank"  rel="noreferrer" title="Visit on github">
 						<Icon size={1.6}>
 							<FaGithub />
 						</Icon>

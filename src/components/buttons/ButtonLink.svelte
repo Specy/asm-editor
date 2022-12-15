@@ -5,6 +5,7 @@
 	export let style = ''
 	export let bg = 'var(--accent)'	
 	export let hasIcon = false
+	export let title = ''
 	export let cssVar = 'unset'
 </script>
 
@@ -13,6 +14,7 @@
 	class="btn"
 	class:hasIcon
     {href}
+	{title}
 	style={`--btn-color:var(--${cssVar},${bg}); --btn-text:var(--${cssVar}-text,${color});${style}; `}
 	{disabled}
 	on:click
