@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { createEventDispatcher, onMount } from 'svelte'
+	import { createEventDispatcher, onDestroy, onMount } from 'svelte'
 	import type monaco from 'monaco-editor'
 	import type { AvailableLanguages } from '$lib/Project'
 	import { Monaco } from '$lib/Monaco'
@@ -12,10 +12,9 @@
 	export let language: AvailableLanguages
 	export let errors: MonacoError[]
 	export let breakpoints: number[]
-	let el: HTMLDivElement
-	let mockEditor: HTMLDivElement
-	let editor: monaco.editor.IStandaloneCodeEditor
-	let monacoInstance: MonacoType
+	let mockEditor: HTMLDivElement | null
+	let editor: monaco.editor.IStandaloneCodeEditor | null
+	let monacoInstance: MonacoType | null
 	let decorations = []
 	let hoveredGliphen: number | null
 	const toDispose = []
@@ -23,10 +22,12 @@
 		change: string
 		breakpointPress: number
 	}>()
+	let el: HTMLDivElement
 
 	onMount(async () => {
-		Monaco.registerLanguages()
 		monacoInstance = await Monaco.get()
+		if(!el) return console.log("Wrapper element not valid",el)
+		Monaco.registerLanguages()
 		editor = monacoInstance.editor.create(el, {
 			value: code,
 			language: language.toLowerCase(),
@@ -74,11 +75,14 @@
 				dispatcher('change', code)
 			})
 		)
-		return () => {
-			toDispose.forEach((d) => d.dispose())
-			Monaco.dispose()
-			editor.dispose()
-		}
+	})
+	onDestroy(() => {
+		toDispose.forEach((d) => {
+			if(typeof d === "function") return d()
+			d.dispose()
+		})
+		Monaco?.dispose()
+		editor?.dispose()
 	})
 	$: {
 		if (editor) {

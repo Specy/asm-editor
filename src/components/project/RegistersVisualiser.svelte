@@ -34,9 +34,9 @@
 				<ValueDiff 
 					monospaced
 					style="padding: 0.1rem"
-					value={usesHex ? chunk.hex : chunk.value}
-					hoverValue={usesHex ? chunk.value : chunk.hex}
-					diff={usesHex ? chunk.prev.hex : chunk.prev.value}
+					value={usesHex ? chunk.hex : `${chunk.value}`.padStart(chunk.groupSize, "0")}
+					hoverValue={usesHex ? `${chunk.value}`.padStart(chunk.groupSize, "0") : chunk.hex}
+					diff={usesHex ? chunk.prev.hex : `${chunk.prev.value}`.padStart(chunk.groupSize, "0")}
 					hoverElementOffset={"-1.25rem"}
 				/>
 			{/each}

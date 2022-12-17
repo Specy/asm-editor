@@ -10,6 +10,7 @@ export type RegisterHex = [hi: string, lo: string]
 export type RegisterChunk = {
     hex: string,
     value: number
+    groupSize: number
     prev: {
         hex: string,
         value: number
@@ -40,6 +41,7 @@ export class Register{
             chunks.push({
                 hex: hex.slice(i, i + groupLength),
                 value: parseInt(hex.slice(i, i + groupLength), 16),
+                groupSize: groupLength,
                 prev: {
                     hex: prevHex.slice(i, i + groupLength),
                     value: parseInt(prevHex.slice(i, i + groupLength), 16)
