@@ -17,6 +17,7 @@
 	let editor: monaco.editor.IStandaloneCodeEditor
 	let monacoInstance: MonacoType
 	let decorations = []
+	let hoveredGliphen: number | null
 	const toDispose = []
 	const dispatcher = createEventDispatcher<{
 		change: string
@@ -54,6 +55,16 @@
 				if (e.target.type === monacoInstance.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
 					dispatcher('breakpointPress', e.target.position.lineNumber)
 				}
+			}),
+			editor.onMouseLeave(() => {
+				hoveredGliphen = null
+			}),
+			editor.onMouseMove((e) => {
+				if (e.target.type === monacoInstance.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
+					hoveredGliphen = e.target.position.lineNumber
+				} else {
+					hoveredGliphen = null
+				}
 			})
 		)
 		toDispose.push(() => observer.disconnect())
@@ -89,10 +100,21 @@
 					options: {
 						glyphMarginClassName: 'breakpoint-glyph'
 					}
-				}))
+				})),
+				...(hoveredGliphen && !breakpoints.includes(hoveredGliphen - 1)
+					? [
+							{
+								range: new monacoInstance.Range(hoveredGliphen, 0, hoveredGliphen, 0),
+								options: {
+									glyphMarginClassName: 'hovered-glyph'
+								}
+							}
+					  ]
+					: [])
 			])
 		}
 	}
+
 	$: {
 		if (editor && highlightedLine > 0) {
 			editor.revealLineInCenter(highlightedLine)
@@ -126,6 +148,7 @@
 		<h1 class="loading">Loading editor...</h1>
 	{/if}
 </div>
+
 <div bind:this={el} class="editor" />
 
 <style lang="scss">
@@ -175,7 +198,8 @@
 		flex: 1;
 	}
 
-	:global(.breakpoint-glyph) {
+	:global(.breakpoint-glyph),
+	:global(.hovered-glyph) {
 		width: calc(22px - 0.6rem) !important;
 		height: calc(22px - 0.6rem) !important;
 		margin-top: 0.3rem;
@@ -183,6 +207,9 @@
 		margin-left: 0.6rem;
 		background-color: var(--accent);
 		border-radius: 1rem;
+	}
+	:global(.hovered-glyph) {
+		background-color: var(--accent2) !important;
 	}
 	.editor {
 		display: flex;

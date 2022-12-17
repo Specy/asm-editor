@@ -23,7 +23,12 @@
 </script>
 
 <Draggable hiddenOnMobile>
-	<div slot="header" class="tab-header row" class:hidden>
+	<button 
+		slot="header" 
+		class="tab-header row" 
+		class:hidden
+		on:dblclick={() => (hidden = !hidden)}
+	>
 		<Icon size={1.2} style="cursor:inherit">
 			<FaGripHorizontal />
 		</Icon>
@@ -42,7 +47,7 @@
 				</Icon>
 			</Button>
 		</div>
-	</div>
+	</button>
 	{#if !hidden}
 		<div class="tab" in:fly={{ x: -10, duration: 400 }} out:fly={{ x: -10, duration: 300 }}>
 			<MemoryControls
@@ -71,7 +76,7 @@
 		display: flex;
 		min-width: 12rem;
 		width: 100%;
-
+		color: var(--secondary-text);
 		margin-bottom: -0.1rem;
 		box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
 		justify-content: center;
@@ -79,7 +84,7 @@
 		height: 1.6rem;
 		transition: all 0.2s ease-out;
 		align-items: center;
-
+		cursor: move;
 		background-color: var(--secondary);
 		position: relative;
 		border-top-left-radius: 0.4rem;

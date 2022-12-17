@@ -46,7 +46,7 @@ const themeObject = {
         name: 'red'
     },
     green: {
-        color: 'rgb(16, 185, 129)',
+        color: 'rgb(53 106 89)',
         name: 'green'
     }
 }

@@ -28,7 +28,7 @@
 	let settingsVisible = false
 	let documentationVisible = false
 	let shortcutsVisible = false
-	const dispatcher = createEventDispatcher<{ save: Project, wantsToLeave:void }>()
+	const dispatcher = createEventDispatcher<{ save: Project; wantsToLeave: void }>()
 	const emulator = M68KEmulator(project.code || '')
 	const pressedKeys = new Map<String, boolean>()
 	function handleKeyDown(e: KeyboardEvent) {
@@ -53,7 +53,6 @@
 			}
 			case ShortcutAction.ToggleSettings: {
 				settingsVisible = !settingsVisible
-				break
 			}
 			case ShortcutAction.BuildCode: {
 				emulator.setCode(project.code)
@@ -80,14 +79,20 @@
 				emulator.step()
 				break
 			}
+			case ShortcutAction.Undo: {
+				if ($emulator.terminated || $emulator.interrupt !== undefined || !$emulator.canExecute || !$emulator.canUndo)
+					break
+				emulator.undo()
+				break
+			}
 		}
 	}
-	function handleKeyUp(e: KeyboardEvent){
+	function handleKeyUp(e: KeyboardEvent) {
 		pressedKeys.delete(e.code)
 	}
-	function clearPressed(){
-			pressedKeys.clear()
-		}
+	function clearPressed() {
+		pressedKeys.clear()
+	}
 	onMount(() => {
 		window.addEventListener('keydown', handleKeyDown)
 		window.addEventListener('keyup', handleKeyUp)
@@ -102,10 +107,13 @@
 
 <header class="project-header">
 	<div class="row">
-		<a href="/projects" on:click={(e) => {
-			e.preventDefault()
-			dispatcher('wantsToLeave')
-		}}>
+		<a
+			href="/projects"
+			on:click={(e) => {
+				e.preventDefault()
+				dispatcher('wantsToLeave')
+			}}
+		>
 			<Icon size={2}>
 				<FaAngleLeft />
 			</Icon>
@@ -203,6 +211,7 @@
 			executionDisabled={$emulator.terminated || $emulator.interrupt !== undefined}
 			buildDisabled={$emulator.compilerErrors.length > 0}
 			hasCompiled={$emulator.canExecute}
+			canUndo={$emulator.canUndo}
 			on:run={async () => {
 				try {
 					emulator.run()
@@ -226,6 +235,14 @@
 				} catch (e) {
 					console.error(e)
 					toast.error('Error executing code. ' + getErrorMessage(e))
+				}
+			}}
+			on:undo={() => {
+				try {
+					emulator.undo()
+				} catch (e) {
+					console.error(e)
+					toast.error('Error executing undo ' + getErrorMessage(e))
 				}
 			}}
 			on:stop={() => emulator.clear()}

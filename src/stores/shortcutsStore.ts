@@ -10,6 +10,7 @@ export enum ShortcutAction {
     BuildCode,
     ClearExecution,
     Step,
+    Undo,
 }
 type Shortcut = {
     type: ShortcutAction
@@ -34,8 +35,9 @@ const shortcuts = new Map([
     ["ShiftLeft+KeyB", createShortcut(ShortcutAction.BuildCode, "ShiftLeft+KeyB", "Build code", 5)],
     ["ShiftLeft+KeyC", createShortcut(ShortcutAction.ClearExecution, "ShiftLeft+KeyC", "Clear execution", 6)],
     ["ShiftLeft+ArrowDown", createShortcut(ShortcutAction.Step, "ShiftLeft+ArrowDown", "Step", 7)],
+    ["ShiftLeft+ArrowUp", createShortcut(ShortcutAction.Undo, "ShiftLeft+ArrowUp", "Undo", 8)],
 ]);
-const CURRENT_VERSION = "1.0.0";
+const CURRENT_VERSION = "1.0.2";
 
 
 function createShortcutStore() {

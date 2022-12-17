@@ -49,6 +49,7 @@ export type EmulatorStore = {
     sp: number,
     stdOut: string,
     canExecute: boolean,
+    canUndo: boolean,
     breakpoints: number[],
     memory: {
         global: MemoryTab
@@ -88,6 +89,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
         errors: [],
         sp: 0,
         stdOut: "",
+        canUndo: false,
         canExecute: false,
         breakpoints: [],
         memory: {
@@ -123,10 +125,19 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
                     interpreter = null
                     return update(s => ({ ...s, compilerErrors: errors}))
                 }
-                interpreter = s68k.createInterpreter(MEMORY_SIZE)
+                interpreter = s68k.createInterpreter(MEMORY_SIZE, {
+                    history_size: 100,
+                    keep_history: true,
+                })
                 const stackTab = current.memory.tabs.find(e => e.name === "Stack")
                 if (stackTab) stackTab.address = interpreter.getSp() - stackTab.pageSize
-                update(s => ({ ...s, canExecute: true, terminated: interpreter.getStatus() !== InterpreterStatus.Running }))
+                const next = interpreter.getNextInstruction()
+                update(s => ({ ...s, 
+                    canExecute: true, 
+                    line: next ? next.parsed_line.line_index : -1,
+                    terminated: interpreter.getStatus() !== InterpreterStatus.Running,
+                    canUndo: false
+                }))
                 updateMemory()
                 res()
             } catch (e) {
@@ -282,7 +293,8 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
         try {
             if (!interpreter) throw new Error("Interpreter not initialized")
             lastLine = interpreter.getCurrentLineIndex()
-            const [ins] = interpreter.step()
+            interpreter.step()
+            const ins = interpreter.getNextInstruction()
             switch (interpreter.getStatus()) {
                 case InterpreterStatus.Interrupt: {
                     const interrupt = interpreter.getCurrentInterrupt()
@@ -293,6 +305,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
             }
             update(data => {
                 data.line = ins.parsed_line.line_index
+                data.canUndo = true
                 return data
             })
         } catch (e) {
@@ -307,7 +320,24 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
         scrollStackTab()
         return interpreter.getStatus() != InterpreterStatus.Running
     }
-
+    function undo(){
+        try{
+            interpreter?.undo()
+            const instruction = interpreter?.getNextInstruction()
+            update(d => ({ ...d, 
+                line: instruction?.parsed_line.line_index ?? -1 ,
+                canUndo: interpreter?.canUndo() ?? false,
+            }))
+            updateRegisters()
+            updateMemory()
+            scrollStackTab()
+        }catch(e){
+            addError(getErrorMessage(e))
+            update(d => ({ ...d, terminated: true}))
+            console.error(e)
+            throw e
+        }
+    }
     async function handleInterrupt(interrupt: Interrupt | null) {
         if (!interrupt || !interpreter) throw new Error("Expected interrupt")
         update(d => ({ ...d, interrupt }))
@@ -375,6 +405,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
                         update(data => {
                             data.terminated = true
                             data.line = ins.parsed_line.line_index
+                            data.canUndo = false
                             data.errors.push("Program terminated with errors")
                             return data
                         })
@@ -389,6 +420,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
             }
             update(data => {
                 data.line = interpreter.getCurrentLineIndex()
+                data.canUndo = interpreter.canUndo()
                 return data
             })
         } catch (e) {
@@ -432,6 +464,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
         setCode,
         clear,
         setTabMemoryAddress,
-        toggleBreakpoint
+        toggleBreakpoint,
+        undo
     }
 }

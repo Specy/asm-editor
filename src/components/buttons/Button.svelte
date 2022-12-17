@@ -6,7 +6,7 @@
 	export let hasIcon = false
 	export let cssVar = 'unset'
 	export let active = false
-	export let title
+	export let title = ""
 </script>
 
 <button
