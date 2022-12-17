@@ -1,6 +1,6 @@
 <script lang="ts">
 	import ValueDiff from '$cmp/project/ValueDiff.svelte'
-	import type { Chunk, Register } from '$lib/languages/M68KEmulator'
+	import type { RegisterChunk, Register } from '$lib/languages/M68KEmulator'
 	export let registers: Register[] = []
 	import { settingsStore } from '$stores/settingsStore'
 	import { Size } from 's68k'
@@ -11,7 +11,7 @@
 	export let size = Size.Word
 	let usesHex = !$settingsStore.values.useDecimalAsDefault.value
 	$: usesHex = !$settingsStore.values.useDecimalAsDefault.value
-	let chunks: Chunk[][] = []
+	let chunks: RegisterChunk[][] = []
 	$: chunks = registers.map(r => r.toSizedGroups(size))
 </script>
 

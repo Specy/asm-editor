@@ -7,7 +7,7 @@ import { createDebouncer, getErrorMessage } from "../utils"
 import { settingsStore } from "$stores/settingsStore"
 export type RegisterHex = [hi: string, lo: string]
 
-export type Chunk = {
+export type RegisterChunk = {
     hex: string,
     value: number
     prev: {
@@ -31,11 +31,11 @@ export class Register{
     toHex(){
         return (this.value >>> 0).toString(16).padStart(8, '0')
     }
-    toSizedGroups(size:Size): Chunk[]{
+    toSizedGroups(size:Size): RegisterChunk[]{
         const groupLength = size === Size.Byte ? 2 : size === Size.Word ? 4 : 8
         const hex = this.toHex()
         const prevHex = (this.prev >>> 0).toString(16).padStart(8, '0')
-        const chunks: Chunk[] = []
+        const chunks: RegisterChunk[] = []
         for(let i = 0; i < hex.length; i += groupLength){
             chunks.push({
                 hex: hex.slice(i, i + groupLength),
@@ -440,7 +440,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
                 if (i++ > haltLimit) throw new Error('Halt limit reached')
             }
             update(data => {
-                data.line = interpreter.getCurrentLineIndex()
+                data.line = lastLine
                 data.canUndo = interpreter.canUndo()
                 return data
             })
