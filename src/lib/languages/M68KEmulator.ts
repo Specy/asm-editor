@@ -1,20 +1,55 @@
 import { get, writable } from "svelte/store"
-import { InterpreterStatus, type Interrupt, type ParsedLine } from "s68k"
+import { InterpreterStatus, Size, type Interrupt, type ParsedLine } from "s68k"
 import { S68k, Interpreter } from "s68k"
 import { MEMORY_SIZE, PAGE_SIZE, PAGE_ELEMENTS_PER_ROW } from "$lib/Config"
 import { Prompt } from "$stores/promptStore"
 import { createDebouncer, getErrorMessage } from "../utils"
 import { settingsStore } from "$stores/settingsStore"
 export type RegisterHex = [hi: string, lo: string]
-export type Register = {
-    value: number,
-    name: string,
-    hex: RegisterHex
-    diff: {
-        value: number,
-        hex: RegisterHex
+
+export type Chunk = {
+    hex: string,
+    value: number
+    prev: {
+        hex: string,
+        value: number
     }
 }
+export class Register{
+    value: number
+    name: string
+    prev: number
+    constructor(name: string, value: number){
+        this.name = name
+        this.value = value
+        this.prev = value
+    }
+    setValue(value: number){
+        this.prev = this.value
+        this.value = value
+    }
+    toHex(){
+        return (this.value >>> 0).toString(16).padStart(8, '0')
+    }
+    toSizedGroups(size:Size): Chunk[]{
+        const groupLength = size === Size.Byte ? 2 : size === Size.Word ? 4 : 8
+        const hex = this.toHex()
+        const prevHex = (this.prev >>> 0).toString(16).padStart(8, '0')
+        const chunks: Chunk[] = []
+        for(let i = 0; i < hex.length; i += groupLength){
+            chunks.push({
+                hex: hex.slice(i, i + groupLength),
+                value: parseInt(hex.slice(i, i + groupLength), 16),
+                prev: {
+                    hex: prevHex.slice(i, i + groupLength),
+                    value: parseInt(prevHex.slice(i, i + groupLength), 16)
+                }
+            })
+        }
+        return chunks
+    }
+}
+
 export type StatusRegister = {
     name: string
     value: number
@@ -229,17 +264,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
             override = new Array(registerName.length).fill(0)
         }
         const registers = (override ?? getRegistersValue()).map((reg, i) => {
-            const hex = (reg >>> 0).toString(16).padStart(8, '0')
-            const hexArray = [hex.slice(0, 4), hex.slice(4, 8)] as RegisterHex
-            return {
-                value: reg as number,
-                name: registerName[i],
-                hex: hexArray,
-                diff: {
-                    value: reg as number,
-                    hex: hexArray
-                }
-            }
+            return new Register(registerName[i], reg)
         })
         update(d => ({ ...d, registers }))
     }
@@ -248,13 +273,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
             if (data.registers.length === 0) return data
             const { registers } = data
             getRegistersValue().forEach((reg, i) => {
-                registers[i].diff.value = registers[i].value
-                registers[i].diff.hex = registers[i].hex
-                if (registers[i].value !== reg) {
-                    registers[i].value = reg
-                    const hex = (reg >>> 0).toString(16).padStart(8, '0')
-                    registers[i].hex = [hex.slice(0, 4), hex.slice(4, 8)] as RegisterHex
-                }
+                registers[i].setValue(reg)
             })
             data.sp = registers[registers.length - 1].value
             return data
@@ -304,7 +323,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
                 }
             }
             update(data => {
-                data.line = ins.parsed_line.line_index
+                data.line = ins?.parsed_line?.line_index ?? data.line
                 data.canUndo = true
                 return data
             })
@@ -315,6 +334,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
             throw e
         }
         updateRegisters()
+        updateStatusRegisters()
         updateMemory()
         updateData()
         scrollStackTab()
@@ -330,6 +350,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
             }))
             updateRegisters()
             updateMemory()
+            updateStatusRegisters()
             scrollStackTab()
         }catch(e){
             addError(getErrorMessage(e))
@@ -430,6 +451,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
         }
         updateRegisters()
         updateData()
+        updateStatusRegisters()
         updateMemory()
         scrollStackTab()
         return interpreter.getStatus()

@@ -5,11 +5,15 @@
 	export let hasSoftDiff: boolean | undefined = undefined
 	export let hoverValue: string | number = ''
 	export let monospaced = false
+	export let hoverElementOffset = "-1.1rem"
 </script>
 
 <div class:modified={diff !== value} class:softDiff={hasSoftDiff === true} class="tooltip-base" class:monospaced {style}>
 	{value}
-	<div class="hover-element">
+	<div 
+		class="hover-element"
+		style={`top: ${hoverElementOffset}`}
+	>
 		{#if hoverValue !== ''}
 			<div class:monospaced style="user-select: all;">
 				{hoverValue}
@@ -25,7 +29,6 @@
 
 <style lang="scss">
 	.tooltip-base {
-		position: relative;
 		display: flex;
 		align-items: center;
 		border-radius: 0.2rem;
@@ -46,7 +49,6 @@
 		position: absolute;
 		cursor: text;
 		box-shadow: rgba(0, 0, 0, 0.4) 0px 2px 2px;
-		top: -1.1rem;
 		padding: 0.2rem;
 	}
 	.old-value{

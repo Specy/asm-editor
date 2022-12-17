@@ -1,18 +1,22 @@
 <script lang="ts">
 	import ValueDiff from '$cmp/project/ValueDiff.svelte'
-	import type { Register } from '$lib/languages/M68KEmulator'
+	import type { Chunk, Register } from '$lib/languages/M68KEmulator'
 	export let registers: Register[] = []
 	import { settingsStore } from '$stores/settingsStore'
+	import { Size } from 's68k'
 	import { createEventDispatcher } from 'svelte'
 	const dispatcher = createEventDispatcher<{
 		registerClick: Register
 	}>()
+	export let size = Size.Word
 	let usesHex = !$settingsStore.values.useDecimalAsDefault.value
 	$: usesHex = !$settingsStore.values.useDecimalAsDefault.value
+	let chunks: Chunk[][] = []
+	$: chunks = registers.map(r => r.toSizedGroups(size))
 </script>
 
 <div class="registers">
-	{#each registers as register (register.name)}
+	{#each registers as register, i (register.name)}
 		<div class="register-wrapper">
 			<div class="hover-register-value">
 				{#if usesHex}
@@ -26,15 +30,14 @@
 			</button>
 		</div>
 		<div class="register-hex">
-			{#each register.hex as hex, i}
-				<ValueDiff
-					style={'padding:0.2rem; '}
-					value={usesHex ? hex : parseInt(hex, 16).toString().padStart(5, '0')}
-					hoverValue={usesHex ? parseInt(hex, 16) : hex}
-					diff={usesHex
-						? register.diff.hex[i]
-						: parseInt(register.diff.hex[i], 16).toString().padStart(5, '0')}
+			{#each chunks[i] as chunk, j}
+				<ValueDiff 
 					monospaced
+					style="padding: 0.1rem"
+					value={usesHex ? chunk.hex : chunk.value}
+					hoverValue={usesHex ? chunk.value : chunk.hex}
+					diff={usesHex ? chunk.prev.hex : chunk.prev.value}
+					hoverElementOffset={"-1.25rem"}
 				/>
 			{/each}
 		</div>
@@ -52,6 +55,7 @@
 		flex-direction: column;
 		gap: 0.2rem;
 		align-items: center;
+		min-width: 8.6rem;
 		font-size: 1rem;
 		flex: 1;
 		@media screen and (max-width: 1000px) {
@@ -100,7 +104,7 @@
 	}
 	.register-hex {
 		display: flex;
-		justify-content: space-between;
+		justify-content: space-around;
 		padding-left: 0.2rem;
 		gap: 0.1rem;
 		border-left: solid 0.1rem var(--tertiary);

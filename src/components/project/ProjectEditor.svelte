@@ -25,9 +25,12 @@
 	export let project: Project
 	import MemoryTab from './MemoryTab.svelte'
 	import ShortcutEditor from '$cmp/project/ShortcutEditor.svelte'
+	import SizeSelector from './SizeSelector.svelte'
+	import { Size } from 's68k'
 	let settingsVisible = false
 	let documentationVisible = false
 	let shortcutsVisible = false
+	let groupSize = Size.Word
 	const dispatcher = createEventDispatcher<{ save: Project; wantsToLeave: void }>()
 	const emulator = M68KEmulator(project.code || '')
 	const pressedKeys = new Map<String, boolean>()
@@ -253,6 +256,7 @@
 			<div class="column" style="margin-right: 0.5rem;">
 				<StatusCodesVisualiser statusCodes={$emulator.statusRegister} />
 				<RegistersVisualiser
+					size={groupSize}
 					registers={$emulator.registers}
 					on:registerClick={async (e) => {
 						const value = e.detail.value
@@ -272,14 +276,21 @@
 				/>
 			{/each}
 			<div class="column">
-				<MemoryControls
-					bytesPerPage={$emulator.memory.global.pageSize}
-					memorySize={MEMORY_SIZE}
-					currentAddress={$emulator.memory.global.address}
-					on:addressChange={async (e) => {
-						emulator.setGlobalMemoryAddress(e.detail)
-					}}
-				/>
+				<div class="row">
+					<SizeSelector 
+						bind:selected={groupSize}
+					/>
+					<MemoryControls
+						bytesPerPage={$emulator.memory.global.pageSize}
+						memorySize={MEMORY_SIZE}
+						inputStyle="height: 100%"
+						currentAddress={$emulator.memory.global.address}
+						on:addressChange={async (e) => {
+							emulator.setGlobalMemoryAddress(e.detail)
+						}}
+					/>
+				</div>
+
 				<MemoryVisualiser
 					bytesPerRow={$emulator.memory.global.rowSize}
 					pageSize={$emulator.memory.global.pageSize}
