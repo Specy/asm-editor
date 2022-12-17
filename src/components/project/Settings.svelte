@@ -2,6 +2,9 @@
     import Setting from './Setting.svelte';
     import { settingsStore } from '$stores/settingsStore';
 	import FloatingContainer from '$cmp/layout/FloatingContainer.svelte'
+    import FaPalette from 'svelte-icons/fa/FaPalette.svelte'
+	import Icon from '$cmp/layout/Icon.svelte'
+	import Button from '$cmp/buttons/Button.svelte'
 	export let visible: boolean
 </script>
 
@@ -16,7 +19,22 @@
                 }}
             />
         {/each}
+        <div class="row" style="align-items: center; justify-content: space-between">
+            <div style="padding-left: 0.4rem">
+                Change theme 
+            </div>
+            <a href="/themes" title="Edit the theme">
+                <Button 
+                    cssVar='accent2'
+                >
+                    <Icon>
+                        <FaPalette />
+                    </Icon>
+                </Button>
+            </a>
+        </div>
     </div>
+
 </FloatingContainer>
 
 

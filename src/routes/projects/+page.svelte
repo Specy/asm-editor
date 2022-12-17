@@ -7,6 +7,7 @@
 	import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
 	import Title from '$cmp/layout/Title.svelte'
 	import ButtonLink from '$cmp/buttons/ButtonLink.svelte'
+	import { blur, fade, scale } from 'svelte/transition'
 	const { projects } = ProjectStore
 	onMount(() => {
 		ProjectStore.load()
@@ -35,8 +36,13 @@
 			</h3>
 		{/if}
 		<div class="project-grid">
-			{#each $projects as project (project.id)}
-				<ProjectCard {project} />
+			{#each $projects as project, i (project.id)}
+				<div
+					in:scale={{ duration: 200, delay: i * 75 + 150, start: 0.9 }}
+					out:scale|local={{ duration: 300, start: 0.8 }}
+				>
+					<ProjectCard {project} />
+				</div>
 			{/each}
 		</div>
 	</div>

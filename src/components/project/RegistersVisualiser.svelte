@@ -48,6 +48,7 @@
 	.registers {
 		display: grid;
 		background-color: var(--secondary);
+		color: var(--secondary-text);
 		padding: 0.5rem;
 		border-radius: 0.5rem;
 		grid-template-columns: auto 1fr;
@@ -100,6 +101,7 @@
 		cursor: pointer;
 		&:hover {
 			background-color: var(--accent2);
+			color: var(--accent2-text);
 		}
 	}
 	.register-hex {

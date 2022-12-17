@@ -28,7 +28,7 @@
 		border-radius: 0.4rem;
 		padding: 0.2rem;
 		background-color: var(--secondary);
-		color: white;
+		color: var(--secondary-text);
 		padding: 0.6rem 1rem;
         margin-top: 0.3rem;
         -webkit-appearance:none;

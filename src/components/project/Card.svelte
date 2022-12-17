@@ -68,6 +68,7 @@
 		&:hover,
 		&:focus {
 			background-color: var(--secondary);
+			color: var(--secondary-text);
 			filter: brightness(1.2);
 		}
 	}
@@ -105,6 +106,7 @@
 	.project-card {
 		width: 100%;
 		background-color: rgba(var(--RGB-secondary), 0.9);
+		color: var(--secondary-text);
 		box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
 		padding: 0.6rem;
 		border-radius: 0.6rem;
@@ -124,6 +126,7 @@
 		&:hover,
 		&:focus {
 			background-color: var(--secondary);
+			color: var(--secondary-text);
 			filter: brightness(1.2);
 		}
 	}

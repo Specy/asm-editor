@@ -111,6 +111,7 @@
 		color: var(--text-darker);
 		display: grid;
 		background-color: var(--secondary);
+		color: var(--secondary-text);
 		border-radius: 0.3rem;
 		grid-template-columns: repeat(var(--bytesPerRow), 1fr);
 		grid-template-rows: repeat(var(--bytesPerRow), 1fr);

@@ -5,6 +5,7 @@
 	import { Monaco } from '$lib/Monaco'
 	import type { MonacoType } from '$lib/Monaco'
 	import type { MonacoError } from '$lib/languages/M68KEmulator'
+	import { generateTheme } from '$lib/editorTheme'
 	export let disabled = false
 	export let code: string
 	export let highlightedLine: number
@@ -42,6 +43,7 @@
 			fontSize: 16,
 			smoothScrolling: true
 		})
+		
 		const observer = new ResizeObserver(() => {
 			if (!mockEditor) return
 			const bounds = mockEditor.getBoundingClientRect()
@@ -50,6 +52,7 @@
 				height: bounds.height
 			})
 		})
+		Monaco.setCustomTheme(generateTheme())
 		observer.observe(mockEditor)
 		toDispose.push(
 			editor.onMouseDown((e) => {
@@ -158,9 +161,11 @@
 <style lang="scss">
 	:global(.selected-line) {
 		background-color: var(--accent);
+		color: var(--accent-text);
 	}
 	:global(.error-line) {
 		background-color: var(--red);
+		color: var(--red-text);
 	}
 	:global(.selected-line-text) {
 		color: var(--accent-text) !important;
@@ -232,6 +237,7 @@
 		justify-content: center;
 		align-items: center;
 		background-color: var(--secondary);
+		color: var(--secondary-text);
 		border-radius: 0.4rem;
 		animation: infinite 3s pulse ease-in-out;
 		position: absolute;

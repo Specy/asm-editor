@@ -86,15 +86,14 @@
 		align-items: center;
 		cursor: move;
 		background-color: var(--secondary);
+		color: var(--secondary-text);
 		position: relative;
 		border-top-left-radius: 0.4rem;
 		border-top-right-radius: 0.4rem;
 		border: 0.1rem solid transparent;
 		&.hidden {
 			width: 0;
-
 			min-width: 8rem;
-
 			border-bottom-left-radius: 0.4rem;
 			border-color: var(--accent2);
 			border-bottom-right-radius: 0.4rem;
@@ -106,6 +105,7 @@
 	}
 	.tab {
 		background-color: var(--primary);
+		color: var(--primary-text);
 		padding: 0.4rem;
 		border-radius: 0.7rem;
 		box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);

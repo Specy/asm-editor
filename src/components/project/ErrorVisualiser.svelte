@@ -41,6 +41,7 @@
 	.error {
 		display: flex;
 		background-color: var(--secondary);
+		color: var(--secondary-text);
 		border-radius: 0.4rem;
 		justify-content: space-between;
 		padding: 0.2rem;

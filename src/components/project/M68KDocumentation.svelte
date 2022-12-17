@@ -51,7 +51,7 @@
 		<Input
 			bind:value={searchValue}
 			placeholder="Search"
-			style="padding: 0rem; background-color: var(--tertiary);"
+			style="padding: 0rem; background-color: var(--tertiary); color: var(--tertiary-text);"
 		/>
 	</div>
 	<div class="docs-list" bind:this={wrapper}>

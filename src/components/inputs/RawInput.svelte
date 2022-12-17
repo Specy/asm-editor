@@ -22,9 +22,11 @@
 		padding: 0.4rem 0.8rem;
         font-size: 0.9rem;
 		background-color: var(--secondary);
+		color: var(--secondary-text);
+
 		> input {
 			width: 100%;
-			color: #bfbfbf;
+			color: var(--secondary-text);
 		}
 	}
     .label{

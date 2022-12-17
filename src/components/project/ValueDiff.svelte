@@ -38,6 +38,7 @@
 	}
 	.softDiff{
 		background-color: var(--primary);
+		color: var(--primary-text);
 	}
 	.hover-element {
 		display: none;

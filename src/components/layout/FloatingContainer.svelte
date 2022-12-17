@@ -37,6 +37,7 @@
 		justify-content: space-between;
         flex-wrap: wrap;
         background-color: rgba(var(--RGB-secondary), 0.75);
+		color: var(--secondary-text);
         align-items: center;
         box-shadow: -2px -1px 27px 4px #00000057;
         z-index: 2;
@@ -56,6 +57,7 @@
 		border-radius: 0.8rem;
 		z-index: 5;
 		background-color: rgba(var(--RGB-tertiary), 0.9);
+		color: var(--tertiary-text);
 		backdrop-filter: blur(3px);
 		opacity: 1;
 		transition: all 0.25s;

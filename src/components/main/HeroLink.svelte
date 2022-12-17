@@ -28,6 +28,7 @@
         transition: all 0.3s;
         &:hover{
             background-color: var(--tertiary);
+            color: var(--tertiary-text);
         }
     }
     .link-icon{

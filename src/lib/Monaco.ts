@@ -1,5 +1,5 @@
 import { browser } from '$app/environment';
-import { baseTheme } from '$lib/editorTheme';
+import { generateTheme } from '$lib/editorTheme';
 import { M68KLanguage, createM68KCompletition, createM68kHoverProvider, createM68kFormatter } from '$lib/languages/M68K-language';
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import type monaco from 'monaco-editor'
@@ -20,10 +20,8 @@ class MonacoLoader {
 		if (this.loading) return this.loading
 		this.loading = import('monaco-editor')
 		const monaco: MonacoType = await this.loading
-		//@ts-ignore custom theme
-		monaco.editor.defineTheme('custom-theme', baseTheme)
+		monaco.editor.defineTheme('custom-theme', generateTheme())
 		monaco.languages.register({ id: 'm68k' })
-
 		this.monaco = monaco
 		this.registerLanguages()
 
@@ -35,7 +33,13 @@ class MonacoLoader {
 		}
 		return monaco
 	}
-
+	setTheme = (theme: string) => {
+		this.monaco.editor.setTheme(theme)
+	}
+	setCustomTheme = (theme: monaco.editor.IStandaloneThemeData) => {
+		this.monaco.editor.defineTheme('custom-theme', theme)
+		this.monaco.editor.setTheme('custom-theme')
+	}
 	registerLanguages = () => {
 		this.dispose()
 		const { monaco } = this

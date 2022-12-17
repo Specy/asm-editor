@@ -30,6 +30,7 @@
 	}
 	.reverse {
 		background-color: var(--secondary);
+		color: var(--secondary-text);
 		.section-content {
 			flex-direction: row-reverse;
 		}
@@ -61,6 +62,7 @@
 		width: 100%;
 		height: 100%;
 		background-color: var(--secondary);
+		color: var(--secondary-text);
 		opacity: 0.6;
 	}
 	.section-content {
@@ -98,6 +100,7 @@
 			padding: 1.2rem;
 			font-size: 1.8rem;
 			background-color: rgba(var(--RGB-tertiary), 0.5);
+			color: var(--tertiary-text);
 		}
 		.section-image{
 			top: 0;

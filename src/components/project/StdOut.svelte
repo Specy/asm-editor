@@ -31,7 +31,7 @@
 	.floating-std-icon {
 		position: absolute;
 		background-color: var(--red);
-		color: white;
+		color: var(--red-text);
 		padding: 0.2rem;
 		right: 0.4rem;
 		border-radius: 0.2rem;
@@ -46,6 +46,7 @@
 	}
     .compilerErrorsShown{
         background-color: var(--accent2);
+		color: var(--accent2-text);
     }
 	.std-out {
 		display: flex;
@@ -57,6 +58,7 @@
 		overflow-y: auto;
 		margin-top: 0.5rem;
 		background-color: var(--secondary);
+		color: var(--secondary-text);
 		@media screen and (max-width: 1000px) {
 				min-height: 4rem;
 				width: 100%;

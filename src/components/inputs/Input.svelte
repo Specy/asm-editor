@@ -56,8 +56,10 @@
 		border-radius: 0.4rem;
 		padding: 0.2rem;
 		background-color: var(--secondary);
+		color: var(--secondary-text);
+
 		> input {
-			color: #bfbfbf;
+			color: var(--secondary-text);
 		}
 	}
 	.input-wrapper {
