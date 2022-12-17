@@ -90,6 +90,7 @@
 			}
 		}
 	}
+
 	function handleKeyUp(e: KeyboardEvent) {
 		pressedKeys.delete(e.code)
 	}

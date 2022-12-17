@@ -51,7 +51,7 @@
 	})
 </script>
 
-{#key refresh}
+{#key refresh}	
 	<div class={`progress`}>
 		<div class={status}>
 			<RgbLine height="0.3rem" />
