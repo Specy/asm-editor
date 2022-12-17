@@ -41,7 +41,8 @@
 			glyphMargin: true,
 			cursorBlinking: 'phase',
 			fontSize: 16,
-			smoothScrolling: true
+			smoothScrolling: true,
+			cursorSmoothCaretAnimation:true,
 		})
 		
 		const observer = new ResizeObserver(() => {
