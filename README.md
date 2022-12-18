@@ -13,5 +13,4 @@ Uses monaco-editor for the editor, and my [WASM M68K interpreter](https://github
 * Create new projects and manage them all in the webapp 
 * Integrated IDE with semantic checks and useful errors to help you learn assembly
 * Integrated documentation and intellisense with addressing modes, descriptions and examples
-* Customisable settings and shortcuts, custom themes in the future
-
+* Customisable settings and shortcuts, including theme customization
