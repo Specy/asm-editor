@@ -20,7 +20,7 @@
 			.map(
 				({ name, color }) => `
     --${name}: ${color};
-    --${name}-text: ${new TinyColor(color).isDark() ? '#dbdbdb' : '#181818'};
+    --${name}-text: ${new TinyColor(color).isDark() ? ThemeStore.textForDark : ThemeStore.textForLight};
     --RGB-${name}: ${
 					new TinyColor(color).toRgbString().match(/(\s*\d+\s*),(\s*\d+\s*),(\s*\d+\s*)/)[0]
 				};

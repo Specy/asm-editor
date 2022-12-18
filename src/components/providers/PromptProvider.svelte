@@ -54,7 +54,7 @@
 		overflow: hidden;
 		max-height: 10rem;
 		width: 20rem;
-		color: var(--primary-text);
+		color: var(--secondary-text);
 		backdrop-filter: blur(3px);
 		border-radius: 0.5rem;
 		background-color: rgba(var(--RGB-secondary), 0.8);

@@ -108,7 +108,7 @@
 
 	.memory-numbers {
 		grid-area: c;
-		color: var(--text-darker);
+		color: var(--text-layered);
 		display: grid;
 		background-color: var(--secondary);
 		color: var(--secondary-text);

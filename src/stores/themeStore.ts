@@ -23,25 +23,10 @@ const themeObject = {
         name: 'secondary',
         prop: 'secondary'
     },
-    secondaryDarker: {
-        color: '#1D2026',
-        name: 'secondary-darker',
-        prop: 'secondaryDarker'
-    },
     tertiary:  {
         color: '#2d3950',
         name: 'tertiary',
         prop: 'tertiary'
-    },
-    mainText: {
-        color: '#f1f1f1',
-        name: 'main-text',
-        prop: 'mainText'
-    },
-    textDarker: {
-        color: '#c1c1c1',
-        name: 'text-darker',
-        prop: 'textDarker'
     },
     accent: {
         color: '#F2A65A',
@@ -58,13 +43,18 @@ const themeObject = {
         name: 'hint',
         prop: 'hint'
     },
+    textDarker: {
+        color: '#c1c1c1',
+        name: 'text-layered',
+        prop: 'textDarker'
+    },
     red: {
         color: '#ed4f4f',
-        name: 'red',
+        name: 'red', //TODO rename to warn 
         prop: 'red'
     },
     green: {
-        color: '#356a59',
+        color: '#356a59', //TODO rename to success
         name: 'green',
         prop: 'green'
     }
@@ -82,6 +72,8 @@ type StoredTheme = {
 }
 const debouncer = createDebouncer(1000)
 export class ThemeStoreClass{
+    public textForDark = "#dbdbdb" 
+    public textForLight = "#181818"
     theme: Writable<{
         [key in ThemeKeys]: Writable<ThemeProp>
     }>
@@ -121,6 +113,15 @@ export class ThemeStoreClass{
     }
     get(key: ThemeKeys): Writable<ThemeProp>{
         return get(this.theme)[key]
+    }
+    getText(key: ThemeKeys): string{
+        const color = this.getColor(key)
+        return color?.isDark() ? this.textForDark : this.textForLight
+    }
+    layer(key: ThemeKeys, layer: number): TinyColor{
+        const color = this.getColor(key)
+        const isDark = color.isDark()
+        return isDark ? color.lighten(layer) : color.darken(layer)
     }
     getColor(key: ThemeKeys): TinyColor{
         return new TinyColor(get(this.get(key)).color)
