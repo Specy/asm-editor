@@ -29,12 +29,13 @@
 					</a>
 					<div class="icon">
 						<Icon size={1.6}
-							on:click={() =>
+							on:click={() => {
 								toast.custom(
 									'Copyright',
 									`© ${new Date().getFullYear()} Specy. All rights reserved.`,
 									4000
-							)}
+								)
+							}}
 						>
 							<FaRegCopyright />
 						</Icon>

@@ -128,7 +128,6 @@ export class ThemeStoreClass{
     }
     save(){
         const inner = () => {
-            console.log("saved")
             const theme = this.toArray()
             const state: StoredTheme = {
                 version: 1,

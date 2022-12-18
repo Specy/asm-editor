@@ -3,7 +3,7 @@
     export let style = ''
 </script>
 
-<div class="icon" style={`width:${size}rem; min-width: ${size}rem; height:${size}rem; ${style};`}>
+<div class="icon" style={`width:${size}rem; min-width: ${size}rem; height:${size}rem; ${style};`} on:click>
     <slot />
 </div>
 
