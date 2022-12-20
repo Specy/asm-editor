@@ -420,16 +420,18 @@ export function M68KEmulator(baseCode: string) {
             while (!interpreter.hasTerminated()) {
                 lastLine = interpreter.getCurrentLineIndex()
                 if (breakpoints.get(lastLine) && i > 0) break
-                const [ins] = interpreter.step()
-                switch (interpreter.getStatus()) {
+                const status = interpreter.stepGetStatus()
+                switch (status) {
                     case InterpreterStatus.Terminated: {
-                        update(d => ({ ...d, terminated: true, line: ins.parsed_line.line_index }))
+                        const ins = interpreter.getLastInstruction()
+                        update(d => ({ ...d, terminated: true, line: ins?.parsed_line?.line_index ?? -1}))
                         break
                     }
                     case InterpreterStatus.TerminatedWithException: {
+                        const ins = interpreter.getLastInstruction()
                         update(data => {
                             data.terminated = true
-                            data.line = ins.parsed_line.line_index
+                            data.line = ins?.parsed_line?.line_index ?? -1
                             data.canUndo = false
                             data.errors.push("Program terminated with errors")
                             return data
@@ -437,6 +439,7 @@ export function M68KEmulator(baseCode: string) {
                         break
                     }
                     case InterpreterStatus.Interrupt: {
+                        const ins = interpreter.getLastInstruction()
                         update(d => ({ ...d, line: ins.parsed_line.line_index }))
                         await handleInterrupt(interpreter.getCurrentInterrupt())
                     }
