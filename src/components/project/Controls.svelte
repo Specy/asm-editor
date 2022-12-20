@@ -5,7 +5,7 @@
 	import FaWrench from 'svelte-icons/fa/FaWrench.svelte'
 	import Icon from '$cmp/layout/Icon.svelte'
 	import FaStepForward from 'svelte-icons/fa/FaStepForward.svelte'
-	import FaStepBackward from 'svelte-icons/fa/FaStepBackward.svelte'
+	import FaRegClock from 'svelte-icons/fa/FaRegClock.svelte'
 	import FaStop from 'svelte-icons/fa/FaStop.svelte'
 	import FaUndo from 'svelte-icons/fa/FaUndo.svelte'
 	const dispatch = createEventDispatcher()
@@ -13,6 +13,7 @@
 	export let hasCompiled: boolean
 	export let buildDisabled: boolean
 	export let canUndo: boolean
+	export let running: boolean
 </script>
 
 <div class="project-controls">
@@ -37,10 +38,14 @@
 		<Button
 			style="width: 5.5rem; padding: 0.5rem 0"
 			on:click={() => dispatch('run')}
-			disabled={executionDisabled}
+			disabled={executionDisabled || running}
 		>
 			<Icon size={1} style="margin-right: 0.4rem;">
-				<FaPlay />
+				{#if running}
+					<FaRegClock />
+				{:else}
+					<FaPlay />
+				{/if}
 			</Icon>
 			Run
 		</Button>

@@ -2,6 +2,7 @@
 	import FaExclamationCircle from 'svelte-icons/fa/FaExclamationCircle.svelte'
 	import FaCheckCircle from 'svelte-icons/fa/FaCheckCircle.svelte'
 	import FaRegCircle from 'svelte-icons/fa/FaRegCircle.svelte'
+	import { onMount } from 'svelte'
 	type statusType = '' | 'correct' | 'wrong'
 	export let title = ''
 	export let value = ''
@@ -10,7 +11,12 @@
 	$: if (value === '') status = ''
 	export let type = 'text'
 	export let placeholder = ""
+	export let focus = false
 	export let hideStatus = true
+	let el:HTMLInputElement
+	onMount(() => {
+		el?.focus()
+	})
 	const setType = (node) => {
 		node.type = type
 	}
@@ -26,6 +32,7 @@
 			class="form-input"
 			use:setType
 			on:change
+			bind:this={el}
 			on:blur
 			placeholder={placeholder ?? title.toUpperCase()}
 			style={hideStatus 

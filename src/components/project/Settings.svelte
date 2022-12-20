@@ -19,11 +19,11 @@
                 }}
             />
         {/each}
-        <div class="row" style="align-items: center; justify-content: space-between">
-            <div style="padding-left: 0.4rem">
+        <div class="row" style="align-items: center; justify-content: space-between; padding: 0.4rem">
+            <div style="padding-left: 0.5rem">
                 Change theme 
             </div>
-            <a href="/themes" title="Edit the theme">
+            <a href="/themes" title="Edit the theme" >
                 <Button 
                     cssVar='accent2'
                 >
@@ -41,7 +41,10 @@
 <style lang="scss">
 
     .settings-values{
+        display: flex;
+        flex-direction: column;
         padding: 0.6rem;
+        gap: 0.2rem;
         padding-top: 0.2rem;
     }
 

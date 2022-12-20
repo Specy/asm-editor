@@ -5,7 +5,7 @@
 
 	import Button from '../buttons/Button.svelte'
 	import Input from '../inputs/Input.svelte';
-
+	let input:HTMLInputElement
 	let value = ''
 	$: if (!$Prompt.promise) value = ''
 	
@@ -13,12 +13,20 @@
 
 <slot />
 {#if $Prompt.promise}
-	<div class="prompt-wrapper" out:fade={{duration: 150}}>
+	<form 
+		class="prompt-wrapper" 
+		out:fade={{duration: 150}}
+		on:submit={(e) => {
+			e.preventDefault()
+			Prompt.answer(value)
+		}}
+	>
 		<div class="prompt-text">
 			{$Prompt.question}
 		</div>
 		{#if $Prompt.type === PromptType.Text}
 			<Input 
+				focus
 				bind:value
 				hideStatus
 				style="color: var(--primary-text); background-color: var(--primary);"
@@ -42,8 +50,7 @@
 				</Button>
 			{/if}
         </div>
-
-	</div>
+	</form>
 {/if}
 
 <style lang="scss">

@@ -18,11 +18,10 @@
 	.form-input {
 		display: flex;
 		align-items: center;
+		padding: 0.6rem 1rem;
 		border-radius: 0.4rem;
-		padding: 0.2rem;
 		background-color: rgb(81 85 87 / 50%);
         color: white;
-		padding: 0.6rem 1rem;
 	}
 	input::placeholder {
 		color: rgb(116, 116, 116);

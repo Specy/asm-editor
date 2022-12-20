@@ -115,7 +115,7 @@ function createMemoryTab(pageSize: number, name: string, address: number, rowSiz
 
 
 const registerName = ['D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'A0', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7']
-export function M68KEmulator(baseCode: string, haltLimit = 100000) {
+export function M68KEmulator(baseCode: string) {
     const { subscribe, set, update } = writable<EmulatorStore>({
         registers: [],
         terminated: false,
@@ -409,7 +409,9 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
             return data
         })
     }
-    async function run() {
+    async function run(haltLimit: number) {
+        console.log("Halt limit:", haltLimit)
+        const start = performance.now()
         let i = 0
         const breakpoints = new Map(get({ subscribe }).breakpoints.map(e => [e, true]))
         let lastLine = -1
@@ -451,6 +453,7 @@ export function M68KEmulator(baseCode: string, haltLimit = 100000) {
             addError(getErrorMessage(e))
             update(d => ({ ...d, terminated: true, line: lastLine }))
         }
+        console.log("Ended in:", performance.now() - start)
         updateRegisters()
         updateData()
         updateStatusRegisters()

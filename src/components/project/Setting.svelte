@@ -27,13 +27,30 @@
 				}}
 			/>
 		{/if}
+		{#if entry.type === "number"}
+			<input
+				class="number"
+				type="number"
+				bind:value
+				on:change={() => {
+					dispatcher('changeValue', value)
+				}}
+			/>
+		{/if}
 	</div>
 </div>
 
 <style lang="scss">
 	.settings-value {
 		justify-content: space-between;
+		align-items: center;
         padding: 0.5rem;
-
+	}
+	.number{
+		padding: 0.6rem 1rem;
+		border-radius: 0.4rem;
+		width: 7rem;
+		background-color: var(--secondary);
+		color: var(--secondary-text);
 	}
 </style>

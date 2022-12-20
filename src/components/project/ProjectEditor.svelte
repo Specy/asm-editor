@@ -27,6 +27,8 @@
 	import ShortcutEditor from '$cmp/project/ShortcutEditor.svelte'
 	import SizeSelector from './SizeSelector.svelte'
 	import { Size } from 's68k'
+	import { settingsStore } from '$stores/settingsStore'
+	let running = false
 	let settingsVisible = false
 	let documentationVisible = false
 	let shortcutsVisible = false
@@ -65,7 +67,7 @@
 			case ShortcutAction.RunCode: {
 				if ($emulator.terminated || $emulator.interrupt !== undefined || !$emulator.canExecute)
 					break
-				emulator.run()
+				emulator.run($settingsStore.values.instructionsLimit.value)
 				break
 			}
 			case ShortcutAction.SaveCode: {
@@ -83,7 +85,12 @@
 				break
 			}
 			case ShortcutAction.Undo: {
-				if ($emulator.terminated || $emulator.interrupt !== undefined || !$emulator.canExecute || !$emulator.canUndo)
+				if (
+					$emulator.terminated ||
+					$emulator.interrupt !== undefined ||
+					!$emulator.canExecute ||
+					!$emulator.canUndo
+				)
 					break
 				emulator.undo()
 				break
@@ -212,20 +219,27 @@
 		</div>
 
 		<Controls
+			{running}
 			executionDisabled={$emulator.terminated || $emulator.interrupt !== undefined}
 			buildDisabled={$emulator.compilerErrors.length > 0}
 			hasCompiled={$emulator.canExecute}
 			canUndo={$emulator.canUndo}
 			on:run={async () => {
-				try {
-					emulator.run()
-				} catch (e) {
-					console.error(e)
-					toast.error('Error executing code. ' + getErrorMessage(e))
-				}
+				running = true
+				setTimeout(() => {
+					try {
+						emulator.run($settingsStore.values.instructionsLimit.value)
+						running = false
+					} catch (e) {
+						console.error(e)
+						running = false
+						toast.error('Error executing code. ' + getErrorMessage(e))
+					}
+				}, 50)
 			}}
 			on:build={async () => {
 				try {
+					running = false
 					emulator.setCode(project.code)
 					await emulator.compile()
 				} catch (e) {
@@ -249,7 +263,10 @@
 					toast.error('Error executing undo ' + getErrorMessage(e))
 				}
 			}}
-			on:stop={() => emulator.clear()}
+			on:stop={() => {
+				emulator.clear()
+				running = false
+			}}
 		/>
 	</div>
 	<div class="right-side">
@@ -278,9 +295,7 @@
 			{/each}
 			<div class="column">
 				<div class="row">
-					<SizeSelector 
-						bind:selected={groupSize}
-					/>
+					<SizeSelector bind:selected={groupSize} />
 					<MemoryControls
 						bytesPerPage={$emulator.memory.global.pageSize}
 						memorySize={MEMORY_SIZE}
