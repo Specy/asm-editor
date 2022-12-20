@@ -444,7 +444,7 @@ export function M68KEmulator(baseCode: string) {
                         await handleInterrupt(interpreter.getCurrentInterrupt())
                     }
                 }
-                if (i++ > haltLimit) throw new Error('Halt limit reached')
+                if (i++ > haltLimit) throw new Error(`Halt limit of ${haltLimit} instructions reached`)
             }
             update(data => {
                 data.line = lastLine

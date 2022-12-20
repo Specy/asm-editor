@@ -28,10 +28,10 @@ function createValue<T>(name: string, value: T) {
 const baseValues: SettingValues = {
     useDecimalAsDefault: createValue("Use decimal as default for registers", false),
     autoScrollStackTab: createValue("Auto scroll stack memory tab", true),
-    instructionsLimit: createValue("Maximum instructions iteration ", 100_000)
+    instructionsLimit: createValue("Maximum instructions iteration ", 300_000)
 }
 
-const CURRENT_VERSION = "1.0.5"
+const CURRENT_VERSION = "1.0.6"
 function createSettingsStore() {
     const { subscribe, update, set } = writable<Settings>({
         meta: {
