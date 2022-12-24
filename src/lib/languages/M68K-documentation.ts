@@ -144,8 +144,11 @@ const desc = {
     "cmp": "Compares the second operand with the first operand",
     "bcc": "Branches to the specified address if {condition code}",
     "scc": "Sets the destination operand to 0 if {condition code} is true, otherwise it sets it to -1",
+    "dbcc": "Decrements the first operand by 1 and branches to the specified address if {condition code} is false and the first operand is not -1. dbra is the same as dbf (will decrement untill it reaches -1)",
     "bra": "Branches to the specified address unconditionally",
     "jmp": "Jumps to the specified address unconditionally",
+    "link": "Pushes to the stack the long content of the address register, sets the address register to the current stack pointer and then decrements the stack pointer by the specified amount",
+    "unlk": "Sets the SP to the address register, then Pops a long value from the stack and stores the result in the address register",
     "not": "Inverts the bits of the operand depending on the specified size",
     "and": "Performs a logical AND between the first and second operand, stores the result in the second operand",
     "or": "Performs a logical OR between the first and second operand, stores the result in the second operand",
@@ -216,6 +219,7 @@ export const M68kDocumentation: Record<InstructionName, InstructionDocumentation
     "cmp": makeIns("cmp", [ANY, NO_Im], ANY_SIZE, desc.cmp, "cmp.l -(sp), (a0)"),
     "bcc": makeIns("bcc", [ONLY_Ea], NO_SIZE, desc.bcc, "b<cc> label ; where cc is one of the condition codes"),
     "scc": makeIns("scc", [NO_Ad_AND_NO_Im], NO_SIZE, desc.scc, "s<cc> d0 ; where cc is one of the condition codes"),
+    "dbcc": makeIns("dbcc", [ONLY_Da, ONLY_Ea], NO_SIZE, desc.dbcc, "db<cc> d0, label ; where cc is one of the condition codes"),
     "not": makeIns("not", [NO_Ad_AND_NO_Im], ANY_SIZE, desc.not, "not.b d0"),
     "or": makeIns("or", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.or, "or.l #$FF, d1"),
     "and": makeIns("and", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.and, "and.l #%10110, d1"),
@@ -223,6 +227,7 @@ export const M68kDocumentation: Record<InstructionName, InstructionDocumentation
     "jmp": makeIns("jmp", [ONLY_In_OR_Id_OR_Ea], NO_SIZE, desc.jmp, "jmp (a0)"),
     "jsr": makeIns("jsr", [ONLY_In_OR_Id_OR_Ea], NO_SIZE, desc.jsr, "jsr (sp)"),
     "bra": makeIns("bra", [ONLY_Ea], NO_SIZE, desc.bra, "bra $2000"),
+    "dbra": makeIns("dbra", [ONLY_Da, ONLY_Ea], NO_SIZE, desc.dbcc, "dbra d0, label"),
     "rts": makeIns("rts", [], NO_SIZE, desc.rts, "rts"),
     "bsr": makeIns("bsr", [ONLY_Ea], NO_SIZE, desc.bsr, "bsr label"),
     "trap": makeIns("trap", [ONLY_Im], NO_SIZE, desc.trap, "trap #15"),
@@ -286,6 +291,16 @@ export function getInstructionDocumentation(instructionName: InstructionName): I
             if (!ins) return ins
             ins.name = "ro" + sub
             ins.description = ins.description.replace("{direction}", `"${directionsDescriptions.get(sub)}"`)
+            return ins
+        }
+    }
+    if (instructionName.startsWith("db")){
+        const sub = instructionName.substring(2)
+        if (branchConditionsMap.has(sub)) {
+            const ins = cloneDeep(M68kDocumentation['dbcc'])
+            if (!ins) return ins
+            ins.name = "db" + sub
+            ins.description = ins.description.replace("{condition code}", `"${branchConditionsDescriptions.get(sub)}"`)
             return ins
         }
     }

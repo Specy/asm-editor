@@ -10,7 +10,7 @@ const arithmetic = ["add", "sub", "suba", "adda", "divs", "divu", "muls", "mulu"
 const logic = ["tst", "cmp", "not", "or", "and", "eor", "lsl", "lsr", "asr", "asl", "rol", "ror", "btst", "bclr", "bchg", "bset"]
 const special = ["clr", "exg", "neg", "ext", "swap", "move", "trap"]
 const directives = ["org", "equ", "dcb", "ds", "dc"]
-const others = [...setConditions.map(e => `s${e}`), ...branchConditions.map(e => `b${e}`), "bsr", "bra", "jsr", "rts"]
+const others = [...setConditions.map(e => `s${e}`), ...branchConditions.map(e => `b${e}`), ...branchConditions.map(e => `db${e}`), "dbra", "bsr", "bra", "jsr", "rts"]
 
 export const M68kInstructions = [...arithmetic, ...logic, ...special, ...others]
 const formattableTokens = [...M68kInstructions, ...directives]
