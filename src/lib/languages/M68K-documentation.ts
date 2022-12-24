@@ -145,6 +145,7 @@ const desc = {
     "bcc": "Branches to the specified address if {condition code}",
     "scc": "Sets the destination operand to 0 if {condition code} is true, otherwise it sets it to -1",
     "dbcc": "Decrements the first operand by 1 and branches to the specified address if {condition code} is false and the first operand is not -1. dbra is the same as dbf (will decrement untill it reaches -1)",
+    "dbra": "Decrements the first operand by 1 and branches to the specified address if the first operand is not -1. dbcc is the same as dbf (will decrement untill it reaches -1)",
     "bra": "Branches to the specified address unconditionally",
     "jmp": "Jumps to the specified address unconditionally",
     "link": "Pushes to the stack the long content of the address register, sets the address register to the current stack pointer and then decrements the stack pointer by the specified amount",
@@ -175,7 +176,7 @@ const desc = {
         6: Print character at d1.
         7: Terminate
         8: Get time, writes to d1
-    `,
+    `.trim(),
 }
 const dirsDesc = {
     "dc": "Defines constants, following the directive there can be a list of constants separated by commas, the size of each constant depends on the selected size. If no size is selected, the size is determined by the value of the constant. If the constant is a string, it will be stored as a sequence of bytes, if it is a number, it will be stored as a sequence of words",
@@ -227,7 +228,9 @@ export const M68kDocumentation: Record<InstructionName, InstructionDocumentation
     "jmp": makeIns("jmp", [ONLY_In_OR_Id_OR_Ea], NO_SIZE, desc.jmp, "jmp (a0)"),
     "jsr": makeIns("jsr", [ONLY_In_OR_Id_OR_Ea], NO_SIZE, desc.jsr, "jsr (sp)"),
     "bra": makeIns("bra", [ONLY_Ea], NO_SIZE, desc.bra, "bra $2000"),
-    "dbra": makeIns("dbra", [ONLY_Da, ONLY_Ea], NO_SIZE, desc.dbcc, "dbra d0, label"),
+    "dbra": makeIns("dbra", [ONLY_Da, ONLY_Ea], NO_SIZE, desc.dbra, "dbra d0, label"),
+    "link": makeIns("link", [ONLY_Ad, ONLY_Im], NO_SIZE, desc.link, "link a0, #-16"),
+    "unlk": makeIns("unlk", [ONLY_Ad], NO_SIZE, desc.unlk, "unlk a0"),
     "rts": makeIns("rts", [], NO_SIZE, desc.rts, "rts"),
     "bsr": makeIns("bsr", [ONLY_Ea], NO_SIZE, desc.bsr, "bsr label"),
     "trap": makeIns("trap", [ONLY_Im], NO_SIZE, desc.trap, "trap #15"),
