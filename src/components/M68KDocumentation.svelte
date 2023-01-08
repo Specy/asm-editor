@@ -16,7 +16,8 @@
 	import DocsSection from '$cmp/project/DocsSection.svelte'
 	export let visible: boolean
 	let wrapper: HTMLDivElement
-	export let searchValue
+	export let style = ""
+	export let searchValue: string
 	export let defaultOpen = false
 	function includesText(nodes: NodeListOf<Element>, text: string) {
 		const texts = Array.from(nodes).map((node) => node.textContent)
@@ -44,7 +45,7 @@
 	}
 </script>
 
-<div class="docs-list" bind:this={wrapper}>
+<div class="docs-list" bind:this={wrapper} {style}>
 	<DocsSection name="Addressing modes" open={defaultOpen}>
 		<div class="column sub-section">
 			<div class="column gap-03">
