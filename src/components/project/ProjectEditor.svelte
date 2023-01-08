@@ -217,12 +217,14 @@
 			<Editor
 				on:change={(d) => {
 					emulator.setCode(d.detail)
-					debounced(() => {
-						dispatcher('save', {
-							silent: true,
-							data: project
+					if ($settingsStore.values.autoSave.value) {
+						debounced(() => {
+							dispatcher('save', {
+								silent: true,
+								data: project
+							})
 						})
-					})
+					}
 				}}
 				on:breakpointPress={(d) => {
 					emulator.toggleBreakpoint(d.detail - 1)
