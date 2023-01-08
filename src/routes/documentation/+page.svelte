@@ -7,7 +7,7 @@
 <title> M68K Documentation </title>
 
 <div class="search-bar">
-	<a class="icon" href="/">
+	<a class="icon" href="/" title="Go to the home">
 		<img src="/favicon.png" alt="logo" />
 		Home
 	</a>

@@ -7,6 +7,7 @@
 		directions,
 		directionsDescriptions,
 		fromSizesToString,
+		fromSizeToString,
 		getAddressingModeNames,
 		instructionsDocumentationList,
 		M68KDirectiveDocumentationList
@@ -168,7 +169,7 @@
 						</div>
 						{#if ins.sizes.length}
 							<span style="font-size: 0.9rem;">
-								({fromSizesToString(ins.sizes)})
+								({fromSizesToString(ins.sizes)}) {ins.defaultSize ? ` {${fromSizeToString(ins.defaultSize)}}` : ''}
 							</span>
 						{/if}
 					</div>

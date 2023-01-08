@@ -5,7 +5,7 @@
 <div class="page">
 	<div class="center-wrapper">
 		<div class="floating-middle">
-			<a href="/">
+			<a href="/" title="Go back to the main page">
 				<div class="go-back">
 					<div class="go-back-404">404</div>
 					<ButtonLink href="/" cssVar="accent2">Click to go back</ButtonLink>

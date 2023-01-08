@@ -130,6 +130,7 @@
 	<div class="row">
 		<a
 			href="/projects"
+			title="Go back to your projects"
 			on:click={(e) => {
 				e.preventDefault()
 				dispatcher('wantsToLeave')

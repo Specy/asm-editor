@@ -43,19 +43,19 @@
 	<AnimatedRgbLine height="0.5rem" style="border-radius: 0;" />
 	<div class="links-row-wrapper">
 		<div class="links-row">
-			<MainPageLinkPreview href="#documentation">
+			<MainPageLinkPreview href="#documentation" title="Documentation section">
 				<div slot="icon">
 					<FaBook />
 				</div>
 				<div slot="description">Documentation</div>
 			</MainPageLinkPreview>
-			<MainPageLinkPreview href="#codeCompletion">
+			<MainPageLinkPreview href="#codeCompletion" title="Code completion section">
 				<div slot="icon">
 					<FaSearch />
 				</div>
 				<div slot="description">Code completion</div>
 			</MainPageLinkPreview>
-			<MainPageLinkPreview href="#tools">
+			<MainPageLinkPreview href="#tools" title="Tools section">
 				<div slot="icon">
 					<FaTools />
 				</div>
@@ -72,7 +72,7 @@
 			The editor comes with a built-in documentation for the M68K instruction set including the
 			valid addressing modes, description, examples for each instruction and directive.
 		<br/>
-			<a href="/documentation" title="documentation" class="docs-visit">
+			<a href="/documentation" title="View documentation" class="docs-visit">
 				Or visit the documentation
 			</a>
 		</div>
