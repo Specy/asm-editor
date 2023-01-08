@@ -68,7 +68,7 @@
 			}
 			case ShortcutAction.BuildCode: {
 				emulator.setCode(project.code)
-				emulator.compile()
+				emulator.compile($settingsStore.values.maxHistorySize.value)
 				break
 			}
 			case ShortcutAction.RunCode: {
@@ -262,7 +262,7 @@
 				try {
 					running = false
 					emulator.setCode(project.code)
-					await emulator.compile()
+					await emulator.compile($settingsStore.values.maxHistorySize.value)
 				} catch (e) {
 					console.error(e)
 					toast.error('Error compiling code. ' + getErrorMessage(e))

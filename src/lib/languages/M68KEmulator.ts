@@ -16,28 +16,28 @@ export type RegisterChunk = {
         value: number
     }
 }
-export class Register{
+export class Register {
     value: number
     name: string
     prev: number
-    constructor(name: string, value: number){
+    constructor(name: string, value: number) {
         this.name = name
         this.value = value
         this.prev = value
     }
-    setValue(value: number){
+    setValue(value: number) {
         this.prev = this.value
         this.value = value
     }
-    toHex(){
+    toHex() {
         return (this.value >>> 0).toString(16).padStart(8, '0')
     }
-    toSizedGroups(size:Size): RegisterChunk[]{
+    toSizedGroups(size: Size): RegisterChunk[] {
         const groupLength = size === Size.Byte ? 2 : size === Size.Word ? 4 : 8
         const hex = this.toHex()
         const prevHex = (this.prev >>> 0).toString(16).padStart(8, '0')
         const chunks: RegisterChunk[] = []
-        for(let i = 0; i < hex.length; i += groupLength){
+        for (let i = 0; i < hex.length; i += groupLength) {
             chunks.push({
                 hex: hex.slice(i, i + groupLength),
                 value: parseInt(hex.slice(i, i + groupLength), 16),
@@ -71,8 +71,6 @@ export type MemoryTab = {
     pageSize: number
     data: DiffedMemory
 }
-
-
 
 export type EmulatorStore = {
     registers: Register[],
@@ -116,7 +114,7 @@ function createMemoryTab(pageSize: number, name: string, address: number, rowSiz
 
 const registerName = ['D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'A0', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7']
 export function M68KEmulator(baseCode: string) {
-    const { subscribe, set, update } = writable<EmulatorStore>({
+    const { subscribe, update } = writable<EmulatorStore>({
         registers: [],
         terminated: false,
         line: -1,
@@ -144,7 +142,7 @@ export function M68KEmulator(baseCode: string) {
     let s68k: S68k | null = null
     let interpreter: Interpreter | null = null
     const debouncer = createDebouncer(500)
-    function compile(): Promise<void> {
+    function compile(historySize: number): Promise<void> {
         return new Promise((res, rej) => {
             try {
                 clear()
@@ -160,17 +158,18 @@ export function M68KEmulator(baseCode: string) {
                 if (errors.length > 0) {
                     s68k = null
                     interpreter = null
-                    return update(s => ({ ...s, compilerErrors: errors}))
+                    return update(s => ({ ...s, compilerErrors: errors }))
                 }
                 interpreter = s68k.createInterpreter(MEMORY_SIZE, {
-                    history_size: 100,
-                    keep_history: true,
+                    history_size: historySize,
+                    keep_history: historySize > 0,
                 })
                 const stackTab = current.memory.tabs.find(e => e.name === "Stack")
                 if (stackTab) stackTab.address = interpreter.getSp() - stackTab.pageSize
                 const next = interpreter.getNextInstruction()
-                update(s => ({ ...s, 
-                    canExecute: true, 
+                update(s => ({
+                    ...s,
+                    canExecute: true,
                     line: next ? next.parsed_line.line_index : -1,
                     terminated: interpreter.getStatus() !== InterpreterStatus.Running,
                     canUndo: false
@@ -195,7 +194,7 @@ export function M68KEmulator(baseCode: string) {
 
     function semanticCheck(code?: string) {
         code = code || get({ subscribe }).code
-        try{
+        try {
             const errors = S68k.semanticCheck(code).map(e => (
                 {
                     line: e.getLine(),
@@ -205,7 +204,7 @@ export function M68KEmulator(baseCode: string) {
                 } as MonacoError
             ))
             update(s => ({ ...s, code, compilerErrors: errors, errors: [] }))
-        }catch(e){
+        } catch (e) {
             console.error(e)
             addError(getErrorMessage(e))
         }
@@ -245,7 +244,7 @@ export function M68KEmulator(baseCode: string) {
         const cpu = interpreter.getCpuSnapshot()
         return cpu.getRegistersValues()
     }
-    
+
     function scrollStackTab() {
         if (!settings.values.autoScrollStackTab.value || !interpreter) return
         const stackTab = current.memory.tabs.find(e => e.name === "Stack")
@@ -326,12 +325,12 @@ export function M68KEmulator(baseCode: string) {
             }
             update(data => {
                 data.line = ins?.parsed_line?.line_index ?? data.line
-                data.canUndo = true
+                data.canUndo = interpreter?.canUndo() ?? false
                 return data
             })
         } catch (e) {
             console.error(e)
-            addError(getErrorMessage(e))
+            addError(getErrorMessage(e, lastLine + 1))
             update(d => ({ ...d, terminated: true, line: lastLine }))
             throw e
         }
@@ -342,21 +341,22 @@ export function M68KEmulator(baseCode: string) {
         scrollStackTab()
         return interpreter.getStatus() != InterpreterStatus.Running
     }
-    function undo(){
-        try{
+    function undo() {
+        try {
             interpreter?.undo()
             const instruction = interpreter?.getNextInstruction()
-            update(d => ({ ...d, 
-                line: instruction?.parsed_line.line_index ?? -1 ,
+            update(d => ({
+                ...d,
+                line: instruction?.parsed_line.line_index ?? -1,
                 canUndo: interpreter?.canUndo() ?? false,
             }))
             updateRegisters()
             updateMemory()
             updateStatusRegisters()
             scrollStackTab()
-        }catch(e){
+        } catch (e) {
             addError(getErrorMessage(e))
-            update(d => ({ ...d, terminated: true}))
+            update(d => ({ ...d, terminated: true }))
             console.error(e)
             throw e
         }
@@ -410,22 +410,27 @@ export function M68KEmulator(baseCode: string) {
         })
     }
     async function run(haltLimit: number) {
-        if (haltLimit <= 0) haltLimit = Infinity
-        console.log("Halt limit:", haltLimit)
+        if (haltLimit <= 0) haltLimit = Number.MAX_SAFE_INTEGER
         const start = performance.now()
         let i = 0
         const breakpoints = new Map(get({ subscribe }).breakpoints.map(e => [e, true]))
-        let lastLine = -1
+        const hasBreakpoints = breakpoints.size > 0
         try {
             if (!interpreter) throw new Error("Interpreter not initialized")
+            let status = interpreter.getStatus()
             while (!interpreter.hasTerminated()) {
-                lastLine = interpreter.getCurrentLineIndex()
-                if (breakpoints.get(lastLine) && i > 0) break
-                const status = interpreter.stepGetStatus()
+                //if it has no breakpoints, give the execution to the wasm thread to improve performance
+                if (!hasBreakpoints) {
+                    interpreter.runWithLimit(haltLimit)
+                    status = interpreter.getStatus()
+                } else {
+                    if (breakpoints.get(interpreter.getCurrentLineIndex()) && i > 0) break
+                    status = interpreter.stepGetStatus()
+                }
                 switch (status) {
                     case InterpreterStatus.Terminated: {
                         const ins = interpreter.getLastInstruction()
-                        update(d => ({ ...d, terminated: true, line: ins?.parsed_line?.line_index ?? -1}))
+                        update(d => ({ ...d, terminated: true, line: ins?.parsed_line?.line_index ?? -1 }))
                         break
                     }
                     case InterpreterStatus.TerminatedWithException: {
@@ -443,19 +448,21 @@ export function M68KEmulator(baseCode: string) {
                         const ins = interpreter.getLastInstruction()
                         update(d => ({ ...d, line: ins.parsed_line.line_index }))
                         await handleInterrupt(interpreter.getCurrentInterrupt())
+                        break
                     }
                 }
                 if (i++ > haltLimit) throw new Error(`Halt limit of ${haltLimit} instructions reached`)
             }
             update(data => {
-                data.line = lastLine
-                data.canUndo = interpreter.canUndo()
+                data.line = interpreter.getCurrentLineIndex() ?? -1
+                data.canUndo = interpreter?.canUndo() ?? false
                 return data
             })
         } catch (e) {
             console.error(e)
-            addError(getErrorMessage(e))
-            update(d => ({ ...d, terminated: true, line: lastLine }))
+            const line = interpreter?.getLastInstruction()?.parsed_line.line_index ?? -1
+            addError(getErrorMessage(e, line + 1))
+            update(d => ({ ...d, terminated: true, line }))
         }
         console.log("Ended in:", performance.now() - start)
         updateRegisters()

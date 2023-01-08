@@ -91,7 +91,7 @@
 	$: {
 		if (editor) {
 			decorations = editor.deltaDecorations(decorations, [
-				...(highlightedLine > 0
+				...(highlightedLine >= 0
 					? [
 							{
 								range: new monacoInstance.Range(highlightedLine + 1, 0, highlightedLine + 1, 0),
