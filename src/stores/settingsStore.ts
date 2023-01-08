@@ -11,6 +11,7 @@ export type SettingValues = {
     useDecimalAsDefault: SettingValue<boolean>
     autoScrollStackTab: SettingValue<boolean>
     instructionsLimit: SettingValue<number>
+    autoSave: SettingValue<boolean>
 }
 export type Settings = {
     meta: {
@@ -28,10 +29,11 @@ function createValue<T>(name: string, value: T) {
 const baseValues: SettingValues = {
     useDecimalAsDefault: createValue("Use decimal as default for registers", false),
     autoScrollStackTab: createValue("Auto scroll stack memory tab", true),
-    instructionsLimit: createValue("Maximum instructions iteration ", 300_000)
+    autoSave: createValue("Auto save", false),
+    instructionsLimit: createValue("Maximum instructions iteration, 0 to ignore", 300_000),
 }
 
-const CURRENT_VERSION = "1.0.6"
+const CURRENT_VERSION = "1.1.0"
 function createSettingsStore() {
     const { subscribe, update, set } = writable<Settings>({
         meta: {

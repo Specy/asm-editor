@@ -44,6 +44,7 @@
 	.settings-value {
 		justify-content: space-between;
 		align-items: center;
+		gap: 0.4rem;
         padding: 0.5rem;
 	}
 	.number{

@@ -410,6 +410,7 @@ export function M68KEmulator(baseCode: string) {
         })
     }
     async function run(haltLimit: number) {
+        if (haltLimit <= 0) haltLimit = Infinity
         console.log("Halt limit:", haltLimit)
         const start = performance.now()
         let i = 0

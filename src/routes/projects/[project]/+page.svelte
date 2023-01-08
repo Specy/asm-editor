@@ -4,7 +4,7 @@
 	import { ProjectStore } from '$stores/projectsStore'
 	import { onDestroy } from 'svelte'
 	import { toast } from '$stores/toastStore'
-	import ProjectEdit from '$cmp/project/ProjectEditor.svelte'
+	import ProjectEditor from '$cmp/project/ProjectEditor.svelte'
 	import { Monaco } from '$lib/Monaco'
 	import { onMount } from 'svelte'
 	import { Prompt } from '$stores/promptStore'
@@ -55,14 +55,15 @@
 />
 <div class="project">
 	{#if project}
-		<ProjectEdit
+		<ProjectEditor
 			bind:project
 			on:wantsToLeave={() => {
 				changePage('/projects')
 			}}
-			on:save={({ detail }) => {
-				ProjectStore.save(detail)
-				toast.logPill('Project saved')
+			on:save={({ detail }) => {				
+				ProjectStore.save(detail.data)
+				console.log("Saved")
+				if(!detail.silent) toast.logPill('Project saved')
 			}}
 		/>
 	{:else}

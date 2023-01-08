@@ -90,6 +90,7 @@ export type InstructionDocumentation = {
     sizes: Size[];
     description?: string;
     example?: string;
+    defaultSize?: Size;
 }
 
 type InstructionName = string;
@@ -127,10 +128,13 @@ export const directionsDescriptions = new Map<string, string>([
 ])
 const desc = {
     "move": "Moves the value from the first operand to second operand.",
+    "moveq": "Moves the value from the first operand to second operand. The first operand is read as a byte so only values between -127 and 127.",
     "add": "Adds the value of the first operand to second operand.",
     "adda": "Adds the value of the first operand to second operand. It does not change the SR",
+    "addq": "Adds the value of the first operand to second operand. The first operand value must be between 1 and 8. If the destination is a address register, it is always treated as a long, and the condition codes are not affected.",
     "sub": "Subtracts the value of the first operand from second operand and stores in the second.",
     "suba": "Subtracts the value of the first operand from second operand and stores in the second. It does not change the SR",
+    "subq": "Subtracts the value of the first operand from second operand and stores in the second. The first operand value must be between 1 and 8. If the destination is a address register, it is always treated as a long, and the condition codes are not affected.",
     "divs": "Divides the value of the first operand by second operand. The quotient is stored in the first 16 bits of the destination register and the remainder is stored in the last 16 bits of the destination register. The first operand is read as a word, the second as a long",
     "divu": "Divides (unsigned) the value of the first operand by second operand. The quotient is stored in the first 16 bits of the destination register and the remainder is stored in the last 16 bits of the destination register. The first operand is read as a word, the second as a long",
     "muls": "Multiplies the value of the first operand by the second operand. The result is stored in the second operand. The first operand is read as a word, the second as a long",
@@ -144,7 +148,9 @@ const desc = {
     "cmp": "Compares the second operand with the first operand",
     "bcc": "Branches to the specified address if {condition code}",
     "scc": "Sets the destination operand to 0 if {condition code} is true, otherwise it sets it to -1",
-    "dbcc": "Decrements the first operand by 1 and branches to the specified address if {condition code} is false and the first operand is not -1. dbra is the same as dbf (will decrement untill it reaches -1)",
+    "dbcc": "Decrements the first operand by 1 and branches to the specified address if {condition code} is false and the first operand is not -1. dbra is the same as dbf (will decrement untill it reaches -1). It reads the operand as a word, so it can run at maximum 64k times",
+    "lea": "Loads the address of the first operand into the second operand, when using indirect addressing, the value is not read, only the address is loaded. For example \"lea 4(a0), a0\" will load a0 + 4 in a1",
+    "pea": "Same as lea, but it pushes the address to the stack",
     "dbra": "Decrements the first operand by 1 and branches to the specified address if the first operand is not -1. dbcc is the same as dbf (will decrement untill it reaches -1)",
     "bra": "Branches to the specified address unconditionally",
     "jmp": "Jumps to the specified address unconditionally",
@@ -163,7 +169,7 @@ const desc = {
     "bchg": "Inverts the bit of the second operand at the position of the value of the first operand",
     "bsr": "Branches to the specified address and stores the return address in the stack",
     "rts": "Returns from a subroutine, pops the return address from the stack and jumps to it",
-    "jsr": "Jumps to the specified address and stores the return address in the stack",
+    "jsr": "Jumps to the specified address, like the \"lea\" instruction, when resolving the address, it does not read the memory, so \"jsr 4(a0)\" will jump to the value of \"a0 + 4\", the address is loaded and stores the return address in the stack",
     "trap": `
         Executes a trap, the value of the operand is used as the trap number, only #15 is supported.
         The register d0 will be used as the trap type which are: 
@@ -184,7 +190,6 @@ const dirsDesc = {
     "dcb": "Defines a space in memory of N elements, the size of each element depends on the specified size, the content of the space is initialized to the second operand",
     "org": "Sets the current position in memory for the following instructions",
     "equ": "Defines a constant that will be replaced by the value when the program is assembled",
-    
 }
 
 export function getAddressingModeNames(addressingModes: AddressingMode[]): string {
@@ -202,29 +207,34 @@ export const M68KDirectiveDocumentation = {
 }
 export const M68KDirectiveDocumentationList = Object.values(M68KDirectiveDocumentation)
 export const M68kDocumentation: Record<InstructionName, InstructionDocumentation> = {
-    "move": makeIns("move", [ANY, NO_Im], ANY_SIZE, desc.move, "move.b #10, d0"),
-    "add": makeIns("add", [ANY, NO_Im], ANY_SIZE, desc.add, "add.l (a4, d3), d1"),
-    "sub": makeIns("sub", [ANY, NO_Im], ANY_SIZE, desc.sub, "sub.w $1000, d1"),
-    "adda": makeIns("adda", [ANY, ONLY_Ad], ANY_SIZE, desc.adda, "adda.l d0, a0"),
-    "suba": makeIns("suba", [ANY, ONLY_Ad], ANY_SIZE, desc.suba, "suba.w #$FF, a1"),
+    "move": makeIns("move", [ANY, NO_Im], ANY_SIZE, desc.move, "move.b #10, d0", Size.Word),
+    "moveq": makeIns("moveq", [ONLY_Im, ONLY_Da], NO_SIZE, desc.moveq, "moveq #10, d0"),
+    "add": makeIns("add", [ANY, NO_Im], ANY_SIZE, desc.add, "add.l (a4, d3), d1", Size.Word),
+    "adda": makeIns("adda", [ANY, ONLY_Ad], ANY_SIZE, desc.adda, "adda.l d0, a0", Size.Word),
+    "addq": makeIns("addq", [ONLY_Im, NO_Im], ANY_SIZE, desc.addq, "addq.w #4, d1", Size.Word),
+    "sub": makeIns("sub", [ANY, NO_Im], ANY_SIZE, desc.sub, "sub.w $1000, d1", Size.Word),
+    "suba": makeIns("suba", [ANY, ONLY_Ad], ANY_SIZE, desc.suba, "suba.w #$FF, a1", Size.Word),
+    "subq": makeIns("subq", [ONLY_Im, NO_Im], ANY_SIZE, desc.subq, "subq.b #1, d3", Size.Word),
     "divs": makeIns("divs", [NO_Ad, ONLY_Da], NO_SIZE, desc.divs, "divs #%101, d1"),
     "divu": makeIns("divu", [NO_Ad, ONLY_Da], NO_SIZE, desc.divu, "divu #@4, d1"),
     "muls": makeIns("muls", [NO_Ad, ONLY_Da], NO_SIZE, desc.muls, "muls d0, d1"),
     "mulu": makeIns("mulu", [NO_Ad, ONLY_Da], NO_SIZE, desc.mulu, "mulu d5, d2"),
     "swap": makeIns("swap", [ONLY_Da], NO_SIZE, desc.swap, "swap d0"),
-    "clr": makeIns("clr", [ONLY_Da_OR_In], ANY_SIZE, desc.clr, "clr.b d0"),
+    "clr": makeIns("clr", [ONLY_Da_OR_In], ANY_SIZE, desc.clr, "clr.b d0", Size.Word),
     "exg": makeIns("exg", [ONLY_REG, ONLY_REG], NO_SIZE, desc.exg, "exg d0, a1"),
-    "neg": makeIns("neg", [ONLY_Da_OR_In_OR_Ea], ANY_SIZE, desc.neg, "neg.l d0"),
-    "ext": makeIns("ext", [ONLY_Da], ONLY_LONG_OR_WORD, desc.ext, "ext.w d0"),
-    "tst": makeIns("tst", [NO_Im], ANY_SIZE, desc.tst, "tst.b (a0)"),
-    "cmp": makeIns("cmp", [ANY, NO_Im], ANY_SIZE, desc.cmp, "cmp.l -(sp), (a0)"),
+    "neg": makeIns("neg", [ONLY_Da_OR_In_OR_Ea], ANY_SIZE, desc.neg, "neg.l d0", Size.Word),
+    "ext": makeIns("ext", [ONLY_Da], ONLY_LONG_OR_WORD, desc.ext, "ext.w d0", Size.Word),
+    "lea": makeIns("lea", [ONLY_In_OR_Id_OR_Ea, ONLY_Ad], NO_SIZE, desc.lea, "lea (a0), a1"),
+    "pea": makeIns("pea", [ONLY_In_OR_Id_OR_Ea], NO_SIZE, desc.pea, "pea (a0)"),
+    "tst": makeIns("tst", [NO_Im], ANY_SIZE, desc.tst, "tst.b (a0)", Size.Word),
+    "cmp": makeIns("cmp", [ANY, NO_Im], ANY_SIZE, desc.cmp, "cmp.l -(sp), (a0)", Size.Word),
     "bcc": makeIns("bcc", [ONLY_Ea], NO_SIZE, desc.bcc, "b<cc> label ; where cc is one of the condition codes"),
     "scc": makeIns("scc", [NO_Ad_AND_NO_Im], NO_SIZE, desc.scc, "s<cc> d0 ; where cc is one of the condition codes"),
     "dbcc": makeIns("dbcc", [ONLY_Da, ONLY_Ea], NO_SIZE, desc.dbcc, "db<cc> d0, label ; where cc is one of the condition codes"),
-    "not": makeIns("not", [NO_Ad_AND_NO_Im], ANY_SIZE, desc.not, "not.b d0"),
-    "or": makeIns("or", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.or, "or.l #$FF, d1"),
-    "and": makeIns("and", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.and, "and.l #%10110, d1"),
-    "eor": makeIns("eor", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.eor, "eor.l d0, d1"),
+    "not": makeIns("not", [NO_Ad_AND_NO_Im], ANY_SIZE, desc.not, "not.b d0", Size.Word),
+    "or": makeIns("or", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.or, "or.l #$FF, d1", Size.Word),
+    "and": makeIns("and", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.and, "and.l #%10110, d1", Size.Word),
+    "eor": makeIns("eor", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.eor, "eor.l d0, d1", Size.Word),
     "jmp": makeIns("jmp", [ONLY_In_OR_Id_OR_Ea], NO_SIZE, desc.jmp, "jmp (a0)"),
     "jsr": makeIns("jsr", [ONLY_In_OR_Id_OR_Ea], NO_SIZE, desc.jsr, "jsr (sp)"),
     "bra": makeIns("bra", [ONLY_Ea], NO_SIZE, desc.bra, "bra $2000"),
@@ -250,7 +260,7 @@ export function getInstructionDocumentation(instructionName: InstructionName): I
     if (instructionName.startsWith("b")) {
         const sub = instructionName.substring(1)
         if (branchConditionsMap.has(sub)) {
-            const ins = M68kDocumentation['bcc']
+            const ins = cloneDeep(M68kDocumentation['bcc'])
             if (!ins) return ins
             ins.name = "b" + sub
             ins.description = ins.description.replace("{condition code}", `"${branchConditionsDescriptions.get(sub)}"`)
@@ -314,8 +324,8 @@ export function getInstructionDocumentation(instructionName: InstructionName): I
 export const instructionsDocumentationList = Object.values(M68kDocumentation)
 
 
-function makeIns(name: string, args: AddressingMode[][], sizes: Size[], description?: string, example?: string): InstructionDocumentation {
-    return { name, args, sizes, description, example };
+function makeIns(name: string, args: AddressingMode[][], sizes: Size[], description?: string, example?: string, defaultSize?: Size): InstructionDocumentation {
+    return { name, args, sizes, description, example, defaultSize };
 }
 
 type DirectiveDocumentation = {

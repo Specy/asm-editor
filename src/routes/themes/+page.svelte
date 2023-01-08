@@ -52,6 +52,7 @@
 	.content {
 		display: flex;
 		flex-direction: column;
+		padding: 0.8rem;
 		max-width: 40rem;
 		width: 100%;
 	}

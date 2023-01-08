@@ -6,11 +6,16 @@ import { AddressingMode, branchConditions, fromSizesToString, fromSizeToString, 
 //TODO ALL OF THIS IS CRAP, IT NEEDS TO BE REDONE FROM 0
 
 
-const arithmetic = ["add", "sub", "suba", "adda", "divs", "divu", "muls", "mulu"]
+const arithmetic = ["add", "sub", "suba", "adda", "divs", "divu", "muls", "mulu", "addq", "subq"]
 const logic = ["tst", "cmp", "not", "or", "and", "eor", "lsl", "lsr", "asr", "asl", "rol", "ror", "btst", "bclr", "bchg", "bset"]
 const special = ["clr", "exg", "neg", "ext", "swap", "move", "trap"]
 const directives = ["org", "equ", "dcb", "ds", "dc"]
-const others = [...setConditions.map(e => `s${e}`), ...branchConditions.map(e => `b${e}`), ...branchConditions.map(e => `db${e}`), "dbra", "bsr", "bra", "jsr", "rts", "link", "unlk"]
+const others = [
+	...setConditions.map(e => `s${e}`), 
+	...branchConditions.map(e => `b${e}`), 
+	...branchConditions.map(e => `db${e}`), 
+	"dbra", "bsr", "bra", "jsr", "rts", "link", "unlk", "lea", "pea", "moveq"
+]
 
 export const M68kInstructions = [...arithmetic, ...logic, ...special, ...others]
 const formattableTokens = [...M68kInstructions, ...directives]
@@ -298,6 +303,7 @@ export function createM68kHoverProvider(monaco: MonacoType) {
 			const word = model.getWordAtPosition(position)?.word
 			if (parsed.type === 'Instruction') {
 				const documentation = getInstructionDocumentation(word?.toLowerCase())
+				const defaultSize = documentation?.defaultSize ? fromSizeToString(documentation.defaultSize) : ""
 				if (!documentation) return { range, contents: [] }
 				return {
 					range,
@@ -308,7 +314,7 @@ export function createM68kHoverProvider(monaco: MonacoType) {
 							${documentation.args.map((e, i) => `\n**Op ${i + 1}:** ${getAddressingModeNames(e)}`).join("\n")}
 						`.trim()
 						},
-						{ value: `**Sizes:** ${documentation.sizes.length ? fromSizesToString(documentation.sizes) : "Not sized"}` },
+						{ value: `**Sizes:** ${documentation.sizes.length ? fromSizesToString(documentation.sizes) : "Not sized"} ${defaultSize ? `\n\n **Default:** ${defaultSize}` : ""}`},
 						{ value: documentation.description ?? "No description" },
 						{ value: `${documentation.example ?? "No examples"}` }
 					]

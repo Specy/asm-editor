@@ -71,6 +71,10 @@
 		<div class="description">
 			The editor comes with a built-in documentation for the M68K instruction set including the
 			valid addressing modes, description, examples for each instruction and directive.
+		<br/>
+			<a href="/documentation" title="documentation" class="docs-visit">
+				Or visit the documentation
+			</a>
 		</div>
 	</MainPageSection>
 	<MainPageSection id="codeCompletion" imageUrl="/images/ASM-CodeCompletion.webp" reverse>
@@ -115,6 +119,9 @@
 	}
 	:global(body) {
 		scroll-behavior: smooth;
+	}
+	.docs-visit{
+		color: var(--accent);
 	}
 	.links-row-wrapper{
 		background-color: var(--secondary);

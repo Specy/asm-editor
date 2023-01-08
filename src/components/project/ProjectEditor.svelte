@@ -13,10 +13,10 @@
 	import { toast } from '$stores/toastStore'
 	import Controls from './Controls.svelte'
 	import StdOut from '$cmp/project/StdOut.svelte'
-	import { clamp, getErrorMessage } from '$lib/utils'
+	import { clamp, createDebouncer, getErrorMessage } from '$lib/utils'
 	import { MEMORY_SIZE } from '$lib/Config'
 	import Settings from './Settings.svelte'
-	import M68KDocumentation from '$cmp/project/M68KDocumentation.svelte'
+	import M68KDocumentation from '$cmp/project/FloatingM68KDocumentation.svelte'
 	import FaBook from 'svelte-icons/fa/FaBook.svelte'
 	import { ShortcutAction, shortcutsStore } from '$stores/shortcutsStore'
 	import RegistersVisualiser from './RegistersVisualiser.svelte'
@@ -33,9 +33,16 @@
 	let documentationVisible = false
 	let shortcutsVisible = false
 	let groupSize = Size.Word
-	const dispatcher = createEventDispatcher<{ save: Project; wantsToLeave: void }>()
+	const dispatcher = createEventDispatcher<{
+		save: {
+			silent: boolean
+			data: Project
+		}
+		wantsToLeave: void
+	}>()
 	const emulator = M68KEmulator(project.code || '')
 	const pressedKeys = new Map<String, boolean>()
+	const debounced = createDebouncer(3000)
 	function handleKeyDown(e: KeyboardEvent) {
 		pressedKeys.set(e.code, true)
 		const code = Array.from(pressedKeys.keys()).join('+')
@@ -71,7 +78,10 @@
 				break
 			}
 			case ShortcutAction.SaveCode: {
-				dispatcher('save', project)
+				dispatcher('save', {
+					silent: false,
+					data: project
+				})
 				break
 			}
 			case ShortcutAction.ClearExecution: {
@@ -178,7 +188,10 @@
 		<Button
 			on:click={() => {
 				emulator.setCode(project.code)
-				dispatcher('save', project)
+				dispatcher('save', {
+					silent: false,
+					data: project
+				})
 			}}
 			cssVar="accent2"
 			hasIcon
@@ -204,6 +217,12 @@
 			<Editor
 				on:change={(d) => {
 					emulator.setCode(d.detail)
+					debounced(() => {
+						dispatcher('save', {
+							silent: true,
+							data: project
+						})
+					})
 				}}
 				on:breakpointPress={(d) => {
 					emulator.toggleBreakpoint(d.detail - 1)

@@ -1,7 +1,6 @@
 <script lang="ts">
 	import FaAngleRight from 'svelte-icons/fa/FaAngleRight.svelte'
 	import Icon from '../layout/Icon.svelte'
-
 	export let name: string
 	export let open = true
 </script>
