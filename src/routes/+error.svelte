@@ -2,7 +2,7 @@
 	import ButtonLink from '$cmp/buttons/ButtonLink.svelte'
 </script>
 
-<div class="page">
+<main class="page">
 	<div class="center-wrapper">
 		<div class="floating-middle">
 			<a href="/" title="Go back to the main page">
@@ -13,7 +13,7 @@
 			</a>
 		</div>
 	</div>
-</div>
+</main>
 
 <style lang="scss">
 	.floating-middle {

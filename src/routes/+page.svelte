@@ -10,7 +10,10 @@
 	import AnimatedRgbLine from '$cmp/misc/AnimatedRgbLine.svelte'
 </script>
 
-<title> Welcome to Asm-Editor</title>
+<svelte:head>
+	<title>Welcome to Asm-Editor</title>
+	<meta name="description" content="Write, learn and run M68K assembly code on your browser. View registers and memory, step and undo the program." />
+</svelte:head>
 
 <div class="main">
 	<div class="content row">

@@ -42,9 +42,14 @@
 	}
 </script>
 
-<title>
-	{project?.name || 'Unnamed'}
-</title>
+
+<svelte:head>
+	<title>
+		{project?.name || 'Unnamed'}
+	</title>
+	<meta name="description" content="Use the editor to write code and run it to debug. Built in documentation and useful tools to learn and develop more easily" />
+</svelte:head>
+
 <svelte:window
 	on:beforeunload={(e) => {
 		if (!$page.url.hostname.includes('localhost')) {

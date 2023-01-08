@@ -5,7 +5,7 @@
 	export let open = true
 </script>
 
-<div class="section" class:open>
+<section class="section" class:open>
 	<button class="section-title" on:click={() => (open = !open)}>
 		<Icon style={`transform: rotate(${open ? 90 : 0}deg); transition: all 0.2s cubic-bezier(.54,.9,0,.97); color: var(--accent); `} size={1.6}>
 			<FaAngleRight />
@@ -17,7 +17,7 @@
 	<div class="column sub-section-content" class:open>
 		<slot />
 	</div>
-</div>
+</section>
 
 <style lang="scss">
 	.section-title {

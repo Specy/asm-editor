@@ -15,7 +15,12 @@
 	})
 </script>
 
-<div class="page">
+<svelte:head>
+	<title> Theme </title>
+	<meta name="description" content="Change the theme of the app" />
+</svelte:head>
+
+<main class="page">
 	<div class="content">
 		<div class="header">
 			<a href="/projects" class="go-back" title="Go to the main page">
@@ -35,7 +40,7 @@
 			{/each}
 		</div>
 	</div>
-</div>
+</main>
 
 <style lang="scss">
 	.header {

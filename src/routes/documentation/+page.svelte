@@ -1,10 +1,16 @@
 <script lang="ts">
 	import Input from '$cmp/inputs/Input.svelte'
 	import M68KDocumentation from '$cmp/M68KDocumentation.svelte'
+	import { instructionsDocumentationList } from '$lib/languages/M68K-documentation'
+	
 	let searchValue = ''
 </script>
 
-<title> M68K Documentation </title>
+<svelte:head>
+	<title> M68K Documentation </title>
+	<meta name="description" content="Read the M68K Documentation, including all the instructions with addressing modes and the assembler features" />
+	<meta name="tags" content={instructionsDocumentationList.map((i) => i.name).join(', ')} />
+</svelte:head>
 
 <div class="search-bar">
 	<a class="icon" href="/" title="Go to the home">

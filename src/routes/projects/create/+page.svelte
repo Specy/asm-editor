@@ -34,8 +34,10 @@
 		}
 	}
 </script>
-
-<title> Create Project </title>
+<svelte:head>	
+	<title> Create Project </title>
+	<meta name="description" content="Create a new project" />
+</svelte:head>
 <div class="create-project">
 	<div class="content">
 		<div class="row top-title">

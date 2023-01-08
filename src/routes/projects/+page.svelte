@@ -7,14 +7,17 @@
 	import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
 	import Title from '$cmp/layout/Title.svelte'
 	import ButtonLink from '$cmp/buttons/ButtonLink.svelte'
-	import { blur, fade, scale } from 'svelte/transition'
+	import { scale } from 'svelte/transition'
 	const { projects } = ProjectStore
 	onMount(() => {
 		ProjectStore.load()
 	})
 </script>
 
-<title> Projects </title>
+<svelte:head>
+	<title> Projects </title>
+	<meta name="description" content="Create, edit or delete your projects" />
+</svelte:head>
 <div class="project-display">
 	<div class="content">
 		<div class="top-row">
