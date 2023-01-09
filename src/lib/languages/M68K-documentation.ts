@@ -220,7 +220,7 @@ export const M68kDocumentation: Record<InstructionName, InstructionDocumentation
     "muls": makeIns("muls", [NO_Ad, ONLY_Da], NO_SIZE, desc.muls, "muls d0, d1"),
     "mulu": makeIns("mulu", [NO_Ad, ONLY_Da], NO_SIZE, desc.mulu, "mulu d5, d2"),
     "swap": makeIns("swap", [ONLY_Da], NO_SIZE, desc.swap, "swap d0"),
-    "clr": makeIns("clr", [ONLY_Da_OR_In], ANY_SIZE, desc.clr, "clr.b d0", Size.Word),
+    "clr": makeIns("clr", [NO_Ad_AND_NO_Im], ANY_SIZE, desc.clr, "clr.b d0", Size.Word),
     "exg": makeIns("exg", [ONLY_REG, ONLY_REG], NO_SIZE, desc.exg, "exg d0, a1"),
     "neg": makeIns("neg", [ONLY_Da_OR_In_OR_Ea], ANY_SIZE, desc.neg, "neg.l d0", Size.Word),
     "ext": makeIns("ext", [ONLY_Da], ONLY_LONG_OR_WORD, desc.ext, "ext.w d0", Size.Word),

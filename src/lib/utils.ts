@@ -35,11 +35,16 @@ export function getErrorMessage(error: any, lineNumber?: number): string{
             case "Unimplemented": return `${prepend} Unimplemented`
             case "DivisionByZero" : return `${prepend} Division by zero`
             case "ExecutionLimit": return `${prepend} Execution limit of ${maybeError.value} instructions reached`
-            case "OutOfBounds" : return `${prepend} Memory read out of bounds at address ${maybeError.value}`
+            case "OutOfBounds" : return `${prepend} Memory read out of bounds: ${maybeError.value}`
             case "IncorrectAddressingMode": return `${prepend} Incorrect addressing mode: ${maybeError.value}`
         } 
     }  
-    if(error.message) return 
+    if(error.message) {
+        if(error.message === "unreachable"){
+            return `${prepend} WASM panicked (unreachable)` 
+        }
+        return  `${prepend} ${error.message}` 
+    }
     return `${prepend} ${JSON.stringify(error)}`
 }
 

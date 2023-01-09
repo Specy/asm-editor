@@ -454,23 +454,27 @@ export function M68KEmulator(baseCode: string) {
                 if (i++ > haltLimit) throw new Error(`Halt limit of ${haltLimit} instructions reached`)
             }
             update(data => {
-                data.line = interpreter.getCurrentLineIndex() ?? -1
+                data.line = interpreter.getLastInstruction()?.parsed_line.line_index ?? -1
                 data.canUndo = interpreter?.canUndo() ?? false
                 return data
             })
+            console.log("Ended in:", performance.now() - start)
+            updateRegisters()
+            updateData()
+            updateStatusRegisters()
+            updateMemory()
+            scrollStackTab()
+            return interpreter.getStatus()
         } catch (e) {
             console.error(e)
-            const line = interpreter?.getLastInstruction()?.parsed_line.line_index ?? -1
+            let line = -1
+            try{
+                line = interpreter?.getLastInstruction()?.parsed_line.line_index ?? -1
+            }catch(e){ console.error(e) }
             addError(getErrorMessage(e, line + 1))
             update(d => ({ ...d, terminated: true, line }))
         }
-        console.log("Ended in:", performance.now() - start)
-        updateRegisters()
-        updateData()
-        updateStatusRegisters()
-        updateMemory()
-        scrollStackTab()
-        return interpreter.getStatus()
+        return InterpreterStatus.TerminatedWithException
     }
     function setGlobalMemoryAddress(address: number) {
         update(data => {
