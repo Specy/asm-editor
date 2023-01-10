@@ -105,6 +105,7 @@
 		max-width: 30rem;
 		text-align: center;
 		margin-bottom: 2rem;
+		color: var(--primary-text);
 		text-shadow: 2px 2px 12px rgb(36 36 36);
 	}
 	.sections-wrapper {
