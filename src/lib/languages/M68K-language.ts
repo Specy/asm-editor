@@ -6,9 +6,9 @@ import { AddressingMode, branchConditions, fromSizesToString, fromSizeToString, 
 //TODO ALL OF THIS IS CRAP, IT NEEDS TO BE REDONE FROM 0
 
 
-const arithmetic = ["add", "sub", "suba", "adda", "divs", "divu", "muls", "mulu", "addq", "subq"]
-const logic = ["tst", "cmp", "not", "or", "and", "eor", "lsl", "lsr", "asr", "asl", "rol", "ror", "btst", "bclr", "bchg", "bset"]
-const special = ["clr", "exg", "neg", "ext", "swap", "move", "trap"]
+const arithmetic = ["add", "sub", "suba", "adda", "divs", "divu", "muls", "mulu", "addq", "subq", "addi", "subi"]
+const logic = ["tst", "cmp","cmpa","cmpm", "cmpi", "not", "or", "and", "eor", "lsl", "lsr", "asr", "asl", "rol", "ror", "btst", "bclr", "bchg", "bset" ,"andi", "ori", "eori", "subi"]
+const special = ["clr", "exg", "neg", "ext", "swap", "move", "movea", "trap"]
 const directives = ["org", "equ", "dcb", "ds", "dc"]
 const others = [
 	...setConditions.map(e => `s${e}`), 

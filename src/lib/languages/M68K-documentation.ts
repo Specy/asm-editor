@@ -68,6 +68,7 @@ const ANY = [Da, Ad, In, Ipi, Ipd, Id, Im, Ea];
 const NO_Da = [Ad, In, Ipi, Ipd, Id, Im, Ea];
 const NO_Ad = [Da, In, Ipi, Ipd, Id, Im, Ea];
 const NO_Im = [Da, In, Ad, Ipi, Ipd, Id, Ea];
+const NO_IM_OR_Ad = [Da, In, Ipi, Ipd, Id, Ea];
 const NO_Ea = [Da, In, Ad, Ipi, Ipd, Im, Id];
 const NO_In = [Da, Ad, Ipi, Ipd, Id, Im, Ea];
 const NO_Ad_AND_NO_Im = [Da, In, Ipi, Ipd, Id, Ea];
@@ -80,6 +81,7 @@ const ONLY_Da_OR_In_OR_Ea = [Da, In, Ea];
 const ONLY_Ea = [Ea];
 const ONLY_Im = [Im];
 const ONLY_In_OR_Id_OR_Ea = [In, Id, Ea];
+const ONLY_Ipi = [Ipi]
 
 const NO_SIZE = []
 const ANY_SIZE = [Size.Byte, Size.Word, Size.Long];
@@ -129,12 +131,15 @@ export const directionsDescriptions = new Map<string, string>([
 const desc = {
     "move": "Moves the value from the first operand to second operand.",
     "moveq": "Moves the value from the first operand to second operand. The first operand is read as a byte so only values between -127 and 127.",
+    "movea": "Moves the value from the first operand to second operand. If the size is word, it is sign extended to long. It does not change the SR",
     "add": "Adds the value of the first operand to second operand.",
+    "addi": "Adds the immediate value to the second operand",
     "adda": "Adds the value of the first operand to second operand. It does not change the SR",
     "addq": "Adds the value of the first operand to second operand. The first operand value must be between 1 and 8. If the destination is a address register, it is always treated as a long, and the condition codes are not affected.",
     "sub": "Subtracts the value of the first operand from second operand and stores in the second.",
     "suba": "Subtracts the value of the first operand from second operand and stores in the second. It does not change the SR",
     "subq": "Subtracts the value of the first operand from second operand and stores in the second. The first operand value must be between 1 and 8. If the destination is a address register, it is always treated as a long, and the condition codes are not affected.",
+    "subi": "Subtracts the immediate value to the second operand",
     "divs": "Divides the value of the first operand by second operand. The quotient is stored in the first 16 bits of the destination register and the remainder is stored in the last 16 bits of the destination register. The first operand is read as a word, the second as a long",
     "divu": "Divides (unsigned) the value of the first operand by second operand. The quotient is stored in the first 16 bits of the destination register and the remainder is stored in the last 16 bits of the destination register. The first operand is read as a word, the second as a long",
     "muls": "Multiplies the value of the first operand by the second operand. The result is stored in the second operand. The first operand is read as a word, the second as a long",
@@ -145,7 +150,10 @@ const desc = {
     "neg": "Flips the sign of the operand, depending on the specified size, defaults to word",
     "ext": "Extends the sign of the operand, depending on the specified size. If the part to extend is negative, it will be filled with 1s, otherwise it will be filled with 0s. Defaults to word",
     "tst": "Compares the operand with 0",
-    "cmp": "Compares the second operand with the first operand",
+    "cmp": "Compares the second operand with the first operand, it sets the flags accordingly which will be used by the branching instructions.",
+    "cmpa": "Compares the second operand with the first operand, it sets the flags accordingly which will be used by the branching instructions. When using word size, the operands are sign extended to long",
+    "cmpm": "Compares two memory regions, only valid operand is the post increment, it sets the flags accordingly which will be used by the branchin instructions.",
+    "cmpi": "Compares the second operand with the first operand, it sets the flags accordingly which will be used by the branching instructions.",
     "bcc": "Branches to the specified address if {condition code}",
     "scc": "Sets the destination operand to 0 if {condition code} is true, otherwise it sets it to -1",
     "dbcc": "Decrements the first operand by 1 and branches to the specified address if {condition code} is false and the first operand is not -1. dbra is the same as dbf (will decrement untill it reaches -1). It reads the operand as a word, so it can run at maximum 64k times",
@@ -158,8 +166,11 @@ const desc = {
     "unlk": "Sets the SP to the address register, then Pops a long value from the stack and stores the result in the address register",
     "not": "Inverts the bits of the operand depending on the specified size",
     "and": "Performs a logical AND between the first and second operand, stores the result in the second operand",
+    "andi": "Performs a logical AND between the first immediate value and second operand, stores the result in the second operand",
     "or": "Performs a logical OR between the first and second operand, stores the result in the second operand",
+    "ori": "Performs a logical OR between the first immediate value and second operand, stores the result in the second operand",
     "eor": "Performs a logical XOR between the first and second operand, stores the result in the second operand",
+    "eori": "Performs a logical XOR between the first immediate value and second operand, stores the result in the second operand",
     "lsd": "Shifts the bits of the second operand to the {direction} as many times as the value of the first operand, depending on the specified size. The new bits are filled with 0s. Defaults to word",
     "asd": "Shifts the bits of the second operand to the {direction} as many times as the value of the first operand, depending on the specified size. The new bits are filled with the sign bit. Defaults to word",
     "rod": "Rotates the bits of the second operand to the {direction} as many times as the value of the first operand, depending on the specified size. Defaults to word",
@@ -209,11 +220,14 @@ export const M68KDirectiveDocumentationList = Object.values(M68KDirectiveDocumen
 export const M68kDocumentation: Record<InstructionName, InstructionDocumentation> = {
     "move": makeIns("move", [ANY, NO_Im], ANY_SIZE, desc.move, "move.b #10, d0", Size.Word),
     "moveq": makeIns("moveq", [ONLY_Im, ONLY_Da], NO_SIZE, desc.moveq, "moveq #10, d0"),
+    "movea": makeIns("movea", [ANY, ONLY_Ad], ONLY_LONG_OR_WORD, desc.movea, "movea.l d0, a0", Size.Word),
     "add": makeIns("add", [ANY, NO_Im], ANY_SIZE, desc.add, "add.l (a4, d3), d1", Size.Word),
     "adda": makeIns("adda", [ANY, ONLY_Ad], ANY_SIZE, desc.adda, "adda.l d0, a0", Size.Word),
     "addq": makeIns("addq", [ONLY_Im, NO_Im], ANY_SIZE, desc.addq, "addq.w #4, d1", Size.Word),
+    "addi": makeIns("addi", [ONLY_Im, NO_IM_OR_Ad], ANY_SIZE, desc.addi, "addi.w #4, d1", Size.Word),
     "sub": makeIns("sub", [ANY, NO_Im], ANY_SIZE, desc.sub, "sub.w $1000, d1", Size.Word),
     "suba": makeIns("suba", [ANY, ONLY_Ad], ANY_SIZE, desc.suba, "suba.w #$FF, a1", Size.Word),
+    "subi": makeIns("subi",  [ONLY_Im, NO_IM_OR_Ad], ANY_SIZE, desc.subi ,"subi #1, d3", Size.Word),
     "subq": makeIns("subq", [ONLY_Im, NO_Im], ANY_SIZE, desc.subq, "subq.b #1, d3", Size.Word),
     "divs": makeIns("divs", [NO_Ad, ONLY_Da], NO_SIZE, desc.divs, "divs #%101, d1"),
     "divu": makeIns("divu", [NO_Ad, ONLY_Da], NO_SIZE, desc.divu, "divu #@4, d1"),
@@ -227,14 +241,20 @@ export const M68kDocumentation: Record<InstructionName, InstructionDocumentation
     "lea": makeIns("lea", [ONLY_In_OR_Id_OR_Ea, ONLY_Ad], NO_SIZE, desc.lea, "lea (a0), a1"),
     "pea": makeIns("pea", [ONLY_In_OR_Id_OR_Ea], NO_SIZE, desc.pea, "pea (a0)"),
     "tst": makeIns("tst", [NO_Im], ANY_SIZE, desc.tst, "tst.b (a0)", Size.Word),
-    "cmp": makeIns("cmp", [ANY, NO_Im], ANY_SIZE, desc.cmp, "cmp.l -(sp), (a0)", Size.Word),
+    "cmp": makeIns("cmp", [ANY, ONLY_REG], ANY_SIZE, desc.cmp, "cmp.l -(sp), d0", Size.Word),
+    "cmpi": makeIns("cmpi", [ONLY_Im, NO_Im], ANY_SIZE, desc.cmpi, "cmpi.w #10, d3", Size.Word),
+    "cmpa": makeIns("cmpa", [ANY, ONLY_Ad], ONLY_LONG_OR_WORD, desc.cmpa, "cmpa.l $1000, a0", Size.Word),
+    "cmpm": makeIns("cmpm", [ONLY_Ipi, ONLY_Ipi], ANY_SIZE, desc.cmpm, "cmpm.b (a0)+, (a1)+", Size.Word),
     "bcc": makeIns("bcc", [ONLY_Ea], NO_SIZE, desc.bcc, "b<cc> label ; where cc is one of the condition codes"),
     "scc": makeIns("scc", [NO_Ad_AND_NO_Im], NO_SIZE, desc.scc, "s<cc> d0 ; where cc is one of the condition codes"),
     "dbcc": makeIns("dbcc", [ONLY_Da, ONLY_Ea], NO_SIZE, desc.dbcc, "db<cc> d0, label ; where cc is one of the condition codes"),
     "not": makeIns("not", [NO_Ad_AND_NO_Im], ANY_SIZE, desc.not, "not.b d0", Size.Word),
     "or": makeIns("or", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.or, "or.l #$FF, d1", Size.Word),
-    "and": makeIns("and", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.and, "and.l #%10110, d1", Size.Word),
+    "ori": makeIns("ori", [ONLY_Im, NO_IM_OR_Ad], ANY_SIZE, desc.ori, "ori.l #%1100, (a0)", Size.Word),
+    "and": makeIns("and", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.and, "and.l d0, d1", Size.Word), //destination should only be register
+    "andi": makeIns("andi",  [ONLY_Im, NO_IM_OR_Ad], ANY_SIZE, desc.andi, "andi.l #$FF, (a0)", Size.Word),
     "eor": makeIns("eor", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.eor, "eor.l d0, d1", Size.Word),
+    "eori": makeIns("eori", [ONLY_Im, NO_IM_OR_Ad], ANY_SIZE, desc.eori, "eori.l #1, (sp)+", Size.Word),
     "jmp": makeIns("jmp", [ONLY_In_OR_Id_OR_Ea], NO_SIZE, desc.jmp, "jmp (a0)"),
     "jsr": makeIns("jsr", [ONLY_In_OR_Id_OR_Ea], NO_SIZE, desc.jsr, "jsr (sp)"),
     "bra": makeIns("bra", [ONLY_Ea], NO_SIZE, desc.bra, "bra $2000"),
