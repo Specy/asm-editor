@@ -8,6 +8,9 @@
 	import FaTools from 'svelte-icons/fa/FaTools.svelte'
 	import MainPageSection from '$cmp/main/HeroSection.svelte'
 	import AnimatedRgbLine from '$cmp/misc/AnimatedRgbLine.svelte'
+	import { ThemeStore } from '$stores/themeStore'
+	const textShadowPrimary = ThemeStore.getColor("primary").isDark()
+	const textShadowSecondary = ThemeStore.getColor("secondary").isDark()
 </script>
 
 <svelte:head>
@@ -18,19 +21,19 @@
 <div class="main">
 	<div class="content row">
 		<div class="preview-image" />
-		<div class="presentation">
+		<div class="presentation" class:textShadow={textShadowPrimary}>
 			<div class="welcome-title">The all in one web editor for M68K</div>
 			<div style="display: flex ;">
 				<ButtonLink
 					href="/projects"
 					color="var(--accent-text)"
-					style="box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);"
+					style={textShadowPrimary && "box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);"}
 					title="Open the editor"
 				>
 					Go to the editor
 				</ButtonLink>
 				<ButtonLink
-					style="margin-left: 1rem; box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);"
+					style={`margin-left: 1rem; ${textShadowPrimary && "box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);"}`}
 					bg="var(--secondary)"
 					color="var(--secondary-text)"
 					href="https://github.com/Specy/asm-editor"
@@ -71,7 +74,7 @@
 <div class="column sections-wrapper">
 	<MainPageSection id="documentation" imageUrl="/images/ASM-Documentation.webp">
 		<div slot="title">Documentation</div>
-		<div class="description">
+		<div class="description" class:textShadow={textShadowPrimary}>
 			The editor comes with a built-in documentation for the M68K instruction set including the
 			valid addressing modes, description, examples for each instruction and directive.
 		<br/>
@@ -82,7 +85,7 @@
 	</MainPageSection>
 	<MainPageSection id="codeCompletion" imageUrl="/images/ASM-CodeCompletion.webp" reverse>
 		<div slot="title">Code completion</div>
-		<div class="description">
+		<div class="description" class:textShadow={textShadowSecondary}>
 			Write and learn faster with the code completion tools, suggesting you with the valid
 			addressing modes and shortcuts for labels and other keywords. Real time semantic errors that
 			warn you before you compile the code
@@ -90,7 +93,7 @@
 	</MainPageSection>
 	<MainPageSection id="tools" imageUrl="/images/ASM-Tools.webp">
 		<div slot="title">Tools & Customisation</div>
-		<div class="description">
+		<div class="description" class:textShadow={textShadowPrimary}>
 			Feature rich tools to help you debug your code. Includes breakpoints, stepping, undo,
 			register/memory diffing, decimal/hexadecimal conversions, stdout/stdin/errors, customisable shortcuts and settings, formatter and more.
 			You can even customise the theme of the editor to your liking.
@@ -106,6 +109,8 @@
 		text-align: center;
 		margin-bottom: 2rem;
 		color: var(--primary-text);
+	}
+	.textShadow{
 		text-shadow: 2px 2px 12px rgb(36 36 36);
 	}
 	.sections-wrapper {

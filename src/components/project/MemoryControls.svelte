@@ -40,7 +40,7 @@
 		<Button
 			on:click={searchAddress}
 			hasIcon
-			style="padding:0 0.5rem; height:2.4rem; width:2.2rem; margin-left: 0.4rem"
+			style="padding:0 0.5rem; height:2.4rem; width:2.2rem; margin-left: 0.2rem"
 			cssVar="primary"
 			active={parseInt(hexAddress, 16) !== currentAddress}
 		>
@@ -76,6 +76,7 @@
 <style lang="scss">
 	.address-search {
 		display: flex;
+		gap: 0.2rem;
 		align-items: center;
 		flex: 1;
 		width: 100%;
