@@ -31,11 +31,11 @@ const baseValues: SettingValues = {
     useDecimalAsDefault: createValue("Use decimal as default for registers", false),
     autoScrollStackTab: createValue("Auto scroll stack memory tab", true),
     autoSave: createValue("Auto save", false),
-    instructionsLimit: createValue("Maximum instructions iteration, 0 to ignore", 300_000),
+    instructionsLimit: createValue("Maximum instructions iteration, 0 to ignore", 500_000),
     maxHistorySize: createValue("Maximum undo history size, 0 to disable", 100),
 }
 
-const CURRENT_VERSION = "1.1.1"
+const CURRENT_VERSION = "1.1.2"
 function createSettingsStore() {
     const { subscribe, update, set } = writable<Settings>({
         meta: {
