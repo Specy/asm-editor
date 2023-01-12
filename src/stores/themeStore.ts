@@ -70,7 +70,7 @@ type StoredTheme = {
     version: number
     theme: ThemeProp[]
 }
-const debouncer = createDebouncer(1000)
+const [debouncer] = createDebouncer(1000)
 export class ThemeStoreClass{
     public textForDark = "#dbdbdb" 
     public textForLight = "#181818"

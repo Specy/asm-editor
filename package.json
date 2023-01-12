@@ -41,7 +41,7 @@
     "dexie": "^3.2.1",
     "monaco-editor": "^0.34.1",
     "s-ago": "^2.2.0",
-    "s68k": "^2.7.0",
+    "s68k": "^2.7.1",
     "sass": "^1.49.11",
     "string-similarity": "^4.0.4",
     "svelte-icons": "^2.1.0",

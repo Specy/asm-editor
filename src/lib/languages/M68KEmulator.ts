@@ -141,7 +141,7 @@ export function M68KEmulator(baseCode: string) {
     subscribe(s => current = s)
     let s68k: S68k | null = null
     let interpreter: Interpreter | null = null
-    const debouncer = createDebouncer(500)
+    const [debouncer, clearDebouncer] = createDebouncer(500)
     function compile(historySize: number): Promise<void> {
         return new Promise((res, rej) => {
             try {
@@ -178,6 +178,7 @@ export function M68KEmulator(baseCode: string) {
                 res()
             } catch (e) {
                 addError(getErrorMessage(e))
+                clearDebouncer() //stop semantic checker from overriding errors
                 rej(e)
             }
         })
@@ -203,7 +204,7 @@ export function M68KEmulator(baseCode: string) {
                     formatted: e.getMessage()
                 } as MonacoError
             ))
-            update(s => ({ ...s, code, compilerErrors: errors, errors: [] }))
+            update(s => ({ ...s, code, compilerErrors: errors, errors: [] }))            
         } catch (e) {
             console.error(e)
             addError(getErrorMessage(e))

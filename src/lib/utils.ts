@@ -6,12 +6,17 @@ export function clamp(value: number, min: number, max: number): number {
 
 export type Timer = NodeJS.Timeout | number;
 
-export function createDebouncer(delay:number){
+export function createDebouncer(delay:number): [(callback:() => void) => void, () => void]{
     let timeoutId:Timer
-    return function(callback:() => void){
+
+    function clear(){
+        clearTimeout(timeoutId)
+    }
+    function debounce(callback:() => void){
         clearTimeout(timeoutId)
         timeoutId = setTimeout(callback, delay)
     }
+    return [debounce, clear]
 }
 export default function blobDownloader(blob:Blob,fileName:string){
     const a = document.createElement('a')

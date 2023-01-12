@@ -42,7 +42,7 @@
 	}>()
 	const emulator = M68KEmulator(project.code || '')
 	const pressedKeys = new Map<String, boolean>()
-	const debounced = createDebouncer(3000)
+	const [debounced] = createDebouncer(3000)
 	function handleKeyDown(e: KeyboardEvent) {
 		pressedKeys.set(e.code, true)
 		const code = Array.from(pressedKeys.keys()).join('+')

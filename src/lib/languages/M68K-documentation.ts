@@ -97,7 +97,7 @@ export type InstructionDocumentation = {
 
 type InstructionName = string;
 
-export const branchConditions = ["hi", "ls", "cc", "cs", "ne", "eq", "vc", "vs", "pl", "mi", "ge", "lt", "gt", "le"];
+export const branchConditions = ["hi", "ls", "cc", "cs", "ne", "eq", "vc", "vs", "pl", "mi", "ge", "lt", "gt", "le", "hs", "lo"];
 
 export const branchConditionsMap = new Map<string, string>(branchConditions.map(c => [c, c]));
 export const branchConditionsDescriptions = new Map<string, string>([
@@ -115,6 +115,8 @@ export const branchConditionsDescriptions = new Map<string, string>([
     ["lt", "Less than"],
     ["gt", "Greater than"],
     ["le", "Less than or equal"],
+    ["hs", "Unsigned higher or same"],
+    ["lo", "Unsigned lower"],
 ])
 export const setConditions = [...branchConditions, "t", "f"];
 const setConditionsDescriptions = new Map<string, string>([
@@ -245,9 +247,9 @@ export const M68kDocumentation: Record<InstructionName, InstructionDocumentation
     "cmpi": makeIns("cmpi", [ONLY_Im, NO_Im], ANY_SIZE, desc.cmpi, "cmpi.w #10, d3", Size.Word),
     "cmpa": makeIns("cmpa", [ANY, ONLY_Ad], ONLY_LONG_OR_WORD, desc.cmpa, "cmpa.l $1000, a0", Size.Word),
     "cmpm": makeIns("cmpm", [ONLY_Ipi, ONLY_Ipi], ANY_SIZE, desc.cmpm, "cmpm.b (a0)+, (a1)+", Size.Word),
-    "bcc": makeIns("bcc", [ONLY_Ea], NO_SIZE, desc.bcc, "b<cc> label ; where cc is one of the condition codes"),
-    "scc": makeIns("scc", [NO_Ad_AND_NO_Im], NO_SIZE, desc.scc, "s<cc> d0 ; where cc is one of the condition codes"),
-    "dbcc": makeIns("dbcc", [ONLY_Da, ONLY_Ea], NO_SIZE, desc.dbcc, "db<cc> d0, label ; where cc is one of the condition codes"),
+    "bcc": makeIns("bcc", [ONLY_Ea], NO_SIZE, desc.bcc, "`b<cc> label` Where cc is one of the condition codes"),
+    "scc": makeIns("scc", [NO_Ad_AND_NO_Im], NO_SIZE, desc.scc, "`s<cc> d0` Where cc is one of the condition codes"),
+    "dbcc": makeIns("dbcc", [ONLY_Da, ONLY_Ea], NO_SIZE, desc.dbcc, "`db<cc> d0, label` Where cc is one of the condition codes"),
     "not": makeIns("not", [NO_Ad_AND_NO_Im], ANY_SIZE, desc.not, "not.b d0", Size.Word),
     "or": makeIns("or", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.or, "or.l #$FF, d1", Size.Word),
     "ori": makeIns("ori", [ONLY_Im, NO_IM_OR_Ad], ANY_SIZE, desc.ori, "ori.l #%1100, (a0)", Size.Word),
@@ -264,9 +266,9 @@ export const M68kDocumentation: Record<InstructionName, InstructionDocumentation
     "rts": makeIns("rts", [], NO_SIZE, desc.rts, "rts"),
     "bsr": makeIns("bsr", [ONLY_Ea], NO_SIZE, desc.bsr, "bsr label"),
     "trap": makeIns("trap", [ONLY_Im], NO_SIZE, desc.trap, "trap #15"),
-    "asd": makeIns("asd", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.asd, "as<d> d0, d3 ; where d is either (l)eft or (r)ight"),
-    "lsd": makeIns("lsd", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.lsd, "ls<d> #3, d7 ; where d is either (l)eft or (r)ight"),
-    "rod": makeIns("rod", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.rod, "ro<d> d2, d5 ; where d is either (l)eft or (r)ight"),
+    "asd": makeIns("asd", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.asd, "`as<d> d0, d3` Where d is either (l)eft or (r)ight"),
+    "lsd": makeIns("lsd", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.lsd, "`ls<d> #3, d7` Where d is either (l)eft or (r)ight"),
+    "rod": makeIns("rod", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.rod, "`ro<d> d2, d5` Where d is either (l)eft or (r)ight"),
     "btst": makeIns("btst", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.btst, "btst #4, d0"),
     "bchg": makeIns("bchg", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.bchg, "bchg #%101, d3"),
     "bclr": makeIns("bclr", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.bclr, "bclr d2, d7"),

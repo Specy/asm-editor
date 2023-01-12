@@ -21,8 +21,8 @@
 <div class="main">
 	<div class="content row">
 		<div class="preview-image" />
-		<div class="presentation" class:textShadow={textShadowPrimary}>
-			<div class="welcome-title">The all in one web editor for M68K</div>
+		<div class="presentation">
+			<div class="welcome-title" class:textShadow={textShadowPrimary}>The all in one web editor for M68K</div>
 			<div style="display: flex ;">
 				<ButtonLink
 					href="/projects"

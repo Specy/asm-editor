@@ -10,7 +10,7 @@
 
 	let moving = false
 	let bounds: DOMRect = new DOMRect(0, 0, 0, 0)
-	const debouncer = createDebouncer(100)
+	const [debouncer] = createDebouncer(100)
 	let observer = new ResizeObserver(() =>
 		debouncer(() => {
 			if (!ref) return

@@ -4,7 +4,7 @@
 </script>
 
 
-<a class="link-element" {href}>
+<a class="link-element" {href} {title}>
     <div class="link-icon">
         <slot name="icon" />
     </div>
