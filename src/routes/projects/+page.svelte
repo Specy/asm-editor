@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { ProjectStore } from '$stores/projectsStore'
-	import ProjectCard from '$cmp/project/Card.svelte'
+	import ProjectCard from '$cmp/project/ProjectCard.svelte'
 	import { onMount } from 'svelte'
 	import Button from '$cmp/buttons/Button.svelte'
 	import Icon from '$cmp/layout/Icon.svelte'
 	import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
+	import FaPlus from 'svelte-icons/fa/FaPlus.svelte'
 	import Title from '$cmp/layout/Title.svelte'
 	import ButtonLink from '$cmp/buttons/ButtonLink.svelte'
 	import { scale } from 'svelte/transition'
@@ -41,12 +42,20 @@
 		<div class="project-grid">
 			{#each $projects as project, i (project.id)}
 				<div
-					in:scale={{ duration: 200, delay: i * 75 + 150, start: 0.9 }}
+					in:scale={{ duration: 200, delay: i * 50 + 150, start: 0.9 }}
 					out:scale|local={{ duration: 300, start: 0.8 }}
 				>
 					<ProjectCard {project} />
 				</div>
 			{/each}
+			<div class="add-project">
+				<Icon size={2.5}>
+					<FaPlus />
+				</Icon>
+				<div>
+					Create project
+				</div>
+			</div>
 		</div>
 	</div>
 </div>
@@ -58,6 +67,17 @@
 		align-items: center;
 		margin-top: 4rem;
 		margin-bottom: 2rem;
+	}
+	.add-project{
+		display: none;
+		justify-content: center;
+		flex-direction: column;
+		gap: 1rem;
+		align-items: center;
+		height: 100%;
+		border-radius: 0.6rem;
+		color: var(--accent);
+		border: solid 0.1rem var(--accent);
 	}
 	.project-display {
 		display: flex;
