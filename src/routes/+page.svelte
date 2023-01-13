@@ -8,6 +8,7 @@
 	import FaTools from 'svelte-icons/fa/FaTools.svelte'
 	import MainPageSection from '$cmp/main/HeroSection.svelte'
 	import AnimatedRgbLine from '$cmp/misc/AnimatedRgbLine.svelte'
+	import GoLinkExternal from 'svelte-icons/go/GoLinkExternal.svelte'
 	import { ThemeStore } from '$stores/themeStore'
 	const textShadowPrimary = ThemeStore.getColor("primary").isDark()
 	const textShadowSecondary = ThemeStore.getColor("secondary").isDark()
@@ -49,7 +50,7 @@
 	<AnimatedRgbLine height="0.5rem" style="border-radius: 0;" />
 	<div class="links-row-wrapper">
 		<div class="links-row">
-			<MainPageLinkPreview href="#documentation" title="Documentation section">
+			<MainPageLinkPreview href="/documentation" title="Documentation page">
 				<div slot="icon">
 					<FaBook />
 				</div>
@@ -79,7 +80,10 @@
 			valid addressing modes, description, examples for each instruction and directive.
 		<br/>
 			<a href="/documentation" title="View documentation" class="docs-visit">
-				Or visit the documentation
+					Or visit the documentation
+				<div style="width: 1rem; height: 1rem; margin-top: 0.2rem; margin-left: 0.3rem">
+					<GoLinkExternal/>
+				</div>
 			</a>
 		</div>
 	</MainPageSection>
@@ -123,7 +127,8 @@
 		flex-direction: column;
 		justify-content: center;
 		align-items: center;
-		background-color: rgba(var(--RGB-primary), 0.94);
+		background-color: rgba(var(--RGB-primary), 0.9);
+		backdrop-filter: blur(5px);
 		z-index: 2;
 	}
 	:global(body) {
@@ -131,7 +136,12 @@
 	}
 	.docs-visit{
 		color: var(--accent);
+		display: flex;
+		&:hover{
+			text-decoration: underline;
+		}
 	}
+	
 	.links-row-wrapper{
 		background-color: var(--secondary);
 		color: var(--secondary-text);
@@ -154,7 +164,7 @@
 		animation: gradient 15s ease infinite;
 		background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
 		*/
-		height: 100vh;
+		min-height: 100vh;
 		border-radius: 0.6rem;
 		.content {
 			display: flex;
@@ -176,7 +186,6 @@
 		background-repeat: no-repeat;
 		background-position: center;
 		background-size: cover;
-		border: solid 0.1rem var(--accent);
 	}
 
 	@media screen and (max-width: 650px) {

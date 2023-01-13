@@ -8,7 +8,6 @@ export type Timer = NodeJS.Timeout | number;
 
 export function createDebouncer(delay:number): [(callback:() => void) => void, () => void]{
     let timeoutId:Timer
-
     function clear(){
         clearTimeout(timeoutId)
     }
