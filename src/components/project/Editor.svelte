@@ -14,7 +14,7 @@
 	export let errors: MonacoError[]
 	export let breakpoints: number[]
 	let mockEditor: HTMLDivElement | null
-	let editor: monaco.editor.IStandaloneCodeEditor | null
+	export let editor: monaco.editor.IStandaloneCodeEditor | null = null
 	let monacoInstance: MonacoType | null
 	let decorations = []
 	let hoveredGliphen: number | null

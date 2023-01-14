@@ -17,9 +17,10 @@
 	outline: none;
 }
 
-.wrap{
+.wrap {
 	flex-wrap: wrap;
 }
+
 body,
 html {
 	min-height: 100%;
@@ -31,6 +32,12 @@ html {
 	font-family: Orienta;
 	flex-direction: column;
 	overflow-x: hidden;
+}
+
+.ellipsis {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 a {

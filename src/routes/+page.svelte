@@ -98,12 +98,13 @@
 	<MainPageSection id="tools" imageUrl="/images/ASM-Tools.webp">
 		<div slot="title">Tools & Customisation</div>
 		<div class="description" class:textShadow={textShadowPrimary}>
-			Feature rich tools to help you debug your code. Includes breakpoints, stepping, undo,
+			Feature rich tools to help you debug your code. Includes breakpoints, stepping, undo, stack tracer,
 			register/memory diffing, decimal/hexadecimal conversions, stdout/stdin/errors, customisable shortcuts and settings, formatter and more.
-			You can even customise the theme of the editor to your liking.
+			You can also customise the theme of the editor to your liking.
 		</div>
 	</MainPageSection>
 </div>
+
 <div class="pre-footer" />
 
 <style lang="scss">

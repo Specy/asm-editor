@@ -1,5 +1,6 @@
 import { get, writable } from "svelte/store"
-import { InterpreterStatus, Size, type Interrupt, type ParsedLine } from "s68k"
+import { InterpreterStatus, Size, type Interrupt, type ParsedLine, type Label } from "s68k"
+
 import { S68k, Interpreter } from "s68k"
 import { MEMORY_SIZE, PAGE_SIZE, PAGE_ELEMENTS_PER_ROW } from "$lib/Config"
 import { Prompt } from "$stores/promptStore"
@@ -79,6 +80,7 @@ export type EmulatorStore = {
     terminated: boolean
     interrupt?: Interrupt
     statusRegister?: StatusRegister[]
+    callStack: Label[]
     line: number,
     code: string,
     sp: number,
@@ -121,6 +123,7 @@ export function M68KEmulator(baseCode: string) {
         code: baseCode,
         statusRegister: ["X", "N", "Z", "V", "C"].map(n => ({ name: n, value: 0 })),
         compilerErrors: [],
+        callStack: [],
         errors: [],
         sp: 0,
         stdOut: "",
@@ -229,6 +232,7 @@ export function M68KEmulator(baseCode: string) {
                 interrupt: undefined,
                 errors: [],
                 canExecute: false,
+                callStack: [],
                 compilerErrors: [],
                 memory: {
                     global: createMemoryTab(PAGE_SIZE, "Global", 0x1000, PAGE_ELEMENTS_PER_ROW),
@@ -303,6 +307,12 @@ export function M68KEmulator(baseCode: string) {
             return data
         })
     }
+    function updateCallStack() {
+        update(data => {
+            data.callStack = interpreter.getCallStack()
+            return data
+        })
+    }
     function addError(error: string) {
         update(data => {
             data.errors = [...data.errors, error]
@@ -339,6 +349,7 @@ export function M68KEmulator(baseCode: string) {
         updateStatusRegisters()
         updateMemory()
         updateData()
+        updateCallStack()
         scrollStackTab()
         return interpreter.getStatus() != InterpreterStatus.Running
     }
@@ -355,6 +366,7 @@ export function M68KEmulator(baseCode: string) {
             updateMemory()
             updateStatusRegisters()
             scrollStackTab()
+            updateCallStack()
         } catch (e) {
             addError(getErrorMessage(e))
             update(d => ({ ...d, terminated: true }))
@@ -465,6 +477,7 @@ export function M68KEmulator(baseCode: string) {
             updateStatusRegisters()
             updateMemory()
             scrollStackTab()
+            updateCallStack()
             return interpreter.getStatus()
         } catch (e) {
             console.error(e)

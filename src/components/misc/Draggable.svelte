@@ -26,8 +26,8 @@
 			left += e.movementX
 			top += e.movementY
 			if (clampPosition) {
-				top = clamp(top, 0, Number.MAX_SAFE_INTEGER)
-				left = clamp(left, 0, window.innerWidth - bounds.width)
+				top = clamp(top, 6, window.innerHeight - bounds.height - 6)
+				left = clamp(left, 6, window.innerWidth - bounds.width - 6)
 			}
 		}
 	}
@@ -50,7 +50,7 @@
 	.draggable {
 		user-select: none;
 		position: absolute;
-		z-index: 2;
+		z-index: 10;
 	}
 	@media (hover: none) {
 		.draggable {

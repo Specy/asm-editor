@@ -28,6 +28,9 @@
 	import SizeSelector from './SizeSelector.svelte'
 	import { Size } from 's68k'
 	import { settingsStore } from '$stores/settingsStore'
+	import FloatingCallStack from './FloatingCallStack.svelte'
+	import type monaco from 'monaco-editor'
+	let editor: monaco.editor.IStandaloneCodeEditor
 	let running = false
 	let settingsVisible = false
 	let documentationVisible = false
@@ -208,6 +211,26 @@
 	<M68KDocumentation bind:visible={documentationVisible} />
 </header>
 
+<FloatingCallStack 
+	stack={$emulator.callStack}
+	on:gotoLabel={(e) => {
+		const label = e.detail
+		editor.revealLine(label.line + 1)
+		editor.setPosition({ lineNumber: label.line + 1, column: 1 })
+	}}
+/>
+
+{#each $emulator.memory.tabs as tab}
+	<MemoryTab
+		{tab}
+		sp={$emulator.sp}
+		on:addressChange={(e) => {
+			const { tab, address } = e.detail
+			emulator.setTabMemoryAddress(address, tab.id)
+		}}
+	/>
+{/each}
+
 <div class="editor-memory-wrapper">
 	<div class="editor-wrapper">
 		<div
@@ -230,6 +253,7 @@
 				on:breakpointPress={(d) => {
 					emulator.toggleBreakpoint(d.detail - 1)
 				}}
+				bind:editor={editor}
 				bind:code={project.code}
 				breakpoints={$emulator.breakpoints}
 				errors={$emulator.compilerErrors}
@@ -305,16 +329,7 @@
 					}}
 				/>
 			</div>
-			{#each $emulator.memory.tabs as tab}
-				<MemoryTab
-					{tab}
-					sp={$emulator.sp}
-					on:addressChange={(e) => {
-						const { tab, address } = e.detail
-						emulator.setTabMemoryAddress(address, tab.id)
-					}}
-				/>
-			{/each}
+
 			<div class="column">
 				<div class="row">
 					<SizeSelector bind:selected={groupSize} />
