@@ -38,7 +38,7 @@
 	class="draggable"
 	bind:this={ref}
 >
-	<div class="row" on:pointerdown={() => (moving = true)} style="cursor: move;">
+	<div class="row" on:pointerdown={() => (moving = true)} style="cursor: move; user-select: none;">
 		<slot name="header" />
 	</div>
 	<slot />
@@ -48,7 +48,6 @@
 
 <style>
 	.draggable {
-		user-select: none;
 		position: absolute;
 		z-index: 10;
 	}

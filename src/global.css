@@ -73,7 +73,9 @@ input:disabled {
 .justify-center {
 	justify-items: center;
 }
-
+.space-between {
+	justify-content: space-between;
+}
 .flex-center {
 	align-items: center;
 	justify-content: center;

@@ -13,6 +13,7 @@ export type SettingValues = {
     instructionsLimit: SettingValue<number>
     autoSave: SettingValue<boolean>
     maxHistorySize: SettingValue<number>
+    maxVisibleHistoryModifications: SettingValue<number>
 }
 export type Settings = {
     meta: {
@@ -33,9 +34,10 @@ const baseValues: SettingValues = {
     autoSave: createValue("Auto save", false),
     instructionsLimit: createValue("Maximum instructions iteration, 0 to ignore", 500_000),
     maxHistorySize: createValue("Maximum undo history size, 0 to disable", 100),
+    maxVisibleHistoryModifications: createValue("Maximum visible history modifications", 10)
 }
 
-const CURRENT_VERSION = "1.1.2"
+const CURRENT_VERSION = "1.1.3"
 function createSettingsStore() {
     const { subscribe, update, set } = writable<Settings>({
         meta: {

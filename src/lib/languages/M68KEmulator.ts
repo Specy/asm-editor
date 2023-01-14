@@ -1,5 +1,5 @@
 import { get, writable } from "svelte/store"
-import { InterpreterStatus, Size, type Interrupt, type ParsedLine, type Label } from "s68k"
+import { InterpreterStatus, Size, type Interrupt, type ParsedLine, type Label, type ExecutionStep } from "s68k"
 
 import { S68k, Interpreter } from "s68k"
 import { MEMORY_SIZE, PAGE_SIZE, PAGE_ELEMENTS_PER_ROW } from "$lib/Config"
@@ -80,6 +80,7 @@ export type EmulatorStore = {
     terminated: boolean
     interrupt?: Interrupt
     statusRegister?: StatusRegister[]
+    latestSteps: ExecutionStep[]
     callStack: Label[]
     line: number,
     code: string,
@@ -126,6 +127,7 @@ export function M68KEmulator(baseCode: string) {
         callStack: [],
         errors: [],
         sp: 0,
+        latestSteps: [],
         stdOut: "",
         canUndo: false,
         canExecute: false,
@@ -232,6 +234,7 @@ export function M68KEmulator(baseCode: string) {
                 interrupt: undefined,
                 errors: [],
                 canExecute: false,
+                latestSteps: [],
                 callStack: [],
                 compilerErrors: [],
                 memory: {
@@ -304,21 +307,19 @@ export function M68KEmulator(baseCode: string) {
     function updateData() {
         update(data => {
             data.terminated = interpreter.hasReachedBottom()
-            return data
-        })
-    }
-    function updateCallStack() {
-        update(data => {
             data.callStack = interpreter.getCallStack()
+            data.latestSteps = interpreter.getUndoHistory(settings.values.maxVisibleHistoryModifications.value)
             return data
         })
     }
+
     function addError(error: string) {
         update(data => {
             data.errors = [...data.errors, error]
             return data
         })
     }
+
     async function step() {
         let lastLine = -1
         try {
@@ -349,13 +350,14 @@ export function M68KEmulator(baseCode: string) {
         updateStatusRegisters()
         updateMemory()
         updateData()
-        updateCallStack()
         scrollStackTab()
         return interpreter.getStatus() != InterpreterStatus.Running
     }
-    function undo() {
+    function undo(amount = 1) {
         try {
-            interpreter?.undo()
+            for (let i = 0; i < amount && interpreter?.canUndo(); i++){
+                interpreter?.undo()
+            }
             const instruction = interpreter?.getNextInstruction()
             update(d => ({
                 ...d,
@@ -366,7 +368,7 @@ export function M68KEmulator(baseCode: string) {
             updateMemory()
             updateStatusRegisters()
             scrollStackTab()
-            updateCallStack()
+            updateData()
         } catch (e) {
             addError(getErrorMessage(e))
             update(d => ({ ...d, terminated: true }))
@@ -477,7 +479,6 @@ export function M68KEmulator(baseCode: string) {
             updateStatusRegisters()
             updateMemory()
             scrollStackTab()
-            updateCallStack()
             return interpreter.getStatus()
         } catch (e) {
             console.error(e)

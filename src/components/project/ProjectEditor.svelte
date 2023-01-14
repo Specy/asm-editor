@@ -28,8 +28,10 @@
 	import SizeSelector from './SizeSelector.svelte'
 	import { Size } from 's68k'
 	import { settingsStore } from '$stores/settingsStore'
-	import FloatingCallStack from './FloatingCallStack.svelte'
 	import type monaco from 'monaco-editor'
+	import ToggleableDraggable from '$cmp/ToggleableDraggable.svelte'
+	import CallStack from './CallStack.svelte'
+	import MutationsViewer from './MutationsViewer.svelte'
 	let editor: monaco.editor.IStandaloneCodeEditor
 	let running = false
 	let settingsVisible = false
@@ -211,18 +213,21 @@
 	<M68KDocumentation bind:visible={documentationVisible} />
 </header>
 
-<FloatingCallStack 
-	stack={$emulator.callStack}
-	on:gotoLabel={(e) => {
-		const label = e.detail
-		editor.revealLine(label.line + 1)
-		editor.setPosition({ lineNumber: label.line + 1, column: 1 })
-	}}
-/>
+<ToggleableDraggable title="Call stack" left={300}>
+	<CallStack
+		stack={$emulator.callStack}
+		on:gotoLabel={(e) => {
+			const label = e.detail
+			editor.revealLineInCenter(label.line + 1)
+			editor.setPosition({ lineNumber: label.line + 1, column: 1 })
+		}}
+	/>
+</ToggleableDraggable>
 
 {#each $emulator.memory.tabs as tab}
 	<MemoryTab
 		{tab}
+		left={500}
 		sp={$emulator.sp}
 		on:addressChange={(e) => {
 			const { tab, address } = e.detail
@@ -230,7 +235,20 @@
 		}}
 	/>
 {/each}
-
+<ToggleableDraggable title="History" left={700}>
+	<MutationsViewer
+		on:undo={(e) => {
+			const amount = e.detail
+			emulator.undo(amount)
+		}}
+		on:highlight={(e) => {
+			const line = e.detail
+			editor.revealLineInCenter(line + 1)
+			editor.setPosition({ lineNumber: line + 1, column: 0 })
+		}}
+		steps={$emulator.latestSteps}
+	/>
+</ToggleableDraggable>
 <div class="editor-memory-wrapper">
 	<div class="editor-wrapper">
 		<div
@@ -253,7 +271,7 @@
 				on:breakpointPress={(d) => {
 					emulator.toggleBreakpoint(d.detail - 1)
 				}}
-				bind:editor={editor}
+				bind:editor
 				bind:code={project.code}
 				breakpoints={$emulator.breakpoints}
 				errors={$emulator.compilerErrors}

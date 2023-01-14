@@ -5,20 +5,18 @@
 	import FaCircle from 'svelte-icons/fa/FaCircle.svelte'
 	import FaLongArrowAltUp from 'svelte-icons/fa/FaLongArrowAltUp.svelte'
 	export let stack: Label[]
-	const dispatcher = createEventDispatcher<{gotoLabel: Label}>()
+	const dispatcher = createEventDispatcher<{ gotoLabel: Label }>()
 </script>
 
 <div class="call-stack-wrapper">
 	<div class="call-stack">
 		{#if stack.length === 0}
-			<div style="padding: 0.4rem">
-				Call stack empty
-			</div>
+			<div class="row" style="justify-content: center; padding: 0.4rem">Call stack empty</div>
 		{/if}
 		{#each [...stack].reverse() as label, i}
-			<button 
-				class:noHover={label.name === ""}
-				class="label-name row" 
+			<button
+				class:noHover={label.name === ''}
+				class="label-name row"
 				on:click={() => {
 					dispatcher('gotoLabel', label)
 				}}
@@ -27,7 +25,7 @@
 					<FaCircle />
 				</Icon>
 				<div class="ellipsis">
-					{label.name || `0x${label.address.toString(16)}`}
+					{label.name || `0x${label.address.toString(16).toUpperCase()}`}
 				</div>
 			</button>
 			{#if i < stack.length - 1}
@@ -71,7 +69,7 @@
 			background-color: var(--tertiary);
 		}
 	}
-	.noHover{
+	.noHover {
 		cursor: default;
 		&:hover {
 			background-color: transparent;

@@ -1,19 +1,13 @@
 <script lang="ts">
-	import Button from '$cmp/buttons/Button.svelte'
-	import Icon from '$cmp/layout/Icon.svelte'
-	import Draggable from '$cmp/misc/Draggable.svelte'
+	import ToggleableDraggable from '$cmp/ToggleableDraggable.svelte'
 	import { MEMORY_SIZE } from '$lib/Config'
 	import type { MemoryTab } from '$lib/languages/M68KEmulator'
 	import { createEventDispatcher } from 'svelte'
-	import FaEye from 'svelte-icons/fa/FaEye.svelte'
-	import FaEyeSlash from 'svelte-icons/fa/FaEyeSlash.svelte'
-	import FaGripHorizontal from 'svelte-icons/fa/FaGripHorizontal.svelte'
-	import { fly } from 'svelte/transition'
 	import MemoryControls from './MemoryControls.svelte'
 	import MemoryVisualiser from './MemoryVisualiser.svelte'
 	export let sp: number
 	export let tab: MemoryTab
-	let hidden = true
+	export let left = 500
 	const dispatcher = createEventDispatcher<{
 		addressChange: {
 			address: number
@@ -22,79 +16,29 @@
 	}>()
 </script>
 
-<Draggable hiddenOnMobile left={500}>
-	<button slot="header" class="tab-header row" class:hidden on:dblclick={() => (hidden = !hidden)}>
-		<Icon style="cursor:inherit; padding: 0.2rem 0.4rem; height: 1.4rem; width: 1.6rem; min-width: 1.6rem">
-			<FaGripHorizontal />
-		</Icon>
-		<div class="ellipsis">Stack pointer</div>
-		<Button
-			style="padding: 0.2rem 0.3rem; height: 1.4rem; border-radius: 0.3rem"
-			cssVar="secondary"
-			on:click={() => (hidden = !hidden)}
-		>
-			<Icon size={1.1}>
-				{#if !hidden}
-					<FaEye />
-				{:else}
-					<FaEyeSlash />
-				{/if}
-			</Icon>
-		</Button>
-	</button>
-	{#if !hidden}
-		<div class="tab" in:fly={{ x: -10, duration: 400 }} out:fly={{ x: -10, duration: 300 }}>
-			<MemoryControls
-				bytesPerPage={tab.pageSize}
-				memorySize={MEMORY_SIZE}
-				currentAddress={tab.address}
-				inputStyle="width: 6rem"
-				on:addressChange={async (e) => {
-					dispatcher('addressChange', { address: e.detail, tab })
-				}}
-				hideLabel
-			/>
-			<MemoryVisualiser
-				bytesPerRow={tab.rowSize}
-				pageSize={tab.pageSize}
-				memory={tab.data}
-				currentAddress={tab.address}
-				{sp}
-			/>
-		</div>
-	{/if}
-</Draggable>
+<ToggleableDraggable title="Stack pointer" {left}>
+	<div class="tab column">
+		<MemoryControls
+			bytesPerPage={tab.pageSize}
+			memorySize={MEMORY_SIZE}
+			currentAddress={tab.address}
+			inputStyle="width: 6rem"
+			on:addressChange={async (e) => {
+				dispatcher('addressChange', { address: e.detail, tab })
+			}}
+			hideLabel
+		/>
+		<MemoryVisualiser
+			bytesPerRow={tab.rowSize}
+			pageSize={tab.pageSize}
+			memory={tab.data}
+			currentAddress={tab.address}
+			{sp}
+		/>
+	</div>
+</ToggleableDraggable>
 
 <style lang="scss">
-	.tab-header {
-		display: flex;
-		min-width: 12rem;
-		width: 100%;
-		color: var(--secondary-text);
-		margin-bottom: -0.1rem;
-		box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
-		justify-content: space-between;
-        gap: 0.3rem;
-		z-index: 2;
-		height: 1.6rem;
-		transition: all 0.2s ease-out;
-		align-items: center;
-		cursor: move;
-		background-color: var(--secondary);
-		color: var(--secondary-text);
-		position: relative;
-		border-top-left-radius: 0.4rem;
-		border-top-right-radius: 0.4rem;
-		border: 0.1rem solid transparent;
-		font-family: Orienta;
-		&.hidden {
-			width: 0;
-			min-width: 9rem;
-			border-bottom-left-radius: 0.4rem;
-			border-color: var(--accent2);
-			border-bottom-right-radius: 0.4rem;
-		}
-	}
 	.tab {
 		background-color: var(--primary);
 		color: var(--primary-text);
