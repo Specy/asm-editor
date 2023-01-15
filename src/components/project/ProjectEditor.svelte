@@ -32,6 +32,8 @@
 	import ToggleableDraggable from '$cmp/ToggleableDraggable.svelte'
 	import CallStack from './CallStack.svelte'
 	import MutationsViewer from './MutationsViewer.svelte'
+	import ButtonLink from '$cmp/buttons/ButtonLink.svelte'
+	import FaDonate from 'svelte-icons/fa/FaDonate.svelte'
 	let editor: monaco.editor.IStandaloneCodeEditor
 	let running = false
 	let settingsVisible = false
@@ -149,6 +151,11 @@
 	</div>
 
 	<div class="row" style="gap: 0.5rem;">
+		<ButtonLink href="/donate" cssVar="accent2" style="padding:0; width:2.2rem; height:2.2rem" hasIcon>
+			<Icon>
+				<FaDonate />
+			</Icon>
+		</ButtonLink>
 		<Button
 			on:click={() => {
 				shortcutsVisible = !shortcutsVisible

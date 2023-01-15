@@ -1,11 +1,11 @@
 <script lang="ts">
 	import FaGithub from 'svelte-icons/fa/FaGithub.svelte'
 	import FaRegCopyright from 'svelte-icons/fa/FaRegCopyright.svelte'
-	import Kofi from '$cmp/misc/KoFi.svelte'
 	import Icon from './Icon.svelte'
 	import { toast } from '$stores/toastStore'
     import { page } from '$app/stores';
 	import AnimatedRgbLine from '$cmp/misc/AnimatedRgbLine.svelte'
+	import FaDonate from 'svelte-icons/fa/FaDonate.svelte'
 	export let pages = []
 </script>
 
@@ -22,9 +22,9 @@
 				</a>
 
 				<div class="icon-wrapper">
-					<a class="icon" href="https://ko-fi.com/specy" title="Donate on kofi">
+					<a class="icon" href="/donate" title="Donate and support me">
 						<Icon size={1.6}>
-							<Kofi />	
+							<FaDonate />	
 						</Icon>
 					</a>
 					<div class="icon">

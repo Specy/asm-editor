@@ -1,4 +1,5 @@
-<script>
+<script lang="ts">
+	import { afterNavigate } from '$app/navigation'
 	import Button from '$cmp/buttons/Button.svelte'
 	import ColorThemeRow from '$cmp/ColorThemeRow.svelte'
 	import Icon from '$cmp/layout/Icon.svelte'
@@ -13,6 +14,10 @@
 			theme = ThemeStore.toArray()
 		})
 	})
+	let previousPage: string = '/projects'
+	afterNavigate(({ from }) => {
+		previousPage = from?.url.pathname ?? previousPage
+	})
 </script>
 
 <svelte:head>
@@ -23,8 +28,8 @@
 <main class="page">
 	<div class="content">
 		<div class="header">
-			<a href="/projects" class="go-back" title="Go to the main page">
-				<Button hasIcon cssVar="primary" style="padding: 0.4rem" title="Go to the main page">
+			<a href={previousPage} class="go-back" title="Go to previous page">
+				<Button hasIcon cssVar="primary" style="padding: 0.4rem" title="Go to previous page">
 					<Icon size={2}>
 						<FaAngleLeft />
 					</Icon>
