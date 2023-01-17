@@ -134,24 +134,26 @@
 </script>
 
 <header class="project-header">
-	<div class="row">
-		<a
-			href="/projects"
-			title="Go back to your projects"
-			on:click={(e) => {
-				e.preventDefault()
-				dispatcher('wantsToLeave')
-			}}
+	<a
+		href="/projects"
+		title="Go back to your projects"
+		on:click={(e) => {
+			e.preventDefault()
+			dispatcher('wantsToLeave')
+		}}
+	>
+		<Icon size={2}>
+			<FaAngleLeft />
+		</Icon>
+	</a>
+	<h1 style="font-size: 1.6rem; margin-left: 0.4rem" class="ellipsis">{project.name}</h1>
+	<div class="row" style="gap: 0.5rem; margin-left: auto;">
+		<ButtonLink
+			href="/donate"
+			cssVar="accent2"
+			style="padding:0; width:2.2rem; height:2.2rem"
+			hasIcon
 		>
-			<Icon size={2}>
-				<FaAngleLeft />
-			</Icon>
-		</a>
-		<h1 style="font-size: 1.6rem; margin-left: 0.4rem">{project.name}</h1>
-	</div>
-
-	<div class="row" style="gap: 0.5rem;">
-		<ButtonLink href="/donate" cssVar="accent2" style="padding:0; width:2.2rem; height:2.2rem" hasIcon>
 			<Icon>
 				<FaDonate />
 			</Icon>
@@ -388,18 +390,9 @@
 <style lang="scss">
 	.project-header {
 		display: flex;
+		align-items: center;
 		justify-content: space-between;
 		margin-bottom: 0.4rem;
-
-		.row {
-			display: flex;
-			align-items: center;
-			h1 {
-				white-space: nowrap;
-				overflow: hidden;
-				text-overflow: ellipsis;
-			}
-		}
 	}
 
 	.editor-memory-wrapper {
