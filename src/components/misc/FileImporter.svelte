@@ -4,7 +4,12 @@
 	export let as: inputTypes = 'text'
 	import { createEventDispatcher } from 'svelte'
 
-	const dispatch = createEventDispatcher()
+	type FileResult = {
+			
+		data: string | ArrayBuffer | null
+		file: File
+	}
+	const dispatch = createEventDispatcher<{import: FileResult}>()
 	let input
 	function onChange(event: any) {
 		if (event.target.files.length === 0) return

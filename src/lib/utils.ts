@@ -17,7 +17,7 @@ export function createDebouncer(delay:number): [(callback:() => void) => void, (
     }
     return [debounce, clear]
 }
-export default function blobDownloader(blob:Blob,fileName:string){
+export function blobDownloader(blob:Blob,fileName:string){
     const a = document.createElement('a')
     a.style.display = 'none'
     document.body.appendChild(a)
@@ -26,6 +26,9 @@ export default function blobDownloader(blob:Blob,fileName:string){
     a.click()
     a.remove()
     URL.revokeObjectURL(a.href)
+}
+export function textDownloader(text: string, fileName){
+    blobDownloader(new Blob([text], { type: "text/json" }), fileName)
 }
 export function getErrorMessage(error: any, lineNumber?: number): string{
     const prepend = lineNumber ? `Error at line ${lineNumber}:` : ""

@@ -6,9 +6,13 @@
 	import Icon from '$cmp/layout/Icon.svelte'
 	import { Prompt, PromptType } from '$stores/promptStore'
 	import ButtonLink from '$cmp/buttons/ButtonLink.svelte'
+	import Button from '$cmp/buttons/Button.svelte'
+	import FaDownload from 'svelte-icons/fa/FaDownload.svelte'
+	import { createEventDispatcher } from 'svelte'
 	export let project: Project
 	let textContent = project.name || 'Unnamed'
 	let descriptionContent = project.description || ''
+	const dispatcher = createEventDispatcher<{download: Project}>()
 	function save() {
 		project.name = textContent
 		project.description = descriptionContent
@@ -44,7 +48,17 @@
 		<div style="margin-left: 0.4rem">
 			{project.language.toUpperCase()}
 		</div>
-		<div style="display: flex;">
+		<div style="display: flex; gap: 0.4rem">
+			<Button
+				cssVar="secondary"
+				style="width: 2.2rem; height: 2.2rem;"
+				title="Download this project"
+				on:click={() => dispatcher('download', project)}
+			>
+				<Icon>
+					<FaDownload />
+				</Icon>
+			</Button>
 			<button class="trash-icon" on:click={deleteProject} title="Delete this project">
 				<Icon>
 					<FaTrashAlt />
@@ -87,8 +101,8 @@
 		background-color: var(--secondary);
 		color: var(--red);
 		width: 2.2rem;
+		cursor: pointer;
 		height: 2.2rem;
-		margin-right: 0.5rem;
 		display: flex;
 		justify-content: center;
 		align-items: center;

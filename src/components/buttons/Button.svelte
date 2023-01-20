@@ -37,6 +37,7 @@
 		border: none;
 		width: fit-content;
 		user-select: none;
+		font-family: Orienta;
 		position: relative;
 		cursor: pointer;
 	}

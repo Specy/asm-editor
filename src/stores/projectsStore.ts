@@ -1,8 +1,10 @@
 import { browser } from "$app/environment"
 import { db } from "$lib/db"
-import type { Project } from "$lib/Project"
+import { Project } from "$lib/Project"
 import { get, writable } from "svelte/store"
 import type { Writable } from "svelte/store"
+
+
 
 
 export class ProjectStoreClass{
@@ -28,6 +30,10 @@ export class ProjectStoreClass{
     async delete(project:Project): Promise<void>{
         await db.deleteProject(project)
         await this.load()
+    }
+    async importFromExternal(code: string){
+        const project = Project.fromExternal(code)
+        this.addProject(project)
     }
     getProject(id: string){
         return get(this.projects).find(project => project.id === id)

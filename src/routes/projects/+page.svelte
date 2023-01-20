@@ -9,14 +9,36 @@
 	import Title from '$cmp/layout/Title.svelte'
 	import ButtonLink from '$cmp/buttons/ButtonLink.svelte'
 	import { scale } from 'svelte/transition'
+	import FileImporter from '$cmp/misc/FileImporter.svelte'
+	import { textDownloader } from '$lib/utils'
+	import FaUpload from 'svelte-icons/fa/FaUpload.svelte'
+	import { toast } from '$stores/toastStore'
 	const { projects } = ProjectStore
 	onMount(() => {
 		ProjectStore.load()
+		try {
+			if ('launchQueue' in window) {
+				console.log('File Handling API is supported!')
+				launchQueue.setConsumer(async (launchParams) => {
+					for (const file of launchParams.files) {
+						const blob = await file.getFile()
+						blob.handle = file
+						const text = await blob.text()
+						ProjectStore.importFromExternal(text)
+						toast.success('Imported project!')
+					}
+				})
+			} else {
+				console.error('File Handling API is not supported!')
+			}
+		} catch (e) {
+			console.error(e)
+		}
 	})
 </script>
 
 <svelte:head>
-	<title> Projects </title>
+	<title>Projects</title>
 	<meta name="description" content="Create, edit or delete your projects" />
 </svelte:head>
 <div class="project-display">
@@ -32,7 +54,28 @@
 				</a>
 				<Title style="margin: 0">Your projects</Title>
 			</div>
-			<ButtonLink href="/projects/create" title="Create a new project"> Create </ButtonLink>
+			<div class="row top-row-buttons">
+				<FileImporter
+					on:import={(e) => {
+						ProjectStore.importFromExternal(e.detail.data)
+						toast.success('Imported project!')
+					}}
+					as="text"
+				>
+					<Button cssVar="secondary">
+						<Icon style="margin-right: 0.4rem" size={1}>
+							<FaUpload />
+						</Icon>
+						Import
+					</Button>
+				</FileImporter>
+				<ButtonLink href="/projects/create" title="Create a new project">
+					<Icon style="margin-right: 0.3rem" size={1}>
+						<FaPlus />
+					</Icon>
+					Create
+				</ButtonLink>
+			</div>
 		</div>
 		{#if $projects.length === 0}
 			<h3 style="margin-top: 4rem; margin-left: 2rem; font-weight:unset">
@@ -45,16 +88,22 @@
 					in:scale={{ duration: 200, delay: i * 50 + 150, start: 0.9 }}
 					out:scale|local={{ duration: 300, start: 0.8 }}
 				>
-					<ProjectCard {project} />
+					<ProjectCard
+						{project}
+						on:download={(e) => {
+							textDownloader(
+								e.detail.toExternal(),
+								`${(e.detail.name ?? 'Untitled project').split(' ').join('_')}.s68k`
+							)
+						}}
+					/>
 				</div>
 			{/each}
 			<div class="add-project">
 				<Icon size={2.5}>
 					<FaPlus />
 				</Icon>
-				<div>
-					Create project
-				</div>
+				<div>Create project</div>
 			</div>
 		</div>
 	</div>
@@ -68,7 +117,10 @@
 		margin-top: 4rem;
 		margin-bottom: 2rem;
 	}
-	.add-project{
+	.top-row-buttons {
+		gap: 0.8rem;
+	}
+	.add-project {
 		display: none;
 		justify-content: center;
 		flex-direction: column;
@@ -108,6 +160,13 @@
 	@media screen and (max-width: 650px) {
 		.top-row {
 			margin-top: 1rem;
+			margin-bottom: 1rem;
+			flex-direction: column;
+			align-items: unset;
+			gap: 1rem;
+		}
+		.top-row-buttons{
+			justify-content: flex-end;
 		}
 		.project-display {
 			padding: 1rem;
