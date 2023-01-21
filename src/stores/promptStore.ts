@@ -33,11 +33,11 @@ function createPromptStore() {
         })
         return promise
     }
-    function confirm(question: string, cancellable = true){
-        return ask(question, PromptType.Confirm, cancellable)
+    function confirm(question: string, cancellable = true): Promise<boolean>{
+        return ask(question, PromptType.Confirm, cancellable) as any as Promise<boolean>
     }
     function askText(question: string, cancellable = true, placeholder = ""){
-        return ask(question, PromptType.Text, cancellable, placeholder)
+        return ask(question, PromptType.Text, cancellable, placeholder) as any as Promise<string>
     }
     function answer(value: string | boolean) {
         current.resolve?.(value)

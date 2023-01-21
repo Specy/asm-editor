@@ -8,7 +8,12 @@
 	import Footer from '$cmp/layout/Footer.svelte'
 	import { onMount } from 'svelte'
 	import { registerServiceWorker } from '$lib/register-sw'
-	onMount(registerServiceWorker)
+	onMount(() => {
+		//dont run in localhost
+		if (window.location.hostname !== 'localhost'){
+			registerServiceWorker()
+		}
+	})
 </script>
 
 <ThemeProvider>

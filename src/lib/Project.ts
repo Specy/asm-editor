@@ -1,6 +1,6 @@
 
 export type AvailableLanguages = 'M68K' | 'MIPS'
-export interface ProjectData{
+export interface ProjectData {
     code: string
     createdAt: number
     updatedAt: number
@@ -11,8 +11,8 @@ export interface ProjectData{
 }
 const CODE_SEPARATOR = "---METADATA---"
 
-const baseM68k = 
-`
+const baseM68k =
+    `
 ORG $1000
 START:
     * Write here your code
@@ -23,25 +23,33 @@ END: * Jump here to end the program
 
 type ProjectMetadata = {
     version: number
-    name:string
+    name: string
     language: AvailableLanguages
-    description:string
+    description: string
+    createdAt: number
+    updatedAt: number
+    id: string
 }
 
 const metaVersion = 1
-export class Project{
+export class Project {
     code = ""
     createdAt = 0
     updatedAt = 0
     name = ""
-    language:AvailableLanguages = "M68K"
+    language: AvailableLanguages = "M68K"
     description = ""
     id = ""
-    constructor(data?: Partial<ProjectData>){
-        Object.assign(this, data || {})
-        this.code = this.language === 'M68K' ? baseM68k : ""
+    constructor(data?: Partial<ProjectData>) {
+        this.code = data?.code ?? this.language === 'M68K' ? baseM68k : ""
+        this.createdAt = data?.createdAt ?? new Date().getTime()
+        this.updatedAt = data?.updatedAt ?? new Date().getTime()
+        this.name = data?.name ?? "Untitled"
+        this.language = data?.language ?? "M68K"
+        this.description = data?.description ?? ""
+        this.id = data?.id ?? ""
     }
-    toObject(): ProjectData{
+    toObject(): ProjectData {
         return {
             code: this.code,
             createdAt: this.createdAt,
@@ -52,46 +60,51 @@ export class Project{
             id: this.id
         }
     }
-    static from(data: Partial<ProjectData>): Project{
+    static from(data: Partial<ProjectData>): Project {
         const project = new Project()
         Object.assign(project, data)
         return project
     }
-    toExternal(){
-        const meta:ProjectMetadata = {
+    toExternal() {
+        const meta: ProjectMetadata = {
             version: metaVersion,
             description: this.description,
-            name: this.name, 
-            language: this.language
+            name: this.name,
+            language: this.language,
+            createdAt: this.createdAt,
+            updatedAt: this.updatedAt,
+            id: this.id
         }
         const metaJson = JSON.stringify(meta, null, 4)
         const commentedJson = metaJson.split("\n").map(e => `* ${e}`).join("\n")
         const separator = `* ${CODE_SEPARATOR} do not write below here`
         return `${this.code}\n\n\n${separator}\n${commentedJson}`
     }
-    static fromExternal(codeAndMeta:string){
+    static fromExternal(codeAndMeta: string) {
         const lines = codeAndMeta.split("\n")
         const regex = new RegExp(`^\\*.*${CODE_SEPARATOR}`)
         const threshold = lines.findIndex(line => line.match(regex))
         const code = lines.slice(0, threshold).join("\n").trimEnd()
         const metaLines = lines.slice(threshold + 1)
-        let metaJson:ProjectMetadata = {
-            name: "", description: "", language: "M68K", version: metaVersion
+        let metaJson: ProjectMetadata = {
+            name: "", 
+            description: "", 
+            language: "M68K", 
+            version: metaVersion, 
+            createdAt: new Date().getTime(), 
+            updatedAt: new Date().getTime(),
+            id: ""
         }
-        try{
+        try {
             const noComments = metaLines.map(l => removeUntill("*", l)).join("\n")
             const temp = JSON.parse(noComments.trim())
-            if(typeof temp === "object" && temp.version === metaVersion){
+            if (typeof temp === "object" && temp.version === metaVersion) {
                 metaJson = temp
             }
-        }catch(e){
+        } catch (e) {
             console.error(e)
         }
-        const project = new Project({
-            ...metaJson, 
-            createdAt: new Date().getTime(),
-            updatedAt: new Date().getTime()
-        })
+        const project = new Project(metaJson)
         project.code = code
         return project
     }
@@ -99,7 +112,7 @@ export class Project{
 
 
 
-function removeUntill(char: string, value:string){
+function removeUntill(char: string, value: string) {
     const split = value.split(char)
     split.shift()
     return split.join(char)

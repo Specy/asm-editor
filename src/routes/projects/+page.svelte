@@ -13,19 +13,66 @@
 	import { textDownloader } from '$lib/utils'
 	import FaUpload from 'svelte-icons/fa/FaUpload.svelte'
 	import { toast } from '$stores/toastStore'
+	import { Project } from '$lib/Project'
+	import { Prompt } from '$stores/promptStore'
+	import { goto } from '$app/navigation'
 	const { projects } = ProjectStore
-	onMount(() => {
-		ProjectStore.load()
+
+	async function importFromText(text: string) {
+		try {
+			const project = Project.fromExternal(text)
+			const existing = await ProjectStore.getProject(project.id)
+			if (existing && existing.code.trim() !== project.code.trim()) {
+				const override = await Prompt.confirm(
+					'An existing project with this id already exists, do you want to override it?'
+				)
+				if (!override) {
+					toast.success('Cancelled import')
+					return undefined
+				}
+				ProjectStore.save(project)
+				toast.logPill('Overriden project!')
+				return project
+			} else if (existing) {
+				ProjectStore.save(project)
+				toast.logPill('Updated project!')
+				return project
+			} else {
+				const proj = await ProjectStore.addProject(project)
+				toast.success('Imported project!')
+				return proj
+			}
+		} catch (e) {
+			console.error(e)
+			toast.error('Failed to import project!')
+		}
+		return undefined
+	}
+
+	onMount(async () => {
+		await ProjectStore.load()
 		try {
 			if ('launchQueue' in window) {
-				console.log('File Handling API is supported!')
 				launchQueue.setConsumer(async (launchParams) => {
+					let lastId = ''
 					for (const file of launchParams.files) {
-						const blob = await file.getFile()
-						blob.handle = file
-						const text = await blob.text()
-						ProjectStore.importFromExternal(text)
-						toast.success('Imported project!')
+						try {
+							const blob = await file.getFile()
+							blob.handle = file
+							const text = await blob.text()
+							const project = Project.fromExternal(text)
+							lastId = (await importFromText(text))?.id ?? project.id
+							ProjectStore.setFileHandle(lastId, file)
+							const proj = await ProjectStore.getProject(lastId)
+							ProjectStore.save(proj) //saves the new metadata to the file
+						} catch (e) {	
+							console.error(e)	
+							toast.error('Failed to import project!')
+						}
+					}
+					const project = ProjectStore.getProject(lastId)
+					if (project && launchParams.files.length === 1) {
+						goto(`/projects/${project.id}`)
 					}
 				})
 			} else {
@@ -33,6 +80,9 @@
 			}
 		} catch (e) {
 			console.error(e)
+		}
+		return () => {
+			launchQueue?.setConsumer(() => {})
 		}
 	})
 </script>
@@ -57,8 +107,7 @@
 			<div class="row top-row-buttons">
 				<FileImporter
 					on:import={(e) => {
-						ProjectStore.importFromExternal(e.detail.data)
-						toast.success('Imported project!')
+						importFromText(e.detail)
 					}}
 					as="text"
 				>
@@ -165,7 +214,7 @@
 			align-items: unset;
 			gap: 1rem;
 		}
-		.top-row-buttons{
+		.top-row-buttons {
 			justify-content: flex-end;
 		}
 		.project-display {

@@ -9,6 +9,7 @@ import type { Writable } from "svelte/store"
 
 export class ProjectStoreClass{
     projects: Writable<Project[]>
+    writableFiles: Map<string, FileSystemFileHandle> = new Map()
     constructor(){
         this.projects = writable([])
         if(browser) this.load()
@@ -24,6 +25,16 @@ export class ProjectStoreClass{
     }
     async save(project: Project): Promise<void>{
         project.updatedAt = new Date().getTime()
+        const file = this.writableFiles.get(project.id)
+        try{
+            if(file){
+                const writer = await file.createWritable()
+                await writer.write(project.toExternal())
+                await writer.close()
+            }
+        }catch(e){
+            console.error(e)
+        }
         await db.updateProject(project)
         await this.load()
     }
@@ -34,6 +45,9 @@ export class ProjectStoreClass{
     async importFromExternal(code: string){
         const project = Project.fromExternal(code)
         this.addProject(project)
+    }
+    setFileHandle(id: string, handle: FileSystemFileHandle){
+        this.writableFiles.set(id, handle)
     }
     getProject(id: string){
         return get(this.projects).find(project => project.id === id)
