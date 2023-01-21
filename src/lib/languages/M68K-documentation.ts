@@ -186,15 +186,17 @@ const desc = {
     "trap": `
         Executes a trap, the value of the operand is used as the trap number, only #15 is supported.
         The register d0 will be used as the trap type which are: 
-        0: Print string at address of a1, then prints a new line.
-        1: Print string at address of a1.   
+        0: Print string pointed by a1 with length read in d1.w, null terminated with max of 255, then prints a new line.
+        1: Print string pointed by a1 with length read in d1.w.
         2: Read string from keyboard, writes at address of a1.
         3: Print number at d1.
         4: Read number, writes to d1.
         5: Read character, writes to d1.
         6: Print character at d1.
-        7: Terminate
-        8: Get time, writes to d1
+        8: Get time, writes to d1.
+        9: Terminate.
+        13: Prints null terminated string pointed by a1 then prints new line, errors if string is longer than 16kb, to prevent infinite loops. 
+        14: Prints null terminated string pointed by a1, errors if string is longer than 16kb, to prevent infinite loops.
     `.trim(),
 }
 const dirsDesc = {
