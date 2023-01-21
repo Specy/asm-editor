@@ -383,7 +383,7 @@
 			</div>
 		</div>
 		<StdOut
-			stdOut={$emulator.stdOut}
+			stdOut={errorStrings ? `${errorStrings}\n${$emulator.stdOut}`: $emulator.stdOut}
 			compilerErrors={$emulator.compilerErrors}
 		/>
 	</div>
