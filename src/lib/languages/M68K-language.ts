@@ -246,7 +246,7 @@ export function createM68KCompletition(monaco: MonacoType) {
 
 			//if wrote a space, suggest the instructions
 			if (trimmed.length === 0 && data) {
-				suggestions.push(...M68kInstructions.map(keyword => {
+				suggestions.push(...formattableTokens.map(keyword => {
 					return {
 						kind: monaco.languages.CompletionItemKind.Function,
 						label: keyword,
@@ -262,7 +262,7 @@ export function createM68KCompletition(monaco: MonacoType) {
 			}
 			//keyword suggestion
 			if (trimmed) {
-				suggestions.push(...M68kInstructions.filter(keyword => keyword.startsWith(data.trimStart()))
+				suggestions.push(...formattableTokens.filter(keyword => keyword.startsWith(data.trimStart()))
 					.map(keyword => {
 						return {
 							kind: monaco.languages.CompletionItemKind.Function,
@@ -301,7 +301,7 @@ export function createM68kHoverProvider(monaco: MonacoType) {
 			const line = model.getValueInRange(range).trim()
 			const parsed = S68k.lexOne(line).parsed
 			const word = model.getWordAtPosition(position)?.word
-			if (parsed.type === 'Instruction') {
+			if (parsed.type === 'Instruction' || parsed.type === 'Directive') {
 				const documentation = getInstructionDocumentation(word?.toLowerCase())
 				const defaultSize = documentation?.defaultSize ? fromSizeToString(documentation.defaultSize) : ""
 				if (!documentation) return { range, contents: [] }
@@ -311,10 +311,10 @@ export function createM68kHoverProvider(monaco: MonacoType) {
 						{
 							value: `
 							**${word}**
-							${documentation.args.map((e, i) => `\n**Op ${i + 1}:** ${getAddressingModeNames(e)}`).join("\n")}
+							${documentation.args?.map((e, i) => `\n**Op ${i + 1}:** ${getAddressingModeNames(e)}`).join("\n") ?? ""}
 						`.trim()
 						},
-						{ value: `**Sizes:** ${documentation.sizes.length ? fromSizesToString(documentation.sizes) : "Not sized"} ${defaultSize ? `\n\n **Default:** ${defaultSize}` : ""}`},
+						{ value: `**Sizes:** ${documentation.sizes?.length ? fromSizesToString(documentation.sizes) : "Not sized"} ${defaultSize ? `\n\n **Default:** ${defaultSize}` : ""}`},
 						{ value: documentation.description ?? "No description" },
 						{ value: `${documentation.example ?? "No examples"}` }
 					]

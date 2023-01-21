@@ -341,7 +341,11 @@ export function getInstructionDocumentation(instructionName: InstructionName): I
             return ins
         }
     }
-    return M68kDocumentation[instructionName];
+    const ins = M68kDocumentation[instructionName]
+    const directive = M68KDirectiveDocumentation[instructionName]
+    if (ins) return ins
+    if (directive) return directive
+    return undefined
 }
 
 

@@ -5,9 +5,15 @@
 	import FaExclamationTriangle from 'svelte-icons/fa/FaExclamationTriangle.svelte'
 	import { fly } from 'svelte/transition'
 	let areCompilerErrorsShown = false
+	let el:HTMLDivElement = null
+
+
+	$:{
+		if(el && stdOut) el.scrollTop = el.scrollHeight
+	}
 </script>
 
-<div class="std-out">
+<div class="std-out" bind:this={el}>
 	{#if compilerErrors.length}
 		<button
 			class="floating-std-icon"

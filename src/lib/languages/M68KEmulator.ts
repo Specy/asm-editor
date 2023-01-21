@@ -223,6 +223,7 @@ export function M68KEmulator(baseCode: string) {
     function clear() {
         setRegisters(new Array(registerName.length).fill(0))
         updateStatusRegisters(new Array(5).fill(0))
+        if(current.interrupt) Prompt.cancel()
         update(state => {
             return {
                 ...state,
@@ -273,7 +274,7 @@ export function M68KEmulator(baseCode: string) {
         }
         const registers = (override ?? getRegistersValue()).map((reg, i) => {
             return new Register(registerName[i], reg)
-        })
+    })
         update(d => ({ ...d, registers }))
     }
     function updateRegisters() {
@@ -459,8 +460,14 @@ export function M68KEmulator(baseCode: string) {
                         break
                     }
                     case InterpreterStatus.Interrupt: {
+                        if(current.terminated || !current.canExecute) break
                         const ins = interpreter.getLastInstruction()
                         update(d => ({ ...d, line: ins.parsed_line.line_index }))
+                        updateRegisters()
+                        updateData()
+                        updateStatusRegisters()
+                        updateMemory()
+                        scrollStackTab()
                         await handleInterrupt(interpreter.getCurrentInterrupt())
                         break
                     }

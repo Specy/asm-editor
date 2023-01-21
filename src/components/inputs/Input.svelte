@@ -5,7 +5,7 @@
 	import { onMount } from 'svelte'
 	type statusType = '' | 'correct' | 'wrong'
 	export let title = ''
-	export let value = ''
+	export let value
 	export let status: statusType = ''
 	export let style = ''
 	$: if (value === '') status = ''
@@ -13,9 +13,9 @@
 	export let placeholder = ""
 	export let focus = false
 	export let hideStatus = true
-	let el:HTMLInputElement
+	export let el:HTMLInputElement = null
 	onMount(() => {
-		el?.focus()
+		if(focus) el?.focus()
 	})
 	const setType = (node) => {
 		node.type = type
@@ -28,7 +28,7 @@
 	{/if}
 	<div class="input-row" {style}>
 		<input
-			bind:value
+			bind:value={value}
 			class="form-input"
 			use:setType
 			on:change

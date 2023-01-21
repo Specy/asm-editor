@@ -1,21 +1,22 @@
 <script lang="ts">
 	import { Prompt, PromptType } from '$stores/promptStore'
-	import { fade } from 'svelte/transition';
-
+	import { fade } from 'svelte/transition'
 
 	import Button from '../buttons/Button.svelte'
-	import Input from '../inputs/Input.svelte';
-	let input:HTMLInputElement
+	import Input from '../inputs/Input.svelte'
+	let input: HTMLInputElement
 	let value = ''
-	$: if (!$Prompt.promise) value = ''
-	
+	$: if (!$Prompt.promise) {
+		value = ''
+		if (input) input.value = ''
+	}
 </script>
 
 <slot />
 {#if $Prompt.promise}
-	<form 
-		class="prompt-wrapper" 
-		out:fade={{duration: 150}}
+	<form
+		class="prompt-wrapper"
+		out:fade={{ duration: 150 }}
 		on:submit={(e) => {
 			e.preventDefault()
 			Prompt.answer(value)
@@ -25,7 +26,8 @@
 			{$Prompt.question}
 		</div>
 		{#if $Prompt.type === PromptType.Text}
-			<Input 
+			<Input
+				bind:el={input}
 				focus
 				bind:value
 				hideStatus
@@ -33,23 +35,17 @@
 			/>
 		{/if}
 
-        <div class="prompt-row">
+		<div class="prompt-row">
 			{#if $Prompt.type === PromptType.Text}
-				<Button cssVar='secondary' disabled={!$Prompt.cancellable}>
-					Cancel
-				</Button>
-				<Button on:click={() => Prompt.answer(value)}>
-					Ok
-				</Button>
+				{#if !$Prompt.cancellable}
+					<Button on:click={() => Prompt.answer(false)} cssVar="secondary">Cancel</Button>
+				{/if}
+				<Button on:click={() => Prompt.cancel()} style="margin-left: auto;">Ok</Button>
 			{:else}
-				<Button on:click={() => Prompt.answer((false))} cssVar='secondary'>
-					Cancel
-				</Button>
-				<Button on:click={() => Prompt.answer((true))} cssVar='accent2'>
-					Yes
-				</Button>
+				<Button on:click={() => Prompt.answer(false)} cssVar="secondary">No</Button>
+				<Button on:click={() => Prompt.answer(true)} cssVar="accent2">Yes</Button>
 			{/if}
-        </div>
+		</div>
 	</form>
 {/if}
 
@@ -67,7 +63,7 @@
 		background-color: rgba(var(--RGB-secondary), 0.8);
 		box-shadow: 0 3px 10px rgb(0 0 0 / 20%);
 		z-index: 20;
-        padding: 0.5rem;
+		padding: 0.5rem;
 		transition: transform 0.3s ease-out;
 		flex-direction: column;
 		animation: slideIn 0.25s ease-out;
@@ -84,11 +80,11 @@
 			opacity: 1;
 		}
 	}
-    .prompt-row{
-        display: flex;
-        margin-top: 0.5rem;
-        justify-content: space-between;
-    }
+	.prompt-row {
+		display: flex;
+		margin-top: 0.5rem;
+		justify-content: space-between;
+	}
 	.prompt-text {
 		padding: 0.3rem;
 		font-size: 0.9rem;
