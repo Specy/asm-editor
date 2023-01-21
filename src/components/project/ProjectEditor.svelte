@@ -40,6 +40,7 @@
 	let documentationVisible = false
 	let shortcutsVisible = false
 	let groupSize = Size.Word
+	let errorStrings = ""
 	const dispatcher = createEventDispatcher<{
 		save: {
 			silent: boolean
@@ -131,6 +132,7 @@
 			window.removeEventListener('blur', clearPressed)
 		}
 	})
+	$: errorStrings = $emulator.errors.join('\n')
 </script>
 
 <header class="project-header">
@@ -381,7 +383,7 @@
 			</div>
 		</div>
 		<StdOut
-			stdOut={`${$emulator.errors.join('\n')}\n ${$emulator.stdOut}`}
+			stdOut={$emulator.stdOut}
 			compilerErrors={$emulator.compilerErrors}
 		/>
 	</div>
@@ -433,6 +435,7 @@
 	.right-side {
 		margin-left: 0.5rem;
 		width: min-content;
+		max-height: calc(100vh - 4.2rem);
 		padding-top: 0.2rem;
 		display: flex;
 		overflow-y: auto;

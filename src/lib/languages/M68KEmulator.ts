@@ -1,6 +1,5 @@
 import { get, writable } from "svelte/store"
 import { InterpreterStatus, Size, type Interrupt, type ParsedLine, type Label, type ExecutionStep } from "s68k"
-
 import { S68k, Interpreter } from "s68k"
 import { MEMORY_SIZE, PAGE_SIZE, PAGE_ELEMENTS_PER_ROW } from "$lib/Config"
 import { Prompt } from "$stores/promptStore"
@@ -382,14 +381,14 @@ export function M68KEmulator(baseCode: string) {
         const { type } = interrupt
         switch (type) {
             case "DisplayStringWithCRLF": {
-                update(d => ({ ...d, stdOut: d.stdOut + interrupt.value + "\n" }))
+                update(d => ({ ...d, stdOut: `${d.stdOut}${interrupt.value}\n` }))
                 interpreter.answerInterrupt({ type })
                 break
             }
             case "DisplayStringWithoutCRLF":
             case "DisplayChar":
             case "DisplayNumber": {
-                update(d => ({ ...d, stdOut: d.stdOut + interrupt.value }))
+                update(d => ({ ...d, stdOut: `${d.stdOut}${interrupt.value}`}))
                 interpreter.answerInterrupt({ type })
                 break
             }
