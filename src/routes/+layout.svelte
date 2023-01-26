@@ -8,12 +8,22 @@
 	import Footer from '$cmp/layout/Footer.svelte'
 	import { onMount } from 'svelte'
 	import { registerServiceWorker } from '$lib/register-sw'
+	import { ThemeStore } from '$stores/themeStore'
+	let metaTheme:HTMLMetaElement = null
+	
 	onMount(() => {
 		//dont run in localhost
 		if (window.location.hostname !== 'localhost'){
 			registerServiceWorker()
 		}
+		metaTheme = document.querySelector('meta[name="theme-color"]')
 	})
+	const color = ThemeStore.get("secondary")
+	$: {
+		if (metaTheme){
+			metaTheme.content = $color.color
+		}
+	}
 </script>
 
 <ThemeProvider>
