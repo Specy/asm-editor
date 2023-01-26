@@ -10,31 +10,49 @@
 	import AnimatedRgbLine from '$cmp/misc/AnimatedRgbLine.svelte'
 	import GoLinkExternal from 'svelte-icons/go/GoLinkExternal.svelte'
 	import { ThemeStore } from '$stores/themeStore'
-	const textShadowPrimary = ThemeStore.getColor("primary").isDark()
-	const textShadowSecondary = ThemeStore.getColor("secondary").isDark()
+	import { onMount } from 'svelte'
+	import FaDownload from 'svelte-icons/fa/FaDownload.svelte'
+	import Button from '$cmp/buttons/Button.svelte'
+	const textShadowPrimary = ThemeStore.getColor('primary').isDark()
+	const textShadowSecondary = ThemeStore.getColor('secondary').isDark()
+	let installEvent: any = null
+	onMount(() => {
+		window.addEventListener('beforeinstallprompt', (e) => {
+			e.preventDefault()
+			console.log('beforeinstallprompt', e)
+			installEvent = e
+		})
+	})
 </script>
 
 <svelte:head>
 	<title>Welcome to Asm-Editor</title>
-	<meta name="description" content="Write, learn and run M68K assembly code on your browser. View registers and memory, step and undo the program." />
+	<meta
+		name="description"
+		content="Write, learn and run M68K assembly code on your browser. View registers and memory, step and undo the program."
+	/>
 </svelte:head>
 
 <div class="main">
 	<div class="content row">
 		<div class="preview-image" />
 		<div class="presentation">
-			<div class="welcome-title" class:textShadow={textShadowPrimary}>The all in one web editor for M68K</div>
+			<div class="welcome-title" class:textShadow={textShadowPrimary}>
+				The all in one web editor for M68K
+			</div>
 			<div style="display: flex ;">
 				<ButtonLink
 					href="/projects"
 					color="var(--accent-text)"
-					style={textShadowPrimary && "box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);"}
+					style={textShadowPrimary && 'box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);'}
 					title="Open the editor"
 				>
 					Go to the editor
 				</ButtonLink>
 				<ButtonLink
-					style={`margin-left: 1rem; ${textShadowPrimary && "box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);"}`}
+					style={`margin-left: 1rem; ${
+						textShadowPrimary && 'box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);'
+					}`}
 					bg="var(--secondary)"
 					color="var(--secondary-text)"
 					href="https://github.com/Specy/asm-editor"
@@ -45,6 +63,25 @@
 					</Icon>
 				</ButtonLink>
 			</div>
+			{#if installEvent}
+				<Button
+					style="margin-top: 1rem; gap: 0.5rem;"
+					cssVar="secondary"
+					on:click={async () => {
+						try {
+							await installEvent.prompt()
+						} catch (e) {
+							console.error(e)
+						}
+						installEvent = null
+					}}
+				>
+					<Icon>
+						<FaDownload />
+					</Icon>
+					Install WebApp
+				</Button>
+			{/if}
 		</div>
 	</div>
 	<AnimatedRgbLine height="0.5rem" style="border-radius: 0;" />
@@ -70,7 +107,6 @@
 			</MainPageLinkPreview>
 		</div>
 	</div>
-
 </div>
 <div class="column sections-wrapper">
 	<MainPageSection id="documentation" imageUrl="/images/ASM-Documentation.webp">
@@ -78,11 +114,11 @@
 		<div class="description" class:textShadow={textShadowPrimary}>
 			The editor comes with a built-in documentation for the M68K instruction set including the
 			valid addressing modes, description, examples for each instruction and directive.
-		<br/>
+			<br />
 			<a href="/documentation" title="View documentation" class="docs-visit">
-					Or visit the documentation
+				Or visit the documentation
 				<div style="width: 1rem; height: 1rem; margin-top: 0.2rem; margin-left: 0.3rem">
-					<GoLinkExternal/>
+					<GoLinkExternal />
 				</div>
 			</a>
 		</div>
@@ -98,9 +134,10 @@
 	<MainPageSection id="tools" imageUrl="/images/ASM-Tools.webp">
 		<div slot="title">Tools & Customisation</div>
 		<div class="description" class:textShadow={textShadowPrimary}>
-			Feature rich tools to help you debug your code. Includes breakpoints, stepping, undo, stack tracer,
-			register/memory diffing, decimal/hexadecimal conversions, stdout/stdin/errors, customisable shortcuts and settings, formatter and more.
-			You can also customise the theme of the editor to your liking.
+			Feature rich tools to help you debug your code. Includes breakpoints, stepping, undo, stack
+			tracer, register/memory diffing, decimal/hexadecimal conversions, stdout/stdin/errors,
+			customisable shortcuts and settings, formatter and more. You can also customise the theme of
+			the editor to your liking.
 		</div>
 	</MainPageSection>
 </div>
@@ -115,7 +152,7 @@
 		margin-bottom: 2rem;
 		color: var(--primary-text);
 	}
-	.textShadow{
+	.textShadow {
 		text-shadow: 2px 2px 12px rgb(36 36 36);
 	}
 	.sections-wrapper {
@@ -135,15 +172,15 @@
 	:global(body) {
 		scroll-behavior: smooth;
 	}
-	.docs-visit{
+	.docs-visit {
 		color: var(--accent);
 		display: flex;
-		&:hover{
+		&:hover {
 			text-decoration: underline;
 		}
 	}
-	
-	.links-row-wrapper{
+
+	.links-row-wrapper {
 		background-color: var(--secondary);
 		color: var(--secondary-text);
 		display: flex;
@@ -151,7 +188,7 @@
 	}
 	.links-row {
 		display: grid;
-		grid-template-columns: repeat(3,1fr);
+		grid-template-columns: repeat(3, 1fr);
 		@media screen and (max-width: 650px) {
 			display: flex;
 			flex-wrap: wrap;

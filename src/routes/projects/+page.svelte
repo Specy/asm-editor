@@ -18,6 +18,7 @@
 	import { goto } from '$app/navigation'
 	const { projects } = ProjectStore
 
+	let hasFileHandleSupport = false
 	async function importFromText(text: string) {
 		try {
 			const project = Project.fromExternal(text)
@@ -49,7 +50,21 @@
 		return undefined
 	}
 
+	async function importFromFileHandle(fileHandles: FileSystemFileHandle[]) {
+		for (const fileHandle of fileHandles) {
+			console.log(fileHandle)
+			const blob = await fileHandle.getFile()
+			blob.handle = fileHandle
+			const text = await blob.text()
+			const project = Project.fromExternal(text)
+			const id = (await importFromText(text))?.id ?? project.id
+			ProjectStore.setFileHandle(id, fileHandle)
+			const proj = await ProjectStore.getProject(id)
+			ProjectStore.save(proj) //saves the new metadata to the file
+		}
+	}
 	onMount(async () => {
+		//hasFileHandleSupport = !!window?.showOpenFilePicker
 		await ProjectStore.load()
 		try {
 			if ('launchQueue' in window) {
@@ -65,8 +80,8 @@
 							ProjectStore.setFileHandle(lastId, file)
 							const proj = await ProjectStore.getProject(lastId)
 							ProjectStore.save(proj) //saves the new metadata to the file
-						} catch (e) {	
-							console.error(e)	
+						} catch (e) {
+							console.error(e)
 							toast.error('Failed to import project!')
 						}
 					}
@@ -105,19 +120,41 @@
 				<Title style="margin: 0">Your projects</Title>
 			</div>
 			<div class="row top-row-buttons">
-				<FileImporter
-					on:import={(e) => {
-						importFromText(e.detail)
-					}}
-					as="text"
-				>
-					<Button cssVar="secondary">
+				{#if hasFileHandleSupport}
+				<!-- Ignored for now as browser asks for permission -->
+					<Button
+						cssVar="secondary"
+						on:click={async () => {
+							const files = await window.showOpenFilePicker({ multiple: true })
+							try {
+								importFromFileHandle(files)
+							} catch (e) {
+								console.error(e)
+								toast.error('Failed to import project!')
+							}
+						}}
+					>
 						<Icon style="margin-right: 0.4rem" size={1}>
 							<FaUpload />
 						</Icon>
 						Import
 					</Button>
-				</FileImporter>
+				{:else}
+					<FileImporter
+						on:import={(e) => {
+							importFromText(e.detail.data)
+						}}
+						as="text"
+					>
+						<Button cssVar="secondary">
+							<Icon style="margin-right: 0.4rem" size={1}>
+								<FaUpload />
+							</Icon>
+							Import
+						</Button>
+					</FileImporter>
+				{/if}
+
 				<ButtonLink href="/projects/create" title="Create a new project">
 					<Icon style="margin-right: 0.3rem" size={1}>
 						<FaPlus />

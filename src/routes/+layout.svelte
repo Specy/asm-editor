@@ -12,10 +12,7 @@
 	let metaTheme:HTMLMetaElement = null
 	
 	onMount(() => {
-		//dont run in localhost
-		if (window.location.hostname !== 'localhost'){
-			registerServiceWorker()
-		}
+		registerServiceWorker()
 		metaTheme = document.querySelector('meta[name="theme-color"]')
 	})
 	const color = ThemeStore.get("secondary")
