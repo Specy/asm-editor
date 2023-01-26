@@ -5,8 +5,8 @@
     "background_color": "#171a21",
     "display": "fullscreen",
     "scope": "/",
-    "start_url": "/",
-    "description": "Write and run M68K and MIPS code on your browser. View registers and step through your program",
+    "start_url": "/projects",
+    "description": "Write, learn and run M68K assembly code on your browser. View registers and memory, step and undo the program.",
     "screenshots": [
         {
             "src": "/images/ASM-editor.webp",
