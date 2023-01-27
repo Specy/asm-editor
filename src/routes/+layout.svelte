@@ -29,7 +29,8 @@
 			<PageTransition refresh={$page.url.pathname}>
 				<slot />
 			</PageTransition>
-			<Footer pages={['/projects', '/projects/create', '', '/', '/themes', "/donate"]} />
+			<!-- fix this -->
+			<Footer pages={['/projects', '/projects/create', '', '/', '/themes', "/donate", "/changelog", "/documentation"]} />
 		</PromptProvider>
 	</ErrorLogger>
 </ThemeProvider>

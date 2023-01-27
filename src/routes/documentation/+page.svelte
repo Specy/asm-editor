@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Input from '$cmp/inputs/Input.svelte'
 	import M68KDocumentation from '$cmp/M68KDocumentation.svelte'
+	import Navbar from '$cmp/Navbar.svelte'
 	import { instructionsDocumentationList } from '$lib/languages/M68K-documentation'
 	
 	let searchValue = ''
@@ -12,7 +13,8 @@
 	<meta name="tags" content={instructionsDocumentationList.map((i) => i.name).join(', ')} />
 </svelte:head>
 
-<div class="search-bar">
+
+<Navbar>
 	<a class="icon" href="/" title="Go to the home">
 		<img src="/favicon.png" alt="logo" />
 		Home
@@ -22,9 +24,15 @@
 		placeholder="Search"
 		style="padding: 0rem; background-color: var(--tertiary); color: var(--tertiary-text); max-width: 15rem;"
 	/>
-</div>
+</Navbar>
+
 <div class="content">
-	<M68KDocumentation bind:searchValue visible={true} defaultOpen={true}  style="max-width: 60rem;"/>
+	<div class="column" style="max-width: 60rem; width: 100%;">
+		<h1 style="margin-top: 1rem;">
+			Documentation
+		</h1>
+		<M68KDocumentation bind:searchValue visible={true} defaultOpen={true}  style="max-width: 60rem; overflow-y: unset"/>
+	</div>
 </div>
 
 <style lang="scss">
@@ -34,8 +42,7 @@
         align-items: center;
 		padding: 0.8rem;
 		padding-top: 4rem;
-        height: 100vh;
-		overflow-y: auto;
+		min-height: 100vh;
 	}
 	.icon {
 		height: 2.2rem;
@@ -48,20 +55,5 @@
 		&:hover {
 			color: var(--accent);
 		}
-	}
-	.search-bar {
-		position: absolute;
-		top: 0rem;
-		padding: 0.8rem;
-		width: 100%;
-		gap: 0.8rem;
-		border-radius: 0.6rem;
-		border-top-left-radius: 0;
-		border-top-right-radius: 0;
-		display: flex;
-		justify-content: space-between;
-		background-color: rgba(var(--RGB-secondary), 0.5);
-		backdrop-filter: blur(0.4rem);
-		z-index: 1;
 	}
 </style>

@@ -68,6 +68,7 @@
 		display: flex;
 		flex-direction: column;
 		flex: 1;
+		position: relative;
 	}
 	.progress {
 		height: 4px;

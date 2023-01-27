@@ -20,7 +20,9 @@
 						<div>Specy</div>
 					</div>
 				</a>
-
+				<a href="/changelog">
+					Changelog
+				</a>
 				<div class="icon-wrapper">
 					<a class="icon" href="/donate" title="Donate and support me">
 						<Icon size={1.6}>
@@ -69,7 +71,7 @@
 		transition: all 0.2s ease-in-out;
 	}
 	a:hover {
-		color: #e20c6c;
+		color: var(--accent);
 	}
 
 	.icon-wrapper {

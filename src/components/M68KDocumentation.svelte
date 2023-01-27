@@ -26,7 +26,8 @@
 		return nodes[match.bestMatchIndex]
 	}
 	$: {
-		if (visible && wrapper) {
+		if (visible && wrapper && searchValue) {
+
 			const els = wrapper.querySelectorAll('.sub-title')
 			const el = includesText(els, searchValue)
 			if (el) {
@@ -230,6 +231,7 @@
 					{/if}
 				</div>
 			{/each}
+
 		</div>
 	</DocsSection>
 	<DocsSection name="Assembler features">
@@ -245,6 +247,7 @@
 </div>
 
 <style>
+
 	.docs-list {
 		display: flex;
 		padding: 0.6rem;
@@ -259,9 +262,7 @@
 		flex-wrap: wrap;
 		gap: 0.3rem;
 	}
-	.search-bar {
-		max-width: 15rem;
-	}
+
 
 	.instruction {
 		display: flex;
