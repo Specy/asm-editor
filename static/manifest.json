@@ -20,7 +20,9 @@
             "name": "Import M68k project",
             "accept": {
                 "text/*": [
-                    ".s68k"
+                    ".s68k",
+                    ".asm",
+                    ".x68"
                 ]
             },
             "icons": [
