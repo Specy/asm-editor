@@ -2,6 +2,7 @@ import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { M68kDocumentation } from '$lib/languages/M68K-documentation';
 
+
 export const load = (async ({ params }) => {
     const instruction = M68kDocumentation[params.instructionName];
     if(!instruction){
