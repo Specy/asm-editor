@@ -13,8 +13,8 @@
 	export let language: AvailableLanguages
 	export let errors: MonacoError[]
 	export let breakpoints: number[]
-	let mockEditor: HTMLDivElement | null
 	export let editor: monaco.editor.IStandaloneCodeEditor | null = null
+	let mockEditor: HTMLDivElement | null
 	let monacoInstance: MonacoType | null
 	let decorations = []
 	let hoveredGliphen: number | null

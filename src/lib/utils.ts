@@ -58,3 +58,8 @@ export function getErrorMessage(error: any, lineNumber?: number): string{
 export function delay(ms:number){
     return new Promise(resolve => setTimeout(resolve, ms))
 }
+
+
+export function capitalize(word:string){
+    return word[0].toUpperCase() + word.slice(1)
+}

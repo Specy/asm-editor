@@ -5,6 +5,7 @@ import { MEMORY_SIZE, PAGE_SIZE, PAGE_ELEMENTS_PER_ROW } from "$lib/Config"
 import { Prompt } from "$stores/promptStore"
 import { createDebouncer, getErrorMessage } from "../utils"
 import { settingsStore } from "$stores/settingsStore"
+import { browser } from "$app/environment"
 export type RegisterHex = [hi: string, lo: string]
 
 export type RegisterChunk = {
@@ -115,7 +116,17 @@ function createMemoryTab(pageSize: number, name: string, address: number, rowSiz
 
 
 const registerName = ['D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'A0', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7']
-export function M68KEmulator(baseCode: string) {
+type M68kEditorOptions = {
+    globalPageSize?: number
+    globalPageElementsPerRow?: number
+}
+
+export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) {
+    options = {
+        globalPageSize: PAGE_SIZE,
+        globalPageElementsPerRow: PAGE_ELEMENTS_PER_ROW,
+        ...options
+    }
     const { subscribe, update } = writable<EmulatorStore>({
         registers: [],
         terminated: false,
@@ -132,7 +143,7 @@ export function M68KEmulator(baseCode: string) {
         canExecute: false,
         breakpoints: [],
         memory: {
-            global: createMemoryTab(PAGE_SIZE, "Global", 0x1000, PAGE_ELEMENTS_PER_ROW),
+            global: createMemoryTab(options.globalPageSize, "Global", 0x1000, options.globalPageElementsPerRow),
             tabs: [
                 createMemoryTab(8 * 4, "Stack", 0x2000, 4),
             ]
@@ -208,7 +219,7 @@ export function M68KEmulator(baseCode: string) {
                     formatted: e.getMessage()
                 } as MonacoError
             ))
-            update(s => ({ ...s, code, compilerErrors: errors, errors: [] }))            
+            update(s => ({ ...s, code, compilerErrors: errors, errors: [] }))
         } catch (e) {
             console.error(e)
             addError(getErrorMessage(e))
@@ -223,7 +234,7 @@ export function M68KEmulator(baseCode: string) {
     function clear() {
         setRegisters(new Array(registerName.length).fill(0))
         updateStatusRegisters(new Array(5).fill(0))
-        if(current.interrupt) Prompt.cancel()
+        if (current.interrupt) Prompt.cancel()
         update(state => {
             return {
                 ...state,
@@ -238,7 +249,7 @@ export function M68KEmulator(baseCode: string) {
                 callStack: [],
                 compilerErrors: [],
                 memory: {
-                    global: createMemoryTab(PAGE_SIZE, "Global", 0x1000, PAGE_ELEMENTS_PER_ROW),
+                    global: createMemoryTab(options.globalPageSize, "Global", 0x1000, options.globalPageElementsPerRow),
                     tabs: [
                         createMemoryTab(8 * 4, "Stack", 0x2000, 4),
                     ]
@@ -274,7 +285,7 @@ export function M68KEmulator(baseCode: string) {
         }
         const registers = (override ?? getRegistersValue()).map((reg, i) => {
             return new Register(registerName[i], reg)
-    })
+        })
         update(d => ({ ...d, registers }))
     }
     function updateRegisters() {
@@ -355,7 +366,7 @@ export function M68KEmulator(baseCode: string) {
     }
     function undo(amount = 1) {
         try {
-            for (let i = 0; i < amount && interpreter?.canUndo(); i++){
+            for (let i = 0; i < amount && interpreter?.canUndo(); i++) {
                 interpreter?.undo()
             }
             const instruction = interpreter?.getNextInstruction()
@@ -389,7 +400,7 @@ export function M68KEmulator(baseCode: string) {
             case "DisplayStringWithoutCRLF":
             case "DisplayChar":
             case "DisplayNumber": {
-                update(d => ({ ...d, stdOut: `${d.stdOut}${interrupt.value}`}))
+                update(d => ({ ...d, stdOut: `${d.stdOut}${interrupt.value}` }))
                 interpreter.answerInterrupt({ type })
                 break
             }
@@ -460,7 +471,7 @@ export function M68KEmulator(baseCode: string) {
                         break
                     }
                     case InterpreterStatus.Interrupt: {
-                        if(current.terminated || !current.canExecute) break
+                        if (current.terminated || !current.canExecute) break
                         const ins = interpreter.getLastInstruction()
                         update(d => ({ ...d, line: ins.parsed_line.line_index }))
                         updateRegisters()
@@ -489,9 +500,9 @@ export function M68KEmulator(baseCode: string) {
         } catch (e) {
             console.error(e)
             let line = -1
-            try{
+            try {
                 line = interpreter?.getLastInstruction()?.parsed_line.line_index ?? -1
-            }catch(e){ console.error(e) }
+            } catch (e) { console.error(e) }
             addError(getErrorMessage(e, line + 1))
             update(d => ({ ...d, terminated: true, line }))
         }

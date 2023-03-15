@@ -2,9 +2,10 @@
 	import type { StatusRegister } from '$lib/languages/M68KEmulator'
 
 	export let statusCodes: StatusRegister[]
+	export let style = ''
 </script>
 
-<div class="status-codes">
+<div class="status-codes" {style}>
 	{#each statusCodes as el, i (i)}
 		<div class="column">
 			<div>

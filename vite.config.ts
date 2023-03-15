@@ -11,7 +11,7 @@ const config: UserConfig = {
 	resolve: {
 		alias: {
 			$cmp: resolve('./src/components/'),
-			$sec: resolve('./src/'),
+			$src: resolve('./src/'),
 			$stores: resolve('./src/stores/'),
 			$utils: resolve('./src/utils/')
 		}

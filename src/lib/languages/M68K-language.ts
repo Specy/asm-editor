@@ -14,9 +14,8 @@ const others = [
 	...setConditions.map(e => `s${e}`), 
 	...branchConditions.map(e => `b${e}`), 
 	...branchConditions.map(e => `db${e}`), 
-	"dbra", "bsr", "bra", "jsr", "rts", "link", "unlk", "lea", "pea", "moveq"
+	"dbra", "bsr", "bra", "jsr", "rts", "link", "unlk", "lea", "pea", "moveq", "jmp"
 ]
-
 export const M68kInstructions = [...arithmetic, ...logic, ...special, ...others]
 const formattableTokens = [...M68kInstructions, ...directives]
 const formattableTokensMap = new Map(formattableTokens.map(e => [e, true]))
@@ -48,6 +47,7 @@ export const M68KLanguage = {
 					}
 				}
 			],
+
 			//technically not correct as it includes the spaces
 			[/\s+(\*|;).*$/, 'comment'],
 			// whitespace

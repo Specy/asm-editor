@@ -1,9 +1,10 @@
 <script lang="ts">
-	import { Size } from 's68k'
+	import { Size } from "s68k";
+	export let style = ""
 	export let selected: Size = Size.Word
 </script>
 
-<div class="row">
+<div class="row" {style}>
 	<label for={`${Size.Long}`}>
 		L
 		<input type="radio" name="size" id={`${Size.Long}`} value={Size.Long} bind:group={selected} />

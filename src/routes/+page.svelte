@@ -12,6 +12,7 @@
 	import { ThemeStore } from '$stores/themeStore'
 	import { onMount } from 'svelte'
 	import FaDownload from 'svelte-icons/fa/FaDownload.svelte'
+	import FaDonate from 'svelte-icons/fa/FaDonate.svelte'
 	import Button from '$cmp/buttons/Button.svelte'
 	const textShadowPrimary = ThemeStore.getColor('primary').isDark()
 	const textShadowSecondary = ThemeStore.getColor('secondary').isDark()
@@ -40,26 +41,32 @@
 			<div class="welcome-title" class:textShadow={textShadowPrimary}>
 				The all in one web editor for M68K
 			</div>
-			<div style="display: flex ;">
+			<div style="display: flex ; gap: 0.6rem">
 				<ButtonLink
 					href="/projects"
-					color="var(--accent-text)"
 					style={textShadowPrimary && 'box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);'}
 					title="Open the editor"
 				>
 					Go to the editor
 				</ButtonLink>
 				<ButtonLink
-					style={`margin-left: 1rem; ${
-						textShadowPrimary && 'box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);'
-					}`}
-					bg="var(--secondary)"
-					color="var(--secondary-text)"
+					style={textShadowPrimary && 'box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);'}
+					cssVar="tertiary"
 					href="https://github.com/Specy/asm-editor"
 					title="Open the project on github"
 				>
 					<Icon>
 						<FaGithub />
+					</Icon>
+				</ButtonLink>
+				<ButtonLink
+					style={textShadowPrimary && 'box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);'}
+					cssVar="tertiary"
+					href="/donate"
+					title="Donate to the project"
+				>
+					<Icon>
+						<FaDonate />
 					</Icon>
 				</ButtonLink>
 			</div>

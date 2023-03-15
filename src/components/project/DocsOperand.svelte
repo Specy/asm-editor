@@ -1,9 +1,10 @@
 <script lang="ts">
 	export let name: string
 	export let content: string
+	export let style = ""
 </script>
 
-<div class="row align-center args">
+<div class="row align-center args" {style}>
 	<div class="op-index row align-center">
 		{name}
 	</div>

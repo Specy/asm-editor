@@ -38,20 +38,25 @@ export enum Size {
     Word = 2,
     Long = 4,
 }
-export function fromSizeToString(size: Size): string {
+export function fromSizeToString(size: Size, extended = false): string {
+    let result = "_"
     switch (size) {
         case Size.Byte:
-            return "b";
+            result = "byte"
+            break;
         case Size.Word:
-            return "w";
+            result = "word"
+            break;
         case Size.Long:
-            return "l";
+            result = "long"
+            break;
         default:
-            return "_";
+            break;
     }
+    return extended ? result : result[0]
 }
-export function fromSizesToString(sizes: Size[]): string {
-    return sizes.map(fromSizeToString).join(",");
+export function fromSizesToString(sizes: Size[], extended = false): string {
+    return sizes.map((e) => fromSizeToString(e, extended)).join(", ");
 }
 
 
@@ -93,6 +98,9 @@ export type InstructionDocumentation = {
     description?: string;
     example?: string;
     defaultSize?: Size;
+    interactiveExample?: {
+        code: string;
+    }
 }
 
 type InstructionName = string;
@@ -142,7 +150,7 @@ const desc = {
     "suba": "Subtracts the value of the first operand from second operand and stores in the second. It does not change the SR",
     "subq": "Subtracts the value of the first operand from second operand and stores in the second. The first operand value must be between 1 and 8. If the destination is a address register, it is always treated as a long, and the condition codes are not affected.",
     "subi": "Subtracts the immediate value to the second operand",
-    "divs": "Divides the value of the first operand by second operand. The quotient is stored in the first 16 bits of the destination register and the remainder is stored in the last 16 bits of the destination register. The first operand is read as a word, the second as a long",
+    "divs": "Divides (signed) the value of the first operand by second operand. The quotient is stored in the first 16 bits of the destination register and the remainder is stored in the last 16 bits of the destination register. The first operand is read as a word, the second as a long",
     "divu": "Divides (unsigned) the value of the first operand by second operand. The quotient is stored in the first 16 bits of the destination register and the remainder is stored in the last 16 bits of the destination register. The first operand is read as a word, the second as a long",
     "muls": "Multiplies the value of the first operand by the second operand. The result is stored in the second operand. The first operand is read as a word, the second as a long",
     "mulu": "Multiplies (unsigned) the value of the first operand by the second operand. The result is stored in the second operand. The first operand is read as a word, the second as a long",
@@ -152,12 +160,12 @@ const desc = {
     "neg": "Flips the sign of the operand, depending on the specified size, defaults to word",
     "ext": "Extends the sign of the operand, depending on the specified size. If the part to extend is negative, it will be filled with 1s, otherwise it will be filled with 0s. Defaults to word",
     "tst": "Compares the operand with 0",
-    "cmp": "Compares the second operand with the first operand, it sets the flags accordingly which will be used by the branching instructions.",
+    "cmp": "Compares the second operand with the first operand, it sets the flags accordingly which will be used by the branching instructions. Works by subtracting the first operand from the second operand and setting the flags.",
     "cmpa": "Compares the second operand with the first operand, it sets the flags accordingly which will be used by the branching instructions. When using word size, the operands are sign extended to long",
     "cmpm": "Compares two memory regions, only valid operand is the post increment, it sets the flags accordingly which will be used by the branchin instructions.",
     "cmpi": "Compares the second operand with the first operand, it sets the flags accordingly which will be used by the branching instructions.",
     "bcc": "Branches to the specified address if {condition code}",
-    "scc": "Sets the destination operand to 0 if {condition code} is true, otherwise it sets it to -1",
+    "scc": "Sets the first byte of the destination operand to $FF (-1) if {condition code} is true, otherwise it sets it to 0",
     "dbcc": "Decrements the first operand by 1 and branches to the specified address if {condition code} is false and the first operand is not -1. dbra is the same as dbf (will decrement untill it reaches -1). It reads the operand as a word, so it can run at maximum 64k times",
     "lea": "Loads the address of the first operand into the second operand, when using indirect addressing, the value is not read, only the address is loaded. For example \"lea 4(a0), a0\" will load a0 + 4 in a1",
     "pea": "Same as lea, but it pushes the address to the stack",
@@ -215,66 +223,370 @@ export function getAddressingModeNames(addressingModes: AddressingMode[]): strin
 
 export const M68KDirectiveDocumentation = {
     "dc": makeDirective("dc", ANY_SIZE, dirsDesc.dc, "dc.b 'Hello world!', 4, %10, $F, @8, 'a', some_label"),
-    "ds": makeDirective("ds",  ANY_SIZE, dirsDesc.ds, "ds.l 100"),
+    "ds": makeDirective("ds", ANY_SIZE, dirsDesc.ds, "ds.l 100"),
     "dcb": makeDirective("dcb", ANY_SIZE, dirsDesc.dcb, "dcb.b 50, 1"),
-    "org": makeDirective("org", NO_SIZE,  dirsDesc.org, "org $1000"),
+    "org": makeDirective("org", NO_SIZE, dirsDesc.org, "org $1000"),
     "equ": makeDirective("equ", NO_SIZE, dirsDesc.equ, "name equ 10"),
 }
 export const M68KDirectiveDocumentationList = Object.values(M68KDirectiveDocumentation)
 export const M68kDocumentation: Record<InstructionName, InstructionDocumentation> = {
-    "move": makeIns("move", [ANY, NO_Im], ANY_SIZE, desc.move, "move.b #10, d0", Size.Word),
-    "moveq": makeIns("moveq", [ONLY_Im, ONLY_Da], NO_SIZE, desc.moveq, "moveq #10, d0"),
-    "movea": makeIns("movea", [ANY, ONLY_Ad], ONLY_LONG_OR_WORD, desc.movea, "movea.l d0, a0", Size.Word),
-    "add": makeIns("add", [ANY, NO_Im], ANY_SIZE, desc.add, "add.l (a4, d3), d1", Size.Word),
-    "adda": makeIns("adda", [ANY, ONLY_Ad], ANY_SIZE, desc.adda, "adda.l d0, a0", Size.Word),
-    "addq": makeIns("addq", [ONLY_Im, NO_Im], ANY_SIZE, desc.addq, "addq.w #4, d1", Size.Word),
-    "addi": makeIns("addi", [ONLY_Im, NO_IM_OR_Ad], ANY_SIZE, desc.addi, "addi.w #4, d1", Size.Word),
-    "sub": makeIns("sub", [ANY, NO_Im], ANY_SIZE, desc.sub, "sub.w $1000, d1", Size.Word),
-    "suba": makeIns("suba", [ANY, ONLY_Ad], ANY_SIZE, desc.suba, "suba.w #$FF, a1", Size.Word),
-    "subi": makeIns("subi",  [ONLY_Im, NO_IM_OR_Ad], ANY_SIZE, desc.subi ,"subi #1, d3", Size.Word),
-    "subq": makeIns("subq", [ONLY_Im, NO_Im], ANY_SIZE, desc.subq, "subq.b #1, d3", Size.Word),
-    "divs": makeIns("divs", [NO_Ad, ONLY_Da], NO_SIZE, desc.divs, "divs #%101, d1"),
-    "divu": makeIns("divu", [NO_Ad, ONLY_Da], NO_SIZE, desc.divu, "divu #@4, d1"),
-    "muls": makeIns("muls", [NO_Ad, ONLY_Da], NO_SIZE, desc.muls, "muls d0, d1"),
-    "mulu": makeIns("mulu", [NO_Ad, ONLY_Da], NO_SIZE, desc.mulu, "mulu d5, d2"),
-    "swap": makeIns("swap", [ONLY_Da], NO_SIZE, desc.swap, "swap d0"),
-    "clr": makeIns("clr", [NO_Ad_AND_NO_Im], ANY_SIZE, desc.clr, "clr.b d0", Size.Word),
-    "exg": makeIns("exg", [ONLY_REG, ONLY_REG], NO_SIZE, desc.exg, "exg d0, a1"),
-    "neg": makeIns("neg", [ONLY_Da_OR_In_OR_Ea], ANY_SIZE, desc.neg, "neg.l d0", Size.Word),
-    "ext": makeIns("ext", [ONLY_Da], ONLY_LONG_OR_WORD, desc.ext, "ext.w d0", Size.Word),
-    "lea": makeIns("lea", [ONLY_In_OR_Id_OR_Ea, ONLY_Ad], NO_SIZE, desc.lea, "lea (a0), a1"),
-    "pea": makeIns("pea", [ONLY_In_OR_Id_OR_Ea], NO_SIZE, desc.pea, "pea (a0)"),
-    "tst": makeIns("tst", [NO_Im], ANY_SIZE, desc.tst, "tst.b (a0)", Size.Word),
-    "cmp": makeIns("cmp", [ANY, ONLY_REG], ANY_SIZE, desc.cmp, "cmp.l -(sp), d0", Size.Word),
-    "cmpi": makeIns("cmpi", [ONLY_Im, NO_Im], ANY_SIZE, desc.cmpi, "cmpi.w #10, d3", Size.Word),
-    "cmpa": makeIns("cmpa", [ANY, ONLY_Ad], ONLY_LONG_OR_WORD, desc.cmpa, "cmpa.l $1000, a0", Size.Word),
-    "cmpm": makeIns("cmpm", [ONLY_Ipi, ONLY_Ipi], ANY_SIZE, desc.cmpm, "cmpm.b (a0)+, (a1)+", Size.Word),
-    "bcc": makeIns("bcc", [ONLY_Ea], NO_SIZE, desc.bcc, "`b<cc> label` Where cc is one of the condition codes"),
-    "scc": makeIns("scc", [NO_Ad_AND_NO_Im], NO_SIZE, desc.scc, "`s<cc> d0` Where cc is one of the condition codes"),
-    "dbcc": makeIns("dbcc", [ONLY_Da, ONLY_Ea], NO_SIZE, desc.dbcc, "`db<cc> d0, label` Where cc is one of the condition codes"),
-    "not": makeIns("not", [NO_Ad_AND_NO_Im], ANY_SIZE, desc.not, "not.b d0", Size.Word),
-    "or": makeIns("or", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.or, "or.l #$FF, d1", Size.Word),
-    "ori": makeIns("ori", [ONLY_Im, NO_IM_OR_Ad], ANY_SIZE, desc.ori, "ori.l #%1100, (a0)", Size.Word),
-    "and": makeIns("and", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.and, "and.l d0, d1", Size.Word), //destination should only be register
-    "andi": makeIns("andi",  [ONLY_Im, NO_IM_OR_Ad], ANY_SIZE, desc.andi, "andi.l #$FF, (a0)", Size.Word),
-    "eor": makeIns("eor", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.eor, "eor.l d0, d1", Size.Word),
-    "eori": makeIns("eori", [ONLY_Im, NO_IM_OR_Ad], ANY_SIZE, desc.eori, "eori.l #1, (sp)+", Size.Word),
-    "jmp": makeIns("jmp", [ONLY_In_OR_Id_OR_Ea], NO_SIZE, desc.jmp, "jmp (a0)"),
-    "jsr": makeIns("jsr", [ONLY_In_OR_Id_OR_Ea], NO_SIZE, desc.jsr, "jsr (sp)"),
-    "bra": makeIns("bra", [ONLY_Ea], NO_SIZE, desc.bra, "bra $2000"),
+    "move": makeIns("move", [ANY, NO_Im], ANY_SIZE, desc.move, "move.b #10, d0", Size.Word, `move.b #10, d0`),
+    "moveq": makeIns("moveq", [ONLY_Im, ONLY_Da], NO_SIZE, desc.moveq, "moveq #10, d0", undefined,
+        `
+        moveq #100, d0
+        moveq #-20, d1
+        moveq #128, d2 ;error 128 is not a valid 8 bit number
+    `),
+    "movea": makeIns("movea", [ANY, ONLY_Ad], ONLY_LONG_OR_WORD, desc.movea, "movea.l d0, a0", Size.Word,
+        `
+        move.l #10, d0        
+        movea.w d0, a0
+    `),
+    "add": makeIns("add", [ANY, NO_Im], ANY_SIZE, desc.add, "add.l (a4, d3), d1", Size.Word,
+        `
+        move #10, d0
+        move.l #20, d1
+        add.w d0, d1
+    `),
+    "adda": makeIns("adda", [ANY, ONLY_Ad], ANY_SIZE, desc.adda, "adda.l d0, a0", Size.Word,
+        `
+        move #10, d0
+        move.l #20, a0
+        adda.w d0, a0
+    `),
+    "addq": makeIns("addq", [ONLY_Im, NO_Im], ANY_SIZE, desc.addq, "addq.w #4, d1", Size.Word,
+        `
+        move.l #20, d1
+        addq.w #4, d1
+        addq.w #9, d1 ; error! exceeds 8
+    `),
+    "addi": makeIns("addi", [ONLY_Im, NO_IM_OR_Ad], ANY_SIZE, desc.addi, "addi.w #4, d1", Size.Word,
+        `
+        move.l #20, d1
+        addi.w #100, d1
+    `),
+    "sub": makeIns("sub", [ANY, NO_Im], ANY_SIZE, desc.sub, "sub.w $1000, d1", Size.Word,
+        `
+        move.l #20, d1
+        sub.w #10, d1   
+    `),
+    "suba": makeIns("suba", [ANY, ONLY_Ad], ANY_SIZE, desc.suba, "suba.w #$FF, a1", Size.Word,
+        `
+        move.l #20, a1
+        suba.w #10, a1
+    `),
+    "subi": makeIns("subi", [ONLY_Im, NO_IM_OR_Ad], ANY_SIZE, desc.subi, "subi #1, d3", Size.Word,
+        `
+        move.l #20, d3
+        subi.l #$FFFF, d3
+    `),
+    "subq": makeIns("subq", [ONLY_Im, NO_Im], ANY_SIZE, desc.subq, "subq.b #1, d3", Size.Word,
+        `
+        move.l #20, d3
+        subq.l #1, d3
+        subq #9, d3 ; error! exceeds 8
+    `),
+    "divs": makeIns("divs", [NO_Ad, ONLY_Da], NO_SIZE, desc.divs, "divs #%101, d1", undefined,
+        `
+        move.l #21, d1
+        divs #2, d1
+        move.w d1, d2 ; quotient
+        ; clr.w d1 ; optional, clear quotient part
+        swap d1 ; swapping to get the remainder
+        move.w d0, d3 ; remainder
+    `),
+    "divu": makeIns("divu", [NO_Ad, ONLY_Da], NO_SIZE, desc.divu, "divu #@4, d1", undefined,
+        `
+        move.l #21, d1
+        divu #2, d1
+        move.w d1, d2 ; quotient
+        ; clr.w d1 ; optional, clear quotient part
+        swap d1 ; swapping to get the remainder
+        move.w d0, d3 ; remainder
+    `),
+    "muls": makeIns("muls", [NO_Ad, ONLY_Da], NO_SIZE, desc.muls, "muls d0, d1", undefined,
+        `
+        move.l #2, d1
+        muls #4, d1
+    `),
+    "mulu": makeIns("mulu", [NO_Ad, ONLY_Da], NO_SIZE, desc.mulu, "mulu d5, d2", undefined,
+        `
+        move.l #2, d2
+        mulu #4, d2
+    `),
+    "swap": makeIns("swap", [ONLY_Da], NO_SIZE, desc.swap, "swap d0", undefined,
+        `
+        move.l #$12345678, d0
+        swap d0
+    `),
+    "clr": makeIns("clr", [NO_Ad_AND_NO_Im], ANY_SIZE, desc.clr, "clr.b d0", Size.Word,
+        `
+        move.l #$ffff, d0
+        clr.b d0
+        move.l #$ffff, d1
+        clr.w d1
+        move.l #$ffff, d2
+        clr.l d2
+    `),
+    "exg": makeIns("exg", [ONLY_REG, ONLY_REG], NO_SIZE, desc.exg, "exg d0, a1", undefined,
+        `
+        move.l #$ff, d0
+        move.l #$aa, a0
+        exg d0, a0
+    `),
+    "neg": makeIns("neg", [ONLY_Da_OR_In_OR_Ea], ANY_SIZE, desc.neg, "neg.l d0", Size.Word,
+        `
+        move.b #1, d0 ; 1, 0x01
+        neg.b d0 ; -1, 0xff
+    `),
+    "ext": makeIns("ext", [ONLY_Da], ONLY_LONG_OR_WORD, desc.ext, "ext.w d0", Size.Word,
+        `
+        move.b #8, d0
+        ext.w d0 
+        move.b #-8, d1
+        ext.w d1
+    `),
+    "lea": makeIns("lea", [ONLY_In_OR_Id_OR_Ea, ONLY_Ad], NO_SIZE, desc.lea, "lea (a0), a1", undefined,
+        `
+        org $2000
+        someLabel: dc.l 0
+
+        START:
+        lea someLabel, a0
+        lea (a0), a1
+        lea $3000, a2
+    `),
+    "pea": makeIns("pea", [ONLY_In_OR_Id_OR_Ea], NO_SIZE, desc.pea, "pea (a0)", undefined,
+        `
+        move.l (sp), d0
+        pea $2000
+        move.l (sp), d1
+    `
+
+    ),
+    "tst": makeIns("tst", [NO_Im], ANY_SIZE, desc.tst, "tst.b (a0)", Size.Word,
+        `
+        move #$ff, d0
+        tst.b d0
+        smi d1 ; set if minus
+        seq d2 ; set if equal
+    `),
+    "cmp": makeIns("cmp", [ANY, ONLY_REG], ANY_SIZE, desc.cmp, "cmp.l -(sp), d0", Size.Word,
+        `
+        move.l #10, d0
+        move.l #11, d1
+        ; compare d0 to d1
+        cmp.l d1, d0 
+        sgt d2 ; if d0 > d1
+        slt d3 ; if d0 < d1
+        ;...etc
+    `),
+    "cmpi": makeIns("cmpi", [ONLY_Im, NO_Im], ANY_SIZE, desc.cmpi, "cmpi.w #10, d3", Size.Word,
+        `
+        move.l #10, d0
+        cmpi.w #11, d0
+        ; compare d0 to 11
+        sgt d2 ; if d0 > 11
+        slt d3 ; if d0 < 11
+        ;...etc
+    `),
+    "cmpa": makeIns("cmpa", [ANY, ONLY_Ad], ONLY_LONG_OR_WORD, desc.cmpa, "cmpa.l $1000, a0", Size.Word,
+        `
+        lea $1000, a0 ; loads address of $1000 into a0
+        cmpa #1000, a0
+        ; compare a0 t0 1000
+        seq d0 ; if a0 == 1000
+    `),
+    "cmpm": makeIns("cmpm", [ONLY_Ipi, ONLY_Ipi], ANY_SIZE, desc.cmpm, "cmpm.b (a0)+, (a1)+", Size.Word,
+        `
+        lea $1000, a0
+        lea $2000, a1
+        move.l #10, (a0)
+        move.l #10, (a1)
+        cmpm.b (a0)+, (a1)+
+        ; compare (a0) to (a1)
+        seq d0 ; if (a0) == (a1)
+    `
+    ),
+    "bcc": makeIns("bcc", [ONLY_Ea], NO_SIZE, desc.bcc, "`b<cc> label` Where cc is one of the condition codes", undefined,
+        `
+        move.l #10, d0
+        move.l #2, d2
+        for_start:
+            subq.l #1, d0
+            add #1, d2
+            tst d0
+            ;if d0 != 0, branch to for_start 
+            bne for_start
+    `),
+    "scc": makeIns("scc", [NO_Ad_AND_NO_Im], NO_SIZE, desc.scc, "`s<cc> d0` Where cc is one of the condition codes", undefined,
+        `
+        move.l #10, d0
+        tst d0 
+        spl d1 ; set if plus
+        sne d2 ; set if not equal
+        smi d3 ; set if minus
+        sgt d4 ; set if greater than
+        ; ...etc
+    `),
+    "dbcc": makeIns("dbcc", [ONLY_Da, ONLY_Ea], NO_SIZE, desc.dbcc, "`db<cc> d0, label` Where cc is one of the condition codes", undefined,
+        `
+        move.l #10, d0
+        move.l #2, d2
+        for_start:
+            add #1, d2
+            ; decrements and tests if d0 != 0
+            dbne d0, for_start
+    `),
+    "not": makeIns("not", [NO_Ad_AND_NO_Im], ANY_SIZE, desc.not, "not.b d0", Size.Word,
+        `
+        move.l #%10110100, d0
+        not.w d0 ;01001011
+        move.l #$01001011, d1
+    `),
+    "or": makeIns("or", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.or, "or.l #$FF, d1", Size.Word,
+        `
+        move.l #$F00F, d0
+        move.l #$0F00, d1
+        or.l d1, d0
+    `),
+    "ori": makeIns("ori", [ONLY_Im, NO_IM_OR_Ad], ANY_SIZE, desc.ori, "ori.l #%1100, (a0)", Size.Word,
+        `
+        move.l #$F00F, d0
+        ori.l #$FF00, d0
+    `),
+    "and": makeIns("and", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.and, "and.l d0, d1", Size.Word,
+        `
+        move.l #$FF0F, d0
+        move.l #$00FF, d1
+        and.l d1, d0
+    `), //destination should only be register
+    "andi": makeIns("andi", [ONLY_Im, NO_IM_OR_Ad], ANY_SIZE, desc.andi, "andi.l #$FF, (a0)", Size.Word,
+        `
+        move.l #$FF0F, d0
+        andi.l #$00FF, d0
+    `),
+    "eor": makeIns("eor", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.eor, "eor.l d0, d1", Size.Word,
+        `   
+        move.l #$F00F, d0
+        move.l #$FF00, d1
+    `),
+    "eori": makeIns("eori", [ONLY_Im, NO_IM_OR_Ad], ANY_SIZE, desc.eori, "eori.l #1, (sp)+", Size.Word,
+        `
+        move.l #$F00F, d0
+        eori.l #$FF00, d0
+    `),
+    "jmp": makeIns("jmp", [ONLY_In_OR_Id_OR_Ea], NO_SIZE, desc.jmp, "jmp (a0)", undefined,
+        `
+        move.l #10, d0
+        lea fn1, a0
+        jmp (a0)
+        ; won't reach because it jumps to fn1
+        move.l #'no', d1
+
+        fn1: 
+            move.l #$FF, d0
+    `),
+    "jsr": makeIns("jsr", [ONLY_In_OR_Id_OR_Ea], NO_SIZE, desc.jsr, "jsr (sp)", undefined,
+        `
+        move.l #10, d0
+        lea add_two_to_d0, a0
+        jsr (a0)
+        jsr add_two_to_d0
+        bra END
+
+        add_two_to_d0: 
+            add.l #2, d0    
+            rts        
+
+        END:
+    `),
+    "bra": makeIns("bra", [ONLY_Ea], NO_SIZE, desc.bra, "bra $2000", undefined,
+        `
+        move.l #10, d1
+        bra branch_here
+
+        branch_here:
+            move.l #ff, d1
+        add #1, d0
+    `),
     "dbra": makeIns("dbra", [ONLY_Da, ONLY_Ea], NO_SIZE, desc.dbra, "dbra d0, label"),
     "link": makeIns("link", [ONLY_Ad, ONLY_Im], NO_SIZE, desc.link, "link a0, #-16"),
     "unlk": makeIns("unlk", [ONLY_Ad], NO_SIZE, desc.unlk, "unlk a0"),
-    "rts": makeIns("rts", [], NO_SIZE, desc.rts, "rts"),
-    "bsr": makeIns("bsr", [ONLY_Ea], NO_SIZE, desc.bsr, "bsr label"),
+    "rts": makeIns("rts", [], NO_SIZE, desc.rts, "rts", undefined,
+        `
+        move.l #10, d0
+        lea add_two_to_d0, a0
+        jsr (a0)
+        jsr add_two_to_d0
+        bra END
+
+        add_two_to_d0: 
+            add.l #2, d0    
+            rts        
+
+        END:
+    `),
+    "bsr": makeIns("bsr", [ONLY_Ea], NO_SIZE, desc.bsr, "bsr label", undefined,
+        `
+        move.l #10, d0
+        bsr add_two_to_d0
+        bra END
+
+        add_two_to_d0: 
+            add.l #2, d0    
+            rts        
+
+        END:
+    `),
     "trap": makeIns("trap", [ONLY_Im], NO_SIZE, desc.trap, "trap #15"),
-    "asd": makeIns("asd", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.asd, "`as<d> d0, d3` Where d is either (l)eft or (r)ight"),
-    "lsd": makeIns("lsd", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.lsd, "`ls<d> #3, d7` Where d is either (l)eft or (r)ight"),
-    "rod": makeIns("rod", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.rod, "`ro<d> d2, d5` Where d is either (l)eft or (r)ight"),
-    "btst": makeIns("btst", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.btst, "btst #4, d0"),
-    "bchg": makeIns("bchg", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.bchg, "bchg #%101, d3"),
-    "bclr": makeIns("bclr", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.bclr, "bclr d2, d7"),
-    "bset": makeIns("bset", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.bset, "bset #1, d1"),
+    "asd": makeIns("asd", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.asd, "`as<d> d0, d3` Where d is either (l)eft or (r)ight", Size.Word,
+        `
+        move.w #$FF00, d0
+        asr.w #4, d0
+        move.w #$0F00, d1
+        asr.w #4, d1
+        move.w #$0FF0, d2
+        asr.w #4, d2
+    `),
+    "lsd": makeIns("lsd", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.lsd, "`ls<d> #3, d7` Where d is either (l)eft or (r)ight", Size.Word,
+        `
+        move.w #$FF00, d0
+        lsr.w #4, d0
+        move.w #$0F00, d1
+        lsr.w #4, d1
+        move.w #$0FF0, d2
+        asr.w #4, d2 
+    `),
+    "rod": makeIns("rod", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.rod, "`ro<d> d2, d5` Where d is either (l)eft or (r)ight", Size.Word,
+        `
+        move.w #$1234, d0
+        rol.w #8, d0
+        move.w #$1234, d1
+        ror.w #8, d1
+    `),
+    "btst": makeIns("btst", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.btst, "btst #4, d0", undefined,
+        `
+        move #1, d0
+        btst #0, d0
+        sne d1
+    `),
+    "bchg": makeIns("bchg", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.bchg, "bchg #%101, d3", undefined,
+        `
+        move #3, d0
+        bchg #0, d0
+        sne d1
+    `),
+    "bclr": makeIns("bclr", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.bclr, "bclr d2, d7", undefined,
+        `
+        move #3, d0
+        bclr #1, d0
+    `),
+    "bset": makeIns("bset", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.bset, "bset #1, d1", undefined,
+        `
+        move #1, d0
+        bset #2, d0
+    `),
 }
 
 
@@ -331,7 +643,7 @@ export function getInstructionDocumentation(instructionName: InstructionName): I
             return ins
         }
     }
-    if (instructionName.startsWith("db")){
+    if (instructionName.startsWith("db")) {
         const sub = instructionName.substring(2)
         if (branchConditionsMap.has(sub)) {
             const ins = cloneDeep(M68kDocumentation['dbcc'])
@@ -352,8 +664,23 @@ export function getInstructionDocumentation(instructionName: InstructionName): I
 export const instructionsDocumentationList = Object.values(M68kDocumentation)
 
 
-function makeIns(name: string, args: AddressingMode[][], sizes: Size[], description?: string, example?: string, defaultSize?: Size): InstructionDocumentation {
-    return { name, args, sizes, description, example, defaultSize };
+function makeIns(name: string, args: AddressingMode[][], sizes: Size[], description?: string, example?: string, defaultSize?: Size, interactiveExample?: string,): InstructionDocumentation {
+    const code = (interactiveExample ?? "")
+        .split("\n")
+        .map(l => l.replace(/\s{8}/g, ""))
+        .join("\n")
+        .trim()
+    return {
+        name,
+        args,
+        sizes,
+        description,
+        example,
+        defaultSize,
+        interactiveExample: {
+            code
+        }
+    };
 }
 
 type DirectiveDocumentation = {
@@ -362,6 +689,17 @@ type DirectiveDocumentation = {
     example?: string;
     sizes: Size[];
 }
-function makeDirective(name: string, sizes:Size[], description?: string, example?: string): DirectiveDocumentation {
-    return { name, description, example, sizes };
+function makeDirective(name: string, sizes: Size[], description?: string, example?: string): DirectiveDocumentation {
+    return {
+        name,
+        description,
+        example,
+        sizes
+    };
 }
+
+
+
+/*TODO
+    spl highlighted wrogn
+*/

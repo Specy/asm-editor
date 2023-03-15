@@ -15,7 +15,7 @@
 		/>
 	</div>
 	<div class="scroll">
-		<M68KDocumentation bind:searchValue bind:visible defaultOpen={false}/>
+		<M68KDocumentation bind:searchValue bind:visible defaultOpen={false} showRedirect={false}/>
 	</div>
 </FloatingContainer>
 

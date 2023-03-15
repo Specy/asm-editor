@@ -9,13 +9,14 @@
 		registerClick: Register
 	}>()
 	export let size = Size.Word
+	export let style = ""
 	let usesHex = !$settingsStore.values.useDecimalAsDefault.value
 	$: usesHex = !$settingsStore.values.useDecimalAsDefault.value
 	let chunks: RegisterChunk[][] = []
 	$: chunks = registers.map(r => r.toSizedGroups(size))
 </script>
 
-<div class="registers">
+<div class="registers" {style}>
 	{#each registers as register, i (register.name)}
 		<div class="register-wrapper">
 			<div class="hover-register-value">
