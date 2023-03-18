@@ -288,7 +288,7 @@
 				errors={$emulator.compilerErrors}
 				language={project.language}
 				highlightedLine={$emulator.line}
-				disabled={$emulator.canExecute}
+				disabled={$emulator.canExecute }
 				hasError={$emulator.errors.length > 0}
 			/>
 		</div>

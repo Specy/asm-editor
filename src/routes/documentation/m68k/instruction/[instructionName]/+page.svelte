@@ -12,16 +12,19 @@
 	import DocsOperand from '$cmp/project/DocsOperand.svelte'
 	export let data: PageData
 	let ins: InstructionDocumentation = data.props.instruction
-	import { browser } from '$app/environment'
 	let component
 	onMount(async () => {
 		//HUGE ASS HACK TO MAKE SVELTEKIT WORK
 		const imp = (await import('./ClientOnly.svelte'))
-		await imp.__tla
-		component = imp.default
+		await imp?.__tla
+		component = imp?.default
 	})
 	let code = ins.interactiveExample?.code ?? '; no interactive instruction available'
 </script>
+
+<title>
+	Docs - {ins.name}
+</title>
 
 <Navbar>
 	<div class="row" style="gap: 2rem; align-items:center;">

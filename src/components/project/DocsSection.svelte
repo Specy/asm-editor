@@ -3,10 +3,14 @@
 	import Icon from '../layout/Icon.svelte'
 	export let name: string
 	export let open = true
+	let cantAnimate = true
 </script>
 
 <section class="section" class:open>
-	<button class="section-title" on:click={() => (open = !open)}>
+	<button class="section-title" on:click={() => {
+		open = !open
+		cantAnimate = false
+	}}>
 		<Icon style={`transform: rotate(${open ? 90 : 0}deg); transition: all 0.2s cubic-bezier(.54,.9,0,.97); color: var(--accent); `} size={1.6}>
 			<FaAngleRight />
 		</Icon>
@@ -14,7 +18,7 @@
 			{name}
 		</div>
 	</button>
-	<div class="column sub-section-content" class:open>
+	<div class="column sub-section-content" class:open class:cantAnimate>
 		<slot />
 	</div>
 </section>
@@ -46,6 +50,13 @@
 		&.open {
 			display: flex;
 			animation: fade-in 0.2s forwards;
+		}
+	}
+	.cantAnimate {
+		animation: unset !important;
+		&.open {
+			opacity: 1;
+			translate: translateX(0);
 		}
 	}
 	@keyframes fade-in{

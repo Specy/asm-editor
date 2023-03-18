@@ -134,8 +134,8 @@
 				editor.getModel(),
 				language,
 				errors.map((e) => {
-					const line = e.line.line
-					const position = line.length - line.trimStart().length + 1
+					const line = e.line?.line
+					const position = line?.length - line?.trimStart().length + 1
 					return {
 						severity: monacoInstance.MarkerSeverity.Error,
 						message: e.message,

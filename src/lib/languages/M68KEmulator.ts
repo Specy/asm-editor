@@ -211,14 +211,15 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
     function semanticCheck(code?: string) {
         code = code || get({ subscribe }).code
         try {
-            const errors = S68k.semanticCheck(code).map(e => (
-                {
+            const errors = S68k.semanticCheck(code).map(e => {
+                console.log(e.getLine())
+                return {
                     line: e.getLine(),
                     lineIndex: e.getLineIndex(),
                     message: e.getError(),
                     formatted: e.getMessage()
                 } as MonacoError
-            ))
+            })
             update(s => ({ ...s, code, compilerErrors: errors, errors: [] }))
         } catch (e) {
             console.error(e)

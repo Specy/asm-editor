@@ -661,7 +661,7 @@ export function getInstructionDocumentation(instructionName: InstructionName): I
 }
 
 
-export const instructionsDocumentationList = Object.values(M68kDocumentation)
+export const instructionsDocumentationList = Object.values(M68kDocumentation).sort((a, b) => a.name.localeCompare(b.name))
 
 
 function makeIns(name: string, args: AddressingMode[][], sizes: Size[], description?: string, example?: string, defaultSize?: Size, interactiveExample?: string,): InstructionDocumentation {

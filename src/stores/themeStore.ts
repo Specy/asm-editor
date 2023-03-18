@@ -34,7 +34,7 @@ const themeObject = {
         prop: 'accent'
     },
     accent2: {
-        color: '#38454f',
+        color: '#3b5364',
         name: 'accent2',
         prop: 'accent2'
     },  

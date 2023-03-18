@@ -14,7 +14,8 @@ export const versions: Version[] = [
         changes: [
             'Changed documentation layout to have future more languages',
             'Added an interactive documentation for each instruction',
-            'Bug fixes for some instructions (rod, asd, lsd) '
+            'Bug fixes for some instructions (rod, asd, lsd) ',
+            'Other bug fixes and improvements',
         ]
     },
     {

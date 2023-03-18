@@ -1,5 +1,7 @@
 <script lang="ts">
-	import Input from '$cmp/inputs/Input.svelte'
+	import Button from '$cmp/buttons/Button.svelte'
+	import ButtonLink from '$cmp/buttons/ButtonLink.svelte'
+import Input from '$cmp/inputs/Input.svelte'
 	import M68KDocumentation from '$cmp/M68KDocumentation.svelte'
 	import Navbar from '$cmp/Navbar.svelte'
 	import { instructionsDocumentationList } from '$lib/languages/M68K-documentation'
@@ -28,8 +30,11 @@
 
 <div class="content">
 	<div class="column" style="max-width: 60rem; width: 100%;">
-		<h1 style="margin-top: 1rem;">
-			Documentation
+		<h1 style="margin-top: 1rem; gap: 1rem; flex-wrap: wrap" class="row">  
+			Documentation  
+			<ButtonLink href="/documentation/m68k/instruction" style="font-weight: normal;" cssVar="accent2">
+				Visit interactive documentation
+			</ButtonLink>
 		</h1>
 		<M68KDocumentation bind:searchValue visible={true} defaultOpen={true}  style="max-width: 60rem; overflow-y: unset" showRedirect/>
 	</div>
