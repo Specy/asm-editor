@@ -16,7 +16,9 @@ const config: UserConfig = {
 			$utils: resolve('./src/utils/')
 		}
 	},
-
+	optimizeDeps: {
+		exclude: ["s68k"]
+	},
 	plugins: [
 		sveltekit(),
 		topLevelAwait(),
