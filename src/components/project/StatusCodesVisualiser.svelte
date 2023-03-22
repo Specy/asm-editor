@@ -1,6 +1,5 @@
 <script lang="ts">
 	import type { StatusRegister } from '$lib/languages/M68KEmulator'
-
 	export let statusCodes: StatusRegister[]
 	export let style = ''
 </script>
@@ -11,7 +10,7 @@
 			<div>
 				{el.name}
 			</div>
-			<div>
+			<div class:edited={el.prev !== el.value}>
 				{el.value}
 			</div>
 		</div>
@@ -28,5 +27,8 @@
 		justify-content: space-around;
 		padding: 0.3rem;
 		border-radius: 0.4rem;
+	}
+	.edited{
+		color: var(--accent);
 	}
 </style>

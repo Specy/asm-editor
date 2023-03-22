@@ -27,6 +27,19 @@
 			</a>
 		{/each}
 	</div>
+	<h1 style="margin-top: 2rem;">Interactive instructions docs</h1>
+	<div class="langs">
+		{#each ['m68k'] as lang}
+			<a class="lang" href="/documentation/{lang}/instruction">
+				<div>
+					{capitalize(lang)} interactive
+				</div>
+				<div class="arrow">
+					<FaArrowRight />
+				</div>
+			</a>
+		{/each}
+	</div>
 </Page>
 
 <style lang="scss">
@@ -34,8 +47,12 @@
 		display: grid;
 		grid-template-columns: repeat(2, minmax(10rem, 1fr));
 		gap: 1rem;
+		margin-left: 1rem;
 	}
-
+	h1{
+		font-size: 1.8rem;
+		font-weight: normal;
+	}
 	.lang {
 		padding: 1rem 2rem;
 		padding-right: 1rem;
@@ -44,7 +61,7 @@
 		width: 100%;
 		display: flex;
 		gap: 1rem;
-		font-size: 1.4rem;
+		font-size: 1.2rem;
 		justify-content: space-between;
 		background-color: var(--secondary);
 		color: var(--secondary-text);

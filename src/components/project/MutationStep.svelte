@@ -4,9 +4,9 @@
 
 <script lang="ts">
 	import Icon from '$cmp/layout/Icon.svelte'
-import { type ExecutionStep, Size } from 's68k'
+	import type { ExecutionStep } from 's68k'
 	import { createEventDispatcher } from 'svelte'
-    import FaUndo from 'svelte-icons/fa/FaUndo.svelte'
+	import FaUndo from 'svelte-icons/fa/FaUndo.svelte'
 	export let step: ExecutionStep
 	let ccr = []
 
@@ -19,36 +19,26 @@ import { type ExecutionStep, Size } from 's68k'
 			(value & 0x10) === 0x10
 		]
 	}
-	function getValue(value: number, size: Size) {
-		switch (size) {
-			case Size.Byte:
-				return value & 0xff
-			case Size.Word:
-				return value & 0xffff
-			case Size.Long:
-				return value & 0xffffffff
-		}
-	}
 
 	$: parseCcr(step.new_ccr.bits)
 	const dispatcher = createEventDispatcher<{
-		undo: void,
+		undo: void
 		highlight: number
 	}>()
-
 </script>
 
 <div class="column step">
 	<div class="step-header column">
-		<button class="undo-to-here"
-            on:click={() => {
-                dispatcher('undo')
-            }}
-        > 
-            <Icon size={1}>
-                <FaUndo />
-            </Icon>
-        </button>
+		<button
+			class="undo-to-here"
+			on:click={() => {
+				dispatcher('undo')
+			}}
+		>
+			<Icon size={1}>
+				<FaUndo />
+			</Icon>
+		</button>
 		<div class="row space-between">
 			<span> PC </span>
 			<span class="pc">
@@ -101,24 +91,24 @@ import { type ExecutionStep, Size } from 's68k'
 
 <style lang="scss">
 	.undo-to-here {
-        position: absolute;
-        top: 0;
-        left: 0rem;
-        width: 2.4rem;
-        padding: 0.2rem 0.4rem;
-        height: 100%;
-        border: none;
+		position: absolute;
+		top: 0;
+		left: 0rem;
+		width: 2.4rem;
+		padding: 0.2rem 0.4rem;
+		height: 100%;
+		border: none;
 		background-color: var(--accent);
 		color: var(--accent-text);
 		display: flex;
-        opacity: 0;
-        pointer-events: none;
+		opacity: 0;
+		pointer-events: none;
 		align-items: center;
 		justify-content: center;
-        font-size: 0.8rem;
-        transition: all 0.2s;
-        font-family: Orienta;
-        border-radius: 0.2rem;
+		font-size: 0.8rem;
+		transition: all 0.2s;
+		font-family: Orienta;
+		border-radius: 0.2rem;
 	}
 
 	.go-to-line {
@@ -139,7 +129,7 @@ import { type ExecutionStep, Size } from 's68k'
 		border-radius: 0.2rem;
 		opacity: 0;
 	}
-	.pc{
+	.pc {
 		position: relative;
 		&:hover {
 			.go-to-line {
@@ -149,13 +139,13 @@ import { type ExecutionStep, Size } from 's68k'
 	}
 	.step-header {
 		position: relative;
-        &:hover {
-            .undo-to-here {
-                opacity: 1;
-                cursor: pointer;
-                pointer-events: all;
-            }
-        }
+		&:hover {
+			.undo-to-here {
+				opacity: 1;
+				cursor: pointer;
+				pointer-events: all;
+			}
+		}
 	}
 
 	.step {

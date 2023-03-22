@@ -316,7 +316,7 @@ export function createM68kHoverProvider(monaco: MonacoType) {
 						},
 						{ value: `**Sizes:** ${documentation.sizes?.length ? fromSizesToString(documentation.sizes) : "Not sized"} ${defaultSize ? `\n\n **Default:** ${defaultSize}` : ""}`},
 						{ value: documentation.description ?? "No description" },
-						{ value: `${documentation.example ?? "No examples"}` }
+						{ value: `${documentation.example ?? "No examples"}` },
 					]
 				}
 			}

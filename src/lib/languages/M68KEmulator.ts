@@ -5,7 +5,7 @@ import { MEMORY_SIZE, PAGE_SIZE, PAGE_ELEMENTS_PER_ROW } from "$lib/Config"
 import { Prompt } from "$stores/promptStore"
 import { createDebouncer, getErrorMessage } from "../utils"
 import { settingsStore } from "$stores/settingsStore"
-import { browser } from "$app/environment"
+import { parseCcr } from "./M68kUtils"
 export type RegisterHex = [hi: string, lo: string]
 
 export type RegisterChunk = {
@@ -56,6 +56,7 @@ export class Register {
 export type StatusRegister = {
     name: string
     value: number
+    prev: number
 }
 export type MonacoError = {
     lineIndex: number
@@ -132,7 +133,7 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
         terminated: false,
         line: -1,
         code: baseCode,
-        statusRegister: ["X", "N", "Z", "V", "C"].map(n => ({ name: n, value: 0 })),
+        statusRegister: ["X", "N", "Z", "V", "C"].map(n => ({ name: n, value: 0, prev: 0 })),
         compilerErrors: [],
         callStack: [],
         errors: [],
@@ -272,11 +273,32 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
         if (stackTab) stackTab.address = sp - (sp % stackTab.pageSize)
     }
     function updateStatusRegisters(override?: number[]) {
+
         const flags = (override ?? interpreter?.getFlagsAsArray().map(f => f ? 1 : 0) ?? new Array(5).fill(0))
+        if (settings.values.maxVisibleHistoryModifications.value > 0 && interpreter && !override) {
+            const last = interpreter.getUndoHistory(1)[0]
+            if (last) {
+                const old = parseCcr(last.old_ccr.bits)
+                return update(state => {
+                    return {
+                        ...state,
+                        statusRegister: state.statusRegister.map((s, i) => ({
+                            ...s,
+                            value: flags[i],
+                            prev: Number(old[i])
+                        }))
+                    }
+                })
+            }
+        }
         update(state => {
             return {
                 ...state,
-                statusRegister: state.statusRegister.map(s => ({ ...s, value: flags.shift() ?? -1 }))
+                statusRegister: state.statusRegister.map((s, i) => ({
+                    ...s,
+                    value: flags[i] ?? -1,
+                    prev: flags[i] ?? -1
+                })),
             }
         })
     }
@@ -321,6 +343,7 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
             data.terminated = interpreter.hasReachedBottom()
             data.callStack = interpreter.getCallStack()
             data.latestSteps = interpreter.getUndoHistory(settings.values.maxVisibleHistoryModifications.value)
+
             return data
         })
     }
@@ -379,8 +402,8 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
             updateRegisters()
             updateMemory()
             updateStatusRegisters()
-            scrollStackTab()
             updateData()
+            scrollStackTab()
         } catch (e) {
             addError(getErrorMessage(e))
             update(d => ({ ...d, terminated: true }))
@@ -476,9 +499,9 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
                         const ins = interpreter.getLastInstruction()
                         update(d => ({ ...d, line: ins.parsed_line.line_index }))
                         updateRegisters()
-                        updateData()
                         updateStatusRegisters()
                         updateMemory()
+                        updateData()
                         scrollStackTab()
                         await handleInterrupt(interpreter.getCurrentInterrupt())
                         break
@@ -493,9 +516,9 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
             })
             console.log("Ended in:", performance.now() - start)
             updateRegisters()
-            updateData()
             updateStatusRegisters()
             updateMemory()
+            updateData()
             scrollStackTab()
             return interpreter.getStatus()
         } catch (e) {

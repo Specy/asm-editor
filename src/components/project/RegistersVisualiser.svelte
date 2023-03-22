@@ -18,6 +18,7 @@
 
 <div class="registers" {style}>
 	{#each registers as register, i (register.name)}
+	<div class="row" style="gap: 0.2rem; flex: 1">
 		<div class="register-wrapper">
 			<div class="hover-register-value">
 				{#if usesHex}
@@ -31,7 +32,7 @@
 			</button>
 		</div>
 		<div class="register-hex">
-			{#each chunks[i] as chunk, j}
+			{#each chunks[i] as chunk}
 				<ValueDiff 
 					monospaced
 					style="padding: 0.1rem"
@@ -42,6 +43,8 @@
 				/>
 			{/each}
 		</div>
+	</div>
+
 	{/each}
 </div>
 
@@ -52,7 +55,7 @@
 		color: var(--secondary-text);
 		padding: 0.5rem;
 		border-radius: 0.5rem;
-		grid-template-columns: auto 1fr;
+		grid-template-columns: auto;
 		grid-template-rows: auto;
 		flex-direction: column;
 		gap: 0.2rem;
@@ -110,6 +113,7 @@
 		justify-content: space-around;
 		padding-left: 0.2rem;
 		gap: 0.1rem;
+		flex: 1;
 		border-left: solid 0.1rem var(--tertiary);
 	}
 </style>

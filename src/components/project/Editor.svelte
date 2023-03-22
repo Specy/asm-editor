@@ -27,7 +27,7 @@
 
 	onMount(async () => {
 		monacoInstance = await Monaco.get()
-		if(!el) return console.log("Wrapper element not valid",el)
+		if (!el) return console.log('Wrapper element not valid', el)
 		Monaco.registerLanguages()
 		editor = monacoInstance.editor.create(el, {
 			value: code,
@@ -42,9 +42,9 @@
 			cursorBlinking: 'phase',
 			fontSize: 16,
 			smoothScrolling: true,
-			cursorSmoothCaretAnimation:true,
+			cursorSmoothCaretAnimation: true
 		})
-		
+
 		const observer = new ResizeObserver(() => {
 			if (!mockEditor) return
 			const bounds = mockEditor.getBoundingClientRect()
@@ -55,6 +55,7 @@
 		})
 		Monaco.setCustomTheme(generateTheme())
 		observer.observe(mockEditor)
+
 		toDispose.push(
 			editor.onMouseDown((e) => {
 				if (e.target.type === monacoInstance.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
@@ -82,7 +83,7 @@
 	})
 	onDestroy(() => {
 		toDispose.forEach((d) => {
-			if(typeof d === "function") return d()
+			if (typeof d === 'function') return d()
 			d.dispose()
 		})
 		Monaco?.dispose()

@@ -106,7 +106,7 @@
 		</div>
 		<RegistersVisualiser
 			size={groupSize}
-			style="display: grid; grid-template-columns: repeat(4, min-content); gap: 0.4rem; justify-content: space-between"
+			style="grid-auto-flow: column; grid-template-rows: repeat(8, 1fr); gap: 0.5rem"
 			registers={$emulator.registers}
 			on:registerClick={async (e) => {
 				const value = e.detail.value
@@ -118,7 +118,7 @@
 	<div class="row">
 		<div class="column">
 			<MemoryControls
-				bytesPerPage={8 * 8}
+				bytesPerPage={4 * 8}
 				memorySize={MEMORY_SIZE}
 				currentAddress={memoryAddress}
 				inputStyle="width: 6rem"
@@ -130,7 +130,7 @@
 			/>
 			<MemoryVisualiser
 				bytesPerRow={4}
-				pageSize={4 * 4}
+				pageSize={4 * 8}
 				memory={$emulator.memory.global.data}
 				currentAddress={$emulator.memory.global.address}
 				sp={$emulator.sp}

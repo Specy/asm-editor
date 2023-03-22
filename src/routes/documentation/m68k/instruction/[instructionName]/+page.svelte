@@ -22,9 +22,15 @@
 	let code = ins.interactiveExample?.code ?? '; no interactive instruction available'
 </script>
 
-<title>
-	Docs - {ins.name}
-</title>
+
+<svelte:head>
+	<meta name="description" content={`The ${ins.name} instruction.\n${ins.description}`} />
+	<meta name="keywords" content={ins.name} />
+	<meta name="author" content="specy" />
+	<title>
+		Docs - {ins.name}
+	</title>
+</svelte:head>
 
 <Navbar>
 	<div class="row" style="gap: 2rem; align-items:center;">
@@ -58,7 +64,7 @@
 		</div>
 
 		<div class="column" style="gap: 1rem;">
-			<div class="column">
+			<article class="column">
 				<h3>Operands</h3>
 				<div class="column" style="gap: 0.5rem; margin: 0.8rem;">
 					{#if ins.args.length}
@@ -71,10 +77,10 @@
 						{/each}
 					{/if}
 				</div>
-			</div>
-			<div class="description">
+			</article>
+			<article class="description">
 				{ins.description}
-			</div>
+			</article>
 		</div>
 	</div>
 	{#if component}
