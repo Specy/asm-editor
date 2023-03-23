@@ -446,7 +446,7 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
                 break
             }
             case "GetTime": {
-                interpreter.answerInterrupt({ type, value: Date.now() / 1000}) //unix seconds
+                interpreter.answerInterrupt({ type, value: Math.round(Date.now() / 1000)}) //unix seconds
                 break
             }
             case "Terminate": {
