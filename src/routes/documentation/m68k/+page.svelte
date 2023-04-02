@@ -36,7 +36,14 @@ import Input from '$cmp/inputs/Input.svelte'
 				Visit interactive documentation
 			</ButtonLink>
 		</h1>
-		<M68KDocumentation bind:searchValue visible={true} defaultOpen={true}  style="max-width: 60rem; overflow-y: unset" showRedirect/>
+		<M68KDocumentation 
+			bind:searchValue 
+			visible={true} 
+			defaultOpen={true}  
+			style="max-width: 60rem; overflow-y: unset" 
+			showRedirect
+			openLinksInNewTab={false}
+		/>
 	</div>
 </div>
 

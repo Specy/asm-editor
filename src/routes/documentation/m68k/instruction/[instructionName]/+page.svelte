@@ -2,6 +2,7 @@
 	import type { PageData } from './$types'
 	import Page from '$cmp/layout/Page.svelte'
 	import Navbar from '$cmp/Navbar.svelte'
+	import SvelteMarkdown from 'svelte-markdown'
 	import { onMount } from 'svelte'
 	import {
 		fromSizesToString,
@@ -10,18 +11,19 @@
 		type InstructionDocumentation
 	} from '$lib/languages/M68K-documentation'
 	import DocsOperand from '$cmp/project/DocsOperand.svelte'
+	import { createMarkdownWithOptions } from '$lib/markdown'
 	export let data: PageData
 	let ins: InstructionDocumentation = data.props.instruction
 	let component
+
 	onMount(async () => {
 		//HUGE ASS HACK TO MAKE SVELTEKIT WORK
-		const imp = (await import('./ClientOnly.svelte'))
+		const imp = await import('./ClientOnly.svelte')
 		await imp?.__tla
 		component = imp?.default
 	})
 	let code = ins.interactiveExample?.code ?? '; no interactive instruction available'
 </script>
-
 
 <svelte:head>
 	<meta name="description" content={`The ${ins.name} instruction.\n${ins.description}`} />
@@ -79,12 +81,14 @@
 				</div>
 			</article>
 			<article class="description">
-				{ins.description}
+				<SvelteMarkdown
+					source={createMarkdownWithOptions(ins.description, {})}
+				/>
 			</article>
 		</div>
 	</div>
 	{#if component}
-	    <svelte:component this={component} {code}/>
+		<svelte:component this={component} {code} />
 	{:else}
 		<div class="loading">Loading...</div>
 	{/if}
@@ -120,6 +124,10 @@
 		padding: 1rem;
 		width: 100%;
 		border-radius: 0.6rem;
+	}
+	:global(.description a) {
+		color: var(--accent);
+		text-decoration: underline;
 	}
 	@media (max-width: 800px) {
 		.instruction-info {

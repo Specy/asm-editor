@@ -12,6 +12,7 @@
 		instructionsDocumentationList,
 		M68KDirectiveDocumentationList
 	} from '$lib/languages/M68K-documentation'
+
 	import DocsOperand from '$cmp/project/DocsOperand.svelte'
 	import stringSimilarity from 'string-similarity'
 	import DocsSection from '$cmp/project/DocsSection.svelte'
@@ -22,7 +23,10 @@
 	let wrapper: HTMLDivElement
 	export let style = ''
 	export let searchValue: string
+	import SvelteMarkdown from 'svelte-markdown'
+	import { createMarkdownWithOptions } from '$lib/markdown'
 	export let defaultOpen = false
+	export let openLinksInNewTab = true
 	export let showRedirect = false
 	function includesText(nodes: NodeListOf<Element>, text: string) {
 		const texts = Array.from(nodes).map((node) => node.textContent)
@@ -172,11 +176,10 @@
 							{#if showRedirect}
 								<a href="#{ins.name}" class="sub-hover" title="click to create quick link">
 									{ins.name}
-
 								</a>
 							{:else}
 								{ins.name}
-							{/if}	
+							{/if}
 						</h1>
 
 						{#if ins.sizes.length}
@@ -195,7 +198,13 @@
 						{/if}
 					</div>
 					{#if ins.description}
-						<span class="sub-description">{ins.description}</span>
+						<span class="sub-description">
+							<SvelteMarkdown
+								source={createMarkdownWithOptions(ins.description, {
+									linksInNewTab: openLinksInNewTab
+								})}
+							/>
+						</span>
 					{/if}
 					<div class="row" style="gap: 1rem; justify-content: space-between;">
 						{#if ins.example}
@@ -204,11 +213,8 @@
 							</span>
 						{/if}
 						{#if showRedirect}
-							<ButtonLink
-								href="/documentation/m68k/instruction/{ins.name}"
-								cssVar="tertiary"
-							>
-								Try it 
+							<ButtonLink href="/documentation/m68k/instruction/{ins.name}" cssVar="tertiary">
+								Try it
 								<Icon style="margin-left: 0.5rem" size={0.8}>
 									<FaArrowRight />
 								</Icon>
@@ -248,7 +254,13 @@
 						{/if}
 					</div>
 					{#if dir.description}
-						<span class="sub-description">{dir.description}</span>
+						<span class="sub-description">
+							<SvelteMarkdown
+								source={createMarkdownWithOptions(dir.description, {
+									linksInNewTab: openLinksInNewTab
+								})}
+							/>
+						</span>
 					{/if}
 					{#if dir.example}
 						<span class="example">
@@ -272,6 +284,10 @@
 </div>
 
 <style>
+	:global(.sub-description a) {
+		color: var(--accent);
+		text-decoration: underline;
+	}
 	.docs-list {
 		display: flex;
 		padding: 0.6rem;
@@ -304,7 +320,7 @@
 		flex-wrap: wrap;
 		gap: 0.3rem;
 	}
-	.sub-hover:hover{
+	.sub-hover:hover {
 		color: var(--accent);
 		text-decoration: underline;
 	}

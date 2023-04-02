@@ -139,15 +139,15 @@ export const directionsDescriptions = new Map<string, string>([
     ["r", "Right"],
 ])
 const desc = {
-    "move": "Moves the value from the first operand to second operand.",
+    "move": "Moves the value from the first operand to second operand. If the second operand is an address register, the [MOVEA](/documentation/m68k/instruction/movea) instruction is used instead.",
     "moveq": "Moves the value from the first operand to second operand. The first operand is read as a byte so only values between -127 and 127.",
-    "movea": "Moves the value from the first operand to second operand. If the size is word, it is sign extended to long. It does not change the SR",
-    "add": "Adds the value of the first operand to second operand.",
+    "movea": "Moves the value from the first operand to second operand. If the size is word, it is sign extended to long. It does not change the SR. When using word size, the first operand is sign extended to long and the second is written as a long.",
+    "add": "Adds the value of the first operand to second operand. If the second operand is an address register, the [ADDA](/documentation/m68k/instruction/adda) instruction is used instead.",
     "addi": "Adds the immediate value to the second operand",
-    "adda": "Adds the value of the first operand to second operand. It does not change the SR",
+    "adda": "Adds the value of the first operand to second operand. It does not change the SR.  When using word size, the first operand is sign extended to long and the second is read and written as a long.",
     "addq": "Adds the value of the first operand to second operand. The first operand value must be between 1 and 8. If the destination is a address register, it is always treated as a long, and the condition codes are not affected.",
-    "sub": "Subtracts the value of the first operand from second operand and stores in the second.",
-    "suba": "Subtracts the value of the first operand from second operand and stores in the second. It does not change the SR",
+    "sub": "Subtracts the value of the first operand from second operand and stores in the second. If the second operand is an address register, the [SUBA](/documentation/m68k/instruction/suba) instruction is used instead.",
+    "suba": "Subtracts the value of the first operand from second operand and stores in the second. It does not change the SR. When using word size, the first operand is sign extended to long and the second is read and written as a long.",
     "subq": "Subtracts the value of the first operand from second operand and stores in the second. The first operand value must be between 1 and 8. If the destination is a address register, it is always treated as a long, and the condition codes are not affected.",
     "subi": "Subtracts the immediate value to the second operand",
     "divs": "Divides (signed) the value of the first operand by second operand. The quotient is stored in the first 16 bits of the destination register and the remainder is stored in the last 16 bits of the destination register. The first operand is read as a word, the second as a long",
@@ -160,8 +160,8 @@ const desc = {
     "neg": "Flips the sign of the operand, depending on the specified size, defaults to word",
     "ext": "Extends the sign of the operand, depending on the specified size. If the part to extend is negative, it will be filled with 1s, otherwise it will be filled with 0s. Defaults to word",
     "tst": "Compares the operand with 0",
-    "cmp": "Compares the second operand with the first operand, it sets the flags accordingly which will be used by the branching instructions. Works by subtracting the first operand from the second operand and setting the flags.",
-    "cmpa": "Compares the second operand with the first operand, it sets the flags accordingly which will be used by the branching instructions. When using word size, the operands are sign extended to long",
+    "cmp": "Compares the second operand with the first operand, it sets the flags accordingly which will be used by the branching instructions. Works by subtracting the first operand from the second operand and setting the flags. If the second operand is an address register, the [CMPA](/documentation/m68k/instruction/cmpa) instruction is used instead.",
+    "cmpa": "Compares the second operand with the first operand, it sets the flags accordingly which will be used by the branching instructions. When using word size, the first operand is sign extended to long and the second is read and written as a long.",
     "cmpm": "Compares two memory regions, only valid operand is the post increment, it sets the flags accordingly which will be used by the branchin instructions.",
     "cmpi": "Compares the second operand with the first operand, it sets the flags accordingly which will be used by the branching instructions.",
     "bcc": "Branches to the specified address if {condition code}",
@@ -248,7 +248,7 @@ export const M68kDocumentation: Record<InstructionName, InstructionDocumentation
         move.l #20, d1
         add.w d0, d1
     `),
-    "adda": makeIns("adda", [ANY, ONLY_Ad], ANY_SIZE, desc.adda, "adda.l d0, a0", Size.Word,
+    "adda": makeIns("adda", [ANY, ONLY_Ad], ONLY_LONG_OR_WORD, desc.adda, "adda.l d0, a0", Size.Word,
         `
         move #10, d0
         move.l #20, a0
@@ -270,7 +270,7 @@ export const M68kDocumentation: Record<InstructionName, InstructionDocumentation
         move.l #20, d1
         sub.w #10, d1   
     `),
-    "suba": makeIns("suba", [ANY, ONLY_Ad], ANY_SIZE, desc.suba, "suba.w #$FF, a1", Size.Word,
+    "suba": makeIns("suba", [ANY, ONLY_Ad], ONLY_LONG_OR_WORD, desc.suba, "suba.w #$FF, a1", Size.Word,
         `
         move.l #20, a1
         suba.w #10, a1
