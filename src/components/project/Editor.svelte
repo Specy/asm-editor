@@ -42,7 +42,7 @@
 			cursorBlinking: 'phase',
 			fontSize: 16,
 			smoothScrolling: true,
-			cursorSmoothCaretAnimation: true
+			cursorSmoothCaretAnimation: "on"
 		})
 
 		const observer = new ResizeObserver(() => {

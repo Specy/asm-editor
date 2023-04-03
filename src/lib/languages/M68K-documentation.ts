@@ -253,6 +253,15 @@ export const M68kDocumentation: Record<InstructionName, InstructionDocumentation
         move #10, d0
         move.l #20, a0
         adda.w d0, a0
+
+        move.l	#$1C000, d1
+        move.l	#$1C000, d2
+        move.l	#$1C000, a1
+        move.l	#$1C000, a2
+	    adda.l	#$6000, d1
+	    adda.l	#$6000, a1
+	    adda.w	#$6000, d2
+	    adda.w	#$6000, a2 ;!
     `),
     "addq": makeIns("addq", [ONLY_Im, NO_Im], ANY_SIZE, desc.addq, "addq.w #4, d1", Size.Word,
         `
@@ -393,7 +402,7 @@ export const M68kDocumentation: Record<InstructionName, InstructionDocumentation
     "cmpa": makeIns("cmpa", [ANY, ONLY_Ad], ONLY_LONG_OR_WORD, desc.cmpa, "cmpa.l $1000, a0", Size.Word,
         `
         lea $1000, a0 ; loads address of $1000 into a0
-        cmpa #1000, a0
+        cmpa #$1000, a0
         ; compare a0 t0 1000
         seq d0 ; if a0 == 1000
     `),
