@@ -17,6 +17,8 @@
 <svelte:head>
 	<title>Donate</title>
 	<meta name="description" content="Donate and support me" />
+	<meta property="og:description" content="Donate and support me" />
+	<meta property="og:title" content="Donate" />
 </svelte:head>
 <Page cropped contentStyle="max-width: 40rem; font-size: 1.1rem; line-height: 1.5rem; padding: 1rem;">
 	<div class="top-row">

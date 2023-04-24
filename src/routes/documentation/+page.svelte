@@ -12,6 +12,18 @@
 		Home
 	</a>
 </Navbar>
+<svelte:head>
+	<title>Documentation</title>
+	<meta
+		name="description"
+		content="All the documentations for the languages and features available in the asm-editor"
+	/>
+	<meta
+		property="og:description"
+		content="All the documentations for the languages and features available in the asm-editor"
+	/>
+	<meta name="og:title" content="Documentation" />
+</svelte:head>
 
 <Page cropped contentStyle="margin-top: 4rem; gap: 1rem; padding: 1rem">
 	<h1>Available Languages</h1>

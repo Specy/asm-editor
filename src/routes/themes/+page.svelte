@@ -24,6 +24,8 @@
 <svelte:head>
 	<title>Theme</title>
 	<meta name="description" content="Change the theme of the app" />
+	<meta property="og:description" content="Change the theme of the app" />
+	<meta property="og:title" content="Theme" />
 </svelte:head>
 
 <Page cropped contentStyle="max-width: 40rem; padding: 1rem">

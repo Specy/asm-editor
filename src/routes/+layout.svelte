@@ -27,6 +27,11 @@
 		}
 	}
 </script>
+<svelte:head>
+	<meta name="description" content="Write, learn and run M68K assembly code on your browser. View registers and memory, step and undo the program.">
+	<meta property="og:description" content="Write, learn and run M68K assembly code on your browser. View registers and memory, step and undo the program.">
+	<meta property="og:title" content="Asm Editor">
+</svelte:head>
 
 <ThemeProvider>
 	<ErrorLogger>

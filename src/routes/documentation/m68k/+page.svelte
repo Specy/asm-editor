@@ -7,12 +7,17 @@
 	import { instructionsDocumentationList } from '$lib/languages/M68K-documentation'
 
 	let searchValue = ''
+
 </script>
 
 <svelte:head>
 	<title>M68K Documentation</title>
 	<meta
 		name="description"
+		content="Read the M68K Documentation, including all the instructions with addressing modes and the assembler features"
+	/>
+	<meta 
+		property="og:description"
 		content="Read the M68K Documentation, including all the instructions with addressing modes and the assembler features"
 	/>
 	<meta name="tags" content={instructionsDocumentationList.map((i) => i.name).join(', ')} />
