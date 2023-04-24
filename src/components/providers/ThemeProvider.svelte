@@ -11,23 +11,33 @@
 			theme = ThemeStore.toArray()
 		})
 	})
+	let accent = ThemeStore.get('accent')
 </script>
+<Body 
+	style={`
+		--scroll-accent: ${$accent.color}
+	`}
+/>
 
 <div
 	class="theme-root"
 	style={`
     ${theme
-			.map(
-				({ name, color }) => `
+			.map(({ name, color }) => {
+				const text = new TinyColor(color).isDark()
+					? ThemeStore.textForDark
+					: ThemeStore.textForLight
+				return `
     --${name}: ${color};
-    --${name}-text: ${
-					new TinyColor(color).isDark() ? ThemeStore.textForDark : ThemeStore.textForLight
-				};
+    --${name}-text: ${text};
     --RGB-${name}: ${
 					new TinyColor(color).toRgbString().match(/(\s*\d+\s*),(\s*\d+\s*),(\s*\d+\s*)/)[0]
 				};
+	--RGB-${name}-text : ${
+		new TinyColor(text).toRgbString().match(/(\s*\d+\s*),(\s*\d+\s*),(\s*\d+\s*)/)[0]
+	};
     `
-			)
+			})
 			.join('\n')}
     ${style}
 `}

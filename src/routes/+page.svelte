@@ -14,6 +14,7 @@
 	import FaDownload from 'svelte-icons/fa/FaDownload.svelte'
 	import FaDonate from 'svelte-icons/fa/FaDonate.svelte'
 	import Button from '$cmp/buttons/Button.svelte'
+	import Page from '$cmp/layout/Page.svelte'
 	const textShadowPrimary = ThemeStore.getColor('primary').isDark()
 	const textShadowSecondary = ThemeStore.getColor('secondary').isDark()
 	let installEvent: any = null
@@ -34,120 +35,122 @@
 	/>
 </svelte:head>
 
-<div class="main">
-	<div class="content row">
-		<div class="preview-image" />
-		<div class="presentation">
-			<div class="welcome-title" class:textShadow={textShadowPrimary}>
-				The all in one web editor for M68K
+<Page>
+	<div class="main">
+		<div class="content row">
+			<div class="preview-image" />
+			<div class="presentation">
+				<div class="welcome-title" class:textShadow={textShadowPrimary}>
+					The all in one web editor for M68K
+				</div>
+				<div style="display: flex ; gap: 0.6rem">
+					<ButtonLink
+						href="/projects"
+						style={textShadowPrimary && 'box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);'}
+						title="Open the editor"
+					>
+						Go to the editor
+					</ButtonLink>
+					<ButtonLink
+						style={textShadowPrimary && 'box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);'}
+						cssVar="tertiary"
+						href="https://github.com/Specy/asm-editor"
+						title="Open the project on github"
+					>
+						<Icon>
+							<FaGithub />
+						</Icon>
+					</ButtonLink>
+					<ButtonLink
+						style={textShadowPrimary && 'box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);'}
+						cssVar="tertiary"
+						href="/donate"
+						title="Donate to the project"
+					>
+						<Icon>
+							<FaDonate />
+						</Icon>
+					</ButtonLink>
+				</div>
+				{#if installEvent}
+					<Button
+						style="margin-top: 1rem; gap: 0.5rem;"
+						cssVar="secondary"
+						on:click={async () => {
+							try {
+								await installEvent.prompt()
+							} catch (e) {
+								console.error(e)
+							}
+							installEvent = null
+						}}
+					>
+						<Icon>
+							<FaDownload />
+						</Icon>
+						Install WebApp
+					</Button>
+				{/if}
 			</div>
-			<div style="display: flex ; gap: 0.6rem">
-				<ButtonLink
-					href="/projects"
-					style={textShadowPrimary && 'box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);'}
-					title="Open the editor"
-				>
-					Go to the editor
-				</ButtonLink>
-				<ButtonLink
-					style={textShadowPrimary && 'box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);'}
-					cssVar="tertiary"
-					href="https://github.com/Specy/asm-editor"
-					title="Open the project on github"
-				>
-					<Icon>
-						<FaGithub />
-					</Icon>
-				</ButtonLink>
-				<ButtonLink
-					style={textShadowPrimary && 'box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);'}
-					cssVar="tertiary"
-					href="/donate"
-					title="Donate to the project"
-				>
-					<Icon>
-						<FaDonate />
-					</Icon>
-				</ButtonLink>
+		</div>
+		<AnimatedRgbLine height="0.5rem" style="border-radius: 0;" />
+		<div class="links-row-wrapper">
+			<div class="links-row">
+				<MainPageLinkPreview href="/documentation" title="Documentation page">
+					<div slot="icon">
+						<FaBook />
+					</div>
+					<div slot="description">Documentation</div>
+				</MainPageLinkPreview>
+				<MainPageLinkPreview href="#codeCompletion" title="Code completion section">
+					<div slot="icon">
+						<FaSearch />
+					</div>
+					<div slot="description">Code completion</div>
+				</MainPageLinkPreview>
+				<MainPageLinkPreview href="#tools" title="Tools section">
+					<div slot="icon">
+						<FaTools />
+					</div>
+					<div slot="description">Tools</div>
+				</MainPageLinkPreview>
 			</div>
-			{#if installEvent}
-				<Button
-					style="margin-top: 1rem; gap: 0.5rem;"
-					cssVar="secondary"
-					on:click={async () => {
-						try {
-							await installEvent.prompt()
-						} catch (e) {
-							console.error(e)
-						}
-						installEvent = null
-					}}
-				>
-					<Icon>
-						<FaDownload />
-					</Icon>
-					Install WebApp
-				</Button>
-			{/if}
 		</div>
 	</div>
-	<AnimatedRgbLine height="0.5rem" style="border-radius: 0;" />
-	<div class="links-row-wrapper">
-		<div class="links-row">
-			<MainPageLinkPreview href="/documentation" title="Documentation page">
-				<div slot="icon">
-					<FaBook />
-				</div>
-				<div slot="description">Documentation</div>
-			</MainPageLinkPreview>
-			<MainPageLinkPreview href="#codeCompletion" title="Code completion section">
-				<div slot="icon">
-					<FaSearch />
-				</div>
-				<div slot="description">Code completion</div>
-			</MainPageLinkPreview>
-			<MainPageLinkPreview href="#tools" title="Tools section">
-				<div slot="icon">
-					<FaTools />
-				</div>
-				<div slot="description">Tools</div>
-			</MainPageLinkPreview>
-		</div>
+	<div class="column sections-wrapper">
+		<MainPageSection id="documentation" imageUrl="/images/ASM-Documentation.webp">
+			<div slot="title">Documentation</div>
+			<div class="description" class:textShadow={textShadowPrimary}>
+				The editor comes with a built-in documentation for the M68K instruction set including the
+				valid addressing modes, description, examples for each instruction and directive.
+				<br />
+				<a href="/documentation" title="View documentation" class="docs-visit">
+					Or visit the documentation
+					<div style="width: 1rem; height: 1rem; margin-top: 0.2rem; margin-left: 0.3rem">
+						<GoLinkExternal />
+					</div>
+				</a>
+			</div>
+		</MainPageSection>
+		<MainPageSection id="codeCompletion" imageUrl="/images/ASM-CodeCompletion.webp" reverse>
+			<div slot="title">Code completion</div>
+			<div class="description" class:textShadow={textShadowSecondary}>
+				Write and learn faster with the code completion tools, suggesting you with the valid
+				addressing modes and shortcuts for labels and other keywords. Real time semantic errors that
+				warn you before you compile the code
+			</div>
+		</MainPageSection>
+		<MainPageSection id="tools" imageUrl="/images/ASM-Tools.webp">
+			<div slot="title">Tools & Customisation</div>
+			<div class="description" class:textShadow={textShadowPrimary}>
+				Feature rich tools to help you debug your code. Includes breakpoints, stepping, undo, stack
+				tracer, register/memory diffing, decimal/hexadecimal conversions, stdout/stdin/errors,
+				customisable shortcuts and settings, formatter and more. You can also customise the theme of
+				the editor to your liking.
+			</div>
+		</MainPageSection>
 	</div>
-</div>
-<div class="column sections-wrapper">
-	<MainPageSection id="documentation" imageUrl="/images/ASM-Documentation.webp">
-		<div slot="title">Documentation</div>
-		<div class="description" class:textShadow={textShadowPrimary}>
-			The editor comes with a built-in documentation for the M68K instruction set including the
-			valid addressing modes, description, examples for each instruction and directive.
-			<br />
-			<a href="/documentation" title="View documentation" class="docs-visit">
-				Or visit the documentation
-				<div style="width: 1rem; height: 1rem; margin-top: 0.2rem; margin-left: 0.3rem">
-					<GoLinkExternal />
-				</div>
-			</a>
-		</div>
-	</MainPageSection>
-	<MainPageSection id="codeCompletion" imageUrl="/images/ASM-CodeCompletion.webp" reverse>
-		<div slot="title">Code completion</div>
-		<div class="description" class:textShadow={textShadowSecondary}>
-			Write and learn faster with the code completion tools, suggesting you with the valid
-			addressing modes and shortcuts for labels and other keywords. Real time semantic errors that
-			warn you before you compile the code
-		</div>
-	</MainPageSection>
-	<MainPageSection id="tools" imageUrl="/images/ASM-Tools.webp">
-		<div slot="title">Tools & Customisation</div>
-		<div class="description" class:textShadow={textShadowPrimary}>
-			Feature rich tools to help you debug your code. Includes breakpoints, stepping, undo, stack
-			tracer, register/memory diffing, decimal/hexadecimal conversions, stdout/stdin/errors,
-			customisable shortcuts and settings, formatter and more. You can also customise the theme of
-			the editor to your liking.
-		</div>
-	</MainPageSection>
-</div>
+</Page>
 
 <div class="pre-footer" />
 

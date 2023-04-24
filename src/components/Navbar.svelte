@@ -1,4 +1,7 @@
-<div class="navbar">
+<script lang="ts">
+	export let style=""
+</script>
+<div class="navbar" {style}>
     <slot />
 </div>
 
@@ -16,6 +19,6 @@
 		justify-content: space-between;
 		background-color: rgba(var(--RGB-secondary), 0.5);
 		backdrop-filter: blur(0.4rem);
-		z-index: 1;
+		z-index: 4;
 	}
 </style>

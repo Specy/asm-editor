@@ -3,6 +3,7 @@
 	import Button from '$cmp/buttons/Button.svelte'
 	import ColorThemeRow from '$cmp/ColorThemeRow.svelte'
 	import Icon from '$cmp/layout/Icon.svelte'
+	import Page from '$cmp/layout/Page.svelte'
 	import Title from '$cmp/layout/Title.svelte'
 	import { ThemeStore } from '$stores/themeStore'
 	import { onMount } from 'svelte'
@@ -21,31 +22,29 @@
 </script>
 
 <svelte:head>
-	<title> Theme </title>
+	<title>Theme</title>
 	<meta name="description" content="Change the theme of the app" />
 </svelte:head>
 
-<main class="page">
-	<div class="content">
-		<div class="header">
-			<a href={previousPage} class="go-back" title="Go to previous page">
-				<Button hasIcon cssVar="primary" style="padding: 0.4rem" title="Go to previous page">
-					<Icon size={2}>
-						<FaAngleLeft />
-					</Icon>
-				</Button>
-			</a>
-			<Title noMargin>Theme</Title>
-		</div>
-		<div class="colors">
-			{#each theme as color, i (color.name)}
-				<div in:scale={{ delay: i * 50 + 200, start: 0.9, duration: 150 }}>
-					<ColorThemeRow bind:color />
-				</div>
-			{/each}
-		</div>
+<Page cropped contentStyle="max-width: 40rem; padding: 1rem">
+	<div class="header">
+		<a href={previousPage} class="go-back" title="Go to previous page">
+			<Button hasIcon cssVar="primary" style="padding: 0.4rem" title="Go to previous page">
+				<Icon size={2}>
+					<FaAngleLeft />
+				</Icon>
+			</Button>
+		</a>
+		<Title noMargin>Theme</Title>
 	</div>
-</main>
+	<div class="colors">
+		{#each theme as color, i (color.name)}
+			<div in:scale={{ delay: i * 50 + 200, start: 0.9, duration: 150 }}>
+				<ColorThemeRow bind:color />
+			</div>
+		{/each}
+	</div>
+</Page>
 
 <style lang="scss">
 	.header {
@@ -53,18 +52,6 @@
 		margin-top: 4rem;
 		margin-bottom: 2rem;
 		align-items: center;
-	}
-	.page {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-	}
-	.content {
-		display: flex;
-		flex-direction: column;
-		padding: 0.8rem;
-		max-width: 40rem;
-		width: 100%;
 	}
 	.colors {
 		display: flex;

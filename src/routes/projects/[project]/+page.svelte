@@ -9,6 +9,7 @@
 	import { onMount } from 'svelte'
 	import { Prompt } from '$stores/promptStore'
 	import { goto } from '$app/navigation'
+	import Page from '$cmp/layout/Page.svelte'
 	let ID = $page.params.project
 	let project: Project = ProjectStore.getProject(ID)
 	let unsubscribe = ProjectStore.projects.subscribe(() => {
@@ -42,12 +43,14 @@
 	}
 </script>
 
-
 <svelte:head>
 	<title>
 		{project?.name || 'Unnamed'}
 	</title>
-	<meta name="description" content="Use the editor to write code and run it to debug. Built in documentation and useful tools to learn and develop more easily" />
+	<meta
+		name="description"
+		content="Use the editor to write code and run it to debug. Built in documentation and useful tools to learn and develop more easily"
+	/>
 </svelte:head>
 
 <svelte:window
@@ -58,23 +61,23 @@
 		}
 	}}
 />
-<div class="project">
+<Page contentStyle="padding: 0.8rem;">
 	{#if project}
 		<ProjectEditor
 			bind:project
 			on:wantsToLeave={() => {
 				changePage('/projects')
 			}}
-			on:save={({ detail }) => {				
+			on:save={({ detail }) => {
 				ProjectStore.save(detail.data)
-				console.log("Saved")
-				if(!detail.silent) toast.logPill('Project saved')
+				console.log('Saved')
+				if (!detail.silent) toast.logPill('Project saved')
 			}}
 		/>
 	{:else}
 		<h1 class="loading">Loading...</h1>
 	{/if}
-</div>
+</Page>
 
 <style lang="scss">
 	.project {

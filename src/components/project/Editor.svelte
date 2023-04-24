@@ -81,6 +81,12 @@
 			})
 		)
 	})
+	$: {
+		if (editor && code !== editor.getValue()) {
+			console.log("overridden editor code")
+			editor.setValue(code)
+		}
+	}
 	onDestroy(() => {
 		toDispose.forEach((d) => {
 			if (typeof d === 'function') return d()

@@ -92,7 +92,7 @@ input:disabled {
 }
 
 ::-webkit-scrollbar-thumb {
-	background: var(--accent);
+	background: var(--scroll-accent);
 	border-radius: 2px;
 }
 

@@ -13,7 +13,7 @@
 	</a>
 </Navbar>
 
-<Page cropped>
+<Page cropped contentStyle="margin-top: 4rem; gap: 1rem; padding: 1rem">
 	<h1>Available Languages</h1>
 	<div class="langs">
 		{#each langs as lang}
@@ -49,7 +49,7 @@
 		gap: 1rem;
 		margin-left: 1rem;
 	}
-	h1{
+	h1 {
 		font-size: 1.8rem;
 		font-weight: normal;
 	}

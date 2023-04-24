@@ -213,7 +213,6 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
         code = code || get({ subscribe }).code
         try {
             const errors = S68k.semanticCheck(code).map(e => {
-                console.log(e.getLine())
                 return {
                     line: e.getLine(),
                     lineIndex: e.getLineIndex(),

@@ -6,6 +6,7 @@
 	import Kofi from '$cmp/misc/KoFi.svelte'
 	import Title from '$cmp/layout/Title.svelte'
 	import { afterNavigate } from '$app/navigation'
+	import Page from '$cmp/layout/Page.svelte'
 
 	let previousPage: string = '/projects'
 	afterNavigate(({ from }) => {
@@ -17,42 +18,40 @@
 	<title>Donate</title>
 	<meta name="description" content="Donate and support me" />
 </svelte:head>
-<div class="page">
-	<div class="content">
-		<div class="top-row">
-			<div class="row" style="align-items: center;">
-				<a href={previousPage} class="go-back" title="Go to previous page">
-					<Button hasIcon cssVar="primary" style="padding: 0.4rem"  title="Go to previous page">
-						<Icon size={2}>
-							<FaAngleLeft />
-						</Icon>
-					</Button>
-				</a>
-				<Title style="margin: 0">Donate</Title>
-			</div>
-		</div>
-		<div>
-			Thanks for using my webapp! If you want to help me continue developing new apps and features,
-			you can donate to me using kofi or paypal.
-			<br />
-			<a href="https://specy.app" style="text-decoration: underline; color: var(--accent)">
-				Or visit my website for more apps
+<Page cropped contentStyle="max-width: 40rem; font-size: 1.1rem; line-height: 1.5rem; padding: 1rem;">
+	<div class="top-row">
+		<div class="row" style="align-items: center;">
+			<a href={previousPage} class="go-back" title="Go to previous page">
+				<Button hasIcon cssVar="primary" style="padding: 0.4rem" title="Go to previous page">
+					<Icon size={2}>
+						<FaAngleLeft />
+					</Icon>
+				</Button>
 			</a>
-		</div>
-		<div class="links">
-			<a class="link" title="Kofi" href="https://ko-fi.com/specy ">
-				<Icon size={3}>
-					<Kofi />
-				</Icon>
-			</a>
-			<a class="link" title="Paypal" href="https://www.paypal.com/paypalme/specydev">
-				<Icon size={3}>
-					<FaPaypal />
-				</Icon>
-			</a>
+			<Title style="margin: 0">Donate</Title>
 		</div>
 	</div>
-</div>
+	<div>
+		Thanks for using my webapp! If you want to help me continue developing new apps and features,
+		you can donate to me using kofi or paypal.
+		<br />
+		<a href="https://specy.app" style="text-decoration: underline; color: var(--accent)">
+			Or visit my website for more apps
+		</a>
+	</div>
+	<div class="links">
+		<a class="link" title="Kofi" href="https://ko-fi.com/specy ">
+			<Icon size={3}>
+				<Kofi />
+			</Icon>
+		</a>
+		<a class="link" title="Paypal" href="https://www.paypal.com/paypalme/specydev">
+			<Icon size={3}>
+				<FaPaypal />
+			</Icon>
+		</a>
+	</div>
+</Page>
 
 <style lang="scss">
 	.page {
@@ -60,8 +59,6 @@
 		flex-direction: column;
 		align-items: center;
 		height: 100%;
-		font-size: 1.1rem;
-		line-height: 1.5rem;
 	}
 	.top-row {
 		display: flex;
@@ -70,12 +67,7 @@
 		margin-top: 4rem;
 		margin-bottom: 2rem;
 	}
-	.content {
-		display: flex;
-		flex-direction: column;
-		max-width: 40rem;
-		width: 100%;
-	}
+
 	.links {
 		display: flex;
 		flex-direction: row;

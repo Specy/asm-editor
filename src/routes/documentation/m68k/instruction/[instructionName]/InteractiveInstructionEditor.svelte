@@ -15,12 +15,17 @@
 	let editor: monaco.editor.IStandaloneCodeEditor
 	let running = false
 	export let code: string
+	export let instructionKey: string
 	let memoryAddress = 0x1000
 	let groupSize = 2
 	const emulator = M68KEmulator(code, {
 		globalPageElementsPerRow: 4,
 		globalPageSize: 4 * 8
 	})
+	$ : if(instructionKey){
+		emulator.clear()
+		running = false
+	}
 </script>
 
 <div class="editor-wrapper" style="gap: 1rem">

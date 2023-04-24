@@ -1,8 +1,9 @@
 <script lang="ts">
     export let code: string = ""
-	import ExampleBar from './ExampleBar.svelte'
+    export let instructionKey: string
+	import ExampleBar from './InteractiveInstructionEditor.svelte'
 
 </script>
 
 
-<ExampleBar bind:code={code} />
+<ExampleBar bind:code={code} {instructionKey}/>

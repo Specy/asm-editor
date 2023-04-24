@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Navbar from '$cmp/Navbar.svelte'
+	import Page from '$cmp/layout/Page.svelte'
 	import { versions } from './versions'
 	import FaCircle from 'svelte-icons/fa/FaCircle.svelte'
 </script>
@@ -11,44 +12,42 @@
 	</a>
 </Navbar>
 
-<div class="content">
-	<div class="column" style="max-width: 60rem; width:100%;">
-		<h1 style="margin-top: 1rem; margin-bottom: 2rem;">Changelog</h1>
-		<div class="column changelog">
-			{#each versions as version}
-				<div class="column version">
-					<div class="row version-header">
-						<h3 class="version-title">
-							{version.version}
-						</h3>
-						<p class="date">
-							{version.date.toISOString().split('T')[0].replace(/-/g, '/')}
-						</p>
-					</div>
-
-					<div class="version-content">
-						{#if version.title}
-							<div class="title">
-								{version.title}
-							</div>
-						{/if}
-						<ul>
-							{#each version.changes as change}
-								<li>
-									{change}
-								</li>
-							{/each}
-						</ul>
-					</div>
+<Page cropped contentStyle="padding: 1rem; padding-top: 4rem">
+	<h1 style="margin-top: 1rem; margin-bottom: 2rem;">Changelog</h1>
+	<div class="column changelog">
+		{#each versions as version}
+			<div class="column version">
+				<div class="row version-header">
+					<h3 class="version-title">
+						{version.version}
+					</h3>
+					<p class="date">
+						{version.date.toISOString().split('T')[0].replace(/-/g, '/')}
+					</p>
 				</div>
-			{/each}
-		</div>
 
-		<div class="fading">
-			<FaCircle />
-		</div>
+				<div class="version-content">
+					{#if version.title}
+						<div class="title">
+							{version.title}
+						</div>
+					{/if}
+					<ul>
+						{#each version.changes as change}
+							<li>
+								{change}
+							</li>
+						{/each}
+					</ul>
+				</div>
+			</div>
+		{/each}
 	</div>
-</div>
+
+	<div class="fading">
+		<FaCircle />
+	</div>
+</Page>
 
 <style lang="scss">
 	.fading {

@@ -1,22 +1,24 @@
 <script lang="ts">
+	import { navigationStore } from "$stores/navigationStore"
+	import { fly } from "svelte/transition"
 	export let cropped = false
+	export let style = ""
+	export let contentStyle = ""
 </script>
 
-<div class="content">
-	<div class="column" style="max-width: {cropped ? '60rem' : 'unset'}; width:100%; gap: 1rem; height: 100%">
+<main class="content" {style} in:fly={{ x: $navigationStore.direction === "back" ? 30 : -30, duration: 500 }}>
+	<div class="column" style="max-width: {cropped ? '60rem' : 'unset'}; width:100%;height: 100%; {contentStyle}">
 		<slot />
 	</div>
-</div>
+</main>
 
 <style lang="scss">
 	.content {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		padding: 0.8rem;
-        height: 100%;
-		margin-top: 1rem;
-		padding-top: 4rem;
+		position: relative;
+		flex: 1;
 	}
 
 </style>

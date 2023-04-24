@@ -16,6 +16,7 @@
 	import { Project } from '$lib/Project'
 	import { Prompt } from '$stores/promptStore'
 	import { goto } from '$app/navigation'
+	import Page from '$cmp/layout/Page.svelte'
 	const { projects } = ProjectStore
 
 	let hasFileHandleSupport = false
@@ -106,94 +107,96 @@
 	<title>Projects</title>
 	<meta name="description" content="Create, edit or delete your projects" />
 </svelte:head>
-<div class="project-display">
-	<div class="content">
-		<div class="top-row">
-			<div class="row" style="align-items: center;">
-				<a href="/" class="go-back" title="Go to the main page">
-					<Button hasIcon cssVar="primary" style="padding: 0.4rem" title="Go to the main page">
-						<Icon size={2}>
-							<FaAngleLeft />
-						</Icon>
-					</Button>
-				</a>
-				<Title style="margin: 0">Your projects</Title>
-			</div>
-			<div class="row top-row-buttons">
-				{#if hasFileHandleSupport}
-				<!-- Ignored for now as browser asks for permission -->
-					<Button
-						cssVar="secondary"
-						on:click={async () => {
-							const files = await window.showOpenFilePicker({ multiple: true })
-							try {
-								importFromFileHandle(files)
-							} catch (e) {
-								console.error(e)
-								toast.error('Failed to import project!')
-							}
-						}}
-					>
-						<Icon style="margin-right: 0.4rem" size={1}>
-							<FaUpload />
-						</Icon>
-						Import
-					</Button>
-				{:else}
-					<FileImporter
-						on:import={(e) => {
-							importFromText(e.detail.data)
-						}}
-						as="text"
-					>
-						<Button cssVar="secondary">
+<Page>
+	<div class="project-display">
+		<div class="content">
+			<div class="top-row">
+				<div class="row" style="align-items: center;">
+					<a href="/" class="go-back" title="Go to the main page">
+						<Button hasIcon cssVar="primary" style="padding: 0.4rem" title="Go to the main page">
+							<Icon size={2}>
+								<FaAngleLeft />
+							</Icon>
+						</Button>
+					</a>
+					<Title style="margin: 0">Your projects</Title>
+				</div>
+				<div class="row top-row-buttons">
+					{#if hasFileHandleSupport}
+						<!-- Ignored for now as browser asks for permission -->
+						<Button
+							cssVar="secondary"
+							on:click={async () => {
+								const files = await window.showOpenFilePicker({ multiple: true })
+								try {
+									importFromFileHandle(files)
+								} catch (e) {
+									console.error(e)
+									toast.error('Failed to import project!')
+								}
+							}}
+						>
 							<Icon style="margin-right: 0.4rem" size={1}>
 								<FaUpload />
 							</Icon>
 							Import
 						</Button>
-					</FileImporter>
-				{/if}
+					{:else}
+						<FileImporter
+							on:import={(e) => {
+								importFromText(e.detail.data)
+							}}
+							as="text"
+						>
+							<Button cssVar="secondary">
+								<Icon style="margin-right: 0.4rem" size={1}>
+									<FaUpload />
+								</Icon>
+								Import
+							</Button>
+						</FileImporter>
+					{/if}
 
-				<ButtonLink href="/projects/create" title="Create a new project">
-					<Icon style="margin-right: 0.3rem" size={1}>
+					<ButtonLink href="/projects/create" title="Create a new project">
+						<Icon style="margin-right: 0.3rem" size={1}>
+							<FaPlus />
+						</Icon>
+						Create
+					</ButtonLink>
+				</div>
+			</div>
+			{#if $projects.length === 0}
+				<h3 style="margin-top: 4rem; margin-left: 2rem; font-weight:unset">
+					You seem to have no projects, create one!
+				</h3>
+			{/if}
+			<div class="project-grid">
+				{#each $projects as project, i (project.id)}
+					<div
+						in:scale={{ duration: 200, delay: i * 50 + 150, start: 0.9 }}
+						out:scale|local={{ duration: 300, start: 0.8 }}
+					>
+						<ProjectCard
+							{project}
+							on:download={(e) => {
+								textDownloader(
+									e.detail.toExternal(),
+									`${(e.detail.name ?? 'Untitled project').split(' ').join('_')}.s68k`
+								)
+							}}
+						/>
+					</div>
+				{/each}
+				<div class="add-project">
+					<Icon size={2.5}>
 						<FaPlus />
 					</Icon>
-					Create
-				</ButtonLink>
-			</div>
-		</div>
-		{#if $projects.length === 0}
-			<h3 style="margin-top: 4rem; margin-left: 2rem; font-weight:unset">
-				You seem to have no projects, create one!
-			</h3>
-		{/if}
-		<div class="project-grid">
-			{#each $projects as project, i (project.id)}
-				<div
-					in:scale={{ duration: 200, delay: i * 50 + 150, start: 0.9 }}
-					out:scale|local={{ duration: 300, start: 0.8 }}
-				>
-					<ProjectCard
-						{project}
-						on:download={(e) => {
-							textDownloader(
-								e.detail.toExternal(),
-								`${(e.detail.name ?? 'Untitled project').split(' ').join('_')}.s68k`
-							)
-						}}
-					/>
+					<div>Create project</div>
 				</div>
-			{/each}
-			<div class="add-project">
-				<Icon size={2.5}>
-					<FaPlus />
-				</Icon>
-				<div>Create project</div>
 			</div>
 		</div>
 	</div>
-</div>
+</Page>
 
 <style lang="scss">
 	.top-row {

@@ -28,20 +28,12 @@
 
 <title> M68K Instructions </title>
 
-<Navbar>
-	<div class="row" style="gap: 2rem; align-items:center;">
-		<a class="icon" href="/" title="Go to the home">
-			<img src="/favicon.png" alt="logo" />
-			Home
-		</a>
-		<a href="/documentation/m68k"> M68k Documentation </a>
-	</div>
-</Navbar>
-<Page cropped>
+
+<Page contentStyle="padding-top: 4rem; gap: 1rem; padding: 1rem">
 	<h1>M68K Instructions</h1>
 	{#each groups as group}
 		{#if group.instructions.length}
-            <a href="#{group.letter}">
+            <a href="#{group.letter}" style="width: min-content; margin-top: 2rem;">
                 <h2 class="letter-group" id={group.letter}>
                     <div>
                         {group.letter}
@@ -79,7 +71,6 @@
         display: flex;
         justify-content: center;
         align-items: center;
-        margin-top: 2rem;
 	}
 	.instruction {
 		padding: 1rem 2rem;

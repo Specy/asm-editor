@@ -13,6 +13,7 @@
 	import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
 	import { ProjectStore } from '$stores/projectsStore'
 	import Icon from '$cmp/layout/Icon.svelte'
+	import Page from '$cmp/layout/Page.svelte'
 	let name = ''
 	let description = ''
 	let language: AvailableLanguages = 'M68K'
@@ -34,15 +35,16 @@
 		}
 	}
 </script>
-<svelte:head>	
-	<title> Create Project </title>
+
+<svelte:head>
+	<title>Create Project</title>
 	<meta name="description" content="Create a new project" />
 </svelte:head>
-<div class="create-project">
-	<div class="content">
+<Page cropped contentStyle="max-width: 40rem">
+	<div class="create-project">
 		<div class="row top-title">
 			<a href="/projects" class="go-back" title="Go to the projects page">
-				<Button hasIcon cssVar='primary' style='padding: 0.4rem'>
+				<Button hasIcon cssVar="primary" style="padding: 0.4rem">
 					<Icon size={2}>
 						<FaAngleLeft />
 					</Icon>
@@ -62,23 +64,14 @@
 			<Button on:click={create}>Create</Button>
 		</div>
 	</div>
-</div>
+</Page>
 
 <style lang="scss">
 	.create-project {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		height: 100%;
 		padding-top: 2rem;
-		.content {
-			max-width: 40rem;
-		}
+
 		@media screen and (max-width: 650px) {
 			padding: 1rem;
-			.content {
-				width: 100%;
-			}
 		}
 	}
 	.top-title {

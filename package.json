@@ -41,6 +41,7 @@
     "@types/string-similarity": "^4.0.0",
     "clone-deep": "^4.0.1",
     "dexie": "^3.2.1",
+    "fuzzy-search": "^3.2.1",
     "monaco-editor": "^0.36.1",
     "s-ago": "^2.2.0",
     "s68k": "^2.9.1",

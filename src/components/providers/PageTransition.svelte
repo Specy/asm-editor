@@ -2,13 +2,11 @@
 	import { afterNavigate, beforeNavigate } from '$app/navigation'
 	import RgbLine from '$cmp/misc/RgbLine.svelte'
 	import type { Timer } from '$lib/utils'
-	import { fly } from 'svelte/transition'
 	export let refresh = ''
 
 	let status = ''
 	let timeout: Timer
 	let timeout2: Timer
-	let goingBack = false
 	function handleProgress(s: string) {
 		if (s === 'started') {
 			status = 'progress-70'
@@ -26,24 +24,7 @@
 		}
 	}
 
-	function removeRoot(url: string) {
-		return url.replace(/^\/+/, '')
-	}
-
 	beforeNavigate((n) => {
-		try {
-			const params = n.to.url.searchParams
-			const back = params?.get('b')
-			if (back) {
-				goingBack = back === '1' ?? false
-			} else {
-				const from = removeRoot(n.from.url.pathname)
-				const to = removeRoot(n.to.url.pathname)
-				goingBack = from.split('/').length >= to.split('/').length && from !== ''
-			}
-		} catch (e) {
-			console.error(e)
-		}
 		handleProgress('started')
 	})
 	afterNavigate(() => {
@@ -57,19 +38,10 @@
 			<RgbLine height="0.3rem" />
 		</div>
 	</div>
-
-	<div in:fly={{ x: goingBack ? 30 : -30, duration: 500 }} class="page">
-		<slot />
-	</div>
 {/key}
 
 <style lang="scss">
-	.page {
-		display: flex;
-		flex-direction: column;
-		flex: 1;
-		position: relative;
-	}
+
 	.progress {
 		height: 4px;
 		width: 100%;

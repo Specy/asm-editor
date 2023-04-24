@@ -1,28 +1,28 @@
 <script lang="ts">
 	import type { PageData } from './$types'
 	import Page from '$cmp/layout/Page.svelte'
-	import Navbar from '$cmp/Navbar.svelte'
 	import SvelteMarkdown from 'svelte-markdown'
-	import { onMount } from 'svelte'
+	import { onMount, SvelteComponent } from 'svelte'
 	import {
 		fromSizesToString,
 		fromSizeToString,
 		getAddressingModeNames,
-		type InstructionDocumentation
 	} from '$lib/languages/M68K-documentation'
 	import DocsOperand from '$cmp/project/DocsOperand.svelte'
 	import { createMarkdownWithOptions } from '$lib/markdown'
 	export let data: PageData
-	let ins: InstructionDocumentation = data.props.instruction
-	let component
+	let ins = data.props.instruction
+	$: ins = data.props.instruction
+	let component: typeof SvelteComponent
 
 	onMount(async () => {
-		//HUGE ASS HACK TO MAKE SVELTEKIT WORK
+		//HUGE ASS HACK TO MAKE SVELTEKIT WORK BECAUSE OF TOP LEVEL AWAIT 
 		const imp = await import('./ClientOnly.svelte')
 		await imp?.__tla
 		component = imp?.default
 	})
 	let code = ins.interactiveExample?.code ?? '; no interactive instruction available'
+	$: code = ins.interactiveExample?.code ?? '; no interactive instruction available'
 </script>
 
 <svelte:head>
@@ -34,16 +34,7 @@
 	</title>
 </svelte:head>
 
-<Navbar>
-	<div class="row" style="gap: 2rem; align-items:center;">
-		<a class="icon" href="/" title="Go to the home">
-			<img src="/favicon.png" alt="logo" />
-			Home
-		</a>
-		<a href="/documentation/m68k"> M68k Documentation </a>
-	</div>
-</Navbar>
-<Page cropped>
+<Page contentStyle="padding: 1rem; gap: 1rem;">
 	<div class="instruction-info" style="flex: 1;">
 		<div class="column">
 			<div class="instruction-name">
@@ -81,14 +72,12 @@
 				</div>
 			</article>
 			<article class="description">
-				<SvelteMarkdown
-					source={createMarkdownWithOptions(ins.description, {})}
-				/>
+				<SvelteMarkdown source={createMarkdownWithOptions(ins.description, {})} />
 			</article>
 		</div>
 	</div>
 	{#if component}
-		<svelte:component this={component} {code} />
+		<svelte:component this={component} bind:code instructionKey={ins.name}/>
 	{:else}
 		<div class="loading">Loading...</div>
 	{/if}
@@ -134,13 +123,5 @@
 			flex-direction: column;
 		}
 	}
-	.icon {
-		height: 2.2rem;
-		display: flex;
-		align-items: center;
-		gap: 1rem;
-		img {
-			height: 100%;
-		}
-	}
+
 </style>
