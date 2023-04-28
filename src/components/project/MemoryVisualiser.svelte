@@ -77,9 +77,12 @@
 						? ' background-color: var(--accent2); color: var(--accent2-text);'
 						: 'border-radius: 0;'
 				}`}
-				hoverValue={word}
 				monospaced
-			/>
+			>
+				<div slot="hoverValue" style="user-select: all;">
+					{word}
+				</div>
+			</ValueDiff>
 		{/each}
 	</div>
 </div>

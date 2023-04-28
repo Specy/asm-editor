@@ -11,6 +11,7 @@ export type RegisterHex = [hi: string, lo: string]
 export type RegisterChunk = {
     hex: string,
     value: number
+    valueSigned: number
     groupSize: number
     prev: {
         hex: string,
@@ -39,9 +40,11 @@ export class Register {
         const prevHex = (this.prev >>> 0).toString(16).padStart(8, '0')
         const chunks: RegisterChunk[] = []
         for (let i = 0; i < hex.length; i += groupLength) {
+            const groupValue = parseInt(hex.slice(i, i + groupLength), 16)
             chunks.push({
                 hex: hex.slice(i, i + groupLength),
-                value: parseInt(hex.slice(i, i + groupLength), 16),
+                value: groupValue,
+                valueSigned: groupValue << (32 - groupLength * 4) >> (32 - groupLength * 4),
                 groupSize: groupLength,
                 prev: {
                     hex: prevHex.slice(i, i + groupLength),

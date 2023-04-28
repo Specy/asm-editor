@@ -1,4 +1,4 @@
-<script type="ts">
+<script lang="ts">
 	import { ThemeStore } from '$stores/themeStore'
 	import type { ThemeProp } from '$stores/themeStore'
 	import { TinyColor } from '@ctrl/tinycolor'

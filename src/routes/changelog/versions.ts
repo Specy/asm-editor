@@ -8,6 +8,15 @@ type Version = {
 }   
 export const versions: Version[] = [
     {
+        version: '2.8.0',
+        title: "Negative numbers in register viewer",
+        date: new Date('2023-04-28'),
+        changes: [
+            "Added negative numbers conversion in register viewer",
+            "Bug fix of interpreter for directive name clash"
+        ]
+    }, 
+    {
         version: '2.7.0',
         title: 'Changed interactive documentation',
         date: new Date('2023-04-24'),

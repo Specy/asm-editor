@@ -37,10 +37,20 @@
 					monospaced
 					style="padding: 0.1rem"
 					value={usesHex ? chunk.hex : `${chunk.value}`.padStart(chunk.groupSize, "0")}
-					hoverValue={usesHex ? `${chunk.value}`.padStart(chunk.groupSize, "0") : chunk.hex}
 					diff={usesHex ? chunk.prev.hex : `${chunk.prev.value}`.padStart(chunk.groupSize, "0")}
-					hoverElementOffset={"-1.25rem"}
-				/>
+					hoverElementOffset={chunk.value !== chunk.valueSigned ? "-2.4rem" : "-1.2rem"}
+				>
+					<div class="column" slot="hoverValue">
+						{#if chunk.value !== chunk.valueSigned}
+							<div style="user-select: all;">
+								{chunk.valueSigned}
+							</div>
+						{/if}
+						<div style="user-select: all;">
+							{usesHex ? `${chunk.value}`.padStart(chunk.groupSize, "0") : chunk.hex}
+						</div>
+					</div>
+				</ValueDiff>
 			{/each}
 		</div>
 	</div>
