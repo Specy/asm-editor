@@ -1,7 +1,6 @@
 import { browser } from "$app/environment";
 import { writable } from "svelte/store";
 
-
 export enum ShortcutAction {
     SaveCode,
     ToggleDocs,

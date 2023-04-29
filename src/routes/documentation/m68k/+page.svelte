@@ -1,13 +1,8 @@
 <script lang="ts">
+	import NavigationLinkButton from '$cmp/NavigationLinkButton.svelte'
 	import ButtonLink from '$cmp/buttons/ButtonLink.svelte'
-	import Input from '$cmp/inputs/Input.svelte'
 	import Page from '$cmp/layout/Page.svelte'
-	import M68KDocumentation from '$cmp/M68KDocumentation.svelte'
-	import Navbar from '$cmp/Navbar.svelte'
 	import { instructionsDocumentationList } from '$lib/languages/M68K-documentation'
-
-	let searchValue = ''
-
 </script>
 
 <svelte:head>
@@ -16,60 +11,46 @@
 		name="description"
 		content="Read the M68K Documentation, including all the instructions with addressing modes and the assembler features"
 	/>
-	<meta 
+	<meta
 		property="og:description"
 		content="Read the M68K Documentation, including all the instructions with addressing modes and the assembler features"
 	/>
 	<meta name="tags" content={instructionsDocumentationList.map((i) => i.name).join(', ')} />
 </svelte:head>
-
-<Navbar>
-	<a class="icon" href="/" title="Go to the home">
-		<img src="/favicon.png" alt="logo" />
-		Home
-	</a>
-	<Input
-		bind:value={searchValue}
-		placeholder="Search"
-		style="padding: 0rem; background-color: var(--tertiary); color: var(--tertiary-text); max-width: 15rem;"
-	/>
-</Navbar>
-<Page contentStyle="padding: 1rem; padding-top: 4rem;" cropped>
-	<div class="content">
-		<div class="column" style="max-width: 60rem; width: 100%;">
-			<h1 style="margin-top: 1rem; gap: 1rem; flex-wrap: wrap" class="row">
-				Documentation
-				<ButtonLink
-					href="/documentation/m68k/instruction"
-					style="font-weight: normal;"
-					cssVar="accent2"
-				>
-					Visit interactive documentation
-				</ButtonLink>
-			</h1>
-			<M68KDocumentation
-				bind:searchValue
-				visible={true}
-				defaultOpen={true}
-				style="max-width: 60rem; overflow-y: unset"
-				showRedirect
-				openLinksInNewTab={false}
-			/>
-		</div>
+<Page contentStyle="padding: 1rem; gap: 1rem">
+	<h1 style="margin-top: 1rem; gap: 1rem; flex-wrap: wrap" class="row">M68K Documentation</h1>
+	<div class="links">
+		<NavigationLinkButton href="/documentation/m68k/instruction">
+			<div>Instructions</div>
+		</NavigationLinkButton>
+		<NavigationLinkButton href="/documentation/m68k/addressing-mode">
+			<div>Addressing Modes</div>
+		</NavigationLinkButton>
+		<NavigationLinkButton href="/documentation/m68k/condition-codes">
+			<div>Condition Codes</div>
+		</NavigationLinkButton>
+		<NavigationLinkButton href="/documentation/m68k/shift-direction">
+			<div>Shift directions</div>
+		</NavigationLinkButton>
+		<NavigationLinkButton href="/documentation/m68k/directive">
+			<div>Directives</div>
+		</NavigationLinkButton>
+		<NavigationLinkButton href="/documentation/m68k/assembler-feature">
+			<div>Assembler Features</div>
+		</NavigationLinkButton>
 	</div>
 </Page>
 
 <style lang="scss">
-	.icon {
-		height: 2.2rem;
-		display: flex;
-		align-items: center;
-		gap: 1rem;
-		img {
-			height: 100%;
-		}
-		&:hover {
-			color: var(--accent);
+	.links {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		max-width: 60rem;
+		gap: 0.8rem;
+	}
+	@media (max-width: 900px) {
+		.links {
+			grid-template-columns: repeat(2, 1fr);
 		}
 	}
 </style>

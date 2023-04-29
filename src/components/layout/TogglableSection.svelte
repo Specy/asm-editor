@@ -1,24 +1,23 @@
 <script lang="ts">
 	import FaAngleRight from 'svelte-icons/fa/FaAngleRight.svelte'
-	import Icon from '../layout/Icon.svelte'
-	export let name: string
+	import Icon from '$cmp/layout/Icon.svelte'
 	export let open = true
+	export let style = ''
+	export let sectionStyle = ''
 	let cantAnimate = true
 </script>
 
-<section class="section" class:open>
+<section class="section" class:open {style}>
 	<button class="section-title" on:click={() => {
 		open = !open
 		cantAnimate = false
 	}}>
-		<Icon style={`transform: rotate(${open ? 90 : 0}deg); transition: all 0.2s cubic-bezier(.54,.9,0,.97); color: var(--accent); `} size={1.6}>
+		<Icon style={`transform: rotate(${open ? 90 : 0}deg); transition: all 0.2s cubic-bezier(.54,.9,0,.97); color: var(--accent); `} size={1.4}>
 			<FaAngleRight />
 		</Icon>
-		<div style="text-align: left;">
-			{name}
-		</div>
+		<slot name="title" />
 	</button>
-	<div class="column sub-section-content" class:open class:cantAnimate>
+	<div class="column sub-section-content" class:open class:cantAnimate style={sectionStyle}>
 		<slot />
 	</div>
 </section>
@@ -42,8 +41,8 @@
 	}
 	.sub-section-content {
 		display: none;
-		padding-left: 1rem;
-		margin-left: 0.7rem;
+		padding-left: 0.8rem;
+		margin-left: 0.6rem;
 		gap: 0.8rem;
 		border-left: 0.2rem solid var(--secondary);
 		opacity: 0;
@@ -52,6 +51,7 @@
 			animation: fade-in 0.2s forwards;
 		}
 	}
+
 	.cantAnimate {
 		animation: unset !important;
 		&.open {

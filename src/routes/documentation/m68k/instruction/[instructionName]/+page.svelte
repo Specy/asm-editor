@@ -8,7 +8,7 @@
 		fromSizeToString,
 		getAddressingModeNames,
 	} from '$lib/languages/M68K-documentation'
-	import DocsOperand from '$cmp/project/DocsOperand.svelte'
+	import DocsOperand from '$cmp/documentation/m68k/DocsOperand.svelte'
 	import { createMarkdownWithOptions } from '$lib/markdown'
 	export let data: PageData
 	let ins = data.props.instruction

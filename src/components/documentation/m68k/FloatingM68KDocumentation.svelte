@@ -1,7 +1,7 @@
 <script lang="ts">
-	import FloatingContainer from '../layout/FloatingContainer.svelte'
+	import FloatingContainer from '$cmp/layout/FloatingContainer.svelte'
 	import Input from '$cmp/inputs/Input.svelte'
-	import M68KDocumentation from '$cmp/M68KDocumentation.svelte'
+	import M68KDocumentation from '$cmp/documentation/m68k/M68KDocumentation.svelte'
 	export let visible: boolean
 	let searchValue = ''
 </script>

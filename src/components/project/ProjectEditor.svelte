@@ -16,7 +16,7 @@
 	import { clamp, createDebouncer, getErrorMessage } from '$lib/utils'
 	import { MEMORY_SIZE } from '$lib/Config'
 	import Settings from './Settings.svelte'
-	import M68KDocumentation from '$cmp/project/FloatingM68KDocumentation.svelte'
+	import M68KDocumentation from '$cmp/documentation/m68k/FloatingM68KDocumentation.svelte'
 	import FaBook from 'svelte-icons/fa/FaBook.svelte'
 	import { ShortcutAction, shortcutsStore } from '$stores/shortcutsStore'
 	import RegistersVisualiser from './RegistersVisualiser.svelte'

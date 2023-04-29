@@ -1,9 +1,8 @@
 <script lang="ts">
 	import Page from '$cmp/layout/Page.svelte'
-	import Navbar from '$cmp/Navbar.svelte'
 	import {
-		instructionsDocumentationList,
-		type InstructionDocumentation
+		type InstructionDocumentation,
+		M68KUncompoundedInstructions
 	} from '$lib/languages/M68K-documentation'
 	import { capitalize } from '$lib/utils'
 	import FaArrowRight from 'svelte-icons/fa/FaArrowRight.svelte'
@@ -16,7 +15,7 @@
 		instructions: []
 	}))
 	$: {
-		instructionsDocumentationList.forEach((ins) => {
+		Array.from(M68KUncompoundedInstructions.values()).forEach((ins) => {
 			const letter = ins.name[0].toUpperCase()
 			const group = groups.find((g) => g.letter === letter)
 			if (group) {

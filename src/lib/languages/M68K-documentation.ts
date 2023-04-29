@@ -93,9 +93,10 @@ const ANY_SIZE = [Size.Byte, Size.Word, Size.Long];
 const ONLY_LONG_OR_WORD = [Size.Long, Size.Word];
 export type InstructionDocumentation = {
     name: string;
+    compundNames?: string[];
     args: AddressingMode[][];
     sizes: Size[];
-    description?: string;
+    description: string;
     example?: string;
     defaultSize?: Size;
     interactiveExample?: {
@@ -126,6 +127,29 @@ export const branchConditionsDescriptions = new Map<string, string>([
     ["hs", "Unsigned higher or same"],
     ["lo", "Unsigned lower"],
 ])
+
+
+export const branchConditionsFlags = new Map<string, string>([
+    ["hi", "!c && !z"],
+    ["ls", "c || z"],
+    ["cc", "!c"],
+    ["cs", "c"],
+    ["ne", "!z"],
+    ["eq", "z"],
+    ["vc", "!v"],
+    ["vs", "v"],
+    ["pl", "!n"],
+    ["mi", "n"],
+    ["ge", "(n && v) || (!n && !v)"],
+    ["lt", "(n && !v) || (!n && v)"],
+    ["gt", "(n && v && !z) || (!n && !v && !z)"],
+    ["le", "z || (n && !v) || (!n && v)"],
+    ["hs", "!c"],
+    ["lo", "c"],
+])
+
+
+
 export const setConditions = [...branchConditions, "t", "f"];
 const setConditionsDescriptions = new Map<string, string>([
     ["t", "True"],
@@ -165,7 +189,7 @@ const desc = {
     "cmpm": "Compares two memory regions, only valid operand is the post increment, it sets the flags accordingly which will be used by the branchin instructions.",
     "cmpi": "Compares the second operand with the first operand, it sets the flags accordingly which will be used by the branching instructions.",
     "bcc": "Branches to the specified address if {condition code}",
-    "scc": "Sets the first byte of the destination operand to $FF (-1) if {condition code} is true, otherwise it sets it to 0",
+    "scc": "Sets the first byte of the destination operand to $FF (-1) if flags {condition code} is true, otherwise it sets it to 0",
     "dbcc": "Decrements the first operand by 1 and branches to the specified address if {condition code} is false and the first operand is not -1. dbra is the same as dbf (will decrement untill it reaches -1). It reads the operand as a word, so it can run at maximum 64k times",
     "lea": "Loads the address of the first operand into the second operand, when using indirect addressing, the value is not read, only the address is loaded. For example \"lea 4(a0), a0\" will load a0 + 4 in a1",
     "pea": "Same as lea, but it pushes the address to the stack",
@@ -229,6 +253,9 @@ export const M68KDirectiveDocumentation = {
     "equ": makeDirective("equ", NO_SIZE, dirsDesc.equ, "name equ 10"),
 }
 export const M68KDirectiveDocumentationList = Object.values(M68KDirectiveDocumentation)
+
+
+
 export const M68kDocumentation: Record<InstructionName, InstructionDocumentation> = {
     "move": makeIns("move", [ANY, NO_Im], ANY_SIZE, desc.move, "move.b #10, d0", Size.Word, `move.b #10, d0`),
     "moveq": makeIns("moveq", [ONLY_Im, ONLY_Da], NO_SIZE, desc.moveq, "moveq #10, d0", undefined,
@@ -417,8 +444,9 @@ export const M68kDocumentation: Record<InstructionName, InstructionDocumentation
         seq d0 ; if (a0) == (a1)
     `
     ),
-    "bcc": makeIns("bcc", [ONLY_Ea], NO_SIZE, desc.bcc, "`b<cc> label` Where cc is one of the condition codes", undefined,
-        `
+    "bcc": {
+        ...makeIns("bcc", [ONLY_Ea], NO_SIZE, desc.bcc, "`b<cc> label` Where cc is one of the condition codes", undefined,
+            `
         move.l #10, d0
         move.l #2, d2
         for_start:
@@ -428,8 +456,11 @@ export const M68kDocumentation: Record<InstructionName, InstructionDocumentation
             ;if d0 != 0, branch to for_start 
             bne for_start
     `),
-    "scc": makeIns("scc", [NO_Ad_AND_NO_Im], NO_SIZE, desc.scc, "`s<cc> d0` Where cc is one of the condition codes", undefined,
-        `
+        compundNames: branchConditions.map(c => `b${c}`),
+    },
+    "scc": {
+        ...makeIns("scc", [NO_Ad_AND_NO_Im], NO_SIZE, desc.scc, "`s<cc> d0` Where cc is one of the condition codes", undefined,
+            `
         move.l #10, d0
         tst d0 
         spl d1 ; set if plus
@@ -438,8 +469,11 @@ export const M68kDocumentation: Record<InstructionName, InstructionDocumentation
         sgt d4 ; set if greater than
         ; ...etc
     `),
-    "dbcc": makeIns("dbcc", [ONLY_Da, ONLY_Ea], NO_SIZE, desc.dbcc, "`db<cc> d0, label` Where cc is one of the condition codes", undefined,
-        `
+        compundNames: setConditions.map(c => `s${c}`),
+    },
+    "dbcc": {
+        ...makeIns("dbcc", [ONLY_Da, ONLY_Ea], NO_SIZE, desc.dbcc, "`db<cc> d0, label` Where cc is one of the condition codes", undefined,
+            `
         move.l #10, d0
         move.l #2, d2
         for_start:
@@ -447,6 +481,8 @@ export const M68kDocumentation: Record<InstructionName, InstructionDocumentation
             ; decrements and tests if d0 != 0
             dbne d0, for_start
     `),
+        compundNames: branchConditions.map(c => `db${c}`),
+    },
     "not": makeIns("not", [NO_Ad_AND_NO_Im], ANY_SIZE, desc.not, "not.b d0", Size.Word,
         `
         move.l #%10110100, d0
@@ -549,8 +585,9 @@ export const M68kDocumentation: Record<InstructionName, InstructionDocumentation
         END:
     `),
     "trap": makeIns("trap", [ONLY_Im], NO_SIZE, desc.trap, "trap #15"),
-    "asd": makeIns("asd", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.asd, "`as<d> d0, d3` Where d is either (l)eft or (r)ight", Size.Word,
-        `
+    "asd": {
+        ...makeIns("asd", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.asd, "`as<d> d0, d3` Where d is either (l)eft or (r)ight", Size.Word,
+            `
         move.w #$FF00, d0
         asr.w #4, d0
         move.w #$0F00, d1
@@ -558,8 +595,11 @@ export const M68kDocumentation: Record<InstructionName, InstructionDocumentation
         move.w #$0FF0, d2
         asr.w #4, d2
     `),
-    "lsd": makeIns("lsd", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.lsd, "`ls<d> #3, d7` Where d is either (l)eft or (r)ight", Size.Word,
-        `
+        compundNames: ["asl", "asr"]
+    },
+    "lsd": {
+        ...makeIns("lsd", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.lsd, "`ls<d> #3, d7` Where d is either (l)eft or (r)ight", Size.Word,
+            `
         move.w #$FF00, d0
         lsr.w #4, d0
         move.w #$0F00, d1
@@ -567,13 +607,18 @@ export const M68kDocumentation: Record<InstructionName, InstructionDocumentation
         move.w #$0FF0, d2
         asr.w #4, d2 
     `),
-    "rod": makeIns("rod", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.rod, "`ro<d> d2, d5` Where d is either (l)eft or (r)ight", Size.Word,
-        `
+        compundNames: ["lsr", "lsl"]
+    },
+    "rod": {
+        ...makeIns("rod", [NO_Ad, NO_Ad_AND_NO_Im], ANY_SIZE, desc.rod, "`ro<d> d2, d5` Where d is either (l)eft or (r)ight", Size.Word,
+            `
         move.w #$1234, d0
         rol.w #8, d0
         move.w #$1234, d1
         ror.w #8, d1
-    `),
+        `),
+        compundNames: ["rol", "ror"]
+    },
     "btst": makeIns("btst", [NO_Ad, NO_Ad_AND_NO_Im], NO_SIZE, desc.btst, "btst #4, d0", undefined,
         `
         move #1, d0
@@ -598,75 +643,49 @@ export const M68kDocumentation: Record<InstructionName, InstructionDocumentation
     `),
 }
 
+export const M68KUncompoundedInstructions = uncompoundInstructions(Object.values(M68kDocumentation))
 
 
 export function getInstructionDocumentation(instructionName: InstructionName): InstructionDocumentation | undefined {
     if (!instructionName) return undefined
-    if (instructionName.startsWith("b")) {
-        const sub = instructionName.substring(1)
-        if (branchConditionsMap.has(sub)) {
-            const ins = cloneDeep(M68kDocumentation['bcc'])
-            if (!ins) return ins
-            ins.name = "b" + sub
-            ins.description = ins.description.replace("{condition code}", `"${branchConditionsDescriptions.get(sub)}"`)
-            return ins
-        }
-    }
-    if (instructionName.startsWith("s")) {
-        const sub = instructionName.substring(1)
-        if (setConditionsDescriptions.has(sub)) {
-            const ins = cloneDeep(M68kDocumentation['scc'])
-            if (!ins) return ins
-            ins.name = "s" + sub
-            ins.description = ins.description.replace("{condition code}", `"${branchConditionsDescriptions.get(sub)}"`)
-            return ins
-        }
-    }
-    if (instructionName.startsWith("as")) {
-        const sub = instructionName.substring(2)
-        if (directionsMap.has(sub)) {
-            const ins = cloneDeep(M68kDocumentation['asd'])
-            if (!ins) return ins
-            ins.name = "as" + sub
-            ins.description = ins.description.replace("{direction}", `"${directionsDescriptions.get(sub)}"`)
-            return ins
-        }
-    }
-    if (instructionName.startsWith("ls")) {
-        const sub = instructionName.substring(2)
-        if (directionsMap.has(sub)) {
-            const ins = cloneDeep(M68kDocumentation['lsd'])
-            if (!ins) return ins
-            ins.name = "ls" + sub
-            ins.description = ins.description.replace("{direction}", `"${directionsDescriptions.get(sub)}"`)
-            return ins
-        }
-    }
-    if (instructionName.startsWith("ro")) {
-        const sub = instructionName.substring(2)
-        if (directionsMap.has(sub)) {
-            const ins = cloneDeep(M68kDocumentation['rod'])
-            if (!ins) return ins
-            ins.name = "ro" + sub
-            ins.description = ins.description.replace("{direction}", `"${directionsDescriptions.get(sub)}"`)
-            return ins
-        }
-    }
-    if (instructionName.startsWith("db")) {
-        const sub = instructionName.substring(2)
-        if (branchConditionsMap.has(sub)) {
-            const ins = cloneDeep(M68kDocumentation['dbcc'])
-            if (!ins) return ins
-            ins.name = "db" + sub
-            ins.description = ins.description.replace("{condition code}", `"${branchConditionsDescriptions.get(sub)}"`)
-            return ins
-        }
-    }
-    const ins = M68kDocumentation[instructionName]
+    const ins = M68KUncompoundedInstructions.get(instructionName)
     const directive = M68KDirectiveDocumentation[instructionName]
     if (ins) return ins
     if (directive) return directive
     return undefined
+}
+
+export function uncompoundInstructions(instructions: InstructionDocumentation[] | Map<string, InstructionDocumentation>) {
+    const map = new Map<string, InstructionDocumentation>()
+    instructions = Array.isArray(instructions) ? instructions : Array.from(instructions.values())
+    instructions.forEach(i => {
+        if (i.compundNames) {
+            i.compundNames.forEach(n => {
+                let description = i.description
+                const name = i.name
+                if(name === "lsd" || name === "asd" || name === "rod") {
+                    const direction = n.substring(n.length - 1)
+                    description = description.replace("{direction}", `"**${directionsDescriptions.get(direction)}"**"`)
+                }
+                if(name === "bcc" || name === "dbcc") {
+                    const code = n.substring(n.length - 2)
+                    description = description.replace("{condition code}", `"**${branchConditionsDescriptions.get(code)}**"`)
+                }
+                if(name === "scc") {
+                    let code = n.substring(n.length - 2)
+                    if(n === "st") code = "t"
+                    if(n === "sf") code = "f"
+                    description = description.replace("{condition code}", `"**${setConditionsDescriptions.get(code)}**"`)
+                }
+                const entry = cloneDeep(i)
+                entry.name = n
+                entry.description = description
+                map.set(n, entry)
+            })
+        }
+        map.set(i.name, i)
+    })
+    return map
 }
 
 

@@ -1,0 +1,55 @@
+.cc-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+
+.gap-03 {
+    gap: 0.3rem;
+}
+
+.sub-title {
+    font-size: 1.3rem;
+    margin-right: 0.4rem;
+}
+:global(.sub-description a) {
+    color: var(--accent);
+    text-decoration: underline;
+}
+.docs-list {
+    display: flex;
+    padding: 0.6rem;
+    padding-left: 0.4rem;
+    padding-top: 1.2rem;
+    flex-direction: column;
+    gap: 1.4rem;
+    font-family: FiraCode;
+}
+
+.instruction {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.instruction-addressing-modes {
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+.sub-hover:hover {
+    color: var(--accent);
+    text-decoration: underline;
+}
+.sub-description,
+.example {
+    white-space: pre-line;
+    padding: 0.6rem 0.8rem;
+    background-color: rgba(var(--RGB-secondary), 0.7);
+    line-height: 1.4rem;
+    border-radius: 0.4rem;
+}
+.sub-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
