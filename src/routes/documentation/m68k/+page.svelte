@@ -1,6 +1,5 @@
 <script lang="ts">
 	import NavigationLinkButton from '$cmp/NavigationLinkButton.svelte'
-	import ButtonLink from '$cmp/buttons/ButtonLink.svelte'
 	import Page from '$cmp/layout/Page.svelte'
 	import { instructionsDocumentationList } from '$lib/languages/M68K-documentation'
 </script>
@@ -51,6 +50,11 @@
 	@media (max-width: 900px) {
 		.links {
 			grid-template-columns: repeat(2, 1fr);
+		}
+	}
+	@media (max-width: 400px) {
+		.links {
+			grid-template-columns: repeat(1, 1fr);
 		}
 	}
 </style>

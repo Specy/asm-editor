@@ -5,7 +5,7 @@
 
 <Page cropped contentStyle="padding: 1rem; gap: 1rem;">
 	<h1>Shift Directions</h1>
-	<div style="text">
+	<div class="text">
 		The shift logical, shift arithmetical and rotate, instructions use the directions to specify in which direction the bits are shifted.
 	</div>
 	<div class="column content">
