@@ -5,7 +5,7 @@
 	export let title: string
 </script>
 
-<a {href} class="menu-link row">
+<a {href} class="menu-link row" on:click>
     <Icon size={0.4} style="color: var(--accent);">
         <FaCircle />
     </Icon>

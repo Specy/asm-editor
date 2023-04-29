@@ -44,11 +44,31 @@
 <div class="row" style="gap: 1rem; flex: 1">
 	<aside class="side-menu column" class:menu-open={menuOpen}>
 		<div class="column" style="gap: 1rem; padding: 0 1rem;">
-			<MenuLink href="/documentation/m68k/addressing-mode" title="Addressing Modes" />
-			<MenuLink href="/documentation/m68k/condition-codes" title="Condition Codes" />
-			<MenuLink href="/documentation/m68k/shift-direction" title="Shifts & directions" />
-			<MenuLink href="/documentation/m68k/directive" title="Directives" />
-			<MenuLink href="/documentation/m68k/assembler-feature" title="Assembler features" />
+			<MenuLink
+				href="/documentation/m68k/addressing-mode"
+				title="Addressing Modes"
+				on:click={() => (menuOpen = false)}
+			/>
+			<MenuLink
+				href="/documentation/m68k/condition-codes"
+				title="Condition Codes"
+				on:click={() => (menuOpen = false)}
+			/>
+			<MenuLink
+				href="/documentation/m68k/shift-direction"
+				title="Shifts & directions"
+				on:click={() => (menuOpen = false)}
+			/>
+			<MenuLink
+				href="/documentation/m68k/directive"
+				title="Directives"
+				on:click={() => (menuOpen = false)}
+			/>
+			<MenuLink
+				href="/documentation/m68k/assembler-feature"
+				title="Assembler features"
+				on:click={() => (menuOpen = false)}
+			/>
 		</div>
 		<TogglableSection
 			open={true}
@@ -59,7 +79,7 @@
 				Instructions
 			</h2>
 			<input bind:value={search} placeholder="Search" class="instruction-search" />
-			<InstructionsMenu instructions={filteredInstructions} />
+			<InstructionsMenu instructions={filteredInstructions}  on:click={() => menuOpen = false}/>
 		</TogglableSection>
 	</aside>
 
@@ -88,7 +108,7 @@
 			position: fixed;
 			width: calc(100vw - 4rem);
 			left: 0;
-			z-index: 2;
+			z-index: 5;
 			transition: transform 0.3s;
 			background-color: rgba(var(--RGB-secondary), 0.9);
 			backdrop-filter: blur(0.3rem);

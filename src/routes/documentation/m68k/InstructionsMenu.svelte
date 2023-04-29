@@ -6,7 +6,7 @@
 
 <div class="column">
 	{#each instructions as ins}
-		<a href="/documentation/m68k/instruction/{ins.name}" class="instruction-link">
+		<a href="/documentation/m68k/instruction/{ins.name}" class="instruction-link" on:click>
 			<div class="instruction-link-inner">
 				{ins.name}
 			</div>
