@@ -12,10 +12,14 @@
 		})
 	})
 	let accent = ThemeStore.get('accent')
+	let background = ThemeStore.get('background')
 </script>
-<Body 
+
+<Body
 	style={`
-		--scroll-accent: ${$accent.color}
+		--scroll-accent: ${$accent.color};
+		background-color: ${$background.color};
+		color: ${new TinyColor($background.color).isDark() ? ThemeStore.textForDark : ThemeStore.textForLight};
 	`}
 />
 
@@ -34,8 +38,8 @@
 					new TinyColor(color).toRgbString().match(/(\s*\d+\s*),(\s*\d+\s*),(\s*\d+\s*)/)[0]
 				};
 	--RGB-${name}-text : ${
-		new TinyColor(text).toRgbString().match(/(\s*\d+\s*),(\s*\d+\s*),(\s*\d+\s*)/)[0]
-	};
+					new TinyColor(text).toRgbString().match(/(\s*\d+\s*),(\s*\d+\s*),(\s*\d+\s*)/)[0]
+				};
     `
 			})
 			.join('\n')}

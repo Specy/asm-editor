@@ -27,6 +27,8 @@
 		flex-direction: column;
 		align-items: center;
 		position: relative;
+		background-color: var(--primary);
+		color: var(--primary-text);
 	}
 	.section-image {
 		background-repeat: no-repeat;
@@ -67,6 +69,7 @@
 		justify-content: flex-end;
 		width: 100%;
 		max-width: 80vw;
+		
 	}
 	.reverse {
 		background-color: var(--secondary);

@@ -164,6 +164,8 @@
 	.sections-wrapper {
 		padding: 4rem 0;
 		font-family: FiraCode;
+		background-color: var(--primary);
+		color: var(--primary-text);
 	}
 	.presentation {
 		display: flex;
