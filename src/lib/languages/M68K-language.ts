@@ -33,15 +33,15 @@ export const M68KLanguage = {
 	tokenizer: {
 		root: [
 			//[/('.+'|\w+)[\+\-\/\*]('.+'|\w+)/, 'arithmetical-operation'],
-			[/(d|D)\d/, 'data-register'],
-			[/(a\d|A\d|sp)/, 'address-register'],
+
 			[new RegExp(`(${directives.join("|")})`), 'directive'],
 			[/\w*:/, 'label'],
 			[
 				/[.a-zA-Z_]\w*/,
 				{
 					cases: {
-						this: 'variable.predefined',
+						'(d|D)\\d': 'data-register',
+						'(a\\d|A\\d|sp)': 'address-register',
 						'@keywords': { token: 'keyword.$0' },
 						'@default': ''
 					}
