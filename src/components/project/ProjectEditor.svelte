@@ -264,12 +264,15 @@
 	<div class="editor-wrapper">
 		<div
 			class="editor-border"
-			class:gradientBorder={$emulator.canExecute}
+			class:gradientBorder={$emulator.canExecute && !$emulator.terminated}
 			class:redBorder={$emulator.errors.length > 0}
 		>
 			<Editor
 				on:change={(d) => {
 					emulator.setCode(d.detail)
+					if($emulator.canExecute && $emulator.terminated && $emulator.line >= 0){
+						emulator.resetSelectedLine()
+					}
 					if ($settingsStore.values.autoSave.value) {
 						debounced(() => {
 							dispatcher('save', {
@@ -288,7 +291,7 @@
 				errors={$emulator.compilerErrors}
 				language={project.language}
 				highlightedLine={$emulator.line}
-				disabled={$emulator.canExecute }
+				disabled={$emulator.canExecute && !$emulator.terminated}
 				hasError={$emulator.errors.length > 0}
 			/>
 		</div>

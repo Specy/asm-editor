@@ -42,11 +42,13 @@
 }
 .sub-description,
 .example {
-    white-space: pre-line;
     padding: 0.6rem 0.8rem;
     background-color: rgba(var(--RGB-secondary), 0.7);
     line-height: 1.4rem;
     border-radius: 0.4rem;
+}
+.example{
+    white-space: pre-line;
 }
 .sub-section {
     display: flex;

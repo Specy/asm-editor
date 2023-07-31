@@ -16,13 +16,13 @@
 	let wrapper: HTMLDivElement
 	export let style = ''
 	export let searchValue: string
-	import SvelteMarkdown from 'svelte-markdown'
 	import { createMarkdownWithOptions } from '$lib/markdown'
 	import AddressingModes from './M68KAddressingModes.svelte'
 	import M68KConditionCodes from './M68KConditionCodes.svelte'
 	import M68KShiftRotations from './M68KShiftDirections.svelte'
 	import M68KDirectives from './M68KDirectives.svelte'
 	import M68KAssemblerFeatures from './M68KAssemblerFeatures.svelte'
+	import MarkdownRenderer from '$cmp/MarkdownRenderer.svelte'
 	export let defaultOpen = false
 	export let openLinksInNewTab = true
 	export let showRedirect = false
@@ -92,7 +92,7 @@
 					</div>
 					{#if ins.description}
 						<span class="sub-description">
-							<SvelteMarkdown
+							<MarkdownRenderer
 								source={createMarkdownWithOptions(ins.description, {
 									linksInNewTab: openLinksInNewTab
 								})}

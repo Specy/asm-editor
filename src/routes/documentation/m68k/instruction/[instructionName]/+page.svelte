@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { PageData } from './$types'
 	import Page from '$cmp/layout/Page.svelte'
-	import SvelteMarkdown from 'svelte-markdown'
 	import { onMount, SvelteComponent } from 'svelte'
 	import {
 		fromSizesToString,
@@ -10,6 +9,7 @@
 	} from '$lib/languages/M68K-documentation'
 	import DocsOperand from '$cmp/documentation/m68k/DocsOperand.svelte'
 	import { createMarkdownWithOptions } from '$lib/markdown'
+	import MarkdownRenderer from '$cmp/MarkdownRenderer.svelte'
 	export let data: PageData
 	let ins = data.props.instruction
 	$: ins = data.props.instruction
@@ -74,7 +74,7 @@
 				</div>
 			</article>
 			<article class="description">
-				<SvelteMarkdown source={createMarkdownWithOptions(ins.description, {})} />
+				<MarkdownRenderer source={createMarkdownWithOptions(ins.description, {})} />
 			</article>
 		</div>
 	</div>
@@ -102,7 +102,8 @@
 	}
 	.instruction-name {
 		font-size: 4rem;
-		margin-right: 3rem;
+		margin-right: 2rem;
+		min-width: 11.2rem;
 		font-weight: 600;
 		color: var(--accent);
 		margin-bottom: 1rem;

@@ -211,7 +211,9 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
             return s
         })
     }
-
+    function resetSelectedLine(){
+        update(s => ({...s, line: -1}))
+    }
     function semanticCheck(code?: string) {
         code = code || get({ subscribe }).code
         try {
@@ -565,6 +567,7 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
         clear,
         setTabMemoryAddress,
         toggleBreakpoint,
-        undo
+        undo,
+        resetSelectedLine
     }
 }

@@ -218,18 +218,20 @@ const desc = {
     "trap": `
         Executes a trap, the value of the operand is used as the trap number, only #15 is supported.
         The register d0 will be used as the trap type which are: 
-        0: Print string pointed by a1 with length read in d1.w, null terminated with max of 255, then prints a new line.
-        1: Print string pointed by a1 with length read in d1.w.
-        2: Read string from keyboard, writes at address of a1.
-        3: Print number at d1.
-        4: Read number, writes to d1.
-        5: Read character, writes to d1.
-        6: Print character at d1.
-        8: Get time, writes to d1.
-        9: Terminate.
-        13: Prints null terminated string pointed by a1 then prints new line, errors if string is longer than 16kb, to prevent infinite loops. 
-        14: Prints null terminated string pointed by a1, errors if string is longer than 16kb, to prevent infinite loops.
-    `.trim(),
+| Opcode | Description                                                                                           |
+|:------:|-------------------------------------------------------------------------------------------------------|
+| 0      | Print string pointed by a1 with length read in d1.w, null terminated with max of 255, then prints a new line.              |
+| 1      | Print string pointed by a1 with length read in d1.w.                                              |
+| 2      | Read string from keyboard, writes at address of a1.                                               |
+| 3      | Print number at d1.                                                                                  |
+| 4      | Read number, writes to d1.                                                                           |
+| 5      | Read character, writes to d1.                                                                        |
+| 6      | Print character at d1.                                                                               |
+| 8      | Get time, writes to d1.                                                                              |
+| 9      | Terminate.                                                                                             |
+| 13     | Prints null terminated string pointed by a1 then prints new line, errors if string is longer than 16kb, to prevent infinite loops.   |
+| 14     | Prints null terminated string pointed by a1, errors if string is longer than 16kb, to prevent infinite loops.                       |
+`.trim(),
 }
 const dirsDesc = {
     "dc": "Defines constants, following the directive there can be a list of constants separated by commas, the size of each constant depends on the selected size. If no size is selected, the size is determined by the value of the constant. If the constant is a string, it will be stored as a sequence of bytes, if it is a number, it will be stored as a sequence of words",

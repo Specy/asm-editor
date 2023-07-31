@@ -1,8 +1,9 @@
 <script lang="ts">
+	import MarkdownRenderer from "$cmp/MarkdownRenderer.svelte"
+
 
 	import { M68KDirectiveDocumentationList, fromSizesToString } from "$lib/languages/M68K-documentation"
 	import { createMarkdownWithOptions } from "$lib/markdown"
-	import SvelteMarkdown from "svelte-markdown"
     export let openLinksInNewTab = true
 </script>
 <div class="column sub-section">
@@ -20,7 +21,7 @@
             </div>
             {#if dir.description}
                 <span class="sub-description">
-                    <SvelteMarkdown
+                    <MarkdownRenderer
                         source={createMarkdownWithOptions(dir.description, {
                             linksInNewTab: openLinksInNewTab
                         })}

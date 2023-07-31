@@ -8,7 +8,7 @@
 	const dispatcher = createEventDispatcher<{
 		registerClick: Register
 	}>()
-	export let size = Size.Word
+	export let size: Size = Size.Word
 	export let style = ""
 	let usesHex = !$settingsStore.values.useDecimalAsDefault.value
 	$: usesHex = !$settingsStore.values.useDecimalAsDefault.value
