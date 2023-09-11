@@ -1,0 +1,6 @@
+next : run build output 
+ *ignore vercel failed node16
+  next.js: run nodd 18
+   next： run turbo charge and pack 
+      builder: use builder.io to run output 
+       next option ： use contentful
