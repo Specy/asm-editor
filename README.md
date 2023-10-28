@@ -49,4 +49,5 @@ The assembler has a few directives and features to simplify writing code.
 * expressions (like `$FF*10`) and many immediate representations. 
 
 # Benchmarks
-The interpreter runs at round 3mhz on the browser and 11mhz natively, it will be improved in the future. You can benchmark your own code by running a loop and then read the js console, the total time of each execution is shown
+The interpreter runs at round 7mhz on the browser and 30mhz natively (on my machine).
+You can benchmark your own code by running a loop and then read the js console, the total time of each execution is shown
