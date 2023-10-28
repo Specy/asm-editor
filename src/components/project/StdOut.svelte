@@ -17,8 +17,8 @@
 	{#if compilerErrors.length}
 		<button
 			class="floating-std-icon"
-			in:fly={{ duration: 300 }}
-			out:fly={{ duration: 200 }}
+			in:fly|global={{ duration: 300 }}
+			out:fly|global={{ duration: 200 }}
 			class:compilerErrorsShown={areCompilerErrorsShown}
 			on:click={() => (areCompilerErrorsShown = !areCompilerErrorsShown)}
 		>

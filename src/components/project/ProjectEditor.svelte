@@ -318,8 +318,8 @@
 			on:build={async () => {
 				try {
 					running = false
-					emulator.setCode(project.code)
-					await emulator.compile($settingsStore.values.maxHistorySize.value)
+					//give the latest code to the emulator
+					await emulator.compile($settingsStore.values.maxHistorySize.value, project.code)
 				} catch (e) {
 					console.error(e)
 					toast.error('Error compiling code. ' + getErrorMessage(e))

@@ -41,7 +41,7 @@
 	</div>
 	<div class="colors">
 		{#each theme as color, i (color.name)}
-			<div in:scale={{ delay: i * 50 + 200, start: 0.9, duration: 150 }}>
+			<div in:scale|global={{ delay: i * 50 + 200, start: 0.9, duration: 150 }}>
 				<ColorThemeRow bind:color />
 			</div>
 		{/each}

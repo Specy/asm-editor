@@ -8,7 +8,7 @@
 <slot />
 {#key $toast.id}
 	{#if $toast.type === ToastType.Toast}
-		<div class="toast-wrapper" class:toastVisible={$toast.visible} in:fly={{ y: -100 }}>
+		<div class="toast-wrapper" class:toastVisible={$toast.visible} in:fly|global={{ y: -100 }}>
 			<div class="toast-title" style={`border-color:${$toast.color}`}>
 				<div>
 					{$toast.title}
@@ -31,7 +31,7 @@
 			</div>
 		</div>
 		{:else}
-		<div class="pill" class:pillVisible={$toast.visible} in:fly={{ y: -100 }}>
+		<div class="pill" class:pillVisible={$toast.visible} in:fly|global={{ y: -100 }}>
 			{$toast.message}
 		</div>
 	{/if}

@@ -175,8 +175,8 @@
 			<div class="project-grid">
 				{#each $projects as project, i (project.id)}
 					<div
-						in:scale={{ duration: 200, delay: i * 50 + 150, start: 0.9 }}
-						out:scale|local={{ duration: 300, start: 0.8 }}
+						in:scale|global={{ duration: 200, delay: i * 50 + 150, start: 0.9 }}
+						out:scale={{ duration: 300, start: 0.8 }}
 					>
 						<ProjectCard
 							{project}

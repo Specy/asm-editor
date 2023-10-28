@@ -13,7 +13,7 @@
 	export let data: PageData
 	let ins = data.props.instruction
 	$: ins = data.props.instruction
-	let component: typeof SvelteComponent
+	let component: typeof SvelteComponent<any>
 
 	onMount(async () => {
 		//HUGE ASS HACK TO MAKE SVELTEKIT WORK BECAUSE OF TOP LEVEL AWAIT 

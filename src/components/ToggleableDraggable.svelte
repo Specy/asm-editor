@@ -36,7 +36,7 @@
 		</Button>
 	</button>
 	{#if !hidden}
-		<div in:fly={{ x: -10, duration: 400 }} out:fly={{ x: -10, duration: 300 }}>
+		<div in:fly|global={{ x: -10, duration: 400 }} out:fly|global={{ x: -10, duration: 300 }}>
 			<slot />
 		</div>
 	{/if}

@@ -161,11 +161,11 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
     let s68k: S68k | null = null
     let interpreter: Interpreter | null = null
     const [debouncer, clearDebouncer] = createDebouncer(500)
-    function compile(historySize: number): Promise<void> {
+    function compile(historySize: number, codeOverride?: string): Promise<void> {
         return new Promise((res, rej) => {
             try {
                 clear()
-                s68k = new S68k(current.code)
+                s68k = new S68k(codeOverride ?? current.code)
                 const errors = s68k.semanticCheck().map(e => {
                     return {
                         line: e.getLine(),
@@ -215,7 +215,8 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
         update(s => ({...s, line: -1}))
     }
     function semanticCheck(code?: string) {
-        code = code || get({ subscribe }).code
+        const currentCode = get({ subscribe }).code
+        code = code ?? currentCode
         try {
             const errors = S68k.semanticCheck(code).map(e => {
                 return {

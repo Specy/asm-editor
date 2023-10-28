@@ -8,6 +8,16 @@ type Version = {
 }   
 export const versions: Version[] = [
     {
+        version: '3.0.0',
+        title: "Improved performance and bugfix",
+        date: new Date('2023-10-28'),
+        changes: [
+            "Improved performance by 2x, now runs at 7mhz",
+            "Bug fixes during compilation and execution",
+            "Increased default instruction limit to 5 million",
+        ]
+    },
+    {
         version: '2.9.0',
         title: "Improved documentation",
         date: new Date('2023-04-29'),

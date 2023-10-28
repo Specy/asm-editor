@@ -6,7 +6,7 @@
 	export let contentStyle = ""
 </script>
 
-<main class="content" {style} in:fly={{ x: $navigationStore.direction === "back" ? 30 : -30, duration: 500 }}>
+<main class="content" {style} in:fly|global={{ x: $navigationStore.direction === "back" ? 30 : -30, duration: 500 }}>
 	<div class="column" style="max-width: {cropped ? '60rem' : 'unset'}; width:100%;height: 100%; {contentStyle}">
 		<slot />
 	</div>

@@ -16,7 +16,7 @@
 {#if $Prompt.promise}
 	<form
 		class="prompt-wrapper"
-		out:fade={{ duration: 150 }}
+		out:fade|global={{ duration: 150 }}
 		on:submit={(e) => {
 			e.preventDefault()
 			Prompt.answer(value)
