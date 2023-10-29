@@ -62,7 +62,7 @@ export function formatTime(s: number) { //performance.now() result
     //format in seconds, milliseconds
     const seconds = Math.floor(s / 1000)
     const milliseconds = Math.floor(s % 1000)
-    const formattedSeconds = `${seconds}`.padStart(2, "0")
+    const formattedSeconds = `${seconds}`
     const formattedMilliseconds = `${milliseconds}`.padStart(3, "0")
     if(seconds === 0) {
         return `${formattedMilliseconds}ms`
