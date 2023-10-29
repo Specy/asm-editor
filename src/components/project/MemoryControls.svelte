@@ -40,8 +40,9 @@
 		<Button
 			on:click={searchAddress}
 			hasIcon
-			style="padding:0 0.5rem; height:2.4rem; width:2.2rem; margin-left: 0.2rem"
+			style="padding:0 0.5rem; height:100%; width:2.2rem; margin-left: 0.2rem"
 			cssVar="primary"
+			title="Search address"
 			active={parseInt(hexAddress, 16) !== currentAddress}
 		>
 			<Icon size={1}>
@@ -52,8 +53,9 @@
 		<Button
 			on:click={() => updateAddress(currentAddress - bytesPerPage)}
 			hasIcon
-			style="padding:0 0.5rem; height:2.4rem"
+			style="padding:0 0.5rem; height:100%;"
 			cssVar="primary"
+			title="Previous page"
 		>
 			<Icon size={1.2}>
 				<FaAngleLeft />
@@ -63,8 +65,9 @@
 		<Button
 			on:click={() => updateAddress(currentAddress + bytesPerPage)}
 			hasIcon
-			style="padding:0 0.5rem; height:2.4rem"
+			style="padding:0 0.5rem; height:100%;"
 			cssVar="primary"
+			title="Next page"	
 		>
 			<Icon size={1.2}>
 				<FaAngleRight />

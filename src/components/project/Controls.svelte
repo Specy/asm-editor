@@ -18,7 +18,7 @@
 
 <div class="project-controls">
 	{#if !hasCompiled}
-		<Button style="width: 5.5rem; padding: 0.5rem 0" on:click={() => dispatch('build')} disabled={buildDisabled}>
+		<Button style="max-width: 5.5rem; flex:1; padding: 0.5rem 0" on:click={() => dispatch('build')} disabled={buildDisabled}>
 			<Icon size={1} style="margin-right: 0.4rem;">
 				<FaWrench />
 			</Icon>
@@ -26,7 +26,7 @@
 		</Button>
 	{:else}
 		<Button
-			style="width: 5.5rem; padding: 0.5rem 0"
+			style="max-width: 5.5rem; flex:1; padding: 0.5rem 0"
 			cssVar="accent2"
 			on:click={() => dispatch('stop')}
 		>
@@ -36,7 +36,7 @@
 			Stop
 		</Button>
 		<Button
-			style="width: 5.5rem; padding: 0.5rem 0"
+			style="max-width: 5.5rem; flex:1; padding: 0.5rem 0"
 			on:click={() => dispatch('run')}
 			disabled={executionDisabled || running}
 		>
@@ -50,7 +50,7 @@
 			Run
 		</Button>
 		<Button
-			style="width: 5.5rem; padding: 0.5rem 0"
+			style="max-width: 5.5rem; flex:1; padding: 0.5rem 0"
 			disabled={executionDisabled || !canUndo}
 			on:click={() => dispatch('undo')}
 		>
@@ -60,7 +60,7 @@
 			Undo
 		</Button>
 		<Button
-			style="width: 5.5rem; padding: 0.5rem 0"
+			style="max-width: 5.5rem; flex:1; padding: 0.5rem 0"
 			disabled={executionDisabled}
 			on:click={() => dispatch('step')}
 		>

@@ -2,6 +2,7 @@
 	import type { MonacoError } from '$lib/languages/M68KEmulator'
 	export let stdOut: string
 	export let compilerErrors: MonacoError[] = []
+	export let info = ''
 	import FaExclamationTriangle from 'svelte-icons/fa/FaExclamationTriangle.svelte'
 	import { fly } from 'svelte/transition'
 	let areCompilerErrorsShown = false
@@ -30,6 +31,9 @@
 	{/if}
 	<div class="std-text">
 		{stdOut}
+	</div>
+	<div class="info"> 
+		{info}
 	</div>
 </div>
 
@@ -69,6 +73,13 @@
 			min-height: 4rem;
 			width: 100%;
 		}
+	}
+	.info{
+		position: absolute;
+		bottom: 0.4rem;
+		right: 0.6rem;
+		color: var(--hint);
+		font-size: 0.9rem;
 	}
 	.std-text {
 		white-space: pre-wrap;

@@ -6,18 +6,18 @@ export function clamp(value: number, min: number, max: number): number {
 
 export type Timer = NodeJS.Timeout | number;
 
-export function createDebouncer(delay:number): [(callback:() => void) => void, () => void]{
-    let timeoutId:Timer
-    function clear(){
+export function createDebouncer(delay: number): [(callback: () => void) => void, () => void] {
+    let timeoutId: Timer
+    function clear() {
         clearTimeout(timeoutId)
     }
-    function debounce(callback:() => void){
+    function debounce(callback: () => void) {
         clearTimeout(timeoutId)
         timeoutId = setTimeout(callback, delay)
     }
     return [debounce, clear]
 }
-export function blobDownloader(blob:Blob,fileName:string){
+export function blobDownloader(blob: Blob, fileName: string) {
     const a = document.createElement('a')
     a.style.display = 'none'
     document.body.appendChild(a)
@@ -27,39 +27,50 @@ export function blobDownloader(blob:Blob,fileName:string){
     a.remove()
     URL.revokeObjectURL(a.href)
 }
-export function textDownloader(text: string, fileName){
+export function textDownloader(text: string, fileName: string) {
     blobDownloader(new Blob([text], { type: "text/json" }), fileName)
 }
-export function getErrorMessage(error: any, lineNumber?: number): string{
+export function getErrorMessage(error: unknown, lineNumber?: number): string {
     const prepend = lineNumber ? `Error at line ${lineNumber}:` : ""
-    if(typeof error !== "object"){
+    if (typeof error !== "object") {
         return `${prepend}${error}`
     }
     const maybeError = error as RuntimeError
-    if(maybeError){
+    if (maybeError) {
         switch (maybeError.type) {
             case "Raw": return maybeError.value
             case "Unimplemented": return `${prepend} Unimplemented`
-            case "DivisionByZero" : return `${prepend} Division by zero`
+            case "DivisionByZero": return `${prepend} Division by zero`
             case "ExecutionLimit": return `${prepend} Execution limit of ${maybeError.value} instructions reached`
-            case "OutOfBounds" : return `${prepend} Memory read out of bounds: ${maybeError.value}`
+            case "OutOfBounds": return `${prepend} Memory read out of bounds: ${maybeError.value}`
             case "IncorrectAddressingMode": return `${prepend} Incorrect addressing mode: ${maybeError.value}`
-        } 
-    }  
-    if(error.message) {
-        if(error.message === "unreachable"){
-            return `${prepend} WASM panicked (unreachable)` 
         }
-        return  `${prepend} ${error.message}` 
+    }
+    if ("message" in error) {
+        if (error.message === "unreachable") {
+            return `${prepend} WASM panicked (unreachable)`
+        }
+        return `${prepend} ${error.message}`
     }
     return `${prepend} ${JSON.stringify(error)}`
 }
 
-export function delay(ms:number){
+export function delay(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms))
+}
+export function formatTime(s: number) { //performance.now() result
+    //format in seconds, milliseconds
+    const seconds = Math.floor(s / 1000)
+    const milliseconds = Math.floor(s % 1000)
+    const formattedSeconds = `${seconds}`.padStart(2, "0")
+    const formattedMilliseconds = `${milliseconds}`.padStart(3, "0")
+    if(seconds === 0) {
+        return `${formattedMilliseconds}ms`
+    }
+    return `${formattedSeconds}.${formattedMilliseconds}s`
 }
 
 
-export function capitalize(word:string){
+export function capitalize(word: string) {
     return word[0].toUpperCase() + word.slice(1)
 }

@@ -13,7 +13,7 @@
 	import { toast } from '$stores/toastStore'
 	import Controls from './Controls.svelte'
 	import StdOut from '$cmp/project/StdOut.svelte'
-	import { clamp, createDebouncer, getErrorMessage } from '$lib/utils'
+	import { clamp, createDebouncer, formatTime, getErrorMessage } from '$lib/utils'
 	import { MEMORY_SIZE } from '$lib/Config'
 	import Settings from './Settings.svelte'
 	import M68KDocumentation from '$cmp/documentation/m68k/FloatingM68KDocumentation.svelte'
@@ -40,7 +40,11 @@
 	let documentationVisible = false
 	let shortcutsVisible = false
 	let groupSize = Size.Word
-	let errorStrings = ""
+	$: errorStrings = $emulator.errors.join('\n')
+	$: info =
+		$emulator.terminated && $emulator.executionTime >= 0
+			? `Ran in ${formatTime($emulator.executionTime)}`
+			: ''
 	const dispatcher = createEventDispatcher<{
 		save: {
 			silent: boolean
@@ -132,7 +136,6 @@
 			window.removeEventListener('blur', clearPressed)
 		}
 	})
-	$: errorStrings = $emulator.errors.join('\n')
 </script>
 
 <header class="project-header">
@@ -153,7 +156,7 @@
 		<ButtonLink
 			href="/donate"
 			cssVar="accent2"
-			style="padding:0; width:2.2rem; height:2.2rem"
+			style="padding:0; width:2.2rem; height:2.2rem;"
 			hasIcon
 		>
 			<Icon>
@@ -235,18 +238,7 @@
 	/>
 </ToggleableDraggable>
 
-{#each $emulator.memory.tabs as tab}
-	<MemoryTab
-		{tab}
-		left={500}
-		sp={$emulator.sp}
-		on:addressChange={(e) => {
-			const { tab, address } = e.detail
-			emulator.setTabMemoryAddress(address, tab.id)
-		}}
-	/>
-{/each}
-<ToggleableDraggable title="History" left={700}>
+<ToggleableDraggable title="History" left={500}>
 	<MutationsViewer
 		on:undo={(e) => {
 			const amount = e.detail
@@ -260,6 +252,17 @@
 		steps={$emulator.latestSteps}
 	/>
 </ToggleableDraggable>
+{#each $emulator.memory.tabs as tab, i}
+	<MemoryTab
+		{tab}
+		left={700 + i * 300}
+		sp={$emulator.sp}
+		on:addressChange={(e) => {
+			const { tab, address } = e.detail
+			emulator.setTabMemoryAddress(address, tab.id)
+		}}
+	/>
+{/each}
 <div class="editor-memory-wrapper">
 	<div class="editor-wrapper">
 		<div
@@ -270,7 +273,7 @@
 			<Editor
 				on:change={(d) => {
 					emulator.setCode(d.detail)
-					if($emulator.canExecute && $emulator.terminated && $emulator.line >= 0){
+					if ($emulator.canExecute && $emulator.terminated && $emulator.line >= 0) {
 						emulator.resetSelectedLine()
 					}
 					if ($settingsStore.values.autoSave.value) {
@@ -349,7 +352,7 @@
 	</div>
 	<div class="right-side">
 		<div class="memory-wrapper">
-			<div class="column" style="margin-right: 0.5rem;">
+			<div class="column" style="gap: 0.5rem;">
 				<StatusCodesVisualiser statusCodes={$emulator.statusRegister} />
 				<RegistersVisualiser
 					size={groupSize}
@@ -362,8 +365,8 @@
 				/>
 			</div>
 
-			<div class="column">
-				<div class="row">
+			<div class="column" style="gap: 0.5rem">
+				<div class="row" style="gap: 0.5rem">
 					<SizeSelector bind:selected={groupSize} />
 					<MemoryControls
 						bytesPerPage={$emulator.memory.global.pageSize}
@@ -386,7 +389,8 @@
 			</div>
 		</div>
 		<StdOut
-			stdOut={errorStrings ? `${errorStrings}\n${$emulator.stdOut}`: $emulator.stdOut}
+			{info}
+			stdOut={errorStrings ? `${errorStrings}\n${$emulator.stdOut}` : $emulator.stdOut}
 			compilerErrors={$emulator.compilerErrors}
 		/>
 	</div>
@@ -397,12 +401,15 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		margin-bottom: 0.4rem;
+		padding: 0.5rem;
+		background-color: var(--secondary);
+		color: var(--secondary-text);
 	}
 
 	.editor-memory-wrapper {
 		display: flex;
 		flex: 1;
+		padding: 0.5rem;
 		.editor-wrapper,
 		.memory-wrapper {
 			display: flex;
@@ -425,6 +432,7 @@
 			}
 		}
 		.memory-wrapper {
+			gap: 0.5rem;
 			@media screen and (max-width: 1000px) {
 				margin-top: 1rem;
 				overflow-x: auto;

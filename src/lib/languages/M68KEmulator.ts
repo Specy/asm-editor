@@ -87,6 +87,7 @@ export type EmulatorStore = {
     latestSteps: ExecutionStep[]
     callStack: Label[]
     line: number,
+    executionTime: number,
     code: string,
     sp: number,
     stdOut: string,
@@ -143,6 +144,7 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
         sp: 0,
         latestSteps: [],
         stdOut: "",
+        executionTime: -1,
         canUndo: false,
         canExecute: false,
         breakpoints: [],
@@ -251,6 +253,8 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
                 code: state.code,
                 interrupt: undefined,
                 errors: [],
+                canUndo: false,
+                executionTime: -1,
                 canExecute: false,
                 latestSteps: [],
                 callStack: [],
@@ -519,12 +523,12 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
                 data.canUndo = interpreter?.canUndo() ?? false
                 return data
             })
-            console.log("Ended in:", performance.now() - start)
             updateRegisters()
             updateStatusRegisters()
             updateMemory()
             updateData()
             scrollStackTab()
+            update(d => ({ ...d, executionTime: performance.now() - start }))
             return interpreter.getStatus()
         } catch (e) {
             console.error(e)

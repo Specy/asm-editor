@@ -9,12 +9,12 @@
 	export let pageSize: number
 	export let bytesPerRow: number
 	import MdTextFields from 'svelte-icons/md/MdTextFields.svelte'
-	import { clamp } from '$lib/utils'
 	enum DisplayType {
 		Hex,
 		Char,
 		Decimal
 	}
+	export let style = ''
 	let type = DisplayType.Hex
 	let visibleAddresses = new Array(pageSize / bytesPerRow).fill(0)
 	$: visibleAddresses = new Array(pageSize / bytesPerRow)
@@ -39,7 +39,7 @@
 	}
 </script>
 
-<div class="memory-grid" style={`--bytesPerRow: ${bytesPerRow}`}>
+<div class="memory-grid" style={`--bytesPerRow: ${bytesPerRow}; ${style}`}>
 	<div class="memory-offsets">
 		{#each new Array(bytesPerRow).fill(0) as _, offset}
 			<div>
@@ -48,9 +48,10 @@
 		{/each}
 	</div>
 	<div class="memory-addresses">
-		<div class="row" style="padding: 0.25rem; height:2rem; align-items:center">
+		<div class="row" style="padding: 0.25rem; height:2rem; padding-bottom: 0; padding-right: 0.1rem">
 			<Button
-				style="padding: 0.2rem; border-radius: 0.35rem; height:fit-content"
+				title={type === DisplayType.Hex ? 'Show as character' : 'Show as hex'}
+				style="padding: 0.2rem; border-radius: 0.35rem; height:100%; width: 100%"
 				on:click={() => (type = type === DisplayType.Hex ? DisplayType.Char : DisplayType.Hex)}
 				active={type === DisplayType.Char}
 				cssVar="accent2"
@@ -101,7 +102,6 @@
 			'b c c c c'
 			'b c c c c';
 		background-color: var(--tertiary);
-		margin-top: 0.5rem;
 		color: var(--tertiary-text);
 		border-radius: 0.5rem;
 		padding-right: 0.3rem;

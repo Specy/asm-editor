@@ -29,7 +29,6 @@
 		color: var(--secondary-text);
 		border-radius: 0.4rem;
 		min-width: 6rem;
-		margin-right: 0.5rem;
 		padding: 0.3rem;
 	}
 	input {

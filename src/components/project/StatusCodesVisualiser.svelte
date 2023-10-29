@@ -23,7 +23,6 @@
 		background-color: var(--secondary);
 		color: var(--secondary-text);
 		gap: 0.3rem;
-		margin-bottom: 0.5rem;
 		justify-content: space-around;
 		padding: 0.3rem;
 		border-radius: 0.4rem;

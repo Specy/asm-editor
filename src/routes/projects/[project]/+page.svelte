@@ -62,7 +62,7 @@
 		}
 	}}
 />
-<Page contentStyle="padding: 0.8rem;">
+<Page>
 	{#if project}
 		<ProjectEditor
 			bind:project

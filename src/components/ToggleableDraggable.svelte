@@ -10,7 +10,7 @@
 	export let title = ''
 	export let hiddenOnMobile = true
 	export let left = 300
-	export let top = 14
+	export let top = 13
 </script>
 
 <Draggable {hiddenOnMobile} {left} {top}>

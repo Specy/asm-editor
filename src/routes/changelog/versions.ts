@@ -15,6 +15,8 @@ export const versions: Version[] = [
             "Improved performance by 2x, now runs at 7mhz",
             "Bug fixes during compilation and execution",
             "Increased default instruction limit to 5 million",
+            "Improved UI on mobile for the interactive documentation",
+            "Improved UI on the editor"
         ]
     },
     {

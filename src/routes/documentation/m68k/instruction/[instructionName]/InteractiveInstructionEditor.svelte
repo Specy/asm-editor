@@ -22,13 +22,13 @@
 		globalPageElementsPerRow: 4,
 		globalPageSize: 4 * 8
 	})
-	$ : if(instructionKey){
+	$: if (instructionKey) {
 		emulator.clear()
 		running = false
 	}
 </script>
 
-<div class="editor-wrapper" style="gap: 1rem">
+<div class="editor-wrapper" style="gap: 0.5rem">
 	<div class="column editor">
 		<div
 			class="editor-border"
@@ -104,42 +104,60 @@
 			}}
 		/>
 	</div>
-	<div class="column" style="width: 17rem;">
-		<div class="row">
-			<SizeSelector bind:selected={groupSize} style="flex:1" />
-			<StatusCodesVisualiser statusCodes={$emulator.statusRegister} style="flex:1" />
-		</div>
-		<RegistersVisualiser
-			size={groupSize}
-			style="grid-auto-flow: column; grid-template-rows: repeat(8, 1fr); gap: 0.5rem"
-			registers={$emulator.registers}
-			on:registerClick={async (e) => {
-				const value = e.detail.value
-				const clampedSize = value - (value % $emulator.memory.global.pageSize)
-				emulator.setGlobalMemoryAddress(clamp(clampedSize, 0, MEMORY_SIZE))
-			}}
-		/>
-	</div>
-	<div class="row">
-		<div class="column">
-			<MemoryControls
-				bytesPerPage={4 * 8}
-				memorySize={MEMORY_SIZE}
-				currentAddress={memoryAddress}
-				inputStyle="width: 6rem"
-				on:addressChange={async (e) => {
-					memoryAddress = e.detail
-					emulator.setGlobalMemoryAddress(e.detail)
-				}}
-				hideLabel
-			/>
+	<div class="column code-data-wrapper" style="gap: 0.5rem;">
+		<div class="show-only-mobile">
 			<MemoryVisualiser
+				style="height: 100%; flex: 1;"
 				bytesPerRow={4}
 				pageSize={4 * 8}
 				memory={$emulator.memory.global.data}
 				currentAddress={$emulator.memory.global.address}
 				sp={$emulator.sp}
 			/>
+		</div>
+		<div class="row code-data-memory" style="gap: 0.5rem;">
+			<div class="data-cpu-status-wrapper">
+				<StatusCodesVisualiser statusCodes={$emulator.statusRegister} style="flex:1" />
+				<SizeSelector bind:selected={groupSize} style="flex:1" />
+			</div>
+			<div class="column code-data-memory-controls">
+				<MemoryControls
+					bytesPerPage={4 * 8}
+					memorySize={MEMORY_SIZE}
+					currentAddress={memoryAddress}
+					inputStyle="width: 6rem; height: 100%"
+					on:addressChange={async (e) => {
+						memoryAddress = e.detail
+						emulator.setGlobalMemoryAddress(e.detail)
+					}}
+					hideLabel
+				/>
+			</div>
+		</div>
+		<div class="row" style="gap: 0.5rem">
+			<div class="column data-registers-wrapper">
+				<RegistersVisualiser
+					size={groupSize}
+					gridStyle="grid-auto-flow: column; grid-template-rows: repeat(8, 1fr); gap: 0.1rem; height: 100%; justify-content: space-evenly;"
+					registers={$emulator.registers}
+					on:registerClick={async (e) => {
+						const value = e.detail.value
+						const clampedSize = value - (value % $emulator.memory.global.pageSize)
+						emulator.setGlobalMemoryAddress(clamp(clampedSize, 0, MEMORY_SIZE))
+					}}
+				/>
+			</div>
+
+			<div class="show-only-desktop" style="flex: 1;">
+				<MemoryVisualiser
+					style="flex: 1;"
+					bytesPerRow={4}
+					pageSize={4 * 8}
+					memory={$emulator.memory.global.data}
+					currentAddress={$emulator.memory.global.address}
+					sp={$emulator.sp}
+				/>
+			</div>
 		</div>
 	</div>
 </div>
@@ -154,6 +172,22 @@
 		height: 100%;
 		flex: 1;
 	}
+	.show-only-mobile {
+		display: none;
+	}
+	.show-only-desktop {
+		display: flex;
+	}
+	.data-registers-wrapper {
+		max-width: 17rem;
+		min-width: 17rem;
+		width: 17rem;
+	}
+	.data-cpu-status-wrapper {
+		width: 17rem;
+		display: flex;
+		gap: 0.5rem;
+	}
 	@media (max-width: 800px) {
 		.editor-wrapper {
 			flex-direction: column;
@@ -161,6 +195,29 @@
 		.editor {
 			height: 15rem;
 			flex: unset;
+		}
+		.code-data-wrapper {
+			flex-direction: column-reverse;
+		}
+		.code-data-memory {
+			flex-direction: column;
+		}
+		.code-data-memory-controls{
+			height: 2.5rem;
+		}
+		.show-only-desktop {
+			display: none;
+		}
+		.show-only-mobile {
+			display: flex;
+		}
+		.data-registers-wrapper {
+			width: 100%;
+			min-width: unset;
+			max-width: unset;
+		}
+		.data-cpu-status-wrapper {
+			width: 100%;
 		}
 	}
 
@@ -171,7 +228,7 @@
 		flex: 1;
 		padding: 0.2rem;
 		border-radius: 0.5rem;
-        margin: -0.2rem;
+		margin: -0.2rem;
 	}
 	.gradientBorder {
 		--border-width: 3px;
