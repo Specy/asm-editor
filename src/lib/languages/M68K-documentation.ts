@@ -287,9 +287,9 @@ export const M68kDocumentation: Record<InstructionName, InstructionDocumentation
         move.l	#$1C000, d2
         move.l	#$1C000, a1
         move.l	#$1C000, a2
-	    adda.l	#$6000, d1
+	    add.l	#$6000, d1
 	    adda.l	#$6000, a1
-	    adda.w	#$6000, d2
+	    add.w	#$6000, d2
 	    adda.w	#$6000, a2 ;!
     `),
     "addq": makeIns("addq", [ONLY_Im, NO_Im], ANY_SIZE, desc.addq, "addq.w #4, d1", Size.Word,

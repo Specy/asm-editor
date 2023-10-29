@@ -171,6 +171,9 @@
 		background-color: var(--accent);
 		color: var(--accent-text);
 	}
+	:global(.overflow-guard, .monaco-editor){
+		border-radius: 0.4rem;
+	}
 	:global(.error-line) {
 		background-color: var(--red);
 		color: var(--red-text);
@@ -233,8 +236,6 @@
 		position: absolute;
 		flex: 1;
 		z-index: 2;
-		border-radius: 0.4rem;
-		overflow: hidden;
 		box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
 	}
 

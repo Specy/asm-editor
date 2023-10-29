@@ -364,7 +364,6 @@
 					}}
 				/>
 			</div>
-
 			<div class="column" style="gap: 0.5rem">
 				<div class="row" style="gap: 0.5rem">
 					<SizeSelector bind:selected={groupSize} />
@@ -413,7 +412,6 @@
 		.editor-wrapper,
 		.memory-wrapper {
 			display: flex;
-			overflow: hidden;
 		}
 
 		.editor-wrapper {
@@ -425,7 +423,6 @@
 			.editor-border {
 				position: relative;
 				display: flex;
-				overflow: hidden;
 				flex: 1;
 				padding: 0.2rem;
 				border-radius: 0.5rem;
@@ -468,7 +465,6 @@
 	}
 
 	.gradientBorder {
-		--border-width: 3px;
 		position: relative;
 		&::before {
 			position: absolute;
@@ -490,7 +486,7 @@
 			);
 			background-size: 300% 300%;
 			background-position: 0 50%;
-			border-radius: calc(2 * var(--border-width));
+			border-radius: 0.5rem;
 			animation: moveGradient 5s alternate infinite, appear 0.3s ease-in;
 		}
 
