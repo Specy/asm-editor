@@ -95,6 +95,7 @@
 		color: var(--secondary-text);
 		font-size: 2rem;
 		border-radius: 0.5rem;
+		min-height: 19.75rem;
 	}
 	.instruction-info {
 		display: flex;

@@ -70,18 +70,13 @@ const Im = AddressingMode.Immediate;
 const Ea = AddressingMode.EffectiveAddress;
 
 const ANY = [Da, Ad, In, Ipi, Ipd, Id, Im, Ea];
-const NO_Da = [Ad, In, Ipi, Ipd, Id, Im, Ea];
 const NO_Ad = [Da, In, Ipi, Ipd, Id, Im, Ea];
 const NO_Im = [Da, In, Ad, Ipi, Ipd, Id, Ea];
 const NO_IM_OR_Ad = [Da, In, Ipi, Ipd, Id, Ea];
-const NO_Ea = [Da, In, Ad, Ipi, Ipd, Im, Id];
-const NO_In = [Da, Ad, Ipi, Ipd, Id, Im, Ea];
 const NO_Ad_AND_NO_Im = [Da, In, Ipi, Ipd, Id, Ea];
 const ONLY_REG = [Da, Ad];
 const ONLY_Ad = [Ad];
 const ONLY_Da = [Da];
-const ONLY_In = [In];
-const ONLY_Da_OR_In = [Da, In];
 const ONLY_Da_OR_In_OR_Ea = [Da, In, Ea];
 const ONLY_Ea = [Ea];
 const ONLY_Im = [Im];
@@ -554,12 +549,39 @@ export const M68kDocumentation: Record<InstructionName, InstructionDocumentation
         bra branch_here
 
         branch_here:
-            move.l #ff, d1
+            move.l #$ff, d1
         add #1, d0
     `),
-    "dbra": makeIns("dbra", [ONLY_Da, ONLY_Ea], NO_SIZE, desc.dbra, "dbra d0, label"),
-    "link": makeIns("link", [ONLY_Ad, ONLY_Im], NO_SIZE, desc.link, "link a0, #-16"),
-    "unlk": makeIns("unlk", [ONLY_Ad], NO_SIZE, desc.unlk, "unlk a0"),
+    "dbra": makeIns("dbra", [ONLY_Da, ONLY_Ea], NO_SIZE, desc.dbra, "dbra d0, label", undefined, 
+        `
+        move.l #5, d0
+        move.l #0, d2
+        for_start:
+            add #1, d2
+            ; decrements and tests if d0 != 0
+            dbra d0, for_start
+        `    
+    ),
+    "link": makeIns("link", [ONLY_Ad, ONLY_Im], NO_SIZE, desc.link, "link a0, #-16", undefined,
+        `
+        * -- NEEDS BETTER EXAMPLE --
+        link  A6,#-12 
+        * .. code ..
+        move  D3,-8(A6)
+        * .. code ..
+        unlk  A6
+        `
+    ),
+    "unlk": makeIns("unlk", [ONLY_Ad], NO_SIZE, desc.unlk, "unlk a0", undefined, 
+        `
+        * -- NEEDS BETTER EXAMPLE --
+        link  A6,#-12 
+        * .. code ..
+        move  D3,-8(A6)
+        * .. code ..
+        unlk  A6
+        `
+    ),
     "rts": makeIns("rts", [], NO_SIZE, desc.rts, "rts", undefined,
         `
         move.l #10, d0
