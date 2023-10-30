@@ -689,7 +689,7 @@ export function uncompoundInstructions(instructions: InstructionDocumentation[] 
                 const name = i.name
                 if(name === "lsd" || name === "asd" || name === "rod") {
                     const direction = n.substring(n.length - 1)
-                    description = description.replace("{direction}", `"**${directionsDescriptions.get(direction)}"**"`)
+                    description = description.replace("{direction}", `"**${directionsDescriptions.get(direction)}**"`)
                 }
                 if(name === "bcc" || name === "dbcc") {
                     const code = n.substring(n.length - 2)
