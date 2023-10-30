@@ -213,8 +213,8 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
             return s
         })
     }
-    function resetSelectedLine(){
-        update(s => ({...s, line: -1}))
+    function resetSelectedLine() {
+        update(s => ({ ...s, line: -1 }))
     }
     function semanticCheck(code?: string) {
         const currentCode = get({ subscribe }).code
@@ -455,7 +455,7 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
                 break
             }
             case "GetTime": {
-                interpreter.answerInterrupt({ type, value: Math.round(Date.now() / 1000)}) //unix seconds
+                interpreter.answerInterrupt({ type, value: Math.round(Date.now() / 1000) }) //unix seconds
                 break
             }
             case "Terminate": {
@@ -471,20 +471,20 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
     async function run(haltLimit: number) {
         if (haltLimit <= 0) haltLimit = Number.MAX_SAFE_INTEGER
         const start = performance.now()
-        let i = 0
-        const breakpoints = new Map(get({ subscribe }).breakpoints.map(e => [e, true]))
-        const hasBreakpoints = breakpoints.size > 0
+        const breakpoints = new Uint32Array(get({ subscribe }).breakpoints)
+        const hasBreakpoints = breakpoints.length > 0
         try {
             if (!interpreter) throw new Error("Interpreter not initialized")
             let status = interpreter.getStatus()
             while (!interpreter.hasTerminated()) {
-                //if it has no breakpoints, give the execution to the wasm thread to improve performance
                 if (!hasBreakpoints) {
                     interpreter.runWithLimit(haltLimit)
                     status = interpreter.getStatus()
                 } else {
-                    if (breakpoints.get(interpreter.getCurrentLineIndex()) && i > 0) break
-                    status = interpreter.stepGetStatus()
+                    interpreter.runWithBreakpoints(breakpoints, haltLimit)
+                    status = interpreter.getStatus()
+                    //here we might have reached a breakpoint. It is paused if the status is running
+                    if (status === InterpreterStatus.Running) break
                 }
                 switch (status) {
                     case InterpreterStatus.Terminated: {
@@ -516,10 +516,13 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
                         break
                     }
                 }
-                if (i++ > haltLimit) throw new Error(`Halt limit of ${haltLimit} instructions reached`)
             }
             update(data => {
-                data.line = interpreter.getLastInstruction()?.parsed_line.line_index ?? -1
+                const ins = interpreter.getNextInstruction()
+                const last = interpreter.getLastInstruction()
+                //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
+                const line = ins?.parsed_line?.line_index ?? last?.parsed_line?.line_index
+                data.line = line ?? -1
                 data.canUndo = interpreter?.canUndo() ?? false
                 return data
             })

@@ -49,5 +49,16 @@ The assembler has a few directives and features to simplify writing code.
 * expressions (like `$FF*10`) and many immediate representations. 
 
 # Benchmarks
-The interpreter runs at round 7mhz on the browser and 30mhz natively (on my machine).
-You can benchmark your own code by running a loop and then read the js console, the total time of each execution is shown
+The interpreter runs at round 30mhz on the browser and 50mhz natively (on my machine).
+You can benchmark your own machine by running a loop, the time it took to run is shown in the bottom right of the console in the editor, the total time of each execution is shown. example code:
+```asm
+limit equ 10000000
+move.l #limit, d0
+move.l #0, d1
+for:
+    add.l #1, d1
+    sub.l #1, d0
+    bne for
+```
+This runs 30 million instructions, make sure you set the Maximum instructions iteration, Maximum history size and Maximum visible history size to 0, as well as not having any breakpoints, this will turn off the
+debugging tools and run the code as fast as possible.

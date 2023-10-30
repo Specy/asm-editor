@@ -21,7 +21,7 @@
     "fuzzy-search": "^3.2.1",
     "monaco-editor": "^0.44.0",
     "s-ago": "^2.2.0",
-    "s68k": "^3.0.1",
+    "s68k": "^3.0.3",
     "sass": "^1.69.5",
     "string-similarity": "^4.0.4",
     "svelte-icons": "^2.1.0",
@@ -29,7 +29,7 @@
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^2.0.3",
-    "@sveltejs/kit": "^1.27.1",
+    "@sveltejs/kit": "^1.27.2",
     "@types/color": "^3.0.5",
     "@types/cookie": "^0.5.3",
     "@typescript-eslint/eslint-plugin": "^6.9.0",

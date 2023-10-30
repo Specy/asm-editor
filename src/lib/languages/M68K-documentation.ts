@@ -217,7 +217,7 @@ const desc = {
 |:------:|-------------------------------------------------------------------------------------------------------|
 | 0      | Print string pointed by a1 with length read in d1.w, null terminated with max of 255, then prints a new line.              |
 | 1      | Print string pointed by a1 with length read in d1.w.                                              |
-| 2      | Read string from keyboard, writes at address of a1.                                               |
+| 2      | Read string from keyboard, writes the string at address of a1 and overrides the value of d1 with the length of the string.                                               |
 | 3      | Print number at d1.                                                                                  |
 | 4      | Read number, writes to d1.                                                                           |
 | 5      | Read character, writes to d1.                                                                        |

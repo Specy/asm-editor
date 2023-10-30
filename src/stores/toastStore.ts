@@ -11,7 +11,7 @@ export enum ToastType{
 }
 
 function Toast() {
-    const { set, update, subscribe } = writable({
+    const { update, subscribe } = writable({
         title: '',
         message: '',
         type: ToastType.Toast,

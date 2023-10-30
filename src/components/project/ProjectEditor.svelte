@@ -417,6 +417,7 @@
 		.editor-wrapper {
 			flex-direction: column;
 			flex: 1;
+			gap: 0.4rem;
 			@media screen and (max-width: 1000px) {
 				min-height: 70vh;
 			}
@@ -425,6 +426,7 @@
 				display: flex;
 				flex: 1;
 				padding: 0.2rem;
+				margin-left: -0.2rem;
 				border-radius: 0.5rem;
 			}
 		}
@@ -464,7 +466,7 @@
 		}
 	}
 
-	.gradientBorder {
+	.gradientBorder, .redBorder{
 		position: relative;
 		&::before {
 			position: absolute;

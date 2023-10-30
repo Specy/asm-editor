@@ -74,9 +74,7 @@
 
 <style lang="scss">
 	.project-controls {
-		margin-top: 0.5rem;
 		display: flex;
 		gap: 0.5rem;
-		padding-left: 0.2rem;
 	}
 </style>

@@ -41,7 +41,7 @@ export function getErrorMessage(error: unknown, lineNumber?: number): string {
             case "Raw": return maybeError.value
             case "Unimplemented": return `${prepend} Unimplemented`
             case "DivisionByZero": return `${prepend} Division by zero`
-            case "ExecutionLimit": return `${prepend} Execution limit of ${maybeError.value} instructions reached`
+            case "ExecutionLimit": return `${prepend} Execution limit of ${maybeError.value} instructions reached (maybe an infinite loop?), disable in the settings if needed`
             case "OutOfBounds": return `${prepend} Memory read out of bounds: ${maybeError.value}`
             case "IncorrectAddressingMode": return `${prepend} Incorrect addressing mode: ${maybeError.value}`
         }
@@ -58,16 +58,14 @@ export function getErrorMessage(error: unknown, lineNumber?: number): string {
 export function delay(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms))
 }
-export function formatTime(s: number) { //performance.now() result
+export function formatTime(s: number) {
     //format in seconds, milliseconds
     const seconds = Math.floor(s / 1000)
     const milliseconds = Math.floor(s % 1000)
-    const formattedSeconds = `${seconds}`
-    const formattedMilliseconds = `${milliseconds}`.padStart(3, "0")
     if(seconds === 0) {
-        return `${formattedMilliseconds}ms`
+        return `${milliseconds}ms`
     }
-    return `${formattedSeconds}.${formattedMilliseconds}s`
+    return `${seconds}.${`${milliseconds}`.padStart(3, "0")}s`
 }
 
 

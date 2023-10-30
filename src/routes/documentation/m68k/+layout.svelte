@@ -28,6 +28,9 @@
 			<img src="/favicon.png" alt="logo" />
 			Home
 		</a>
+		<a class="icon" href="/projects" title="Go to the home">
+			Projects
+		</a>
 		<a href="/documentation/m68k"> M68k </a>
 		<div class="mobile-only" style="margin-left: auto; margin-right: 0.5rem">
 			<Icon on:click={() => (menuOpen = !menuOpen)}>

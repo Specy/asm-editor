@@ -171,6 +171,7 @@
 	.editor {
 		height: 100%;
 		flex: 1;
+		gap: 0.5rem;
 	}
 	.show-only-mobile {
 		display: none;
@@ -229,7 +230,7 @@
 		border-radius: 0.5rem;
 		margin: -0.2rem;
 	}
-	.gradientBorder {
+	.gradientBorder, .redBorder {
 		position: relative;
 		&::before {
 			position: absolute;

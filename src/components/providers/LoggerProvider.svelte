@@ -46,14 +46,14 @@
 		max-height: 10rem;
 		width: 20rem;
 		color: #bfbfbf;
-		background-color: rgba(var(--RGB-secondary), 0.85);
-		backdrop-filter: blur(3px);
+		background-color: rgba(var(--RGB-tertiary), 0.85);
+		backdrop-filter: blur(4px);
 		border-radius: 0.4rem;
 		box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
 		z-index: 20;
 		transition: transform 0.3s ease-out;
 		animation: animateIn 0.3s ease-out;
-		transform: translateY(calc(-100% - 1rem));
+		transform: translateY(calc(-100% - 2rem));
 		flex-direction: column;
 		padding: 0.6rem;
 		padding-top: 0.1rem;
@@ -61,10 +61,12 @@
 	.pill{
 		position: absolute;
 		left: 50vw;
-		top: 0.6rem;
+		top: 0.4rem;
+		text-align: center;
+		min-width: 10rem;
 		padding: 0.6rem 2rem;  
 		border-radius: 10rem;
-		background-color: rgba(var(--RGB-secondary), 0.85);
+		background-color: rgba(var(--RGB-tertiary), 0.75);
 		backdrop-filter: blur(3px);
 		box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
 		z-index: 20;

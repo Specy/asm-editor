@@ -12,7 +12,7 @@ export const versions: Version[] = [
         title: "Improved performance and bugfix",
         date: new Date('2023-10-28'),
         changes: [
-            "Improved performance by 2x, now runs at 7mhz",
+            "Improved performance by 3x, now runs at +-30mhz",
             "Bug fixes during compilation and execution",
             "Increased default instruction limit to 5 million",
             "Improved UI on mobile for the interactive documentation",

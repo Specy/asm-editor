@@ -3,15 +3,19 @@
 	import Navbar from '$cmp/Navbar.svelte'
 	import NavigationLinkButton from '$cmp/NavigationLinkButton.svelte'
 	import { capitalize } from '$lib/utils'
-	import FaArrowRight from 'svelte-icons/fa/FaArrowRight.svelte'
 	const langs = ['m68k']
 </script>
 
 <Navbar>
-	<a class="icon" href="/" title="Go to the home">
-		<img src="/favicon.png" alt="logo" />
-		Home
-	</a>
+	<div  class="row" style="gap: 2rem; align-items:center; flex: 1">
+		<a class="icon" href="/" title="Go to the home">
+			<img src="/favicon.png" alt="logo" />
+			Home
+		</a>
+		<a class="icon" href="/projects" title="Go to the home">
+			Projects
+		</a>
+	</div>
 </Navbar>
 <svelte:head>
 	<title>Documentation</title>

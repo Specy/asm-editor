@@ -32,7 +32,7 @@ const baseValues: SettingValues = {
     useDecimalAsDefault: createValue("Use decimal as default for registers", false),
     autoScrollStackTab: createValue("Auto scroll stack memory tab", true),
     autoSave: createValue("Auto save", false),
-    instructionsLimit: createValue("Maximum instructions iteration, 0 to ignore", 5_000_000),
+    instructionsLimit: createValue("Maximum instructions iteration, 0 to ignore", 50_000_000),
     maxHistorySize: createValue("Maximum undo history size, 0 to disable", 100),
     maxVisibleHistoryModifications: createValue("Maximum visible history modifications", 10),
 }
