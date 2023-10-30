@@ -3,6 +3,7 @@
 	import TogglableSection from '$cmp/layout/TogglableSection.svelte'
 	import { M68KUncompoundedInstructions } from '$lib/languages/M68K-documentation'
 	import InstructionsMenu from './InstructionsMenu.svelte'
+	import { page } from '$app/stores'
 	import FaBars from 'svelte-icons/fa/FaBars.svelte'
 	let instructions = Array.from(M68KUncompoundedInstructions.values()).sort((a, b) =>
 		a.name.localeCompare(b.name)
@@ -16,6 +17,7 @@
 	const searcher = new FuzzySearch(instructions, ['name', 'description'], {
 		sort: true
 	})
+	$: currentInstructionName = $page.params.instructionName ?? ''
 	let filteredInstructions = instructions
 	$: {
 		filteredInstructions = searcher.search(search.toLowerCase())
@@ -28,9 +30,7 @@
 			<img src="/favicon.png" alt="logo" />
 			Home
 		</a>
-		<a class="icon" href="/projects" title="Go to your projects">
-			Projects
-		</a>
+		<a class="icon" href="/projects" title="Go to your projects"> Projects </a>
 		<a href="/documentation/m68k"> M68k </a>
 		<div class="mobile-only" style="margin-left: auto; margin-right: 0.5rem">
 			<Icon on:click={() => (menuOpen = !menuOpen)}>
@@ -82,7 +82,11 @@
 				Instructions
 			</h2>
 			<input bind:value={search} placeholder="Search" class="instruction-search" />
-			<InstructionsMenu instructions={filteredInstructions}  on:click={() => menuOpen = false}/>
+			<InstructionsMenu
+				instructions={filteredInstructions}
+				on:click={() => (menuOpen = false)}
+				{currentInstructionName}
+			/>
 		</TogglableSection>
 	</aside>
 

@@ -1,12 +1,17 @@
 <script lang="ts">
 	import type { InstructionDocumentation } from '$lib/languages/M68K-documentation'
-
+	export let currentInstructionName = ''
 	export let instructions: InstructionDocumentation[]
 </script>
 
 <div class="column">
 	{#each instructions as ins}
-		<a href="/documentation/m68k/instruction/{ins.name}" class="instruction-link" on:click>
+		<a 
+			href="/documentation/m68k/instruction/{ins.name}" 
+			class="instruction-link" 
+			class:current-instruction={ins.name === currentInstructionName}
+			on:click
+		>
 			<div class="instruction-link-inner">
 				{ins.name}
 			</div>
@@ -27,6 +32,10 @@
 		background-color: var(--tertiary);
 		color: var(--tertiary-text);
 		border-left-color: var(--accent);
+	}
+	.current-instruction{
+		border-left-color: var(--accent2);
+		background-color: rgba(var(--RGB-tertiary), 0.5);
 	}
 	.instruction-link-inner{
 		transition: transform 0.1s;
