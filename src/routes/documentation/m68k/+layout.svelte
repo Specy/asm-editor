@@ -28,7 +28,7 @@
 			<img src="/favicon.png" alt="logo" />
 			Home
 		</a>
-		<a class="icon" href="/projects" title="Go to the home">
+		<a class="icon" href="/projects" title="Go to your projects">
 			Projects
 		</a>
 		<a href="/documentation/m68k"> M68k </a>
