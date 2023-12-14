@@ -53,7 +53,6 @@
 
 	async function importFromFileHandle(fileHandles: FileSystemFileHandle[]) {
 		for (const fileHandle of fileHandles) {
-			console.log(fileHandle)
 			const blob = await fileHandle.getFile()
 			blob.handle = fileHandle
 			const text = await blob.text()

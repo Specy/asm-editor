@@ -16,6 +16,7 @@ export class ProjectStoreClass{
     }
     async load(){
         const projects = await db.getProjects()
+        projects.sort((a, b) => b.updatedAt - a.updatedAt)
         this.projects.set(projects)
     }
     async addProject(project: Project): Promise<Project>{
