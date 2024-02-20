@@ -86,6 +86,7 @@
 			filter: brightness(1.2);
 		}
 	}
+	
 	.project-dates {
 		color: var(--hint);
 		font-size: 0.8rem;
