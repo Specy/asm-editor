@@ -169,8 +169,8 @@ const desc = {
     "suba": "Subtracts the value of the first operand from second operand and stores in the second. It does not change the SR. When using word size, the first operand is sign extended to long and the second is read and written as a long.",
     "subq": "Subtracts the value of the first operand from second operand and stores in the second. The first operand value must be between 1 and 8. If the destination is a address register, it is always treated as a long, and the condition codes are not affected.",
     "subi": "Subtracts the immediate value to the second operand",
-    "divs": "Divides (signed) the value of the first operand by second operand. The quotient is stored in the first 16 bits of the destination register and the remainder is stored in the last 16 bits of the destination register. The first operand is read as a word, the second as a long",
-    "divu": "Divides (unsigned) the value of the first operand by second operand. The quotient is stored in the first 16 bits of the destination register and the remainder is stored in the last 16 bits of the destination register. The first operand is read as a word, the second as a long",
+    "divs": "Divides (signed) the value of the second operand by the value of the first operand (op2 / op1). The quotient is stored in the first 16 bits of the destination register and the remainder is stored in the last 16 bits of the destination register. The first operand is read as a word, the second as a long",
+    "divu": "Divides (unsigned) the value of the second operand by the value of the first operand (op2 / op1). The quotient is stored in the first 16 bits of the destination register and the remainder is stored in the last 16 bits of the destination register. The first operand is read as a word, the second as a long",
     "muls": "Multiplies the value of the first operand by the second operand. The result is stored in the second operand. The first operand is read as a word, the second as a long",
     "mulu": "Multiplies (unsigned) the value of the first operand by the second operand. The result is stored in the second operand. The first operand is read as a word, the second as a long",
     "swap": "Swaps the two word of the register, you can see the register as [a,b] after the swap it will be [b,a]",
@@ -319,7 +319,7 @@ export const M68kDocumentation: Record<InstructionName, InstructionDocumentation
         subq.l #1, d3
         subq #9, d3 ; error! exceeds 8
     `),
-    "divs": makeIns("divs", [NO_Ad, ONLY_Da], NO_SIZE, desc.divs, "divs #%101, d1", undefined,
+    "divs": makeIns("divs", [NO_Ad, ONLY_Da], NO_SIZE, desc.divs, "divs #2, d1", undefined,
         `
         move.l #21, d1
         divs #2, d1
