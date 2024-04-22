@@ -3,7 +3,6 @@ import topLevelAwait from "vite-plugin-top-level-await";
 import wasm from 'vite-plugin-wasm';
 import type { UserConfig } from 'vite';
 import { resolve } from 'path'
-
 const config: UserConfig = {
 	server: {
 		port: 3000,
