@@ -5,9 +5,10 @@ import { get, writable } from "svelte/store"
 import type { Writable } from "svelte/store"
 
 
-
+export const SHARE_ID = '__share__'
 
 export class ProjectStoreClass{
+    inited = false
     projects: Writable<Project[]>
     writableFiles: Map<string, FileSystemFileHandle> = new Map()
     constructor(){
@@ -18,13 +19,17 @@ export class ProjectStoreClass{
         const projects = await db.getProjects()
         projects.sort((a, b) => b.updatedAt - a.updatedAt)
         this.projects.set(projects)
+        this.inited = true
+        return projects
     }
     async addProject(project: Project): Promise<Project>{
+        project.updatedAt = new Date().getTime()
         const result = await db.addProject(project)
         await this.load()
         return result 
     }
     async save(project: Project): Promise<void>{
+        if(project.id === SHARE_ID) throw new Error("Cannot save shared project")
         project.updatedAt = new Date().getTime()
         const file = this.writableFiles.get(project.id)
         try{
@@ -50,10 +55,12 @@ export class ProjectStoreClass{
     setFileHandle(id: string, handle: FileSystemFileHandle){
         this.writableFiles.set(id, handle)
     }
-    getProject(id: string){
+    async getProject(id: string){
+        if(!this.inited) await this.load()
         return get(this.projects).find(project => project.id === id)
     }
     getProjectFromDb(id: string){
+        if(id === SHARE_ID) return null
         return db.getProject(id)
     }
 }

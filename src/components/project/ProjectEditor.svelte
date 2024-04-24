@@ -22,7 +22,7 @@
 	import RegistersVisualiser from './RegistersVisualiser.svelte'
 	import StatusCodesVisualiser from './StatusCodesVisualiser.svelte'
 	import MemoryControls from './MemoryControls.svelte'
-	export let project: Project
+	import FaShareAlt from 'svelte-icons/fa/FaShareAlt.svelte'
 	import MemoryTab from './MemoryTab.svelte'
 	import ShortcutEditor from '$cmp/project/ShortcutEditor.svelte'
 	import SizeSelector from './SizeSelector.svelte'
@@ -34,6 +34,9 @@
 	import MutationsViewer from './MutationsViewer.svelte'
 	import ButtonLink from '$cmp/buttons/ButtonLink.svelte'
 	import FaDonate from 'svelte-icons/fa/FaDonate.svelte'
+
+	export let project: Project
+
 	let editor: monaco.editor.IStandaloneCodeEditor
 	let running = false
 	let settingsVisible = false
@@ -51,10 +54,12 @@
 			data: Project
 		}
 		wantsToLeave: void
+		share: Project
 	}>()
 	const emulator = M68KEmulator(project.code || '')
 	const pressedKeys = new Map<String, boolean>()
 	const [debounced] = createDebouncer(3000)
+
 	function handleKeyDown(e: KeyboardEvent) {
 		pressedKeys.set(e.code, true)
 		const code = Array.from(pressedKeys.keys()).join('+')
@@ -123,9 +128,11 @@
 	function handleKeyUp(e: KeyboardEvent) {
 		pressedKeys.delete(e.code)
 	}
+
 	function clearPressed() {
 		pressedKeys.clear()
 	}
+
 	onMount(() => {
 		window.addEventListener('keydown', handleKeyDown)
 		window.addEventListener('keyup', handleKeyUp)
@@ -153,6 +160,16 @@
 	</a>
 	<h1 style="font-size: 1.6rem; margin-left: 0.4rem" class="ellipsis">{project.name}</h1>
 	<div class="row" style="gap: 0.5rem; margin-left: auto;">
+		<Button
+			on:click={() => dispatcher('share', project)}
+			hasIcon
+			cssVar="accent2"
+			style="padding:0; width:2.2rem; height:2.2rem;"
+		>
+			<Icon>
+				<FaShareAlt />
+			</Icon>
+		</Button>
 		<ButtonLink
 			href="/donate"
 			cssVar="accent2"
@@ -396,119 +413,127 @@
 </div>
 
 <style lang="scss">
-	.project-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 0.5rem;
-		background-color: var(--secondary);
-		color: var(--secondary-text);
-	}
+  .project-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem;
+    background-color: var(--secondary);
+    color: var(--secondary-text);
+  }
 
-	.editor-memory-wrapper {
-		display: flex;
-		flex: 1;
-		padding: 0.5rem;
-		.editor-wrapper,
-		.memory-wrapper {
-			display: flex;
-		}
+  .editor-memory-wrapper {
+    display: flex;
+    flex: 1;
+    padding: 0.5rem;
 
-		.editor-wrapper {
-			flex-direction: column;
-			flex: 1;
-			gap: 0.4rem;
-			@media screen and (max-width: 1000px) {
-				min-height: 70vh;
-			}
-			.editor-border {
-				position: relative;
-				display: flex;
-				flex: 1;
-				padding: 0.2rem;
-				margin-left: -0.2rem;
-				border-radius: 0.5rem;
-			}
-		}
-		.memory-wrapper {
-			gap: 0.5rem;
-			@media screen and (max-width: 1000px) {
-				margin-top: 1rem;
-				overflow-x: auto;
-				width: 100%;
-			}
-		}
-		@media screen and (max-width: 1000px) {
-			flex-direction: column;
-		}
-	}
-	.right-side {
-		margin-left: 0.5rem;
-		width: min-content;
-		max-height: calc(100vh - 4.2rem);
-		padding-top: 0.2rem;
-		display: flex;
-		overflow-y: auto;
-		flex-direction: column;
-	}
-	@media screen and (max-width: 1000px) {
-		.editor-memory-wrapper {
-			grid-template-columns: 1fr;
-		}
-		.right-side {
-			margin: 0;
-			padding: 0.2rem;
-			margin-top: 1rem;
-			width: unset;
-			max-height: unset;
-			align-items: center;
-			flex-direction: column-reverse;
-		}
-	}
+    .editor-wrapper,
+    .memory-wrapper {
+      display: flex;
+    }
 
-	.gradientBorder, .redBorder{
-		position: relative;
-		&::before {
-			position: absolute;
-			content: '';
-			top: 0;
-			left: 0;
-			width: 100%;
-			height: 100%;
-			background: linear-gradient(
-				60deg,
-				hsl(224, 85%, 66%),
-				hsl(269, 85%, 66%),
-				hsl(314, 85%, 66%),
-				hsl(359, 85%, 66%),
-				hsl(44, 85%, 66%),
-				hsl(89, 85%, 66%),
-				hsl(134, 85%, 66%),
-				hsl(179, 85%, 66%)
-			);
-			background-size: 300% 300%;
-			background-position: 0 50%;
-			border-radius: 0.5rem;
-			animation: moveGradient 5s alternate infinite, appear 0.3s ease-in;
-		}
+    .editor-wrapper {
+      flex-direction: column;
+      flex: 1;
+      gap: 0.4rem;
+      @media screen and (max-width: 1000px) {
+        min-height: 70vh;
+      }
 
-		@keyframes appear {
-			from {
-				opacity: 0;
-			}
-			to {
-				opacity: 1;
-			}
-		}
-		@keyframes moveGradient {
-			50% {
-				background-position: 100% 50%;
-			}
-		}
-	}
-	.redBorder {
-		&::before {
-			background: linear-gradient(60deg, hsl(359, 85%, 66%), hsl(0, 85%, 66%));
-		}
-	}
+      .editor-border {
+        position: relative;
+        display: flex;
+        flex: 1;
+        padding: 0.2rem;
+        margin-left: -0.2rem;
+        border-radius: 0.5rem;
+      }
+    }
+
+    .memory-wrapper {
+      gap: 0.5rem;
+      @media screen and (max-width: 1000px) {
+        margin-top: 1rem;
+        overflow-x: auto;
+        width: 100%;
+      }
+    }
+
+    @media screen and (max-width: 1000px) {
+      flex-direction: column;
+    }
+  }
+
+  .right-side {
+    margin-left: 0.5rem;
+    width: min-content;
+    max-height: calc(100vh - 4.2rem);
+    padding-top: 0.2rem;
+    display: flex;
+    overflow-y: auto;
+    flex-direction: column;
+  }
+
+  @media screen and (max-width: 1000px) {
+    .editor-memory-wrapper {
+      grid-template-columns: 1fr;
+    }
+    .right-side {
+      margin: 0;
+      padding: 0.2rem;
+      margin-top: 1rem;
+      width: unset;
+      max-height: unset;
+      align-items: center;
+      flex-direction: column-reverse;
+    }
+  }
+
+  .gradientBorder, .redBorder {
+    position: relative;
+
+    &::before {
+      position: absolute;
+      content: '';
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(
+                      60deg,
+                      hsl(224, 85%, 66%),
+                      hsl(269, 85%, 66%),
+                      hsl(314, 85%, 66%),
+                      hsl(359, 85%, 66%),
+                      hsl(44, 85%, 66%),
+                      hsl(89, 85%, 66%),
+                      hsl(134, 85%, 66%),
+                      hsl(179, 85%, 66%)
+      );
+      background-size: 300% 300%;
+      background-position: 0 50%;
+      border-radius: 0.5rem;
+      animation: moveGradient 5s alternate infinite, appear 0.3s ease-in;
+    }
+
+    @keyframes appear {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+    @keyframes moveGradient {
+      50% {
+        background-position: 100% 50%;
+      }
+    }
+  }
+
+  .redBorder {
+    &::before {
+      background: linear-gradient(60deg, hsl(359, 85%, 66%), hsl(0, 85%, 66%));
+    }
+  }
 </style>

@@ -20,6 +20,7 @@
     "clone-deep": "^4.0.1",
     "dexie": "^4.0.4",
     "fuzzy-search": "^3.2.1",
+    "lz-string": "^1.5.0",
     "monaco-editor": "^0.47.0",
     "s-ago": "^2.2.0",
     "s68k": "^3.0.5",
