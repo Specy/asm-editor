@@ -1,30 +1,32 @@
 <script lang="ts">
-	import ButtonLink from '$cmp/buttons/ButtonLink.svelte'
-	import Icon from '$cmp/layout/Icon.svelte'
-	import MainPageLinkPreview from '$cmp/main/HeroLink.svelte'
-	import FaGithub from 'svelte-icons/fa/FaGithub.svelte'
-	import FaBook from 'svelte-icons/fa/FaBook.svelte'
-	import FaSearch from 'svelte-icons/fa/FaSearch.svelte'
-	import FaTools from 'svelte-icons/fa/FaTools.svelte'
-	import MainPageSection from '$cmp/main/HeroSection.svelte'
-	import AnimatedRgbLine from '$cmp/misc/AnimatedRgbLine.svelte'
-	import GoLinkExternal from 'svelte-icons/go/GoLinkExternal.svelte'
-	import { ThemeStore } from '$stores/themeStore'
-	import { onMount } from 'svelte'
-	import FaDownload from 'svelte-icons/fa/FaDownload.svelte'
-	import FaDonate from 'svelte-icons/fa/FaDonate.svelte'
-	import Button from '$cmp/buttons/Button.svelte'
-	import Page from '$cmp/layout/Page.svelte'
-	const textShadowPrimary = ThemeStore.getColor('primary').isDark()
-	const textShadowSecondary = ThemeStore.getColor('secondary').isDark()
-	let installEvent: any = null
-	onMount(() => {
-		window.addEventListener('beforeinstallprompt', (e) => {
-			e.preventDefault()
-			console.log('beforeinstallprompt', e)
-			installEvent = e
-		})
-	})
+    import ButtonLink from '$cmp/buttons/ButtonLink.svelte'
+    import Icon from '$cmp/layout/Icon.svelte'
+    import MainPageLinkPreview from '$cmp/main/HeroLink.svelte'
+    import FaGithub from 'svelte-icons/fa/FaGithub.svelte'
+    import FaBook from 'svelte-icons/fa/FaBook.svelte'
+    import FaSearch from 'svelte-icons/fa/FaSearch.svelte'
+    import FaTools from 'svelte-icons/fa/FaTools.svelte'
+    import FaCode from 'svelte-icons/fa/FaCode.svelte'
+    import MainPageSection from '$cmp/main/HeroSection.svelte'
+    import AnimatedRgbLine from '$cmp/misc/AnimatedRgbLine.svelte'
+    import GoLinkExternal from 'svelte-icons/go/GoLinkExternal.svelte'
+    import { ThemeStore } from '$stores/themeStore'
+    import { onMount } from 'svelte'
+    import FaDownload from 'svelte-icons/fa/FaDownload.svelte'
+    import FaDonate from 'svelte-icons/fa/FaDonate.svelte'
+    import Button from '$cmp/buttons/Button.svelte'
+    import Page from '$cmp/layout/Page.svelte'
+
+    const textShadowPrimary = ThemeStore.getColor('primary').isDark()
+    const textShadowSecondary = ThemeStore.getColor('secondary').isDark()
+    let installEvent: any = null
+    onMount(() => {
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault()
+            console.log('beforeinstallprompt', e)
+            installEvent = e
+        })
+    })
 </script>
 
 <svelte:head>
@@ -110,6 +112,12 @@
 					</div>
 					<div slot="description">Tools</div>
 				</MainPageLinkPreview>
+				<MainPageLinkPreview href="/embed" title="Embed the app in your website">
+					<div slot="icon">
+						<FaCode />
+					</div>
+					<div slot="description">Embed</div>
+				</MainPageLinkPreview>
 			</div>
 		</div>
 	</div>
@@ -120,7 +128,7 @@
 				The editor comes with a built-in documentation for the M68K instruction set including the
 				valid addressing modes, description, examples for each instruction and directive.
 				<br />
-				<a href="/documentation/m68k" title="View documentation" class="docs-visit">
+				<a href="/documentation/m68k" title="View documentation" class="external-link">
 					Or visit the documentation
 					<div style="width: 1rem; height: 1rem; margin-top: 0.2rem; margin-left: 0.3rem">
 						<GoLinkExternal />
@@ -145,115 +153,137 @@
 				the editor to your liking.
 			</div>
 		</MainPageSection>
+		<MainPageSection id="embed" reverse>
+			<div slot="title">Embed</div>
+			<div class="description" class:textShadow={textShadowPrimary}>
+				Embed the editor in your website to show and teach how
+				assembly works using the <a href="/embed" title="Embedder tool" class="external-link">
+					Embedder tool
+					<div style="width: 1rem; height: 1rem; margin-top: 0.2rem; margin-left: 0.3rem">
+						<GoLinkExternal />
+					</div>
+				</a>
+			</div>
+		</MainPageSection>
 	</div>
 </Page>
 
 <div class="pre-footer" />
 
 <style lang="scss">
-	.welcome-title {
-		font-size: 3rem;
-		max-width: 30rem;
-		text-align: center;
-		margin-bottom: 2rem;
-		color: var(--primary-text);
-	}
-	.textShadow {
-		text-shadow: 2px 2px 12px rgb(36 36 36);
-	}
-	.sections-wrapper {
-		padding: 4rem 0;
-		font-family: FiraCode;
-		background-color: var(--primary);
-		color: var(--primary-text);
-	}
-	.presentation {
-		display: flex;
-		flex: 1;
-		flex-direction: column;
-		justify-content: center;
-		align-items: center;
-		background-color: rgba(var(--RGB-primary), 0.9);
-		backdrop-filter: blur(5px);
-		z-index: 2;
-	}
-	:global(body) {
-		scroll-behavior: smooth;
-	}
-	.docs-visit {
-		color: var(--accent);
-		display: flex;
-		&:hover {
-			text-decoration: underline;
-		}
-	}
+  .welcome-title {
+    font-size: 3rem;
+    max-width: 30rem;
+    text-align: center;
+    margin-bottom: 2rem;
+    color: var(--primary-text);
+  }
 
-	.links-row-wrapper {
-		background-color: var(--secondary);
-		color: var(--secondary-text);
-		display: flex;
-		justify-content: center;
-	}
-	.links-row {
-		display: grid;
-		grid-template-columns: repeat(3, 1fr);
-		@media screen and (max-width: 650px) {
-			display: flex;
-			flex-wrap: wrap;
-		}
-	}
-	.main {
-		display: flex;
-		flex-direction: column;
-		/* 
+  .textShadow {
+    text-shadow: 2px 2px 12px rgb(36 36 36);
+  }
+
+  .sections-wrapper {
+    padding: 4rem 0;
+    font-family: FiraCode;
+    background-color: var(--primary);
+    color: var(--primary-text);
+  }
+
+  .presentation {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background-color: rgba(var(--RGB-primary), 0.9);
+    backdrop-filter: blur(5px);
+    z-index: 2;
+  }
+
+  :global(body) {
+    scroll-behavior: smooth;
+  }
+
+  .external-link {
+    color: var(--accent);
+    display: inline-flex;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  .links-row-wrapper {
+    background-color: var(--secondary);
+    color: var(--secondary-text);
+    display: flex;
+    justify-content: center;
+  }
+
+  .links-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    @media screen and (max-width: 650px) {
+      display: flex;
+      flex-wrap: wrap;
+    }
+  }
+
+  .main {
+    display: flex;
+    flex-direction: column;
+    /*
 		background-size: 400% 400%;
 		animation: gradient 15s ease infinite;
 		background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
 		*/
-		min-height: 100vh;
-		border-radius: 0.6rem;
-		.content {
-			display: flex;
-			flex: 1;
-			border-radius: 0.4rem;
-			overflow: hidden;
-			position: relative;
-			border-radius: 0.45rem;
-		}
-	}
-	.preview-image {
-		display: flex;
-		width: 100%;
-		height: 100%;
-		top: 0;
-		left: 0;
-		position: absolute;
-		background-image: url('/images/ASM-editor.webp');
-		background-repeat: no-repeat;
-		background-position: center;
-		background-size: cover;
-	}
+    min-height: 100vh;
+    border-radius: 0.6rem;
 
-	@media screen and (max-width: 650px) {
-		.main {
-			.content {
-				width: 100%;
-			}
-		}
-		.welcome-title {
-			font-size: 2.5rem;
-		}
-	}
+    .content {
+      display: flex;
+      flex: 1;
+      border-radius: 0.4rem;
+      overflow: hidden;
+      position: relative;
+      border-radius: 0.45rem;
+    }
+  }
 
-	@keyframes gradient {
-		0% {
-			background-position: 0% 50%;
-		}
-		50% {
-			background-position: 100% 50%;
-		}
-		100% {
-			background-position: 0% 50%;
-		}
-	}
+  .preview-image {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    position: absolute;
+    background-image: url('/images/ASM-editor.webp');
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: cover;
+  }
+
+  @media screen and (max-width: 650px) {
+    .main {
+      .content {
+        width: 100%;
+      }
+    }
+    .welcome-title {
+      font-size: 2.5rem;
+    }
+  }
+
+  @keyframes gradient {
+    0% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0% 50%;
+    }
+  }
 </style>

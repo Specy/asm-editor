@@ -25,12 +25,14 @@
 </script>
 
 <Navbar style="border-bottom-left-radius: 0;">
-	<div class="row" style="gap: 2rem; align-items:center; flex: 1">
+	<div class="row" style="gap: 1rem; align-items:center; flex: 1">
 		<a class="icon" href="/" title="Go to the home">
 			<img src="/favicon.png" alt="logo" />
 			Home
 		</a>
 		<a class="icon" href="/projects" title="Go to your projects"> Projects </a>
+		<a href="/embed"> Embed </a>
+
 		<a href="/documentation/m68k"> M68k </a>
 		<div class="mobile-only" style="margin-left: auto; margin-right: 0.5rem">
 			<Icon on:click={() => (menuOpen = !menuOpen)}>
@@ -141,6 +143,9 @@
 		gap: 1rem;
 		img {
 			height: 100%;
+		}
+		&:hover{
+			color: var(--accent)
 		}
 	}
 </style>

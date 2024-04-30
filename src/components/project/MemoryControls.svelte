@@ -14,6 +14,7 @@
 	export let memorySize: number
 	export let hideLabel = false
 	export let inputStyle = ''
+	export let style = ''
 	function searchAddress() {
 		const newAddress = parseInt(hexAddress, 16)
 		hexAddress = currentAddress.toString(16)
@@ -30,7 +31,7 @@
 	$: dispatcher('addressChange', currentAddress)
 </script>
 
-<Form style="width:100%" on:submit={searchAddress}>
+<Form style="width:100%; {style}" on:submit={searchAddress}>
 	<div class="address-search">
 		<RawInput
 			bind:value={hexAddress}

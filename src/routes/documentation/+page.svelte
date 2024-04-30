@@ -3,20 +3,11 @@
 	import Navbar from '$cmp/Navbar.svelte'
 	import NavigationLinkButton from '$cmp/NavigationLinkButton.svelte'
 	import { capitalize } from '$lib/utils'
+  import DefaultNavbar from '$cmp/DefaultNavbar.svelte'
 	const langs = ['m68k']
 </script>
 
-<Navbar>
-	<div  class="row" style="gap: 2rem; align-items:center; flex: 1">
-		<a class="icon" href="/" title="Go to the home">
-			<img src="/favicon.png" alt="logo" />
-			Home
-		</a>
-		<a class="icon" href="/projects" title="Go to your projects">
-			Projects
-		</a>
-	</div>
-</Navbar>
+<DefaultNavbar />
 <svelte:head>
 	<title>Documentation</title>
 	<meta
@@ -62,16 +53,5 @@
 		margin-top: 1rem;
 		padding-top: 4rem;
 	}
-	.icon {
-		height: 2.2rem;
-		display: flex;
-		align-items: center;
-		gap: 1rem;
-		img {
-			height: 100%;
-		}
-		&:hover {
-			color: var(--accent);
-		}
-	}
+
 </style>

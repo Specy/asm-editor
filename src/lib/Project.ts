@@ -11,7 +11,7 @@ export interface ProjectData {
 }
 const CODE_SEPARATOR = "---METADATA---"
 
-const baseM68k =
+export const BASE_M68K_CODE =
     `
 ORG $1000
 START:
@@ -41,7 +41,7 @@ export class Project {
     description = ""
     id = ""
     constructor(data?: Partial<ProjectData>) {
-        this.code = data?.code ?? this.language === 'M68K' ? baseM68k : ""
+        this.code = data?.code ?? this.language === 'M68K' ? BASE_M68K_CODE : ""
         this.createdAt = data?.createdAt ?? new Date().getTime()
         this.updatedAt = data?.updatedAt ?? new Date().getTime()
         this.name = data?.name ?? "Untitled"

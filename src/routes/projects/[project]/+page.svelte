@@ -36,16 +36,17 @@
 		return Monaco.dispose
 	})
 
-	async function save(project: Project) {
+	async function save(project: Project): Promise<boolean> {
 		if (project.id === SHARE_ID) {
 			if (!(await Prompt.confirm('Do you want to save this shared project in your projects?')))
-				return
+				return false
 			delete project.id
 			const newProject = await ProjectStore.addProject(project)
 			project.id = newProject.id
 		} else {
 			await ProjectStore.save(project)
 		}
+		return true
 	}
 
 	function share(pr: Project) {
@@ -112,7 +113,7 @@
 				changePage('/projects')
 			}}
 			on:save={async ({ detail }) => {
-				await save(project)
+				if(!await save(project)) return
 				console.log('Saved')
 				if (!detail.silent) toast.logPill('Project saved')
 			}}

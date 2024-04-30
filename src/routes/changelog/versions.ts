@@ -1,58 +1,67 @@
-
 type Version = {
     version: string
     title?: string
     date: Date
     changes: string[]
     notes?: string[]
-}   
+}
 export const versions: Version[] = [
     {
+        version: '3.1.0',
+        title: 'Share by URL, labels on top',
+        date: new Date('2024-04-30'),
+        changes: [
+            'Added share by URL, you can now share your code by including it in a sharable URL',
+            'Whenever there is indentation in the code (for example labels at the start of the line, plus indented code), the label will be "fixed" at the top of the editor',
+			"Added embeddable editor, you can now embed the editor in your website",
+        ]
+    },
+    {
         version: '3.0.0',
-        title: "Improved performance and bugfix",
+        title: 'Improved performance and bugfix',
         date: new Date('2023-10-28'),
         changes: [
-            "Improved performance by 3x, now runs at +-30mhz",
-            "Bug fixes during compilation and execution",
-            "Improved UI on mobile for the interactive documentation",
-            "Improved UI on the editor"
+            'Improved performance by 3x, now runs at +-30mhz',
+            'Bug fixes during compilation and execution',
+            'Improved UI on mobile for the interactive documentation',
+            'Improved UI on the editor'
         ]
     },
     {
         version: '2.9.0',
-        title: "Improved documentation",
+        title: 'Improved documentation',
         date: new Date('2023-04-29'),
         changes: [
-            "Added side menu to all documentation pages",
-            "Added more explanations to documentation for condition codes",
-            "Added individual condition code dependent instructions",
-            "Improved UI of documentation pages"
+            'Added side menu to all documentation pages',
+            'Added more explanations to documentation for condition codes',
+            'Added individual condition code dependent instructions',
+            'Improved UI of documentation pages'
         ]
     },
     {
         version: '2.8.0',
-        title: "Negative numbers in register viewer",
+        title: 'Negative numbers in register viewer',
         date: new Date('2023-04-28'),
         changes: [
-            "Added negative numbers conversion in register viewer",
-            "Bug fix of interpreter for directive name clash"
+            'Added negative numbers conversion in register viewer',
+            'Bug fix of interpreter for directive name clash'
         ]
-    }, 
+    },
     {
         version: '2.7.0',
         title: 'Changed interactive documentation',
         date: new Date('2023-04-24'),
         changes: [
             'Added side menu to interactive documentation',
-            'Improved transitions between pages',
+            'Improved transitions between pages'
         ]
-    },{
+    }, {
         version: '2.6.5',
         title: 'Bug fixes and more diffings',
         date: new Date('2023-03-22'),
         changes: [
             'Added status code diffing',
-            'Fixed bugs in interactive documentation',
+            'Fixed bugs in interactive documentation'
         ]
     },
     {
@@ -63,7 +72,7 @@ export const versions: Version[] = [
             'Changed documentation layout to have future more languages',
             'Added an interactive documentation for each instruction',
             'Bug fixes for some instructions (rod, asd, lsd) ',
-            'Other bug fixes and improvements',
+            'Other bug fixes and improvements'
         ]
     },
     {
@@ -84,7 +93,7 @@ export const versions: Version[] = [
         changes: [
             'Added callstack tracing',
             'Added mutations history',
-            'UI fixes',
+            'UI fixes'
         ]
     },
     {
@@ -94,7 +103,7 @@ export const versions: Version[] = [
         changes: [
             'Improved by 3x the interpreter performance and bugfix',
             'Improved interpreter errors',
-            'Changed hero page',
+            'Changed hero page'
         ]
     },
     {
@@ -117,9 +126,9 @@ export const versions: Version[] = [
             'Improved SEO',
             'Improved accessibility',
             'Improved performance',
-            'Improved animations',
+            'Improved animations'
         ]
-    },  
+    },
     {
         version: '2.3.0',
         date: new Date('2022-11-03'),
@@ -127,7 +136,7 @@ export const versions: Version[] = [
         changes: [
             'Added editable shortcuts',
             'Added support for strings in the interpreter and memory viewer',
-            'Interpreter bug fixes',
+            'Interpreter bug fixes'
         ]
     },
     {
@@ -137,7 +146,7 @@ export const versions: Version[] = [
         changes: [
             'Added stack viewer',
             'Improve documentation and inline documentation',
-            'Interpreter bug fixes',
+            'Interpreter bug fixes'
 
         ]
     },
@@ -150,10 +159,10 @@ export const versions: Version[] = [
             'Added settings',
             'Added inline documentation',
             'Improved editor styling',
-            'Improved animations',
+            'Improved animations'
 
-        ]   
-    },  
+        ]
+    },
     {
         version: '2.0.0',
         date: new Date('2022-10-19'),
@@ -167,7 +176,7 @@ export const versions: Version[] = [
             'Added more directives',
             'Added breakpoints',
             'Added stepping',
-            'Removed mips emulator',
+            'Removed mips emulator'
 
         ]
     },
@@ -179,9 +188,9 @@ export const versions: Version[] = [
             'Added mips emulator (buggy)',
             'Added animations',
             'Added formatter',
-            'Improved code suggestions',
+            'Improved code suggestions'
         ]
-    }, 
+    },
     {
         version: '1.0.0',
         date: new Date('2022-04-06'),
@@ -191,7 +200,7 @@ export const versions: Version[] = [
             'Added m68k emulator',
             'Added register viewer',
             'Added initial editor and syntax highlighting',
-            'Added Service Worker for offline support and installation',
+            'Added Service Worker for offline support and installation'
         ]
     }
 
