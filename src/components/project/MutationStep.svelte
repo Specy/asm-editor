@@ -4,20 +4,14 @@
 
 <script lang="ts">
 	import Icon from '$cmp/layout/Icon.svelte'
-	import type { ExecutionStep } from 's68k'
+  import { ccrToFlagsArray, type ExecutionStep } from 's68k'
 	import { createEventDispatcher } from 'svelte'
 	import FaUndo from 'svelte-icons/fa/FaUndo.svelte'
 	export let step: ExecutionStep
 	let ccr = []
 
 	function parseCcr(value: number) {
-		ccr = [
-			(value & 0x1) === 0x1,
-			(value & 0x2) === 0x2,
-			(value & 0x4) === 0x4,
-			(value & 0x8) === 0x8,
-			(value & 0x10) === 0x10
-		]
+		ccr = ccrToFlagsArray(value).reverse()
 	}
 
 	$: parseCcr(step.new_ccr.bits)

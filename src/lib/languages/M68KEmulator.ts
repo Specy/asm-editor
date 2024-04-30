@@ -1,11 +1,18 @@
 import { get, writable } from "svelte/store"
-import { InterpreterStatus, Size, type Interrupt, type ParsedLine, type Label, type ExecutionStep } from "s68k"
+import {
+    InterpreterStatus,
+    Size,
+    type Interrupt,
+    type ParsedLine,
+    type Label,
+    type ExecutionStep,
+    ccrToFlagsArray
+} from 's68k'
 import { S68k, Interpreter } from "s68k"
 import { MEMORY_SIZE, PAGE_SIZE, PAGE_ELEMENTS_PER_ROW } from "$lib/Config"
 import { Prompt } from "$stores/promptStore"
 import { createDebouncer, getErrorMessage } from "../utils"
 import { settingsStore } from "$stores/settingsStore"
-import { parseCcr } from "./M68kUtils"
 export type RegisterHex = [hi: string, lo: string]
 
 export type RegisterChunk = {
@@ -283,11 +290,11 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
     }
     function updateStatusRegisters(override?: number[]) {
 
-        const flags = (override ?? interpreter?.getFlagsAsArray().map(f => f ? 1 : 0) ?? new Array(5).fill(0))
+        const flags = (override ?? interpreter?.getFlagsAsArray().map(f => f ? 1 : 0) ?? new Array(5).fill(0)).reverse()
         if (settings.values.maxVisibleHistoryModifications.value > 0 && interpreter && !override) {
             const last = interpreter.getUndoHistory(1)[0]
             if (last) {
-                const old = parseCcr(last.old_ccr.bits)
+                const old = ccrToFlagsArray(last.old_ccr.bits).reverse()
                 return update(state => {
                     return {
                         ...state,
