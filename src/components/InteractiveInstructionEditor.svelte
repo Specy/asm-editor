@@ -158,7 +158,7 @@
 
   .editor {
     min-height: 15rem;
-    min-width: min(calc(100vw - 1rem), 25rem);
+    min-width: min(100%, 25rem);
     flex: 1;
     gap: 0.5rem;
   }

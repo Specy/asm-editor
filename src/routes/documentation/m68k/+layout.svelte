@@ -47,6 +47,13 @@
 </Navbar>
 
 <div class="row" style="gap: 1rem; flex: 1">
+	<button
+		class="side-menu-underlay"
+		class:side-menu-underlay-open={menuOpen}
+		on:click={() => (menuOpen = false)}
+	>
+
+	</button>
 	<aside class="side-menu column" class:menu-open={menuOpen}>
 		<div class="column" style="gap: 1rem; padding: 0 1rem;">
 			<MenuLink
@@ -120,7 +127,6 @@
 			z-index: 5;
 			transition: transform 0.3s;
 			background-color: rgba(var(--RGB-secondary), 0.9);
-			backdrop-filter: blur(0.3rem);
 			transform: translateX(calc((100vw - 4rem) * -1));
 		}
 		.mobile-only {
@@ -148,4 +154,23 @@
 			color: var(--accent)
 		}
 	}
+	.side-menu-underlay{
+		position: fixed;
+		top: 3.2rem;
+		left: 0;
+		width: 100vw;
+		height: 100%;
+		background-color: rgba(0, 0, 0, 0.5);
+		opacity: 0;
+		pointer-events: none;
+		cursor: pointer;
+		z-index: 3;
+		transition: opacity 0.3s;
+		backdrop-filter: blur(0.2rem);
+	}
+	.side-menu-underlay-open{
+		opacity: 1;
+		pointer-events: all;
+	}
+
 </style>
