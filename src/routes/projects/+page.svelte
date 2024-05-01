@@ -85,7 +85,7 @@
 							toast.error('Failed to import project!')
 						}
 					}
-					const project = ProjectStore.getProject(lastId)
+					const project = await ProjectStore.getProject(lastId)
 					if (project && launchParams.files.length === 1) {
 						goto(`/projects/${project.id}`)
 					}
