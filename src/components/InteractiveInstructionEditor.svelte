@@ -28,6 +28,7 @@
         emulator.clear()
         running = false
     }
+    $: emulator.setCode(code)
 </script>
 
 <div class="editor-wrapper" style="gap: 0.5rem">

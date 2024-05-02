@@ -18,5 +18,9 @@ export function createMarkdownWithRenderer(text: string, renderer: Renderer){
 }
 
 export function createMarkdownWithOptions(text: string, options: MarkdownRendererProps){
-    return marked(text, { renderer: createMarkdownRenderer(options)})
+    return marked(text, {
+        renderer: createMarkdownRenderer(options),
+        mangle: false,
+        headerIds: false
+    })
 }
