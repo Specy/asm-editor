@@ -1,9 +1,9 @@
 <script lang="ts">
-	import Page from '$cmp/layout/Page.svelte'
-	import Navbar from '$cmp/Navbar.svelte'
-	import NavigationLinkButton from '$cmp/NavigationLinkButton.svelte'
+	import Page from '$cmp/shared/layout/Page.svelte'
+	import Navbar from '$cmp/shared/layout/Navbar.svelte'
+	import NavigationLinkButton from '$cmp/shared/button/NavigationLinkButton.svelte'
 	import { capitalize } from '$lib/utils'
-  import DefaultNavbar from '$cmp/DefaultNavbar.svelte'
+  import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
 	const langs = ['m68k']
 </script>
 

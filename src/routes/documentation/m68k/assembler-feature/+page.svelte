@@ -1,6 +1,6 @@
 <script lang="ts">
 	import M68KAssemblerFeatures from '$cmp/documentation/m68k/M68KAssemblerFeatures.svelte'
-	import Page from '$cmp/layout/Page.svelte'
+	import Page from '$cmp/shared/layout/Page.svelte'
 </script>
 
 <Page cropped contentStyle="padding: 1rem; gap: 1rem;">

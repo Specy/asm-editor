@@ -1,5 +1,5 @@
 <script lang="ts">
-	import DocsOperand from '$cmp/documentation/m68k/DocsOperand.svelte'
+	import DocsOperand from '$cmp/documentation/DocsOperand.svelte'
 	import {
 		AddressingMode,
 		addressingModeToString,

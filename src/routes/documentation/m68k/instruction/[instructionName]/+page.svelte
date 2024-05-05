@@ -1,15 +1,15 @@
 <script lang="ts">
 	import type { PageData } from './$types'
-	import Page from '$cmp/layout/Page.svelte'
+	import Page from '$cmp/shared/layout/Page.svelte'
 	import { onMount, SvelteComponent } from 'svelte'
 	import {
 		fromSizesToString,
 		fromSizeToString,
 		getAddressingModeNames,
 	} from '$lib/languages/M68K-documentation'
-	import DocsOperand from '$cmp/documentation/m68k/DocsOperand.svelte'
+	import DocsOperand from '$cmp/documentation/DocsOperand.svelte'
 	import { createMarkdownWithOptions } from '$lib/markdown'
-	import MarkdownRenderer from '$cmp/MarkdownRenderer.svelte'
+	import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
 	export let data: PageData
 	let ins = data.props.instruction
 	$: ins = data.props.instruction

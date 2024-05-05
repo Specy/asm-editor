@@ -1,6 +1,6 @@
 <script lang="ts">
 
-	import DocsOperand from "$cmp/documentation/m68k/DocsOperand.svelte"
+	import DocsOperand from "$cmp/documentation/DocsOperand.svelte"
 	import { directions, directionsDescriptions } from "$lib/languages/M68K-documentation"
 
 </script>

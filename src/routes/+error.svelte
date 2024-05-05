@@ -1,5 +1,5 @@
 <script>
-	import ButtonLink from '$cmp/buttons/ButtonLink.svelte'
+	import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
 </script>
 
 <main class="page">

@@ -1,105 +1,116 @@
 <script lang="ts">
-	import { ProjectStore } from '$stores/projectsStore'
-	import ProjectCard from '$cmp/project/ProjectCard.svelte'
-	import { onMount } from 'svelte'
-	import Button from '$cmp/buttons/Button.svelte'
-	import Icon from '$cmp/layout/Icon.svelte'
-	import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
-	import FaPlus from 'svelte-icons/fa/FaPlus.svelte'
-	import Title from '$cmp/layout/Title.svelte'
-	import ButtonLink from '$cmp/buttons/ButtonLink.svelte'
-	import { scale } from 'svelte/transition'
-	import FileImporter from '$cmp/misc/FileImporter.svelte'
-	import { textDownloader } from '$lib/utils'
-	import FaUpload from 'svelte-icons/fa/FaUpload.svelte'
-	import { toast } from '$stores/toastStore'
-	import { Project } from '$lib/Project'
-	import { Prompt } from '$stores/promptStore'
-	import { goto } from '$app/navigation'
-	import Page from '$cmp/layout/Page.svelte'
-	const { projects } = ProjectStore
+    import { ProjectStore } from '$stores/projectsStore'
+    import ProjectCard from '$cmp/specific/project/ProjectCard.svelte'
+    import { onMount } from 'svelte'
+    import Button from '$cmp/shared/button/Button.svelte'
+    import Icon from '$cmp/shared/layout/Icon.svelte'
+    import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
+    import FaPlus from 'svelte-icons/fa/FaPlus.svelte'
+    import Title from '$cmp/shared/layout/Header.svelte'
+    import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
+    import { scale } from 'svelte/transition'
+    import FileImporter from '$cmp/shared/fileImporter/FileImporter.svelte'
+    import { textDownloader } from '$lib/utils'
+    import FaUpload from 'svelte-icons/fa/FaUpload.svelte'
+    import { toast } from '$stores/toastStore'
+    import { Project } from '$lib/Project'
+    import { Prompt } from '$stores/promptStore'
+    import { goto } from '$app/navigation'
+    import Page from '$cmp/shared/layout/Page.svelte'
 
-	let hasFileHandleSupport = false
-	async function importFromText(text: string) {
-		try {
-			const project = Project.fromExternal(text)
-			const existing = await ProjectStore.getProject(project.id)
-			if (existing && existing.code.trim() !== project.code.trim()) {
-				const override = await Prompt.confirm(
-					'An existing project with this id already exists, do you want to override it?'
-				)
-				if (!override) {
-					toast.success('Cancelled import')
-					return undefined
-				}
-				ProjectStore.save(project)
-				toast.logPill('Overriden project!')
-				return project
-			} else if (existing) {
-				ProjectStore.save(project)
-				toast.logPill('Updated project!')
-				return project
-			} else {
-				const proj = await ProjectStore.addProject(project)
-				toast.success('Imported project!')
-				return proj
-			}
-		} catch (e) {
-			console.error(e)
-			toast.error('Failed to import project!')
-		}
-		return undefined
-	}
+    const { projects } = ProjectStore
 
-	async function importFromFileHandle(fileHandles: FileSystemFileHandle[]) {
-		for (const fileHandle of fileHandles) {
-			const blob = await fileHandle.getFile()
-			blob.handle = fileHandle
-			const text = await blob.text()
-			const project = Project.fromExternal(text)
-			const id = (await importFromText(text))?.id ?? project.id
-			ProjectStore.setFileHandle(id, fileHandle)
-			const proj = await ProjectStore.getProject(id)
-			ProjectStore.save(proj) //saves the new metadata to the file
-		}
-	}
-	onMount(async () => {
-		//hasFileHandleSupport = !!window?.showOpenFilePicker
-		await ProjectStore.load()
-		try {
-			if ('launchQueue' in window) {
-				launchQueue.setConsumer(async (launchParams) => {
-					let lastId = ''
-					for (const file of launchParams.files) {
-						try {
-							const blob = await file.getFile()
-							blob.handle = file
-							const text = await blob.text()
-							const project = Project.fromExternal(text)
-							lastId = (await importFromText(text))?.id ?? project.id
-							ProjectStore.setFileHandle(lastId, file)
-							const proj = await ProjectStore.getProject(lastId)
-							ProjectStore.save(proj) //saves the new metadata to the file
-						} catch (e) {
-							console.error(e)
-							toast.error('Failed to import project!')
-						}
-					}
-					const project = await ProjectStore.getProject(lastId)
-					if (project && launchParams.files.length === 1) {
-						goto(`/projects/${project.id}`)
-					}
-				})
-			} else {
-				console.error('File Handling API is not supported!')
-			}
-		} catch (e) {
-			console.error(e)
-		}
-		return () => {
-			launchQueue?.setConsumer(() => {})
-		}
-	})
+    let hasFileHandleSupport = false
+
+    async function importFromText(text: string) {
+        try {
+            const project = Project.fromExternal(text)
+            const existing = await ProjectStore.getProject(project.id)
+            if (existing && existing.code.trim() !== project.code.trim()) {
+                const override = await Prompt.confirm(
+                    'An existing project with this id already exists, do you want to override it?'
+                )
+                if (!override) {
+                    toast.success('Cancelled import')
+                    return undefined
+                }
+                ProjectStore.save(project)
+                toast.logPill('Overriden project!')
+                return project
+            } else if (existing) {
+                ProjectStore.save(project)
+                toast.logPill('Updated project!')
+                return project
+            } else {
+                const proj = await ProjectStore.addProject(project)
+                toast.success('Imported project!')
+                return proj
+            }
+        } catch (e) {
+            console.error(e)
+            toast.error('Failed to import project!')
+        }
+        return undefined
+    }
+
+    async function importFromFileHandle(fileHandles: FileSystemFileHandle[]) {
+        for (const fileHandle of fileHandles) {
+            const blob = await fileHandle.getFile()
+						// @ts-ignore
+            blob.handle = fileHandle
+            const text = await blob.text()
+            const project = Project.fromExternal(text)
+            const id = (await importFromText(text))?.id ?? project.id
+            ProjectStore.setFileHandle(id, fileHandle)
+            const proj = await ProjectStore.getProject(id)
+            ProjectStore.save(proj) //saves the new metadata to the file
+        }
+    }
+
+    onMount(() => {
+        //hasFileHandleSupport = !!window?.showOpenFilePicker
+        async function run() {
+
+            await ProjectStore.load()
+            try {
+                if ('launchQueue' in window) {
+                    window.launchQueue.setConsumer(async (launchParams) => {
+                        let lastId = ''
+                        for (const file of launchParams.files) {
+                            try {
+                                const blob = await file.getFile()
+                                blob.handle = file
+                                const text = await blob.text()
+                                const project = Project.fromExternal(text)
+                                lastId = (await importFromText(text))?.id ?? project.id
+                                ProjectStore.setFileHandle(lastId, file)
+                                const proj = await ProjectStore.getProject(lastId)
+                                ProjectStore.save(proj) //saves the new metadata to the file
+                            } catch (e) {
+                                console.error(e)
+                                toast.error('Failed to import project!')
+                            }
+                        }
+                        const project = await ProjectStore.getProject(lastId)
+                        if (project && launchParams.files.length === 1) {
+                            goto(`/projects/${project.id}`)
+                        }
+                    })
+                } else {
+                    console.error('File Handling API is not supported!')
+                }
+            } catch (e) {
+                console.error(e)
+            }
+        }
+
+        run()
+        return () => {
+            if ('launchQueue' in window) {
+                window.launchQueue.setConsumer(() => {})
+            }
+        }
+    })
 </script>
 
 <svelte:head>
@@ -130,7 +141,7 @@
 							on:click={async () => {
 								const files = await window.showOpenFilePicker({ multiple: true })
 								try {
-									importFromFileHandle(files)
+									await importFromFileHandle(files)
 								} catch (e) {
 									console.error(e)
 									toast.error('Failed to import project!')
@@ -200,69 +211,76 @@
 </Page>
 
 <style lang="scss">
-	.top-row {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		margin-top: 4rem;
-		margin-bottom: 2rem;
-	}
-	.top-row-buttons {
-		gap: 0.8rem;
-	}
-	.add-project {
-		display: none;
-		justify-content: center;
-		flex-direction: column;
-		gap: 1rem;
-		align-items: center;
-		height: 100%;
-		border-radius: 0.6rem;
-		color: var(--accent);
-		border: solid 0.1rem var(--accent);
-	}
-	.project-display {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		height: 100%;
-	}
-	@media screen and (min-width: 650px) {
-		.go-back {
-			position: absolute;
-			top: 1rem;
-			left: 1rem;
-		}
-	}
-	.project-grid {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 1rem;
-		margin-bottom: 2rem;
-		justify-content: space-between;
-	}
-	.content {
-		display: flex;
-		flex-direction: column;
-		max-width: 40rem;
-		width: 100%;
-	}
-	@media screen and (max-width: 650px) {
-		.top-row {
-			margin-top: 1rem;
-			margin-bottom: 1rem;
-			flex-direction: column;
-			align-items: unset;
-			gap: 1rem;
-		}
-		.top-row-buttons {
-			justify-content: flex-end;
-		}
-		.project-display {
-			padding: 1rem;
-		}
-		.project-grid {
-			grid-template-columns: minmax(0, 1fr);
-		}
-	}
+  .top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 4rem;
+    margin-bottom: 2rem;
+  }
+
+  .top-row-buttons {
+    gap: 0.8rem;
+  }
+
+  .add-project {
+    display: none;
+    justify-content: center;
+    flex-direction: column;
+    gap: 1rem;
+    align-items: center;
+    height: 100%;
+    border-radius: 0.6rem;
+    color: var(--accent);
+    border: solid 0.1rem var(--accent);
+  }
+
+  .project-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+  }
+
+  @media screen and (min-width: 650px) {
+    .go-back {
+      position: absolute;
+      top: 1rem;
+      left: 1rem;
+    }
+  }
+
+  .project-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+    justify-content: space-between;
+  }
+
+  .content {
+    display: flex;
+    flex-direction: column;
+    max-width: 40rem;
+    width: 100%;
+  }
+
+  @media screen and (max-width: 650px) {
+    .top-row {
+      margin-top: 1rem;
+      margin-bottom: 1rem;
+      flex-direction: column;
+      align-items: unset;
+      gap: 1rem;
+    }
+    .top-row-buttons {
+      justify-content: flex-end;
+    }
+    .project-display {
+      padding: 1rem;
+    }
+    .project-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
 </style>

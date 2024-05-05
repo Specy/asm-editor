@@ -1,19 +1,19 @@
 <script lang="ts">
     import { onMount } from 'svelte'
-    import InteractiveInstructionEditor from '$cmp/InteractiveInstructionEditor.svelte'
+    import InteractiveInstructionEditor from '$cmp/shared/InteractiveInstructionEditor.svelte'
     import { type AvailableLanguages, BASE_M68K_CODE } from '$lib/Project'
-    import Page from '$cmp/layout/Page.svelte'
+    import Page from '$cmp/shared/layout/Page.svelte'
     import lzstring from 'lz-string'
     import { page } from '$app/stores'
-    import DefaultNavbar from '$cmp/DefaultNavbar.svelte'
-
-    let inIframe = true
-    let code = BASE_M68K_CODE
+    import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
 
     type Settings = {
         showMemory: boolean
 			language: AvailableLanguages
     }
+
+    let inIframe = true
+    let code = BASE_M68K_CODE
     let settings: Settings = {
         showMemory: true,
 				language: "M68K"

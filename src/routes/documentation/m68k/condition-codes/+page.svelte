@@ -1,7 +1,7 @@
 <script lang="ts">
-	import DocsOperand from '$cmp/documentation/m68k/DocsOperand.svelte'
+	import DocsOperand from '$cmp/documentation/DocsOperand.svelte'
 	import M68KConditionCodes from '$cmp/documentation/m68k/M68KConditionCodes.svelte'
-	import Page from '$cmp/layout/Page.svelte'
+	import Page from '$cmp/shared/layout/Page.svelte'
 	import { branchConditionsFlags } from '$lib/languages/M68K-documentation'
 	const flags = Array.from(branchConditionsFlags.entries())
 </script>

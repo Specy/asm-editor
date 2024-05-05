@@ -1,12 +1,12 @@
 <script lang="ts">
-	import Button from '$cmp/buttons/Button.svelte'
-	import Icon from '$cmp/layout/Icon.svelte'
+	import Button from '$cmp/shared/button/Button.svelte'
+	import Icon from '$cmp/shared/layout/Icon.svelte'
 	import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
 	import FaPaypal from 'svelte-icons/fa/FaPaypal.svelte'
-	import Kofi from '$cmp/misc/KoFi.svelte'
-	import Title from '$cmp/layout/Title.svelte'
+	import Kofi from '$cmp/shared/misc/KoFi.svelte'
+	import Title from '$cmp/shared/layout/Header.svelte'
 	import { afterNavigate } from '$app/navigation'
-	import Page from '$cmp/layout/Page.svelte'
+	import Page from '$cmp/shared/layout/Page.svelte'
 
 	let previousPage: string = '/projects'
 	afterNavigate(({ from }) => {
@@ -56,12 +56,7 @@
 </Page>
 
 <style lang="scss">
-	.page {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		height: 100%;
-	}
+
 	.top-row {
 		display: flex;
 		justify-content: space-between;
@@ -93,9 +88,6 @@
 	@media screen and (max-width: 650px) {
 		.top-row {
 			margin-top: 1rem;
-		}
-		.page {
-			padding: 1rem;
 		}
 	}
 </style>

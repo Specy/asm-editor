@@ -1,5 +1,5 @@
 <script lang="ts">
-	import Page from '$cmp/layout/Page.svelte'
+	import Page from '$cmp/shared/layout/Page.svelte'
 	import {
 		type InstructionDocumentation,
 		M68KUncompoundedInstructions

@@ -59,7 +59,7 @@ const themeObject = {
         prop: 'green'
     }
 }
-type ThemeKeys = keyof typeof themeObject
+export type ThemeKeys = keyof typeof themeObject
 export type ThemeProp = {
     name: string
     color: string

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import MarkdownRenderer from "$cmp/MarkdownRenderer.svelte"
+	import MarkdownRenderer from "$cmp/shared/markdown/MarkdownRenderer.svelte"
 
 
 	import { M68KDirectiveDocumentationList, fromSizesToString } from "$lib/languages/M68K-documentation"

@@ -1,6 +1,6 @@
 <script lang="ts">
-	import Navbar from '$cmp/Navbar.svelte'
-	import TogglableSection from '$cmp/layout/TogglableSection.svelte'
+	import Navbar from '$cmp/shared/layout/Navbar.svelte'
+	import TogglableSection from '$cmp/shared/layout/TogglableSection.svelte'
 	import { M68KUncompoundedInstructions } from '$lib/languages/M68K-documentation'
 	import InstructionsMenu from './InstructionsMenu.svelte'
 	import { page } from '$app/stores'
@@ -12,7 +12,7 @@
 	let search = ''
 	import FuzzySearch from 'fuzzy-search'
 	import MenuLink from './instruction/MenuLink.svelte'
-	import Icon from '$cmp/layout/Icon.svelte'
+	import Icon from '$cmp/shared/layout/Icon.svelte'
 	import FaTimes from 'svelte-icons/fa/FaTimes.svelte'
 	const searcher = new FuzzySearch(instructions, ['name', 'description'], {
 		sort: true

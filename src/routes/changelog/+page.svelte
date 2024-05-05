@@ -1,16 +1,12 @@
 <script lang="ts">
-	import Navbar from '$cmp/Navbar.svelte'
-	import Page from '$cmp/layout/Page.svelte'
+	import Navbar from '$cmp/shared/layout/Navbar.svelte'
+	import Page from '$cmp/shared/layout/Page.svelte'
 	import { versions } from './versions'
 	import FaCircle from 'svelte-icons/fa/FaCircle.svelte'
+  import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
 </script>
 
-<Navbar>
-	<a class="icon" href="/" title="Go to the home">
-		<img src="/favicon.png" alt="logo" />
-		Home
-	</a>
-</Navbar>
+<DefaultNavbar/>
 
 <Page cropped contentStyle="padding: 1rem; padding-top: 4rem">
 	<h1 style="margin-top: 1rem; margin-bottom: 2rem;">Changelog</h1>
@@ -107,26 +103,6 @@
 	.version {
 		gap: 0.6rem;
 	}
-	.content {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		padding: 0.8rem;
-		padding-top: 4rem;
-	}
-	.icon {
-		height: 2.2rem;
-		display: flex;
-		align-items: center;
-		gap: 1rem;
-		img {
-			height: 100%;
-		}
-		&:hover {
-			color: var(--accent);
-		}
-	}
 
-	.changelog {
-	}
+
 </style>

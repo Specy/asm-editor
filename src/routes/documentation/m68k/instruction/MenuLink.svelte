@@ -1,5 +1,5 @@
 <script lang="ts">
-	import Icon from "$cmp/layout/Icon.svelte"
+	import Icon from "$cmp/shared/layout/Icon.svelte"
 	import FaCircle from "svelte-icons/fa/FaCircle.svelte"
 	export let href: string
 	export let title: string

@@ -6,12 +6,12 @@
 		instructionsDocumentationList
 	} from '$lib/languages/M68K-documentation'
 
-	import DocsOperand from '$cmp/documentation/m68k/DocsOperand.svelte'
+	import DocsOperand from '$cmp/documentation/DocsOperand.svelte'
 	import stringSimilarity from 'string-similarity'
-	import DocsSection from '$cmp/layout/TogglableSection.svelte'
-	import ButtonLink from '$cmp/buttons/ButtonLink.svelte'
+	import DocsSection from '$cmp/shared/layout/TogglableSection.svelte'
+	import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
 	import FaArrowRight from 'svelte-icons/fa/FaArrowRight.svelte'
-	import Icon from '$cmp/layout/Icon.svelte'
+	import Icon from '$cmp/shared/layout/Icon.svelte'
 	export let visible: boolean
 	let wrapper: HTMLDivElement
 	export let style = ''
@@ -22,7 +22,7 @@
 	import M68KShiftRotations from './M68KShiftDirections.svelte'
 	import M68KDirectives from './M68KDirectives.svelte'
 	import M68KAssemblerFeatures from './M68KAssemblerFeatures.svelte'
-	import MarkdownRenderer from '$cmp/MarkdownRenderer.svelte'
+	import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
 	export let defaultOpen = false
 	export let openLinksInNewTab = true
 	export let showRedirect = false

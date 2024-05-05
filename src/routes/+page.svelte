@@ -1,21 +1,21 @@
 <script lang="ts">
-    import ButtonLink from '$cmp/buttons/ButtonLink.svelte'
-    import Icon from '$cmp/layout/Icon.svelte'
-    import MainPageLinkPreview from '$cmp/main/HeroLink.svelte'
+    import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
+    import Icon from '$cmp/shared/layout/Icon.svelte'
+    import MainPageLinkPreview from '$cmp/specific/landing/HeroLink.svelte'
     import FaGithub from 'svelte-icons/fa/FaGithub.svelte'
     import FaBook from 'svelte-icons/fa/FaBook.svelte'
     import FaSearch from 'svelte-icons/fa/FaSearch.svelte'
     import FaTools from 'svelte-icons/fa/FaTools.svelte'
     import FaCode from 'svelte-icons/fa/FaCode.svelte'
-    import MainPageSection from '$cmp/main/HeroSection.svelte'
-    import AnimatedRgbLine from '$cmp/misc/AnimatedRgbLine.svelte'
+    import MainPageSection from '$cmp/specific/landing/HeroSection.svelte'
+    import AnimatedRgbLine from '$cmp/shared/misc/AnimatedRgbLine.svelte'
     import GoLinkExternal from 'svelte-icons/go/GoLinkExternal.svelte'
     import { ThemeStore } from '$stores/themeStore'
     import { onMount } from 'svelte'
     import FaDownload from 'svelte-icons/fa/FaDownload.svelte'
     import FaDonate from 'svelte-icons/fa/FaDonate.svelte'
-    import Button from '$cmp/buttons/Button.svelte'
-    import Page from '$cmp/layout/Page.svelte'
+    import Button from '$cmp/shared/button/Button.svelte'
+    import Page from '$cmp/shared/layout/Page.svelte'
 
     const textShadowPrimary = ThemeStore.getColor('primary').isDark()
     const textShadowSecondary = ThemeStore.getColor('secondary').isDark()
