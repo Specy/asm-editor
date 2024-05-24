@@ -20,7 +20,7 @@ function createNavigationStore() {
         try {
             const back = params?.get('b')
             if (back) {
-                goingBack = back === '1' ?? false
+                goingBack = back === '1'
             } else {
                 const from = removeRoot(fromUrl)
                 const to = removeRoot(toUrl)
