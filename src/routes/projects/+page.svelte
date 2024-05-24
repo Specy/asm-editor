@@ -193,7 +193,7 @@
 							on:download={(e) => {
 								textDownloader(
 									e.detail.toExternal(),
-									`${(e.detail.name ?? 'Untitled project').split(' ').join('_')}.s68k`
+									`${(e.detail.name || 'Untitled project').split(' ').join('_')}.s68k`
 								)
 							}}
 						/>

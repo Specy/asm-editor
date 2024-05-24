@@ -42,7 +42,7 @@ export class Register {
         return (this.value >>> 0).toString(16).padStart(8, '0')
     }
     toSizedGroups(size: Size): RegisterChunk[] {
-        const groupLength = size === Size.Byte ? 2 : size === Size.Word ? 4 : 8
+            const groupLength = size === Size.Byte ? 2 : size === Size.Word ? 4 : 8
         const hex = this.toHex()
         const prevHex = (this.prev >>> 0).toString(16).padStart(8, '0')
         const chunks: RegisterChunk[] = []
