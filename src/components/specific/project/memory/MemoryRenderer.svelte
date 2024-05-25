@@ -4,6 +4,7 @@
     import type { DiffedMemory } from '$lib/languages/M68KEmulator'
     import ValueDiff from '$cmp/specific/project/user-tools/ValueDiffer.svelte'
     import MdTextFields from 'svelte-icons/md/MdTextFields.svelte'
+    import FaTimes from 'svelte-icons/fa/FaTimes.svelte'
     import { onMount } from 'svelte'
     import {
         findElInTree,
@@ -11,6 +12,7 @@
         goesNextLineBy,
         inRange
     } from '$cmp/specific/project/memory/memoryTabUtils'
+    import Row from '$cmp/shared/layout/Row.svelte'
 
     const id = Math.random().toString(36).substring(8)
     export let memory: DiffedMemory
@@ -40,24 +42,21 @@
         .map((_, i) => currentAddress + i * bytesPerRow)
 
     onMount(() => {
-        const fn = () => {
-            selectingAddresses = false
-            selectedAddressesIndexes.start = -1
-            selectedAddressesIndexes.len = 0
-        }
         const deselect = () => {
             selectingAddresses = false
         }
         const selectFn = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
-                fn()
+                selectingAddresses = false
+                selectedAddressesIndexes.start = -1
+                selectedAddressesIndexes.len = 0
             }
         }
-        window.addEventListener('blur', fn)
+        window.addEventListener('blur', deselect)
         window.addEventListener('keydown', selectFn)
         window.addEventListener('pointerup', deselect)
         return () => {
-            window.removeEventListener('blur', fn)
+            window.removeEventListener('blur', deselect)
             window.removeEventListener('keydown', selectFn)
             window.removeEventListener('pointerup', deselect)
         }
@@ -124,7 +123,7 @@
 		{/each}
 	</div>
 	<div class="memory-addresses">
-		<div class="row" style="padding: 0.25rem; height:2rem; padding-bottom: 0; padding-right: 0.1rem">
+		<Row padding="0.25rem" gap="0.2rem" style="height:2rem; width: 3.2rem; padding-bottom: 0; padding-right: 0.1rem">
 			<Button
 				title={type === DisplayType.Hex ? 'Show as character' : 'Show as hex'}
 				style="padding: 0.2rem; border-radius: 0.35rem; height:100%; width: 100%"
@@ -136,23 +135,39 @@
 					<MdTextFields />
 				</Icon>
 			</Button>
-		</div>
+			{#if selectedAddressesIndexes.start !== -1}
+				<Button
+					cssVar="green"
+					style="padding: 0.2rem; border-radius: 0.35rem; height:100%; width: 100%"
+					on:click={() => {
+					selectingAddresses = false
+					selectedAddressesIndexes.start = -1
+					selectedAddressesIndexes.len = 0
+				}}
+				>
+					<Icon size={1}>
+						<FaTimes />
+					</Icon>
+				</Button>
+			{/if}
+		</Row>
 		{#each visibleAddresses as address (address)}
 			<div class="memory-grid-address">
 				{getTextFromValue(address, 4, DisplayType.Hex)}
 			</div>
 		{/each}
 	</div>
+
 	<!-- svelte-ignore a11y-no-static-element-interactions -->
 	<div
 		class="memory-numbers"
 		on:pointerdown={onPointerDown}
 		on:dragstart={(e) => e.preventDefault()}
-
 		on:pointermove={selectingAddresses ? handlePointerMove : undefined}
 	>
+
 		{#each memory.current as word, i}
-			<div class="memory-number" >
+			<div class="memory-number">
 				{#if i === selectedAddressesIndexes.start}
 					<div
 						class="selection-value"
@@ -201,9 +216,21 @@
 </div>
 
 <style lang="scss">
-	.memory-number {
-		position: relative;
-	}
+  .memory-selection-cancel {
+    position: absolute;
+    bottom: 0rem;
+    right: 0rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: var(--green);
+    color: var(--green-text);
+  }
+
+  .memory-number {
+    position: relative;
+  }
+
   .selection-value {
     background-color: var(--primary);
     color: var(--primary-text);
@@ -217,6 +244,7 @@
 
   .memory-grid {
     display: grid;
+    position: relative;
     font-family: monospace;
     font-size: 1rem;
     grid-template-columns: min-content;
@@ -232,7 +260,6 @@
     border-radius: 0.5rem;
     padding-right: 0.3rem;
     padding-bottom: 0.3rem;
-    overflow: hidden;
   }
 
   .memory-numbers {

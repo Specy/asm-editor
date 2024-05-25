@@ -5,6 +5,7 @@
 	import { createEventDispatcher } from 'svelte'
 	import MemoryControls from './MemoryControls.svelte'
 	import MemoryVisualiser from './MemoryRenderer.svelte'
+  import Column from '$cmp/shared/layout/Column.svelte'
 	export let sp: number
 	export let tab: MemoryTab
 	export let left = 500
@@ -43,6 +44,7 @@
 		background-color: var(--primary);
 		color: var(--primary-text);
 		padding: 0.4rem;
+		gap: 0.4rem;
 		border-radius: 0.7rem;
 		box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
 		border-top-left-radius: 0;
