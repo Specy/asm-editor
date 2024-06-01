@@ -175,7 +175,7 @@
 			{@const overflowsBy = goesNextLineBy(selectedAddressesIndexes.start, selectedAddressesIndexes.len, bytesPerRow)}
 			<div class="memory-number">
 				{#if i === selectedAddressesIndexes.start}
-					{@const signedSelection = getGroupSignedValue(selectionValue.current, selectionValue.len)}
+					{@const signedSelection = getGroupSignedValue(selectionValue.current, selectionValue.len * 2)}
 					<div
 						class="selection-value"
 
