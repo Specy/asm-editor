@@ -190,7 +190,7 @@
 								min-width: ${selectionValue.len * 1.7}rem;
 						`}
 					>
-						{#if word !== signedSelection}
+						{#if selectionValue.current !== signedSelection}
 							<div style="user-select: all;">
 								{signedSelection}
 							</div>
