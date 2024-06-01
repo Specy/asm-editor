@@ -180,7 +180,7 @@
 						class="selection-value"
 
 						style={`
-								bottom: calc(${i > pageSize - bytesPerRow - 1 ? '1.8rem' : '-2.7rem'} - ${word !== signedSelection ? "1.2rem" : "0.1rem"});
+								bottom: calc(${i > pageSize - bytesPerRow - 1 ? '1.8rem' : '-2.7rem'} - ${selectionValue.current !== signedSelection ? "1.2rem" : "0.1rem"});
 								left: ${overflowsBy.overflows
 									? `calc(-${overflowsBy.by} * 1.75rem)`
 									:	selectionValue.len === 1
