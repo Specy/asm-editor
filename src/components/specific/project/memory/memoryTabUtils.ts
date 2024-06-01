@@ -1,4 +1,5 @@
 import type { DiffedMemory } from '$lib/languages/M68KEmulator'
+import { Size } from 's68k'
 
 export function findElInTree(e: HTMLElement, baseId: string) {
     let el = e
@@ -9,6 +10,12 @@ export function findElInTree(e: HTMLElement, baseId: string) {
         el = el.parentElement
     }
     return el
+}
+
+
+
+export function getGroupSignedValue(groupValue: number, groupLength: number) {
+    return groupValue << (32 - groupLength * 4) >> (32 - groupLength * 4)
 }
 
 

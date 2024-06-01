@@ -16,6 +16,8 @@
 	$: usesHex = !$settingsStore.values.useDecimalAsDefault.value
 	let chunks: RegisterChunk[][] = []
 	$: chunks = registers.map((r) => r.toSizedGroups(size))
+
+
 </script>
 
 <div class="registers-wrapper" class:withoutHeader {style}>

@@ -7,13 +7,22 @@ type Version = {
 }
 export const versions: Version[] = [
     {
+        version: '3.2.0',
+        title: 'Memory region viewer',
+        date: new Date('2024-06-1'),
+        changes: [
+            `Added memory region viewer, you can select up to 4 bytes of memory to convert it's value in decimal/signed decimal`,
+            'Fixed bug when prompting for single character input',
+        ]
+    },
+    {
         version: '3.1.0',
         title: 'Share by URL, labels on top',
         date: new Date('2024-04-30'),
         changes: [
             'Added share by URL, you can now share your code by including it in a sharable URL',
             'Whenever there is indentation in the code (for example labels at the start of the line, plus indented code), the label will be "fixed" at the top of the editor',
-			"Added embeddable editor, you can now embed the editor in your website",
+            'Added embeddable editor, you can now embed the editor in your website'
         ]
     },
     {

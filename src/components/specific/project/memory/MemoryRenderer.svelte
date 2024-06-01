@@ -8,6 +8,7 @@
     import { onMount } from 'svelte'
     import {
         findElInTree,
+        getGroupSignedValue,
         getNumberInRange,
         goesNextLineBy,
         inRange
@@ -79,6 +80,7 @@
         }
     }
 
+
     function onPointerDown(e: PointerEvent) {
         selectingAddresses = true
         const el = findElInTree(e.target as HTMLElement, id)
@@ -88,11 +90,15 @@
         selectedAddressesIndexes.len = 0
     }
 
+    let lastIdx = -1
+
     function handlePointerMove(e: PointerEvent) {
         if (!selectingAddresses) return
         const el = findElInTree(e.target as HTMLElement, id)
         const index = parseInt(el.id.split('-')[1])
         if (isNaN(index)) return
+        if (lastIdx === index && selectedAddressesIndexes.start !== -1) return
+        lastIdx = index
         if (selectedAddressesIndexes.start === -1) {
             selectedAddressesIndexes.start = index
             selectedAddressesIndexes.len = 0
@@ -109,9 +115,6 @@
         }
     }
 
-
-    $: selectionValue = getNumberInRange(memory, selectedAddressesIndexes.start, selectedAddressesIndexes.len)
-    $: overflowsBy = goesNextLineBy(selectedAddressesIndexes.start, selectedAddressesIndexes.len, bytesPerRow)
 </script>
 
 <div class="memory-grid" style={`--bytesPerRow: ${bytesPerRow}; ${style}`}>
@@ -167,21 +170,35 @@
 	>
 
 		{#each memory.current as word, i}
+			{@const signed = getGroupSignedValue(word, 1)}
+			{@const selectionValue = getNumberInRange(memory, selectedAddressesIndexes.start, selectedAddressesIndexes.len)}
+			{@const overflowsBy = goesNextLineBy(selectedAddressesIndexes.start, selectedAddressesIndexes.len, bytesPerRow)}
 			<div class="memory-number">
 				{#if i === selectedAddressesIndexes.start}
+					{@const signedSelection = getGroupSignedValue(selectionValue.current, selectionValue.len)}
 					<div
 						class="selection-value"
 
 						style={`
-								bottom: ${i > pageSize - bytesPerRow - 1 ? '1.8rem' : '-2.7rem'};
-								left: ${overflowsBy.overflows ? `calc(-${overflowsBy.by} * 1.75rem)`:selectionValue.len === 1 ? '-0.3rem' : '0'};
-								min-width: ${selectionValue.len * 1.75}rem;
+								bottom: calc(${i > pageSize - bytesPerRow - 1 ? '1.8rem' : '-2.7rem'} - ${word !== signedSelection ? "1.2rem" : "0.1rem"});
+								left: ${overflowsBy.overflows
+									? `calc(-${overflowsBy.by} * 1.75rem)`
+									:	selectionValue.len === 1
+										? '-0.3rem'
+										: '0'
+								};
+								min-width: ${selectionValue.len * 1.7}rem;
 						`}
 					>
-						<div>
+						{#if word !== signedSelection}
+							<div style="user-select: all;">
+								{signedSelection}
+							</div>
+						{/if}
+						<div style="user-select: all;">
 							{selectionValue.current}
 						</div>
-						<div style="color: var(--accent)">
+						<div style="color: var(--accent); user-select: all">
 							{selectionValue.prev}
 						</div>
 					</div>
@@ -200,14 +217,22 @@
 						: ''
 						}
 						`}
+					hoverElementOffset={word !== signed ? '-2.2rem' : '-1rem'}
 					monospaced
 				>
 					<div
 						slot="hoverValue"
-						style="user-select: all;"
-
 					>
-						{word}
+						{#if word !== signed}
+							<div style="user-select: all;">
+								{signed}
+							</div>
+						{/if}
+						<div
+							style="user-select: all"
+						>
+							{word}
+						</div>
 					</div>
 				</ValueDiff>
 			</div>
