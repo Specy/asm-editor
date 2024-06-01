@@ -1,148 +1,149 @@
 <script lang="ts">
-	import Editor from '$cmp/specific/project/Editor.svelte'
-	import Button from '$cmp/shared/button/Button.svelte'
-	import { M68KEmulator } from '$lib/languages/M68KEmulator'
-	import MemoryVisualiser from '$cmp/specific/project/memory/MemoryRenderer.svelte'
-	import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
-	import { createEventDispatcher, onMount } from 'svelte'
-	import FaKeyboard from 'svelte-icons/fa/FaKeyboard.svelte'
-	import type { Project } from '$lib/Project'
-	import FaSave from 'svelte-icons/fa/FaSave.svelte'
-	import FaCog from 'svelte-icons/fa/FaCog.svelte'
-	import Icon from '$cmp/shared/layout/Icon.svelte'
-	import { toast } from '$stores/toastStore'
-	import Controls from '$cmp/specific/project/Controls.svelte'
-	import StdOut from '$cmp/specific/project/user-tools/StdOutRenderer.svelte'
-	import { clamp, createDebouncer, formatTime, getErrorMessage } from '$lib/utils'
-	import { MEMORY_SIZE } from '$lib/Config'
-	import Settings from '$cmp/specific/project/settings/Settings.svelte'
-	import M68KDocumentation from '$cmp/specific/project/FloatingM68KDocumentation.svelte'
-	import FaBook from 'svelte-icons/fa/FaBook.svelte'
-	import { ShortcutAction, shortcutsStore } from '$stores/shortcutsStore'
-	import RegistersVisualiser from '$cmp/specific/project/cpu/RegistersRenderer.svelte'
-	import StatusCodesVisualiser from '$cmp/specific/project/cpu/StatusCodesRenderer.svelte'
-	import MemoryControls from '$cmp/specific/project/memory/MemoryControls.svelte'
-	import FaShareAlt from 'svelte-icons/fa/FaShareAlt.svelte'
-	import MemoryTab from '$cmp/specific/project/memory/MemoryTab.svelte'
-	import ShortcutEditor from '$cmp/specific/project/settings/ShortcutEditor.svelte'
-	import SizeSelector from '$cmp/specific/project/cpu/SizeSelector.svelte'
-	import { Size } from 's68k'
-	import { settingsStore } from '$stores/settingsStore'
-	import type monaco from 'monaco-editor'
-	import ToggleableDraggable from '$cmp/shared/draggable/DraggableContainer.svelte'
-	import CallStack from '$cmp/specific/project/user-tools/CallStack.svelte'
-	import MutationsViewer from '$cmp/specific/project/user-tools/MutationsRenderer.svelte'
-	import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
-	import FaDonate from 'svelte-icons/fa/FaDonate.svelte'
+    import Editor from '$cmp/specific/project/Editor.svelte'
+    import Button from '$cmp/shared/button/Button.svelte'
+    import { M68KEmulator } from '$lib/languages/M68KEmulator'
+    import MemoryVisualiser from '$cmp/specific/project/memory/MemoryRenderer.svelte'
+    import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
+    import { createEventDispatcher, onMount } from 'svelte'
+    import FaKeyboard from 'svelte-icons/fa/FaKeyboard.svelte'
+    import type { Project } from '$lib/Project'
+    import FaSave from 'svelte-icons/fa/FaSave.svelte'
+    import FaCog from 'svelte-icons/fa/FaCog.svelte'
+    import Icon from '$cmp/shared/layout/Icon.svelte'
+    import { toast } from '$stores/toastStore'
+    import Controls from '$cmp/specific/project/Controls.svelte'
+    import StdOut from '$cmp/specific/project/user-tools/StdOutRenderer.svelte'
+    import { clamp, createDebouncer, formatTime, getErrorMessage } from '$lib/utils'
+    import { MEMORY_SIZE } from '$lib/Config'
+    import Settings from '$cmp/specific/project/settings/Settings.svelte'
+    import M68KDocumentation from '$cmp/specific/project/FloatingM68KDocumentation.svelte'
+    import FaBook from 'svelte-icons/fa/FaBook.svelte'
+    import { ShortcutAction, shortcutsStore } from '$stores/shortcutsStore'
+    import RegistersVisualiser from '$cmp/specific/project/cpu/RegistersRenderer.svelte'
+    import StatusCodesVisualiser from '$cmp/specific/project/cpu/StatusCodesRenderer.svelte'
+    import MemoryControls from '$cmp/specific/project/memory/MemoryControls.svelte'
+    import FaShareAlt from 'svelte-icons/fa/FaShareAlt.svelte'
+    import MemoryTab from '$cmp/specific/project/memory/MemoryTab.svelte'
+    import ShortcutEditor from '$cmp/specific/project/settings/ShortcutEditor.svelte'
+    import SizeSelector from '$cmp/specific/project/cpu/SizeSelector.svelte'
+    import { Size } from 's68k'
+    import { settingsStore } from '$stores/settingsStore'
+    import type monaco from 'monaco-editor'
+    import ToggleableDraggable from '$cmp/shared/draggable/DraggableContainer.svelte'
+    import CallStack from '$cmp/specific/project/user-tools/CallStack.svelte'
+    import MutationsViewer from '$cmp/specific/project/user-tools/MutationsRenderer.svelte'
+    import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
+    import FaDonate from 'svelte-icons/fa/FaDonate.svelte'
 
-	export let project: Project
+    export let project: Project
 
-	let editor: monaco.editor.IStandaloneCodeEditor
-	let running = false
-	let settingsVisible = false
-	let documentationVisible = false
-	let shortcutsVisible = false
-	let groupSize = Size.Word
-	$: errorStrings = $emulator.errors.join('\n')
-	$: info =
-		$emulator.terminated && $emulator.executionTime >= 0
-			? `Ran in ${formatTime($emulator.executionTime)}`
-			: ''
-	const dispatcher = createEventDispatcher<{
-		save: {
-			silent: boolean
-			data: Project
-		}
-		wantsToLeave: void
-		share: Project
-	}>()
-	const emulator = M68KEmulator(project.code || '')
-	const pressedKeys = new Map<String, boolean>()
-	const [debounced] = createDebouncer(3000)
+    let editor: monaco.editor.IStandaloneCodeEditor
+    let running = false
+    let settingsVisible = false
+    let documentationVisible = false
+    let shortcutsVisible = false
+    let groupSize = Size.Word
+    $: errorStrings = $emulator.errors.join('\n')
+    $: info =
+        $emulator.terminated && $emulator.executionTime >= 0
+            ? `Ran in ${formatTime($emulator.executionTime)}`
+            : ''
+    const dispatcher = createEventDispatcher<{
+        save: {
+            silent: boolean
+            data: Project
+        }
+        wantsToLeave: void
+        share: Project
+    }>()
+    const emulator = M68KEmulator(project.code || '')
+    const pressedKeys = new Map<String, boolean>()
+    const [debounced] = createDebouncer(3000)
 
-	function handleKeyDown(e: KeyboardEvent) {
-		pressedKeys.set(e.code, true)
-		const code = Array.from(pressedKeys.keys()).join('+')
-		const shortcut = shortcutsStore.get(code)
-		if (e.repeat && shortcut?.type !== ShortcutAction.Step) return
-		if (
-			//@ts-ignore ignore all events coming from the editor and input
-			e.target.tagName === 'INPUT' ||
-			//@ts-ignore ignore all events coming from the editor and input
-			e.composedPath().some((el) => el?.className?.includes('monaco-editor'))
-		) {
-			//@ts-ignore if escape, then blur the editor
-			if (e.code === 'Escape') e.target?.blur()
-			return
-		}
-		switch (shortcut?.type) {
-			case ShortcutAction.ToggleDocs: {
-				documentationVisible = !documentationVisible
-				break
-			}
-			case ShortcutAction.ToggleSettings: {
-				settingsVisible = !settingsVisible
-			}
-			case ShortcutAction.BuildCode: {
-				emulator.setCode(project.code)
-				emulator.compile($settingsStore.values.maxHistorySize.value)
-				break
-			}
-			case ShortcutAction.RunCode: {
-				if ($emulator.terminated || $emulator.interrupt !== undefined || !$emulator.canExecute)
-					break
-				emulator.run($settingsStore.values.instructionsLimit.value)
-				break
-			}
-			case ShortcutAction.SaveCode: {
-				dispatcher('save', {
-					silent: false,
-					data: project
-				})
-				break
-			}
-			case ShortcutAction.ClearExecution: {
-				emulator.clear()
-				break
-			}
-			case ShortcutAction.Step: {
-				if ($emulator.terminated || $emulator.interrupt !== undefined || !$emulator.canExecute)
-					break
-				emulator.step()
-				break
-			}
-			case ShortcutAction.Undo: {
-				if (
-					$emulator.terminated ||
-					$emulator.interrupt !== undefined ||
-					!$emulator.canExecute ||
-					!$emulator.canUndo
-				)
-					break
-				emulator.undo()
-				break
-			}
-		}
-	}
+    function handleKeyDown(e: KeyboardEvent) {
+        pressedKeys.set(e.code, true)
+        const code = Array.from(pressedKeys.keys()).join('+')
+        const shortcut = shortcutsStore.get(code)
+        if (e.repeat && shortcut?.type !== ShortcutAction.Step) return
+        if (
+            //@ts-ignore ignore all events coming from the editor and input
+            e.target.tagName === 'INPUT' ||
+            //@ts-ignore ignore all events coming from the editor and input
+            e.composedPath().some((el) => el?.className?.includes('monaco-editor'))
+        ) {
+            //@ts-ignore if escape, then blur the editor
+            if (e.code === 'Escape') e.target?.blur()
+            return
+        }
+        switch (shortcut?.type) {
+            case ShortcutAction.ToggleDocs: {
+                documentationVisible = !documentationVisible
+                break
+            }
+            case ShortcutAction.ToggleSettings: {
+                settingsVisible = !settingsVisible
+            }
+            case ShortcutAction.BuildCode: {
+                emulator.setCode(project.code)
+                emulator.compile($settingsStore.values.maxHistorySize.value)
+                break
+            }
+            case ShortcutAction.RunCode: {
+                if ($emulator.terminated || $emulator.interrupt !== undefined || !$emulator.canExecute)
+                    break
+                emulator.run($settingsStore.values.instructionsLimit.value)
+                break
+            }
+            case ShortcutAction.SaveCode: {
+                dispatcher('save', {
+                    silent: false,
+                    data: project
+                })
+                break
+            }
+            case ShortcutAction.ClearExecution: {
+                emulator.clear()
+                break
+            }
+            case ShortcutAction.Step: {
+                if ($emulator.terminated || $emulator.interrupt !== undefined || !$emulator.canExecute)
+                    break
+                emulator.step()
+                break
+            }
+            case ShortcutAction.Undo: {
+                if (
+                    $emulator.terminated ||
+                    $emulator.interrupt !== undefined ||
+                    !$emulator.canExecute ||
+                    !$emulator.canUndo
+                )
+                    break
+                emulator.undo()
+                break
+            }
+        }
+    }
 
-	function handleKeyUp(e: KeyboardEvent) {
-		pressedKeys.delete(e.code)
-	}
+    function handleKeyUp(e: KeyboardEvent) {
+        pressedKeys.delete(e.code)
+    }
 
-	function clearPressed() {
-		pressedKeys.clear()
-	}
+    function clearPressed() {
+        pressedKeys.clear()
+    }
 
-	onMount(() => {
-		window.addEventListener('keydown', handleKeyDown)
-		window.addEventListener('keyup', handleKeyUp)
-		window.addEventListener('blur', clearPressed)
-		return () => {
-			window.removeEventListener('keydown', handleKeyDown)
-			window.removeEventListener('keyup', handleKeyUp)
-			window.removeEventListener('blur', clearPressed)
-		}
-	})
+    onMount(() => {
+        window.addEventListener('keydown', handleKeyDown)
+        window.addEventListener('keyup', handleKeyUp)
+        window.addEventListener('blur', clearPressed)
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown)
+            window.removeEventListener('keyup', handleKeyUp)
+            window.removeEventListener('blur', clearPressed)
+            emulator.dispose()
+        }
+    })
 </script>
 
 <header class="project-header">

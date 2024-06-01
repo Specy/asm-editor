@@ -1,18 +1,20 @@
-import { get, writable } from "svelte/store"
+import { get, writable } from 'svelte/store'
 import {
-    InterpreterStatus,
-    Size,
-    type Interrupt,
-    type ParsedLine,
-    type Label,
+    ccrToFlagsArray,
     type ExecutionStep,
-    ccrToFlagsArray
+    Interpreter,
+    InterpreterStatus,
+    type Interrupt,
+    type Label,
+    type ParsedLine,
+    S68k,
+    Size
 } from 's68k'
-import { S68k, Interpreter } from "s68k"
-import { MEMORY_SIZE, PAGE_SIZE, PAGE_ELEMENTS_PER_ROW } from "$lib/Config"
-import { Prompt } from "$stores/promptStore"
-import { createDebouncer, getErrorMessage } from "../utils"
-import { settingsStore } from "$stores/settingsStore"
+import { MEMORY_SIZE, PAGE_ELEMENTS_PER_ROW, PAGE_SIZE } from '$lib/Config'
+import { Prompt } from '$stores/promptStore'
+import { createDebouncer, getErrorMessage } from '../utils'
+import { settingsStore } from '$stores/settingsStore'
+
 export type RegisterHex = [hi: string, lo: string]
 
 export type RegisterChunk = {
@@ -25,24 +27,29 @@ export type RegisterChunk = {
         value: number
     }
 }
+
 export class Register {
     value: number
     name: string
     prev: number
+
     constructor(name: string, value: number) {
         this.name = name
         this.value = value
         this.prev = value
     }
+
     setValue(value: number) {
         this.prev = this.value
         this.value = value
     }
+
     toHex() {
         return (this.value >>> 0).toString(16).padStart(8, '0')
     }
+
     toSizedGroups(size: Size): RegisterChunk[] {
-            const groupLength = size === Size.Byte ? 2 : size === Size.Word ? 4 : 8
+        const groupLength = size === Size.Byte ? 2 : size === Size.Word ? 4 : 8
         const hex = this.toHex()
         const prevHex = (this.prev >>> 0).toString(16).padStart(8, '0')
         const chunks: RegisterChunk[] = []
@@ -112,6 +119,7 @@ export type DiffedMemory = {
 }
 
 let currentTabId = 0
+
 function createMemoryTab(pageSize: number, name: string, address: number, rowSize: number): MemoryTab {
     return {
         name,
@@ -144,35 +152,33 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
         terminated: false,
         line: -1,
         code: baseCode,
-        statusRegister: ["X", "N", "Z", "V", "C"].map(n => ({ name: n, value: 0, prev: 0 })),
+        statusRegister: ['X', 'N', 'Z', 'V', 'C'].map(n => ({ name: n, value: 0, prev: 0 })),
         compilerErrors: [],
         callStack: [],
         errors: [],
         sp: 0,
         latestSteps: [],
-        stdOut: "",
+        stdOut: '',
         executionTime: -1,
         canUndo: false,
         canExecute: false,
         breakpoints: [],
         memory: {
-            global: createMemoryTab(options.globalPageSize, "Global", 0x1000, options.globalPageElementsPerRow),
+            global: createMemoryTab(options.globalPageSize, 'Global', 0x1000, options.globalPageElementsPerRow),
             tabs: [
-                createMemoryTab(8 * 4, "Stack", 0x2000, 4),
+                createMemoryTab(8 * 4, 'Stack', 0x2000, 4)
             ]
         },
         interrupt: undefined
     })
-    let current = get({ subscribe })
-    let settings = get(settingsStore)
-    settingsStore.subscribe(s => settings = s)
-    subscribe(s => current = s)
     let s68k: S68k | null = null
     let interpreter: Interpreter | null = null
     const [debouncer, clearDebouncer] = createDebouncer(500)
+
     function compile(historySize: number, codeOverride?: string): Promise<void> {
         return new Promise((res, rej) => {
             try {
+                const current = get({ subscribe })
                 clear()
                 s68k = new S68k(codeOverride ?? current.code)
                 const errors = s68k.semanticCheck().map(e => {
@@ -190,9 +196,9 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
                 }
                 interpreter = s68k.createInterpreter(MEMORY_SIZE, {
                     history_size: historySize,
-                    keep_history: historySize > 0,
+                    keep_history: historySize > 0
                 })
-                const stackTab = current.memory.tabs.find(e => e.name === "Stack")
+                const stackTab = current.memory.tabs.find(e => e.name === 'Stack')
                 if (stackTab) stackTab.address = interpreter.getSp() - stackTab.pageSize
                 const next = interpreter.getNextInstruction()
                 update(s => ({
@@ -220,9 +226,11 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
             return s
         })
     }
+
     function resetSelectedLine() {
         update(s => ({ ...s, line: -1 }))
     }
+
     function semanticCheck(code?: string) {
         const currentCode = get({ subscribe }).code
         code = code ?? currentCode
@@ -248,6 +256,8 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
     }
 
     function clear() {
+        const current = get({ subscribe })
+
         setRegisters(new Array(registerName.length).fill(0))
         updateStatusRegisters(new Array(5).fill(0))
         if (current.interrupt) Prompt.cancel()
@@ -256,7 +266,7 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
                 ...state,
                 terminated: false,
                 line: -1,
-                stdOut: "",
+                stdOut: '',
                 code: state.code,
                 interrupt: undefined,
                 errors: [],
@@ -267,11 +277,11 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
                 callStack: [],
                 compilerErrors: [],
                 memory: {
-                    global: createMemoryTab(options.globalPageSize, "Global", 0x1000, options.globalPageElementsPerRow),
+                    global: createMemoryTab(options.globalPageSize, 'Global', 0x1000, options.globalPageElementsPerRow),
                     tabs: [
-                        createMemoryTab(8 * 4, "Stack", 0x2000, 4),
+                        createMemoryTab(8 * 4, 'Stack', 0x2000, 4)
                     ]
-                },
+                }
             }
         })
     }
@@ -283,12 +293,17 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
     }
 
     function scrollStackTab() {
+        const settings = get(settingsStore)
+        const current = get({ subscribe })
+
         if (!settings.values.autoScrollStackTab.value || !interpreter) return
-        const stackTab = current.memory.tabs.find(e => e.name === "Stack")
+        const stackTab = current.memory.tabs.find(e => e.name === 'Stack')
         const sp = interpreter.getSp()
         if (stackTab) stackTab.address = sp - (sp % stackTab.pageSize)
     }
+
     function updateStatusRegisters(override?: number[]) {
+        const settings = get(settingsStore)
 
         const flags = (override ?? interpreter?.getFlagsAsArray().map(f => f ? 1 : 0) ?? new Array(5).fill(0)).reverse()
         if (settings.values.maxVisibleHistoryModifications.value > 0 && interpreter && !override) {
@@ -314,10 +329,11 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
                     ...s,
                     value: flags[i] ?? -1,
                     prev: flags[i] ?? -1
-                })),
+                }))
             }
         })
     }
+
     function setRegisters(override?: number[]) {
         if (!interpreter && !override) {
             override = new Array(registerName.length).fill(0)
@@ -327,6 +343,7 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
         })
         update(d => ({ ...d, registers }))
     }
+
     function updateRegisters() {
         update(data => {
             if (data.registers.length === 0) return data
@@ -338,6 +355,7 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
             return data
         })
     }
+
     function updateMemory() {
         if (!interpreter) return
         update(data => {
@@ -354,7 +372,10 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
             return data
         })
     }
+
     function updateData() {
+        const settings = get(settingsStore)
+
         update(data => {
             data.terminated = interpreter.hasReachedBottom()
             data.callStack = interpreter.getCallStack()
@@ -362,6 +383,13 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
 
             return data
         })
+    }
+
+    function dispose() {
+        clearDebouncer()
+        interpreter = null
+        s68k = null
+        clear()
     }
 
     function addError(error: string) {
@@ -374,7 +402,7 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
     async function step() {
         let lastLine = -1
         try {
-            if (!interpreter) throw new Error("Interpreter not initialized")
+            if (!interpreter) throw new Error('Interpreter not initialized')
             lastLine = interpreter.getCurrentLineIndex()
             interpreter.step()
             const ins = interpreter.getNextInstruction()
@@ -404,6 +432,7 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
         scrollStackTab()
         return interpreter.getStatus() != InterpreterStatus.Running
     }
+
     function undo(amount = 1) {
         try {
             for (let i = 0; i < amount && interpreter?.canUndo(); i++) {
@@ -413,7 +442,7 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
             update(d => ({
                 ...d,
                 line: instruction?.parsed_line.line_index ?? -1,
-                canUndo: interpreter?.canUndo() ?? false,
+                canUndo: interpreter?.canUndo() ?? false
             }))
             updateRegisters()
             updateMemory()
@@ -427,63 +456,69 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
             throw e
         }
     }
+
     async function handleInterrupt(interrupt: Interrupt | null) {
-        if (!interrupt || !interpreter) throw new Error("Expected interrupt")
+        if (!interrupt || !interpreter) throw new Error('Expected interrupt')
         update(d => ({ ...d, interrupt }))
         const { type } = interrupt
         switch (type) {
-            case "DisplayStringWithCRLF": {
+            case 'DisplayStringWithCRLF': {
                 update(d => ({ ...d, stdOut: `${d.stdOut}${interrupt.value}\n` }))
                 interpreter.answerInterrupt({ type })
                 break
             }
-            case "DisplayStringWithoutCRLF":
-            case "DisplayChar":
-            case "DisplayNumber": {
+            case 'DisplayStringWithoutCRLF':
+            case 'DisplayChar':
+            case 'DisplayNumber': {
                 update(d => ({ ...d, stdOut: `${d.stdOut}${interrupt.value}` }))
                 interpreter.answerInterrupt({ type })
                 break
             }
-            case "ReadChar": {
-                const char = (await Prompt.askText("Enter a character") as string)[0]
-                if (!char) throw new Error("Expected a character")
+            case 'ReadChar': {
+                const char = (await Prompt.askText('Enter a character') as string)[0]
+                if (!char) throw new Error(`Expected a character, got "${char}"`)
                 interpreter.answerInterrupt({ type, value: char })
                 break
             }
-            case "ReadNumber": {
-                const number = Number(await Prompt.askText("Enter a number"))
-                if (Number.isNaN(number)) throw new Error("Invalid number")
+            case 'ReadNumber': {
+                const number = Number(await Prompt.askText('Enter a number'))
+                if (Number.isNaN(number)) throw new Error(`Expected a number, got "${number}"`)
                 interpreter.answerInterrupt({ type, value: number })
                 break
             }
-            case "ReadKeyboardString": {
-                const string = await Prompt.askText("Enter a string") as string
+            case 'ReadKeyboardString': {
+                const string = await Prompt.askText('Enter a string') as string
                 interpreter.answerInterrupt({ type, value: string })
                 break
             }
-            case "GetTime": {
+            case 'GetTime': {
                 interpreter.answerInterrupt({ type, value: Math.round(Date.now() / 1000) }) //unix seconds
                 break
             }
-            case "Terminate": {
+            case 'Terminate': {
                 interpreter.answerInterrupt({ type })
                 break
             }
+            default:
+                throw new Error(`Unknown interrupt type "${type}"`)
         }
         update(data => {
             data.interrupt = undefined
             return data
         })
     }
+
     async function run(haltLimit: number) {
         if (haltLimit <= 0) haltLimit = Number.MAX_SAFE_INTEGER
         const start = performance.now()
         const breakpoints = new Uint32Array(get({ subscribe }).breakpoints)
         const hasBreakpoints = breakpoints.length > 0
         try {
-            if (!interpreter) throw new Error("Interpreter not initialized")
+            if (!interpreter) throw new Error('Interpreter not initialized')
             let status = interpreter.getStatus()
             while (!interpreter.hasTerminated()) {
+                const current = get({ subscribe })
+
                 if (!hasBreakpoints) {
                     interpreter.runWithLimit(haltLimit)
                     status = interpreter.getStatus()
@@ -505,7 +540,7 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
                             data.terminated = true
                             data.line = ins?.parsed_line?.line_index ?? -1
                             data.canUndo = false
-                            data.errors.push("Program terminated with errors")
+                            data.errors.push('Program terminated with errors')
                             return data
                         })
                         break
@@ -545,12 +580,15 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
             let line = -1
             try {
                 line = interpreter?.getLastInstruction()?.parsed_line.line_index ?? -1
-            } catch (e) { console.error(e) }
+            } catch (e) {
+                console.error(e)
+            }
             addError(getErrorMessage(e, line + 1))
             update(d => ({ ...d, terminated: true, line }))
         }
         return InterpreterStatus.TerminatedWithException
     }
+
     function setGlobalMemoryAddress(address: number) {
         update(data => {
             data.memory.global.address = address
@@ -559,6 +597,7 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
             return data
         })
     }
+
     function setTabMemoryAddress(address: number, tabId: number) {
         update(data => {
             const tab = data.memory.tabs.find(e => e.id == tabId)
@@ -583,6 +622,7 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
         setTabMemoryAddress,
         toggleBreakpoint,
         undo,
-        resetSelectedLine
+        resetSelectedLine,
+        dispose
     }
 }

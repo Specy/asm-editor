@@ -12,6 +12,7 @@
     import StatusCodesVisualiser from '$cmp/specific/project/cpu/StatusCodesRenderer.svelte'
     import RegistersVisualiser from '$cmp/specific/project/cpu/RegistersRenderer.svelte'
     import SizeSelector from '$cmp/specific/project/cpu/SizeSelector.svelte'
+    import { onMount } from 'svelte'
 
     let editor: monaco.editor.IStandaloneCodeEditor
     let running = false
@@ -23,6 +24,12 @@
     const emulator = M68KEmulator(code, {
         globalPageElementsPerRow: 4,
         globalPageSize: 4 * 8
+    })
+
+    onMount(() => {
+        return () => {
+            emulator.dispose()
+        }
     })
     $: if (instructionKey) {
         emulator.clear()
@@ -201,12 +208,12 @@
   @media (max-width: 720px) {
     .data-registers-wrapper {
       flex: 1;
-			max-width: unset;
-			width: unset;
+      max-width: unset;
+      width: unset;
     }
-		.data-cpu-status-wrapper{
-			width: unset;
-		}
+    .data-cpu-status-wrapper {
+      width: unset;
+    }
   }
 
   .editor-border {

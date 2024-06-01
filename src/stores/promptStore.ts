@@ -5,6 +5,7 @@ export enum PromptType{
 }
 type Prompt = {
     promise: Promise<string | boolean> | null
+    id: number
     question: string
     placeholder: string
     type: PromptType
@@ -15,6 +16,7 @@ function createPromptStore() {
     const { subscribe, set, update } = writable<Prompt>({
         promise: null,
         question: '',
+        id: 0,
         placeholder: '',
         type: PromptType.Text,
         resolve: null,
@@ -25,7 +27,7 @@ function createPromptStore() {
     function ask(question: string, type: PromptType, cancellable = true, placeholder = ""): Promise<string | boolean> {
         current.resolve?.(null)
         const promise = new Promise<string | boolean>((resolve) => {
-            set({ promise: null, question, placeholder, type, resolve, cancellable })
+            set({ promise: null, question, placeholder, type, resolve, cancellable, id: current.id + 1})
         })
         update(s => {
             s.promise = promise

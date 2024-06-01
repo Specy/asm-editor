@@ -1,15 +1,17 @@
 <script lang="ts">
-	import { Prompt, PromptType } from '$stores/promptStore'
-	import { fade } from 'svelte/transition'
+    import { Prompt, PromptType } from '$stores/promptStore'
+    import { fade } from 'svelte/transition'
 
-	import Button from '$cmp/shared/button/Button.svelte'
-	import Input from '$cmp/shared/input/Input.svelte'
-	let input: HTMLInputElement
-	let value = ''
-	$: if (!$Prompt.promise) {
-		value = ''
-		if (input) input.value = ''
-	}
+    import Button from '$cmp/shared/button/Button.svelte'
+    import Input from '$cmp/shared/input/Input.svelte'
+
+    let input: HTMLInputElement
+    let value = ''
+    let currentId = 0
+    $: if ($Prompt.id !== currentId) {
+        currentId = $Prompt.id
+        value = ''
+    }
 </script>
 
 <slot />
@@ -50,45 +52,48 @@
 {/if}
 
 <style lang="scss">
-	.prompt-wrapper {
-		display: flex;
-		position: fixed;
-		top: 1rem;
-		overflow: hidden;
-		max-height: 10rem;
-		width: 20rem;
-		color: var(--secondary-text);
-		backdrop-filter: blur(3px);
-		border-radius: 0.5rem;
-		background-color: rgba(var(--RGB-secondary), 0.8);
-		box-shadow: 0 3px 10px rgb(0 0 0 / 20%);
-		z-index: 20;
-		padding: 0.5rem;
-		transition: transform 0.3s ease-out;
-		flex-direction: column;
-		animation: slideIn 0.25s ease-out;
-		animation-fill-mode: forwards;
-		transform: translateX(calc(50vw - 50%));
-	}
-	@keyframes slideIn {
-		from {
-			transform: translateY(-80%) translateX(calc(50vw - 50%)) scale(0.95);
-			opacity: 0;
-		}
-		to {
-			transform: translateY(0) translateX(calc(50vw - 50%)) scale(1);
-			opacity: 1;
-		}
-	}
-	.prompt-row {
-		display: flex;
-		margin-top: 0.5rem;
-		justify-content: space-between;
-	}
-	.prompt-text {
-		padding: 0.3rem;
-		font-size: 0.9rem;
-		display: flex;
-		margin-top: auto;
-	}
+  .prompt-wrapper {
+    display: flex;
+    position: fixed;
+    top: 1rem;
+    overflow: hidden;
+    max-height: 10rem;
+    width: 20rem;
+    color: var(--secondary-text);
+    backdrop-filter: blur(3px);
+    border-radius: 0.5rem;
+    background-color: rgba(var(--RGB-secondary), 0.8);
+    box-shadow: 0 3px 10px rgb(0 0 0 / 20%);
+    z-index: 20;
+    padding: 0.5rem;
+    transition: transform 0.3s ease-out;
+    flex-direction: column;
+    animation: slideIn 0.25s ease-out;
+    animation-fill-mode: forwards;
+    transform: translateX(calc(50vw - 50%));
+  }
+
+  @keyframes slideIn {
+    from {
+      transform: translateY(-80%) translateX(calc(50vw - 50%)) scale(0.95);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0) translateX(calc(50vw - 50%)) scale(1);
+      opacity: 1;
+    }
+  }
+
+  .prompt-row {
+    display: flex;
+    margin-top: 0.5rem;
+    justify-content: space-between;
+  }
+
+  .prompt-text {
+    padding: 0.3rem;
+    font-size: 0.9rem;
+    display: flex;
+    margin-top: auto;
+  }
 </style>
