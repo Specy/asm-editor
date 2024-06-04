@@ -4,7 +4,7 @@ A webapp made with [sveltekit](https://kit.svelte.dev/) and [rust](https://www.r
 Uses monaco-editor for the editor, and my [WASM M68K interpreter](https://github.com/Specy/s68k) to run the code.
 
 Mainly made to help people approaching assembly by providing the tools necessary to write and debug code more easily.
-![localImage](https://asm-editor.specy.app/images/ASM-editor.png)
+![localImage](https://asm-editor.specy.app/images/ASM-editor.webp)
 
 ## Features recap
 * Simple code completition and full syntax highlighting

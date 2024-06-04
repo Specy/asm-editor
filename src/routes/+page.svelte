@@ -36,7 +36,7 @@
 <Page>
 	<div class="main">
 		<div class="content row">
-			<div class="preview-image" />
+			<img src="/images/ASM-editor.webp" alt="ASM editor" class="preview-image" />
 			<div class="presentation">
 				<div class="welcome-title" class:textShadow={textShadowPrimary}>
 					The all in one web editor for M68K
@@ -258,7 +258,6 @@
     top: 0;
     left: 0;
     position: absolute;
-    background-image: url('/images/ASM-editor.webp');
     background-repeat: no-repeat;
     background-position: center;
     background-size: cover;
