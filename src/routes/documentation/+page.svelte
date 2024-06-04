@@ -1,6 +1,5 @@
 <script lang="ts">
 	import Page from '$cmp/shared/layout/Page.svelte'
-	import Navbar from '$cmp/shared/layout/Navbar.svelte'
 	import NavigationLinkButton from '$cmp/shared/button/NavigationLinkButton.svelte'
 	import { capitalize } from '$lib/utils'
   import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
@@ -24,7 +23,7 @@
 <Page cropped contentStyle="margin-top: 4rem; gap: 1rem; padding: 1rem">
 	<h1>Languages</h1>
 	<div class="langs">
-		{#each ['m68k'] as lang}
+		{#each langs as lang}
 			<NavigationLinkButton href="/documentation/{lang}">
 				<div>
 					{capitalize(lang)}
@@ -45,13 +44,4 @@
 		font-size: 1.8rem;
 		font-weight: normal;
 	}
-	.content {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		padding: 0.8rem;
-		margin-top: 1rem;
-		padding-top: 4rem;
-	}
-
 </style>

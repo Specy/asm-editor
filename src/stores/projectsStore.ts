@@ -1,5 +1,5 @@
 import { browser } from "$app/environment"
-import { db } from "$lib/db"
+import { db } from "$lib/storage/db"
 import { Project } from "$lib/Project"
 import { get, writable } from "svelte/store"
 import type { Writable } from "svelte/store"

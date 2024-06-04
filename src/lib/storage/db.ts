@@ -1,6 +1,6 @@
 import Dexie from 'dexie'
 import type { Table } from 'dexie'
-import { Project, type ProjectData } from './Project'
+import { Project, type ProjectData } from '../Project'
 
 function id(length = 7) {
     let result = '';

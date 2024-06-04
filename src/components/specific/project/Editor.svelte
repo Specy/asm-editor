@@ -2,10 +2,10 @@
 	import { createEventDispatcher, onDestroy, onMount } from 'svelte'
 	import type monaco from 'monaco-editor'
 	import type { AvailableLanguages } from '../../../lib/Project'
-	import { Monaco } from '../../../lib/Monaco'
-	import type { MonacoType } from '../../../lib/Monaco'
+	import { Monaco } from '$lib/monaco/Monaco'
+	import type { MonacoType } from '$lib/monaco/Monaco'
 	import type { MonacoError } from '../../../lib/languages/M68KEmulator'
-	import { generateTheme } from '../../../lib/editorTheme'
+	import { generateTheme } from '$lib/monaco/editorTheme'
 	export let disabled = false
 	export let code: string
 	export let highlightedLine: number

@@ -17,6 +17,7 @@
     import { Prompt } from '$stores/promptStore'
     import { goto } from '$app/navigation'
     import Page from '$cmp/shared/layout/Page.svelte'
+    import Row from '$cmp/shared/layout/Row.svelte'
 
     const { projects } = ProjectStore
 
@@ -68,7 +69,6 @@
     }
 
     onMount(() => {
-        //hasFileHandleSupport = !!window?.showOpenFilePicker
         async function run() {
 
             await ProjectStore.load()
@@ -123,7 +123,7 @@
 	<div class="project-display">
 		<div class="content">
 			<div class="top-row">
-				<div class="row" style="align-items: center;">
+				<Row align="center">
 					<a href="/" class="go-back" title="Go to the main page">
 						<Button hasIcon cssVar="primary" style="padding: 0.4rem" title="Go to the main page">
 							<Icon size={2}>
@@ -132,7 +132,7 @@
 						</Button>
 					</a>
 					<Title style="margin: 0">Your projects</Title>
-				</div>
+				</Row>
 				<div class="row top-row-buttons">
 					{#if hasFileHandleSupport}
 						<!-- Ignored for now as browser asks for permission -->

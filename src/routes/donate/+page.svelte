@@ -7,6 +7,7 @@
 	import Title from '$cmp/shared/layout/Header.svelte'
 	import { afterNavigate } from '$app/navigation'
 	import Page from '$cmp/shared/layout/Page.svelte'
+  import Row from '$cmp/shared/layout/Row.svelte'
 
 	let previousPage: string = '/projects'
 	afterNavigate(({ from }) => {
@@ -20,9 +21,10 @@
 	<meta property="og:description" content="Donate and support me" />
 	<meta property="og:title" content="Donate" />
 </svelte:head>
+
 <Page cropped contentStyle="max-width: 40rem; font-size: 1.1rem; line-height: 1.5rem; padding: 1rem;">
 	<div class="top-row">
-		<div class="row" style="align-items: center;">
+		<Row align="center">
 			<a href={previousPage} class="go-back" title="Go to previous page">
 				<Button hasIcon cssVar="primary" style="padding: 0.4rem" title="Go to previous page">
 					<Icon size={2}>
@@ -31,7 +33,7 @@
 				</Button>
 			</a>
 			<Title style="margin: 0">Donate</Title>
-		</div>
+		</Row>
 	</div>
 	<div>
 		Thanks for using my webapp! If you want to help me continue developing new apps and features,

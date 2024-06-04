@@ -3,6 +3,7 @@
 	import M68KConditionCodes from '$cmp/documentation/m68k/M68KConditionCodes.svelte'
 	import Page from '$cmp/shared/layout/Page.svelte'
 	import { branchConditionsFlags } from '$lib/languages/M68K-documentation'
+  import Column from '$cmp/shared/layout/Column.svelte'
 	const flags = Array.from(branchConditionsFlags.entries())
 </script>
 
@@ -41,20 +42,16 @@
 		<br />C is the carry flag, when an operation causes a carry, like an addition or a shift, it is
 		set to the value of the carry.
 	</div>
-	<div class="column cc">
+	<Column gap="0.4rem" style="margin-left: 1rem">
 		{#each flags as cc}
 			<DocsOperand name={cc[0]} content={cc[1]} style="width: fit-content"/>
 		{/each}
-	</div>
+	</Column>
 </Page>
 
 <style>
 	.content {
 		padding: 1rem;
-	}
-	.cc {
-		gap: 0.4rem;
-		margin-left: 1rem;	
 	}
 	a {
 		color: var(--accent);

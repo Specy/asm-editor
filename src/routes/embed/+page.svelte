@@ -6,10 +6,11 @@
     import lzstring from 'lz-string'
     import { page } from '$app/stores'
     import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
+    import Column from '$cmp/shared/layout/Column.svelte'
 
     type Settings = {
         showMemory: boolean
-			language: AvailableLanguages
+				language: AvailableLanguages
     }
 
     let inIframe = true
@@ -71,22 +72,21 @@
 {/if}
 <Page contentStyle={!inIframe ? "padding-top: 3.5rem" : ""}>
 	{#if !inIframe}
-		<div class="column" style="gap: 1rem; padding: 1rem;">
+		<Column gap="1rem" padding="1rem">
 			<p>
 				Write some assembly code, below the editor there will be generated an embed URL and embed html code that you can
 				put in your website
 			</p>
-		</div>
+		</Column>
 	{/if}
 
-	<div class="column" style={inIframe ? "padding: 0.5rem" : "padding: 0.5rem; flex:1"}>
-
+	<Column style={inIframe ? "padding: 0.5rem" : "padding: 0.5rem; flex:1"}>
 		<InteractiveInstructionEditor
 			bind:code
 			showMemory={settings.showMemory}
 			instructionKey="none"
 		/>
-	</div>
+	</Column>
 
 	{#if !inIframe}
 		<div class="share-container">

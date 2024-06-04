@@ -3,7 +3,7 @@
     import { M68KEmulator } from '$lib/languages/M68KEmulator'
     import { toast } from '$stores/toastStore'
     import Controls from '$cmp/specific/project/Controls.svelte'
-    import { clamp, getErrorMessage } from '$lib/utils'
+    import { clamp } from '$lib/utils'
     import { settingsStore } from '$stores/settingsStore'
     import type monaco from 'monaco-editor'
     import MemoryControls from '$cmp/specific/project/memory/MemoryControls.svelte'
@@ -13,6 +13,7 @@
     import RegistersVisualiser from '$cmp/specific/project/cpu/RegistersRenderer.svelte'
     import SizeSelector from '$cmp/specific/project/cpu/SizeSelector.svelte'
     import { onMount } from 'svelte'
+    import { getM68kErrorMessage } from '$lib/languages/M68kUtils'
 
     let editor: monaco.editor.IStandaloneCodeEditor
     let running = false
@@ -78,7 +79,7 @@
 					} catch (e) {
 						console.error(e)
 						running = false
-						toast.error('Error executing code. ' + getErrorMessage(e))
+						toast.error('Error executing code. ' + getM68kErrorMessage(e))
 					}
 				}, 50)
 			}}
@@ -89,7 +90,7 @@
 					await emulator.compile($settingsStore.values.maxHistorySize.value)
 				} catch (e) {
 					console.error(e)
-					toast.error('Error compiling code. ' + getErrorMessage(e))
+					toast.error('Error compiling code. ' + getM68kErrorMessage(e))
 				}
 			}}
 			on:step={() => {
@@ -97,7 +98,7 @@
 					emulator.step()
 				} catch (e) {
 					console.error(e)
-					toast.error('Error executing code. ' + getErrorMessage(e))
+					toast.error('Error executing code. ' + getM68kErrorMessage(e))
 				}
 			}}
 			on:undo={() => {
@@ -105,7 +106,7 @@
 					emulator.undo()
 				} catch (e) {
 					console.error(e)
-					toast.error('Error executing undo ' + getErrorMessage(e))
+					toast.error('Error executing undo ' + getM68kErrorMessage(e))
 				}
 			}}
 			on:stop={() => {
@@ -235,6 +236,7 @@
       left: 0;
       width: 100%;
       height: 100%;
+      background-size: 300% 300%;
       background: linear-gradient(
                       60deg,
                       hsl(224, 85%, 66%),
@@ -245,9 +247,7 @@
                       hsl(89, 85%, 66%),
                       hsl(134, 85%, 66%),
                       hsl(179, 85%, 66%)
-      );
-      background-size: 300% 300%;
-      background-position: 0 50%;
+      ) 0 50%;
       border-radius: 0.5rem;
       animation: moveGradient 5s alternate infinite, appear 0.3s ease-in;
     }

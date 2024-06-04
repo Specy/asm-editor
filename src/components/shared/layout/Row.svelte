@@ -3,11 +3,13 @@
     import type { ThemeKeys } from '$stores/themeStore'
 
     export let justify: Justify | undefined = undefined
+		export let flex1: boolean | undefined
     export let align: Justify | undefined = undefined
     export let gap: string | undefined = undefined
     export let padding: string | undefined = undefined
     export let background: ThemeKeys | undefined = undefined
     export let style: string | undefined = undefined
+				export let margin: string | undefined
 </script>
 
 <div
@@ -19,6 +21,8 @@
     {padding ? `padding: ${padding};` : ''}
     {background ? `background-color: var(--${background}); color: var(--${background}-text);` : ''}
     {style}
+    {flex1 ? 'flex:1;' : ''}
+    {margin ? `margin: ${margin};` : ''}
     "
 >
 	<slot />

@@ -10,6 +10,7 @@
 	import DocsOperand from '$cmp/documentation/DocsOperand.svelte'
 	import { createMarkdownWithOptions } from '$lib/markdown'
 	import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
+  import Column from '$cmp/shared/layout/Column.svelte'
 	export let data: PageData
 	let ins = data.props.instruction
 	$: ins = data.props.instruction
@@ -21,7 +22,6 @@
 		await imp?.__tla
 		component = imp?.default
 	})
-	let code = ins.interactiveExample?.code ?? '; no interactive instruction available'
 	$: code = ins.interactiveExample?.code ?? '; no interactive instruction available'
 </script>
 
@@ -38,11 +38,11 @@
 
 <Page contentStyle="padding: 1rem; gap: 1rem;">
 	<div class="instruction-info" style="flex: 1;">
-		<div class="column">
+		<Column>
 			<div class="instruction-name">
 				{ins.name}
 			</div>
-			<div class="column" style="margin-left: 0.8rem;">
+			<Column style="margin-left: 0.8rem;">
 				{#if ins.sizes.length}
 					<h3>Sizes</h3>
 					<div style="margin: 0.8rem">
@@ -55,13 +55,13 @@
 						{fromSizeToString(ins.defaultSize, true)}
 					</div>
 				{/if}
-			</div>
-		</div>
+			</Column>
+		</Column>
 
-		<div class="column" style="gap: 1rem;">
+		<Column gap="1rem">
 			<article class="column">
 				<h3>Operands</h3>
-				<div class="column" style="gap: 0.5rem; margin: 0.8rem;">
+				<Column gap="0.5rem" margin='0.8rem'>
 					{#if ins.args.length}
 						{#each ins.args as arg, i}
 							<DocsOperand
@@ -71,12 +71,12 @@
 							/>
 						{/each}
 					{/if}
-				</div>
+				</Column>
 			</article>
 			<article class="description">
 				<MarkdownRenderer source={createMarkdownWithOptions(ins.description, {})} />
 			</article>
-		</div>
+		</Column>
 	</div>
 	{#if component}
 		<svelte:component this={component} bind:code instructionKey={ins.name}/>

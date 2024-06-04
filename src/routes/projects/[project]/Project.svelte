@@ -13,7 +13,7 @@
     import { toast } from '$stores/toastStore'
     import Controls from '$cmp/specific/project/Controls.svelte'
     import StdOut from '$cmp/specific/project/user-tools/StdOutRenderer.svelte'
-    import { clamp, createDebouncer, formatTime, getErrorMessage } from '$lib/utils'
+    import { clamp, createDebouncer, formatTime } from '$lib/utils'
     import { MEMORY_SIZE } from '$lib/Config'
     import Settings from '$cmp/specific/project/settings/Settings.svelte'
     import M68KDocumentation from '$cmp/specific/project/FloatingM68KDocumentation.svelte'
@@ -34,6 +34,8 @@
     import MutationsViewer from '$cmp/specific/project/user-tools/MutationsRenderer.svelte'
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
     import FaDonate from 'svelte-icons/fa/FaDonate.svelte'
+    import { getM68kErrorMessage } from '$lib/languages/M68kUtils'
+    import Row from '$cmp/shared/layout/Row.svelte'
 
     export let project: Project
 
@@ -44,10 +46,9 @@
     let shortcutsVisible = false
     let groupSize = Size.Word
     $: errorStrings = $emulator.errors.join('\n')
-    $: info =
-        $emulator.terminated && $emulator.executionTime >= 0
-            ? `Ran in ${formatTime($emulator.executionTime)}`
-            : ''
+    $: info = ($emulator.terminated && $emulator.executionTime >= 0)
+        ? `Ran in ${formatTime($emulator.executionTime)}`
+        : ''
     const dispatcher = createEventDispatcher<{
         save: {
             silent: boolean
@@ -144,6 +145,25 @@
             emulator.dispose()
         }
     })
+
+    function toggleWindow(windowName: 'shortcuts' | 'documentation' | 'settings') {
+
+        if (windowName === 'shortcuts') {
+            shortcutsVisible = !shortcutsVisible
+            documentationVisible = false
+            settingsVisible = false
+        } else if (windowName === 'documentation') {
+            shortcutsVisible = false
+            documentationVisible = !documentationVisible
+            settingsVisible = false
+        } else if (windowName === 'settings') {
+            shortcutsVisible = false
+            documentationVisible = false
+            settingsVisible = !settingsVisible
+        }
+    }
+
+
 </script>
 
 <header class="project-header">
@@ -160,7 +180,7 @@
 		</Icon>
 	</a>
 	<h1 style="font-size: 1.6rem; margin-left: 0.4rem" class="ellipsis">{project.name}</h1>
-	<div class="row" style="gap: 0.5rem; margin-left: auto;">
+	<Row gap="0.5rem" style="margin-left: auto;">
 		<Button
 			on:click={() => dispatcher('share', project)}
 			hasIcon
@@ -182,11 +202,7 @@
 			</Icon>
 		</ButtonLink>
 		<Button
-			on:click={() => {
-				shortcutsVisible = !shortcutsVisible
-				documentationVisible = false
-				settingsVisible = false
-			}}
+			on:click={() => toggleWindow('shortcuts')}
 			hasIcon
 			cssVar="accent2"
 			style="padding:0; width:2.2rem; height:2.2rem"
@@ -196,11 +212,7 @@
 			</Icon>
 		</Button>
 		<Button
-			on:click={() => {
-				documentationVisible = !documentationVisible
-				settingsVisible = false
-				shortcutsVisible = false
-			}}
+			on:click={() => toggleWindow('documentation')}
 			hasIcon
 			cssVar="accent2"
 			style="padding:0; width:2.2rem; height:2.2rem"
@@ -210,11 +222,7 @@
 			</Icon>
 		</Button>
 		<Button
-			on:click={() => {
-				settingsVisible = !settingsVisible
-				documentationVisible = false
-				shortcutsVisible = false
-			}}
+			on:click={() => toggleWindow('settings')}
 			hasIcon
 			cssVar="accent2"
 			style="padding:0; width:2.2rem; height:2.2rem"
@@ -239,7 +247,7 @@
 				<FaSave />
 			</Icon>
 		</Button>
-	</div>
+	</Row>
 	<ShortcutEditor bind:visible={shortcutsVisible} />
 	<Settings bind:visible={settingsVisible} />
 	<M68KDocumentation bind:visible={documentationVisible} />
@@ -332,7 +340,7 @@
 					} catch (e) {
 						console.error(e)
 						running = false
-						toast.error('Error executing code. ' + getErrorMessage(e))
+						toast.error('Error executing code. ' + getM68kErrorMessage(e))
 					}
 				}, 50)
 			}}
@@ -343,7 +351,7 @@
 					await emulator.compile($settingsStore.values.maxHistorySize.value, project.code)
 				} catch (e) {
 					console.error(e)
-					toast.error('Error compiling code. ' + getErrorMessage(e))
+					toast.error('Error compiling code. ' + getM68kErrorMessage(e))
 				}
 			}}
 			on:step={() => {
@@ -351,7 +359,7 @@
 					emulator.step()
 				} catch (e) {
 					console.error(e)
-					toast.error('Error executing code. ' + getErrorMessage(e))
+					toast.error('Error executing code. ' + getM68kErrorMessage(e))
 				}
 			}}
 			on:undo={() => {
@@ -359,7 +367,7 @@
 					emulator.undo()
 				} catch (e) {
 					console.error(e)
-					toast.error('Error executing undo ' + getErrorMessage(e))
+					toast.error('Error executing undo ' + getM68kErrorMessage(e))
 				}
 			}}
 			on:stop={() => {

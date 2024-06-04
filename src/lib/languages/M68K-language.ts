@@ -1,4 +1,4 @@
-import type { MonacoType } from "$lib/Monaco"
+import type { MonacoType } from "$lib/monaco/Monaco"
 import { S68k } from "s68k"
 import { AddressingMode, branchConditions, fromSizesToString, fromSizeToString, getAddressingModeNames, getInstructionDocumentation, setConditions } from "./M68K-documentation"
 
@@ -275,7 +275,7 @@ export function createM68KCompletition(monaco: MonacoType) {
 				suggestions
 			}
 		},
-		resolveCompletionItem(item, token) {
+		resolveCompletionItem(item) {
 			return {
 				...CompletitionMap[item.label],
 				...item,
@@ -290,7 +290,7 @@ export function createM68KCompletition(monaco: MonacoType) {
 
 export function createM68kHoverProvider(monaco: MonacoType) {
 	return {
-		provideHover: (model, position, token) => {
+		provideHover: (model, position) => {
 			const range = new monaco.Range(
 				position.lineNumber,
 				1,

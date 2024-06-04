@@ -1,5 +1,3 @@
-import type { RuntimeError } from "s68k";
-
 export function clamp(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value));
 }
@@ -29,30 +27,6 @@ export function blobDownloader(blob: Blob, fileName: string) {
 }
 export function textDownloader(text: string, fileName: string) {
     blobDownloader(new Blob([text], { type: "text/json" }), fileName)
-}
-export function getErrorMessage(error: unknown, lineNumber?: number): string {
-    const prepend = lineNumber ? `Error at line ${lineNumber}:` : ""
-    if (typeof error !== "object") {
-        return `${prepend}${error}`
-    }
-    const maybeError = error as RuntimeError
-    if (maybeError) {
-        switch (maybeError.type) {
-            case "Raw": return maybeError.value
-            case "Unimplemented": return `${prepend} Unimplemented`
-            case "DivisionByZero": return `${prepend} Division by zero`
-            case "ExecutionLimit": return `${prepend} Execution limit of ${maybeError.value} instructions reached (maybe an infinite loop?), disable in the settings if needed`
-            case "OutOfBounds": return `${prepend} Memory read out of bounds: ${maybeError.value}`
-            case "IncorrectAddressingMode": return `${prepend} Incorrect addressing mode: ${maybeError.value}`
-        }
-    }
-    if ("message" in error) {
-        if (error.message === "unreachable") {
-            return `${prepend} WASM panicked (unreachable)`
-        }
-        return `${prepend} ${error.message}`
-    }
-    return `${prepend} ${JSON.stringify(error)}`
 }
 
 export function delay(ms: number) {

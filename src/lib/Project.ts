@@ -96,7 +96,7 @@ export class Project {
             id: ""
         }
         try {
-            const noComments = metaLines.map(l => removeUntill("*", l)).join("\n")
+            const noComments = metaLines.map(l => removeUntil("*", l)).join("\n")
             const temp = JSON.parse(noComments.trim())
             if (typeof temp === "object" && temp.version === metaVersion) {
                 metaJson = temp
@@ -112,7 +112,7 @@ export class Project {
 
 
 
-function removeUntill(char: string, value: string) {
+function removeUntil(char: string, value: string) {
     const split = value.split(char)
     split.shift()
     return split.join(char)

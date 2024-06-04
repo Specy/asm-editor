@@ -12,7 +12,7 @@
 	import { beforeNavigate } from '$app/navigation'
 	import { navigationStore } from '$stores/navigationStore'
 	let metaTheme:HTMLMetaElement = null
-	
+
 	onMount(() => {
 		registerServiceWorker()
 		metaTheme = document.querySelector('meta[name="theme-color"]')
@@ -21,11 +21,10 @@
 		navigationStore.navigatingTo(p.to.url.pathname, p.from.url.pathname, p.to.url.searchParams)
 	})
 	const color = ThemeStore.get("secondary")
-	$: {
-		if (metaTheme){
+	$: if (metaTheme){
 			metaTheme.content = $color.color
-		}
 	}
+
 </script>
 <svelte:head>
 	<meta name="description" content="Write, learn and run M68K assembly code on your browser. View registers and memory, step and undo the program.">

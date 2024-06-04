@@ -5,7 +5,7 @@
     import { onMount } from 'svelte'
     import { toast } from '$stores/toastStore'
     import ProjectEditor from './Project.svelte'
-    import { Monaco } from '$lib/Monaco'
+    import { Monaco } from '$lib/monaco/Monaco'
     import { Prompt } from '$stores/promptStore'
     import { goto } from '$app/navigation'
     import Page from '$cmp/shared/layout/Page.svelte'

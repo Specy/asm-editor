@@ -9,6 +9,7 @@
 	import { onMount } from 'svelte'
 	import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
 	import { scale } from 'svelte/transition'
+  import Column from '$cmp/shared/layout/Column.svelte'
 	let theme = ThemeStore.toArray()
 	onMount(() => {
 		ThemeStore.theme.subscribe((_) => {
@@ -39,13 +40,13 @@
 		</a>
 		<Title noMargin>Theme</Title>
 	</div>
-	<div class="colors">
+	<Column gap="1rem"  style="margin-bottom:3rem">
 		{#each theme as color, i (color.name)}
 			<div in:scale|global={{ delay: i * 50 + 200, start: 0.9, duration: 150 }}>
 				<ColorThemeRow bind:color />
 			</div>
 		{/each}
-	</div>
+	</Column>
 </Page>
 
 <style lang="scss">

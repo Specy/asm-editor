@@ -1,10 +1,11 @@
 <script lang="ts">
 	import type { InstructionDocumentation } from '$lib/languages/M68K-documentation'
+  import Column from '$cmp/shared/layout/Column.svelte'
 	export let currentInstructionName = ''
 	export let instructions: InstructionDocumentation[]
 </script>
 
-<div class="column">
+<Column>
 	{#each instructions as ins}
 		<a 
 			href="/documentation/m68k/instruction/{ins.name}" 
@@ -17,14 +18,12 @@
 			</div>
 		</a>
 	{/each}
-</div>
+</Column>
 
 <style lang="scss">
 	a {
 		padding: 0.4rem 0.6rem;
-		border-radius: 0.2rem;
-		border-top-left-radius: 0;
-		border-bottom-left-radius: 0;
+		border-radius: 0 0.2rem 0.2rem 0 ;
 		border-left: solid 0.2rem transparent;
 	}
 

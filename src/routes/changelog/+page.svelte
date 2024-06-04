@@ -4,29 +4,31 @@
 	import { versions } from './versions'
 	import FaCircle from 'svelte-icons/fa/FaCircle.svelte'
   import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
+  import Column from '$cmp/shared/layout/Column.svelte'
+  import Row from '$cmp/shared/layout/Row.svelte'
 </script>
 
 <DefaultNavbar/>
 
 <Page cropped contentStyle="padding: 1rem; padding-top: 4rem">
 	<h1 style="margin-top: 1rem; margin-bottom: 2rem;">Changelog</h1>
-	<div class="column changelog">
+	<Column gap="0.6rem">
 		{#each versions as version}
-			<div class="column version">
-				<div class="row version-header">
-					<h3 class="version-title">
+			<Column gap="0.6rem">
+				<Row gap="1rem" align="center">
+					<h2 class="version-title">
 						{version.version}
-					</h3>
+					</h2>
 					<p class="date">
 						{version.date.toISOString().split('T')[0].replace(/-/g, '/')}
 					</p>
-				</div>
+				</Row>
 
 				<div class="version-content">
 					{#if version.title}
-						<div class="title">
+						<h2 class="title">
 							{version.title}
-						</div>
+						</h2>
 					{/if}
 					<ul>
 						{#each version.changes as change}
@@ -36,9 +38,9 @@
 						{/each}
 					</ul>
 				</div>
-			</div>
+			</Column>
 		{/each}
-	</div>
+	</Column>
 
 	<div class="fading">
 		<FaCircle />
@@ -63,10 +65,6 @@
 		color: var(--accent-text);
 		font-size: 1.2rem;
 	}
-	.version-header {
-		gap: 1rem;
-		align-items: center;
-	}
 	.title {
 		font-size: 1.3rem;
 		color: var(--accent);
@@ -74,13 +72,10 @@
 	}
 	.version-content {
 		border-left: solid 0.2rem var(--accent);
-		padding: 1rem;
-		padding-top: 0rem;
-		margin-left: 2.5rem;
+    margin-left: 2.5rem;
 		font-size: 1.1rem;
-		padding-left: 2rem;
-		padding-right: 0;
-	}
+    padding: 0 0 1rem 2rem;
+  }
 	@media (max-width: 600px) {
 		.version-content {
 			padding-left: 1rem;
@@ -96,13 +91,5 @@
 			line-height: 1.4em;
 		}
 	}
-
-	.changelog {
-		gap: 0.6rem;
-	}
-	.version {
-		gap: 0.6rem;
-	}
-
 
 </style>

@@ -12,8 +12,9 @@ import {
 } from 's68k'
 import { MEMORY_SIZE, PAGE_ELEMENTS_PER_ROW, PAGE_SIZE } from '$lib/Config'
 import { Prompt } from '$stores/promptStore'
-import { createDebouncer, getErrorMessage } from '../utils'
+import { createDebouncer } from '../utils'
 import { settingsStore } from '$stores/settingsStore'
+import { getM68kErrorMessage } from '$lib/languages/M68kUtils'
 
 export type RegisterHex = [hi: string, lo: string]
 
@@ -211,7 +212,7 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
                 updateMemory()
                 res()
             } catch (e) {
-                addError(getErrorMessage(e))
+                addError(getM68kErrorMessage(e))
                 clearDebouncer() //stop semantic checker from overriding errors
                 rej(e)
             }
@@ -246,7 +247,7 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
             update(s => ({ ...s, code, compilerErrors: errors, errors: [] }))
         } catch (e) {
             console.error(e)
-            addError(getErrorMessage(e))
+            addError(getM68kErrorMessage(e))
         }
     }
 
@@ -421,7 +422,7 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
             })
         } catch (e) {
             console.error(e)
-            addError(getErrorMessage(e, lastLine + 1))
+            addError(getM68kErrorMessage(e, lastLine + 1))
             update(d => ({ ...d, terminated: true, line: lastLine }))
             throw e
         }
@@ -450,7 +451,7 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
             updateData()
             scrollStackTab()
         } catch (e) {
-            addError(getErrorMessage(e))
+            addError(getM68kErrorMessage(e))
             update(d => ({ ...d, terminated: true }))
             console.error(e)
             throw e
@@ -583,7 +584,7 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
             } catch (e) {
                 console.error(e)
             }
-            addError(getErrorMessage(e, line + 1))
+            addError(getM68kErrorMessage(e, line + 1))
             update(d => ({ ...d, terminated: true, line }))
         }
         return InterpreterStatus.TerminatedWithException

@@ -16,6 +16,7 @@
     import FaDonate from 'svelte-icons/fa/FaDonate.svelte'
     import Button from '$cmp/shared/button/Button.svelte'
     import Page from '$cmp/shared/layout/Page.svelte'
+    import Row from '$cmp/shared/layout/Row.svelte'
 
     const textShadowPrimary = ThemeStore.getColor('primary').isDark()
     const textShadowSecondary = ThemeStore.getColor('secondary').isDark()
@@ -41,7 +42,7 @@
 				<div class="welcome-title" class:textShadow={textShadowPrimary}>
 					The all in one web editor for M68K
 				</div>
-				<div style="display: flex ; gap: 0.6rem">
+				<Row gap="0.6rem">
 					<ButtonLink
 						href="/projects"
 						style={textShadowPrimary && 'box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);'}
@@ -69,7 +70,7 @@
 							<FaDonate />
 						</Icon>
 					</ButtonLink>
-				</div>
+				</Row>
 				{#if installEvent}
 					<Button
 						style="margin-top: 1rem; gap: 0.5rem;"
@@ -185,7 +186,7 @@
 
   .sections-wrapper {
     padding: 4rem 0;
-    font-family: FiraCode;
+    font-family: FiraCode, monospace;
     background-color: var(--primary);
     color: var(--primary-text);
   }
@@ -233,18 +234,11 @@
   .main {
     display: flex;
     flex-direction: column;
-    /*
-		background-size: 400% 400%;
-		animation: gradient 15s ease infinite;
-		background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
-		*/
     min-height: 100vh;
     border-radius: 0.6rem;
-
     .content {
       display: flex;
       flex: 1;
-      border-radius: 0.4rem;
       overflow: hidden;
       position: relative;
       border-radius: 0.45rem;
@@ -276,13 +270,13 @@
 
   @keyframes gradient {
     0% {
-      background-position: 0% 50%;
+      background-position: 0 50%;
     }
     50% {
       background-position: 100% 50%;
     }
     100% {
-      background-position: 0% 50%;
+      background-position: 0 50%;
     }
   }
 </style>

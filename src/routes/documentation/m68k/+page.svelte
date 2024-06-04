@@ -34,7 +34,7 @@
 		<NavigationLinkButton href="/documentation/m68k/directive">
 			<div>Directives</div>
 		</NavigationLinkButton>
-		<NavigationLinkButton href="/documentation/m68k/assembler-feature">
+		<NavigationLinkButton href="/documentation/m68k/assembler-features">
 			<div>Assembler Features</div>
 		</NavigationLinkButton>
 	</div>

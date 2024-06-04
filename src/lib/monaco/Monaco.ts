@@ -1,5 +1,5 @@
 import { browser } from '$app/environment';
-import { generateTheme } from '$lib/editorTheme';
+import { generateTheme } from '$lib/monaco/editorTheme';
 import { M68KLanguage, createM68KCompletition, createM68kHoverProvider, createM68kFormatter } from '$lib/languages/M68K-language';
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import type monaco from 'monaco-editor'
