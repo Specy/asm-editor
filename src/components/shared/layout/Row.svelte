@@ -20,9 +20,9 @@
     {gap ? `gap: ${gap};` : ''}
     {padding ? `padding: ${padding};` : ''}
     {background ? `background-color: var(--${background}); color: var(--${background}-text);` : ''}
-    {style}
     {flex1 ? 'flex:1;' : ''}
     {margin ? `margin: ${margin};` : ''}
+    {style ?? ''}
     "
 >
 	<slot />
