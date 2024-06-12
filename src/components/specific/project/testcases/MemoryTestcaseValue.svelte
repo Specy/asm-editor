@@ -34,7 +34,7 @@
 	{#if editable}
 
 		{#if value.type === "number"}
-			<Row align="center" gap="0.5rem">
+			<Row align="center" gap="0.5rem" style="flex-wrap: wrap">
 				<div>Address</div>
 				<input
 					type="number"
