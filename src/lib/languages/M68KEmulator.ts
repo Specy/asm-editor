@@ -651,7 +651,6 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
         if (!interpreter) throw new Error('Interpreter not initialized')
         const cpu = interpreter.getCpuSnapshot()
         const registers = cpu.getRegistersValues()
-        console.log(testcase.expectedRegisters)
         for (const [register, value] of Object.entries(testcase.expectedRegisters)) {
             const registerIndex = registerName.indexOf(register.toUpperCase())
             if (registerIndex === -1) {

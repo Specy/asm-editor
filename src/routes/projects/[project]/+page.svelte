@@ -41,7 +41,7 @@
     })
 
     async function save(project: Project): Promise<boolean> {
-        if(status !== 'loaded') return false
+        if (status !== 'loaded') return false
         if (project.id === SHARE_ID) {
             if (!(await Prompt.confirm('Do you want to save this shared project in your projects?')))
                 return false
@@ -111,32 +111,32 @@
 	}}
 />
 <Page>
-	<ProjectEditor
-		bind:project
-		on:wantsToLeave={() => {
+	{#key project.id}
+		<ProjectEditor
+			bind:project
+			on:wantsToLeave={() => {
 				changePage('/projects')
 			}}
-		on:save={async ({ detail }) => {
+			on:save={async ({ detail }) => {
 				if(!await save(project)) return
 				console.log('Saved')
 				if (!detail.silent) toast.logPill('Project saved')
 			}}
-		on:share={({detail}) => {
+			on:share={({detail}) => {
 				share(detail)
 			}}
-	/>
-	{#if status === "loading" || status === "error"}
-		<div class="overlay" class:overlay-hidden={!(status === "loading" || status === "error")}>
-			{#if status === "loading"}
-				<h1 class="loading">Loading...</h1>
-			{:else}
-				<h1 class="error">Error loading project!</h1>
-				<ButtonLink href="/projects">Back to your projects</ButtonLink>
-			{/if}
-		</div>
-	{/if}
-
-
+		/>
+		{#if status === "loading" || status === "error"}
+			<div class="overlay" class:overlay-hidden={!(status === "loading" || status === "error")}>
+				{#if status === "loading"}
+					<h1 class="loading">Loading...</h1>
+				{:else}
+					<h1 class="error">Error loading project!</h1>
+					<ButtonLink href="/projects">Back to your projects</ButtonLink>
+				{/if}
+			</div>
+		{/if}
+	{/key}
 </Page>
 
 <style lang="scss">
@@ -151,8 +151,8 @@
     display: flex;
     justify-content: center;
     align-items: center;
-		flex-direction: column;
-		gap: 2rem;
+    flex-direction: column;
+    gap: 2rem;
     z-index: 10;
   }
 
