@@ -66,6 +66,8 @@
 
 		<Controls
 			{running}
+			hasTests={false}
+			canEditTests={false}
 			executionDisabled={$emulator.terminated || $emulator.interrupt !== undefined}
 			buildDisabled={$emulator.compilerErrors.length > 0}
 			hasCompiled={$emulator.canExecute}

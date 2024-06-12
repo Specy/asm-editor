@@ -7,14 +7,17 @@ import {
     type Interrupt,
     type Label,
     type ParsedLine,
+    type RegisterOperand,
     S68k,
     Size
-} from 's68k'
+} from '@specy/s68k'
 import { MEMORY_SIZE, PAGE_ELEMENTS_PER_ROW, PAGE_SIZE } from '$lib/Config'
 import { Prompt } from '$stores/promptStore'
 import { createDebouncer } from '../utils'
 import { settingsStore } from '$stores/settingsStore'
 import { getM68kErrorMessage } from '$lib/languages/M68kUtils'
+import type { Testcase, TestcaseResult, TestcaseValidationError } from '$lib/Project'
+import { byteSliceToNum, isMemoryChunkEqual, numberToByteSlice } from '$cmp/specific/project/memory/memoryTabUtils'
 
 export type RegisterHex = [hi: string, lo: string]
 
@@ -135,8 +138,27 @@ function createMemoryTab(pageSize: number, name: string, address: number, rowSiz
     }
 }
 
+const defaultInterruptHandlers = {
+    'GetTime': async () => Math.round(Date.now() / 1000),
+    'ReadKeyboardString': async () => Prompt.askText('Enter a string') as Promise<string>,
+    'ReadNumber': async () => {
+        return Prompt.askText('Enter a number') as Promise<string | number>
+    },
+    'ReadChar': async () => {
+        return (await Prompt.askText('Enter a character') as string)[0]
+    }
+} as const
 
-const registerName = ['D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'A0', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7']
+
+function registerNameToType(name: string) {
+    return {
+        value: Number(name[1]),
+        type: name[0] === 'A' ? 'Address' : 'Data'
+    } satisfies RegisterOperand
+}
+
+
+export const registerName = ['D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'A0', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7']
 type M68kEditorOptions = {
     globalPageSize?: number
     globalPageElementsPerRow?: number
@@ -458,8 +480,12 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
         }
     }
 
-    async function handleInterrupt(interrupt: Interrupt | null) {
+    async function handleInterrupt(interrupt: Interrupt | null, inputHandlers: Partial<typeof defaultInterruptHandlers> = {}) {
         if (!interrupt || !interpreter) throw new Error('Expected interrupt')
+        const handlers = {
+            ...defaultInterruptHandlers,
+            ...inputHandlers
+        }
         update(d => ({ ...d, interrupt }))
         const { type } = interrupt
         switch (type) {
@@ -476,24 +502,28 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
                 break
             }
             case 'ReadChar': {
-                const char = (await Prompt.askText('Enter a character') as string)[0]
+                const char = await handlers.ReadChar()
                 if (!char) throw new Error(`Expected a character, got "${char}"`)
                 interpreter.answerInterrupt({ type, value: char })
                 break
             }
             case 'ReadNumber': {
-                const number = Number(await Prompt.askText('Enter a number'))
-                if (Number.isNaN(number)) throw new Error(`Expected a number, got "${number}"`)
+                const answer = await handlers.ReadNumber()
+                const number = Number(answer)
+                if (Number.isNaN(number) || answer === '') throw new Error(`Expected a number, got "${answer === '' ? '' : number}"`)
                 interpreter.answerInterrupt({ type, value: number })
                 break
             }
             case 'ReadKeyboardString': {
-                const string = await Prompt.askText('Enter a string') as string
+                const string = await handlers.ReadKeyboardString()
                 interpreter.answerInterrupt({ type, value: string })
                 break
             }
             case 'GetTime': {
-                interpreter.answerInterrupt({ type, value: Math.round(Date.now() / 1000) }) //unix seconds
+                interpreter.answerInterrupt({
+                    type,
+                    value: await handlers.GetTime()
+                }) //unix seconds
                 break
             }
             case 'Terminate': {
@@ -529,36 +559,7 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
                     //here we might have reached a breakpoint. It is paused if the status is running
                     if (status === InterpreterStatus.Running) break
                 }
-                switch (status) {
-                    case InterpreterStatus.Terminated: {
-                        const ins = interpreter.getLastInstruction()
-                        update(d => ({ ...d, terminated: true, line: ins?.parsed_line?.line_index ?? -1 }))
-                        break
-                    }
-                    case InterpreterStatus.TerminatedWithException: {
-                        const ins = interpreter.getLastInstruction()
-                        update(data => {
-                            data.terminated = true
-                            data.line = ins?.parsed_line?.line_index ?? -1
-                            data.canUndo = false
-                            data.errors.push('Program terminated with errors')
-                            return data
-                        })
-                        break
-                    }
-                    case InterpreterStatus.Interrupt: {
-                        if (current.terminated || !current.canExecute) break
-                        const ins = interpreter.getLastInstruction()
-                        update(d => ({ ...d, line: ins.parsed_line.line_index }))
-                        updateRegisters()
-                        updateStatusRegisters()
-                        updateMemory()
-                        updateData()
-                        scrollStackTab()
-                        await handleInterrupt(interpreter.getCurrentInterrupt())
-                        break
-                    }
-                }
+                await handleInterpreterInterruption(interpreter)
             }
             update(data => {
                 const ins = interpreter.getNextInstruction()
@@ -610,6 +611,212 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
         })
     }
 
+    async function handleInterpreterInterruption(int: Interpreter, inputHandlers: Partial<typeof defaultInterruptHandlers> = {}) {
+        const status = int.getStatus()
+        const current = get({ subscribe })
+        switch (status) {
+            case InterpreterStatus.Terminated: {
+                const ins = int.getLastInstruction()
+                update(d => ({ ...d, terminated: true, line: ins?.parsed_line?.line_index ?? -1 }))
+                break
+            }
+            case InterpreterStatus.TerminatedWithException: {
+                const ins = int.getLastInstruction()
+                update(data => {
+                    data.terminated = true
+                    data.line = ins?.parsed_line?.line_index ?? -1
+                    data.canUndo = false
+                    data.errors.push('Program terminated with errors')
+                    return data
+                })
+                break
+            }
+            case InterpreterStatus.Interrupt: {
+                if (current.terminated || !current.canExecute) break
+                const ins = int.getLastInstruction()
+                update(d => ({ ...d, line: ins.parsed_line.line_index }))
+                updateRegisters()
+                updateStatusRegisters()
+                updateMemory()
+                updateData()
+                scrollStackTab()
+                await handleInterrupt(int.getCurrentInterrupt(), inputHandlers)
+                break
+            }
+        }
+    }
+
+    async function validateTestcase(testcase: Testcase) {
+        const errors = [] as TestcaseValidationError[]
+        if (!interpreter) throw new Error('Interpreter not initialized')
+        const cpu = interpreter.getCpuSnapshot()
+        const registers = cpu.getRegistersValues()
+        console.log(testcase.expectedRegisters)
+        for (const [register, value] of Object.entries(testcase.expectedRegisters)) {
+            const registerIndex = registerName.indexOf(register.toUpperCase())
+            if (registerIndex === -1) {
+                console.error(`Register ${register} not found`)
+                continue
+            }
+            const registerValue = registers[registerIndex]
+            if (registerValue !== value) {
+                errors.push({
+                    type: 'wrong-register',
+                    register,
+                    expected: value,
+                    got: registerValue
+                })
+            }
+        }
+        const current = get({ subscribe })
+        if (current.stdOut !== testcase.expectedOutput) {
+            errors.push({
+                type: 'wrong-output',
+                expected: testcase.expectedOutput,
+                got: current.stdOut
+            })
+        }
+        for (const value of testcase.expectedMemory) {
+            if (value.type === 'number') {
+                const bytes = interpreter.readMemoryBytes(value.address, value.bytes)
+                const num = byteSliceToNum(bytes)
+                if (num !== value.expected) {
+                    errors.push({
+                        type: 'wrong-memory-number',
+                        address: value.address,
+                        bytes: value.bytes,
+                        expected: value.expected,
+                        got: num
+                    })
+                }
+            } else if (value.type === 'number-chunk') {
+                const bytes = interpreter.readMemoryBytes(value.address, value.expected.length)
+                if (!isMemoryChunkEqual(bytes, value.expected)) {
+                    errors.push({
+                        type: 'wrong-memory-chunk',
+                        address: value.address,
+                        expected: value.expected,
+                        got: Array.from(bytes)
+                    })
+                }
+            } else if (value.type === 'string-chunk') {
+                const bytes = interpreter.readMemoryBytes(value.address, value.expected.length)
+                const str = new TextDecoder().decode(bytes)
+                if (str !== value.expected) {
+                    errors.push({
+                        type: 'wrong-memory-string',
+                        address: value.address,
+                        expected: value.expected,
+                        got: str
+                    })
+                }
+
+            }
+        }
+        return errors
+    }
+
+    async function runTestcase(testcase: Testcase, haltLimit: number) {
+        if (haltLimit <= 0) haltLimit = Number.MAX_SAFE_INTEGER
+        const start = performance.now()
+        try {
+            if (!interpreter) throw new Error('Interpreter not initialized')
+            for (const [register, value] of Object.entries(testcase.startingRegisters)) {
+                interpreter.setRegisterValue(registerNameToType(register), value)
+            }
+            for (const value of testcase.startingMemory) {
+                if (value.type === 'number') {
+                    const slice = new Uint8Array(numberToByteSlice(value.expected, value.bytes))
+                    interpreter.writeMemoryBytes(value.address, slice)
+                } else if (value.type === 'number-chunk') {
+                    interpreter.writeMemoryBytes(value.address, new Uint8Array(value.expected))
+                } else if (value.type === 'string-chunk') {
+                    const encoded = new TextEncoder().encode(value.expected)
+                    interpreter.writeMemoryBytes(value.address, encoded)
+                }
+            }
+            while (!interpreter.hasTerminated()) {
+                interpreter.runWithLimit(haltLimit)
+                await handleInterpreterInterruption(interpreter, {
+                    ReadChar: async () => {
+                        if (testcase.input.length === 0) throw new Error('Input does not have any characters')
+                        return testcase.input.shift()
+                    },
+                    ReadNumber: async () => {
+                        if (testcase.input.length === 0) throw new Error('Input does not have any numbers')
+                        return testcase.input.shift()
+                    },
+                    ReadKeyboardString: async () => {
+                        if (testcase.input.length === 0) throw new Error('Input does not have any strings')
+                        return testcase.input.shift()
+                    }
+                })
+            }
+            update(data => {
+                const ins = interpreter.getNextInstruction()
+                const last = interpreter.getLastInstruction()
+                //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
+                const line = ins?.parsed_line?.line_index ?? last?.parsed_line?.line_index
+                data.line = line ?? -1
+                data.canUndo = interpreter?.canUndo() ?? false
+                return data
+            })
+            updateRegisters()
+            updateStatusRegisters()
+            updateMemory()
+            updateData()
+            scrollStackTab()
+            update(d => ({ ...d, executionTime: performance.now() - start }))
+            return interpreter.getStatus()
+        } catch (e) {
+            console.error(e)
+            let line = -1
+            try {
+                line = interpreter?.getLastInstruction()?.parsed_line.line_index ?? -1
+            } catch (e) {
+                console.error(e)
+            }
+            addError(getM68kErrorMessage(e, line + 1))
+            update(d => ({ ...d, terminated: true, line }))
+        }
+        return InterpreterStatus.TerminatedWithException
+    }
+
+    async function test(code: string, testcases: Testcase[], haltLimit: number, historySize = 0) {
+        const results = [] as TestcaseResult[]
+        for (const testcase of testcases) {
+            try {
+                await compile(historySize, code)
+                await runTestcase(testcase, haltLimit)
+                const errors = await validateTestcase(testcase)
+                results.push({
+                    errors,
+                    passed: errors.length === 0,
+                    testcase
+                })
+            } catch (e) {
+                console.error(e)
+                update(d => {
+                    d.errors.push(getM68kErrorMessage(e))
+                    return d
+                })
+            }
+        }
+        const passedTests = results.filter(r => r.passed)
+        update(d => {
+            d.stdOut = '⏳ Running tests...\n ' + d.stdOut
+            if (passedTests.length !== results.length) {
+                d.stdOut += `\n❌ ${results.length - results.filter(r => r.passed).length} testcases not passed\n`
+            }
+            if (passedTests.length > 0) {
+                d.stdOut += `\n✅ ${passedTests.length} testcases passed \n`
+            }
+            return d
+        })
+        return results
+    }
+
+
     clear()
     semanticCheck()
     return {
@@ -624,6 +831,7 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
         toggleBreakpoint,
         undo,
         resetSelectedLine,
-        dispose
+        dispose,
+        test
     }
 }

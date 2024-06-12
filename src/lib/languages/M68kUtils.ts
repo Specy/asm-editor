@@ -1,7 +1,7 @@
-import type { RuntimeError } from 's68k'
+import type { RuntimeError } from '@specy/s68k'
 
 export function parseCcr(value: number) {
-    return  [
+    return [
         (value & 0x1) === 0x1,
         (value & 0x2) === 0x2,
         (value & 0x4) === 0x4,
@@ -40,4 +40,8 @@ export function getM68kErrorMessage(error: unknown, lineNumber?: number): string
         return `${prepend} ${error.message}`
     }
     return `${prepend} ${JSON.stringify(error)}`
+}
+
+export function toHexString(value: number, padStart = 4) {
+    return (value >>> 0).toString(16).padStart(padStart, '0')
 }

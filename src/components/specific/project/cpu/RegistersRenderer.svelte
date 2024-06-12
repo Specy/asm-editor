@@ -4,7 +4,7 @@
 	export let registers: Register[] = []
 	export let withoutHeader = false
 	import { settingsStore } from '$stores/settingsStore'
-	import { Size } from 's68k'
+	import { Size } from '@specy/s68k'
 	import { createEventDispatcher } from 'svelte'
 	const dispatcher = createEventDispatcher<{
 		registerClick: Register

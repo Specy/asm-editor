@@ -6,7 +6,7 @@
     import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
     import { createEventDispatcher, onMount } from 'svelte'
     import FaKeyboard from 'svelte-icons/fa/FaKeyboard.svelte'
-    import type { Project } from '$lib/Project'
+    import type { Project, TestcaseResult } from '$lib/Project'
     import FaSave from 'svelte-icons/fa/FaSave.svelte'
     import FaCog from 'svelte-icons/fa/FaCog.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
@@ -26,7 +26,7 @@
     import MemoryTab from '$cmp/specific/project/memory/MemoryTab.svelte'
     import ShortcutEditor from '$cmp/specific/project/settings/ShortcutEditor.svelte'
     import SizeSelector from '$cmp/specific/project/cpu/SizeSelector.svelte'
-    import { Size } from 's68k'
+    import { Size } from '@specy/s68k'
     import { settingsStore } from '$stores/settingsStore'
     import type monaco from 'monaco-editor'
     import ToggleableDraggable from '$cmp/shared/draggable/DraggableContainer.svelte'
@@ -36,14 +36,17 @@
     import FaDonate from 'svelte-icons/fa/FaDonate.svelte'
     import { getM68kErrorMessage } from '$lib/languages/M68kUtils'
     import Row from '$cmp/shared/layout/Row.svelte'
+    import TestcasesEditor from '$cmp/specific/project/testcases/TestcasesEditor.svelte'
 
     export let project: Project
 
     let editor: monaco.editor.IStandaloneCodeEditor
+    let testcasesResult: TestcaseResult[] = []
     let running = false
     let settingsVisible = false
     let documentationVisible = false
     let shortcutsVisible = false
+    let testcasesVisible = false
     let groupSize = Size.Word
     $: errorStrings = $emulator.errors.join('\n')
     $: info = ($emulator.terminated && $emulator.executionTime >= 0)
@@ -146,20 +149,28 @@
         }
     })
 
-    function toggleWindow(windowName: 'shortcuts' | 'documentation' | 'settings') {
-
+    function toggleWindow(windowName: 'shortcuts' | 'documentation' | 'settings' | 'testcases') {
+        //TODO improve this lol
         if (windowName === 'shortcuts') {
             shortcutsVisible = !shortcutsVisible
             documentationVisible = false
             settingsVisible = false
+            testcasesVisible = false
         } else if (windowName === 'documentation') {
             shortcutsVisible = false
             documentationVisible = !documentationVisible
             settingsVisible = false
+            testcasesVisible = false
         } else if (windowName === 'settings') {
             shortcutsVisible = false
             documentationVisible = false
             settingsVisible = !settingsVisible
+            testcasesVisible = false
+        } else if (windowName === 'testcases') {
+            shortcutsVisible = false
+            documentationVisible = false
+            settingsVisible = false
+            testcasesVisible = !testcasesVisible
         }
     }
 
@@ -251,6 +262,11 @@
 	<ShortcutEditor bind:visible={shortcutsVisible} />
 	<Settings bind:visible={settingsVisible} />
 	<M68KDocumentation bind:visible={documentationVisible} />
+	<TestcasesEditor
+		bind:visible={testcasesVisible}
+		testcasesResult={testcasesResult}
+		bind:testcases={project.testcases}
+	/>
 </header>
 
 <ToggleableDraggable title="Call stack" left={300}>
@@ -325,14 +341,41 @@
 			/>
 		</div>
 
+
 		<Controls
 			{running}
+			hasTests={project.testcases.length > 0}
+			hasErrorsInTests={testcasesResult.some((r) => !r.passed)}
+			hasNoErrorsInTests={testcasesResult.every((r) => r.passed) && testcasesResult.length > 0}
+			canEditTests={true}
 			executionDisabled={$emulator.terminated || $emulator.interrupt !== undefined}
 			buildDisabled={$emulator.compilerErrors.length > 0}
 			hasCompiled={$emulator.canExecute}
 			canUndo={$emulator.canUndo}
+			on:edit-tests={() => {
+				toggleWindow('testcases')
+			}}
+			on:test={async () => {
+				running = true
+				setTimeout(async () => {
+					try {
+						testcasesResult = await emulator.test(
+							project.code,
+							project.testcases,
+							$settingsStore.values.instructionsLimit.value,
+							$settingsStore.values.maxHistorySize.value,
+						)
+						running = false
+					} catch (e) {
+						console.error(e)
+						running = false
+						toast.error('Error executing tests. ' + getM68kErrorMessage(e))
+					}
+				}, 50)
+			}}
 			on:run={async () => {
 				running = true
+				testcasesResult = []
 				setTimeout(() => {
 					try {
 						emulator.run($settingsStore.values.instructionsLimit.value)
@@ -373,6 +416,7 @@
 			on:stop={() => {
 				emulator.clear()
 				running = false
+				testcasesResult = []
 			}}
 		/>
 	</div>

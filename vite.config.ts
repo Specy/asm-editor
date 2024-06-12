@@ -16,7 +16,7 @@ const config: UserConfig = {
 		}
 	},
 	optimizeDeps: {
-		exclude: ["s68k"]
+		exclude: ["@specy/s68k"]
 	},
 	plugins: [
 		sveltekit(),

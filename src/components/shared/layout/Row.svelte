@@ -3,13 +3,13 @@
     import type { ThemeKeys } from '$stores/themeStore'
 
     export let justify: Justify | undefined = undefined
-		export let flex1: boolean | undefined
+    export let flex1: boolean | undefined = undefined
     export let align: Justify | undefined = undefined
     export let gap: string | undefined = undefined
     export let padding: string | undefined = undefined
     export let background: ThemeKeys | undefined = undefined
     export let style: string | undefined = undefined
-				export let margin: string | undefined
+    export let margin: string | undefined = undefined
 </script>
 
 <div
@@ -29,7 +29,7 @@
 </div>
 
 <style>
-	.flex {
-		display: flex;
-	}
+    .flex {
+        display: flex;
+    }
 </style>

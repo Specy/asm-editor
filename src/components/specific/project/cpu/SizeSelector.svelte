@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Size } from "s68k";
+	import { Size } from "@specy/s68k";
 	export let style = ""
 	export let selected: Size = Size.Word
 </script>

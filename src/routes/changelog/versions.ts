@@ -7,12 +7,21 @@ type Version = {
 }
 export const versions: Version[] = [
     {
+        version: '3.3.0',
+        title: 'Testcases and base index addressing',
+        date: new Date('2024-06-12'),
+        changes: [
+            "Added testcases creation, you can create testcases with an initial configuration and expected output",
+            "Added base index addressing mode",
+        ]
+    },
+    {
         version: '3.2.0',
         title: 'Memory region viewer',
         date: new Date('2024-06-1'),
         changes: [
             `Added memory region viewer, you can select up to 4 bytes of memory to convert it's value in decimal/signed decimal`,
-            'Fixed bug when prompting for single character input',
+            'Fixed bug when prompting for single character input'
         ]
     },
     {

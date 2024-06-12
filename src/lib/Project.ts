@@ -8,7 +8,67 @@ export interface ProjectData {
     description: string
     id: string
     language: AvailableLanguages
+    testcases: Testcase[]
 }
+
+export type MemoryValue = {
+    type: 'number',
+    address: number,
+    bytes: number,
+    expected: number
+} | {
+    type: 'string-chunk',
+    address: number,
+    expected: string
+} | {
+    type: 'number-chunk'
+    address: number,
+    expected: number[]
+}
+
+export type Testcase = {
+    input: string[]
+    expectedOutput: string
+    startingRegisters: Record<string, number>
+    expectedRegisters: Record<string, number>
+    startingMemory: MemoryValue[]
+    expectedMemory: MemoryValue[]
+}
+
+export type TestcaseValidationError = {
+    type: "wrong-register",
+    register: string,
+    expected: number,
+    got: number
+} | {
+    type: "wrong-memory-number",
+    address: number,
+    bytes: number,
+    expected: number,
+    got: number
+} | {
+    type: "wrong-memory-string",
+    address: number,
+    expected: string,
+    got: string
+} | {
+    type: "wrong-memory-chunk",
+    address: number,
+    expected: number[],
+    got: number[]
+} | {
+    type: "wrong-output",
+    expected: string,
+    got: string
+}
+
+export type TestcaseResult = {
+    errors: TestcaseValidationError[]
+    passed: boolean
+    testcase: Testcase
+}
+
+
 const CODE_SEPARATOR = "---METADATA---"
 
 export const BASE_M68K_CODE =
@@ -29,6 +89,7 @@ type ProjectMetadata = {
     createdAt: number
     updatedAt: number
     id: string
+    testcases: Testcase[]
 }
 
 const metaVersion = 1
@@ -40,6 +101,7 @@ export class Project {
     language: AvailableLanguages = "M68K"
     description = ""
     id = ""
+    testcases: Testcase[] = []
     constructor(data?: Partial<ProjectData>) {
         this.code = data?.code ?? this.language === 'M68K' ? BASE_M68K_CODE : ""
         this.createdAt = data?.createdAt ?? new Date().getTime()
@@ -48,6 +110,7 @@ export class Project {
         this.language = data?.language ?? "M68K"
         this.description = data?.description ?? ""
         this.id = data?.id ?? ""
+        this.testcases = data?.testcases ?? []
     }
     toObject(): ProjectData {
         return {
@@ -57,6 +120,7 @@ export class Project {
             name: this.name,
             language: this.language,
             description: this.description,
+            testcases: this.testcases,
             id: this.id
         }
     }
@@ -73,6 +137,7 @@ export class Project {
             language: this.language,
             createdAt: this.createdAt,
             updatedAt: this.updatedAt,
+            testcases: this.testcases,
             id: this.id
         }
         const metaJson = JSON.stringify(meta, null, 4)
@@ -93,6 +158,7 @@ export class Project {
             version: metaVersion, 
             createdAt: new Date().getTime(), 
             updatedAt: new Date().getTime(),
+            testcases: [],
             id: ""
         }
         try {

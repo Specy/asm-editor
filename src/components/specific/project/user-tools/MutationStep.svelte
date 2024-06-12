@@ -4,7 +4,7 @@
 
 <script lang="ts">
 	import Icon from '$cmp/shared/layout/Icon.svelte'
-  import { ccrToFlagsArray, type ExecutionStep } from 's68k'
+  import { ccrToFlagsArray, type ExecutionStep } from '@specy/s68k'
 	import { createEventDispatcher } from 'svelte'
 	import FaUndo from 'svelte-icons/fa/FaUndo.svelte'
 	export let step: ExecutionStep
@@ -71,9 +71,9 @@
 						to
 						{mutation.value.register.type[0]}{mutation.value.register.value}
 					{:else if mutation.type === 'WriteMemory'}
-						Wrote {mutation.value.size} to 0x{mutation.value.address.toString(16).toUpperCase()}
+						Wrote {mutation.value.size} to ${mutation.value.address.toString(16).toUpperCase()}
 					{:else if mutation.type === 'WriteMemoryBytes'}
-						Wrote {mutation.value.old.length} bytes to 0x{mutation.value.address
+						Wrote {mutation.value.old.length} bytes to ${mutation.value.address
 							.toString(16)
 							.toUpperCase()}
 					{/if}

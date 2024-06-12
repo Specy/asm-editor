@@ -1,22 +1,27 @@
 <script lang="ts">
-		import FaChevronDown from 'svelte-icons/fa/FaChevronDown.svelte'
+    import FaChevronDown from 'svelte-icons/fa/FaChevronDown.svelte'
+    import Icon from '$cmp/shared/layout/Icon.svelte'
+
     export let expanded: boolean = false
+		export let style: string = ''
 </script>
 
 
-<div class="expandable-container" class:expandable-container-open={expanded}>
-    <button
-            on:click={() => expanded = !expanded}
-            class="expandable-container-expand"
-    >
-        <div class="chevron-icon" class:chevron-icon-expanded={expanded}>
-            <FaChevronDown/>
-        </div>
-        <slot name="title"/>
-    </button>
-    <div class="expandable-container-content">
-        <slot />
-    </div>
+<div class="expandable-container" class:expandable-container-open={expanded} {style}>
+	<button
+		on:click={() => expanded = !expanded}
+		class="expandable-container-expand"
+	>
+		<div class="chevron-icon" class:chevron-icon-expanded={expanded}>
+			<Icon>
+				<FaChevronDown />
+			</Icon>
+		</div>
+		<slot name="title" />
+	</button>
+	<div class="expandable-container-content">
+		<slot />
+	</div>
 </div>
 
 <style>
@@ -25,6 +30,7 @@
         align-items: center;
         gap: 1rem;
         background-color: transparent;
+        padding: 0.8rem;
         cursor: pointer;
         color: var(--primary-text);
     }
@@ -32,7 +38,6 @@
     .expandable-container {
         display: flex;
         flex-direction: column;
-        padding: 0.8rem;
         background-color: var(--primary);
         color: var(--primary-text);
         border-radius: 0.4rem;

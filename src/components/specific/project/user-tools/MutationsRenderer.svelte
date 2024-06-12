@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { ExecutionStep } from "s68k"
+	import type { ExecutionStep } from "@specy/s68k"
 	import { createEventDispatcher } from "svelte"
 	import MutationStep from "./MutationStep.svelte"
     export let steps: ExecutionStep[]

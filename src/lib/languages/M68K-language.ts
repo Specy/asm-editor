@@ -1,5 +1,5 @@
 import type { MonacoType } from "$lib/monaco/Monaco"
-import { S68k } from "s68k"
+import { S68k } from "@specy/s68k"
 import { AddressingMode, branchConditions, fromSizesToString, fromSizeToString, getAddressingModeNames, getInstructionDocumentation, setConditions } from "./M68K-documentation"
 
 

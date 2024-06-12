@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Icon from '$cmp/shared/layout/Icon.svelte'
-	import type { Label } from 's68k'
+	import type { Label } from '@specy/s68k'
 	import { createEventDispatcher } from 'svelte'
 	import FaCircle from 'svelte-icons/fa/FaCircle.svelte'
 	import FaLongArrowAltUp from 'svelte-icons/fa/FaLongArrowAltUp.svelte'
