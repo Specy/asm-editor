@@ -116,7 +116,7 @@
 				editable={false}
 			/>
 		{/if}
-		{#if testcase.expectedOutput.length > 0}
+		{#if testcase.input.length > 0}
 			<Header type="h3">Inputs</Header>
 			<Row gap="0.3rem" style="flex-wrap: wrap">
 				{#each testcase.input as line}
