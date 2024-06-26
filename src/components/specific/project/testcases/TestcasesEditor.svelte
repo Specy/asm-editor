@@ -68,7 +68,7 @@
 				</Header>
 				<Column gap="1rem">
 					{#if testcases.length === 0}
-						<p>
+						<p style="padding: 1rem">
 							No testcases yet. Add new ones to test the correctness of your code.
 						</p>
 					{:else}
