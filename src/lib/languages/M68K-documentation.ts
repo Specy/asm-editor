@@ -5,11 +5,13 @@ export enum AddressingMode {
     DataRegister = 1,
     AddressRegister = 2,
     Indirect = 4,
-    IndirectWithPostincrement = 8,
-    IndirectWithPredecrement = 16,
+    PostIndirect = 8,
+    PreIndirect = 16,
     IndirectWithDisplacement = 32,
     Immediate = 64,
-    EffectiveAddress = 128,
+    Absolute = 128,
+    IndirectIndex = 256,
+    RegisterRange = 512,
 }
 
 
@@ -20,15 +22,19 @@ export function addressingModeToString(addressingMode: AddressingMode): string {
         case AddressingMode.AddressRegister:
             return 'An'
 
-        case AddressingMode.IndirectWithPostincrement:
-        case AddressingMode.IndirectWithPredecrement:
+        case AddressingMode.PostIndirect:
+        case AddressingMode.PreIndirect:
         case AddressingMode.Indirect:
         case AddressingMode.IndirectWithDisplacement:
             return '(An)'
         case AddressingMode.Immediate:
             return 'Im'
-        case AddressingMode.EffectiveAddress:
+        case AddressingMode.Absolute:
             return 'ea'
+        case AddressingMode.IndirectIndex:
+            return '(An, Xn)'
+        case AddressingMode.RegisterRange:
+            return 'Xn-Xn'
         default:
             return '_'
     }
@@ -66,17 +72,18 @@ export function fromSizesToString(sizes: Size[], extended = false): string {
 const Da = AddressingMode.DataRegister
 const Ad = AddressingMode.AddressRegister
 const In = AddressingMode.Indirect
-const Ipi = AddressingMode.IndirectWithPostincrement
-const Ipd = AddressingMode.IndirectWithPredecrement
+const Ipi = AddressingMode.PostIndirect
+const Ipd = AddressingMode.PreIndirect
 const Id = AddressingMode.IndirectWithDisplacement
 const Im = AddressingMode.Immediate
-const Ea = AddressingMode.EffectiveAddress
+const Ea = AddressingMode.Absolute
+const Ix = AddressingMode.IndirectIndex
 
-const ANY = [Da, Ad, In, Ipi, Ipd, Id, Im, Ea]
-const NO_Ad = [Da, In, Ipi, Ipd, Id, Im, Ea]
-const NO_Im = [Da, In, Ad, Ipi, Ipd, Id, Ea]
-const NO_IM_OR_Ad = [Da, In, Ipi, Ipd, Id, Ea]
-const NO_Ad_AND_NO_Im = [Da, In, Ipi, Ipd, Id, Ea]
+const ANY = [Da, Ad, In, Ipi, Ipd, Id, Im, Ea, Ix]
+const NO_Ad = [Da, In, Ipi, Ipd, Id, Im, Ea, Ix]
+const NO_Im = [Da, In, Ad, Ipi, Ipd, Id, Ea, Ix]
+const NO_IM_OR_Ad = [Da, In, Ipi, Ipd, Id, Ea, Ix]
+const NO_Ad_AND_NO_Im = [Da, In, Ipi, Ipd, Id, Ea, Ix]
 const ONLY_REG = [Da, Ad]
 const ONLY_Ad = [Ad]
 const ONLY_Da = [Da]
@@ -163,6 +170,9 @@ const desc = {
     'move': 'Moves the value from the first operand to second operand. If the second operand is an address register, the [MOVEA](/documentation/m68k/instruction/movea) instruction is used instead.',
     'moveq': 'Moves the value from the first operand to second operand. The first operand is read as a byte so only values between -127 and 127.',
     'movea': 'Moves the value from the first operand to second operand. If the size is word, it is sign extended to long. It does not change the SR. When using word size, the first operand is sign extended to long and the second is written as a long.',
+    'movem': "Move many, useful when you want to save a bunch of registers, for example to save their value when branching to a function it moves a list of registers to memory, or memory to a list of registers. The first operand is the list of registers, " +
+        "the second operand is the memory region. If you define the registers as the first operand, then it will save the registers to memory, if the first operand is the memory, then it will load the registers from memory. You can write the list of registers by separating them with a \"/\", " +
+        "and the range between registers by using a dash. ex: a3-a5/d0-d2 will select d0, d1, d2, a3, a4, a5. The order of the register will be converted to first data, then address registers, from 0 to 7. When using the pre-decrement operand, the order of the registers will be reversed, going from a7 to a0, and d7 to d0.",
     'add': 'Adds the value of the first operand to second operand. If the second operand is an address register, the [ADDA](/documentation/m68k/instruction/adda) instruction is used instead.',
     'addi': 'Adds the immediate value to the second operand',
     'adda': 'Adds the value of the first operand to second operand. It does not change the SR.  When using word size, the first operand is sign extended to long and the second is read and written as a long.',
@@ -261,6 +271,24 @@ export const M68kDocumentation: Record<InstructionName, InstructionDocumentation
         moveq #100, d0
         moveq #-20, d1
         moveq #128, d2 ;error 128 is not a valid 8 bit number
+    `),
+    'movem': makeIns('movem', [NO_Im, NO_Im], ONLY_LONG_OR_WORD, desc.movem, 'movem.l d0-d2, (a0)', Size.Word,
+
+        `
+    move.l #$1, D0   ; Load some values into registers
+    move.l #$2, D1
+    move.l #$3, A0
+    bsr example_function 
+    bra END                 
+
+example_function:
+    movem.l D0-D1/A0, -(SP) ; Save registers to the stack
+    move.l #$ff, D0
+    move.l #$ff, D1
+    move.l #$ff, A0
+    movem.l (SP)+, D0-D1/A0 ; Restore registers from the stack
+    rts                     
+END: 
     `),
     'movea': makeIns('movea', [ANY, ONLY_Ad], ONLY_LONG_OR_WORD, desc.movea, 'movea.l d0, a0', Size.Word,
         `

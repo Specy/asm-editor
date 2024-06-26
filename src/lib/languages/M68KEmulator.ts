@@ -548,7 +548,6 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
             if (!interpreter) throw new Error('Interpreter not initialized')
             let status = interpreter.getStatus()
             while (!interpreter.hasTerminated()) {
-                const current = get({ subscribe })
 
                 if (!hasBreakpoints) {
                     interpreter.runWithLimit(haltLimit)

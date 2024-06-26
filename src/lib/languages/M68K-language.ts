@@ -8,7 +8,7 @@ import { AddressingMode, branchConditions, fromSizesToString, fromSizeToString, 
 
 const arithmetic = ["add", "sub", "suba", "adda", "divs", "divu", "muls", "mulu", "addq", "subq", "addi", "subi"]
 const logic = ["tst", "cmp","cmpa","cmpm", "cmpi", "not", "or", "and", "eor", "lsl", "lsr", "asr", "asl", "rol", "ror", "btst", "bclr", "bchg", "bset" ,"andi", "ori", "eori", "subi"]
-const special = ["clr", "exg", "neg", "ext", "swap", "move", "movea", "trap"]
+const special = ["clr", "exg", "neg", "ext", "swap", "move", "movea", "trap", 'movem']
 const directives = ["org", "equ", "dcb", "ds", "dc"]
 const others = [
 	...setConditions.map(e => `s${e}`), 
@@ -371,7 +371,7 @@ function getAddressingModes(am: AddressingMode[], monaco: MonacoType) {
 			insertText: "#"
 		})
 	}
-	if (amMap.has(AddressingMode.EffectiveAddress)) {
+	if (amMap.has(AddressingMode.Absolute)) {
 		res.push({
 			kind: monaco.languages.CompletionItemKind.Value,
 			label: "EA",
@@ -385,14 +385,14 @@ function getAddressingModes(am: AddressingMode[], monaco: MonacoType) {
 			insertText: "()"
 		})
 	}
-	if (amMap.has(AddressingMode.IndirectWithPredecrement)) {
+	if (amMap.has(AddressingMode.PreIndirect)) {
 		res.push({
 			kind: monaco.languages.CompletionItemKind.Value,
 			label: "-(An)",
 			insertText: "-()"
 		})
 	}
-	if (amMap.has(AddressingMode.IndirectWithPostincrement)) {
+	if (amMap.has(AddressingMode.PostIndirect)) {
 		res.push({
 			kind: monaco.languages.CompletionItemKind.Value,
 			label: "(An)+",

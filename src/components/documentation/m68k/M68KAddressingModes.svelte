@@ -52,11 +52,11 @@
         <div class="example">Ex| (a0)+, -(sp)</div>
         <div class="row gap-03 wrap">
             <DocsOperand
-                name={addressingModeToString(AddressingMode.IndirectWithPostincrement)}
+                name={addressingModeToString(AddressingMode.PostIndirect)}
                 content="Post increment"
             />
             <DocsOperand
-                name={addressingModeToString(AddressingMode.IndirectWithPredecrement)}
+                name={addressingModeToString(AddressingMode.PreIndirect)}
                 content="Post increment"
             />
         </div>
@@ -92,7 +92,7 @@
         <div class="example">Ex| $1000, some_label, 140, %101010, @22, 'e'</div>
         <div class="row gap-03 wrap">
             <DocsOperand
-                name={addressingModeToString(AddressingMode.EffectiveAddress)}
+                name={addressingModeToString(AddressingMode.Absolute)}
                 content="Effective address"
             />
             <DocsOperand name="<ea>" content="Effective address" />

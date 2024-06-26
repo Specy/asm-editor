@@ -13,6 +13,7 @@ export const versions: Version[] = [
         changes: [
             "Added testcases creation, you can create testcases with an initial configuration and expected output",
             "Added base index addressing mode",
+            "Added MOVEM instruction",
         ]
     },
     {
