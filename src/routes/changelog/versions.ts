@@ -7,6 +7,16 @@ type Version = {
 }
 export const versions: Version[] = [
     {
+      version: '3.4.0',
+        title: 'Improved editor and bug fixes',
+        date: new Date('2024-07-02'),
+        changes: [
+            "Improved memory address resolve (now implements full 32 bit addressing)",
+            "Added more strict memory read/write checks for odd addresses in non-byte operations",
+            "Added alignment errors in compilation"
+        ]
+    },
+    {
         version: '3.3.0',
         title: 'Testcases and base index addressing',
         date: new Date('2024-06-12'),

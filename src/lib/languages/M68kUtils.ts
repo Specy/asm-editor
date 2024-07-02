@@ -31,6 +31,8 @@ export function getM68kErrorMessage(error: unknown, lineNumber?: number): string
                 return `${prepend} Memory read out of bounds: ${maybeError.value}`
             case 'IncorrectAddressingMode':
                 return `${prepend} Incorrect addressing mode: ${maybeError.value}`
+            case 'AddressError':
+                return `${prepend} Address error: Tried to read/write to an odd memory address "${maybeError.address}" using non-byte operation with size "${maybeError.size}" `
         }
     }
     if ('message' in error) {
