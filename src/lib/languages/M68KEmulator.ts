@@ -217,7 +217,7 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
                     interpreter = null
                     return update(s => ({ ...s, compilerErrors: errors }))
                 }
-                interpreter = s68k.createInterpreter(MEMORY_SIZE, {
+                interpreter = s68k.createInterpreter( {
                     history_size: historySize,
                     keep_history: historySize > 0
                 })
