@@ -1,7 +1,5 @@
 <script lang="ts">
 	import MarkdownRenderer from "$cmp/shared/markdown/MarkdownRenderer.svelte"
-
-
 	import { M68KDirectiveDocumentationList, fromSizesToString } from "$lib/languages/M68K-documentation"
 	import { createMarkdownWithOptions } from "$lib/markdown"
     export let openLinksInNewTab = true

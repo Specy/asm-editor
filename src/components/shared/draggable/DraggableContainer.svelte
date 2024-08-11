@@ -36,7 +36,7 @@
 		</Button>
 	</button>
 	{#if !hidden}
-		<div in:fly|global={{ x: -10, duration: 400 }} out:fly|global={{ x: -10, duration: 300 }}>
+		<div in:fly|global={{ x: -10, duration: 500 }} out:fly|global={{ x: -10, duration: 300 }}>
 			<slot />
 		</div>
 	{/if}
@@ -54,7 +54,7 @@
 		gap: 0.3rem;
 		z-index: 2;
 		height: 1.6rem;
-		transition: all 0.2s ease-out;
+		transition: all 0.2s cubic-bezier(0, 1, 1, 1);
 		align-items: center;
 		cursor: move;
 		background-color: var(--secondary);
