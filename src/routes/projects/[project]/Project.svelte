@@ -1,12 +1,12 @@
 <script lang="ts">
     import Editor from '$cmp/specific/project/Editor.svelte'
     import Button from '$cmp/shared/button/Button.svelte'
-    import { M68KEmulator } from '$lib/languages/M68KEmulator'
+    import { M68KEmulator } from '$lib/languages/M68KEmulator.svelte'
     import MemoryVisualiser from '$cmp/specific/project/memory/MemoryRenderer.svelte'
     import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
     import { createEventDispatcher, onMount } from 'svelte'
     import FaKeyboard from 'svelte-icons/fa/FaKeyboard.svelte'
-    import type { Project, TestcaseResult } from '$lib/Project'
+    import type { Project, TestcaseResult } from '$lib/Project.svelte'
     import FaSave from 'svelte-icons/fa/FaSave.svelte'
     import FaCog from 'svelte-icons/fa/FaCog.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
@@ -26,8 +26,7 @@
     import MemoryTab from '$cmp/specific/project/memory/MemoryTab.svelte'
     import ShortcutEditor from '$cmp/specific/project/settings/ShortcutEditor.svelte'
     import SizeSelector from '$cmp/specific/project/cpu/SizeSelector.svelte'
-    import { Size } from '@specy/s68k'
-    import { settingsStore } from '$stores/settingsStore'
+    import { settingsStore } from '$stores/settingsStore.svelte'
     import type monaco from 'monaco-editor'
     import ToggleableDraggable from '$cmp/shared/draggable/DraggableContainer.svelte'
     import CallStack from '$cmp/specific/project/user-tools/CallStack.svelte'
@@ -37,21 +36,34 @@
     import { getM68kErrorMessage } from '$lib/languages/M68kUtils'
     import Row from '$cmp/shared/layout/Row.svelte'
     import TestcasesEditor from '$cmp/specific/project/testcases/TestcasesEditor.svelte'
+    import { RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
 
-    export let project: Project
+    interface Props {
+        project: Project
+    }
 
-    let editor: monaco.editor.IStandaloneCodeEditor
-    let testcasesResult: TestcaseResult[] = []
-    let running = false
-    let settingsVisible = false
-    let documentationVisible = false
-    let shortcutsVisible = false
-    let testcasesVisible = false
-    let groupSize = Size.Word
-    $: errorStrings = $emulator.errors.join('\n')
-    $: info = ($emulator.terminated && $emulator.executionTime >= 0)
-        ? `Ran in ${formatTime($emulator.executionTime)}`
-        : ''
+    let { project = $bindable() }: Props = $props()
+
+    const emulator = M68KEmulator(project.code)
+
+    $effect(() => {
+        emulator.setCode(project.code)
+    })
+
+    let editor: monaco.editor.IStandaloneCodeEditor = $state()
+    let testcasesResult: TestcaseResult[] = $state([])
+    let running = $state(false)
+    let settingsVisible = $state(false)
+    let documentationVisible = $state(false)
+    let shortcutsVisible = $state(false)
+    let testcasesVisible = $state(false)
+    let groupSize = $state(RegisterSize.Word)
+    let errorStrings = $derived(emulator.errors.join('\n'))
+    let info = $derived(
+        emulator.terminated && emulator.executionTime >= 0
+            ? `Ran in ${formatTime(emulator.executionTime)}`
+            : ''
+    )
     const dispatcher = createEventDispatcher<{
         save: {
             silent: boolean
@@ -60,7 +72,6 @@
         wantsToLeave: void
         share: Project
     }>()
-    const emulator = M68KEmulator(project.code || '')
     const pressedKeys = new Map<String, boolean>()
     const [debounced] = createDebouncer(3000)
 
@@ -88,14 +99,13 @@
                 settingsVisible = !settingsVisible
             }
             case ShortcutAction.BuildCode: {
-                emulator.setCode(project.code)
-                emulator.compile($settingsStore.values.maxHistorySize.value)
+                emulator.compile(settingsStore.values.maxHistorySize.value)
                 break
             }
             case ShortcutAction.RunCode: {
-                if ($emulator.terminated || $emulator.interrupt !== undefined || !$emulator.canExecute)
+                if (emulator.terminated || emulator.interrupt !== undefined || !emulator.canExecute)
                     break
-                emulator.run($settingsStore.values.instructionsLimit.value)
+                emulator.run(settingsStore.values.instructionsLimit.value)
                 break
             }
             case ShortcutAction.SaveCode: {
@@ -110,17 +120,17 @@
                 break
             }
             case ShortcutAction.Step: {
-                if ($emulator.terminated || $emulator.interrupt !== undefined || !$emulator.canExecute)
+                if (emulator.terminated || emulator.interrupt !== undefined || !emulator.canExecute)
                     break
                 emulator.step()
                 break
             }
             case ShortcutAction.Undo: {
                 if (
-                    $emulator.terminated ||
-                    $emulator.interrupt !== undefined ||
-                    !$emulator.canExecute ||
-                    !$emulator.canUndo
+                    emulator.terminated ||
+                    emulator.interrupt !== undefined ||
+                    !emulator.canExecute ||
+                    !emulator.canUndo
                 )
                     break
                 emulator.undo()
@@ -173,420 +183,419 @@
             testcasesVisible = !testcasesVisible
         }
     }
-
-
 </script>
 
 <header class="project-header">
-	<a
-		href="/projects"
-		title="Go back to your projects"
-		on:click={(e) => {
-			e.preventDefault()
-			dispatcher('wantsToLeave')
-		}}
-	>
-		<Icon size={2}>
-			<FaAngleLeft />
-		</Icon>
-	</a>
-	<h1 style="font-size: 1.6rem; margin-left: 0.4rem" class="ellipsis">{project.name}</h1>
-	<Row gap="0.5rem" style="margin-left: auto;">
-		<Button
-			on:click={() => dispatcher('share', project)}
-			hasIcon
-			cssVar="accent2"
-			style="padding:0; width:2.2rem; height:2.2rem;"
-		>
-			<Icon>
-				<FaShareAlt />
-			</Icon>
-		</Button>
-		<ButtonLink
-			href="/donate"
-			cssVar="accent2"
-			style="padding:0; width:2.2rem; height:2.2rem;"
-			hasIcon
-		>
-			<Icon>
-				<FaDonate />
-			</Icon>
-		</ButtonLink>
-		<Button
-			on:click={() => toggleWindow('shortcuts')}
-			hasIcon
-			cssVar="accent2"
-			style="padding:0; width:2.2rem; height:2.2rem"
-		>
-			<Icon>
-				<FaKeyboard />
-			</Icon>
-		</Button>
-		<Button
-			on:click={() => toggleWindow('documentation')}
-			hasIcon
-			cssVar="accent2"
-			style="padding:0; width:2.2rem; height:2.2rem"
-		>
-			<Icon>
-				<FaBook />
-			</Icon>
-		</Button>
-		<Button
-			on:click={() => toggleWindow('settings')}
-			hasIcon
-			cssVar="accent2"
-			style="padding:0; width:2.2rem; height:2.2rem"
-		>
-			<Icon>
-				<FaCog />
-			</Icon>
-		</Button>
-		<Button
-			on:click={() => {
-				emulator.setCode(project.code)
-				dispatcher('save', {
-					silent: false,
-					data: project
-				})
-			}}
-			cssVar="accent2"
-			hasIcon
-			style="padding:0; width:2.2rem; height:2.2rem"
-		>
-			<Icon>
-				<FaSave />
-			</Icon>
-		</Button>
-	</Row>
-	<ShortcutEditor bind:visible={shortcutsVisible} />
-	<Settings bind:visible={settingsVisible} />
-	<M68KDocumentation bind:visible={documentationVisible} />
-	<TestcasesEditor
-		bind:visible={testcasesVisible}
-		testcasesResult={testcasesResult}
-		bind:testcases={project.testcases}
-	/>
+    <a
+        href="/projects"
+        title="Go back to your projects"
+        onclick={(e) => {
+            e.preventDefault()
+            dispatcher('wantsToLeave')
+        }}
+    >
+        <Icon size={2}>
+            <FaAngleLeft />
+        </Icon>
+    </a>
+    <h1 style="font-size: 1.6rem; margin-left: 0.4rem" class="ellipsis">{project.name}</h1>
+    <Row gap="0.5rem" style="margin-left: auto;">
+        <Button
+            on:click={() => dispatcher('share', project)}
+            hasIcon
+            cssVar="accent2"
+            style="padding:0; width:2.2rem; height:2.2rem;"
+        >
+            <Icon>
+                <FaShareAlt />
+            </Icon>
+        </Button>
+        <ButtonLink
+            href="/donate"
+            cssVar="accent2"
+            style="padding:0; width:2.2rem; height:2.2rem;"
+            hasIcon
+        >
+            <Icon>
+                <FaDonate />
+            </Icon>
+        </ButtonLink>
+        <Button
+            on:click={() => toggleWindow('shortcuts')}
+            hasIcon
+            cssVar="accent2"
+            style="padding:0; width:2.2rem; height:2.2rem"
+        >
+            <Icon>
+                <FaKeyboard />
+            </Icon>
+        </Button>
+        <Button
+            on:click={() => toggleWindow('documentation')}
+            hasIcon
+            cssVar="accent2"
+            style="padding:0; width:2.2rem; height:2.2rem"
+        >
+            <Icon>
+                <FaBook />
+            </Icon>
+        </Button>
+        <Button
+            on:click={() => toggleWindow('settings')}
+            hasIcon
+            cssVar="accent2"
+            style="padding:0; width:2.2rem; height:2.2rem"
+        >
+            <Icon>
+                <FaCog />
+            </Icon>
+        </Button>
+        <Button
+            on:click={() => {
+                dispatcher('save', {
+                    silent: false,
+                    data: project
+                })
+            }}
+            cssVar="accent2"
+            hasIcon
+            style="padding:0; width:2.2rem; height:2.2rem"
+        >
+            <Icon>
+                <FaSave />
+            </Icon>
+        </Button>
+    </Row>
+    <ShortcutEditor bind:visible={shortcutsVisible} />
+    <Settings bind:visible={settingsVisible} />
+    <M68KDocumentation bind:visible={documentationVisible} />
+    <TestcasesEditor
+        bind:visible={testcasesVisible}
+        {testcasesResult}
+        bind:testcases={project.testcases}
+    />
 </header>
 
 <ToggleableDraggable title="Call stack" left={300}>
-	<CallStack
-		stack={$emulator.callStack}
-		on:gotoLabel={(e) => {
-			const label = e.detail
-			editor.revealLineInCenter(label.line + 1)
-			editor.setPosition({ lineNumber: label.line + 1, column: 1 })
-		}}
-	/>
+    <CallStack
+        stack={emulator.callStack}
+        on:gotoLabel={(e) => {
+            const label = e.detail
+            editor.revealLineInCenter(label.line + 1)
+            editor.setPosition({ lineNumber: label.line + 1, column: 1 })
+        }}
+    />
 </ToggleableDraggable>
 
 <ToggleableDraggable title="History" left={500}>
-	<MutationsViewer
-		on:undo={(e) => {
-			const amount = e.detail
-			emulator.undo(amount)
-		}}
-		on:highlight={(e) => {
-			const line = e.detail
-			editor.revealLineInCenter(line + 1)
-			editor.setPosition({ lineNumber: line + 1, column: 0 })
-		}}
-		steps={$emulator.latestSteps}
-	/>
+    <MutationsViewer
+        on:undo={(e) => {
+            const amount = e.detail
+            emulator.undo(amount)
+        }}
+        on:highlight={(e) => {
+            const line = e.detail
+            editor.revealLineInCenter(line + 1)
+            editor.setPosition({ lineNumber: line + 1, column: 0 })
+        }}
+        steps={emulator.latestSteps}
+    />
 </ToggleableDraggable>
-{#each $emulator.memory.tabs as tab, i}
-	<MemoryTab
-		{tab}
-		left={700 + i * 300}
-		sp={$emulator.sp}
-		on:addressChange={(e) => {
-			const { tab, address } = e.detail
-			emulator.setTabMemoryAddress(address, tab.id)
-		}}
-	/>
+{#each emulator.memory.tabs as tab, i}
+    <MemoryTab
+        {tab}
+        left={700 + i * 300}
+        sp={emulator.sp}
+        on:addressChange={(e) => {
+            const { tab, address } = e.detail
+            emulator.setTabMemoryAddress(address, tab.id)
+        }}
+    />
 {/each}
 <div class="editor-memory-wrapper">
-	<div class="editor-wrapper">
-		<div
-			class="editor-border"
-			class:gradientBorder={$emulator.canExecute && !$emulator.terminated}
-			class:redBorder={$emulator.errors.length > 0}
-		>
-			<Editor
-				on:change={(d) => {
-					emulator.setCode(d.detail)
-					if ($emulator.canExecute && $emulator.terminated && $emulator.line >= 0) {
-						emulator.resetSelectedLine()
-					}
-					if ($settingsStore.values.autoSave.value) {
-						debounced(() => {
-							dispatcher('save', {
-								silent: true,
-								data: project
-							})
-						})
-					}
-				}}
-				on:breakpointPress={(d) => {
-					emulator.toggleBreakpoint(d.detail - 1)
-				}}
-				bind:editor
-				bind:code={project.code}
-				breakpoints={$emulator.breakpoints}
-				errors={$emulator.compilerErrors}
-				language={project.language}
-				highlightedLine={$emulator.line}
-				disabled={$emulator.canExecute && !$emulator.terminated}
-				hasError={$emulator.errors.length > 0}
-			/>
-		</div>
+    <div class="editor-wrapper">
+        <div
+            class="editor-border"
+            class:gradientBorder={emulator.canExecute && !emulator.terminated}
+            class:redBorder={emulator.errors.length > 0}
+        >
+            <Editor
+                on:change={(d) => {
+                    if (emulator.canExecute && emulator.terminated && emulator.line >= 0) {
+                        emulator.resetSelectedLine()
+                    }
+                    if (settingsStore.values.autoSave.value) {
+                        debounced(() => {
+                            dispatcher('save', {
+                                silent: true,
+                                data: project
+                            })
+                        })
+                    }
+                }}
+                on:breakpointPress={(d) => {
+                    emulator.toggleBreakpoint(d.detail - 1)
+                }}
+                bind:editor
+                bind:code={project.code}
+                breakpoints={emulator.breakpoints}
+                errors={emulator.compilerErrors}
+                language={project.language}
+                highlightedLine={emulator.line}
+                disabled={emulator.canExecute && !emulator.terminated}
+                hasError={emulator.errors.length > 0}
+            />
+        </div>
 
+        <Controls
+            {running}
+            hasTests={project.testcases.length > 0}
+            hasErrorsInTests={testcasesResult.some((r) => !r.passed)}
+            hasNoErrorsInTests={testcasesResult.every((r) => r.passed) &&
+                testcasesResult.length > 0}
+            canEditTests={true}
+            executionDisabled={emulator.terminated || emulator.interrupt !== undefined}
+            buildDisabled={emulator.compilerErrors.length > 0}
+            hasCompiled={emulator.canExecute}
+            canUndo={emulator.canUndo}
+            on:edit-tests={() => {
+                toggleWindow('testcases')
+            }}
+            on:test={async () => {
+                running = true
+                setTimeout(async () => {
+                    try {
+                        testcasesResult = await emulator.test(
+                            project.code,
+                            project.testcases,
+                            settingsStore.values.instructionsLimit.value,
+                            settingsStore.values.maxHistorySize.value
+                        )
+                        running = false
+                    } catch (e) {
+                        console.error(e)
+                        running = false
+                        toast.error('Error executing tests. ' + getM68kErrorMessage(e))
+                    }
+                }, 50)
+            }}
+            on:run={async () => {
+                running = true
+                testcasesResult = []
+                setTimeout(() => {
+                    try {
+                        emulator.run(settingsStore.values.instructionsLimit.value)
+                        running = false
+                    } catch (e) {
+                        console.error(e)
+                        running = false
+                        toast.error('Error executing code. ' + getM68kErrorMessage(e))
+                    }
+                }, 50)
+            }}
+            on:build={async () => {
+                try {
+                    running = false
+                    //give the latest code to the emulator
+                    await emulator.compile(settingsStore.values.maxHistorySize.value, project.code)
+                } catch (e) {
+                    console.error(e)
+                    toast.error('Error compiling code. ' + getM68kErrorMessage(e))
+                }
+            }}
+            on:step={() => {
+                try {
+                    emulator.step()
+                } catch (e) {
+                    console.error(e)
+                    toast.error('Error executing code. ' + getM68kErrorMessage(e))
+                }
+            }}
+            on:undo={() => {
+                try {
+                    emulator.undo()
+                } catch (e) {
+                    console.error(e)
+                    toast.error('Error executing undo ' + getM68kErrorMessage(e))
+                }
+            }}
+            on:stop={() => {
+                emulator.clear()
+                running = false
+                testcasesResult = []
+            }}
+        />
+    </div>
+    <div class="right-side">
+        <div class="memory-wrapper">
+            <div class="column" style="gap: 0.5rem;">
+                <StatusCodesVisualiser statusCodes={emulator.statusRegister} />
+                <RegistersVisualiser
+                    size={groupSize}
+                    registers={emulator.registers}
+                    on:registerClick={async (e) => {
+                        const value = e.detail.value
+                        const clampedSize = value - (value % emulator.memory.global.pageSize)
+                        emulator.setGlobalMemoryAddress(clamp(clampedSize, 0, MEMORY_SIZE))
+                    }}
+                />
+            </div>
+            <div class="column" style="gap: 0.5rem">
+                <div class="row" style="gap: 0.5rem">
+                    <SizeSelector bind:selected={groupSize} />
+                    <MemoryControls
+                        bytesPerPage={emulator.memory.global.pageSize}
+                        memorySize={MEMORY_SIZE}
+                        inputStyle="height: 100%"
+                        currentAddress={emulator.memory.global.address}
+                        on:addressChange={(e) => {
+                            emulator.setGlobalMemoryAddress(e.detail)
+                        }}
+                    />
+                </div>
 
-		<Controls
-			{running}
-			hasTests={project.testcases.length > 0}
-			hasErrorsInTests={testcasesResult.some((r) => !r.passed)}
-			hasNoErrorsInTests={testcasesResult.every((r) => r.passed) && testcasesResult.length > 0}
-			canEditTests={true}
-			executionDisabled={$emulator.terminated || $emulator.interrupt !== undefined}
-			buildDisabled={$emulator.compilerErrors.length > 0}
-			hasCompiled={$emulator.canExecute}
-			canUndo={$emulator.canUndo}
-			on:edit-tests={() => {
-				toggleWindow('testcases')
-			}}
-			on:test={async () => {
-				running = true
-				setTimeout(async () => {
-					try {
-						testcasesResult = await emulator.test(
-							project.code,
-							project.testcases,
-							$settingsStore.values.instructionsLimit.value,
-							$settingsStore.values.maxHistorySize.value,
-						)
-						running = false
-					} catch (e) {
-						console.error(e)
-						running = false
-						toast.error('Error executing tests. ' + getM68kErrorMessage(e))
-					}
-				}, 50)
-			}}
-			on:run={async () => {
-				running = true
-				testcasesResult = []
-				setTimeout(() => {
-					try {
-						emulator.run($settingsStore.values.instructionsLimit.value)
-						running = false
-					} catch (e) {
-						console.error(e)
-						running = false
-						toast.error('Error executing code. ' + getM68kErrorMessage(e))
-					}
-				}, 50)
-			}}
-			on:build={async () => {
-				try {
-					running = false
-					//give the latest code to the emulator
-					await emulator.compile($settingsStore.values.maxHistorySize.value, project.code)
-				} catch (e) {
-					console.error(e)
-					toast.error('Error compiling code. ' + getM68kErrorMessage(e))
-				}
-			}}
-			on:step={() => {
-				try {
-					emulator.step()
-				} catch (e) {
-					console.error(e)
-					toast.error('Error executing code. ' + getM68kErrorMessage(e))
-				}
-			}}
-			on:undo={() => {
-				try {
-					emulator.undo()
-				} catch (e) {
-					console.error(e)
-					toast.error('Error executing undo ' + getM68kErrorMessage(e))
-				}
-			}}
-			on:stop={() => {
-				emulator.clear()
-				running = false
-				testcasesResult = []
-			}}
-		/>
-	</div>
-	<div class="right-side">
-		<div class="memory-wrapper">
-			<div class="column" style="gap: 0.5rem;">
-				<StatusCodesVisualiser statusCodes={$emulator.statusRegister} />
-				<RegistersVisualiser
-					size={groupSize}
-					registers={$emulator.registers}
-					on:registerClick={async (e) => {
-						const value = e.detail.value
-						const clampedSize = value - (value % $emulator.memory.global.pageSize)
-						emulator.setGlobalMemoryAddress(clamp(clampedSize, 0, MEMORY_SIZE))
-					}}
-				/>
-			</div>
-			<div class="column" style="gap: 0.5rem">
-				<div class="row" style="gap: 0.5rem">
-					<SizeSelector bind:selected={groupSize} />
-					<MemoryControls
-						bytesPerPage={$emulator.memory.global.pageSize}
-						memorySize={MEMORY_SIZE}
-						inputStyle="height: 100%"
-						currentAddress={$emulator.memory.global.address}
-						on:addressChange={async (e) => {
-							emulator.setGlobalMemoryAddress(e.detail)
-						}}
-					/>
-				</div>
-
-				<MemoryVisualiser
-					bytesPerRow={$emulator.memory.global.rowSize}
-					pageSize={$emulator.memory.global.pageSize}
-					memory={$emulator.memory.global.data}
-					currentAddress={$emulator.memory.global.address}
-					sp={$emulator.sp}
-				/>
-			</div>
-		</div>
-		<StdOut
-			{info}
-			stdOut={errorStrings ? `${errorStrings}\n${$emulator.stdOut}` : $emulator.stdOut}
-			compilerErrors={$emulator.compilerErrors}
-		/>
-	</div>
+                <MemoryVisualiser
+                    bytesPerRow={emulator.memory.global.rowSize}
+                    pageSize={emulator.memory.global.pageSize}
+                    memory={emulator.memory.global.data}
+                    currentAddress={emulator.memory.global.address}
+                    sp={emulator.sp}
+                />
+            </div>
+        </div>
+        <StdOut
+            {info}
+            stdOut={errorStrings ? `${errorStrings}\n${emulator.stdOut}` : emulator.stdOut}
+            compilerErrors={emulator.compilerErrors}
+        />
+    </div>
 </div>
 
 <style lang="scss">
-  .project-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.5rem;
-    background-color: var(--secondary);
-    color: var(--secondary-text);
-  }
-
-  .editor-memory-wrapper {
-    display: flex;
-    flex: 1;
-    padding: 0.5rem;
-
-    .editor-wrapper,
-    .memory-wrapper {
-      display: flex;
+    .project-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.5rem;
+        background-color: var(--secondary);
+        color: var(--secondary-text);
     }
 
-    .editor-wrapper {
-      flex-direction: column;
-      flex: 1;
-      gap: 0.4rem;
-      @media screen and (max-width: 1000px) {
-        min-height: 70vh;
-      }
-
-      .editor-border {
-        position: relative;
+    .editor-memory-wrapper {
         display: flex;
         flex: 1;
-        padding: 0.2rem;
-        margin-left: -0.2rem;
-        border-radius: 0.5rem;
-      }
+        padding: 0.5rem;
+
+        .editor-wrapper,
+        .memory-wrapper {
+            display: flex;
+        }
+
+        .editor-wrapper {
+            flex-direction: column;
+            flex: 1;
+            gap: 0.4rem;
+            @media screen and (max-width: 1000px) {
+                min-height: 70vh;
+            }
+
+            .editor-border {
+                position: relative;
+                display: flex;
+                flex: 1;
+                padding: 0.2rem;
+                margin-left: -0.2rem;
+                border-radius: 0.5rem;
+            }
+        }
+
+        .memory-wrapper {
+            gap: 0.5rem;
+            @media screen and (max-width: 1000px) {
+                margin-top: 1rem;
+                overflow-x: auto;
+                width: 100%;
+            }
+        }
+
+        @media screen and (max-width: 1000px) {
+            flex-direction: column;
+        }
     }
 
-    .memory-wrapper {
-      gap: 0.5rem;
-      @media screen and (max-width: 1000px) {
-        margin-top: 1rem;
-        overflow-x: auto;
-        width: 100%;
-      }
+    .right-side {
+        margin-left: 0.5rem;
+        width: min-content;
+        max-height: calc(100vh - 4.2rem);
+        padding-top: 0.2rem;
+        display: flex;
+        overflow-y: auto;
+        flex-direction: column;
     }
 
     @media screen and (max-width: 1000px) {
-      flex-direction: column;
-    }
-  }
-
-  .right-side {
-    margin-left: 0.5rem;
-    width: min-content;
-    max-height: calc(100vh - 4.2rem);
-    padding-top: 0.2rem;
-    display: flex;
-    overflow-y: auto;
-    flex-direction: column;
-  }
-
-  @media screen and (max-width: 1000px) {
-    .editor-memory-wrapper {
-      grid-template-columns: 1fr;
-    }
-    .right-side {
-      margin: 0;
-      padding: 0.2rem;
-      margin-top: 1rem;
-      width: unset;
-      max-height: unset;
-      align-items: center;
-      flex-direction: column-reverse;
-    }
-  }
-
-  .gradientBorder, .redBorder {
-    position: relative;
-
-    &::before {
-      position: absolute;
-      content: '';
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(
-                      60deg,
-                      hsl(224, 85%, 66%),
-                      hsl(269, 85%, 66%),
-                      hsl(314, 85%, 66%),
-                      hsl(359, 85%, 66%),
-                      hsl(44, 85%, 66%),
-                      hsl(89, 85%, 66%),
-                      hsl(134, 85%, 66%),
-                      hsl(179, 85%, 66%)
-      );
-      background-size: 300% 300%;
-      background-position: 0 50%;
-      border-radius: 0.5rem;
-      animation: moveGradient 5s alternate infinite, appear 0.3s ease-in;
+        .editor-memory-wrapper {
+            grid-template-columns: 1fr;
+        }
+        .right-side {
+            margin: 0;
+            padding: 0.2rem;
+            margin-top: 1rem;
+            width: unset;
+            max-height: unset;
+            align-items: center;
+            flex-direction: column-reverse;
+        }
     }
 
-    @keyframes appear {
-      from {
-        opacity: 0;
-      }
-      to {
-        opacity: 1;
-      }
-    }
-    @keyframes moveGradient {
-      50% {
-        background-position: 100% 50%;
-      }
-    }
-  }
+    .gradientBorder,
+    .redBorder {
+        position: relative;
 
-  .redBorder {
-    &::before {
-      background: linear-gradient(60deg, hsl(359, 85%, 66%), hsl(0, 85%, 66%));
+        &::before {
+            position: absolute;
+            content: '';
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                60deg,
+                hsl(224, 85%, 66%),
+                hsl(269, 85%, 66%),
+                hsl(314, 85%, 66%),
+                hsl(359, 85%, 66%),
+                hsl(44, 85%, 66%),
+                hsl(89, 85%, 66%),
+                hsl(134, 85%, 66%),
+                hsl(179, 85%, 66%)
+            );
+            background-size: 300% 300%;
+            background-position: 0 50%;
+            border-radius: 0.5rem;
+            animation:
+                moveGradient 5s alternate infinite,
+                appear 0.3s ease-in;
+        }
+
+        @keyframes appear {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+        @keyframes moveGradient {
+            50% {
+                background-position: 100% 50%;
+            }
+        }
     }
-  }
+
+    .redBorder {
+        &::before {
+            background: linear-gradient(60deg, hsl(359, 85%, 66%), hsl(0, 85%, 66%));
+        }
+    }
 </style>

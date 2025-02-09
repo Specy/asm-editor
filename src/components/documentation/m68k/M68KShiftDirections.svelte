@@ -1,10 +1,7 @@
 <script lang="ts">
-
-	import DocsOperand from "$cmp/documentation/DocsOperand.svelte"
-	import { directions, directionsDescriptions } from "$lib/languages/M68K-documentation"
-
+    import DocsOperand from '$cmp/documentation/DocsOperand.svelte'
+    import { directions, directionsDescriptions } from '$lib/languages/M68K-documentation'
 </script>
-
 
 <div class="cc-grid">
     {#each directions as dr}
@@ -12,8 +9,6 @@
     {/each}
 </div>
 
-
-
 <style lang="scss">
-	@import './style.scss'	
+    @import './style.scss';
 </style>

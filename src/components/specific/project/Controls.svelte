@@ -13,106 +13,125 @@
     import FaExclamationTriangle from 'svelte-icons/fa/FaExclamationTriangle.svelte'
 
     const dispatch = createEventDispatcher()
-    export let executionDisabled: boolean
 
-    export let hasTests: boolean
+    interface Props {
+        executionDisabled: boolean
+        hasTests: boolean
+        canEditTests: boolean
+        hasErrorsInTests?: boolean
+        hasNoErrorsInTests?: boolean
+        hasCompiled: boolean
+        buildDisabled: boolean
+        canUndo: boolean
+        running: boolean
+    }
 
-    export let canEditTests: boolean
-    export let hasErrorsInTests = false
-		export let hasNoErrorsInTests = false
-    export let hasCompiled: boolean
-    export let buildDisabled: boolean
-    export let canUndo: boolean
-    export let running: boolean
+    let {
+        executionDisabled,
+        hasTests,
+        canEditTests,
+        hasErrorsInTests = false,
+        hasNoErrorsInTests = false,
+        hasCompiled,
+        buildDisabled,
+        canUndo,
+        running
+    }: Props = $props()
 </script>
 
 <div class="project-controls">
-	{#if !hasCompiled}
-		<Button style="max-width: 5.5rem; flex:1; padding: 0.5rem 0.3rem" on:click={() => dispatch('build')}
-						disabled={buildDisabled}>
-			<Icon size={1} style="margin-right: 0.4rem;">
-				<FaWrench />
-			</Icon>
-			Build
-		</Button>
-		{#if hasTests}
-			<Button style="max-width: 5.5rem; flex:1; padding: 0.5rem 0.3rem" on:click={() => dispatch('test')}
-							disabled={buildDisabled} cssVar="accent2">
-				<Icon size={1} style="margin-right: 0.4rem;">
-					<FaFlask />
-				</Icon>
-				Test
-			</Button>
-		{/if}
-	{:else}
-		<Button
-			style="max-width: 5.5rem; flex:1; padding: 0.5rem 0.3rem"
-			cssVar="accent2"
-			on:click={() => dispatch('stop')}
-		>
-			<Icon size={1} style="margin-right: 0.4rem;">
-				<FaStop />
-			</Icon>
-			Stop
-		</Button>
-		<Button
-			style="max-width: 5.5rem; flex:1; padding: 0.5rem 0.3rem"
-			on:click={() => dispatch('run')}
-			disabled={executionDisabled || running}
-		>
-			<Icon size={1} style="margin-right: 0.4rem;">
-				{#if running}
-					<FaRegClock />
-				{:else}
-					<FaPlay />
-				{/if}
-			</Icon>
-			Run
-		</Button>
-		<Button
-			style="max-width: 5.5rem; flex:1; padding: 0.5rem 0.3rem"
-			disabled={executionDisabled || !canUndo}
-			on:click={() => dispatch('undo')}
-		>
-			<Icon size={1} style="margin-right: 0.4rem;">
-				<FaUndo />
-			</Icon>
-			Undo
-		</Button>
-		<Button
-			style="max-width: 5.5rem; flex:1; padding: 0.5rem 0.3rem"
-			disabled={executionDisabled}
-			on:click={() => dispatch('step')}
-		>
-			<Icon size={1} style="margin-right: 0.4rem;">
-				<FaStepForward />
-			</Icon>
-			Step
-		</Button>
-	{/if}
-	{#if canEditTests}
-		<Button
-			style="max-width: 7rem; padding: 0.5rem 0.8rem; margin-left: auto;"
-			cssVar={hasErrorsInTests ? 'red' :
-			hasNoErrorsInTests ? "green" : 'accent2'}
-			on:click={() => dispatch('edit-tests')}
-		>
-			<Icon size={1} style="margin-right: 0.4rem;">
-				{#if hasErrorsInTests}
-					<FaExclamationTriangle />
-				{:else}
-					<FaListOl />
-				{/if}
-			</Icon>
-			Testcases
-		</Button>
-	{/if}
+    {#if !hasCompiled}
+        <Button
+            style="max-width: 5.5rem; flex:1; padding: 0.5rem 0.3rem"
+            on:click={() => dispatch('build')}
+            disabled={buildDisabled}
+        >
+            <Icon size={1} style="margin-right: 0.4rem;">
+                <FaWrench />
+            </Icon>
+            Build
+        </Button>
+        {#if hasTests}
+            <Button
+                style="max-width: 5.5rem; flex:1; padding: 0.5rem 0.3rem"
+                on:click={() => dispatch('test')}
+                disabled={buildDisabled}
+                cssVar="accent2"
+            >
+                <Icon size={1} style="margin-right: 0.4rem;">
+                    <FaFlask />
+                </Icon>
+                Test
+            </Button>
+        {/if}
+    {:else}
+        <Button
+            style="max-width: 5.5rem; flex:1; padding: 0.5rem 0.3rem"
+            cssVar="accent2"
+            on:click={() => dispatch('stop')}
+        >
+            <Icon size={1} style="margin-right: 0.4rem;">
+                <FaStop />
+            </Icon>
+            Stop
+        </Button>
+        <Button
+            style="max-width: 5.5rem; flex:1; padding: 0.5rem 0.3rem"
+            on:click={() => dispatch('run')}
+            disabled={executionDisabled || running}
+        >
+            <Icon size={1} style="margin-right: 0.4rem;">
+                {#if running}
+                    <FaRegClock />
+                {:else}
+                    <FaPlay />
+                {/if}
+            </Icon>
+            Run
+        </Button>
+        <Button
+            style="max-width: 5.5rem; flex:1; padding: 0.5rem 0.3rem"
+            disabled={executionDisabled || !canUndo}
+            on:click={() => dispatch('undo')}
+        >
+            <Icon size={1} style="margin-right: 0.4rem;">
+                <FaUndo />
+            </Icon>
+            Undo
+        </Button>
+        <Button
+            style="max-width: 5.5rem; flex:1; padding: 0.5rem 0.3rem"
+            disabled={executionDisabled}
+            on:click={() => dispatch('step')}
+        >
+            <Icon size={1} style="margin-right: 0.4rem;">
+                <FaStepForward />
+            </Icon>
+            Step
+        </Button>
+    {/if}
+    {#if canEditTests}
+        <Button
+            style="max-width: 7rem; padding: 0.5rem 0.8rem; margin-left: auto;"
+            cssVar={hasErrorsInTests ? 'red' : hasNoErrorsInTests ? 'green' : 'accent2'}
+            on:click={() => dispatch('edit-tests')}
+        >
+            <Icon size={1} style="margin-right: 0.4rem;">
+                {#if hasErrorsInTests}
+                    <FaExclamationTriangle />
+                {:else}
+                    <FaListOl />
+                {/if}
+            </Icon>
+            Testcases
+        </Button>
+    {/if}
 </div>
 
 <style lang="scss">
-  .project-controls {
-    display: flex;
-		flex-wrap: wrap;
-    gap: 0.5rem;
-  }
+    .project-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
 </style>

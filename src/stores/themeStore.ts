@@ -1,15 +1,15 @@
-import { browser } from '$app/environment';
-import { createDebouncer } from '$lib/utils';
-import { TinyColor } from '@ctrl/tinycolor';
+import { browser } from '$app/environment'
+import { createDebouncer } from '$lib/utils'
+import { TinyColor } from '@ctrl/tinycolor'
 
 import cloneDeep from 'clone-deep'
 import { get, writable } from 'svelte/store'
-import type { Writable } from "svelte/store"
+import type { Writable } from 'svelte/store'
 
 //TODO redo this with a single writable object, it doesnt need to be this complicated
 const themeObject = {
     background: {
-        color: "#171A21",
+        color: '#171A21',
         name: 'background',
         prop: 'background'
     },
@@ -19,11 +19,11 @@ const themeObject = {
         prop: 'primary'
     },
     secondary: {
-        color: '#212630',
+        color: '#1d212a',
         name: 'secondary',
         prop: 'secondary'
     },
-    tertiary:  {
+    tertiary: {
         color: '#2d3950',
         name: 'tertiary',
         prop: 'tertiary'
@@ -37,7 +37,7 @@ const themeObject = {
         color: '#3b5364',
         name: 'accent2',
         prop: 'accent2'
-    },  
+    },
     hint: {
         color: '#939393',
         name: 'hint',
@@ -50,7 +50,7 @@ const themeObject = {
     },
     red: {
         color: '#ed4f4f',
-        name: 'red', //TODO rename to warn 
+        name: 'red', //TODO rename to warn
         prop: 'red'
     },
     green: {
@@ -71,20 +71,20 @@ type StoredTheme = {
     theme: ThemeProp[]
 }
 const [debouncer] = createDebouncer(1000)
-export class ThemeStoreClass{
-    public textForDark = "#dbdbdb" 
-    public textForLight = "#181818"
+export class ThemeStoreClass {
+    public textForDark = '#dbdbdb'
+    public textForLight = '#181818'
     theme: Writable<{
         [key in ThemeKeys]: Writable<ThemeProp>
     }>
-    constructor(){
+    constructor() {
         const base = cloneDeep(themeObject)
         const listened = {} as { [key in ThemeKeys]: Writable<ThemeProp> }
         Object.entries(base).forEach(([key, value]) => {
             //@ts-ignore doesnt like that i set the key
             listened[key] = writable({
                 //@ts-ignore value is an object
-                ...value, 
+                ...value,
                 //@ts-ignore value is unknown
                 color: value.color
             })
@@ -92,41 +92,40 @@ export class ThemeStoreClass{
         this.theme = writable(listened)
     }
     toArray(): ThemeProp[] {
-        return Object.values(get(this.theme)).map(el => get(el))
+        return Object.values(get(this.theme)).map((el) => get(el))
     }
-    isDefault(key: ThemeKeys, color): boolean{
+    isDefault(key: ThemeKeys, color): boolean {
         return themeObject[key]?.color === color
     }
-    reset(key: ThemeKeys){
+    reset(key: ThemeKeys) {
         this.set(key, themeObject[key]?.color)
-        
     }
-    set(key: ThemeKeys, color: string): void{
-        this.theme.update(theme => {
-            theme[key].update(themeProp => {
+    set(key: ThemeKeys, color: string): void {
+        this.theme.update((theme) => {
+            theme[key].update((themeProp) => {
                 themeProp.color = color
-                return themeProp   
+                return themeProp
             })
             return theme
         })
         this.save()
     }
-    get(key: ThemeKeys): Writable<ThemeProp>{
+    get(key: ThemeKeys): Writable<ThemeProp> {
         return get(this.theme)[key]
     }
-    getText(key: ThemeKeys): string{
+    getText(key: ThemeKeys): string {
         const color = this.getColor(key)
         return color?.isDark() ? this.textForDark : this.textForLight
     }
-    layer(key: ThemeKeys, layer: number): TinyColor{
+    layer(key: ThemeKeys, layer: number): TinyColor {
         const color = this.getColor(key)
         const isDark = color.isDark()
         return isDark ? color.lighten(layer) : color.darken(layer)
     }
-    getColor(key: ThemeKeys): TinyColor{
+    getColor(key: ThemeKeys): TinyColor {
         return new TinyColor(get(this.get(key)).color)
     }
-    save(){
+    save() {
         const inner = () => {
             const theme = this.toArray()
             const state: StoredTheme = {
@@ -137,20 +136,19 @@ export class ThemeStoreClass{
         }
         debouncer(inner)
     }
-    load(){
-        try{
+    load() {
+        try {
             const theme = JSON.parse(localStorage.getItem('theme')) as StoredTheme | null
-            if(theme && theme.version === version){
+            if (theme && theme.version === version) {
                 theme.theme.forEach((themeProp: ThemeProp) => {
                     this.set(themeProp.prop, themeProp.color)
                 })
             }
-        }catch(e){
+        } catch (e) {
             console.error(e)
         }
-
     }
 }
 
 export const ThemeStore = new ThemeStoreClass()
-if(browser) ThemeStore.load()
+if (browser) ThemeStore.load()

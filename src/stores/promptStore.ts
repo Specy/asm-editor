@@ -1,5 +1,5 @@
-import { writable } from "svelte/store"
-export enum PromptType{
+import { writable } from 'svelte/store'
+export enum PromptType {
     Text,
     Confirm
 }
@@ -20,25 +20,38 @@ function createPromptStore() {
         placeholder: '',
         type: PromptType.Text,
         resolve: null,
-        cancellable: true,
+        cancellable: true
     })
     let current: Prompt
-    subscribe(value => current = value)
-    function ask(question: string, type: PromptType, cancellable = true, placeholder = ""): Promise<string | boolean> {
+    subscribe((value) => (current = value))
+    function ask(
+        question: string,
+        type: PromptType,
+        cancellable = true,
+        placeholder = ''
+    ): Promise<string | boolean> {
         current.resolve?.(null)
         const promise = new Promise<string | boolean>((resolve) => {
-            set({ promise: null, question, placeholder, type, resolve, cancellable, id: current.id + 1})
+            set({
+                promise: null,
+                question,
+                placeholder,
+                type,
+                resolve,
+                cancellable,
+                id: current.id + 1
+            })
         })
-        update(s => {
+        update((s) => {
             s.promise = promise
             return s
         })
         return promise
     }
-    function confirm(question: string, cancellable = true): Promise<boolean>{
+    function confirm(question: string, cancellable = true): Promise<boolean> {
         return ask(question, PromptType.Confirm, cancellable) as any as Promise<boolean>
     }
-    function askText(question: string, cancellable = true, placeholder = ""){
+    function askText(question: string, cancellable = true, placeholder = '') {
         return ask(question, PromptType.Text, cancellable, placeholder) as any as Promise<string>
     }
     function answer(value: string | boolean) {
@@ -46,7 +59,7 @@ function createPromptStore() {
         cancel()
     }
     function cancel() {
-        update(s => {
+        update((s) => {
             s.promise = null
             s.resolve = null
             return s
@@ -54,7 +67,7 @@ function createPromptStore() {
         reset()
     }
     function reset() {
-        update(s => {
+        update((s) => {
             s.question = ''
             s.placeholder = ''
             s.cancellable = true

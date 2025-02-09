@@ -5,49 +5,56 @@
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import { createEventDispatcher } from 'svelte'
 
-    export let name: string
-    export let canDelete: boolean = true
     const dispatcher = createEventDispatcher<{
-        'change-key': { old: string, new: string }
-        'delete': void
+        'change-key': { old: string; new: string }
+        delete: void
     }>()
-    export let registersNames: string[]
-    export let value: number
 
-    export let style = ''
+    interface Props {
+        name: string
+        canDelete?: boolean
+        registersNames: string[]
+        value: number
+        style?: string
+    }
+
+    let {
+        name,
+        canDelete = true,
+        registersNames,
+        value = $bindable(),
+        style = ''
+    }: Props = $props()
 </script>
 
 <div class="register-testcase" {style}>
-	<select
-		value={name}
-		on:change={(e) => dispatcher('change-key', {
-			old: name,
-			new: e.target.value
-		})}
-	>
-		{#each registersNames as registerName}
-			<option value={registerName}>{registerName}</option>
-		{/each}
-	</select>
-	<div class="hide-on-hover" style={!canDelete ? "display: flex" : ''}>
-		<Icon size={0.8}>
-			<FaArrowRight />
-		</Icon>
-	</div>
-	{#if canDelete}
-		<button
-			class="show-on-hover"
-			on:click={() => dispatcher('delete')}
-		>
-			<Icon size={0.8}>
-				<FaTimes />
-			</Icon>
-		</button>
-	{/if}
+    <select
+        value={name}
+        onchange={(e) =>
+            dispatcher('change-key', {
+                old: name,
+                new: e.target.value
+            })}
+    >
+        {#each registersNames as registerName}
+            <option value={registerName}>{registerName}</option>
+        {/each}
+    </select>
+    <div class="hide-on-hover" style={!canDelete ? 'display: flex' : ''}>
+        <Icon size={0.8}>
+            <FaArrowRight />
+        </Icon>
+    </div>
+    {#if canDelete}
+        <button class="show-on-hover" onclick={() => dispatcher('delete')}>
+            <Icon size={0.8}>
+                <FaTimes />
+            </Icon>
+        </button>
+    {/if}
 
-	<input type="number" bind:value>
+    <input type="number" bind:value />
 </div>
-
 
 <style>
     .register-testcase {
@@ -58,7 +65,8 @@
         overflow: hidden;
     }
 
-    .show-on-hover, .hide-on-hover {
+    .show-on-hover,
+    .hide-on-hover {
         height: 100%;
         display: flex;
         align-items: center;
@@ -107,7 +115,7 @@
     }
 
     /* Firefox */
-    input[type=number] {
+    input[type='number'] {
         -moz-appearance: textfield;
     }
 </style>

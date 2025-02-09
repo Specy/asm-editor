@@ -11,7 +11,6 @@ export function parseCcr(value: number) {
 }
 
 export function getM68kErrorMessage(error: unknown, lineNumber?: number): string {
-
     const prepend = lineNumber ? `Error at line ${lineNumber}:` : ''
     if (typeof error !== 'object') {
         return `${prepend}${error}`

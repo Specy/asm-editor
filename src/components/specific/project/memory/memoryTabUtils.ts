@@ -1,5 +1,4 @@
-import type { DiffedMemory } from '$lib/languages/M68KEmulator'
-import { Size } from '@specy/s68k'
+import type { DiffedMemory } from '$lib/languages/commonLanguageFeatures.svelte'
 
 export function findElInTree(e: HTMLElement, baseId: string) {
     let el = e
@@ -12,12 +11,9 @@ export function findElInTree(e: HTMLElement, baseId: string) {
     return el
 }
 
-
-
 export function getGroupSignedValue(groupValue: number, groupLength: number) {
-    return groupValue << (32 - groupLength * 4) >> (32 - groupLength * 4)
+    return (groupValue << (32 - groupLength * 4)) >> (32 - groupLength * 4)
 }
-
 
 export function inRange(value: number, start: number, len: number) {
     if (len < 0) {
@@ -28,7 +24,12 @@ export function inRange(value: number, start: number, len: number) {
 }
 
 export function byteSliceToNum(bytes: Uint8Array) {
-    return parseInt(Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join(''), 16)
+    return parseInt(
+        Array.from(bytes)
+            .map((b) => b.toString(16).padStart(2, '0'))
+            .join(''),
+        16
+    )
 }
 export function numberToByteSlice(num: number, bytes: number) {
     const hex = num.toString(16).padStart(bytes * 2, '0')
@@ -37,11 +38,9 @@ export function numberToByteSlice(num: number, bytes: number) {
         arr.push(parseInt(hex.slice(i, i + 2), 16))
     }
     return arr
-
 }
 
-
-export function isMemoryChunkEqual(memory: number[] | Uint8Array, to: number[] | Uint8Array){
+export function isMemoryChunkEqual(memory: number[] | Uint8Array, to: number[] | Uint8Array) {
     if (memory.length !== to.length) return false
     for (let i = 0; i < memory.length; i++) {
         if (memory[i] !== to[i]) {
@@ -49,17 +48,17 @@ export function isMemoryChunkEqual(memory: number[] | Uint8Array, to: number[] |
         }
     }
     return true
-
 }
 
-
 export function getNumberInRange(memory: DiffedMemory, start: number, len: number) {
-    const num = len < 0
-        ? memory.current.slice(start + len, start + 1)
-        : memory.current.slice(start, start + len + 1)
-    const prev = len < 0
-        ? memory.prevState.slice(start + len, start + 1)
-        : memory.prevState.slice(start, start + len + 1)
+    const num =
+        len < 0
+            ? memory.current.slice(start + len, start + 1)
+            : memory.current.slice(start, start + len + 1)
+    const prev =
+        len < 0
+            ? memory.prevState.slice(start + len, start + 1)
+            : memory.prevState.slice(start, start + len + 1)
     return {
         current: byteSliceToNum(num),
         prev: byteSliceToNum(prev),
@@ -77,6 +76,6 @@ export function goesNextLineBy(index: number, length: number, rowLength: number)
     }
     return {
         overflows: index + length >= rowLength,
-        by: (index + length) % rowLength + 1
+        by: ((index + length) % rowLength) + 1
     }
 }

@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { ProjectStore } from '$stores/projectsStore'
+    import { ProjectStore } from '$stores/projectsStore.svelte'
     import ProjectCard from '$cmp/specific/project/ProjectCard.svelte'
     import { onMount } from 'svelte'
     import Button from '$cmp/shared/button/Button.svelte'
@@ -13,19 +13,17 @@
     import { textDownloader } from '$lib/utils'
     import FaUpload from 'svelte-icons/fa/FaUpload.svelte'
     import { toast } from '$stores/toastStore'
-    import { Project } from '$lib/Project'
+    import { makeProjectFromExternal } from '$lib/Project.svelte'
     import { Prompt } from '$stores/promptStore'
     import { goto } from '$app/navigation'
     import Page from '$cmp/shared/layout/Page.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
 
-    const { projects } = ProjectStore
-
     let hasFileHandleSupport = false
 
     async function importFromText(text: string) {
         try {
-            const project = Project.fromExternal(text)
+            const project = makeProjectFromExternal(text)
             const existing = await ProjectStore.getProject(project.id)
             if (existing && existing.code.trim() !== project.code.trim()) {
                 const override = await Prompt.confirm(
@@ -57,10 +55,10 @@
     async function importFromFileHandle(fileHandles: FileSystemFileHandle[]) {
         for (const fileHandle of fileHandles) {
             const blob = await fileHandle.getFile()
-						// @ts-ignore
+            // @ts-ignore
             blob.handle = fileHandle
             const text = await blob.text()
-            const project = Project.fromExternal(text)
+            const project = makeProjectFromExternal(text)
             const id = (await importFromText(text))?.id ?? project.id
             ProjectStore.setFileHandle(id, fileHandle)
             const proj = await ProjectStore.getProject(id)
@@ -70,7 +68,6 @@
 
     onMount(() => {
         async function run() {
-
             await ProjectStore.load()
             try {
                 if ('launchQueue' in window) {
@@ -81,7 +78,7 @@
                                 const blob = await file.getFile()
                                 blob.handle = file
                                 const text = await blob.text()
-                                const project = Project.fromExternal(text)
+                                const project = makeProjectFromExternal(text)
                                 lastId = (await importFromText(text))?.id ?? project.id
                                 ProjectStore.setFileHandle(lastId, file)
                                 const proj = await ProjectStore.getProject(lastId)
@@ -114,173 +111,178 @@
 </script>
 
 <svelte:head>
-	<title>Projects</title>
-	<meta name="description" content="Create, edit or delete your projects" />
-	<meta name="og:description" content="Create, edit or delete your projects" />
-	<meta name="og:title" content="Projects" />
+    <title>Projects</title>
+    <meta name="description" content="Create, edit or delete your projects" />
+    <meta name="og:description" content="Create, edit or delete your projects" />
+    <meta name="og:title" content="Projects" />
 </svelte:head>
 <Page>
-	<div class="project-display">
-		<div class="content">
-			<div class="top-row">
-				<Row align="center">
-					<a href="/" class="go-back" title="Go to the main page">
-						<Button hasIcon cssVar="primary" style="padding: 0.4rem" title="Go to the main page">
-							<Icon size={2}>
-								<FaAngleLeft />
-							</Icon>
-						</Button>
-					</a>
-					<Title style="margin: 0">Your projects</Title>
-				</Row>
-				<div class="row top-row-buttons">
-					{#if hasFileHandleSupport}
-						<!-- Ignored for now as browser asks for permission -->
-						<Button
-							cssVar="secondary"
-							on:click={async () => {
-								const files = await window.showOpenFilePicker({ multiple: true })
-								try {
-									await importFromFileHandle(files)
-								} catch (e) {
-									console.error(e)
-									toast.error('Failed to import project!')
-								}
-							}}
-						>
-							<Icon style="margin-right: 0.4rem" size={1}>
-								<FaUpload />
-							</Icon>
-							Import
-						</Button>
-					{:else}
-						<FileImporter
-							on:import={(e) => {
-								importFromText(e.detail.data)
-							}}
-							as="text"
-						>
-							<Button cssVar="secondary">
-								<Icon style="margin-right: 0.4rem" size={1}>
-									<FaUpload />
-								</Icon>
-								Import
-							</Button>
-						</FileImporter>
-					{/if}
+    <div class="project-display">
+        <div class="content">
+            <div class="top-row">
+                <Row align="center">
+                    <a href="/" class="go-back" title="Go to the main page">
+                        <Button
+                            hasIcon
+                            cssVar="primary"
+                            style="padding: 0.4rem"
+                            title="Go to the main page"
+                        >
+                            <Icon size={2}>
+                                <FaAngleLeft />
+                            </Icon>
+                        </Button>
+                    </a>
+                    <Title style="margin: 0">Your projects</Title>
+                </Row>
+                <div class="row top-row-buttons">
+                    {#if hasFileHandleSupport}
+                        <!-- Ignored for now as browser asks for permission -->
+                        <Button
+                            cssVar="secondary"
+                            on:click={async () => {
+                                const files = await window.showOpenFilePicker({ multiple: true })
+                                try {
+                                    await importFromFileHandle(files)
+                                } catch (e) {
+                                    console.error(e)
+                                    toast.error('Failed to import project!')
+                                }
+                            }}
+                        >
+                            <Icon style="margin-right: 0.4rem" size={1}>
+                                <FaUpload />
+                            </Icon>
+                            Import
+                        </Button>
+                    {:else}
+                        <FileImporter
+                            on:import={(e) => {
+                                importFromText(e.detail.data)
+                            }}
+                            as="text"
+                        >
+                            <Button cssVar="secondary">
+                                <Icon style="margin-right: 0.4rem" size={1}>
+                                    <FaUpload />
+                                </Icon>
+                                Import
+                            </Button>
+                        </FileImporter>
+                    {/if}
 
-					<ButtonLink href="/projects/create" title="Create a new project">
-						<Icon style="margin-right: 0.3rem" size={1}>
-							<FaPlus />
-						</Icon>
-						Create
-					</ButtonLink>
-				</div>
-			</div>
-			{#if $projects.length === 0}
-				<h3 style="margin-top: 4rem; margin-left: 2rem; font-weight:unset">
-					You seem to have no projects, create one!
-				</h3>
-			{/if}
-			<div class="project-grid">
-				{#each $projects as project, i (project.id)}
-					<div
-						in:scale|global={{ duration: 200, delay: i * 50 + 150, start: 0.9 }}
-						out:scale={{ duration: 300, start: 0.8 }}
-					>
-						<ProjectCard
-							{project}
-							on:download={(e) => {
-								textDownloader(
-									e.detail.toExternal(),
-									`${(e.detail.name || 'Untitled project').split(' ').join('_')}.s68k`
-								)
-							}}
-						/>
-					</div>
-				{/each}
-				<div class="add-project">
-					<Icon size={2.5}>
-						<FaPlus />
-					</Icon>
-					<div>Create project</div>
-				</div>
-			</div>
-		</div>
-	</div>
+                    <ButtonLink href="/projects/create" title="Create a new project">
+                        <Icon style="margin-right: 0.3rem" size={1}>
+                            <FaPlus />
+                        </Icon>
+                        Create
+                    </ButtonLink>
+                </div>
+            </div>
+            {#if ProjectStore.projects.length === 0}
+                <h3 style="margin-top: 4rem; margin-left: 2rem; font-weight:unset">
+                    You seem to have no projects, create one!
+                </h3>
+            {/if}
+            <div class="project-grid">
+                {#each ProjectStore.projects as project, i (project.id)}
+                    <div
+                        in:scale|global={{ duration: 200, delay: i * 50 + 150, start: 0.9 }}
+                        out:scale={{ duration: 300, start: 0.8 }}
+                    >
+                        <ProjectCard
+                            {project}
+                            on:download={(e) => {
+                                textDownloader(
+                                    e.detail.toExternal(),
+                                    `${(e.detail.name || 'Untitled project').split(' ').join('_')}.s68k`
+                                )
+                            }}
+                        />
+                    </div>
+                {/each}
+                <div class="add-project">
+                    <Icon size={2.5}>
+                        <FaPlus />
+                    </Icon>
+                    <div>Create project</div>
+                </div>
+            </div>
+        </div>
+    </div>
 </Page>
 
 <style lang="scss">
-  .top-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: 4rem;
-    margin-bottom: 2rem;
-  }
-
-  .top-row-buttons {
-    gap: 0.8rem;
-  }
-
-  .add-project {
-    display: none;
-    justify-content: center;
-    flex-direction: column;
-    gap: 1rem;
-    align-items: center;
-    height: 100%;
-    border-radius: 0.6rem;
-    color: var(--accent);
-    border: solid 0.1rem var(--accent);
-  }
-
-  .project-display {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    height: 100%;
-  }
-
-  @media screen and (min-width: 650px) {
-    .go-back {
-      position: absolute;
-      top: 1rem;
-      left: 1rem;
-    }
-  }
-
-  .project-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1rem;
-    margin-bottom: 2rem;
-    justify-content: space-between;
-  }
-
-  .content {
-    display: flex;
-    flex-direction: column;
-    max-width: 40rem;
-    width: 100%;
-  }
-
-  @media screen and (max-width: 650px) {
     .top-row {
-      margin-top: 1rem;
-      margin-bottom: 1rem;
-      flex-direction: column;
-      align-items: unset;
-      gap: 1rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 4rem;
+        margin-bottom: 2rem;
     }
+
     .top-row-buttons {
-      justify-content: flex-end;
+        gap: 0.8rem;
     }
+
+    .add-project {
+        display: none;
+        justify-content: center;
+        flex-direction: column;
+        gap: 1rem;
+        align-items: center;
+        height: 100%;
+        border-radius: 0.6rem;
+        color: var(--accent);
+        border: solid 0.1rem var(--accent);
+    }
+
     .project-display {
-      padding: 1rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        height: 100%;
     }
+
+    @media screen and (min-width: 650px) {
+        .go-back {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+        }
+    }
+
     .project-grid {
-      grid-template-columns: minmax(0, 1fr);
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+        justify-content: space-between;
     }
-  }
+
+    .content {
+        display: flex;
+        flex-direction: column;
+        max-width: 40rem;
+        width: 100%;
+    }
+
+    @media screen and (max-width: 650px) {
+        .top-row {
+            margin-top: 1rem;
+            margin-bottom: 1rem;
+            flex-direction: column;
+            align-items: unset;
+            gap: 1rem;
+        }
+        .top-row-buttons {
+            justify-content: flex-end;
+        }
+        .project-display {
+            padding: 1rem;
+        }
+        .project-grid {
+            grid-template-columns: minmax(0, 1fr);
+        }
+    }
 </style>

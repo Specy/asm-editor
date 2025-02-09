@@ -2,19 +2,34 @@
     import { type Justify, justifyMap } from './layoutUtils'
     import type { ThemeKeys } from '$stores/themeStore'
 
-    export let justify: Justify | undefined = undefined
-    export let flex1: boolean | undefined = undefined
-    export let align: Justify | undefined = undefined
-    export let gap: string | undefined = undefined
-    export let padding: string | undefined = undefined
-    export let background: ThemeKeys | undefined = undefined
-    export let style: string | undefined = undefined
-    export let margin: string | undefined = undefined
+    interface Props {
+        justify?: Justify | undefined
+        flex1?: boolean | undefined
+        align?: Justify | undefined
+        gap?: string | undefined
+        padding?: string | undefined
+        background?: ThemeKeys | undefined
+        style?: string | undefined
+        margin?: string | undefined
+        children?: import('svelte').Snippet
+    }
+
+    let {
+        justify = undefined,
+        flex1 = undefined,
+        align = undefined,
+        gap = undefined,
+        padding = undefined,
+        background = undefined,
+        style = undefined,
+        margin = undefined,
+        children
+    }: Props = $props()
 </script>
 
 <div
-	class="flex"
-	style="
+    class="flex"
+    style="
     {justify ? `justify-content: ${justifyMap[justify]};` : ''}
     {align ? `align-items: ${justifyMap[align]};` : ''}
     {gap ? `gap: ${gap};` : ''}
@@ -25,7 +40,7 @@
     {style ?? ''}
     "
 >
-	<slot />
+    {@render children?.()}
 </div>
 
 <style>

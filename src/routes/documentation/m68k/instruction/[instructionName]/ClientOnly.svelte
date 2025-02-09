@@ -1,9 +1,13 @@
 <script lang="ts">
-    export let code = ""
-    export let instructionKey: string
-	import InteractiveEditor from '$cmp/shared/InteractiveInstructionEditor.svelte'
+    import InteractiveEditor from '$cmp/shared/InteractiveInstructionEditor.svelte'
+    interface Props {
+        code?: string
+        instructionKey: string
+    }
 
+    let { code = $bindable(''), instructionKey }: Props = $props()
 </script>
 
-
-<InteractiveEditor bind:code={code} {instructionKey}/>
+{#key instructionKey}
+    <InteractiveEditor bind:code />
+{/key}

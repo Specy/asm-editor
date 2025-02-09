@@ -1,4 +1,13 @@
-export type Justify = "start" | "end" | "center" | "between" | "around" | "evenly" | "unset" | "inherit" | "stretch"
+export type Justify =
+    | 'start'
+    | 'end'
+    | 'center'
+    | 'between'
+    | 'around'
+    | 'evenly'
+    | 'unset'
+    | 'inherit'
+    | 'stretch'
 
 export const justifyMap: Record<Justify, string> = {
     start: 'flex-start',

@@ -9,7 +9,7 @@ declare global {
         // interface Platform {}
     }
     export const launchQueue: {
-        setConsumer: (consumer: (task: () => void) => void) => void;
+        setConsumer: (consumer: (task: () => void) => void) => void
     }
     export const showOpenFilePicker: (options: { multiple: boolean }) => Promise<File[]>
 }

@@ -7,7 +7,6 @@
     <div class="example">#label+2, #$F*10, #450-%1010, #@5834/4, #($FF+%1010)*3</div>
 </div>
 
-
 <style lang="scss">
-	@import './style.scss'	
+    @import './style.scss';
 </style>

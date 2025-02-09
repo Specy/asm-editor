@@ -1,8 +1,11 @@
 <script lang="ts">
-    export let title
-    export let description
-</script>
+    interface Props {
+        title: any
+        description: any
+    }
 
+    let { title, description }: Props = $props()
+</script>
 
 <title>
     {title}

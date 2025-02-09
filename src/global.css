@@ -1,101 +1,101 @@
 @font-face {
-	font-family: Orienta;
-	src: url(/fonts/Orienta-Regular.ttf);
+    font-family: Orienta;
+    src: url(/fonts/Orienta-Regular.ttf);
 }
 
 @font-face {
-	font-family: FiraCode;
-	src: url(/fonts/FiraCode-Medium.woff2);
+    font-family: FiraCode;
+    src: url(/fonts/FiraCode-Medium.woff2);
 }
 
 * {
-	margin: 0;
-	padding: 0;
-	border: none;
-	box-sizing: border-box;
-	-webkit-tap-highlight-color: transparent;
-	outline: none;
+    margin: 0;
+    padding: 0;
+    border: none;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+    outline: none;
 }
 
 .wrap {
-	flex-wrap: wrap;
+    flex-wrap: wrap;
 }
 
 body,
 html {
-	min-height: 100%;
-	height: 100%;
-	width: 100%;
-	background-color: var(--background, #171A21);
-	color: var(--background-text, #dbdbdb);
-	display: flex;
-	font-family: Orienta;
-	flex-direction: column;
-	overflow-x: hidden;
+    min-height: 100%;
+    height: 100%;
+    width: 100%;
+    background-color: var(--background, #171a21);
+    color: var(--background-text, #dbdbdb);
+    display: flex;
+    font-family: Orienta;
+    flex-direction: column;
+    overflow-x: hidden;
 }
 
 .ellipsis {
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 a {
-	text-decoration: none;
-	color: inherit;
+    text-decoration: none;
+    color: inherit;
 }
 
 input:disabled {
-	cursor: not-allowed !important;
-	filter: saturate(0.6) !important;
+    cursor: not-allowed !important;
+    filter: saturate(0.6) !important;
 }
 
 #svelte {
-	min-height: 100%;
-	height: 100%;
-	display: flex;
-	flex-direction: column;
+    min-height: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
 }
 
 .column {
-	display: flex;
-	flex-direction: column;
+    display: flex;
+    flex-direction: column;
 }
 
 .row {
-	display: flex;
+    display: flex;
 }
 
 .align-center {
-	align-items: center;
+    align-items: center;
 }
 
 .justify-center {
-	justify-items: center;
+    justify-items: center;
 }
 .space-between {
-	justify-content: space-between;
+    justify-content: space-between;
 }
 .flex-center {
-	align-items: center;
-	justify-content: center;
+    align-items: center;
+    justify-content: center;
 }
 
 ::-webkit-scrollbar {
-	width: 0.3rem;
-	height: 0.4rem;
-	background: rgba(44, 44, 44, 0.9);
+    width: 0.3rem;
+    height: 0.4rem;
+    background: rgba(44, 44, 44, 0.9);
 }
 
 ::-webkit-scrollbar-track {
-	background: none;
+    background: none;
 }
 
 ::-webkit-scrollbar-thumb {
-	background: var(--scroll-accent);
-	border-radius: 2px;
+    background: var(--scroll-accent);
+    border-radius: 2px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-	background: #555;
+    background: #555;
 }

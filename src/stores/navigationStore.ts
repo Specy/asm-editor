@@ -1,19 +1,16 @@
-import { writable } from "svelte/store";
+import { writable } from 'svelte/store'
 
-
-type NavigationDiretion = 'forward' | 'back';
-
+type NavigationDiretion = 'forward' | 'back'
 
 function removeRoot(url: string) {
     return url.replace(/^\/+/, '')
 }
 
 function createNavigationStore() {
-
     const { subscribe, set, update } = writable({
         current: '',
-        direction: 'forward' as NavigationDiretion,
-    });
+        direction: 'forward' as NavigationDiretion
+    })
 
     function navigatingTo(toUrl: string, fromUrl: string, params?: URLSearchParams) {
         let goingBack = false
@@ -35,12 +32,9 @@ function createNavigationStore() {
         })
     }
     return {
-
         subscribe,
         navigatingTo
-    };
+    }
 }
 
-
-
-export const navigationStore = createNavigationStore();
+export const navigationStore = createNavigationStore()

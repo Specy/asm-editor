@@ -1,21 +1,22 @@
 <script>
-	import { createEventDispatcher } from 'svelte'
-	export let style = ''
-	const dispatch = createEventDispatcher()
-	function submit(e) {
-		e.preventDefault()
-		dispatch('submit', e)
-	}
+    import { createEventDispatcher } from 'svelte'
+    /** @type {{style?: string, children?: import('svelte').Snippet}} */
+    let { style = '', children } = $props()
+    const dispatch = createEventDispatcher()
+    function submit(e) {
+        e.preventDefault()
+        dispatch('submit', e)
+    }
 </script>
 
-<form on:submit={submit} {style}>
-    <slot/>
+<form onsubmit={submit} {style}>
+    {@render children?.()}
 </form>
 
 <style lang="scss">
-	form {
-		display: flex;
-		flex-direction: column;
-		flex: 1;
-	}
+    form {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+    }
 </style>

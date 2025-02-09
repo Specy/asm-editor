@@ -7,13 +7,22 @@ type Version = {
 }
 export const versions: Version[] = [
     {
-      version: '3.4.0',
+        version: '3.5.0',
+        title: 'Migrated website to svelte 5 & preparations for MIPS',
+        date: new Date('2025-02-09'),
+        changes: [
+           "Migrated website to svelte 5",
+           "Made the UI more generic over different languages, MIPS interpreter is coming soon",
+        ]
+    },
+    {
+        version: '3.4.0',
         title: 'Improved editor and bug fixes',
         date: new Date('2024-07-02'),
         changes: [
-            "Improved memory address resolve (now implements full 32 bit addressing)",
-            "Added more strict memory read/write checks for odd addresses in non-byte operations",
-            "Added alignment errors in compilation"
+            'Improved memory address resolve (now implements full 32 bit addressing)',
+            'Added more strict memory read/write checks for odd addresses in non-byte operations',
+            'Added alignment errors in compilation'
         ]
     },
     {
@@ -21,9 +30,9 @@ export const versions: Version[] = [
         title: 'Testcases and base index addressing',
         date: new Date('2024-06-12'),
         changes: [
-            "Added testcases creation, you can create testcases with an initial configuration and expected output",
-            "Added base index addressing mode",
-            "Added MOVEM instruction",
+            'Added testcases creation, you can create testcases with an initial configuration and expected output',
+            'Added base index addressing mode',
+            'Added MOVEM instruction'
         ]
     },
     {
@@ -84,14 +93,12 @@ export const versions: Version[] = [
             'Added side menu to interactive documentation',
             'Improved transitions between pages'
         ]
-    }, {
+    },
+    {
         version: '2.6.5',
         title: 'Bug fixes and more diffings',
         date: new Date('2023-03-22'),
-        changes: [
-            'Added status code diffing',
-            'Fixed bugs in interactive documentation'
-        ]
+        changes: ['Added status code diffing', 'Fixed bugs in interactive documentation']
     },
     {
         version: '2.6.0',
@@ -119,11 +126,7 @@ export const versions: Version[] = [
         version: '2.5.0',
         date: new Date('2023-01-15'),
         title: 'Callstack tracing and mutations history',
-        changes: [
-            'Added callstack tracing',
-            'Added mutations history',
-            'UI fixes'
-        ]
+        changes: ['Added callstack tracing', 'Added mutations history', 'UI fixes']
     },
     {
         version: '2.4.1',
@@ -176,7 +179,6 @@ export const versions: Version[] = [
             'Added stack viewer',
             'Improve documentation and inline documentation',
             'Interpreter bug fixes'
-
         ]
     },
     {
@@ -189,7 +191,6 @@ export const versions: Version[] = [
             'Added inline documentation',
             'Improved editor styling',
             'Improved animations'
-
         ]
     },
     {
@@ -206,7 +207,6 @@ export const versions: Version[] = [
             'Added breakpoints',
             'Added stepping',
             'Removed mips emulator'
-
         ]
     },
     {
@@ -232,6 +232,4 @@ export const versions: Version[] = [
             'Added Service Worker for offline support and installation'
         ]
     }
-
-
 ]

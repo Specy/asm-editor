@@ -1,71 +1,89 @@
 <script lang="ts">
+    import { createBubbler } from 'svelte/legacy'
+
+    const bubble = createBubbler()
     import type { ThemeKeys } from '$stores/themeStore'
 
-    export let disabled = false
-    export let color = 'var(--accent-text)'
-    export let style = ''
-    export let bg = 'var(--accent)'
-    export let hasIcon = false
-    export let cssVar: ThemeKeys | 'unset' = 'unset'
-    export let active = false
-    export let title = ''
+    interface Props {
+        disabled?: boolean
+        color?: string
+        style?: string
+        bg?: string
+        hasIcon?: boolean
+        cssVar?: ThemeKeys | 'unset'
+        active?: boolean
+        title?: string
+        children?: import('svelte').Snippet
+    }
+
+    let {
+        disabled = false,
+        color = 'var(--accent-text)',
+        style = '',
+        bg = 'var(--accent)',
+        hasIcon = false,
+        cssVar = 'unset',
+        active = false,
+        title = '',
+        children
+    }: Props = $props()
 </script>
 
 <button
-	type="button"
-	class="btn"
-	class:hasIcon
-	{title}
-	style={`--btn-color:var(--${cssVar},${bg}); --btn-text:var(--${cssVar}-text,${color});${style}; `}
-	{disabled}
-	on:click
-	class:active
+    type="button"
+    class="btn"
+    class:hasIcon
+    {title}
+    style={`--btn-color:var(--${cssVar},${bg}); --btn-text:var(--${cssVar}-text,${color});${style}; `}
+    {disabled}
+    onclick={bubble('click')}
+    class:active
 >
-	<slot />
+    {@render children?.()}
 </button>
 
 <style lang="scss">
-  .btn {
-    padding: 0.5rem 1rem;
-    border-radius: 0.4rem;
-    color: var(--btn-text, --accent-text);
-    background-color: var(--btn-color, --accent);
-    text-align: center;
-    display: flex;
-    transition: all 0.3s;
-    font-size: 1rem;
-    align-items: center;
-    justify-content: center;
-    border: none;
-    width: fit-content;
-    user-select: none;
-    font-family: Orienta;
-    position: relative;
-    cursor: pointer;
-  }
+    .btn {
+        padding: 0.6rem 1rem;
+        border-radius: 0.4rem;
+        color: var(--btn-text, --accent-text);
+        background-color: var(--btn-color, --accent);
+        text-align: center;
+        display: flex;
+        transition: all 0.3s;
+        font-size: 1rem;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        width: fit-content;
+        user-select: none;
+        font-family: Orienta;
+        position: relative;
+        cursor: pointer;
+    }
 
-  .active {
-    background-color: var(--accent);
-    color: var(--accent-text);
-  }
+    .active {
+        background-color: var(--accent);
+        color: var(--accent-text);
+    }
 
-  .btn:hover {
-    filter: brightness(1.2)
-  }
+    .btn:hover {
+        filter: brightness(1.2);
+    }
 
-  .btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
+    .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
 
-  .btn:disabled:hover {
-    filter: none !important;
-  }
+    .btn:disabled:hover {
+        filter: none !important;
+    }
 
-  .hasIcon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0.35rem 0.8rem;
-  }
+    .hasIcon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.35rem 0.8rem;
+    }
 </style>

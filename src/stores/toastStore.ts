@@ -1,12 +1,12 @@
 import { writable } from 'svelte/store'
 enum Colors {
-    Green = "rgb(85, 143, 144)",
-    Red = "#B33A3A",
-    Orange = "#FFA500",
-    Hint = "var(--accent)"
+    Green = 'rgb(85, 143, 144)',
+    Red = '#B33A3A',
+    Orange = '#FFA500',
+    Hint = 'var(--accent)'
 }
-export enum ToastType{
-    Toast, 
+export enum ToastType {
+    Toast,
     Pill
 }
 
@@ -22,8 +22,14 @@ function Toast() {
     })
     let id = 0
     let timeout
-    function execute(message: string, duration: number, color: Colors, title = '', type = ToastType.Toast) {
-        update(data => {
+    function execute(
+        message: string,
+        duration: number,
+        color: Colors,
+        title = '',
+        type = ToastType.Toast
+    ) {
+        update((data) => {
             id++
             return {
                 ...data,
@@ -41,23 +47,23 @@ function Toast() {
         timeout = setTimeout(close, duration)
     }
     function error(text: string, timeout = 3000) {
-        execute(text, timeout, Colors.Red, "Error")
+        execute(text, timeout, Colors.Red, 'Error')
     }
     function success(text: string, timeout = 3000) {
-        execute(text, timeout, Colors.Green, "Success")
+        execute(text, timeout, Colors.Green, 'Success')
     }
     function warn(text: string, timeout = 3000) {
-        execute(text, timeout, Colors.Orange, "Warning")
+        execute(text, timeout, Colors.Orange, 'Warning')
     }
     function log(text: string, timeout = 4000) {
-        execute(text, timeout, Colors.Hint, "Warning")
+        execute(text, timeout, Colors.Hint, 'Warning')
     }
     function logPill(text: string, timeout = 2000) {
-        execute(text, timeout, Colors.Hint, "", ToastType.Pill)
+        execute(text, timeout, Colors.Hint, '', ToastType.Pill)
     }
     function close() {
-        update(data => {
-            return { ...data, visible: false, duration: 0}
+        update((data) => {
+            return { ...data, visible: false, duration: 0 }
         })
         clearTimeout(timeout)
     }
@@ -65,7 +71,14 @@ function Toast() {
         execute(text, timeout, Colors.Hint, title)
     }
     return {
-        error, success, custom, closeToast: close, log, warn, subscribe, logPill
+        error,
+        success,
+        custom,
+        closeToast: close,
+        log,
+        warn,
+        subscribe,
+        logPill
     }
 }
 

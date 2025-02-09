@@ -2,26 +2,28 @@
     import FaChevronDown from 'svelte-icons/fa/FaChevronDown.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
 
-    export let expanded: boolean = false
-		export let style: string = ''
+    interface Props {
+        expanded?: boolean
+        style?: string
+        title?: import('svelte').Snippet
+        children?: import('svelte').Snippet
+    }
+
+    let { expanded = $bindable(false), style = '', title, children }: Props = $props()
 </script>
 
-
 <div class="expandable-container" class:expandable-container-open={expanded} {style}>
-	<button
-		on:click={() => expanded = !expanded}
-		class="expandable-container-expand"
-	>
-		<div class="chevron-icon" class:chevron-icon-expanded={expanded}>
-			<Icon>
-				<FaChevronDown />
-			</Icon>
-		</div>
-		<slot name="title" />
-	</button>
-	<div class="expandable-container-content">
-		<slot />
-	</div>
+    <button onclick={() => (expanded = !expanded)} class="expandable-container-expand">
+        <div class="chevron-icon" class:chevron-icon-expanded={expanded}>
+            <Icon>
+                <FaChevronDown />
+            </Icon>
+        </div>
+        {@render title?.()}
+    </button>
+    <div class="expandable-container-content">
+        {@render children?.()}
+    </div>
 </div>
 
 <style>
@@ -69,7 +71,6 @@
         display: flex;
         animation: appear 0.2s;
     }
-
 
     @keyframes appear {
         from {

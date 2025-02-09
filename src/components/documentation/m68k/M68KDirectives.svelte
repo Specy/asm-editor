@@ -1,9 +1,17 @@
 <script lang="ts">
-	import MarkdownRenderer from "$cmp/shared/markdown/MarkdownRenderer.svelte"
-	import { M68KDirectiveDocumentationList, fromSizesToString } from "$lib/languages/M68K-documentation"
-	import { createMarkdownWithOptions } from "$lib/markdown"
-    export let openLinksInNewTab = true
+    import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
+    import {
+        M68KDirectiveDocumentationList,
+        fromSizesToString
+    } from '$lib/languages/M68K-documentation'
+    import { createMarkdownWithOptions } from '$lib/markdown'
+    interface Props {
+        openLinksInNewTab?: boolean
+    }
+
+    let { openLinksInNewTab = true }: Props = $props()
 </script>
+
 <div class="column sub-section">
     {#each M68KDirectiveDocumentationList as dir}
         <div class="instruction">
@@ -19,11 +27,7 @@
             </div>
             {#if dir.description}
                 <span class="sub-description">
-                    <MarkdownRenderer
-                        source={createMarkdownWithOptions(dir.description, {
-                            linksInNewTab: openLinksInNewTab
-                        })}
-                    />
+                    <MarkdownRenderer source={dir.description} linksInNewTab={openLinksInNewTab} />
                 </span>
             {/if}
             {#if dir.example}
@@ -35,7 +39,6 @@
     {/each}
 </div>
 
-
 <style lang="scss">
-	@import './style.scss'	
+    @import './style.scss';
 </style>
