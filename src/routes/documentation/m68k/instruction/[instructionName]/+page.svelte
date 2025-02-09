@@ -8,7 +8,6 @@
         fromSizesToString,
         fromSizeToString,
         getAddressingModeNames,
-        M68KUncompoundedInstructions
     } from '$lib/languages/M68K-documentation'
     import DocsOperand from '$cmp/documentation/DocsOperand.svelte'
     import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
@@ -17,11 +16,8 @@
         data: PageData
     }
 
-    import { page } from '$app/state'
-
     let { data }: Props = $props()
-    //let ins = $derived(data.props.instruction)
-    let ins = $derived(M68KUncompoundedInstructions.get(page.params.instructionName))
+    let ins = $derived(data.props.instruction)
 
     let component: any = $state.raw()
     onMount(async () => {
