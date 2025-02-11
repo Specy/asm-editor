@@ -142,14 +142,15 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
             try {
                 clear()
                 mips = makeMipsfromSource(codeOverride ?? code)
+                mips.setUndoSize(historySize)
                 const result = mips.assemble()
+                mips.setUndoEnabled(historySize > 0)
                 state.compilerErrors = result.errors.map(assembleErrorToMonacoError)
                 state.canExecute = result.errors.length === 0
                 if (result.errors.length > 0) {
                     return rej(result.report)
                 }
                 mips.initialize(true)
-                mips.setUndoEnabled(historySize > 0)
                 //TODO add interrupts
                 const stackTab = state.memory.tabs.find((e) => e.name === 'Stack')
                 if (stackTab) stackTab.address = mips.stackPointer - stackTab.pageSize
@@ -342,8 +343,8 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
     function undo(amount = 1) {
         try {
             if (!mips) return
-            for (let i = 0; i < amount && mips.getUndoStack().length; i++) {
-                //mips.undo()
+            for (let i = 0; i < amount && mips.canUndo; i++) {
+                mips.undo()
             }
             const instruction = mips.getNextStatement()
             state.line = instruction.sourceLine - 1
