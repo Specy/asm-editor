@@ -1,11 +1,13 @@
 import { PAGE_ELEMENTS_PER_ROW, PAGE_SIZE } from '$lib/Config'
-import { makeMipsfromSource, type JsMips, type RegisterName, type MIPSAssembleError, BackStepAction } from '@specy/mips'
+import { MIPS, type JsMips, type RegisterName, type MIPSAssembleError, BackStepAction } from '@specy/mips'
 import { createMemoryTab, InterpreterStatus, makeRegister, type BaseEmulatorActions, type BaseEmulatorState, type EmulatorSettings, type MonacoError, type RegisterChunk } from './commonLanguageFeatures.svelte'
 import { createDebouncer } from '$lib/utils'
 import { Prompt } from '$stores/promptStore'
 import { settingsStore } from '$stores/settingsStore.svelte'
 import type { Testcase, TestcaseResult, TestcaseValidationError } from '$lib/Project.svelte'
 import { byteSliceToNum, isMemoryChunkEqual, numberToByteSlice } from '$cmp/specific/project/memory/memoryTabUtils'
+
+
 
 export type MIPSEmulatorState = BaseEmulatorState & {}
 
@@ -141,7 +143,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         return new Promise((res, rej) => {
             try {
                 clear()
-                mips = makeMipsfromSource(codeOverride ?? code)
+                mips = MIPS.makeMipsFromSource(codeOverride ?? code)
                 mips.setUndoSize(historySize)
                 const result = mips.assemble()
                 mips.setUndoEnabled(historySize > 0)
@@ -181,7 +183,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
 
     function semanticCheck() {
         try {
-            const mips = makeMipsfromSource(code)
+            const mips = MIPS.makeMipsFromSource(code)
             const result = mips.assemble()
             const errors = result.errors.map(assembleErrorToMonacoError)
             state.compilerErrors = errors
@@ -275,6 +277,13 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         state.terminated = hasTerminated()
         const steps = mips.getUndoStack().slice(0, settings.values.maxVisibleHistoryModifications.value)
         state.latestSteps = steps.map(step => {
+            let line = -1
+            try{
+                const ins = mips.getStatementAtAddress(step.pc)
+                line = ins.sourceLine - 1
+            }catch(e){
+
+            }
             return {
                 pc: step.pc,
                 old_ccr: {
@@ -283,7 +292,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 new_ccr: {
                     bits: 0
                 },
-                line: -1,
+                line,
                 //TODO improve this, add more info from the step
                 mutations: [{
                     type: 'Other',
@@ -306,7 +315,6 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
     function hasTerminated() {
         try {
             mips.getNextStatement()
-
             return false
         } catch (e) {
             return true
