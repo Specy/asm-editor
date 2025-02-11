@@ -116,28 +116,32 @@ export type ExecutionStep = {
 
 export type MutationOperation =
     | {
-          type: 'WriteRegister'
-          value: {
-              register: string
-              old: number
-              size: RegisterSize
-          }
-      }
+        type: 'WriteRegister'
+        value: {
+            register: string
+            old: number
+            size: RegisterSize
+        }
+    }
     | {
-          type: 'WriteMemory'
-          value: {
-              address: number
-              old: number
-              size: RegisterSize
-          }
-      }
+        type: 'WriteMemory'
+        value: {
+            address: number
+            old: number
+            size: RegisterSize
+        }
+    }
     | {
-          type: 'WriteMemoryBytes'
-          value: {
-              address: number
-              old: number[]
-          }
-      }
+        type: 'WriteMemoryBytes'
+        value: {
+            address: number
+            old: number[]
+        }
+    }
+    | {
+        type: "Other"
+        value: string
+    }
 
 export type Register = ReturnType<typeof makeRegister>
 
@@ -167,6 +171,35 @@ export enum InterpreterStatus {
     Interrupt = 1,
     Terminated = 2,
     TerminatedWithException = 3
+}
+
+let currentTabId = 0
+
+export function createMemoryTab(
+    pageSize: number,
+    name: string,
+    address: number,
+    rowSize: number,
+    initialValue: number
+): MemoryTab {
+    return {
+        name,
+        address,
+        id: currentTabId++,
+        rowSize,
+        pageSize,
+        data: {
+            current: new Uint8Array(pageSize).fill(initialValue),
+            prevState: new Uint8Array(pageSize).fill(initialValue)
+        }
+    }
+}
+
+
+
+export type EmulatorSettings = {
+    globalPageSize?: number
+    globalPageElementsPerRow?: number
 }
 
 export type BaseEmulatorActions = {

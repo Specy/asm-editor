@@ -3,7 +3,6 @@ import {
     ccrToFlagsArray,
     type ExecutionStep,
     Interpreter,
-    InterpreterStatus,
     type Interrupt,
     type Label,
     type ParsedLine,
@@ -22,15 +21,18 @@ import {
     numberToByteSlice
 } from '$cmp/specific/project/memory/memoryTabUtils'
 import {
+    createMemoryTab,
     makeRegister,
     RegisterSize,
     type BaseEmulatorActions,
     type BaseEmulatorState,
+    type EmulatorSettings,
     type MemoryTab,
     type MonacoError,
     type MutationOperation,
     type Register,
-    type StatusRegister
+    type StatusRegister,
+    InterpreterStatus
 } from './commonLanguageFeatures.svelte'
 
 export type M68KEmulatorState = BaseEmulatorState & {
@@ -38,26 +40,8 @@ export type M68KEmulatorState = BaseEmulatorState & {
     statusRegister?: StatusRegister[]
 }
 
-let currentTabId = 0
 
-function createMemoryTab(
-    pageSize: number,
-    name: string,
-    address: number,
-    rowSize: number
-): MemoryTab {
-    return {
-        name,
-        address,
-        id: currentTabId++,
-        rowSize,
-        pageSize,
-        data: {
-            current: new Uint8Array(pageSize).fill(0xff),
-            prevState: new Uint8Array(pageSize).fill(0xff)
-        }
-    }
-}
+
 
 const defaultInterruptHandlers = {
     GetTime: async () => Math.round(Date.now() / 1000),
@@ -95,12 +79,9 @@ export const registerName = [
     'A6',
     'A7'
 ]
-type M68kEditorOptions = {
-    globalPageSize?: number
-    globalPageElementsPerRow?: number
-}
 
-export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) {
+
+export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
     options = {
         globalPageSize: PAGE_SIZE,
         globalPageElementsPerRow: PAGE_ELEMENTS_PER_ROW,
@@ -128,9 +109,10 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
                 options.globalPageSize,
                 'Global',
                 0x1000,
-                options.globalPageElementsPerRow
+                options.globalPageElementsPerRow,
+                0xff,
             ),
-            tabs: [createMemoryTab(8 * 4, 'Stack', 0x2000, 4)]
+            tabs: [createMemoryTab(8 * 4, 'Stack', 0x2000, 4, 0xff)]
         },
         interrupt: undefined
     })
@@ -234,9 +216,10 @@ export function M68KEmulator(baseCode: string, options: M68kEditorOptions = {}) 
                     options.globalPageSize,
                     'Global',
                     0x1000,
-                    options.globalPageElementsPerRow
+                    options.globalPageElementsPerRow,
+                    0xff
                 ),
-                tabs: [createMemoryTab(8 * 4, 'Stack', 0x2000, 4)]
+                tabs: [createMemoryTab(8 * 4, 'Stack', 0x2000, 4,0xff)]
             }
         }
     }

@@ -27,6 +27,7 @@ class MonacoLoader {
         const monaco: MonacoType = await this.loading
         monaco.editor.defineTheme('custom-theme', generateTheme())
         monaco.languages.register({ id: 'm68k' })
+        monaco.languages.register({ id: 'mips' })
         this.monaco = monaco
         this.registerLanguages()
 

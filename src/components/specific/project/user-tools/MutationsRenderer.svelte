@@ -1,7 +1,7 @@
 <script lang="ts">
-    import type { ExecutionStep } from '@specy/s68k'
     import { createEventDispatcher } from 'svelte'
     import MutationStep from './MutationStep.svelte'
+    import type { ExecutionStep } from '$lib/languages/commonLanguageFeatures.svelte'
     interface Props {
         steps: ExecutionStep[]
     }

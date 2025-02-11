@@ -21,9 +21,9 @@
             const code = $page.url.searchParams.get('project')
             const parsed = JSON.parse(lzstring.decompressFromEncodedURIComponent(code))
             parsed.id = SHARE_ID
-            project = makeProject(parsed)
+            project.set(parsed)
         } else {
-            project = await ProjectStore.getProject(id)
+            project.set(await ProjectStore.getProject(id))
             if (!project) {
                 toast.error('Project not found', 10000)
                 status = 'error'

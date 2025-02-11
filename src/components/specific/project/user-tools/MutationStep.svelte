@@ -3,7 +3,6 @@
 </script>
 
 <script lang="ts">
-    import { run } from 'svelte/legacy'
 
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import { ccrToFlagsArray } from '@specy/s68k'

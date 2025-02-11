@@ -161,7 +161,7 @@
         }
     })
     $effect(() => {
-        if (editor) {
+        if (editor && monacoInstance) {
             monacoInstance.editor.setModelMarkers(
                 editor.getModel(),
                 language,

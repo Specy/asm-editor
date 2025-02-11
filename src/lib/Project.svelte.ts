@@ -14,21 +14,21 @@ export interface ProjectData {
 
 export type MemoryValue =
     | {
-          type: 'number'
-          address: number
-          bytes: number
-          expected: number
-      }
+        type: 'number'
+        address: number
+        bytes: number
+        expected: number
+    }
     | {
-          type: 'string-chunk'
-          address: number
-          expected: string
-      }
+        type: 'string-chunk'
+        address: number
+        expected: string
+    }
     | {
-          type: 'number-chunk'
-          address: number
-          expected: number[]
-      }
+        type: 'number-chunk'
+        address: number
+        expected: number[]
+    }
 
 export type Testcase = {
     input: string[]
@@ -41,35 +41,35 @@ export type Testcase = {
 
 export type TestcaseValidationError =
     | {
-          type: 'wrong-register'
-          register: string
-          expected: number
-          got: number
-      }
+        type: 'wrong-register'
+        register: string
+        expected: number
+        got: number
+    }
     | {
-          type: 'wrong-memory-number'
-          address: number
-          bytes: number
-          expected: number
-          got: number
-      }
+        type: 'wrong-memory-number'
+        address: number
+        bytes: number
+        expected: number
+        got: number
+    }
     | {
-          type: 'wrong-memory-string'
-          address: number
-          expected: string
-          got: string
-      }
+        type: 'wrong-memory-string'
+        address: number
+        expected: string
+        got: string
+    }
     | {
-          type: 'wrong-memory-chunk'
-          address: number
-          expected: number[]
-          got: number[]
-      }
+        type: 'wrong-memory-chunk'
+        address: number
+        expected: number[]
+        got: number[]
+    }
     | {
-          type: 'wrong-output'
-          expected: string
-          got: string
-      }
+        type: 'wrong-output'
+        expected: string
+        got: string
+    }
 
 export type TestcaseResult = {
     errors: TestcaseValidationError[]
@@ -86,6 +86,15 @@ START:
 
 END: * Jump here to end the program
 `.trim()
+
+export const BASE_MIPS_CODE = `
+.data
+    # Write here your data
+.text
+main:
+    # Write here your code
+`.trim()
+
 
 type ProjectMetadata = {
     version: number
@@ -131,13 +140,14 @@ export function makeProjectFromExternal(codeAndMeta: string) {
 }
 
 export function makeProject(data?: Partial<ProjectData>) {
+    const lang = data?.language ?? 'M68K' as AvailableLanguages
     let state = $state({
         id: data?.id ?? '',
-        code: data?.code ?? (data?.language === 'M68K' ? BASE_M68K_CODE : ''),
+        code: data?.code ?? (lang === "M68K" ? BASE_M68K_CODE : BASE_MIPS_CODE),
         createdAt: data?.createdAt ?? new Date().getTime(),
         updatedAt: data?.updatedAt ?? new Date().getTime(),
         name: data?.name ?? 'Untitled',
-        language: (data?.language ?? 'M68K') as AvailableLanguages,
+        language: lang,
         description: data?.description ?? '',
         testcases: (data?.testcases ?? []) as Testcase[]
     })
@@ -173,6 +183,17 @@ export function makeProject(data?: Partial<ProjectData>) {
             .join('\n')
         const separator = `* ${CODE_SEPARATOR} do not write below here`
         return `${state.code}\n\n\n${separator}\n${commentedJson}`
+    }
+
+    function set(data: Partial<ProjectData & { id: string }>) {
+        state.code = data.code ?? state.code
+        state.createdAt = data.createdAt ?? state.createdAt
+        state.updatedAt = data.updatedAt ?? state.updatedAt
+        state.name = data.name ?? state.name
+        state.language = data.language ?? state.language
+        state.description = data.description ?? state.description
+        state.testcases = data.testcases ?? state.testcases
+        state.id = data.id ?? state.id
     }
 
     return {
@@ -225,7 +246,7 @@ export function makeProject(data?: Partial<ProjectData>) {
         set updatedAt(v: number) {
             state.updatedAt = v
         },
-
+        set,
         toObject,
         toExternal
     }

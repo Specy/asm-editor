@@ -17,6 +17,8 @@
     import { onMount } from 'svelte'
     import { getM68kErrorMessage } from '$lib/languages/M68kUtils'
 
+    /*TODO make this agnostic */
+
     let running = $state(false)
     interface Props {
         code: string
@@ -128,7 +130,7 @@
             on:registerClick={async (e) => {
                 const value = e.detail.value
                 const clampedSize = value - (value % emulator.memory.global.pageSize)
-                emulator.setGlobalMemoryAddress(clamp(clampedSize, 0, MEMORY_SIZE))
+                emulator.setGlobalMemoryAddress(clamp(clampedSize, 0, MEMORY_SIZE['M68K']))
             }}
         />
     </div>
@@ -136,7 +138,7 @@
         <div class="column code-data-memory-controls">
             <MemoryControls
                 bytesPerPage={4 * 8}
-                memorySize={MEMORY_SIZE}
+                memorySize={MEMORY_SIZE['M68K'] /*TODO make this agnostic */}
                 currentAddress={memoryAddress}
                 style="flex: unset"
                 inputStyle="width: 6rem; height: 3rem"
@@ -147,6 +149,7 @@
                 hideLabel
             />
             <MemoryVisualiser
+                defaultMemoryValue={0xff /*TODO make this agnostic */}
                 style="height: 100%; flex: 1;"
                 bytesPerRow={4}
                 pageSize={4 * 8}

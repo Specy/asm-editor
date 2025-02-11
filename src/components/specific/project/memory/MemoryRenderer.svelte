@@ -30,9 +30,10 @@
         pageSize: number
         bytesPerRow: number
         style?: string
+        defaultMemoryValue: number
     }
 
-    let { memory, currentAddress, sp, pageSize, bytesPerRow, style = '' }: Props = $props()
+    let { memory, currentAddress, sp, pageSize, bytesPerRow, style = '', defaultMemoryValue }: Props = $props()
     const maxAddresses = 4
     let selectedAddressesIndexes = $state({
         start: -1,
@@ -75,7 +76,7 @@
                     .toUpperCase()
             case DisplayType.Char:
                 //hides last extended ascii to have prettier view
-                return value === 0xff ? '' : String.fromCharCode(value)
+                return value === defaultMemoryValue ? '' : String.fromCharCode(value)
             case DisplayType.Decimal:
                 return value.toString().padStart(padding ?? 2, '0')
             default:
@@ -228,8 +229,8 @@
                 <ValueDiff
                     value={getTextFromValue(word, 0, type)}
                     id={`${id}-${i}`}
-                    diff={getTextFromValue(memory.prevState[i] ?? 0xff, 0, type)}
-                    hasSoftDiff={word !== 0xff}
+                    diff={getTextFromValue(memory.prevState[i] ?? defaultMemoryValue, 0, type)}
+                    hasSoftDiff={word !== defaultMemoryValue}
                     style={`padding: 0.3rem; min-width: calc(0.6rem + 2ch); height: calc(2ch + 0.65rem); ${
                         currentAddress + i === sp
                             ? ' background-color: var(--accent2); color: var(--accent2-text);'

@@ -7,6 +7,14 @@ type Version = {
 }
 export const versions: Version[] = [
     {
+        version: '4.0.0',
+        title: 'Added MIPS language!',
+        date: new Date('2025-02-11'),
+        changes: [
+           "Added initial MIPS assembler/simulator (mars)"
+        ]
+    },
+    {
         version: '3.5.0',
         title: 'Migrated website to svelte 5 & preparations for MIPS',
         date: new Date('2025-02-09'),

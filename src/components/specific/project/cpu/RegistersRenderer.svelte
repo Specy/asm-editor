@@ -35,54 +35,49 @@
     {/if}
     <div class="registers" style={gridStyle}>
         {#each registers as register, i (register.name)}
-            <div class="row register">
-                <div class="register-wrapper" style="display:flex; align-items: center;">
-                    <div class="hover-register-value">
-                        {#if usesHex}
-                            {register.value}
-                        {:else}
-                            {register.value.toString(16).padStart(8, '0')}
-                        {/if}
-                    </div>
-                    <button
-                        class="register-name"
-                        onclick={() => dispatcher('registerClick', register)}
+            <div class="register-wrapper">
+                <div class="hover-register-value">
+                    {#if usesHex}
+                        {register.value}
+                    {:else}
+                        {register.value.toString(16).padStart(8, '0')}
+                    {/if}
+                </div>
+                <button class="register-name" onclick={() => dispatcher('registerClick', register)}>
+                    {register.name}
+                </button>
+            </div>
+            <div class="register-hex">
+                {#each chunks[i] as chunk}
+                    <ValueDiff
+                        monospaced
+                        style="padding: 0.1rem"
+                        value={usesHex
+                            ? chunk.hex
+                            : `${chunk.value}`.padStart(chunk.groupSize, '0')}
+                        diff={usesHex
+                            ? chunk.prev.hex
+                            : `${chunk.prev.value}`.padStart(chunk.groupSize, '0')}
+                        hoverElementOffset={chunk.value !== chunk.valueSigned
+                            ? '-2.4rem'
+                            : '-1.2rem'}
                     >
-                        {register.name}
-                    </button>
-                </div>
-                <div class="register-hex">
-                    {#each chunks[i] as chunk}
-                        <ValueDiff
-                            monospaced
-                            style="padding: 0.1rem"
-                            value={usesHex
-                                ? chunk.hex
-                                : `${chunk.value}`.padStart(chunk.groupSize, '0')}
-                            diff={usesHex
-                                ? chunk.prev.hex
-                                : `${chunk.prev.value}`.padStart(chunk.groupSize, '0')}
-                            hoverElementOffset={chunk.value !== chunk.valueSigned
-                                ? '-2.4rem'
-                                : '-1.2rem'}
-                        >
-                            {#snippet hoverValue()}
-                                <div class="column">
-                                    {#if chunk.value !== chunk.valueSigned}
-                                        <div style="user-select: all;">
-                                            {chunk.valueSigned}
-                                        </div>
-                                    {/if}
+                        {#snippet hoverValue()}
+                            <div class="column">
+                                {#if chunk.value !== chunk.valueSigned}
                                     <div style="user-select: all;">
-                                        {usesHex
-                                            ? `${chunk.value}`.padStart(chunk.groupSize, '0')
-                                            : chunk.hex}
+                                        {chunk.valueSigned}
                                     </div>
+                                {/if}
+                                <div style="user-select: all;">
+                                    {usesHex
+                                        ? `${chunk.value}`.padStart(chunk.groupSize, '0')
+                                        : chunk.hex}
                                 </div>
-                            {/snippet}
-                        </ValueDiff>
-                    {/each}
-                </div>
+                            </div>
+                        {/snippet}
+                    </ValueDiff>
+                {/each}
             </div>
         {/each}
     </div>
@@ -96,28 +91,25 @@
         color: var(--secondary-text);
         border-radius: 0.5rem;
         min-width: 8.6rem;
-        padding-bottom: 0.3rem;
         flex: 1;
     }
 
     .registers {
         display: grid;
-        grid-template-columns: auto;
+        grid-template-columns: min-content 1fr;
         grid-template-rows: auto;
         flex-direction: column;
+        gap: 0.3rem;
+        padding: 0.3rem;
         font-size: 1rem;
         flex: 1;
+        overflow-y: auto;
+        max-height: calc(100vh - 14rem); //HOTFIX
         @media screen and (max-width: 1000px) {
             width: unset;
         }
     }
-    .register {
-        gap: 0.2rem;
-        align-items: center;
-        height: 100%;
-        margin: 0 0.3rem;
-        padding: 0.1rem 0.2rem;
-    }
+
     .registers-header {
         display: flex;
         align-items: center;
@@ -152,6 +144,9 @@
         font-weight: normal;
     }
     .register-wrapper {
+        display: flex;
+        justify-content: center;
+        align-items: center;
         position: relative;
         &:hover .hover-register-value {
             display: flex;
@@ -162,7 +157,7 @@
         padding: 0.2rem;
         border-radius: 0.2rem;
         border: none;
-        width: 1.6rem;
+        min-width: 1.6rem;
         background: transparent;
         color: var(--secondary-text);
         cursor: pointer;

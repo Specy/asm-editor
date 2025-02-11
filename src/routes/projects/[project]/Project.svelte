@@ -14,7 +14,7 @@
     import Controls from '$cmp/specific/project/Controls.svelte'
     import StdOut from '$cmp/specific/project/user-tools/StdOutRenderer.svelte'
     import { clamp, createDebouncer, formatTime } from '$lib/utils'
-    import { MEMORY_SIZE } from '$lib/Config'
+    import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE } from '$lib/Config'
     import Settings from '$cmp/specific/project/settings/Settings.svelte'
     import M68KDocumentation from '$cmp/specific/project/FloatingM68KDocumentation.svelte'
     import FaBook from 'svelte-icons/fa/FaBook.svelte'
@@ -37,6 +37,7 @@
     import Row from '$cmp/shared/layout/Row.svelte'
     import TestcasesEditor from '$cmp/specific/project/testcases/TestcasesEditor.svelte'
     import { RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
+    import { GenericEmulator } from '$lib/languages/Emulator'
 
     interface Props {
         project: Project
@@ -44,7 +45,7 @@
 
     let { project = $bindable() }: Props = $props()
 
-    const emulator = M68KEmulator(project.code)
+    const emulator = GenericEmulator(project.language, project.code)
 
     $effect(() => {
         emulator.setCode(project.code)
@@ -304,6 +305,8 @@
 {#each emulator.memory.tabs as tab, i}
     <MemoryTab
         {tab}
+        defaultMemoryValue={DEFAULT_MEMORY_VALUE[project.language]}
+        memorySize={MEMORY_SIZE[project.language]}
         left={700 + i * 300}
         sp={emulator.sp}
         on:addressChange={(e) => {
@@ -319,32 +322,34 @@
             class:gradientBorder={emulator.canExecute && !emulator.terminated}
             class:redBorder={emulator.errors.length > 0}
         >
-            <Editor
-                on:change={(d) => {
-                    if (emulator.canExecute && emulator.terminated && emulator.line >= 0) {
-                        emulator.resetSelectedLine()
-                    }
-                    if (settingsStore.values.autoSave.value) {
-                        debounced(() => {
-                            dispatcher('save', {
-                                silent: true,
-                                data: project
+            {#key project.language}
+                <Editor
+                    on:change={(d) => {
+                        if (emulator.canExecute && emulator.terminated && emulator.line >= 0) {
+                            emulator.resetSelectedLine()
+                        }
+                        if (settingsStore.values.autoSave.value) {
+                            debounced(() => {
+                                dispatcher('save', {
+                                    silent: true,
+                                    data: project
+                                })
                             })
-                        })
-                    }
-                }}
-                on:breakpointPress={(d) => {
-                    emulator.toggleBreakpoint(d.detail - 1)
-                }}
-                bind:editor
-                bind:code={project.code}
-                breakpoints={emulator.breakpoints}
-                errors={emulator.compilerErrors}
-                language={project.language}
-                highlightedLine={emulator.line}
-                disabled={emulator.canExecute && !emulator.terminated}
-                hasError={emulator.errors.length > 0}
-            />
+                        }
+                    }}
+                    on:breakpointPress={(d) => {
+                        emulator.toggleBreakpoint(d.detail - 1)
+                    }}
+                    bind:editor
+                    bind:code={project.code}
+                    breakpoints={emulator.breakpoints}
+                    errors={emulator.compilerErrors}
+                    language={project.language}
+                    highlightedLine={emulator.line}
+                    disabled={emulator.canExecute && !emulator.terminated}
+                    hasError={emulator.errors.length > 0}
+                />
+            {/key}
         </div>
 
         <Controls
@@ -429,14 +434,16 @@
     <div class="right-side">
         <div class="memory-wrapper">
             <div class="column" style="gap: 0.5rem;">
-                <StatusCodesVisualiser statusCodes={emulator.statusRegister} />
+                {#if emulator.statusRegister}
+                    <StatusCodesVisualiser statusCodes={emulator.statusRegister} />
+                {/if}
                 <RegistersVisualiser
                     size={groupSize}
                     registers={emulator.registers}
                     on:registerClick={async (e) => {
                         const value = e.detail.value
                         const clampedSize = value - (value % emulator.memory.global.pageSize)
-                        emulator.setGlobalMemoryAddress(clamp(clampedSize, 0, MEMORY_SIZE))
+                        emulator.setGlobalMemoryAddress(clamp(clampedSize, 0, MEMORY_SIZE[project.language]))
                     }}
                 />
             </div>
@@ -445,7 +452,7 @@
                     <SizeSelector bind:selected={groupSize} />
                     <MemoryControls
                         bytesPerPage={emulator.memory.global.pageSize}
-                        memorySize={MEMORY_SIZE}
+                        memorySize={MEMORY_SIZE[project.language]}
                         inputStyle="height: 100%"
                         currentAddress={emulator.memory.global.address}
                         on:addressChange={(e) => {
@@ -455,6 +462,7 @@
                 </div>
 
                 <MemoryVisualiser
+                    defaultMemoryValue={DEFAULT_MEMORY_VALUE[project.language]}
                     bytesPerRow={emulator.memory.global.rowSize}
                     pageSize={emulator.memory.global.pageSize}
                     memory={emulator.memory.global.data}
