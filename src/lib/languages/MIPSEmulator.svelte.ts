@@ -289,8 +289,8 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         state.callStack = mips.getCallStack().map(v => {
             return {
                 address: v,
-                name: mips.getLabelAtAddress(v) ?? '',
-                line: mips.getStatementAtAddress(v)?.sourceLine ?? -1
+                name: mips.getLabelAtAddress(v) ?? `0x${v.toString(16).padStart(8, '0')}`,
+                line: (mips.getStatementAtAddress(v)?.sourceLine ?? 0) - 1
             }
         })
         state.latestSteps = steps.map(step => {
@@ -453,7 +453,6 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
             } catch (e) {
                 state.line = -1
             }
-
             state.canUndo = mips.canUndo
             updateRegisters()
             updateMemory()
