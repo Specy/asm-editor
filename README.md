@@ -1,7 +1,7 @@
 # Asm editor
 
 A webapp made with [sveltekit](https://kit.svelte.dev/), [rust](https://www.rust-lang.org/it) webassembly and [java TEAVM](https://teavm.org/) to learn, write and run M68K and MIPS assembly code.
-Uses monaco-editor for the editor, my [WASM M68K interpreter](https://github.com/Specy/s68k) to run the code, and a Java compile to javascript [MIPS Assembler](https://github.com/Specy/mars).
+Uses monaco-editor for the editor, my [WASM M68K interpreter](https://github.com/Specy/s68k) to run the code, and a Java [MIPS Assembler (mars)](https://github.com/Specy/mars) compiled to javascript.
 
 Mainly made to help people approaching assembly by providing the tools necessary to write and debug code more easily.
 ![localImage](https://asm-editor.specy.app/images/ASM-editor.webp)
