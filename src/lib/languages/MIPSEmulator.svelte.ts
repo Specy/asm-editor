@@ -461,7 +461,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
             scrollStackTab()
             state.executionTime = performance.now() - start
             state.terminated = terminated
-            return terminated
+            return terminated ? InterpreterStatus.Terminated : InterpreterStatus.Running
         } catch (e) {
             console.error(e)
             let line = -1
