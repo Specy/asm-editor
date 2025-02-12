@@ -1,9 +1,10 @@
-<script lang="ts">
+<script lang="ts" module>
     import type { Plugin } from 'carta-md'
-    import { Carta, Markdown } from 'carta-md'
+    import { Carta } from 'carta-md'
     import DOMPurify from 'isomorphic-dompurify'
     import rehypeRaw from 'rehype-raw'
     import rehypeExternalLinks from 'rehype-external-links'
+
     const ext: Plugin = {
         transformers: [
             {
@@ -13,19 +14,41 @@
                     processor.use(rehypeRaw)
                 }
             },
+    
+        ]
+    }
+    const extWithExternalLins: Plugin = {
+        transformers: [
             {
                 execution: 'sync',
                 type: 'rehype',
                 transform({ processor }) {
-                    if (linksInNewTab) {
                         processor.use(rehypeExternalLinks, {
                             target: '_blank'
                         })
-                    }
                 }
             }
         ]
     }
+  const cartaNormal = new Carta({
+        sanitizer: DOMPurify.sanitize,
+        extensions: [ext],
+        rehypeOptions: {
+            allowDangerousHtml: true
+        }
+    })
+    const cartaWithExternalLins = new Carta({
+        sanitizer: DOMPurify.sanitize,
+        extensions: [extWithExternalLins],
+        rehypeOptions: {
+            allowDangerousHtml: true
+        }
+    })
+</script>
+
+<script lang="ts">
+    import { Markdown } from 'carta-md'
+
     interface Props {
         source: string
         linksInNewTab?: boolean
@@ -33,13 +56,7 @@
 
     let { source, linksInNewTab }: Props = $props()
 
-    const carta = new Carta({
-        sanitizer: DOMPurify.sanitize,
-        extensions: [ext],
-        rehypeOptions: {
-            allowDangerousHtml: true
-        }
-    })
+    const carta = linksInNewTab ? cartaWithExternalLins : cartaNormal
 </script>
 
 <div class="_markdown">

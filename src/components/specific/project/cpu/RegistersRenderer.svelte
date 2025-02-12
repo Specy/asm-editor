@@ -51,6 +51,7 @@
                 {#each chunks[i] as chunk}
                     <ValueDiff
                         monospaced
+                        hoverElementStyle="left: -0.1rem"
                         style="padding: 0.1rem"
                         value={usesHex
                             ? chunk.hex

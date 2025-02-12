@@ -253,6 +253,7 @@ export function createM68kFormatter(monaco: MonacoType) {
         }
     }
 }
+
 export function createM68KCompletition(monaco: MonacoType) {
     return {
         triggerCharacters: ['.', ',', ' ', 'deleteLeft', 'tab', '$', '#'],

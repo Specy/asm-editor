@@ -88,6 +88,7 @@
     function onPointerDown(e: PointerEvent) {
         selectingAddresses = true
         const el = findElInTree(e.target as HTMLElement, id)
+        if(!el) return
         const index = parseInt(el.id.split('-')[1])
         if (isNaN(index)) return
         selectedAddressesIndexes.start = index
@@ -99,6 +100,7 @@
     function handlePointerMove(e: PointerEvent) {
         if (!selectingAddresses) return
         const el = findElInTree(e.target as HTMLElement, id)
+        if(!el) return
         const index = parseInt(el.id.split('-')[1])
         if (isNaN(index)) return
         if (lastIdx === index && selectedAddressesIndexes.start !== -1) return
@@ -138,7 +140,7 @@
         <Row
             padding="0.25rem"
             gap="0.2rem"
-            style="height:2rem; width: 3.2rem; padding-bottom: 0; padding-right: 0.1rem"
+            style="height:2rem; min-width: 3.8rem; padding-bottom: 0; padding-right: 0.25rem;"
         >
             <Button
                 title={type === DisplayType.Hex ? 'Show as character' : 'Show as hex'}
@@ -208,9 +210,7 @@
 								left: ${
                                     overflowsBy.overflows
                                         ? `calc(-${overflowsBy.by} * 1.75rem)`
-                                        : selectionValue.len === 1
-                                          ? '-0.3rem'
-                                          : '0'
+                                        : '0'
                                 };
 								min-width: ${selectionValue.len * 1.7}rem;
 						`}
@@ -233,6 +233,7 @@
                     id={`${id}-${i}`}
                     diff={getTextFromValue(memory.prevState[i] ?? defaultMemoryValue, 0, type)}
                     hasSoftDiff={word !== defaultMemoryValue}
+                    hoverElementStyle={`width: 100%; min-width: fit-content; left: 50%; transform: translateX(-50%);`}
                     style={`padding: 0.3rem; min-width: calc(0.6rem + 2ch); height: calc(2ch + 0.65rem); ${
                         currentAddress + i === sp
                             ? ' background-color: var(--accent2); color: var(--accent2-text);'

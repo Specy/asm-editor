@@ -2,10 +2,12 @@
     interface Props {
         diff: string | number
         style?: string
+        hoverElementStyle?: string
         value: string | number
         hasSoftDiff?: boolean | undefined
         monospaced?: boolean
         hoverElementOffset?: string
+        oldValueStyle?: string
         id?: string | undefined
         hoverValue?: import('svelte').Snippet
     }
@@ -13,9 +15,11 @@
     let {
         diff,
         style = '',
+        hoverElementStyle = '',
         value,
         hasSoftDiff = undefined,
         monospaced = false,
+        oldValueStyle,
         hoverElementOffset = '-1.1rem',
         id = undefined,
         hoverValue
@@ -23,14 +27,19 @@
 </script>
 
 <div style="position: relative;">
-    <div class="hover-element" style={`--top: ${hoverElementOffset}`}>
+    <div class="hover-element" style={`--top: ${hoverElementOffset}; ${hoverElementStyle}`}>
         {#if hoverValue}
             <div class:monospaced>
                 {@render hoverValue?.()}
             </div>
         {/if}
         {#if diff !== value}
-            <div class="old-value" class:monospaced>
+            <div
+                class="old-value"
+                class:monospaced
+                style={oldValueStyle}
+                role="tooltip"
+            >
                 {diff}
             </div>
         {/if}
@@ -55,6 +64,7 @@
         text-align: center;
         justify-content: center;
         cursor: default;
+        text-align: center;
     }
 
     .softDiff {
@@ -69,10 +79,10 @@
         color: var(--tertiary-text);
         border-radius: 0.2rem;
         top: var(--top);
-        left: -0.1rem;
         z-index: 3;
         position: absolute;
         cursor: text;
+        text-align: center;
         box-shadow: rgba(0, 0, 0, 0.4) 0px 2px 2px;
         padding: 0.2rem;
     }

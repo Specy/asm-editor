@@ -3,12 +3,18 @@ import type { DiffedMemory } from '$lib/languages/commonLanguageFeatures.svelte'
 export function findElInTree(e: HTMLElement, baseId: string) {
     let el = e
     while (el.parentElement) {
+        // @ts-ignore
+        for(const child of el.children) {
+            if (child.id.startsWith(baseId)) {
+                return child
+            }
+        }
         if (el.id.startsWith(baseId)) {
             return el
         }
         el = el.parentElement
     }
-    return el
+    return null
 }
 
 export function getGroupSignedValue(groupValue: number, groupLength: number) {

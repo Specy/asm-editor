@@ -1,5 +1,5 @@
 import { PAGE_ELEMENTS_PER_ROW, PAGE_SIZE } from '$lib/Config'
-import { MIPS, type JsMips, type RegisterName, type MIPSAssembleError, BackStepAction, registerHandlers, unimplementedHandler, ConfirmResult, type JsBackStep } from '@specy/mips'
+import { MIPS, type JsMips, type RegisterName, type MIPSAssembleError, BackStepAction, registerHandlers, unimplementedHandler, ConfirmResult, type JsBackStep, type HandlerMapFns } from '@specy/mips'
 import { createMemoryTab, InterpreterStatus, makeRegister, RegisterSize, type BaseEmulatorActions, type BaseEmulatorState, type EmulatorSettings, type MonacoError, type MutationOperation, type RegisterChunk } from './commonLanguageFeatures.svelte'
 import { createDebouncer } from '$lib/utils'
 import { Prompt } from '$stores/promptStore'
@@ -160,49 +160,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 mips.initialize(true)
 
 
-                registerHandlers(mips, {
-                    askDouble: (props: string) => Number(prompt(props)),
-                    askFloat: (props: string) => Number(prompt(props)),
-                    askInt: (props: string) => Number(prompt(props)),
-                    askString: (props: string) => prompt(props),
-
-                    printChar: (char: string) => { state.stdOut += char },
-                    printDouble: (value: number) => { state.stdOut += String(value) },
-                    printFloat: (value: number) => { state.stdOut += String(value) },
-                    printInt: (value: number) => { state.stdOut += String(value) },
-                    printString: (value: string) => { state.stdOut += value },
-
-                    readFile: unimplementedHandler('readFile'),
-                    writeFile: unimplementedHandler('writeFile'),
-                    openFile: unimplementedHandler('openFile'),
-                    closeFile: unimplementedHandler('closeFile'),
-
-                    stdIn: unimplementedHandler('stdIn'),
-                    stdOut: (buffer: number[]) => {
-                        state.stdOut += new TextDecoder().decode(new Uint8Array(buffer))
-                    },
-
-                    readChar: () => {
-                        const str = prompt('Enter a character')
-                        if (str.length !== 1) throw new Error('Invalid character')
-                        return str[0]
-                    },
-                    readDouble: () => Number(prompt('Enter a double')),
-                    readFloat: () => Number(prompt('Enter a float')),
-                    readInt: () => Number(prompt('Enter an integer')),
-                    readString: () => prompt('Enter a string'),
-
-
-                    log: (message: string) => { state.stdOut += message },
-                    logLine: (message: string) => { state.stdOut += message + '\n' },
-
-
-                    confirm: (message: string) => Number(confirm(`${message}; 1 = yes, 0 = no, -1 = cancel`)) as ConfirmResult,
-                    inputDialog: (message: string) => prompt(message),
-                    outputDialog: (message: string) => alert(message),
-
-                    sleep: unimplementedHandler('sleep'),
-                })
+                registerHandlers(mips, getHandlers())
 
                 //TODO add interrupts
                 const stackTab = state.memory.tabs.find((e) => e.name === 'Stack')
@@ -487,6 +445,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
                 state.line = ins.sourceLine - 1
             } catch (e) {
+                state.line = -1
             }
 
             state.canUndo = mips.canUndo
@@ -594,6 +553,52 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         return errors
     }
 
+    function getHandlers() {
+        return {
+            askDouble: (props: string) => Number(prompt(props)),
+            askFloat: (props: string) => Number(prompt(props)),
+            askInt: (props: string) => Number(prompt(props)),
+            askString: (props: string) => prompt(props),
+
+            printChar: (char: string) => { state.stdOut += char },
+            printDouble: (value: number) => { state.stdOut += String(value) },
+            printFloat: (value: number) => { state.stdOut += String(value) },
+            printInt: (value: number) => { state.stdOut += String(value) },
+            printString: (value: string) => { state.stdOut += value },
+
+            readFile: unimplementedHandler('readFile'),
+            writeFile: unimplementedHandler('writeFile'),
+            openFile: unimplementedHandler('openFile'),
+            closeFile: unimplementedHandler('closeFile'),
+            stdIn: unimplementedHandler('stdIn'),
+
+            stdOut: (buffer: number[]) => {
+                state.stdOut += new TextDecoder().decode(new Uint8Array(buffer))
+            },
+
+            readChar: () => {
+                const str = prompt('Enter a character')
+                if (str.length !== 1) throw new Error('Invalid character')
+                return str[0]
+            },
+            readDouble: () => Number(prompt('Enter a double')),
+            readFloat: () => Number(prompt('Enter a float')),
+            readInt: () => Number(prompt('Enter an integer')),
+            readString: () => prompt('Enter a string'),
+
+
+            log: (message: string) => { state.stdOut += message },
+            logLine: (message: string) => { state.stdOut += message + '\n' },
+
+
+            confirm: (message: string) => Number(confirm(`${message}; 1 = yes, 0 = no, -1 = cancel`)) as ConfirmResult,
+            inputDialog: (message: string) => prompt(message),
+            outputDialog: (message: string) => alert(message),
+
+            sleep: unimplementedHandler('sleep'),
+        } satisfies HandlerMapFns
+    }
+
     async function runTestcase(testcase: Testcase, haltLimit: number) {
         if (haltLimit <= 0) haltLimit = Number.MAX_SAFE_INTEGER
         const start = performance.now()
@@ -613,11 +618,60 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
                     mips.setMemoryBytes(value.address, Array.from(encoded))
                 }
             }
+            registerHandlers(mips, {
+                ...getHandlers(),
+                readChar: () => {
+                    if (testcase.input.length === 0)
+                        throw new Error('Input does not have any characters left')
+                    if (testcase.input[0].length !== 1) throw new Error('Invalid character')
+                    return testcase.input.shift()[0]
+                },
+                readDouble: () => {
+                    if (testcase.input.length === 0) throw new Error('Input does not have any numbers left')
+                    if (Number.isNaN(Number(testcase.input[0]))) throw new Error('Invalid number')
+                    return Number(testcase.input.shift())
+                },
+                readFloat: () => {
+                    if (testcase.input.length === 0) throw new Error('Input does not have any numbers left')
+                    if (Number.isNaN(Number(testcase.input[0]))) throw new Error('Invalid number')
+                    return Number(testcase.input.shift())
+                },
+                readInt: () => {
+                    if (testcase.input.length === 0) throw new Error('Input does not have any numbers left')
+                    if (Number.isNaN(Number(testcase.input[0]))) throw new Error('Invalid number')
+                    return Number(testcase.input.shift())
+                },
+                readString: () => {
+                    if (testcase.input.length === 0) throw new Error('Input does not have any strings left')
+                    return testcase.input.shift()
+                },
+                printChar: (char: string) => { state.stdOut += char },
+                printDouble: (value: number) => { state.stdOut += String(value) },
+                printFloat: (value: number) => { state.stdOut += String(value) },
+                printInt: (value: number) => { state.stdOut += String(value) },
+                printString: (value: string) => { state.stdOut += value },
+                stdOut: (buffer: number[]) => {
+                    state.stdOut += new TextDecoder().decode(new Uint8Array(buffer))
+                },
+                log: (message: string) => { state.stdOut += message },
+                logLine: (message: string) => { state.stdOut += message + '\n' },
+
+                askDouble: unimplementedHandler('askDouble'),
+                askFloat: unimplementedHandler('askFloat'),
+                askInt: unimplementedHandler('askInt'),
+                askString: unimplementedHandler('askString'),
+                confirm: unimplementedHandler('confirm'),
+                inputDialog: unimplementedHandler('inputDialog'),
+                outputDialog: unimplementedHandler('outputDialog'),
+                sleep: unimplementedHandler('sleep'),
+            })
             mips.simulateWithLimit(haltLimit)
-            //TODO add interrupts
-            const ins = mips.getNextStatement()
-            //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
-            state.line = ins.sourceLine - 1
+            try {
+                const ins = mips.getNextStatement()
+                //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
+                state.line = ins.sourceLine - 1
+            } catch (e) {}
+
             state.canUndo = mips.canUndo
 
             updateRegisters()
