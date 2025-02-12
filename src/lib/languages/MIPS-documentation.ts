@@ -70,17 +70,17 @@ export const mipsDirectivesMap = {
     word: {
         name: 'word',
         description:
-            'Allocates **one or more** 32-bit (4-byte) words in memory.\n\nExample:\n```assembly\nvalues: .word 1, 2, 3, 4\n```'
+            'Allocates **one or more** 32-bit (4-byte) words in memory.\n\nExample:\n```mips\nvalues: .word 1, 2, 3, 4\n```'
     },
     half: {
         name: 'half',
         description:
-            'Allocates **one or more** 16-bit (2-byte) halfwords in memory.\n\nExample:\n```assembly\nvalues: .half 1234, 5678\n```'
+            'Allocates **one or more** 16-bit (2-byte) halfwords in memory.\n\nExample:\n```mips\nvalues: .half 1234, 5678\n```'
     },
     byte: {
         name: 'byte',
         description:
-            'Allocates **one or more** 8-bit (1-byte) values in memory.\n\nExample:\n```assembly\nflags: .byte 0, 1, 1, 0\n```'
+            'Allocates **one or more** 8-bit (1-byte) values in memory.\n\nExample:\n```mips\nflags: .byte 0, 1, 1, 0\n```'
     },
     float: {
         name: 'float',
@@ -93,7 +93,7 @@ export const mipsDirectivesMap = {
     asciiz: {
         name: 'asciiz',
         description:
-            'Stores a **null-terminated string** (C-style string).\n\nExample:\n```assembly\nmessage: .asciiz "Hello, world!"\n```'
+            'Stores a **null-terminated string** (C-style string).\n\nExample:\n```mips\nmessage: .asciiz "Hello, world!"\n```'
     },
     ascii: {
         name: 'ascii',
@@ -103,17 +103,17 @@ export const mipsDirectivesMap = {
     space: {
         name: 'space',
         description:
-            'Reserves a **specified number of bytes** in memory without initializing them.\n\nExample:\n```assembly\nbuffer: .space 100   # Reserves 100 bytes\n```'
+            'Reserves a **specified number of bytes** in memory without initializing them.\n\nExample:\n```mips\nbuffer: .space 100   # Reserves 100 bytes\n```'
     },
     align: {
         name: 'align',
         description:
-            'Aligns the next data to a **2^n-byte boundary**.\n\nExample:\n```assembly\n.align 2   # Aligns to a 4-byte boundary\n```'
+            'Aligns the next data to a **2^n-byte boundary**.\n\nExample:\n```mips\n.align 2   # Aligns to a 4-byte boundary\n```'
     },
     globl: {
         name: 'globl',
         description:
-            "Marks a **symbol as global**, making it accessible from other files.\n\nExample:\n```assembly\n.globl main   # Makes 'main' visible to the linker\n```"
+            "Marks a **symbol as global**, making it accessible from other files.\n\nExample:\n```mips\n.globl main   # Makes 'main' visible to the linker\n```"
     },
     extern: {
         name: 'extern',
@@ -130,17 +130,17 @@ export const mipsDirectivesMap = {
     include: {
         name: 'include',
         description:
-            'Includes an external assembly file.\n\nExample:\n```assembly\n.include "myfile.s"\n```'
+            'Includes an external assembly file.\n\nExample:\n```mips\n.include "myfile.s"\n```'
     },
     eqv: {
         name: 'eqv',
         description:
-            'Defines a **symbolic constant**, similar to `#define` in C.\n\nExample:\n```assembly\n.eqv SIZE 10\n```'
+            'Defines a **symbolic constant**, similar to `#define` in C.\n\nExample:\n```mips\n.eqv SIZE 10\n```'
     },
     set: {
         name: 'set',
         description:
-            'Configures assembler settings, such as allowing modifications to the `$at` register.\n\nExample:\n```assembly\n.set noat  # Allows use of register $at\n```'
+            'Configures assembler settings, such as allowing modifications to the `$at` register.\n\nExample:\n```mips\n.set noat  # Allows use of register $at\n```'
     },
     bss: {
         name: 'bss',

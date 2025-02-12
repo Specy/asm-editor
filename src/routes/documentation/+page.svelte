@@ -3,7 +3,7 @@
     import NavigationLinkButton from '$cmp/shared/button/NavigationLinkButton.svelte'
     import { capitalize } from '$lib/utils'
     import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
-    const langs = ['m68k']
+    const langs = ['m68k', 'mips']
 </script>
 
 <DefaultNavbar />

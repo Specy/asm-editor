@@ -1,34 +1,27 @@
 <script lang="ts">
-    import { run } from 'svelte/legacy'
-
     import type { PageData } from './$types'
     import Page from '$cmp/shared/layout/Page.svelte'
-    import { onMount } from 'svelte'
-    import {
-        fromSizesToString,
-        fromSizeToString,
-        getAddressingModeNames
-    } from '$lib/languages/M68K-documentation'
-    import DocsOperand from '$cmp/documentation/DocsOperand.svelte'
     import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
+    import { onMount } from 'svelte'
     interface Props {
         data: PageData
     }
 
     let { data }: Props = $props()
-    let ins = $derived(data.props.instruction)
+    let ins = $derived(data.props.instruction[0])
+
+    let code = $state(ins.interactiveExample?.code ?? '; no interactive instruction available')
 
     let component: any = $state.raw()
     onMount(async () => {
         //HUGE HACK TO MAKE SVELTEKIT PRERENDER BECAUSE OF TOP LEVEL AWAIT
-        const imp = await import('./ClientOnly.svelte')
+        const imp = await import('../../../m68k/instruction/[instructionName]/ClientOnly.svelte')
         //@ts-ignore
         await imp?.__tla
         //@ts-ignore
         component = imp?.default
     })
-    let code = $state(ins.interactiveExample?.code ?? '; no interactive instruction available')
 
     $effect(() => {
         code = ins.interactiveExample?.code ?? '; no interactive instruction available'
@@ -52,37 +45,17 @@
             <div class="instruction-name">
                 {ins.name}
             </div>
-            <Column style="margin-left: 0.8rem;">
-                {#if ins.sizes.length}
-                    <h3>Sizes</h3>
-                    <div style="margin: 0.8rem">
-                        {fromSizesToString(ins.sizes, true)}
-                    </div>
-                {/if}
-                {#if ins.defaultSize}
-                    <h3>Default Size</h3>
-                    <div style="margin: 0.8rem">
-                        {fromSizeToString(ins.defaultSize, true)}
-                    </div>
-                {/if}
-            </Column>
         </Column>
 
-        <Column gap="1rem">
-            <article class="column">
-                <h3>Operands</h3>
-                <Column gap="0.5rem" margin="0.8rem">
-                    {#if ins.args.length}
-                        {#each ins.args as arg, i}
-                            <DocsOperand
-                                name={`Op ${i + 1}`}
-                                content={getAddressingModeNames(arg)}
-                                style="width: fit-content;"
-                            />
-                        {/each}
-                    {/if}
-                </Column>
-            </article>
+        <Column gap="1rem" flex1>
+            <Column style="gap: 1rem">
+                <h2>Variants</h2>
+                <MarkdownRenderer
+                    source={data.props.instruction
+                        .map((v) => `- ${v.description} **${v.example}**`)
+                        .join('\n')}
+                />
+            </Column>
             <article class="description">
                 <MarkdownRenderer source={ins.description} />
             </article>
@@ -90,7 +63,7 @@
     </div>
     {#if component}
         {@const SvelteComponent_1 = component}
-        <SvelteComponent_1 bind:code instructionKey={ins.name}  language="M68K"/>
+        <SvelteComponent_1 bind:code instructionKey={ins.name} language="MIPS" />
     {:else}
         <div class="loading">Loading...</div>
     {/if}

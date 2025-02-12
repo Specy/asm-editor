@@ -228,9 +228,16 @@ export function createMIPSHoverProvider(monaco: MonacoType) {
             }
             const ins = mipsInstructionMap.get(word)
             if (ins) {
-                contents.push({
-                    value: ins.map((ins, i) => `${i + 1}. ${formatInstruction(ins)}`).join('\n')
-                })
+                if (ins.length === 1) {
+                    contents.push({
+                        value: formatInstruction(ins[0])
+                    })
+                } else {
+                    contents.push({
+                        value: ins.map((ins, i) => `${i + 1}. ${formatInstruction(ins)}`).join('\n')
+                    })
+                }
+
             }
             if (MIPSRegistersMap['$' + word]) {
                 contents.push({

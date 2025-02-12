@@ -1,28 +1,27 @@
 <script lang="ts">
     import { createBubbler } from 'svelte/legacy'
 
-    const bubble = createBubbler()
-    import type { InstructionDocumentation } from '$lib/languages/M68K-documentation'
     import Column from '$cmp/shared/layout/Column.svelte'
     interface Props {
         currentInstructionName?: string
-        instructions: InstructionDocumentation[]
+        instructions: string[]
         onClick?: (e: MouseEvent) => void
+        hrefBase: string
     }
 
-    let { currentInstructionName = '', instructions, onClick }: Props = $props()
+    let { currentInstructionName = '', instructions, onClick, hrefBase}: Props = $props()
 </script>
 
 <Column>
     {#each instructions as ins}
         <a
-            href="/documentation/m68k/instruction/{ins.name}"
+            href="{hrefBase}/{ins}"
             class="instruction-link"
-            class:current-instruction={ins.name === currentInstructionName}
+            class:current-instruction={ins === currentInstructionName}
             onclick={onClick}
         >
             <div class="instruction-link-inner">
-                {ins.name}
+                {ins}
             </div>
         </a>
     {/each}

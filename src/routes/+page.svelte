@@ -95,7 +95,7 @@
         <AnimatedRgbLine height="0.5rem" style="border-radius: 0;" />
         <div class="links-row-wrapper">
             <div class="links-row">
-                <MainPageLinkPreview href="/documentation/m68k" title="Documentation page">
+                <MainPageLinkPreview href="/documentation" title="Documentation page">
                     {#snippet icon()}
                         <div>
                             <FaBook />
@@ -147,7 +147,7 @@
                 The editor comes with a built-in documentation for the M68K instruction set
                 including the valid addressing modes, description, examples for each instruction and
                 directive.
-                <a href="/documentation/m68k" title="View documentation" class="external-link">
+                <a href="/documentation" title="View documentation" class="external-link">
                     Visit the documentation
                     <div style="width: 1rem; height: 1rem; margin-top: 0.2rem; margin-left: 0.3rem">
                         <GoLinkExternal />

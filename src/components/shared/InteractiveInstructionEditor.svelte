@@ -61,7 +61,7 @@
                 bind:code
                 breakpoints={emulator.breakpoints}
                 errors={emulator.compilerErrors}
-                language={'M68K'}
+                language={language}
                 highlightedLine={emulator.line}
                 disabled={emulator.canExecute && !emulator.terminated}
                 hasError={emulator.errors.length > 0}

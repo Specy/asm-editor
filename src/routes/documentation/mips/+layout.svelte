@@ -2,25 +2,24 @@
     import Navbar from '$cmp/shared/layout/Navbar.svelte'
     import TogglableSection from '$cmp/shared/layout/TogglableSection.svelte'
     import { M68KUncompoundedInstructions } from '$lib/languages/M68K-documentation'
-    import InstructionsMenu from './InstructionsMenu.svelte'
     import { page } from '$app/stores'
     import FaBars from 'svelte-icons/fa/FaBars.svelte'
 
     import FuzzySearch from 'fuzzy-search'
-    import MenuLink from './instruction/MenuLink.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import FaTimes from 'svelte-icons/fa/FaTimes.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
+    import { mipsInstructionNames } from '$lib/languages/MIPS-documentation'
+    import MenuLink from '../m68k/instruction/MenuLink.svelte'
+    import InstructionsMenu from '../m68k/InstructionsMenu.svelte'
     interface Props {
         children?: import('svelte').Snippet
     }
 
     let { children }: Props = $props()
 
-    let instructions = Array.from(M68KUncompoundedInstructions.values()).sort((a, b) =>
-        a.name.localeCompare(b.name)
-    )
+    let instructions = Array.from(mipsInstructionNames).sort((a, b) => a.localeCompare(b))
     let menuOpen = $state(false)
     let search = $state('')
     const searcher = new FuzzySearch(instructions, ['name', 'description'], {
@@ -61,30 +60,14 @@
     </button>
     <aside class="side-menu column" class:menu-open={menuOpen}>
         <Column gap="1rem" padding="0 1rem">
-            <MenuLink href="/documentation/m68k" title="M68K" onClick={() => (menuOpen = false)} />
             <MenuLink
-                href="/documentation/m68k/addressing-mode"
-                title="Addressing Modes"
+                href="/documentation/mips"
+                title="MIPS"
                 onClick={() => (menuOpen = false)}
             />
             <MenuLink
-                href="/documentation/m68k/condition-codes"
-                title="Condition Codes"
-                onClick={() => (menuOpen = false)}
-            />
-            <MenuLink
-                href="/documentation/m68k/shift-direction"
-                title="Shifts & directions"
-                onClick={() => (menuOpen = false)}
-            />
-            <MenuLink
-                href="/documentation/m68k/directive"
+                href="/documentation/mips/directive"
                 title="Directives"
-                onClick={() => (menuOpen = false)}
-            />
-            <MenuLink
-                href="/documentation/m68k/assembler-features"
-                title="Assembler features"
                 onClick={() => (menuOpen = false)}
             />
         </Column>
@@ -100,8 +83,8 @@
             {/snippet}
             <input bind:value={search} placeholder="Search" class="instruction-search" />
             <InstructionsMenu
-                instructions={filteredInstructions.map((ins) => ins.name)}
-                hrefBase="/documentation/m68k/instruction"
+                hrefBase="/documentation/mips/instruction"
+                instructions={filteredInstructions}
                 onClick={() => (menuOpen = false)}
                 {currentInstructionName}
             />

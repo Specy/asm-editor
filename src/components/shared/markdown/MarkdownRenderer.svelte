@@ -4,6 +4,9 @@
     import DOMPurify from 'isomorphic-dompurify'
     import rehypeRaw from 'rehype-raw'
     import rehypeExternalLinks from 'rehype-external-links'
+    import '@cartamd/plugin-code/default.css';
+    import {code} from '@cartamd/plugin-code'
+
 
     const ext: Plugin = {
         transformers: [
@@ -31,14 +34,14 @@
     }
     const cartaNormal = new Carta({
         sanitizer: DOMPurify.sanitize,
-        extensions: [ext],
+        extensions: [ext, code({ langs: ['mips']})],
         rehypeOptions: {
             allowDangerousHtml: true
         }
     })
     const cartaWithExternalLins = new Carta({
         sanitizer: DOMPurify.sanitize,
-        extensions: [extWithExternalLins],
+        extensions: [extWithExternalLins, code({  langs: ['mips']})],
         rehypeOptions: {
             allowDangerousHtml: true
         }
@@ -70,6 +73,9 @@
         flex-direction: column;
     }
 
+    :global(.shiki){
+        padding: 0.5rem;
+    }
     :global(._markdown table) {
         border-radius: 0.4rem;
         border-collapse: collapse;
@@ -101,6 +107,12 @@
         padding: 0.2rem 0.4rem;
     }
 
+    :global(._markdown ul, ._markdown ol) {
+        padding-left: 1rem;
+    }
+    :global(._markdown li:not(:last-child)) {
+        margin-bottom: 0.5rem;
+    }
     :global(._markdown p) {
         white-space: pre-line;
     }

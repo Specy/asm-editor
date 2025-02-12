@@ -10,7 +10,7 @@
         </a>
         <a class="icon" href="/projects" title="Go to your projects"> Projects </a>
         <a class="icon" href="/embed" title="Embed the website"> Embed </a>
-        <a class="icon" href="/documentation/m68k" title="Embed the website"> M68k </a>
+        <a class="icon" href="/documentation/" title="Go to the docs"> Docs </a>
     </div>
 </Navbar>
 
