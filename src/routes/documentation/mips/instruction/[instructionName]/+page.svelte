@@ -4,6 +4,7 @@
     import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
     import { onMount } from 'svelte'
+    import { formatAggregatedArgs } from '$lib/languages/MIPS-documentation'
     interface Props {
         data: PageData
     }
@@ -48,6 +49,13 @@
         </Column>
 
         <Column gap="1rem" flex1>
+            <Column gap='1rem'>
+                <h2>Operands</h2>
+                <span>
+                    {formatAggregatedArgs(data.props.instruction)}
+                </span>
+            </Column>
+
             <Column style="gap: 1rem">
                 <h2>Variants</h2>
                 <MarkdownRenderer

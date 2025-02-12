@@ -16,7 +16,7 @@
     import { clamp, createDebouncer, formatTime } from '$lib/utils'
     import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE } from '$lib/Config'
     import Settings from '$cmp/specific/project/settings/Settings.svelte'
-    import M68KDocumentation from '$cmp/specific/project/FloatingM68KDocumentation.svelte'
+    import M68KDocumentation from '$cmp/specific/project/FloatingLanguageDocumentation.svelte'
     import FaBook from 'svelte-icons/fa/FaBook.svelte'
     import { ShortcutAction, shortcutsStore } from '$stores/shortcutsStore'
     import RegistersVisualiser from '$cmp/specific/project/cpu/RegistersRenderer.svelte'
@@ -38,6 +38,7 @@
     import TestcasesEditor from '$cmp/specific/project/testcases/TestcasesEditor.svelte'
     import { RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
     import { GenericEmulator } from '$lib/languages/Emulator'
+    import FloatingLanguageDocumentation from '$cmp/specific/project/FloatingLanguageDocumentation.svelte'
 
     interface Props {
         project: Project
@@ -269,7 +270,7 @@
     </Row>
     <ShortcutEditor bind:visible={shortcutsVisible} />
     <Settings bind:visible={settingsVisible} />
-    <M68KDocumentation bind:visible={documentationVisible} />
+    <FloatingLanguageDocumentation bind:visible={documentationVisible} language={project.language}/>
     <TestcasesEditor
         registerNames={emulator.registers.map((r) => r.name)}
         bind:visible={testcasesVisible}

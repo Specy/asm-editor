@@ -4,6 +4,7 @@
     import { mipsDirectivesMap } from '$lib/languages/MIPS-documentation'
     import Page from '$cmp/shared/layout/Page.svelte'
     import Card from '$cmp/shared/layout/Card.svelte'
+    import MipsDirectiveDocumentation from '$cmp/documentation/mips/MIPSDirectiveDocumentation.svelte'
 </script>
 
 <Page cropped contentStyle="padding: 1rem; gap: 1rem;">
@@ -13,12 +14,5 @@
         that are executed by the CPU, but rather instructions that are used by the assembler to
         define the structure of the program.
     </p>
-    <Column gap="1rem" style='width: 100%;'>
-        {#each Object.values(mipsDirectivesMap) as directive}
-            <Card gap="1rem" padding="1rem" background="secondary" style='width: 100%;'>
-                <h2>.{directive.name}</h2>
-                <MarkdownRenderer source={directive.description} />
-            </Card>
-        {/each}
-    </Column>
+    <MipsDirectiveDocumentation />
 </Page>

@@ -1,6 +1,7 @@
 import type { MonacoType } from '$lib/monaco/Monaco'
 import { instructionsDocumentationList } from './M68K-documentation'
 import {
+    MIPSAddressingModes,
     mipsDirectivesMap,
     mipsInstructionMap,
     mipsInstructionsVariants,
@@ -263,76 +264,6 @@ const possibleArgs = mipsInstructionsWithDuplicates.flatMap((i) =>
 )
 const possibleArgsSet = new Set(possibleArgs)
 
-const MIPSAddressingModes = {
-    REGISTER_NAME: {
-        detail: '$t1',
-        label: '$reg',
-        insertText: '$',
-        documentation: 'Register name',
-        priority: 1
-    },
-    INTEGER_16: {
-        detail: '0',
-        label: 'int16',
-        documentation: '16 bit integer',
-        priority: 2
-    },
-    INTEGER_16U: {
-        detail: '0',
-        label: 'int16u',
-        documentation: 'Unsigned 16 bit integer',
-        priority: 2
-    },
-    INTEGER_5: {
-        detail: '0',
-        label: 'int5',
-        documentation: '5 bit integer',
-        priority: 2
-    },
-    INTEGER_32: {
-        detail: '0',
-        label: 'int32',
-        documentation: '32 bit integer',
-        priority: 2
-    },
-    LEFT_PAREN: {
-        detail: '(',
-        label: '(',
-        documentation: 'Left parenthesis',
-        priority: 3
-    },
-    RIGHT_PAREN: {
-        detail: ')',
-        label: ')',
-        documentation: 'Right parenthesis',
-        priority: 3
-    },
-    IDENTIFIER: {
-        detail: 'identifier',
-        label: 'id',
-        documentation: 'Identifier',
-        priority: 4
-    },
-    REGISTER_NUMBER: {
-        detail: '0',
-        label: 'regnum',
-        documentation: 'Register number',
-        priority: 1
-    },
-    FP_REGISTER_NAME: {
-        detail: '$f1',
-        label: '$freg',
-        insertText: '$f',
-        documentation: 'Floating point register name',
-        priority: 1
-    },
-    PLUS: {
-        detail: '+',
-        label: '+',
-        documentation: 'Plus',
-        priority: 3
-    }
-}
 
 const MIPSRegistersMap = Object.fromEntries(
     MIPSRegisterNames.map((r) => {

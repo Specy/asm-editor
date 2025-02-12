@@ -2,15 +2,18 @@
     import FloatingContainer from '$cmp/shared/layout/FloatingContainer.svelte'
     import Input from '$cmp/shared/input/Input.svelte'
     import M68KDocumentation from '$cmp/documentation/m68k/M68KDocumentation.svelte'
+    import type { AvailableLanguages } from '$lib/Project.svelte'
+    import MipsDocumentation from '$cmp/documentation/mips/MIPSDocumentation.svelte'
     interface Props {
         visible: boolean
+        language: AvailableLanguages
     }
 
-    let { visible = $bindable() }: Props = $props()
+    let { visible = $bindable(), language }: Props = $props()
     let searchValue = $state('')
 </script>
 
-<FloatingContainer bind:visible title="M68K Documentation" style="width: 45rem">
+<FloatingContainer bind:visible title="{language} Documentation" style="width: 45rem">
     {#snippet header()}
         <div class="search-bar">
             <Input
@@ -21,7 +24,22 @@
         </div>
     {/snippet}
     <div class="scroll">
-        <M68KDocumentation bind:searchValue bind:visible defaultOpen={false} showRedirect={false} />
+        {#if language === 'M68K'}
+            <M68KDocumentation
+                bind:searchValue
+                bind:visible
+                defaultOpen={false}
+                showRedirect={false}
+            />
+        {/if}
+        {#if language === 'MIPS'}
+            <MipsDocumentation
+                bind:searchValue
+                bind:visible
+                showRedirect={false}
+                defaultOpen={false}
+            />
+        {/if}
     </div>
 </FloatingContainer>
 

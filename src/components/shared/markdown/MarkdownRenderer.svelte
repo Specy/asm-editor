@@ -63,14 +63,15 @@
     interface Props {
         source: string
         linksInNewTab?: boolean
+        style?: string
     }
 
-    let { source, linksInNewTab }: Props = $props()
+    let { source, linksInNewTab, style }: Props = $props()
 
     const carta = linksInNewTab ? cartaWithExternalLins : cartaNormal
 </script>
 
-<div class="_markdown">
+<div class="_markdown" {style}>
     {#key source}
         <Markdown value={source} {carta} />
     {/key}
