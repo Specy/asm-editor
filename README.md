@@ -1,7 +1,7 @@
 # Asm editor
 
-A webapp made with [sveltekit](https://kit.svelte.dev/) and [rust](https://www.rust-lang.org/it) webassembly to learn, write and run m68k assembly code.
-Uses monaco-editor for the editor, and my [WASM M68K interpreter](https://github.com/Specy/s68k) to run the code.
+A webapp made with [sveltekit](https://kit.svelte.dev/), [rust](https://www.rust-lang.org/it) webassembly and [java TEAVM](https://teavm.org/) to learn, write and run M68K and MIPS assembly code.
+Uses monaco-editor for the editor, my [WASM M68K interpreter](https://github.com/Specy/s68k) to run the code, and a Java compile to javascript [MIPS Assembler](https://github.com/Specy/mars).
 
 Mainly made to help people approaching assembly by providing the tools necessary to write and debug code more easily.
 ![localImage](https://asm-editor.specy.app/images/ASM-editor.webp)
@@ -23,7 +23,7 @@ Once running the program there are many tools to help you understand what instru
 
 - Values which changed between each instructions are highlighted and the old value is also visible. registers and memory have tooltips to show the decimal/hexadecimal value.
 - Follow the stack pointer with the dedicated tab, it's split in rows of 4 bytes to make it easier to see the changes
-- Whenever a jsr / bsr / rts instruction is executed, the callstack is saved so that it can be seen
+- Whenever a jump with link instruction is executed, the callstack is saved so that it can be seen
 - A view of the changes to the state of the interpreter is visible to see what each instruction did, like register / memory writes and changes to the ccr, it is also possible to jump back to a previous state
 - step/undo the code, add breakpoints, and jump to a specific execution step
 - Testcase runner, with IO and initial memory/register setup to create "exercises" and test your code
@@ -36,7 +36,7 @@ giving a simple description and example.
 
 ## Documentation
 
-The webapp comes with a [built-in documentation](https://asm-editor.specy.app/documentation/m68k), both available inside the editor and as a separate page. It explains brefly how each instruction works and the addressing modes, further documentation is coming in the future.
+The webapp comes with a [built-in documentation](https://asm-editor.specy.app/documentation), both available inside the editor and as a separate page. It explains brefly how each instruction works and the addressing modes, further documentation is coming in the future.
 
 ## Settings and shortcuts
 
@@ -50,18 +50,9 @@ Projects are stored locally on your browser, and with the app also working offli
 
 You can embed the editor [here](https://asm-editor.specy.app/embed), by using an iframe, you can set the initial code and additional settings by passing them as query parameters. Which can be built by visiting the link above.
 
-## Assembler features
+# Benchmarks M68K
 
-The assembler has a few directives and features to simplify writing code.
-
-- equ directive to define constants
-- dc, ds, dcb directives to define data regions
-- org directive to set the origin of the code
-- expressions (like `$FF*10`) and many immediate representations.
-
-# Benchmarks
-
-The interpreter runs at round 50mhz on the browser and 60mhz natively (on my machine).
+The M68K interpreter runs at round 50mhz on the browser and 60mhz natively (on my machine).
 You can benchmark your own machine by running a loop, the time it took to run is shown in the bottom right of the console in the editor, the total time of each execution is shown. example code:
 
 ```asm
