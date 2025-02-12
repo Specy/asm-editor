@@ -13,9 +13,9 @@
         that are executed by the CPU, but rather instructions that are used by the assembler to
         define the structure of the program.
     </p>
-    <Column gap="1rem">
+    <Column gap="1rem" style='width: 100%;'>
         {#each Object.values(mipsDirectivesMap) as directive}
-            <Card gap="1rem" padding="1rem" background="secondary">
+            <Card gap="1rem" padding="1rem" background="secondary" style='width: 100%;'>
                 <h2>.{directive.name}</h2>
                 <MarkdownRenderer source={directive.description} />
             </Card>

@@ -4,12 +4,21 @@
     import DOMPurify from 'isomorphic-dompurify'
     import rehypeRaw from 'rehype-raw'
     import rehypeExternalLinks from 'rehype-external-links'
-    import '@cartamd/plugin-code/default.css';
-    import {code} from '@cartamd/plugin-code'
+    import '@cartamd/plugin-code/default.css'
+    import { code } from '@cartamd/plugin-code'
 
+    const theme = 'one-dark-pro'
 
     const ext: Plugin = {
         transformers: [
+            {
+                execution: 'async',
+                type: 'rehype',
+                async transform({ carta }) {
+                    const highlighter = await carta.highlighter()
+                    await highlighter.loadTheme(theme)
+                }
+            },
             {
                 execution: 'sync',
                 type: 'rehype',
@@ -34,14 +43,14 @@
     }
     const cartaNormal = new Carta({
         sanitizer: DOMPurify.sanitize,
-        extensions: [ext, code({ langs: ['mips']})],
+        extensions: [ext, code({ theme, langs: ['mips'] })],
         rehypeOptions: {
             allowDangerousHtml: true
         }
     })
     const cartaWithExternalLins = new Carta({
         sanitizer: DOMPurify.sanitize,
-        extensions: [extWithExternalLins, code({  langs: ['mips']})],
+        extensions: [extWithExternalLins, code({ theme, langs: ['mips'] })],
         rehypeOptions: {
             allowDangerousHtml: true
         }
@@ -73,8 +82,12 @@
         flex-direction: column;
     }
 
-    :global(.shiki){
+    :global(.shiki) {
         padding: 0.5rem;
+        overflow-x: auto;
+        border-radius: 0.3rem;
+        margin-top: 0.5rem;
+        width: 100%;
     }
     :global(._markdown table) {
         border-radius: 0.4rem;

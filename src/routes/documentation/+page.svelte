@@ -3,7 +3,7 @@
     import NavigationLinkButton from '$cmp/shared/button/NavigationLinkButton.svelte'
     import { capitalize } from '$lib/utils'
     import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
-    const langs = ['m68k', 'mips']
+    const langs = ['M68K', 'MIPS']
 </script>
 
 <DefaultNavbar />
@@ -24,9 +24,9 @@
     <h1>Languages</h1>
     <div class="langs">
         {#each langs as lang}
-            <NavigationLinkButton href="/documentation/{lang}">
+            <NavigationLinkButton href="/documentation/{lang.toLowerCase()}">
                 <div>
-                    {capitalize(lang)}
+                    {lang}
                 </div>
             </NavigationLinkButton>
         {/each}
@@ -36,9 +36,9 @@
 <style lang="scss">
     .langs {
         display: grid;
-        grid-template-columns: repeat(2, minmax(10rem, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
         gap: 1rem;
-        margin-left: 1rem;
+        padding: 1rem;
     }
     h1 {
         font-size: 1.8rem;

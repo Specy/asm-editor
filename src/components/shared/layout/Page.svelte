@@ -29,6 +29,7 @@
         display: flex;
         flex-direction: column;
         align-items: center;
+        max-width: 100vw;
         position: relative;
         flex: 1;
     }

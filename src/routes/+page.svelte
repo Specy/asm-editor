@@ -40,7 +40,7 @@
             <img src="/images/ASM-editor.webp" alt="ASM editor" class="preview-image" />
             <div class="presentation">
                 <div class="welcome-title" class:textShadow={textShadowPrimary}>
-                    The all in one web editor for M68K
+                    The all in one web editor for M68K & MIPS
                 </div>
                 <Row gap="0.6rem">
                     <ButtonLink
@@ -144,7 +144,7 @@
                 <div>Documentation</div>
             {/snippet}
             <div class="description" class:textShadow={textShadowPrimary}>
-                The editor comes with a built-in documentation for the M68K instruction set
+                The editor comes with a built-in documentation for the M68K and MIPS instruction set
                 including the valid addressing modes, description, examples for each instruction and
                 directive.
                 <a href="/documentation" title="View documentation" class="external-link">
@@ -208,7 +208,7 @@
 
     .welcome-title {
         font-size: 3rem;
-        max-width: 30rem;
+        max-width: 33rem;
         text-align: center;
         margin-bottom: 2rem;
         color: var(--primary-text);
@@ -300,7 +300,7 @@
             }
         }
         .welcome-title {
-            font-size: 2.5rem;
+            font-size: 2.3rem;
         }
     }
 
