@@ -59,8 +59,8 @@
                             ? chunk.prev.hex
                             : `${chunk.prev.value}`.padStart(chunk.groupSize, '0')}
                         hoverElementOffset={chunk.value !== chunk.valueSigned
-                            ? '-2.4rem'
-                            : '-1.2rem'}
+                            ? '-2.5rem'
+                            : '-1.25rem'}
                     >
                         {#snippet hoverValue()}
                             <div class="column">
@@ -91,7 +91,14 @@
         color: var(--secondary-text);
         border-radius: 0.5rem;
         min-width: 8.6rem;
+        position: relative;
         flex: 1;
+        max-height: calc(100vh - 11.8rem); //HOTFIX
+        overflow-y: auto;
+    }
+
+    ::-webkit-scrollbar{
+        background-color: transparent !important;
     }
 
     .registers {
@@ -100,11 +107,9 @@
         grid-template-rows: auto;
         flex-direction: column;
         gap: 0.3rem;
-        padding: 0.3rem;
+        padding: 0.4rem;
         font-size: 1rem;
         flex: 1;
-        overflow-y: auto;
-        max-height: calc(100vh - 14rem); //HOTFIX
         @media screen and (max-width: 1000px) {
             width: unset;
         }
@@ -112,11 +117,12 @@
 
     .registers-header {
         display: flex;
+        position: sticky;
+        top: 0;
+        z-index: 2;
         align-items: center;
         justify-content: center;
-        background-color: rgba(var(--RGB-tertiary), 0.75);
-        border-top-left-radius: 0.5rem;
-        border-top-right-radius: 0.5rem;
+        background-color: var(--tertiary);
         height: 2rem;
         min-height: 2rem;
     }
@@ -131,12 +137,13 @@
         border-radius: 0.2rem;
         position: absolute;
         cursor: text;
+        z-index: 3;
         user-select: all;
         font-family: monospace;
         font-size: 1rem;
         box-shadow: rgba(0, 0, 0, 0.4) 0px 0px 6px;
         left: 1.6rem;
-        z-index: 2;
+        z-index: 3;
         top: 0;
         height: 100%;
         padding: 0 0.7rem;

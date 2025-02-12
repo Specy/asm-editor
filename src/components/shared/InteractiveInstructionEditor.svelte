@@ -10,12 +10,14 @@
     import type monaco from 'monaco-editor'
     import MemoryControls from '$cmp/specific/project/memory/MemoryControls.svelte'
     import MemoryVisualiser from '$cmp/specific/project/memory/MemoryRenderer.svelte'
-    import { MEMORY_SIZE } from '$lib/Config'
+    import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE } from '$lib/Config'
     import StatusCodesVisualiser from '$cmp/specific/project/cpu/StatusCodesRenderer.svelte'
     import RegistersVisualiser from '$cmp/specific/project/cpu/RegistersRenderer.svelte'
     import SizeSelector from '$cmp/specific/project/cpu/SizeSelector.svelte'
     import { onMount } from 'svelte'
     import { getM68kErrorMessage } from '$lib/languages/M68kUtils'
+    import type { AvailableLanguages } from '$lib/Project.svelte'
+    import { GenericEmulator } from '$lib/languages/Emulator'
 
     /*TODO make this agnostic */
 
@@ -23,12 +25,13 @@
     interface Props {
         code: string
         showMemory?: boolean
+        language?: AvailableLanguages
     }
 
-    let { code = $bindable(), showMemory = true }: Props = $props()
+    let { code = $bindable(), showMemory = true, language }: Props = $props()
     let memoryAddress = $state(0x1000)
     let groupSize = $state(2)
-    const emulator = M68KEmulator(code, {
+    const emulator = GenericEmulator(language, code, {
         globalPageElementsPerRow: 4,
         globalPageSize: 4 * 8
     })
@@ -120,12 +123,20 @@
     </div>
     <div class="column data-registers-wrapper">
         <div class="data-cpu-status-wrapper">
-            <StatusCodesVisualiser statusCodes={emulator.statusRegister} style="flex:1" />
+            {#if emulator.statusRegisters?.length > 0}
+                <StatusCodesVisualiser statusCodes={emulator.statusRegisters} style="flex:1" />
+            {/if}
             <SizeSelector bind:selected={groupSize} style="flex:1" />
         </div>
         <RegistersVisualiser
             size={groupSize}
-            gridStyle="grid-auto-flow: column; grid-template-rows: repeat(8, 1fr); gap: 0.1rem; height: 100%; justify-content: space-evenly;"
+            gridStyle="
+                grid-template-columns: min-content 1fr min-content 1fr; 
+                gap: 0.1rem; 
+                height: 100%; 
+                justify-content: space-evenly;
+                max-height: 16rem;
+                "
             registers={emulator.registers}
             on:registerClick={async (e) => {
                 const value = e.detail.value
@@ -138,7 +149,7 @@
         <div class="column code-data-memory-controls">
             <MemoryControls
                 bytesPerPage={4 * 8}
-                memorySize={MEMORY_SIZE['M68K'] /*TODO make this agnostic */}
+                memorySize={MEMORY_SIZE[language]}
                 currentAddress={memoryAddress}
                 style="flex: unset"
                 inputStyle="width: 6rem; height: 3rem"
@@ -149,7 +160,8 @@
                 hideLabel
             />
             <MemoryVisualiser
-                defaultMemoryValue={0xff /*TODO make this agnostic */}
+                endianess={emulator.memory.global.endianess}
+                defaultMemoryValue={DEFAULT_MEMORY_VALUE[language]}
                 style="height: 100%; flex: 1;"
                 bytesPerRow={4}
                 pageSize={4 * 8}
@@ -185,15 +197,16 @@
     }
 
     .data-registers-wrapper {
-        max-width: 17rem;
-        min-width: 17rem;
-        width: 17rem;
+        --width: 18rem;
+        max-width: var(--width);
+        min-width: var(--width);
+        width: var(--width);
         gap: 0.5rem;
         flex: 1;
     }
 
     .data-cpu-status-wrapper {
-        width: 17rem;
+        width: var(--width);
         display: flex;
         gap: 0.5rem;
     }

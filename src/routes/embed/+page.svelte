@@ -9,6 +9,7 @@
     import { page } from '$app/stores'
     import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
+    import Select from '$cmp/shared/input/Select.svelte'
 
     type Settings = {
         showMemory: boolean
@@ -84,7 +85,13 @@
     {/if}
 
     <Column style={inIframe ? 'padding: 0.5rem' : 'padding: 0.5rem; flex:1'}>
-        <InteractiveInstructionEditor bind:code showMemory={settings.showMemory} />
+        {#key settings.language}
+            <InteractiveInstructionEditor
+                bind:code
+                showMemory={settings.showMemory}
+                language={settings.language}
+            />
+        {/key}
     </Column>
 
     {#if !inIframe}
@@ -95,11 +102,21 @@
                     <span>Show memory</span>
                     <input type="checkbox" bind:checked={settings.showMemory} />
                 </div>
+                <div class="share-settings" style="justify-content: space-between;">
+                    <span>Language</span>
+                    <Select
+                        style="background-color: var(--tertiary); color: var(--secondary-text); text-align: center;"
+                        wrapperStyle="max-width: 5rem;"
+                        options={['M68K', 'MIPS']}
+                        bind:value={settings.language}
+                    />
+                </div>
             </div>
             <div class="share-card">
                 <h2 style="text-align: center;">URL</h2>
                 <textarea>{generatedCode}</textarea>
             </div>
+            <div class="share-card"></div>
             <div class="share-card">
                 <h2 style="text-align: center;">Embed code</h2>
                 <textarea

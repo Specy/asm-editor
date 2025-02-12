@@ -4,9 +4,10 @@
     import type { ExecutionStep } from '$lib/languages/commonLanguageFeatures.svelte'
     interface Props {
         steps: ExecutionStep[]
+        statusRegisterNames: string[]
     }
 
-    let { steps }: Props = $props()
+    let { steps, statusRegisterNames }: Props = $props()
 
     const dispatch = createEventDispatcher<{ undo: number }>()
 </script>
@@ -17,6 +18,7 @@
     {/if}
     {#each steps as step, i}
         <MutationStep
+            flags={statusRegisterNames}
             {step}
             on:undo={() => {
                 dispatch('undo', i)

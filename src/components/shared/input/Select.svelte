@@ -5,6 +5,7 @@
         style?: string
         title?: string
         disabled?: any
+        wrapperStyle?: string
     }
 
     let {
@@ -12,11 +13,12 @@
         value = $bindable(''),
         style = '',
         title = '',
+        wrapperStyle = '',
         disabled = []
     }: Props = $props()
 </script>
 
-<div class="wrapper">
+<div class="wrapper" style={wrapperStyle}>
     <div>{title}</div>
     <select
         bind:value

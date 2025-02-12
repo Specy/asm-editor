@@ -186,14 +186,7 @@ export function makeProject(data?: Partial<ProjectData>) {
     }
 
     function set(data: Partial<ProjectData & { id: string }>) {
-        state.code = data.code ?? state.code
-        state.createdAt = data.createdAt ?? state.createdAt
-        state.updatedAt = data.updatedAt ?? state.updatedAt
-        state.name = data.name ?? state.name
-        state.language = data.language ?? state.language
-        state.description = data.description ?? state.description
-        state.testcases = data.testcases ?? state.testcases
-        state.id = data.id ?? state.id
+        Object.assign(state, data)
     }
 
     return {

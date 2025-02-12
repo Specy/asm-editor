@@ -31,9 +31,10 @@
         bytesPerRow: number
         style?: string
         defaultMemoryValue: number
+        endianess: 'big' | 'little'
     }
 
-    let { memory, currentAddress, sp, pageSize, bytesPerRow, style = '', defaultMemoryValue }: Props = $props()
+    let { memory, currentAddress, sp, pageSize, bytesPerRow, style = '', defaultMemoryValue, endianess }: Props = $props()
     const maxAddresses = 4
     let selectedAddressesIndexes = $state({
         start: -1,
@@ -41,7 +42,7 @@
     })
     let selectingAddresses = $state(false)
 
-    let type = $state(DisplayType.Hex)
+    let type = $state(DisplayType.Hex) as typeof DisplayType[keyof typeof DisplayType]
     let visibleAddresses = $derived(
         new Array(pageSize / bytesPerRow).fill(0).map((_, i) => currentAddress + i * bytesPerRow)
     )
@@ -67,7 +68,7 @@
         }
     })
 
-    function getTextFromValue(value: number, padding?: number, typeOverride?: typeof DisplayType) {
+    function getTextFromValue(value: number, padding?: number, typeOverride?: typeof DisplayType[keyof typeof DisplayType]) {
         switch (typeOverride ?? type) {
             case DisplayType.Hex:
                 return value
@@ -186,7 +187,8 @@
             {@const selectionValue = getNumberInRange(
                 memory,
                 selectedAddressesIndexes.start,
-                selectedAddressesIndexes.len
+                selectedAddressesIndexes.len,
+                endianess
             )}
             {@const overflowsBy = goesNextLineBy(
                 selectedAddressesIndexes.start,

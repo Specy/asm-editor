@@ -6,8 +6,8 @@
     import type { AvailableLanguages } from '../../../lib/Project.svelte'
     import { Monaco } from '$lib/monaco/Monaco'
     import type { MonacoType } from '$lib/monaco/Monaco'
-    import type { MonacoError } from '../../../lib/languages/M68KEmulator.svelte'
     import { generateTheme } from '$lib/monaco/editorTheme'
+    import type { MonacoError } from '$lib/languages/commonLanguageFeatures.svelte'
     interface Props {
         disabled?: boolean
         code: string
@@ -166,8 +166,7 @@
                 editor.getModel(),
                 language,
                 errors.map((e) => {
-                    const line = e.line?.line
-                    const position = line?.length - line?.trimStart().length + 1
+                    const position =  e.column
                     return {
                         severity: monacoInstance.MarkerSeverity.Error,
                         message: e.message,

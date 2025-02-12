@@ -46,9 +46,10 @@
                 !(await Prompt.confirm('Do you want to save this shared project in your projects?'))
             )
                 return false
-            delete project.id
+            project.set({id: undefined})
             const newProject = await ProjectStore.addProject(project)
-            project.id = newProject.id
+            project.set({id: newProject.id})
+            goto(`/projects/${project.id}`)
         } else {
             await ProjectStore.save(project)
         }

@@ -1,9 +1,4 @@
-<script lang="ts" module>
-    const flags = ['X', 'N', 'Z', 'V', 'C']
-</script>
-
 <script lang="ts">
-
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import { ccrToFlagsArray } from '@specy/s68k'
     import { createEventDispatcher } from 'svelte'
@@ -11,11 +6,17 @@
     import type { ExecutionStep } from '$lib/languages/commonLanguageFeatures.svelte'
     interface Props {
         step: ExecutionStep
+        flags: string[]
     }
 
-    let { step }: Props = $props()
+    let { step, flags }: Props = $props()
     let ccr = $derived(ccrToFlagsArray(step.new_ccr.bits).reverse())
 
+    const sizeMap = {
+        1: 'Byte',
+        2: 'Word',
+        4: 'Long'
+    }
     const dispatcher = createEventDispatcher<{
         undo: void
         highlight: number
@@ -48,18 +49,20 @@
                 </button>
             </span>
         </div>
-        <div class="row space-between">
-            <span> CCR </span>
-            <span>
-                <div class="row flags">
-                    {#each flags as flag, i}
-                        <div class="flag" class:flag-active={ccr[i]}>
-                            {flag}
-                        </div>
-                    {/each}
-                </div>
-            </span>
-        </div>
+        {#if flags.length !== 0}
+            <div class="row space-between">
+                <span> CCR </span>
+                <span>
+                    <div class="row flags">
+                        {#each flags as flag, i}
+                            <div class="flag" class:flag-active={ccr[i]}>
+                                {flag}
+                            </div>
+                        {/each}
+                    </div>
+                </span>
+            </div>
+        {/if}
     </div>
 
     {#if step.mutations.length !== 0}
@@ -68,17 +71,19 @@
                 <div>
                     {#if mutation.type === 'WriteRegister'}
                         Wrote
-                        {mutation.value.size}
+                        {sizeMap[mutation.value.size]}
                         to
                         {mutation.value.register}
                     {:else if mutation.type === 'WriteMemory'}
-                        Wrote {mutation.value.size} to ${mutation.value.address
+                        Wrote {sizeMap[mutation.value.size] ?? mutation.value.size} to ${mutation.value.address
                             .toString(16)
                             .toUpperCase()}
                     {:else if mutation.type === 'WriteMemoryBytes'}
                         Wrote {mutation.value.old.length} bytes to ${mutation.value.address
                             .toString(16)
                             .toUpperCase()}
+                    {:else if mutation.type === 'Other'}
+                        {mutation.value}
                     {/if}
                 </div>
             {/each}
@@ -135,6 +140,8 @@
         }
     }
     .step-header {
+        min-height: 2rem;
+        justify-content: center;
         position: relative;
         &:hover {
             .undo-to-here {

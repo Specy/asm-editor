@@ -23,13 +23,18 @@ export function inRange(value: number, start: number, len: number) {
     }
 }
 
-export function byteSliceToNum(bytes: Uint8Array) {
-    return parseInt(
-        Array.from(bytes)
-            .map((b) => b.toString(16).padStart(2, '0'))
-            .join(''),
-        16
-    )
+export function byteSliceToNum(bytes: Uint8Array, endianess: 'big' | 'little' = 'big') {
+    let num = 0
+    if (endianess === 'big') {
+        for (let i = 0; i < bytes.length; i++) {
+            num = (num << 8) | bytes[i]
+        }
+    } else {
+        for (let i = bytes.length - 1; i >= 0; i--) {
+            num = (num << 8) | bytes[i]
+        }
+    }
+    return num
 }
 export function numberToByteSlice(num: number, bytes: number) {
     const hex = num.toString(16).padStart(bytes * 2, '0')
@@ -50,7 +55,7 @@ export function isMemoryChunkEqual(memory: number[] | Uint8Array, to: number[] |
     return true
 }
 
-export function getNumberInRange(memory: DiffedMemory, start: number, len: number) {
+export function getNumberInRange(memory: DiffedMemory, start: number, len: number, endianess: 'big' | 'little') {
     const num =
         len < 0
             ? memory.current.slice(start + len, start + 1)
@@ -60,8 +65,8 @@ export function getNumberInRange(memory: DiffedMemory, start: number, len: numbe
             ? memory.prevState.slice(start + len, start + 1)
             : memory.prevState.slice(start, start + len + 1)
     return {
-        current: byteSliceToNum(num),
-        prev: byteSliceToNum(prev),
+        current: byteSliceToNum(num, endianess),
+        prev: byteSliceToNum(prev, endianess),
         len: num.length
     }
 }

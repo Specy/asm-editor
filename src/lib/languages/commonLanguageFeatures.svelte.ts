@@ -7,6 +7,7 @@ export type StatusRegister = {
 }
 export type MonacoError = {
     lineIndex: number
+    column: number
     line: {
         line: string
         line_index: number
@@ -27,6 +28,7 @@ export type MemoryTab = {
     address: number
     rowSize: number
     pageSize: number
+    endianess: 'big' | 'little'
     data: DiffedMemory
 }
 
@@ -148,6 +150,7 @@ export type Register = ReturnType<typeof makeRegister>
 export type BaseEmulatorState = {
     code: string
     registers: Register[]
+    statusRegisters: StatusRegister[]
     errors: string[]
     compilerErrors: MonacoError[]
     terminated: boolean
@@ -180,7 +183,8 @@ export function createMemoryTab(
     name: string,
     address: number,
     rowSize: number,
-    initialValue: number
+    initialValue: number,
+    endianess: 'big' | 'little'
 ): MemoryTab {
     return {
         name,
@@ -188,6 +192,7 @@ export function createMemoryTab(
         id: currentTabId++,
         rowSize,
         pageSize,
+        endianess,
         data: {
             current: new Uint8Array(pageSize).fill(initialValue),
             prevState: new Uint8Array(pageSize).fill(initialValue)

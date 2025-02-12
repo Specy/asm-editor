@@ -290,6 +290,7 @@
 
 <ToggleableDraggable title="History" left={500}>
     <MutationsViewer
+        statusRegisterNames={emulator.statusRegisters.map((r) => r.name)}
         on:undo={(e) => {
             const amount = e.detail
             emulator.undo(amount)
@@ -304,6 +305,7 @@
 </ToggleableDraggable>
 {#each emulator.memory.tabs as tab, i}
     <MemoryTab
+        endianess={tab.endianess}
         {tab}
         defaultMemoryValue={DEFAULT_MEMORY_VALUE[project.language]}
         memorySize={MEMORY_SIZE[project.language]}
@@ -434,8 +436,8 @@
     <div class="right-side">
         <div class="memory-wrapper">
             <div class="column" style="gap: 0.5rem;">
-                {#if emulator.statusRegister}
-                    <StatusCodesVisualiser statusCodes={emulator.statusRegister} />
+                {#if emulator.statusRegisters && emulator.statusRegisters.length > 0}
+                    <StatusCodesVisualiser statusCodes={emulator.statusRegisters} />
                 {/if}
                 <RegistersVisualiser
                     size={groupSize}
@@ -462,6 +464,7 @@
                 </div>
 
                 <MemoryVisualiser
+                    endianess={emulator.memory.global.endianess}
                     defaultMemoryValue={DEFAULT_MEMORY_VALUE[project.language]}
                     bytesPerRow={emulator.memory.global.rowSize}
                     pageSize={emulator.memory.global.pageSize}

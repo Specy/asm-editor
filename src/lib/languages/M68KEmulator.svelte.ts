@@ -37,7 +37,6 @@ import {
 
 export type M68KEmulatorState = BaseEmulatorState & {
     interrupt?: Interrupt
-    statusRegister?: StatusRegister[]
 }
 
 
@@ -93,7 +92,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         registers: [],
         terminated: false,
         line: -1,
-        statusRegister: ['X', 'N', 'Z', 'V', 'C'].map((n) => ({ name: n, value: 0, prev: 0 })),
+        statusRegisters: ['X', 'N', 'Z', 'V', 'C'].map((n) => ({ name: n, value: 0, prev: 0 })),
         compilerErrors: [],
         callStack: [],
         errors: [],
@@ -111,8 +110,9 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 0x1000,
                 options.globalPageElementsPerRow,
                 0xff,
+                'big'
             ),
-            tabs: [createMemoryTab(8 * 4, 'Stack', 0x2000, 4, 0xff)]
+            tabs: [createMemoryTab(8 * 4, 'Stack', 0x2000, 4, 0xff, 'big')]
         },
         interrupt: undefined
     })
@@ -131,8 +131,10 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 clear()
                 s68k = new S68k(codeOverride ?? code)
                 const errors = s68k.semanticCheck().map((e) => {
+                    const line = e.getLine()
                     return {
-                        line: e.getLine(),
+                        line: line,
+                        column: line.line.length - line.line.trimStart().length + 1,
                         lineIndex: e.getLineIndex(),
                         message: e.getError(),
                         formatted: e.getMessage()
@@ -178,8 +180,10 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
     function semanticCheck() {
         try {
             const errors = S68k.semanticCheck(code).map((e) => {
+                const line = e.getLine()
                 return {
-                    line: e.getLine(),
+                    line,
+                    column: line.line.length - line.line.trimStart().length + 1,
                     lineIndex: e.getLineIndex(),
                     message: e.getError(),
                     formatted: e.getMessage()
@@ -217,9 +221,10 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
                     'Global',
                     0x1000,
                     options.globalPageElementsPerRow,
-                    0xff
+                    0xff,
+                    'big'
                 ),
-                tabs: [createMemoryTab(8 * 4, 'Stack', 0x2000, 4,0xff)]
+                tabs: [createMemoryTab(8 * 4, 'Stack', 0x2000, 4,0xff, 'big')]
             }
         }
     }
@@ -252,7 +257,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
             const last = interpreter.getUndoHistory(1)[0]
             if (last) {
                 const old = ccrToFlagsArray(last.old_ccr.bits).reverse()
-                state.statusRegister = state.statusRegister.map((s, i) => ({
+                state.statusRegisters = state.statusRegisters.map((s, i) => ({
                     ...s,
                     value: flags[i],
                     prev: Number(old[i])
@@ -260,7 +265,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 return
             }
         }
-        state.statusRegister = state.statusRegister.map((s, i) => ({
+        state.statusRegisters = state.statusRegisters.map((s, i) => ({
             ...s,
             value: flags[i] ?? -1,
             prev: flags[i] ?? -1
@@ -309,6 +314,11 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         const steps = interpreter.getUndoHistory(
             settings.values.maxVisibleHistoryModifications.value
         )
+        const sizeMap = {
+            Long: RegisterSize.Long,
+            Word: RegisterSize.Word,
+            Byte: RegisterSize.Byte
+        }
         state.latestSteps = steps.map((s) => {
             return {
                 ...s,
@@ -318,7 +328,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
                             type: 'WriteRegister',
                             value: {
                                 old: m.value.old,
-                                size: m.value.size as unknown as RegisterSize,
+                                size: sizeMap[m.value.size] as RegisterSize,
                                 register: registerOperandToString(m.value.register)
                             }
                         } as MutationOperation
@@ -588,7 +598,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         for (const value of testcase.expectedMemory) {
             if (value.type === 'number') {
                 const bytes = interpreter.readMemoryBytes(value.address, value.bytes)
-                const num = byteSliceToNum(bytes)
+                const num = byteSliceToNum(bytes, 'big')
                 if (num !== value.expected) {
                     errors.push({
                         type: 'wrong-memory-number',
@@ -772,8 +782,8 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         get interrupt() {
             return state.interrupt
         },
-        get statusRegister() {
-            return state.statusRegister
+        get statusRegisters() {
+            return state.statusRegisters
         },
         compile,
         step,

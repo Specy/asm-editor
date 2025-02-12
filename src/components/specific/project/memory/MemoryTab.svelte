@@ -11,10 +11,11 @@
         tab: MemoryTab
         left?: number
         memorySize: number
-        defaultMemoryValue:number
+        defaultMemoryValue: number
+        endianess: 'big' | 'little'
     }
 
-    let { sp, tab, left = 500, memorySize, defaultMemoryValue}: Props = $props()
+    let { sp, tab, left = 500, memorySize, defaultMemoryValue, endianess }: Props = $props()
     const dispatcher = createEventDispatcher<{
         addressChange: {
             address: number
@@ -27,7 +28,7 @@
     <div class="tab column">
         <MemoryControls
             bytesPerPage={tab.pageSize}
-            memorySize={memorySize}
+            {memorySize}
             currentAddress={tab.address}
             inputStyle="width: 6rem"
             on:addressChange={async (e) => {
@@ -36,6 +37,7 @@
             hideLabel
         />
         <MemoryVisualiser
+            {endianess}
             {defaultMemoryValue}
             bytesPerRow={tab.rowSize}
             pageSize={tab.pageSize}

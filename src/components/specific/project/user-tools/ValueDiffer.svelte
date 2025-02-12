@@ -22,16 +22,8 @@
     }: Props = $props()
 </script>
 
-<div
-    class:modified={diff !== value}
-    class:softDiff={hasSoftDiff === true}
-    class="tooltip-base"
-    {id}
-    class:monospaced
-    {style}
->
-    {value}
-    <div class="hover-element" style={`top: ${hoverElementOffset}`}>
+<div style="position: relative;">
+    <div class="hover-element" style={`--top: ${hoverElementOffset}`}>
         {#if hoverValue}
             <div class:monospaced>
                 {@render hoverValue?.()}
@@ -42,6 +34,16 @@
                 {diff}
             </div>
         {/if}
+    </div>
+    <div
+        class:modified={diff !== value}
+        class:softDiff={hasSoftDiff === true}
+        class="tooltip-base"
+        {id}
+        class:monospaced
+        {style}
+    >
+        {value}
     </div>
 </div>
 
@@ -63,10 +65,12 @@
     .hover-element {
         display: none;
         flex-direction: column;
-        min-width: 100%;
         background-color: var(--tertiary);
         color: var(--tertiary-text);
         border-radius: 0.2rem;
+        top: var(--top);
+        left: -0.1rem;
+        z-index: 3;
         position: absolute;
         cursor: text;
         box-shadow: rgba(0, 0, 0, 0.4) 0px 2px 2px;
@@ -85,7 +89,8 @@
         filter: brightness(1.1);
     }
 
-    .tooltip-base:hover .hover-element {
+    .hover-element:has(~ .tooltip-base:hover),
+    .hover-element:hover {
         display: flex;
     }
 
