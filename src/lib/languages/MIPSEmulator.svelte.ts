@@ -286,6 +286,13 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         if (!mips) return
         state.terminated = hasTerminated()
         const steps = mips.getUndoStack().slice(0, settings.values.maxVisibleHistoryModifications.value)
+        state.callStack = mips.getCallStack().map(v => {
+            return {
+                address: v,
+                name: mips.getLabelAtAddress(v) ?? '',
+                line: mips.getStatementAtAddress(v)?.sourceLine ?? -1
+            }
+        })
         state.latestSteps = steps.map(step => {
             let line = -1
             try {
@@ -379,8 +386,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         try {
             if (!mips) throw new Error('Interpreter not initialized')
             lastLine = mips.getNextStatement()?.sourceLine ?? -1
-            mips.step()
-            state.terminated = hasTerminated()
+            state.terminated = mips.step()
             try {
                 const ins = mips.getNextStatement()
                 state.line = ins.sourceLine - 1
@@ -439,7 +445,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         const start = performance.now()
         const breakpoints = state.breakpoints
         try {
-            mips.simulateWithBreakpointsAndLimit(calculateBreakpoints(breakpoints), haltLimit)
+            const terminated = mips.simulateWithBreakpointsAndLimit(calculateBreakpoints(breakpoints), haltLimit)
             try {
                 const ins = mips.getNextStatement()
                 //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
@@ -454,7 +460,8 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
             updateData()
             scrollStackTab()
             state.executionTime = performance.now() - start
-            return mips.terminated ? InterpreterStatus.Terminated : InterpreterStatus.Running
+            state.terminated = terminated
+            return terminated
         } catch (e) {
             console.error(e)
             let line = -1
