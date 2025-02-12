@@ -34,12 +34,7 @@
             </div>
         {/if}
         {#if diff !== value}
-            <div
-                class="old-value"
-                class:monospaced
-                style={oldValueStyle}
-                role="tooltip"
-            >
+            <div class="old-value" class:monospaced style={oldValueStyle} role="tooltip">
                 {diff}
             </div>
         {/if}

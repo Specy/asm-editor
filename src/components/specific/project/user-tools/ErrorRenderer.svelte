@@ -24,7 +24,7 @@
             <Icon
                 size={2}
                 style="width:1rem"
-                on:click={() => {
+                onClick={() => {
                     if (index > 0) index--
                 }}
             >
@@ -35,7 +35,7 @@
             <Icon
                 size={2}
                 style="width:1rem"
-                on:click={() => {
+                onClick={() => {
                     if (index < errors.length - 1) index++
                 }}
             >

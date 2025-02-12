@@ -28,7 +28,7 @@
     <div class="row" style="gap: 1rem">
         {#if !ThemeStore.isDefault(color.prop, color.color)}
             <Button
-                on:click={() => {
+                onClick={() => {
                     ThemeStore.reset(color.prop)
                 }}
             >

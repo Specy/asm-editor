@@ -34,7 +34,7 @@
                     <div class="icon">
                         <Icon
                             size={1.6}
-                            on:click={() => {
+                            onClick={() => {
                                 toast.custom(
                                     'Copyright',
                                     `© ${new Date().getFullYear()} Specy. All rights reserved.`,

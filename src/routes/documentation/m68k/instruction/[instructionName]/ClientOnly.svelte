@@ -9,5 +9,5 @@
 </script>
 
 {#key instructionKey}
-    <InteractiveEditor bind:code language='M68K'/>
+    <InteractiveEditor bind:code language="M68K" />
 {/key}

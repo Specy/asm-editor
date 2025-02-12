@@ -317,7 +317,7 @@ const darkOverride = [
     {
         foreground: '8673ff',
         token: 'variable.predefined'
-    }, 
+    },
     {
         foreground: 'c26ef2',
         token: 'address-register'

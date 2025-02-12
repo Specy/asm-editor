@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { registerName } from '$lib/languages/M68KEmulator.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import RegisterTestcaseValue from '$cmp/specific/project/testcases/RegisterTestcaseValue.svelte'
@@ -10,9 +9,10 @@
     interface Props {
         registers: Record<string, number>
         editable: boolean
+        registerNames: string[]
     }
 
-    let { registers = $bindable(), editable }: Props = $props()
+    let { registers = $bindable(), editable, registerNames }: Props = $props()
 
     function makeNewRegister(defaultName = 'D0') {
         return {
@@ -26,7 +26,7 @@
     }
 
     function getAvailableRegisterName(usedNames: Record<string, any>) {
-        return registerName.filter((name) => usedNames[name] === undefined)
+        return registerNames.filter((name) => usedNames[name] === undefined)
     }
 
     let newRegister = $state(makeNewRegister())
@@ -50,7 +50,7 @@
                 }}
                 bind:value={registers[key]}
                 name={key}
-                registersNames={registerName}
+                registersNames={registerNames}
             />
         {/each}
         <div class="add-input" style={freeStartingRegisters.length === 0 ? 'display:none' : ''}>

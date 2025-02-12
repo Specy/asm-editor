@@ -7,7 +7,7 @@
     import {
         fromSizesToString,
         fromSizeToString,
-        getAddressingModeNames,
+        getAddressingModeNames
     } from '$lib/languages/M68K-documentation'
     import DocsOperand from '$cmp/documentation/DocsOperand.svelte'
     import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'

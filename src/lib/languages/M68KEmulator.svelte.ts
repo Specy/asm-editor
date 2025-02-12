@@ -39,9 +39,6 @@ export type M68KEmulatorState = BaseEmulatorState & {
     interrupt?: Interrupt
 }
 
-
-
-
 const defaultInterruptHandlers = {
     GetTime: async () => Math.round(Date.now() / 1000),
     ReadKeyboardString: async () => Prompt.askText('Enter a string') as Promise<string>,
@@ -78,7 +75,6 @@ export const registerName = [
     'A6',
     'A7'
 ]
-
 
 export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
     options = {
@@ -224,7 +220,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
                     0xff,
                     'big'
                 ),
-                tabs: [createMemoryTab(8 * 4, 'Stack', 0x2000, 4,0xff, 'big')]
+                tabs: [createMemoryTab(8 * 4, 'Stack', 0x2000, 4, 0xff, 'big')]
             }
         }
     }

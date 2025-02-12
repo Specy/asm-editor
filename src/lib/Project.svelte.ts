@@ -14,21 +14,21 @@ export interface ProjectData {
 
 export type MemoryValue =
     | {
-        type: 'number'
-        address: number
-        bytes: number
-        expected: number
-    }
+          type: 'number'
+          address: number
+          bytes: number
+          expected: number
+      }
     | {
-        type: 'string-chunk'
-        address: number
-        expected: string
-    }
+          type: 'string-chunk'
+          address: number
+          expected: string
+      }
     | {
-        type: 'number-chunk'
-        address: number
-        expected: number[]
-    }
+          type: 'number-chunk'
+          address: number
+          expected: number[]
+      }
 
 export type Testcase = {
     input: string[]
@@ -41,35 +41,35 @@ export type Testcase = {
 
 export type TestcaseValidationError =
     | {
-        type: 'wrong-register'
-        register: string
-        expected: number
-        got: number
-    }
+          type: 'wrong-register'
+          register: string
+          expected: number
+          got: number
+      }
     | {
-        type: 'wrong-memory-number'
-        address: number
-        bytes: number
-        expected: number
-        got: number
-    }
+          type: 'wrong-memory-number'
+          address: number
+          bytes: number
+          expected: number
+          got: number
+      }
     | {
-        type: 'wrong-memory-string'
-        address: number
-        expected: string
-        got: string
-    }
+          type: 'wrong-memory-string'
+          address: number
+          expected: string
+          got: string
+      }
     | {
-        type: 'wrong-memory-chunk'
-        address: number
-        expected: number[]
-        got: number[]
-    }
+          type: 'wrong-memory-chunk'
+          address: number
+          expected: number[]
+          got: number[]
+      }
     | {
-        type: 'wrong-output'
-        expected: string
-        got: string
-    }
+          type: 'wrong-output'
+          expected: string
+          got: string
+      }
 
 export type TestcaseResult = {
     errors: TestcaseValidationError[]
@@ -94,7 +94,6 @@ export const BASE_MIPS_CODE = `
 main:
     # Write here your code
 `.trim()
-
 
 type ProjectMetadata = {
     version: number
@@ -140,10 +139,10 @@ export function makeProjectFromExternal(codeAndMeta: string) {
 }
 
 export function makeProject(data?: Partial<ProjectData>) {
-    const lang = data?.language ?? 'M68K' as AvailableLanguages
+    const lang = data?.language ?? ('M68K' as AvailableLanguages)
     let state = $state({
         id: data?.id ?? '',
-        code: data?.code ?? (lang === "M68K" ? BASE_M68K_CODE : BASE_MIPS_CODE),
+        code: data?.code ?? (lang === 'M68K' ? BASE_M68K_CODE : BASE_MIPS_CODE),
         createdAt: data?.createdAt ?? new Date().getTime(),
         updatedAt: data?.updatedAt ?? new Date().getTime(),
         name: data?.name ?? 'Untitled',

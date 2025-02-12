@@ -58,7 +58,7 @@
     <MemoryTestcaseValue bind:value={memoryValue} canRemove={false} />
     <Button
         cssVar="accent2"
-        on:click={() => {
+        onClick={() => {
             dispatcher('create', { value: memoryValue })
             memoryValue = makeEmptyMemoryValue(type)
         }}

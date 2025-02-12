@@ -140,7 +140,7 @@
                         <!-- Ignored for now as browser asks for permission -->
                         <Button
                             cssVar="secondary"
-                            on:click={async () => {
+                            onClick={async () => {
                                 const files = await window.showOpenFilePicker({ multiple: true })
                                 try {
                                     await importFromFileHandle(files)

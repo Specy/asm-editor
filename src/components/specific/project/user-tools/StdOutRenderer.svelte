@@ -4,6 +4,7 @@
     import type { MonacoError } from '$lib/languages/M68KEmulator.svelte'
     import FaExclamationTriangle from 'svelte-icons/fa/FaExclamationTriangle.svelte'
     import { fly } from 'svelte/transition'
+    import Console from '$cmp/shared/Console.svelte'
     interface Props {
         stdOut: string
         compilerErrors?: MonacoError[]
@@ -14,6 +15,7 @@
     let areCompilerErrorsShown = $state(false)
     let el: HTMLDivElement = $state(null)
 
+    let separator = $derived(compilerErrors.length ? '\n\n' : '')
     $effect(() => {
         if (el && stdOut) el.scrollTop = el.scrollHeight
     })
@@ -31,12 +33,7 @@
             <FaExclamationTriangle />
         </button>
     {/if}
-    {#if areCompilerErrorsShown && compilerErrors.length}
-        {compilerErrors.map((e) => e.formatted).join('\n') + '\n'}
-    {/if}
-    <div class="std-text">
-        {stdOut}
-    </div>
+    <Console value={`${compilerErrors.map((e) => e.formatted).join('\n')}${separator}${stdOut}`} />
     <div class="info">
         {info}
     </div>
@@ -65,12 +62,10 @@
     }
     .std-out {
         display: flex;
-        padding: 0.6rem;
         position: relative;
-        word-break: break-all;
         border-radius: 0.5rem;
+        overflow: hidden;
         flex: 1;
-        overflow-y: auto;
         margin-top: 0.5rem;
         background-color: var(--secondary);
         color: var(--secondary-text);
@@ -82,12 +77,8 @@
     .info {
         position: absolute;
         bottom: 0.4rem;
-        right: 0.6rem;
+        right: 1.2rem;
         color: var(--hint);
         font-size: 0.9rem;
-    }
-    .std-text {
-        white-space: pre-wrap;
-        font-family: monospace;
     }
 </style>

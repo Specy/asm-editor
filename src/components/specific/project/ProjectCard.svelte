@@ -63,7 +63,7 @@
                 cssVar="secondary"
                 style="width: 2.2rem; height: 2.2rem;"
                 title="Download this project"
-                on:click={() => dispatcher('download', project)}
+                onClick={() => dispatcher('download', project)}
             >
                 <Icon>
                     <FaDownload />

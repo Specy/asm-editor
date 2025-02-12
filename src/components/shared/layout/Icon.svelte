@@ -2,14 +2,14 @@
     import { createBubbler } from 'svelte/legacy'
 
     const bubble = createBubbler()
-    /** @type {{size?: number, style?: string, children?: import('svelte').Snippet}} */
-    let { size = 1.2, style = '', children } = $props()
+    /** @type {{size?: number, style?: string, onClick?:  (e: MouseEvent) => void, children?: import('svelte').Snippet}} */
+    let { size = 1.2, style = '', children, onClick } = $props()
 </script>
 
 <div
     class="icon"
     style={`width:${size}rem; min-width: ${size}rem; height:${size}rem; ${style};`}
-    onclick={bubble('click')}
+    onclick={onClick}
 >
     {@render children?.()}
 </div>

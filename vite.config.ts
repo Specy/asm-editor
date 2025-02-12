@@ -16,7 +16,7 @@ const config: UserConfig = {
         }
     },
     optimizeDeps: {
-        exclude: ['@specy/s68k']
+        exclude: ['@specy/s68k', '@battlefieldduck/xterm-svelte']
     },
     plugins: [sveltekit(), topLevelAwait(), wasm()]
 }

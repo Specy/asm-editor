@@ -75,7 +75,7 @@
                     <Button
                         style="margin-top: 1rem; gap: 0.5rem;"
                         cssVar="secondary"
-                        on:click={async () => {
+                        onClick={async () => {
                             try {
                                 await installEvent.prompt()
                             } catch (e) {

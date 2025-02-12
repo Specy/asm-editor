@@ -15,7 +15,7 @@ export const load = (async ({ params }) => {
 }) satisfies PageServerLoad
 
 export const entries: EntryGenerator = () => {
-    return Array.from(M68KUncompoundedInstructions.keys()).map(instructionName => ({
+    return Array.from(M68KUncompoundedInstructions.keys()).map((instructionName) => ({
         instructionName
     }))
 }

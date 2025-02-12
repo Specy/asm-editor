@@ -49,12 +49,12 @@
         <div class="prompt-row">
             {#if $Prompt.type === PromptType.Text}
                 {#if !$Prompt.cancellable}
-                    <Button on:click={() => Prompt.answer(false)} cssVar="secondary">Cancel</Button>
+                    <Button onClick={() => Prompt.answer(false)} cssVar="secondary">Cancel</Button>
                 {/if}
-                <Button on:click={() => Prompt.answer(value)} style="margin-left: auto;">Ok</Button>
+                <Button onClick={() => Prompt.answer(value)} style="margin-left: auto;">Ok</Button>
             {:else}
-                <Button on:click={() => Prompt.answer(false)} cssVar="secondary">No</Button>
-                <Button on:click={() => Prompt.answer(true)} cssVar="accent2">Yes</Button>
+                <Button onClick={() => Prompt.answer(false)} cssVar="secondary">No</Button>
+                <Button onClick={() => Prompt.answer(true)} cssVar="accent2">Yes</Button>
             {/if}
         </div>
     </form>

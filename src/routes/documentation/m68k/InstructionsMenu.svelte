@@ -7,9 +7,10 @@
     interface Props {
         currentInstructionName?: string
         instructions: InstructionDocumentation[]
+        onClick?: (e: MouseEvent) => void
     }
 
-    let { currentInstructionName = '', instructions }: Props = $props()
+    let { currentInstructionName = '', instructions, onClick }: Props = $props()
 </script>
 
 <Column>
@@ -18,7 +19,7 @@
             href="/documentation/m68k/instruction/{ins.name}"
             class="instruction-link"
             class:current-instruction={ins.name === currentInstructionName}
-            onclick={bubble('click')}
+            onclick={onClick}
         >
             <div class="instruction-link-inner">
                 {ins.name}

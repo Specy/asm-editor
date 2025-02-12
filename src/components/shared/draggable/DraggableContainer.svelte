@@ -37,7 +37,7 @@
             <Button
                 style="padding: 0.2rem 0.3rem; height: 1.4rem; border-radius: 0.3rem"
                 cssVar="secondary"
-                on:click={() => (hidden = !hidden)}
+                onClick={() => (hidden = !hidden)}
             >
                 <Icon size={1.1}>
                     {#if !hidden}

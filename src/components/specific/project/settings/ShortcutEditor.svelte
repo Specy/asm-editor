@@ -60,7 +60,7 @@
                     <Button
                         active={entry[1].id === selectedId}
                         cssVar="secondary"
-                        on:click={() => {
+                        onClick={() => {
                             selectedId = entry[1].id
                         }}
                     >
@@ -70,7 +70,7 @@
                         <Button
                             hasIcon
                             style="min-height: 2.2rem"
-                            on:click={() => {
+                            onClick={() => {
                                 shortcutsStore.updateKey(entry[0], currentShortcut)
                                 selectedId = -1
                             }}
@@ -85,7 +85,7 @@
                             style="min-height: 2.2rem"
                             cssVar={entry[0] !== entry[1].defaultValue ? 'accent' : 'secondary'}
                             disabled={entry[0] === entry[1].defaultValue}
-                            on:click={() =>
+                            onClick={() =>
                                 shortcutsStore.updateKey(entry[0], entry[1].defaultValue)}
                         >
                             <Icon size={1}>

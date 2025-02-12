@@ -4,7 +4,7 @@ export function findElInTree(e: HTMLElement, baseId: string) {
     let el = e
     while (el.parentElement) {
         // @ts-ignore
-        for(const child of el.children) {
+        for (const child of el.children) {
             if (child.id.startsWith(baseId)) {
                 return child
             }
@@ -61,7 +61,12 @@ export function isMemoryChunkEqual(memory: number[] | Uint8Array, to: number[] |
     return true
 }
 
-export function getNumberInRange(memory: DiffedMemory, start: number, len: number, endianess: 'big' | 'little') {
+export function getNumberInRange(
+    memory: DiffedMemory,
+    start: number,
+    len: number,
+    endianess: 'big' | 'little'
+) {
     const num =
         len < 0
             ? memory.current.slice(start + len, start + 1)

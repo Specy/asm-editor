@@ -13,8 +13,7 @@
                 transform({ processor }) {
                     processor.use(rehypeRaw)
                 }
-            },
-    
+            }
         ]
     }
     const extWithExternalLins: Plugin = {
@@ -23,14 +22,14 @@
                 execution: 'sync',
                 type: 'rehype',
                 transform({ processor }) {
-                        processor.use(rehypeExternalLinks, {
-                            target: '_blank'
-                        })
+                    processor.use(rehypeExternalLinks, {
+                        target: '_blank'
+                    })
                 }
             }
         ]
     }
-  const cartaNormal = new Carta({
+    const cartaNormal = new Carta({
         sanitizer: DOMPurify.sanitize,
         extensions: [ext],
         rehypeOptions: {

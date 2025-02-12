@@ -17,9 +17,15 @@
         visible: boolean
         testcases: Testcase[]
         testcasesResult: TestcaseResult[]
+        registerNames: string[]
     }
 
-    let { visible = $bindable(), testcases = $bindable(), testcasesResult }: Props = $props()
+    let {
+        visible = $bindable(),
+        testcases = $bindable(),
+        testcasesResult,
+        registerNames
+    }: Props = $props()
 
     function makeNewTestcase() {
         return {
@@ -76,10 +82,14 @@
                     {:else}
                         {#each testcases as testcase, i}
                             <div class="testcase-wrapper">
-                                <TestcaseRenderer bind:testcase={testcases[i]} editable={false}>
+                                <TestcaseRenderer
+                                    bind:testcase={testcases[i]}
+                                    editable={false}
+                                    {registerNames}
+                                >
                                     <Row justify="end">
                                         <Button
-                                            on:click={() =>
+                                            onClick={() =>
                                                 (testcases = testcases.filter(
                                                     (t) => t !== testcase
                                                 ))}
@@ -102,13 +112,14 @@
             <Header noMargin>New Testcase</Header>
             {#key testcaseKey}
                 <TestcaseRenderer
+                    {registerNames}
                     style="border: solid 0.1rem var(--accent)"
                     editable
                     bind:testcase={newTestcase}
                 >
                     <Row justify="end">
                         <Button
-                            on:click={addTestcase}
+                            onClick={addTestcase}
                             hasIcon
                             style="padding: 0.5rem 0.6rem; gap: 0.4rem"
                         >

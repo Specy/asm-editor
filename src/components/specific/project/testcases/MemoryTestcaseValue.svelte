@@ -25,7 +25,7 @@
         <Button
             style="padding: 0.4rem"
             hasIcon
-            on:click={() => dispatcher('remove')}
+            onClick={() => dispatcher('remove')}
             cssVar="secondary"
         >
             <Icon>

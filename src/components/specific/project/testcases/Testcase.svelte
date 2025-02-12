@@ -15,18 +15,32 @@
         style?: string
         editable?: boolean
         children?: import('svelte').Snippet
+        registerNames: string[]
     }
 
-    let { testcase = $bindable(), style = '', editable = false, children }: Props = $props()
+    let {
+        testcase = $bindable(),
+        style = '',
+        editable = false,
+        children,
+        registerNames
+    }: Props = $props()
 </script>
 
 <Card padding="0.8rem" gap="1rem" {style} radius="0.8rem">
     {#if editable}
         <Header type="h3">Starting registers values</Header>
-        <RegistersTestcaseEditor bind:registers={testcase.startingRegisters} editable />
-
+        <RegistersTestcaseEditor
+            bind:registers={testcase.startingRegisters}
+            {registerNames}
+            editable
+        />
         <Header type="h3">Expected registers values</Header>
-        <RegistersTestcaseEditor bind:registers={testcase.expectedRegisters} editable />
+        <RegistersTestcaseEditor
+            bind:registers={testcase.expectedRegisters}
+            {registerNames}
+            editable
+        />
         <Header type="h3">Starting memory values</Header>
         <MemoryTestcaseEditor bind:memoryValues={testcase.startingMemory} editable />
         <Header type="h3">Expected memory values</Header>
@@ -60,7 +74,7 @@
         <textarea
             bind:value={testcase.expectedOutput}
             class="input-textarea"
-            style="width: 100%; border-radius: 0.3rem; padding: 0.5rem"
+            style="width: 100%; border-radius: 0.3rem; padding: 0.5rem; min-height: 5rem"
         ></textarea>
         {@render children?.()}
     {:else}
@@ -69,6 +83,7 @@
                 <Column gap="0.5rem">
                     <Header type="h3">Starting registers</Header>
                     <RegistersTestcaseEditor
+                        {registerNames}
                         bind:registers={testcase.startingRegisters}
                         editable={false}
                     />
@@ -79,6 +94,7 @@
                 <Column gap="0.5rem">
                     <Header type="h3">Expected registers</Header>
                     <RegistersTestcaseEditor
+                        {registerNames}
                         bind:registers={testcase.expectedRegisters}
                         editable={false}
                     />
@@ -124,7 +140,11 @@
         word-break: break-all;
     }
     .input-textarea {
-        width: 3rem;
+        width: 6rem;
+        min-width: 6rem;
+        height: 2rem;
+        min-height: 2rem;
+        padding: 0.5rem;
         background-color: var(--secondary);
         color: var(--secondary-text);
     }

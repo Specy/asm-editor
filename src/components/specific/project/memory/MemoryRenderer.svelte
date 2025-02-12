@@ -34,7 +34,16 @@
         endianess: 'big' | 'little'
     }
 
-    let { memory, currentAddress, sp, pageSize, bytesPerRow, style = '', defaultMemoryValue, endianess }: Props = $props()
+    let {
+        memory,
+        currentAddress,
+        sp,
+        pageSize,
+        bytesPerRow,
+        style = '',
+        defaultMemoryValue,
+        endianess
+    }: Props = $props()
     const maxAddresses = 4
     let selectedAddressesIndexes = $state({
         start: -1,
@@ -42,7 +51,7 @@
     })
     let selectingAddresses = $state(false)
 
-    let type = $state(DisplayType.Hex) as typeof DisplayType[keyof typeof DisplayType]
+    let type = $state(DisplayType.Hex) as (typeof DisplayType)[keyof typeof DisplayType]
     let visibleAddresses = $derived(
         new Array(pageSize / bytesPerRow).fill(0).map((_, i) => currentAddress + i * bytesPerRow)
     )
@@ -68,7 +77,11 @@
         }
     })
 
-    function getTextFromValue(value: number, padding?: number, typeOverride?: typeof DisplayType[keyof typeof DisplayType]) {
+    function getTextFromValue(
+        value: number,
+        padding?: number,
+        typeOverride?: (typeof DisplayType)[keyof typeof DisplayType]
+    ) {
         switch (typeOverride ?? type) {
             case DisplayType.Hex:
                 return value
@@ -88,7 +101,7 @@
     function onPointerDown(e: PointerEvent) {
         selectingAddresses = true
         const el = findElInTree(e.target as HTMLElement, id)
-        if(!el) return
+        if (!el) return
         const index = parseInt(el.id.split('-')[1])
         if (isNaN(index)) return
         selectedAddressesIndexes.start = index
@@ -100,7 +113,7 @@
     function handlePointerMove(e: PointerEvent) {
         if (!selectingAddresses) return
         const el = findElInTree(e.target as HTMLElement, id)
-        if(!el) return
+        if (!el) return
         const index = parseInt(el.id.split('-')[1])
         if (isNaN(index)) return
         if (lastIdx === index && selectedAddressesIndexes.start !== -1) return
@@ -145,7 +158,7 @@
             <Button
                 title={type === DisplayType.Hex ? 'Show as character' : 'Show as hex'}
                 style="padding: 0.2rem; border-radius: 0.35rem; height:100%; width: 100%"
-                on:click={() =>
+                onClick={() =>
                     (type = type === DisplayType.Hex ? DisplayType.Char : DisplayType.Hex)}
                 active={type === DisplayType.Char}
                 cssVar="accent2"
@@ -158,7 +171,7 @@
                 <Button
                     cssVar="green"
                     style="padding: 0.2rem; border-radius: 0.35rem; height:100%; width: 100%"
-                    on:click={() => {
+                    onClick={() => {
                         selectingAddresses = false
                         selectedAddressesIndexes.start = -1
                         selectedAddressesIndexes.len = 0
@@ -207,11 +220,7 @@
                         class="selection-value"
                         style={`
 								bottom: calc(${i > pageSize - bytesPerRow - 1 ? '1.8rem' : '-2.7rem'} - ${selectionValue.current !== signedSelection ? '1.2rem' : '0.1rem'});
-								left: ${
-                                    overflowsBy.overflows
-                                        ? `calc(-${overflowsBy.by} * 1.75rem)`
-                                        : '0'
-                                };
+								left: ${overflowsBy.overflows ? `calc(-${overflowsBy.by} * 1.75rem)` : '0'};
 								min-width: ${selectionValue.len * 1.7}rem;
 						`}
                     >

@@ -57,7 +57,7 @@
             style={`flex:1; padding-right: 0; ${inputStyle}`}
         />
         <Button
-            on:click={searchAddress}
+            onClick={searchAddress}
             hasIcon
             style="padding:0 0.5rem; height:100%; width:2.2rem; margin-left: 0.2rem; min-height: 1.8rem;"
             cssVar="primary"
@@ -70,7 +70,7 @@
         </Button>
 
         <Button
-            on:click={() => updateAddress(currentAddress - bytesPerPage)}
+            onClick={() => updateAddress(currentAddress - bytesPerPage)}
             hasIcon
             style="padding:0 0.5rem; height:100%; min-height: 1.8rem;"
             cssVar="primary"
@@ -82,7 +82,7 @@
         </Button>
 
         <Button
-            on:click={() => updateAddress(currentAddress + bytesPerPage)}
+            onClick={() => updateAddress(currentAddress + bytesPerPage)}
             hasIcon
             style="padding:0 0.5rem; height:100%; min-height: 1.8rem;"
             cssVar="primary"

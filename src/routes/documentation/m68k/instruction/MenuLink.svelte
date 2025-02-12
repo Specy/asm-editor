@@ -7,12 +7,13 @@
     interface Props {
         href: string
         title: string
+        onClick?: (e: MouseEvent) => void
     }
 
-    let { href, title }: Props = $props()
+    let { href, title, onClick }: Props = $props()
 </script>
 
-<a {href} class="menu-link row" onclick={bubble('click')}>
+<a {href} class="menu-link row" onclick={onClick}>
     <Icon size={0.4} style="color: var(--accent);">
         <FaCircle />
     </Icon>

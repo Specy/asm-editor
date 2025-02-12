@@ -202,7 +202,7 @@
     <h1 style="font-size: 1.6rem; margin-left: 0.4rem" class="ellipsis">{project.name}</h1>
     <Row gap="0.5rem" style="margin-left: auto;">
         <Button
-            on:click={() => dispatcher('share', project)}
+            onClick={() => dispatcher('share', project)}
             hasIcon
             cssVar="accent2"
             style="padding:0; width:2.2rem; height:2.2rem;"
@@ -222,7 +222,7 @@
             </Icon>
         </ButtonLink>
         <Button
-            on:click={() => toggleWindow('shortcuts')}
+            onClick={() => toggleWindow('shortcuts')}
             hasIcon
             cssVar="accent2"
             style="padding:0; width:2.2rem; height:2.2rem"
@@ -232,7 +232,7 @@
             </Icon>
         </Button>
         <Button
-            on:click={() => toggleWindow('documentation')}
+            onClick={() => toggleWindow('documentation')}
             hasIcon
             cssVar="accent2"
             style="padding:0; width:2.2rem; height:2.2rem"
@@ -242,7 +242,7 @@
             </Icon>
         </Button>
         <Button
-            on:click={() => toggleWindow('settings')}
+            onClick={() => toggleWindow('settings')}
             hasIcon
             cssVar="accent2"
             style="padding:0; width:2.2rem; height:2.2rem"
@@ -252,7 +252,7 @@
             </Icon>
         </Button>
         <Button
-            on:click={() => {
+            onClick={() => {
                 dispatcher('save', {
                     silent: false,
                     data: project
@@ -271,6 +271,7 @@
     <Settings bind:visible={settingsVisible} />
     <M68KDocumentation bind:visible={documentationVisible} />
     <TestcasesEditor
+        registerNames={emulator.registers.map((r) => r.name)}
         bind:visible={testcasesVisible}
         {testcasesResult}
         bind:testcases={project.testcases}
@@ -445,7 +446,9 @@
                     on:registerClick={async (e) => {
                         const value = e.detail.value
                         const clampedSize = value - (value % emulator.memory.global.pageSize)
-                        emulator.setGlobalMemoryAddress(clamp(clampedSize, 0, MEMORY_SIZE[project.language]))
+                        emulator.setGlobalMemoryAddress(
+                            clamp(clampedSize, 0, MEMORY_SIZE[project.language])
+                        )
                     }}
                 />
             </div>

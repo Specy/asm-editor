@@ -1,17 +1,40 @@
 import { PAGE_ELEMENTS_PER_ROW, PAGE_SIZE } from '$lib/Config'
-import { MIPS, type JsMips, type RegisterName, type MIPSAssembleError, BackStepAction, registerHandlers, unimplementedHandler, ConfirmResult, type JsBackStep, type HandlerMapFns } from '@specy/mips'
-import { createMemoryTab, InterpreterStatus, makeRegister, RegisterSize, type BaseEmulatorActions, type BaseEmulatorState, type EmulatorSettings, type MonacoError, type MutationOperation, type RegisterChunk } from './commonLanguageFeatures.svelte'
+import {
+    MIPS,
+    type JsMips,
+    type RegisterName,
+    type MIPSAssembleError,
+    BackStepAction,
+    registerHandlers,
+    unimplementedHandler,
+    ConfirmResult,
+    type JsBackStep,
+    type HandlerMapFns
+} from '@specy/mips'
+import {
+    createMemoryTab,
+    InterpreterStatus,
+    makeRegister,
+    RegisterSize,
+    type BaseEmulatorActions,
+    type BaseEmulatorState,
+    type EmulatorSettings,
+    type MonacoError,
+    type MutationOperation,
+    type RegisterChunk
+} from './commonLanguageFeatures.svelte'
 import { createDebouncer } from '$lib/utils'
 import { Prompt } from '$stores/promptStore'
 import { settingsStore } from '$stores/settingsStore.svelte'
 import type { Testcase, TestcaseResult, TestcaseValidationError } from '$lib/Project.svelte'
-import { byteSliceToNum, isMemoryChunkEqual, numberToByteSlice } from '$cmp/specific/project/memory/memoryTabUtils'
+import {
+    byteSliceToNum,
+    isMemoryChunkEqual,
+    numberToByteSlice
+} from '$cmp/specific/project/memory/memoryTabUtils'
 import { Size } from './M68K-documentation'
 
-
-
-export type MIPSEmulatorState = BaseEmulatorState & {
-}
+export type MIPSEmulatorState = BaseEmulatorState & {}
 
 /*
     compile: (historySize: number, codeOverride?: string) => Promise<void>
@@ -72,7 +95,6 @@ export const MIPSRegisterNames = [
     '$ra'
 ]
 
-
 /*
 export type MonacoError = {
     lineIndex: number
@@ -90,15 +112,13 @@ function assembleErrorToMonacoError(error: MIPSAssembleError): MonacoError {
         lineIndex: error.lineNumber - 1,
         column: error.columnNumber,
         line: {
-            line: "",
+            line: '',
             line_index: error.lineNumber
         },
         message: error.message,
         formatted: error.message
     }
-
 }
-
 
 export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
     options = {
@@ -131,13 +151,12 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 0x0,
                 'little'
             ),
-            tabs: [createMemoryTab(8 * 4, 'Stack', 0x7FFFFFFC, 4, 0x0, 'little')]
-        },
+            tabs: [createMemoryTab(8 * 4, 'Stack', 0x7ffffffc, 4, 0x0, 'little')]
+        }
     })
 
     let mips: JsMips | null = null
     const [debouncer, clearDebouncer] = createDebouncer(500)
-
 
     function setCode(c: string) {
         code = c
@@ -158,7 +177,6 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 }
                 mips.setUndoEnabled(historySize > 0)
                 mips.initialize(true)
-
 
                 registerHandlers(mips, getHandlers())
 
@@ -224,7 +242,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
                     0x0,
                     'little'
                 ),
-                tabs: [createMemoryTab(8 * 4, 'Stack', 0x7FFFFFFC, 4, 0x0, 'little')]
+                tabs: [createMemoryTab(8 * 4, 'Stack', 0x7ffffffc, 4, 0x0, 'little')]
             }
         }
         setRegisters(new Array(MIPSRegisterNames.length).fill(0))
@@ -244,7 +262,6 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         const sp = mips.stackPointer
         if (stackTab) stackTab.address = sp - (sp % stackTab.pageSize)
     }
-
 
     function setRegisters(override?: number[]) {
         if (!mips && !override) {
@@ -285,22 +302,22 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         const settings = settingsStore
         if (!mips) return
         state.terminated = hasTerminated()
-        const steps = mips.getUndoStack().slice(0, settings.values.maxVisibleHistoryModifications.value)
-        state.callStack = mips.getCallStack().map(v => {
+        const steps = mips
+            .getUndoStack()
+            .slice(0, settings.values.maxVisibleHistoryModifications.value)
+        state.callStack = mips.getCallStack().map((v) => {
             return {
                 address: v,
                 name: mips.getLabelAtAddress(v) ?? `0x${v.toString(16).padStart(8, '0')}`,
                 line: (mips.getStatementAtAddress(v)?.sourceLine ?? 0) - 1
             }
         })
-        state.latestSteps = steps.map(step => {
+        state.latestSteps = steps.map((step) => {
             let line = -1
             try {
                 const ins = mips.getStatementAtAddress(step.pc)
                 line = ins.sourceLine - 1
-            } catch (e) {
-
-            }
+            } catch (e) {}
             return {
                 pc: step.pc,
                 old_ccr: {
@@ -329,14 +346,15 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
                     old: 0,
                     size: RegisterSize.Long
                 }
-
             }
-        } else if ([
-            BackStepAction.MEMORY_RESTORE_BYTE,
-            BackStepAction.MEMORY_RESTORE_HALF,
-            BackStepAction.MEMORY_RESTORE_WORD,
-            BackStepAction.MEMORY_RESTORE_RAW_WORD
-        ].includes(step.action)) {
+        } else if (
+            [
+                BackStepAction.MEMORY_RESTORE_BYTE,
+                BackStepAction.MEMORY_RESTORE_HALF,
+                BackStepAction.MEMORY_RESTORE_WORD,
+                BackStepAction.MEMORY_RESTORE_RAW_WORD
+            ].includes(step.action)
+        ) {
             return {
                 type: 'WriteMemory',
                 value: {
@@ -390,7 +408,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
             try {
                 const ins = mips.getNextStatement()
                 state.line = ins.sourceLine - 1
-            } catch (e) { }
+            } catch (e) {}
 
             state.canUndo = mips.canUndo
         } catch (e) {
@@ -428,7 +446,6 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         }
     }
 
-
     function calculateBreakpoints(breakpoints: number[]) {
         const b = breakpoints
             .map((line) => {
@@ -445,7 +462,10 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         const start = performance.now()
         const breakpoints = state.breakpoints
         try {
-            const terminated = mips.simulateWithBreakpointsAndLimit(calculateBreakpoints(breakpoints), haltLimit)
+            const terminated = mips.simulateWithBreakpointsAndLimit(
+                calculateBreakpoints(breakpoints),
+                haltLimit
+            )
             try {
                 const ins = mips.getNextStatement()
                 //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
@@ -479,7 +499,9 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
     function setGlobalMemoryAddress(address: number) {
         const bytes = mips?.readMemoryBytes(address, state.memory.global.pageSize)
         state.memory.global.address = address
-        state.memory.global.data.current = bytes ? new Uint8Array(bytes) : new Uint8Array(state.memory.global.pageSize).fill(0xff)
+        state.memory.global.data.current = bytes
+            ? new Uint8Array(bytes)
+            : new Uint8Array(state.memory.global.pageSize).fill(0xff)
         state.memory.global.data.prevState = state.memory.global.data.current
     }
 
@@ -566,11 +588,21 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
             askInt: (props: string) => Number(prompt(props)),
             askString: (props: string) => prompt(props),
 
-            printChar: (char: string) => { state.stdOut += char },
-            printDouble: (value: number) => { state.stdOut += String(value) },
-            printFloat: (value: number) => { state.stdOut += String(value) },
-            printInt: (value: number) => { state.stdOut += String(value) },
-            printString: (value: string) => { state.stdOut += value },
+            printChar: (char: string) => {
+                state.stdOut += char
+            },
+            printDouble: (value: number) => {
+                state.stdOut += String(value)
+            },
+            printFloat: (value: number) => {
+                state.stdOut += String(value)
+            },
+            printInt: (value: number) => {
+                state.stdOut += String(value)
+            },
+            printString: (value: string) => {
+                state.stdOut += value
+            },
 
             readFile: unimplementedHandler('readFile'),
             writeFile: unimplementedHandler('writeFile'),
@@ -592,16 +624,19 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
             readInt: () => Number(prompt('Enter an integer')),
             readString: () => prompt('Enter a string'),
 
+            log: (message: string) => {
+                state.stdOut += message
+            },
+            logLine: (message: string) => {
+                state.stdOut += message + '\n'
+            },
 
-            log: (message: string) => { state.stdOut += message },
-            logLine: (message: string) => { state.stdOut += message + '\n' },
-
-
-            confirm: (message: string) => Number(confirm(`${message}; 1 = yes, 0 = no, -1 = cancel`)) as ConfirmResult,
+            confirm: (message: string) =>
+                Number(confirm(`${message}; 1 = yes, 0 = no, -1 = cancel`)) as ConfirmResult,
             inputDialog: (message: string) => prompt(message),
             outputDialog: (message: string) => alert(message),
 
-            sleep: unimplementedHandler('sleep'),
+            sleep: unimplementedHandler('sleep')
         } satisfies HandlerMapFns
     }
 
@@ -609,11 +644,12 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         if (haltLimit <= 0) haltLimit = Number.MAX_SAFE_INTEGER
         const start = performance.now()
         try {
+            const t = structuredClone($state.snapshot(testcase))
             if (!mips) throw new Error('Interpreter not initialized')
-            for (const [register, value] of Object.entries(testcase.startingRegisters)) {
+            for (const [register, value] of Object.entries(t.startingRegisters)) {
                 mips.setRegisterValue(register as RegisterName, value)
             }
-            for (const value of testcase.startingMemory) {
+            for (const value of t.startingMemory) {
                 if (value.type === 'number') {
                     const slice = numberToByteSlice(value.expected, value.bytes)
                     mips.setMemoryBytes(value.address, slice)
@@ -627,40 +663,58 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
             registerHandlers(mips, {
                 ...getHandlers(),
                 readChar: () => {
-                    if (testcase.input.length === 0)
+                    if (t.input.length === 0)
                         throw new Error('Input does not have any characters left')
-                    if (testcase.input[0].length !== 1) throw new Error('Invalid character')
-                    return testcase.input.shift()[0]
+                    if (t.input[0].length !== 1) throw new Error('Invalid character')
+                    return t.input.shift()[0]
                 },
                 readDouble: () => {
-                    if (testcase.input.length === 0) throw new Error('Input does not have any numbers left')
-                    if (Number.isNaN(Number(testcase.input[0]))) throw new Error('Invalid number')
-                    return Number(testcase.input.shift())
+                    if (t.input.length === 0)
+                        throw new Error('Input does not have any numbers left')
+                    if (Number.isNaN(Number(t.input[0]))) throw new Error('Invalid number')
+                    return Number(t.input.shift())
                 },
                 readFloat: () => {
-                    if (testcase.input.length === 0) throw new Error('Input does not have any numbers left')
-                    if (Number.isNaN(Number(testcase.input[0]))) throw new Error('Invalid number')
-                    return Number(testcase.input.shift())
+                    if (t.input.length === 0)
+                        throw new Error('Input does not have any numbers left')
+                    if (Number.isNaN(Number(t.input[0]))) throw new Error('Invalid number')
+                    return Number(t.input.shift())
                 },
                 readInt: () => {
-                    if (testcase.input.length === 0) throw new Error('Input does not have any numbers left')
-                    if (Number.isNaN(Number(testcase.input[0]))) throw new Error('Invalid number')
-                    return Number(testcase.input.shift())
+                    if (t.input.length === 0)
+                        throw new Error('Input does not have any numbers left')
+                    if (Number.isNaN(Number(t.input[0]))) throw new Error('Invalid number')
+                    return Number(t.input.shift())
                 },
                 readString: () => {
-                    if (testcase.input.length === 0) throw new Error('Input does not have any strings left')
-                    return testcase.input.shift()
+                    if (t.input.length === 0)
+                        throw new Error('Input does not have any strings left')
+                    return t.input.shift()
                 },
-                printChar: (char: string) => { state.stdOut += char },
-                printDouble: (value: number) => { state.stdOut += String(value) },
-                printFloat: (value: number) => { state.stdOut += String(value) },
-                printInt: (value: number) => { state.stdOut += String(value) },
-                printString: (value: string) => { state.stdOut += value },
+                printChar: (char: string) => {
+                    state.stdOut += char
+                },
+                printDouble: (value: number) => {
+                    state.stdOut += String(value)
+                },
+                printFloat: (value: number) => {
+                    state.stdOut += String(value)
+                },
+                printInt: (value: number) => {
+                    state.stdOut += String(value)
+                },
+                printString: (value: string) => {
+                    state.stdOut += value
+                },
                 stdOut: (buffer: number[]) => {
                     state.stdOut += new TextDecoder().decode(new Uint8Array(buffer))
                 },
-                log: (message: string) => { state.stdOut += message },
-                logLine: (message: string) => { state.stdOut += message + '\n' },
+                log: (message: string) => {
+                    state.stdOut += message
+                },
+                logLine: (message: string) => {
+                    state.stdOut += message + '\n'
+                },
 
                 askDouble: unimplementedHandler('askDouble'),
                 askFloat: unimplementedHandler('askFloat'),
@@ -669,7 +723,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 confirm: unimplementedHandler('confirm'),
                 inputDialog: unimplementedHandler('inputDialog'),
                 outputDialog: unimplementedHandler('outputDialog'),
-                sleep: unimplementedHandler('sleep'),
+                sleep: unimplementedHandler('sleep')
             })
             mips.simulateWithLimit(haltLimit)
             try {
@@ -729,10 +783,8 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         return results
     }
 
-
     clear()
     semanticCheck()
-
 
     return {
         get registers() {
@@ -798,8 +850,6 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
     } satisfies MIPSEmulatorState & BaseEmulatorActions
 }
 
-
-
 const backStepActionMap = {
     [BackStepAction.MEMORY_RESTORE_BYTE]: 'Memory restore byte',
     [BackStepAction.MEMORY_RESTORE_HALF]: 'Memory restore half',
@@ -811,9 +861,8 @@ const backStepActionMap = {
     [BackStepAction.COPROC1_CONDITION_SET]: 'Coproc1 condition set',
     [BackStepAction.DO_NOTHING]: 'Do nothing',
     [BackStepAction.REGISTER_RESTORE]: 'Register restore',
-    [BackStepAction.PC_RESTORE]: 'PC restore',
+    [BackStepAction.PC_RESTORE]: 'PC restore'
 } satisfies Record<BackStepAction, string>
-
 
 const memorySizeMap = {
     [BackStepAction.MEMORY_RESTORE_BYTE]: RegisterSize.Byte,

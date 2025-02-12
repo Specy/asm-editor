@@ -66,7 +66,7 @@
             <ButtonLink href="/projects" cssVar="primary" title="Cancel new project"
                 >Cancel</ButtonLink
             >
-            <Button on:click={create}>Create</Button>
+            <Button onClick={create}>Create</Button>
         </div>
     </div>
 </Page>

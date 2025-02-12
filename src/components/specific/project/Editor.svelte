@@ -166,7 +166,7 @@
                 editor.getModel(),
                 language,
                 errors.map((e) => {
-                    const position =  e.column
+                    const position = e.column
                     return {
                         severity: monacoInstance.MarkerSeverity.Error,
                         message: e.message,

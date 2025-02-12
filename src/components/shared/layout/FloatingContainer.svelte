@@ -20,7 +20,7 @@
         <Button
             style="padding: 0.5rem"
             hasIcon
-            on:click={() => {
+            onClick={() => {
                 visible = !visible
             }}
             cssVar="secondary"

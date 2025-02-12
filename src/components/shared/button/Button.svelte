@@ -14,6 +14,7 @@
         active?: boolean
         title?: string
         children?: import('svelte').Snippet
+        onClick?: (e: MouseEvent) => void
     }
 
     let {
@@ -25,6 +26,7 @@
         cssVar = 'unset',
         active = false,
         title = '',
+        onClick,
         children
     }: Props = $props()
 </script>
@@ -36,7 +38,7 @@
     {title}
     style={`--btn-color:var(--${cssVar},${bg}); --btn-text:var(--${cssVar}-text,${color});${style}; `}
     {disabled}
-    onclick={bubble('click')}
+    onclick={onClick}
     class:active
 >
     {@render children?.()}

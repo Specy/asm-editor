@@ -41,7 +41,7 @@
 
         <a href="/documentation/m68k"> M68k </a>
         <div class="mobile-only" style="margin-left: auto; margin-right: 0.5rem">
-            <Icon on:click={() => (menuOpen = !menuOpen)}>
+            <Icon onClick={() => (menuOpen = !menuOpen)}>
                 {#if menuOpen}
                     <FaTimes />
                 {:else}
@@ -64,27 +64,27 @@
             <MenuLink
                 href="/documentation/m68k/addressing-mode"
                 title="Addressing Modes"
-                on:click={() => (menuOpen = false)}
+                onClick={() => (menuOpen = false)}
             />
             <MenuLink
                 href="/documentation/m68k/condition-codes"
                 title="Condition Codes"
-                on:click={() => (menuOpen = false)}
+                onClick={() => (menuOpen = false)}
             />
             <MenuLink
                 href="/documentation/m68k/shift-direction"
                 title="Shifts & directions"
-                on:click={() => (menuOpen = false)}
+                onClick={() => (menuOpen = false)}
             />
             <MenuLink
                 href="/documentation/m68k/directive"
                 title="Directives"
-                on:click={() => (menuOpen = false)}
+                onClick={() => (menuOpen = false)}
             />
             <MenuLink
                 href="/documentation/m68k/assembler-features"
                 title="Assembler features"
-                on:click={() => (menuOpen = false)}
+                onClick={() => (menuOpen = false)}
             />
         </Column>
         <TogglableSection
@@ -100,7 +100,7 @@
             <input bind:value={search} placeholder="Search" class="instruction-search" />
             <InstructionsMenu
                 instructions={filteredInstructions}
-                on:click={() => (menuOpen = false)}
+                onClick={() => (menuOpen = false)}
                 {currentInstructionName}
             />
         </TogglableSection>

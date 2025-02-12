@@ -43,7 +43,7 @@
     {#if !hasCompiled}
         <Button
             style="max-width: 5.5rem; flex:1; padding: 0.5rem 0.3rem"
-            on:click={() => dispatch('build')}
+            onClick={() => dispatch('build')}
             disabled={buildDisabled}
         >
             <Icon size={1} style="margin-right: 0.4rem;">
@@ -54,7 +54,7 @@
         {#if hasTests}
             <Button
                 style="max-width: 5.5rem; flex:1; padding: 0.5rem 0.3rem"
-                on:click={() => dispatch('test')}
+                onClick={() => dispatch('test')}
                 disabled={buildDisabled}
                 cssVar="accent2"
             >
@@ -68,7 +68,7 @@
         <Button
             style="max-width: 5.5rem; flex:1; padding: 0.5rem 0.3rem"
             cssVar="accent2"
-            on:click={() => dispatch('stop')}
+            onClick={() => dispatch('stop')}
         >
             <Icon size={1} style="margin-right: 0.4rem;">
                 <FaStop />
@@ -77,7 +77,7 @@
         </Button>
         <Button
             style="max-width: 5.5rem; flex:1; padding: 0.5rem 0.3rem"
-            on:click={() => dispatch('run')}
+            onClick={() => dispatch('run')}
             disabled={executionDisabled || running}
         >
             <Icon size={1} style="margin-right: 0.4rem;">
@@ -92,7 +92,7 @@
         <Button
             style="max-width: 5.5rem; flex:1; padding: 0.5rem 0.3rem"
             disabled={executionDisabled || !canUndo}
-            on:click={() => dispatch('undo')}
+            onClick={() => dispatch('undo')}
         >
             <Icon size={1} style="margin-right: 0.4rem;">
                 <FaUndo />
@@ -102,7 +102,7 @@
         <Button
             style="max-width: 5.5rem; flex:1; padding: 0.5rem 0.3rem"
             disabled={executionDisabled}
-            on:click={() => dispatch('step')}
+            onClick={() => dispatch('step')}
         >
             <Icon size={1} style="margin-right: 0.4rem;">
                 <FaStepForward />
@@ -114,7 +114,7 @@
         <Button
             style="max-width: 7rem; padding: 0.5rem 0.8rem; margin-left: auto;"
             cssVar={hasErrorsInTests ? 'red' : hasNoErrorsInTests ? 'green' : 'accent2'}
-            on:click={() => dispatch('edit-tests')}
+            onClick={() => dispatch('edit-tests')}
         >
             <Icon size={1} style="margin-right: 0.4rem;">
                 {#if hasErrorsInTests}

@@ -1,4 +1,5 @@
 import type { Testcase, TestcaseResult } from '$lib/Project.svelte'
+import type { Interrupt } from '@specy/s68k'
 
 export type StatusRegister = {
     name: string
@@ -118,32 +119,32 @@ export type ExecutionStep = {
 
 export type MutationOperation =
     | {
-        type: 'WriteRegister'
-        value: {
-            register: string
-            old: number
-            size: RegisterSize
-        }
-    }
+          type: 'WriteRegister'
+          value: {
+              register: string
+              old: number
+              size: RegisterSize
+          }
+      }
     | {
-        type: 'WriteMemory'
-        value: {
-            address: number
-            old: number
-            size: RegisterSize
-        }
-    }
+          type: 'WriteMemory'
+          value: {
+              address: number
+              old: number
+              size: RegisterSize
+          }
+      }
     | {
-        type: 'WriteMemoryBytes'
-        value: {
-            address: number
-            old: number[]
-        }
-    }
+          type: 'WriteMemoryBytes'
+          value: {
+              address: number
+              old: number[]
+          }
+      }
     | {
-        type: "Other"
-        value: string
-    }
+          type: 'Other'
+          value: string
+      }
 
 export type Register = ReturnType<typeof makeRegister>
 
@@ -163,6 +164,7 @@ export type BaseEmulatorState = {
     canExecute: boolean
     canUndo: boolean
     breakpoints: number[]
+    interrupt?: Interrupt
     memory: {
         global: MemoryTab
         tabs: MemoryTab[]
@@ -199,8 +201,6 @@ export function createMemoryTab(
         }
     }
 }
-
-
 
 export type EmulatorSettings = {
     globalPageSize?: number

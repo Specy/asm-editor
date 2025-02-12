@@ -18,7 +18,7 @@
                 <div>
                     {$toast.title}
                 </div>
-                <Icon on:click={toast.closeToast}>
+                <Icon onClick={toast.closeToast}>
                     <FaTimes />
                 </Icon>
             </div>

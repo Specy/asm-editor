@@ -98,7 +98,7 @@
         overflow-y: auto;
     }
 
-    ::-webkit-scrollbar{
+    ::-webkit-scrollbar {
         background-color: transparent !important;
     }
 
