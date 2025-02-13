@@ -17,6 +17,7 @@
         mipsInstructionNames
     } from '$lib/languages/MIPS-documentation'
     import MipsDirectiveDocumentation from './MIPSDirectiveDocumentation.svelte'
+    import MipsSyscall from './MIPSSyscall.svelte'
     interface Props {
         visible: boolean
         style?: string
@@ -66,6 +67,12 @@
             <h4>Directives</h4>
         {/snippet}
         <MipsDirectiveDocumentation />
+    </DocsSection>
+    <DocsSection open={defaultOpen}>
+        {#snippet title()}
+            <h4>Syscalls</h4>
+        {/snippet}
+        <MipsSyscall />
     </DocsSection>
     <DocsSection>
         {#snippet title()}

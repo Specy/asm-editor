@@ -60,14 +60,15 @@
     </button>
     <aside class="side-menu column" class:menu-open={menuOpen}>
         <Column gap="1rem" padding="0 1rem">
-            <MenuLink
-                href="/documentation/mips"
-                title="MIPS"
-                onClick={() => (menuOpen = false)}
-            />
+            <MenuLink href="/documentation/mips" title="MIPS" onClick={() => (menuOpen = false)} />
             <MenuLink
                 href="/documentation/mips/directive"
                 title="Directives"
+                onClick={() => (menuOpen = false)}
+            />
+            <MenuLink
+                href="/documentation/mips/syscall"
+                title="Syscalls"
                 onClick={() => (menuOpen = false)}
             />
         </Column>

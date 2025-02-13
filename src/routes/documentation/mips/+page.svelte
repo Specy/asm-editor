@@ -23,6 +23,9 @@
         <NavigationLinkButton href="/documentation/mips/instruction">
             <div>Instructions</div>
         </NavigationLinkButton>
+        <NavigationLinkButton href="/documentation/mips/syscall">
+            <div>Syscalls</div>
+        </NavigationLinkButton>
     </div>
 </Page>
 
