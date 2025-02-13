@@ -26,7 +26,7 @@
         testcases = $bindable(),
         testcasesResult,
         registerNames,
-        editable
+        editable = true
     }: Props = $props()
 
     function makeNewTestcase() {

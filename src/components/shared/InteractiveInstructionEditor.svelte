@@ -21,13 +21,14 @@
     import Column from './layout/Column.svelte'
     import StdOutRenderer from '$cmp/specific/project/user-tools/StdOutRenderer.svelte'
     import TestcasesEditor from '$cmp/specific/project/testcases/TestcasesEditor.svelte'
+    import Row from './layout/Row.svelte'
 
     /*TODO make this agnostic */
 
     let running = $state(false)
     interface Props {
         code: string
-        testcases: Testcase[]
+        testcases?: Testcase[]
         showMemory?: boolean
         showConsole?: boolean
         showTestcases?: boolean
@@ -41,7 +42,7 @@
         language,
         showConsole,
         showTestcases,
-        testcases = $bindable(),
+        testcases = $bindable([]),
         embedded
     }: Props = $props()
     let memoryAddress = $state(0x1000)
@@ -170,56 +171,62 @@
         />
     </div>
     <Column>
-        <div class="column data-registers-wrapper">
-            <div class="data-cpu-status-wrapper">
-                {#if emulator.statusRegisters?.length > 0}
-                    <StatusCodesVisualiser statusCodes={emulator.statusRegisters} style="flex:1" />
-                {/if}
-                <SizeSelector bind:selected={groupSize} style="flex:1" />
-            </div>
-            <RegistersVisualiser
-                size={groupSize}
-                gridStyle="
+        <Row wrap gap="0.5rem" flex1>
+            <div class="column data-registers-wrapper">
+                <div class="data-cpu-status-wrapper">
+                    {#if emulator.statusRegisters?.length > 0}
+                        <StatusCodesVisualiser
+                            statusCodes={emulator.statusRegisters}
+                            style="flex:1"
+                        />
+                    {/if}
+                    <SizeSelector bind:selected={groupSize} style="flex:1" />
+                </div>
+                <RegistersVisualiser
+                    size={groupSize}
+                    gridStyle="
                 grid-template-columns: min-content 1fr min-content 1fr; 
                 gap: 0.1rem; 
                 height: 100%; 
                 justify-content: space-evenly;
                 "
-                style={`max-height: ${embedded ? 'calc(100vh - 7.2rem)' : '15.7rem'}; min-height: 11.5rem;`}
-                registers={emulator.registers}
-                on:registerClick={async (e) => {
-                    const value = e.detail.value
-                    const clampedSize = value - (value % emulator.memory.global.pageSize)
-                    emulator.setGlobalMemoryAddress(clamp(clampedSize, 0, MEMORY_SIZE['M68K']))
-                }}
-            />
-        </div>
-        {#if showMemory}
-            <div class="column code-data-memory-controls">
-                <MemoryControls
-                    bytesPerPage={4 * 8}
-                    memorySize={MEMORY_SIZE[language]}
-                    currentAddress={memoryAddress}
-                    style="flex: unset"
-                    inputStyle="width: 6rem; height: 3rem"
-                    on:addressChange={async (e) => {
-                        memoryAddress = e.detail
-                        emulator.setGlobalMemoryAddress(e.detail)
+                    style={`max-height: ${embedded ? 'calc(100vh - 7.2rem)' : '16.3rem'}; min-height: 11.5rem;`}
+                    registers={emulator.registers}
+                    on:registerClick={async (e) => {
+                        const value = e.detail.value
+                        const clampedSize = value - (value % emulator.memory.global.pageSize)
+                        emulator.setGlobalMemoryAddress(clamp(clampedSize, 0, MEMORY_SIZE['M68K']))
                     }}
-                    hideLabel
-                />
-                <MemoryVisualiser
-                    endianess={emulator.memory.global.endianess}
-                    defaultMemoryValue={DEFAULT_MEMORY_VALUE[language]}
-                    style="height: 100%; flex: 1;"
-                    bytesPerRow={4}
-                    pageSize={4 * 8}
-                    memory={emulator.memory.global.data}
-                    currentAddress={emulator.memory.global.address}
-                    sp={emulator.sp}
                 />
             </div>
-        {/if}
+            {#if showMemory}
+                <div class="column code-data-memory-controls">
+                    <MemoryControls
+                        bytesPerPage={4 * 8}
+                        memorySize={MEMORY_SIZE[language]}
+                        currentAddress={memoryAddress}
+                        style="flex: unset"
+                        inputStyle="width: 6rem; height: 3rem"
+                        on:addressChange={async (e) => {
+                            memoryAddress = e.detail
+                            emulator.setGlobalMemoryAddress(e.detail)
+                        }}
+                        hideLabel
+                    />
+                    <MemoryVisualiser
+                        endianess={emulator.memory.global.endianess}
+                        defaultMemoryValue={DEFAULT_MEMORY_VALUE[language]}
+                        style="height: 100%; flex: 1;"
+                        bytesPerRow={4}
+                        pageSize={4 * 8}
+                        memory={emulator.memory.global.data}
+                        currentAddress={emulator.memory.global.address}
+                        sp={emulator.sp}
+                    />
+                </div>
+            {/if}
+        </Row>
+
         {#if showConsole}
             <StdOutRenderer
                 {info}

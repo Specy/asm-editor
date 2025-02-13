@@ -130,7 +130,7 @@
 
     {#if !inIframe}
         <div class="share-container">
-            <div class="share-card" style="padding: 1rem">
+            <div class="share-card" style="padding: 1rem; gap: 0.5rem">
                 <h2 style="text-align: center;">Embed Settings</h2>
                 <div class="share-settings">
                     <span>Show memory</span>
