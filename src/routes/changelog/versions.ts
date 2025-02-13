@@ -9,8 +9,12 @@ export const versions: Version[] = [
     {
         version: '4.0.0',
         title: 'Added MIPS language!',
-        date: new Date('2025-02-11'),
-        changes: ['Added initial MIPS assembler/simulator (mars)']
+        date: new Date('2025-02-13'),
+        changes: [
+            'Added MIPS assembler/simulator (mars)',
+            'Added MIPS documentation',
+            'Other improvements and bug fixes'
+        ]
     },
     {
         version: '3.5.0',
