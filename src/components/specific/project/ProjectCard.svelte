@@ -9,6 +9,8 @@
     import Button from '$cmp/shared/button/Button.svelte'
     import FaDownload from 'svelte-icons/fa/FaDownload.svelte'
     import { createEventDispatcher } from 'svelte'
+    import { DEFAULT_THEME, ThemeStore } from '$stores/themeStore'
+    import { LANG_ACCENT } from '$lib/Config'
     interface Props {
         project: Project
     }
@@ -17,6 +19,8 @@
     let textContent = $state(project.name || 'Unnamed')
     let descriptionContent = $state(project.description || '')
     const dispatcher = createEventDispatcher<{ download: Project }>()
+
+    const colors = $derived(LANG_ACCENT[project.language])
     function save() {
         project.name = textContent
         project.description = descriptionContent
@@ -76,7 +80,7 @@
             </button>
 
             <ButtonLink
-                bg="var(--accent2)"
+                bg={colors.accent2}
                 color="var(--accent2-text)"
                 href={`/projects/${project.id}`}
                 title="Open this project"

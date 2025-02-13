@@ -7,7 +7,7 @@ import { get, readonly, writable } from 'svelte/store'
 import type { Writable } from 'svelte/store'
 
 //TODO redo this with a single writable object, it doesnt need to be this complicated
-const themeObject = {
+export const DEFAULT_THEME = {
     background: {
         color: '#171A21',
         name: 'background',
@@ -66,7 +66,7 @@ const themeObject = {
         readonly: true
     }
 }
-export type ThemeKeys = keyof typeof themeObject
+export type ThemeKeys = keyof typeof DEFAULT_THEME
 export type ThemeProp = {
     name: string
     color: string
@@ -86,7 +86,7 @@ export class ThemeStoreClass {
         [key in ThemeKeys]: Writable<ThemeProp>
     }>
     constructor() {
-        const base = cloneDeep(themeObject)
+        const base = cloneDeep(DEFAULT_THEME)
         const listened = {} as { [key in ThemeKeys]: Writable<ThemeProp> }
         Object.entries(base).forEach(([key, value]) => {
             //@ts-ignore doesnt like that i set the key
@@ -103,12 +103,12 @@ export class ThemeStoreClass {
         return Object.values(get(this.theme)).map((el) => get(el))
     }
     isDefault(key: ThemeKeys, color): boolean {
-        return themeObject[key]?.color === color
+        return DEFAULT_THEME[key]?.color === color
     }
-    reset(key: ThemeKeys) {
-        this.set(key, themeObject[key]?.color)
+    reset(key: ThemeKeys, dontSave = false) {
+        this.set(key, DEFAULT_THEME[key]?.color, dontSave)
     }
-    set(key: ThemeKeys, color: string): void {
+    set(key: ThemeKeys, color: string, dontSave = false): void {
         this.theme.update((theme) => {
             theme[key].update((themeProp) => {
                 themeProp.color = color
@@ -116,6 +116,7 @@ export class ThemeStoreClass {
             })
             return theme
         })
+        if (dontSave) return
         this.save()
     }
     get(key: ThemeKeys): Writable<ThemeProp> {
@@ -134,6 +135,7 @@ export class ThemeStoreClass {
         return new TinyColor(get(this.get(key)).color)
     }
     save() {
+        if (!browser) return
         const inner = () => {
             const theme = this.toArray()
             const state: StoredTheme = {
@@ -146,6 +148,7 @@ export class ThemeStoreClass {
     }
     load() {
         try {
+            if (!browser) return
             const theme = JSON.parse(localStorage.getItem('theme')) as StoredTheme | null
             if (theme && theme.version === version) {
                 theme.theme.forEach((themeProp: ThemeProp) => {

@@ -18,9 +18,9 @@
             store = ThemeStore
         })
     })
-    let scrollbar = store.get('scrollbar')
-    let accent = store.get('accent')
-    let background = store.get('background')
+    let scrollbar = $derived(store.get('scrollbar'))
+    let accent = $derived(store.get('accent'))
+    let background = $derived(store.get('background'))
 </script>
 
 <Body
