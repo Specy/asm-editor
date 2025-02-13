@@ -3,7 +3,7 @@ import { createDebouncer } from '$lib/utils'
 import { TinyColor } from '@ctrl/tinycolor'
 
 import cloneDeep from 'clone-deep'
-import { get, writable } from 'svelte/store'
+import { get, readonly, writable } from 'svelte/store'
 import type { Writable } from 'svelte/store'
 
 //TODO redo this with a single writable object, it doesnt need to be this complicated
@@ -48,15 +48,22 @@ const themeObject = {
         name: 'text-layered',
         prop: 'textDarker'
     },
+    scrollbar: {
+        color: '#3b5364',
+        name: 'scrollbar',
+        prop: 'scrollbar'
+    },
     red: {
         color: '#ed4f4f',
         name: 'red', //TODO rename to warn
-        prop: 'red'
+        prop: 'red',
+        readonly: true
     },
     green: {
         color: '#356a59', //TODO rename to success
         name: 'green',
-        prop: 'green'
+        prop: 'green',
+        readonly: true
     }
 }
 export type ThemeKeys = keyof typeof themeObject
@@ -64,6 +71,7 @@ export type ThemeProp = {
     name: string
     color: string
     prop: ThemeKeys
+    readonly?: boolean
 }
 const version = 1
 type StoredTheme = {

@@ -33,7 +33,11 @@
             <FaExclamationTriangle />
         </button>
     {/if}
-    <Console value={`${compilerErrors.map((e) => e.formatted).join('\n')}${separator}${stdOut}`} />
+    <div>
+        <Console
+            value={`${compilerErrors.map((e) => e.formatted).join('\n')}${separator}${stdOut}`}
+        />
+    </div>
     <div class="info">
         {info}
     </div>
@@ -61,12 +65,12 @@
         color: var(--accent2-text);
     }
     .std-out {
-        display: flex;
         position: relative;
         border-radius: 0.5rem;
-        overflow: hidden;
-        flex: 1;
         margin-top: 0.5rem;
+        overflow-y: auto;
+        display: flex;
+        flex: 1;
         background-color: var(--secondary);
         color: var(--secondary-text);
         @media screen and (max-width: 1000px) {
@@ -75,8 +79,8 @@
         }
     }
     .info {
-        position: absolute;
-        bottom: 0.4rem;
+        position: fixed;
+        bottom: 0.8rem;
         right: 1.2rem;
         color: var(--hint);
         font-size: 0.9rem;

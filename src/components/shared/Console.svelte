@@ -9,11 +9,13 @@
     let {
         value = $bindable(),
         terminal = $bindable(),
-        editable = false
+        editable = false,
+        useXterm = false
     } = $props<{
         value: string
         terminal?: Terminal
         editable?: boolean
+        useXterm?: boolean
     }>()
 
     let options: ITerminalOptions & ITerminalInitOnlyOptions = {
@@ -58,9 +60,13 @@
     })
 </script>
 
-<div bind:this={wrapper} class="wrapper">
-    <Xterm class="xterm-console" bind:terminal {options} {onLoad} {onData} {onKey} />
-</div>
+{#if useXterm}
+    <div bind:this={wrapper} class="wrapper">
+        <Xterm class="xterm-console" bind:terminal {options} {onLoad} {onData} {onKey} />
+    </div>
+{:else}
+    <div class="console">{value}</div>
+{/if}
 
 <style lang="scss">
     .wrapper {
@@ -73,5 +79,12 @@
         position: absolute;
         inset: 0.5rem;
         left: 0.7rem;
+    }
+
+    .console {
+        padding: 0.5rem;
+        padding-left: 0.8rem;
+        white-space: pre-wrap;
+        font-family: monospace;
     }
 </style>

@@ -3,31 +3,34 @@
 
     import { onMount } from 'svelte'
     import InteractiveInstructionEditor from '$cmp/shared/InteractiveInstructionEditor.svelte'
-    import { type AvailableLanguages, BASE_M68K_CODE } from '$lib/Project.svelte'
+    import { type AvailableLanguages } from '$lib/Project.svelte'
     import Page from '$cmp/shared/layout/Page.svelte'
     import lzstring from 'lz-string'
     import { page } from '$app/stores'
     import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
     import Select from '$cmp/shared/input/Select.svelte'
+    import { viewStore } from '$stores/view'
+    import { BASE_CODE } from '$lib/Config'
 
     type Settings = {
         showMemory: boolean
         language: AvailableLanguages
     }
 
-    let inIframe = $state(true)
-    let code = $state(BASE_M68K_CODE)
     let settings: Settings = $state({
         showMemory: true,
         language: 'M68K'
     })
+    let inIframe = $state(true)
+    let code = $state(BASE_CODE[settings.language])
+
     let generatedCode = $state('')
     let timeoutId = 0 as any
     onMount(() => {
         inIframe = window.self !== window.top
-        code = getCodeFromUrl() ?? BASE_M68K_CODE
         settings = getSettings()
+        code = getCodeFromUrl() ?? BASE_CODE[settings.language]
     })
 
     function getCodeFromUrl() {
@@ -61,6 +64,7 @@
 
     function generateCodeUrl(code: string, settings: Settings) {
         clearTimeout(timeoutId)
+        viewStore(settings)
         timeoutId = setTimeout(() => {
             generatedCode = createCodeUrl(code, settings)
         }, 1000)
@@ -105,6 +109,7 @@
                 <div class="share-settings" style="justify-content: space-between;">
                     <span>Language</span>
                     <Select
+                        onChange={() => code = BASE_CODE[settings.language]}
                         style="background-color: var(--tertiary); color: var(--secondary-text); text-align: center;"
                         wrapperStyle="max-width: 5rem;"
                         options={['M68K', 'MIPS']}
@@ -116,7 +121,6 @@
                 <h2 style="text-align: center;">URL</h2>
                 <textarea>{generatedCode}</textarea>
             </div>
-            <div class="share-card"></div>
             <div class="share-card">
                 <h2 style="text-align: center;">Embed code</h2>
                 <textarea

@@ -96,6 +96,10 @@
         flex: 1;
         max-height: calc(100vh - 11.8rem); //HOTFIX
         overflow-y: auto;
+
+        @media screen and (max-width: 1000px) {
+            max-height: 33.7rem; //HOTFIX
+        }
     }
 
     ::-webkit-scrollbar {

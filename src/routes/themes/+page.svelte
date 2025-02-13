@@ -42,9 +42,11 @@
     </div>
     <Column gap="1rem" style="margin-bottom:3rem">
         {#each theme as color, i (color.name)}
-            <div in:scale|global={{ delay: i * 50 + 200, start: 0.9, duration: 150 }}>
-                <ColorThemeRow bind:color={theme[i]} />
-            </div>
+            {#if !color.readonly}
+                <div in:scale|global={{ delay: i * 50 + 200, start: 0.9, duration: 150 }}>
+                    <ColorThemeRow bind:color={theme[i]} />
+                </div>
+            {/if}
         {/each}
     </Column>
 </Page>

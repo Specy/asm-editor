@@ -11,18 +11,21 @@
 
     let { style = '', children }: Props = $props()
     let theme: ThemeProp[] = $state(ThemeStore.toArray())
+    let store = $state(ThemeStore)
     onMount(() => {
         ThemeStore.theme.subscribe(() => {
             theme = ThemeStore.toArray()
+            store = ThemeStore
         })
     })
-    let accent = ThemeStore.get('accent')
-    let background = ThemeStore.get('background')
+    let scrollbar = store.get('scrollbar')
+    let accent = store.get('accent')
+    let background = store.get('background')
 </script>
 
 <Body
     style={`
-		--scroll-accent: ${$accent.color};
+		--scroll-accent: ${$scrollbar.color};
 		background-color: ${$background.color};
 		color: ${new TinyColor($background.color).isDark() ? ThemeStore.textForDark : ThemeStore.textForLight};
 	`}

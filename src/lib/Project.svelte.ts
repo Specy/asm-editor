@@ -1,4 +1,5 @@
 import { get } from 'svelte/store'
+import { BASE_CODE } from './Config'
 
 export type AvailableLanguages = 'M68K' | 'MIPS'
 export interface ProjectData {
@@ -79,21 +80,6 @@ export type TestcaseResult = {
 
 const CODE_SEPARATOR = '---METADATA---'
 
-export const BASE_M68K_CODE = `
-ORG $1000
-START:
-    * Write here your code
-
-END: * Jump here to end the program
-`.trim()
-
-export const BASE_MIPS_CODE = `
-.data
-    # Write here your data
-.text
-main:
-    # Write here your code
-`.trim()
 
 type ProjectMetadata = {
     version: number
@@ -142,7 +128,7 @@ export function makeProject(data?: Partial<ProjectData>) {
     const lang = data?.language ?? ('M68K' as AvailableLanguages)
     let state = $state({
         id: data?.id ?? '',
-        code: data?.code ?? (lang === 'M68K' ? BASE_M68K_CODE : BASE_MIPS_CODE),
+        code: data?.code ?? BASE_CODE[lang],
         createdAt: data?.createdAt ?? new Date().getTime(),
         updatedAt: data?.updatedAt ?? new Date().getTime(),
         name: data?.name ?? 'Untitled',

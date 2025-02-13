@@ -270,7 +270,10 @@
     </Row>
     <ShortcutEditor bind:visible={shortcutsVisible} />
     <Settings bind:visible={settingsVisible} />
-    <FloatingLanguageDocumentation bind:visible={documentationVisible} language={project.language}/>
+    <FloatingLanguageDocumentation
+        bind:visible={documentationVisible}
+        language={project.language}
+    />
     <TestcasesEditor
         registerNames={emulator.registers.map((r) => r.name)}
         bind:visible={testcasesVisible}
@@ -528,6 +531,7 @@
             gap: 0.5rem;
             @media screen and (max-width: 1000px) {
                 margin-top: 1rem;
+                padding-bottom: 1rem;
                 overflow-x: auto;
                 width: 100%;
             }
