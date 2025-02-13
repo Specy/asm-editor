@@ -1,10 +1,10 @@
 <script lang="ts">
-    import Row from '$cmp/shared/layout/Row.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import RegisterTestcaseValue from '$cmp/specific/project/testcases/RegisterTestcaseValue.svelte'
     import FaPlus from 'svelte-icons/fa/FaPlus.svelte'
     import RegistersRenderer from '$cmp/specific/project/cpu/RegistersRenderer.svelte'
     import { makeRegister } from '$lib/languages/commonLanguageFeatures.svelte'
+    import Column from '$cmp/shared/layout/Column.svelte'
 
     interface Props {
         registers: Record<string, number>
@@ -14,9 +14,9 @@
 
     let { registers = $bindable(), editable, registerNames }: Props = $props()
 
-    function makeNewRegister(defaultName = 'D0') {
+    function makeNewRegister(defaultName?: string) {
         return {
-            name: defaultName,
+            name: defaultName ?? registerNames[0],
             value: 0
         }
     }
@@ -34,7 +34,7 @@
     let freeStartingRegisters = $derived(getAvailableRegisterName(registers))
 </script>
 
-<Row gap="0.3rem" style="flex-wrap: wrap">
+<Column gap="0.3rem" style="max-width: 12rem">
     {#if editable}
         {#each startingRegisters as [key, value] (key)}
             <RegisterTestcaseValue
@@ -80,7 +80,7 @@
             registers={Object.entries(registers).map(([name, value]) => makeRegister(name, value))}
         />
     {/if}
-</Row>
+</Column>
 
 <style>
     .add-input {

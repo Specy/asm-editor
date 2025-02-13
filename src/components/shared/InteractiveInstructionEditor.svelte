@@ -5,7 +5,7 @@
     import { M68KEmulator } from '$lib/languages/M68KEmulator.svelte'
     import { toast } from '$stores/toastStore'
     import Controls from '$cmp/specific/project/Controls.svelte'
-    import { clamp } from '$lib/utils'
+    import { clamp, formatTime } from '$lib/utils'
     import { settingsStore } from '$stores/settingsStore.svelte'
     import type monaco from 'monaco-editor'
     import MemoryControls from '$cmp/specific/project/memory/MemoryControls.svelte'
@@ -16,21 +16,38 @@
     import SizeSelector from '$cmp/specific/project/cpu/SizeSelector.svelte'
     import { onMount } from 'svelte'
     import { getM68kErrorMessage } from '$lib/languages/M68kUtils'
-    import type { AvailableLanguages } from '$lib/Project.svelte'
+    import type { AvailableLanguages, Testcase, TestcaseResult } from '$lib/Project.svelte'
     import { GenericEmulator } from '$lib/languages/Emulator'
+    import Column from './layout/Column.svelte'
+    import StdOutRenderer from '$cmp/specific/project/user-tools/StdOutRenderer.svelte'
+    import TestcasesEditor from '$cmp/specific/project/testcases/TestcasesEditor.svelte'
 
     /*TODO make this agnostic */
 
     let running = $state(false)
     interface Props {
         code: string
+        testcases: Testcase[]
         showMemory?: boolean
+        showConsole?: boolean
+        showTestcases?: boolean
+        embedded?: boolean
         language?: AvailableLanguages
     }
 
-    let { code = $bindable(), showMemory = true, language }: Props = $props()
+    let {
+        code = $bindable(),
+        showMemory = true,
+        language,
+        showConsole,
+        showTestcases,
+        testcases = $bindable(),
+        embedded
+    }: Props = $props()
     let memoryAddress = $state(0x1000)
     let groupSize = $state(2)
+    let testcasesVisible = $state(false)
+    let testcasesResult: TestcaseResult[] = $state([])
     const emulator = GenericEmulator(language, code, {
         globalPageElementsPerRow: 4,
         globalPageSize: 4 * 8
@@ -45,6 +62,13 @@
             emulator.dispose()
         }
     })
+
+    let errorStrings = $derived(emulator.errors.join('\n'))
+    let info = $derived(
+        emulator.terminated && emulator.executionTime >= 0
+            ? `Ran in ${formatTime(emulator.executionTime)}`
+            : ''
+    )
 </script>
 
 <div class="editor-wrapper" style="gap: 0.5rem">
@@ -61,7 +85,7 @@
                 bind:code
                 breakpoints={emulator.breakpoints}
                 errors={emulator.compilerErrors}
-                language={language}
+                {language}
                 highlightedLine={emulator.line}
                 disabled={emulator.canExecute && !emulator.terminated}
                 hasError={emulator.errors.length > 0}
@@ -70,12 +94,36 @@
 
         <Controls
             {running}
-            hasTests={false}
-            canEditTests={false}
+            hasTests={testcases.length > 0}
+            canEditTests={showTestcases}
+            hasErrorsInTests={testcasesResult.some((r) => !r.passed)}
+            hasNoErrorsInTests={testcasesResult.every((r) => r.passed) &&
+                testcasesResult.length > 0}
             executionDisabled={emulator.terminated || emulator.interrupt !== undefined}
             buildDisabled={emulator.compilerErrors.length > 0}
             hasCompiled={emulator.canExecute}
             canUndo={emulator.canUndo}
+            on:edit-tests={() => {
+                testcasesVisible = !testcasesVisible
+            }}
+            on:test={async () => {
+                running = true
+                setTimeout(async () => {
+                    try {
+                        testcasesResult = await emulator.test(
+                            code,
+                            testcases,
+                            settingsStore.values.instructionsLimit.value,
+                            settingsStore.values.maxHistorySize.value
+                        )
+                        running = false
+                    } catch (e) {
+                        console.error(e)
+                        running = false
+                        toast.error('Error executing tests. ' + getM68kErrorMessage(e))
+                    }
+                }, 50)
+            }}
             on:run={async () => {
                 running = true
                 setTimeout(() => {
@@ -121,56 +169,74 @@
             }}
         />
     </div>
-    <div class="column data-registers-wrapper">
-        <div class="data-cpu-status-wrapper">
-            {#if emulator.statusRegisters?.length > 0}
-                <StatusCodesVisualiser statusCodes={emulator.statusRegisters} style="flex:1" />
-            {/if}
-            <SizeSelector bind:selected={groupSize} style="flex:1" />
-        </div>
-        <RegistersVisualiser
-            size={groupSize}
-            gridStyle="
+    <Column>
+        <div class="column data-registers-wrapper">
+            <div class="data-cpu-status-wrapper">
+                {#if emulator.statusRegisters?.length > 0}
+                    <StatusCodesVisualiser statusCodes={emulator.statusRegisters} style="flex:1" />
+                {/if}
+                <SizeSelector bind:selected={groupSize} style="flex:1" />
+            </div>
+            <RegistersVisualiser
+                size={groupSize}
+                gridStyle="
                 grid-template-columns: min-content 1fr min-content 1fr; 
                 gap: 0.1rem; 
                 height: 100%; 
                 justify-content: space-evenly;
-                max-height: 16rem;
                 "
-            registers={emulator.registers}
-            on:registerClick={async (e) => {
-                const value = e.detail.value
-                const clampedSize = value - (value % emulator.memory.global.pageSize)
-                emulator.setGlobalMemoryAddress(clamp(clampedSize, 0, MEMORY_SIZE['M68K']))
-            }}
-        />
-    </div>
-    {#if showMemory}
-        <div class="column code-data-memory-controls">
-            <MemoryControls
-                bytesPerPage={4 * 8}
-                memorySize={MEMORY_SIZE[language]}
-                currentAddress={memoryAddress}
-                style="flex: unset"
-                inputStyle="width: 6rem; height: 3rem"
-                on:addressChange={async (e) => {
-                    memoryAddress = e.detail
-                    emulator.setGlobalMemoryAddress(e.detail)
+                style={`max-height: ${embedded ? 'calc(100vh - 7.2rem)' : '15.7rem'}; min-height: 11.5rem;`}
+                registers={emulator.registers}
+                on:registerClick={async (e) => {
+                    const value = e.detail.value
+                    const clampedSize = value - (value % emulator.memory.global.pageSize)
+                    emulator.setGlobalMemoryAddress(clamp(clampedSize, 0, MEMORY_SIZE['M68K']))
                 }}
-                hideLabel
-            />
-            <MemoryVisualiser
-                endianess={emulator.memory.global.endianess}
-                defaultMemoryValue={DEFAULT_MEMORY_VALUE[language]}
-                style="height: 100%; flex: 1;"
-                bytesPerRow={4}
-                pageSize={4 * 8}
-                memory={emulator.memory.global.data}
-                currentAddress={emulator.memory.global.address}
-                sp={emulator.sp}
             />
         </div>
-    {/if}
+        {#if showMemory}
+            <div class="column code-data-memory-controls">
+                <MemoryControls
+                    bytesPerPage={4 * 8}
+                    memorySize={MEMORY_SIZE[language]}
+                    currentAddress={memoryAddress}
+                    style="flex: unset"
+                    inputStyle="width: 6rem; height: 3rem"
+                    on:addressChange={async (e) => {
+                        memoryAddress = e.detail
+                        emulator.setGlobalMemoryAddress(e.detail)
+                    }}
+                    hideLabel
+                />
+                <MemoryVisualiser
+                    endianess={emulator.memory.global.endianess}
+                    defaultMemoryValue={DEFAULT_MEMORY_VALUE[language]}
+                    style="height: 100%; flex: 1;"
+                    bytesPerRow={4}
+                    pageSize={4 * 8}
+                    memory={emulator.memory.global.data}
+                    currentAddress={emulator.memory.global.address}
+                    sp={emulator.sp}
+                />
+            </div>
+        {/if}
+        {#if showConsole}
+            <StdOutRenderer
+                {info}
+                stdOut={errorStrings ? `${errorStrings}\n${emulator.stdOut}` : emulator.stdOut}
+                compilerErrors={emulator.compilerErrors}
+            />
+        {/if}
+        {#if showTestcases}
+            <TestcasesEditor
+                editable={!embedded}
+                registerNames={emulator.registers.map((r) => r.name)}
+                bind:visible={testcasesVisible}
+                {testcasesResult}
+                bind:testcases
+            />
+        {/if}
+    </Column>
 </div>
 
 <style lang="scss">
@@ -178,6 +244,7 @@
         justify-content: center;
         display: flex;
         flex-wrap: wrap;
+        flex: 1;
         gap: 1rem;
     }
 

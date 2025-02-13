@@ -18,13 +18,15 @@
         testcases: Testcase[]
         testcasesResult: TestcaseResult[]
         registerNames: string[]
+        editable?: boolean
     }
 
     let {
         visible = $bindable(),
         testcases = $bindable(),
         testcasesResult,
-        registerNames
+        registerNames,
+        editable
     }: Props = $props()
 
     function makeNewTestcase() {
@@ -65,12 +67,12 @@
                     {passedTestcases.length} / {totalTestcases} testcases passed
                 </Header>
                 {#each failedTestcases as testcase}
-                    <TestcaseResultRenderer testcaseResult={testcase} />
+                    <TestcaseResultRenderer testcaseResult={testcase} registerNames={registerNames} />
                 {/each}
             </Column>
         {/if}
         <Column padding="1rem" gap="1rem">
-            <ExpandableContainer>
+            <ExpandableContainer expanded={!editable}>
                 {#snippet title()}
                     <Header noMargin>Testcases</Header>
                 {/snippet}
@@ -83,60 +85,65 @@
                         {#each testcases as testcase, i}
                             <div class="testcase-wrapper">
                                 <TestcaseRenderer
+                                    style="padding-top: 0.3rem"
                                     bind:testcase={testcases[i]}
                                     editable={false}
                                     {registerNames}
                                 >
-                                    <Row justify="end">
-                                        <Button
-                                            onClick={() =>
-                                                (testcases = testcases.filter(
-                                                    (t) => t !== testcase
-                                                ))}
-                                            hasIcon
-                                            cssVar="red"
-                                            style="padding: 0.5rem 0.6rem; gap: 0.4rem"
-                                        >
-                                            <Icon>
-                                                <FaTimes />
-                                            </Icon>
-                                            Remove Testcase
-                                        </Button>
-                                    </Row>
+                                    {#if editable}
+                                        <Row justify="end">
+                                            <Button
+                                                onClick={() =>
+                                                    (testcases = testcases.filter(
+                                                        (t) => t !== testcase
+                                                    ))}
+                                                hasIcon
+                                                cssVar="red"
+                                                style="padding: 0.5rem 0.6rem; gap: 0.4rem"
+                                            >
+                                                <Icon>
+                                                    <FaTimes />
+                                                </Icon>
+                                                Remove Testcase
+                                            </Button>
+                                        </Row>
+                                    {/if}
                                 </TestcaseRenderer>
                             </div>
                         {/each}
                     {/if}
                 </Column>
             </ExpandableContainer>
-            <Header noMargin>New Testcase</Header>
-            {#key testcaseKey}
-                <TestcaseRenderer
-                    {registerNames}
-                    style="border: solid 0.1rem var(--accent)"
-                    editable
-                    bind:testcase={newTestcase}
-                >
-                    <Row justify="end">
-                        <Button
-                            onClick={addTestcase}
-                            hasIcon
-                            style="padding: 0.5rem 0.6rem; gap: 0.4rem"
-                        >
-                            <Icon>
-                                <FaPlus />
-                            </Icon>
-                            Add Testcase
-                        </Button>
-                    </Row>
-                </TestcaseRenderer>
-            {/key}
+            {#if editable}
+                <Header noMargin>New Testcase</Header>
+                {#key testcaseKey}
+                    <TestcaseRenderer
+                        {registerNames}
+                        style="border: solid 0.1rem var(--accent)"
+                        editable
+                        bind:testcase={newTestcase}
+                    >
+                        <Row justify="end">
+                            <Button
+                                onClick={addTestcase}
+                                hasIcon
+                                style="padding: 0.5rem 0.6rem; gap: 0.4rem"
+                            >
+                                <Icon>
+                                    <FaPlus />
+                                </Icon>
+                                Add Testcase
+                            </Button>
+                        </Row>
+                    </TestcaseRenderer>
+                {/key}
+            {/if}
         </Column>
     </Column>
 </FloatingContainer>
 
 <style>
     .testcase-wrapper:not(:last-child) {
-        border-bottom: solid 0.2rem var(--accent);
+        border-bottom: solid 0.2rem var(--secondary);
     }
 </style>

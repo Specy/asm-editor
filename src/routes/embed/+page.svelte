@@ -3,7 +3,7 @@
 
     import { onMount } from 'svelte'
     import InteractiveInstructionEditor from '$cmp/shared/InteractiveInstructionEditor.svelte'
-    import { type AvailableLanguages } from '$lib/Project.svelte'
+    import { type AvailableLanguages, type Testcase } from '$lib/Project.svelte'
     import Page from '$cmp/shared/layout/Page.svelte'
     import lzstring from 'lz-string'
     import { page } from '$app/stores'
@@ -16,21 +16,26 @@
     type Settings = {
         showMemory: boolean
         language: AvailableLanguages
+        showConsole: boolean
+        showTests: boolean
     }
 
     let settings: Settings = $state({
         showMemory: true,
-        language: 'M68K'
+        language: 'M68K',
+        showConsole: false,
+        showTests: true
     })
     let inIframe = $state(true)
     let code = $state(BASE_CODE[settings.language])
-
+    let testcases = $state([] as Testcase[])
     let generatedCode = $state('')
     let timeoutId = 0 as any
     onMount(() => {
         inIframe = window.self !== window.top
         settings = getSettings()
         code = getCodeFromUrl() ?? BASE_CODE[settings.language]
+        testcases = getTestsFromUrl()
     })
 
     function getCodeFromUrl() {
@@ -44,34 +49,55 @@
             return undefined
         }
     }
+    function getTestsFromUrl() {
+        const searchParams = $page.url.searchParams
+        const tests = searchParams.get('testcases')
+        if (!tests) return []
+        try {
+            return JSON.parse(lzstring.decompressFromEncodedURIComponent(tests))
+        } catch (e) {
+            console.error(e)
+            return []
+        }
+    }
 
     function getSettings() {
         const searchParams = $page.url.searchParams
         const showMemory = searchParams.get('showMemory') === 'true'
         const language = (searchParams.get('language') ?? 'M68K') as AvailableLanguages
+        const showConsole = searchParams.get('showConsole') === 'true'
+        const showTests = (searchParams.get('showTests') ?? 'true') === 'true'
         return {
             showMemory,
-            language
+            language,
+            showConsole,
+            showTests
         } satisfies Settings
     }
 
-    function createCodeUrl(code: string, settings: Settings) {
+    function createCodeUrl(code: string, settings: Settings, testcases: Testcase[]) {
         const showMemory = settings.showMemory ? 'showMemory=true&' : ''
+        const showConsole = settings.showConsole ? 'showConsole=true&' : ''
+        const showTests = settings.showTests ? 'showTests=true&' : ''
         const lang = `language=${settings.language}&`
         const compressed = lzstring.compressToEncodedURIComponent(code)
-        return `${window.location.origin}/embed?${showMemory}${lang}code=${compressed}`
+        const tests =
+            testcases.length > 0
+                ? `testcases=${lzstring.compressToEncodedURIComponent(JSON.stringify(testcases))}&`
+                : ''
+        return `${window.location.origin}/embed?${showMemory}${showTests}${showConsole}${lang}${tests}code=${compressed}`
     }
 
-    function generateCodeUrl(code: string, settings: Settings) {
+    function generateCodeUrl(code: string, settings: Settings, testcases: Testcase[]) {
         clearTimeout(timeoutId)
         viewStore(settings)
         timeoutId = setTimeout(() => {
-            generatedCode = createCodeUrl(code, settings)
+            generatedCode = createCodeUrl(code, settings, testcases)
         }, 1000)
     }
 
     $effect(() => {
-        generateCodeUrl(code, settings)
+        generateCodeUrl(code, settings, testcases)
     })
 </script>
 
@@ -92,7 +118,11 @@
         {#key settings.language}
             <InteractiveInstructionEditor
                 bind:code
+                bind:testcases
+                embedded={inIframe}
+                showConsole={settings.showConsole}
                 showMemory={settings.showMemory}
+                showTestcases={settings.showTests}
                 language={settings.language}
             />
         {/key}
@@ -106,10 +136,18 @@
                     <span>Show memory</span>
                     <input type="checkbox" bind:checked={settings.showMemory} />
                 </div>
+                <div class="share-settings">
+                    <span>Show console</span>
+                    <input type="checkbox" bind:checked={settings.showConsole} />
+                </div>
+                <div class="share-settings">
+                    <span>Show tests</span>
+                    <input type="checkbox" bind:checked={settings.showTests} />
+                </div>
                 <div class="share-settings" style="justify-content: space-between;">
                     <span>Language</span>
                     <Select
-                        onChange={() => code = BASE_CODE[settings.language]}
+                        onChange={() => (code = BASE_CODE[settings.language])}
                         style="background-color: var(--tertiary); color: var(--secondary-text); text-align: center;"
                         wrapperStyle="max-width: 5rem;"
                         options={['M68K', 'MIPS']}

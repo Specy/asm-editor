@@ -9,6 +9,7 @@
     import Button from '$cmp/shared/button/Button.svelte'
     import FaPlus from 'svelte-icons/fa/FaPlus.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
+    import Column from '$cmp/shared/layout/Column.svelte'
 
     const dispatcher = createEventDispatcher<{
         create: { value: MemoryValue }
@@ -46,8 +47,13 @@
     })
 </script>
 
-<Card border="secondary" padding="0.5rem" gap="0.5rem">
-    <Row align="center" gap="0.5rem">
+<Card border="tertiary" gap="0.5rem">
+    <Row
+        align="center"
+        padding="0.5rem 1rem"
+        gap="0.5rem"
+        style="border-bottom: 0.1rem solid var(--tertiary); padding-bottom: 0.5rem"
+    >
         <div>Type</div>
         <select bind:value={type}>
             <option value="number">Number</option>
@@ -55,24 +61,30 @@
             <option value="string-chunk">String Chunk</option>
         </select>
     </Row>
-    <MemoryTestcaseValue bind:value={memoryValue} canRemove={false} />
-    <Button
-        cssVar="accent2"
-        onClick={() => {
-            dispatcher('create', { value: memoryValue })
-            memoryValue = makeEmptyMemoryValue(type)
-        }}
-    >
-        <Icon>
-            <FaPlus /> Add
-        </Icon>
-    </Button>
+    <Column padding="0.5rem 1rem">
+        <MemoryTestcaseValue bind:value={memoryValue} canRemove={false} />
+    </Column>
+    <Row justify="end" padding="0.5rem">
+        <Button
+            cssVar="accent2"
+            style='padding: 0.5rem 0.6rem'
+            onClick={() => {
+                dispatcher('create', { value: memoryValue })
+                memoryValue = makeEmptyMemoryValue(type)
+            }}
+        >
+            <Icon size={1} style="margin-right: 0.4rem">
+                <FaPlus />
+            </Icon>
+            Add
+        </Button>
+    </Row>
 </Card>
 
 <style>
     select {
         background-color: var(--secondary);
-        padding: 0.3rem 0.4rem;
+        padding: 0.5rem;
         border-radius: 0.3rem;
         color: var(--secondary-text);
     }

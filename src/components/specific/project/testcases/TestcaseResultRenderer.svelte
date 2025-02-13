@@ -9,13 +9,14 @@
 
     interface Props {
         testcaseResult: TestcaseResult
+        registerNames: string[]
     }
 
-    let { testcaseResult }: Props = $props()
+    let { testcaseResult, registerNames}: Props = $props()
 </script>
 
 <Card border={testcaseResult.passed ? 'background' : 'red'}>
-    <Column padding="0.5rem">
+    <Column padding="0.5rem 0.8rem">
         {#each testcaseResult.errors as err}
             {#if err.type === 'wrong-register'}
                 <div class="testcase-error">
@@ -58,7 +59,7 @@
         {#snippet title()}
             <Header type="h3" noMargin>Show testcase</Header>
         {/snippet}
-        <Testcase testcase={testcaseResult.testcase} />
+        <Testcase testcase={testcaseResult.testcase} registerNames={registerNames}/>
     </ExpandableContainer>
 </Card>
 

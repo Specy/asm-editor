@@ -1,7 +1,6 @@
 <script lang="ts">
-    import FaArrowRight from 'svelte-icons/fa/FaArrowRight.svelte'
     import FaTimes from 'svelte-icons/fa/FaTimes.svelte'
-
+    import FaEquals from 'svelte-icons/fa/FaEquals.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import { createEventDispatcher } from 'svelte'
 
@@ -42,7 +41,7 @@
     </select>
     <div class="hide-on-hover" style={!canDelete ? 'display: flex' : ''}>
         <Icon size={0.8}>
-            <FaArrowRight />
+            <FaEquals />
         </Icon>
     </div>
     {#if canDelete}
@@ -98,10 +97,8 @@
     }
 
     input {
-        width: 4rem;
         padding: 0.2rem 0.5rem;
         appearance: none;
-
         border-left: solid 0.1rem var(--primary);
         height: 100%;
         background-color: var(--secondary);

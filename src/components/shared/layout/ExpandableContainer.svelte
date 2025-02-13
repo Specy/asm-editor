@@ -56,13 +56,13 @@
     }
 
     .expandable-container-open {
-        border: solid 0.2rem var(--secondary-5);
+        border: solid 0.2rem var(--secondary);
     }
 
     .expandable-container-content {
         display: none;
         flex-direction: column;
-        border-top: solid 0.2rem var(--secondary-5);
+        border-top: solid 0.2rem var(--secondary);
         margin-top: 0.5rem;
         padding-top: 0.5rem;
     }

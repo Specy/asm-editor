@@ -11,6 +11,7 @@
         background?: ThemeKeys | undefined
         style?: string | undefined
         margin?: string | undefined
+        wrap?: boolean | undefined
         children?: import('svelte').Snippet
     }
 
@@ -23,6 +24,7 @@
         background = undefined,
         style = undefined,
         margin = undefined,
+        wrap = undefined,
         children
     }: Props = $props()
 </script>
@@ -37,6 +39,7 @@
     {background ? `background-color: var(--${background}); color: var(--${background}-text);` : ''}
     {flex1 ? 'flex:1;' : ''}
     {margin ? `margin: ${margin};` : ''}
+    {wrap ? 'flex-wrap: wrap;' : ''}
     {style ?? ''}
     "
 >

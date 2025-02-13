@@ -146,6 +146,7 @@ export function createMIPSCompletition(monaco: MonacoType) {
                                 }
                             })
                         }
+                        return []
                     })
                     const dedupedArgs = possibleArgs.filter(
                         (arg, index, self) => self.findIndex((a) => a.label === arg.label) === index

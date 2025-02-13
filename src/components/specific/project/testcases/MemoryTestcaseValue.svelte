@@ -21,37 +21,33 @@
 </script>
 
 <div class="memory-testcase">
-    {#if canRemove}
-        <Button
-            style="padding: 0.4rem"
-            hasIcon
-            onClick={() => dispatcher('remove')}
-            cssVar="secondary"
-        >
-            <Icon>
-                <FaTimes />
-            </Icon>
-        </Button>
-    {/if}
     {#if editable}
         {#if value.type === 'number'}
-            <Row align="center" gap="0.5rem" style="flex-wrap: wrap">
-                <div>Address</div>
-                <input type="number" class="input" bind:value={value.address} />
-                <div>Bytes</div>
-                <select bind:value={value.bytes} class="select">
-                    <option value={1}>1</option>
-                    <option value={2}>2</option>
-                    <option value={4}>4</option>
-                </select>
-                <div>Expected</div>
-                <input type="number" class="input" bind:value={value.expected} />
+            <Row align="center" flex1 justify='between' gap="0.5rem" style="flex-wrap: wrap">
+                <Row align="center" gap="0.5rem">
+                    <div>At address</div>
+                    <input type="number" class="input" bind:value={value.address} />
+                </Row>
+                <Row align="center" gap="0.5rem">
+                    <div>Of bytes</div>
+                    <select bind:value={value.bytes} class="select">
+                        <option value={1}>1</option>
+                        <option value={2}>2</option>
+                        <option value={4}>4</option>
+                    </select>
+                </Row>
+                <Row align="center" gap="0.5rem">
+                    <div>Is expected</div>
+                    <input type="number" class="input" bind:value={value.expected} />
+                </Row>
             </Row>
         {:else if value.type === 'string-chunk'}
             <Column gap="0.5rem" flex1>
-                <div>Address</div>
-                <input type="number" class="input" bind:value={value.address} />
-                <div>Expected</div>
+                <Row align="center" gap="0.5rem">
+                    <div>At address</div>
+                    <input type="number" class="input" bind:value={value.address} />
+                </Row>
+                <div>Is expected string</div>
                 <textarea
                     class="input"
                     style="width: 100%;"
@@ -62,9 +58,9 @@
             </Column>
         {:else if value.type === 'number-chunk'}
             <Column gap="0.5rem" flex1>
-                <div>Address</div>
+                <div>At address</div>
                 <input type="number" class="input" bind:value={value.address} />
-                <div>Expected (comma separated)</div>
+                <div>Is expected bytes (comma separated)</div>
                 <textarea
                     class="input"
                     style="width: 100%;"
@@ -94,19 +90,32 @@
             </div>
         {/if}
     {/if}
+    {#if canRemove}
+        <Button
+            style="padding: 0.4rem; margin-left: auto;"
+            hasIcon
+            onClick={() => dispatcher('remove')}
+            cssVar="secondary"
+        >
+            <Icon>
+                <FaTimes />
+            </Icon>
+        </Button>
+    {/if}
 </div>
 
 <style>
     .memory-testcase {
         position: relative;
         display: flex;
+        align-items: center;
         gap: 0.4rem;
     }
 
     .input,
     .select {
-        width: 4.5rem;
-        padding: 0.3rem 0.5rem;
+        width: 5.5rem;
+        padding: 0.5rem 0.5rem;
         border-radius: 0.3rem;
         background-color: var(--secondary);
         color: var(--secondary-text);

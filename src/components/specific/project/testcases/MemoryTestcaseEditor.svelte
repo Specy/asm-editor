@@ -13,19 +13,21 @@
 </script>
 
 <Column gap="0.5rem">
-    <Column>
-        {#each memoryValues as memoryValue, i}
-            <div class="value">
-                <MemoryTestcaseValue
-                    bind:value={memoryValues[i]}
-                    canRemove={editable}
-                    {editable}
-                    on:remove={() =>
-                        (memoryValues = memoryValues.filter((mv) => mv !== memoryValue))}
-                />
-            </div>
-        {/each}
-    </Column>
+    {#if memoryValues.length > 0}
+        <div class="values">
+            {#each memoryValues as memoryValue, i}
+                <div class="value">
+                    <MemoryTestcaseValue
+                        bind:value={memoryValues[i]}
+                        canRemove={editable}
+                        editable={false}
+                        on:remove={() =>
+                            (memoryValues = memoryValues.filter((mv) => mv !== memoryValue))}
+                    />
+                </div>
+            {/each}
+        </div>
+    {/if}
 
     {#if editable}
         <NewMemoryTestcase on:create={(e) => (memoryValues = [...memoryValues, e.detail.value])} />
@@ -33,11 +35,17 @@
 </Column>
 
 <style>
+    .values{
+        border-radius: 0.5rem;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+    }
     .value {
         padding: 0.5rem;
+        padding-left: 1rem;
+        background-color: var(--secondary);
     }
 
-    .value:not(:last-child) {
-        border-bottom: 0.1rem solid var(--secondary);
-    }
 </style>

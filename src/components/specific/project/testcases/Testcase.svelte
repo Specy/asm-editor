@@ -25,22 +25,30 @@
         children,
         registerNames
     }: Props = $props()
+
 </script>
 
 <Card padding="0.8rem" gap="1rem" {style} radius="0.8rem">
     {#if editable}
-        <Header type="h3">Starting registers values</Header>
-        <RegistersTestcaseEditor
-            bind:registers={testcase.startingRegisters}
-            {registerNames}
-            editable
-        />
-        <Header type="h3">Expected registers values</Header>
-        <RegistersTestcaseEditor
-            bind:registers={testcase.expectedRegisters}
-            {registerNames}
-            editable
-        />
+        <Row gap="1rem" wrap justify="around">
+            <Column gap="1rem">
+                <Header type="h3">Starting registers values</Header>
+                <RegistersTestcaseEditor
+                    bind:registers={testcase.startingRegisters}
+                    {registerNames}
+                    editable
+                />
+            </Column>
+            <Column gap="1rem">
+                <Header type="h3">Expected registers values</Header>
+                <RegistersTestcaseEditor
+                    bind:registers={testcase.expectedRegisters}
+                    {registerNames}
+                    editable
+                />
+            </Column>
+        </Row>
+
         <Header type="h3">Starting memory values</Header>
         <MemoryTestcaseEditor bind:memoryValues={testcase.startingMemory} editable />
         <Header type="h3">Expected memory values</Header>
@@ -78,35 +86,35 @@
         ></textarea>
         {@render children?.()}
     {:else}
-        <Row gap="1rem" justify="around">
-            {#if Object.keys(testcase.startingRegisters).length !== 0}
-                <Column gap="0.5rem">
-                    <Header type="h3">Starting registers</Header>
-                    <RegistersTestcaseEditor
-                        {registerNames}
-                        bind:registers={testcase.startingRegisters}
-                        editable={false}
-                    />
-                </Column>
-            {/if}
+        {#if Object.keys(testcase.startingRegisters).length !== 0 || Object.keys(testcase.expectedRegisters).length !== 0}
+            <Row gap="1rem" justify="around">
+                {#if Object.keys(testcase.startingRegisters).length !== 0}
+                    <Column gap="0.5rem">
+                        <Header type="h3">Starting registers</Header>
+                        <RegistersTestcaseEditor
+                            {registerNames}
+                            bind:registers={testcase.startingRegisters}
+                            editable={false}
+                        />
+                    </Column>
+                {/if}
 
-            {#if Object.keys(testcase.expectedRegisters).length !== 0}
-                <Column gap="0.5rem">
-                    <Header type="h3">Expected registers</Header>
-                    <RegistersTestcaseEditor
-                        {registerNames}
-                        bind:registers={testcase.expectedRegisters}
-                        editable={false}
-                    />
-                </Column>
-            {/if}
-        </Row>
-
+                {#if Object.keys(testcase.expectedRegisters).length !== 0}
+                    <Column gap="0.5rem">
+                        <Header type="h3">Expected registers</Header>
+                        <RegistersTestcaseEditor
+                            {registerNames}
+                            bind:registers={testcase.expectedRegisters}
+                            editable={false}
+                        />
+                    </Column>
+                {/if}
+            </Row>
+        {/if}
         {#if testcase.startingMemory.length !== 0}
             <Header type="h3">Starting memory values</Header>
             <MemoryTestcaseEditor bind:memoryValues={testcase.startingMemory} editable={false} />
         {/if}
-
         {#if testcase.expectedMemory.length !== 0}
             <Header type="h3">Expected memory values</Header>
             <MemoryTestcaseEditor bind:memoryValues={testcase.expectedMemory} editable={false} />
