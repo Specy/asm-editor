@@ -773,12 +773,15 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
             }
         }
         const passedTests = results.filter((r) => r.passed)
-        state.stdOut = '⏳ Running tests...\n ' + state.stdOut
+        state.stdOut = '⏳ Running tests...\n\n' + state.stdOut
         if (passedTests.length !== results.length) {
-            state.stdOut += `\n❌ ${results.length - results.filter((r) => r.passed).length} testcases not passed\n`
+            state.stdOut += `\n\n❌ ${results.length - results.filter((r) => r.passed).length} testcases not passed\n`
         }
         if (passedTests.length > 0) {
-            state.stdOut += `\n✅ ${passedTests.length} testcases passed \n`
+            if(!state.stdOut.endsWith('testcases not passed')){
+                state.stdOut += '\n'
+            }
+            state.stdOut += `✅ ${passedTests.length} testcases passed \n`
         }
         return results
     }

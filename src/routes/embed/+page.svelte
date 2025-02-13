@@ -88,7 +88,7 @@
         </Column>
     {/if}
 
-    <Column style={inIframe ? 'padding: 0.5rem' : 'padding: 0.5rem; flex:1'}>
+    <Column style={'padding: 0.5rem; flex:1'}>
         {#key settings.language}
             <InteractiveInstructionEditor
                 bind:code
