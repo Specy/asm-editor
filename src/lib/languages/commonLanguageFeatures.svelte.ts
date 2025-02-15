@@ -1,3 +1,4 @@
+import { numberToByteSlice } from '$cmp/specific/project/memory/memoryTabUtils'
 import type { Testcase, TestcaseResult } from '$lib/Project.svelte'
 import type { Interrupt } from '@specy/s68k'
 
@@ -55,6 +56,11 @@ export type RegisterChunk = {
         hex: string
         value: number
     }
+}
+
+
+export function numbersOfSizeToSlice(numbers: number[], bytes: number, endianess: 'big' | 'little' = 'big') {
+    return numbers.flatMap(v => numberToByteSlice(v, bytes, endianess))
 }
 
 export function makeRegister(name: string, v: number) {

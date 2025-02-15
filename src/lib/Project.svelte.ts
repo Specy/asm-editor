@@ -28,6 +28,7 @@ export type MemoryValue =
     | {
           type: 'number-chunk'
           address: number
+          bytes: number
           expected: number[]
       }
 

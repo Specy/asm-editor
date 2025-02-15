@@ -20,6 +20,7 @@
             return {
                 type: 'number-chunk',
                 address: 0,
+                bytes: 1,
                 expected: []
             }
         } else if (kind === 'string-chunk') {

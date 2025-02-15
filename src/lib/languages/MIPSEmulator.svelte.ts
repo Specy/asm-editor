@@ -16,6 +16,7 @@ import {
     createMemoryTab,
     InterpreterStatus,
     makeRegister,
+    numbersOfSizeToSlice,
     RegisterSize,
     type BaseEmulatorActions,
     type BaseEmulatorState,
@@ -501,9 +502,9 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
             try {
                 const ins = mips.getNextStatement()
                 //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
-                if(!terminated){
+                if (!terminated) {
                     state.line = ins.sourceLine - 1
-                }else{
+                } else {
                     state.line = -1
                 }
             } catch (e) {
@@ -592,12 +593,13 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
                     })
                 }
             } else if (value.type === 'number-chunk') {
-                const bytes = mips.readMemoryBytes(value.address, value.expected.length)
-                if (!isMemoryChunkEqual(bytes, value.expected)) {
+                const bytes = mips.readMemoryBytes(value.address, value.expected.length * value.bytes)
+                const expected = numbersOfSizeToSlice(value.expected, value.bytes, 'little')
+                if (!isMemoryChunkEqual(bytes, expected)) {
                     errors.push({
                         type: 'wrong-memory-chunk',
                         address: value.address,
-                        expected: value.expected,
+                        expected: expected,
                         got: Array.from(bytes)
                     })
                 }
@@ -690,7 +692,8 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
                     const slice = numberToByteSlice(value.expected, value.bytes, 'little')
                     mips.setMemoryBytes(value.address, slice)
                 } else if (value.type === 'number-chunk') {
-                    mips.setMemoryBytes(value.address, value.expected)
+                    const expected = numbersOfSizeToSlice(value.expected, value.bytes, 'little')
+                    mips.setMemoryBytes(value.address, expected)
                 } else if (value.type === 'string-chunk') {
                     const encoded = new TextEncoder().encode(value.expected)
                     mips.setMemoryBytes(value.address, Array.from(encoded))
@@ -785,6 +788,14 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 console.error(e)
             }
             addError(getMIPSErrorMessage(e))
+            try {
+                updateRegisters()
+                updateMemory()
+                updateData()
+                scrollStackTab()
+            } catch (e) {
+
+            }
             state.terminated = true
             state.line = line
         }
@@ -817,7 +828,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
             if (!state.stdOut.endsWith('testcases not passed')) {
                 state.stdOut += '\n'
             }
-            state.stdOut += `✅ ${passedTests.length} testcases passed \n`
+            state.stdOut += `\n✅ ${passedTests.length} testcases passed \n`
         }
         return results
     }

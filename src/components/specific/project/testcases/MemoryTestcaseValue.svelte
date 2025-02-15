@@ -17,16 +17,31 @@
         canRemove?: boolean
     }
 
+    function parseNumber(value: string): number {
+        if(!value) return 0
+        if (value.startsWith('0x')) {
+            return parseInt(value.slice(2), 16)
+        } else {
+            return parseInt(value)
+        }
+    }
+
     let { value = $bindable(), editable = true, canRemove = true }: Props = $props()
 </script>
 
 <div class="memory-testcase">
     {#if editable}
         {#if value.type === 'number'}
-            <Row align="center" flex1 justify='between' gap="0.5rem" style="flex-wrap: wrap">
+            <Row align="center" flex1 justify="between" gap="0.5rem" style="flex-wrap: wrap">
                 <Row align="center" gap="0.5rem">
                     <div>At address</div>
-                    <input type="number" class="input" bind:value={value.address} />
+                    <input
+                        class="input"
+                        bind:value={value.address}
+                        onblur={(e) => {
+                            value.address = parseNumber(e.target.value)
+                        }}
+                    />
                 </Row>
                 <Row align="center" gap="0.5rem">
                     <div>Of bytes</div>
@@ -38,14 +53,26 @@
                 </Row>
                 <Row align="center" gap="0.5rem">
                     <div>Is expected</div>
-                    <input type="number" class="input" bind:value={value.expected} />
+                    <input
+                        class="input"
+                        bind:value={value.expected}
+                        onblur={(e) => {
+                            value.expected = parseNumber(e.target.value)
+                        }}
+                    />
                 </Row>
             </Row>
         {:else if value.type === 'string-chunk'}
             <Column gap="0.5rem" flex1>
                 <Row align="center" gap="0.5rem">
                     <div>At address</div>
-                    <input type="number" class="input" bind:value={value.address} />
+                    <input
+                        class="input"
+                        bind:value={value.address}
+                        onblur={(e) => {
+                            value.address = parseNumber(e.target.value)
+                        }}
+                    />
                 </Row>
                 <div>Is expected string</div>
                 <textarea
@@ -59,15 +86,28 @@
         {:else if value.type === 'number-chunk'}
             <Column gap="0.5rem" flex1>
                 <div>At address</div>
-                <input type="number" class="input" bind:value={value.address} />
-                <div>Is expected bytes (comma separated)</div>
+                <input
+                    class="input"
+                    bind:value={value.address}
+                    onblur={(e) => {
+                        value.address = parseNumber(e.target.value)
+                    }}
+                />
+                <div>Is expected numbers (comma separated)</div>
                 <textarea
                     class="input"
                     style="width: 100%;"
                     onchange={(e) => {
-                        value.expected = e.target.value.split(',').map((v) => Number(v.trim()))
+                        if(!e.target.value) return value.expected = []
+                        value.expected = e.target.value.split(',').map((v) => parseNumber(v))
                     }}>{value.expected.join(', ')}</textarea
                 >
+                <div>Each of size</div>
+                <select bind:value={value.bytes} class="select">
+                    <option value={1}>1</option>
+                    <option value={2}>2</option>
+                    <option value={4}>4</option>
+                </select>
             </Column>
         {/if}
     {:else}
@@ -87,6 +127,7 @@
             <div style="word-break: break-all;">
                 At address <b>${toHexString(value.address)}</b>, expect
                 <b>[{value.expected.map((v) => `0x${toHexString(v, 2)}`).join(', ')}]</b>
+                each of <b>{value.bytes}</b> bytes
             </div>
         {/if}
     {/if}

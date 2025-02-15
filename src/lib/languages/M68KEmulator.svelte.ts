@@ -32,7 +32,8 @@ import {
     type MutationOperation,
     type Register,
     type StatusRegister,
-    InterpreterStatus
+    InterpreterStatus,
+    numbersOfSizeToSlice
 } from './commonLanguageFeatures.svelte'
 
 export type M68KEmulatorState = BaseEmulatorState & {
@@ -606,12 +607,13 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
                     })
                 }
             } else if (value.type === 'number-chunk') {
-                const bytes = interpreter.readMemoryBytes(value.address, value.expected.length)
-                if (!isMemoryChunkEqual(bytes, value.expected)) {
+                const bytes = interpreter.readMemoryBytes(value.address, value.expected.length * value.bytes)
+                const expected = numbersOfSizeToSlice(value.expected, value.bytes)
+                if (!isMemoryChunkEqual(bytes, expected)) {
                     errors.push({
                         type: 'wrong-memory-chunk',
                         address: value.address,
-                        expected: value.expected,
+                        expected: expected,
                         got: Array.from(bytes)
                     })
                 }
@@ -644,7 +646,8 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
                     const slice = new Uint8Array(numberToByteSlice(value.expected, value.bytes))
                     interpreter.writeMemoryBytes(value.address, slice)
                 } else if (value.type === 'number-chunk') {
-                    interpreter.writeMemoryBytes(value.address, new Uint8Array(value.expected))
+                    const expected = numbersOfSizeToSlice(value.expected, value.bytes)
+                    interpreter.writeMemoryBytes(value.address, new Uint8Array(expected))
                 } else if (value.type === 'string-chunk') {
                     const encoded = new TextEncoder().encode(value.expected)
                     interpreter.writeMemoryBytes(value.address, encoded)
