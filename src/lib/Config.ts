@@ -1,4 +1,5 @@
 import { DEFAULT_THEME } from "$stores/themeStore"
+import type { AvailableLanguages } from "./Project.svelte"
 
 export const PAGE_SIZE = 16 * 16
 export const PAGE_ELEMENTS_PER_ROW = Math.sqrt(PAGE_SIZE)
@@ -51,3 +52,9 @@ START:
 END: * Jump here to end the program
 `.trim()
 }
+
+
+export const LANGUAGE_EXTENSIONS = {
+    M68K: 's68k',
+    MIPS: 'mips',
+} satisfies Record<AvailableLanguages, string>

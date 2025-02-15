@@ -13,11 +13,12 @@
     import { textDownloader } from '$lib/utils'
     import FaUpload from 'svelte-icons/fa/FaUpload.svelte'
     import { toast } from '$stores/toastStore'
-    import { makeProjectFromExternal } from '$lib/Project.svelte'
+    import { makeProjectFromExternal, AvailableLanguages } from '$lib/Project.svelte'
     import { Prompt } from '$stores/promptStore'
     import { goto } from '$app/navigation'
     import Page from '$cmp/shared/layout/Page.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
+    import { LANGUAGE_EXTENSIONS } from '$lib/Config'
 
     let hasFileHandleSupport = false
 
@@ -195,7 +196,7 @@
                             on:download={(e) => {
                                 textDownloader(
                                     e.detail.toExternal(),
-                                    `${(e.detail.name || 'Untitled project').split(' ').join('_')}.s68k`
+                                    `${(e.detail.name || 'Untitled project').split(' ').join('_')}.${LANGUAGE_EXTENSIONS[e.detail.language]}`
                                 )
                             }}
                         />
