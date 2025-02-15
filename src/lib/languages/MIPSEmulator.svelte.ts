@@ -687,7 +687,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
             }
             for (const value of t.startingMemory) {
                 if (value.type === 'number') {
-                    const slice = numberToByteSlice(value.expected, value.bytes)
+                    const slice = numberToByteSlice(value.expected, value.bytes, 'little')
                     mips.setMemoryBytes(value.address, slice)
                 } else if (value.type === 'number-chunk') {
                     mips.setMemoryBytes(value.address, value.expected)

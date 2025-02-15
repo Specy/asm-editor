@@ -42,13 +42,21 @@ export function byteSliceToNum(bytes: Uint8Array, endianess: 'big' | 'little' = 
     }
     return num
 }
-export function numberToByteSlice(num: number, bytes: number) {
-    const hex = num.toString(16).padStart(bytes * 2, '0')
-    const arr = []
-    for (let i = 0; i < hex.length; i += 2) {
-        arr.push(parseInt(hex.slice(i, i + 2), 16))
+export function numberToByteSlice(num: number, bytes: number, endianess: 'big' | 'little' = 'big'): number[] {
+    const arr = new Array(bytes)
+    if (endianess === 'big') {
+        for (let i = bytes - 1; i >= 0; i--) {
+            arr[i] = num & 0xff
+            num >>= 8
+        }
+    } else {
+        for (let i = 0; i < bytes; i++) {
+            arr[i] = num & 0xff
+            num >>= 8
+        }
     }
     return arr
+    
 }
 
 export function isMemoryChunkEqual(memory: number[] | Uint8Array, to: number[] | Uint8Array) {
