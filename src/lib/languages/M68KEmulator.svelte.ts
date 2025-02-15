@@ -86,6 +86,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
     let code = $state(baseCode)
     let state = $state<Omit<M68KEmulatorState, 'code'>>({
         registers: [],
+        decorations: [],
         terminated: false,
         line: -1,
         statusRegisters: ['X', 'N', 'Z', 'V', 'C'].map((n) => ({ name: n, value: 0, prev: 0 })),
@@ -782,6 +783,9 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
             return state.statusRegisters
         },
         compile,
+        get decorations() {
+            return state.decorations
+        },
         step,
         run,
         setGlobalMemoryAddress,

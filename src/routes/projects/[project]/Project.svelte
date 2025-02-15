@@ -39,6 +39,8 @@
     import { RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
     import { GenericEmulator } from '$lib/languages/Emulator'
     import FloatingLanguageDocumentation from '$cmp/specific/project/FloatingLanguageDocumentation.svelte'
+    import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
+    import BelowLineContent from '$cmp/specific/project/user-tools/BelowLineContent.svelte'
 
     interface Props {
         project: Project
@@ -331,6 +333,13 @@
         >
             {#key project.language}
                 <Editor
+                    viewZones={emulator.decorations.map(v => {
+                        return {
+                            afterLineNumber: v.belowLine,
+                            content: BelowLineContent,
+                            props: { md: v.md, note: v.note }
+                        }
+                    })}
                     on:change={(d) => {
                         if (emulator.canExecute && emulator.terminated && emulator.line >= 0) {
                             emulator.resetSelectedLine()

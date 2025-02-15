@@ -148,9 +148,18 @@ export type MutationOperation =
 
 export type Register = ReturnType<typeof makeRegister>
 
+export type EmulatorDecoration = {
+    type: 'below-line'
+    note?: string
+    belowLine: number
+    md: string
+}
+
+
 export type BaseEmulatorState = {
     code: string
     registers: Register[]
+    decorations: EmulatorDecoration[]
     statusRegisters: StatusRegister[]
     errors: string[]
     compilerErrors: MonacoError[]

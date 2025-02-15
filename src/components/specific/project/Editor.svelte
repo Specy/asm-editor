@@ -1,6 +1,6 @@
 <script lang="ts">
     import { run } from 'svelte/legacy'
-
+    import { mount, type Component } from 'svelte'
     import { createEventDispatcher, onDestroy, onMount } from 'svelte'
     import type monaco from 'monaco-editor'
     import type { AvailableLanguages } from '../../../lib/Project.svelte'
@@ -17,6 +17,11 @@
         errors: MonacoError[]
         breakpoints: number[]
         editor?: monaco.editor.IStandaloneCodeEditor
+        viewZones?: {
+            afterLineNumber: number
+            content: Component
+            props: unknown
+        }[]
     }
 
     let {
@@ -27,7 +32,8 @@
         language,
         errors,
         breakpoints,
-        editor = $bindable()
+        editor = $bindable(),
+        viewZones = []
     }: Props = $props()
     let mockEditor: HTMLDivElement | null = $state()
     let monacoInstance: MonacoType | null = $state.raw()
@@ -115,6 +121,59 @@
     $effect(() => {
         decorations = editor?.createDecorationsCollection()
     })
+
+    $effect(() => {
+        if (editor && viewZones.length > 0) {
+            let currentViewZones = [] as {
+                id: string
+                domNode: HTMLElement
+                observer: ResizeObserver
+            }[]
+            currentViewZones = []
+            editor.changeViewZones(function (changeAccessor) {
+                viewZones.forEach((zone) => {
+                    const domNode = document.createElement('div')
+                    const wrapper = document.createElement('div')
+                    const Component = zone.content
+                    const props = zone.props
+                    mount(Component, {
+                        target: wrapper,
+                        props
+                    })
+                    domNode.appendChild(wrapper)
+
+                    const id = changeAccessor.addZone({
+                        afterLineNumber: zone.afterLineNumber,
+                        get heightInPx() {
+                            return wrapper.getBoundingClientRect().height
+                        },
+                        domNode
+                    })
+                    const observer = new ResizeObserver(() => {
+                        const height = wrapper.getBoundingClientRect().height
+                        if(!height) return
+                        editor?.changeViewZones((accessor) => {
+                            accessor.layoutZone(id)
+                        })
+                    })
+                    observer.observe(wrapper)
+                    currentViewZones.push({ id, domNode, observer })
+                })
+            })
+            return () => {
+                currentViewZones.forEach((zone) => {
+                    zone.domNode.remove()
+                    zone.observer.disconnect()
+                })
+                editor.changeViewZones((changeAccessor) => {
+                    currentViewZones.forEach((zone) => {
+                        changeAccessor.removeZone(zone.id)
+                    })
+                })
+            }
+        }
+    })
+
     $effect(() => {
         if (editor && decorations) {
             decorations.set([
@@ -179,6 +238,7 @@
             )
         }
     })
+
     $effect(() => {
         editor?.updateOptions({ readOnly: disabled })
     })

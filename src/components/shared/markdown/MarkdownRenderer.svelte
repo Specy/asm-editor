@@ -87,7 +87,6 @@
         padding: 0.5rem;
         overflow-x: auto;
         border-radius: 0.3rem;
-        margin-top: 0.5rem;
         width: 100%;
     }
     :global(._markdown table) {

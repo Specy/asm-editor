@@ -9,7 +9,8 @@ import {
     unimplementedHandler,
     ConfirmResult,
     type JsBackStep,
-    type HandlerMapFns
+    type HandlerMapFns,
+    type JsProgramStatement
 } from '@specy/mips'
 import {
     createMemoryTab,
@@ -18,6 +19,7 @@ import {
     RegisterSize,
     type BaseEmulatorActions,
     type BaseEmulatorState,
+    type EmulatorDecoration,
     type EmulatorSettings,
     type MonacoError,
     type MutationOperation,
@@ -131,6 +133,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         registers: [],
         terminated: false,
         line: -1,
+        decorations: [],
         statusRegisters: [],
         compilerErrors: [],
         callStack: [],
@@ -163,6 +166,34 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         debouncer(semanticCheck)
     }
 
+
+    function addDecorations() {
+        if (!mips) return
+        const statements = mips.getCompiledStatements()
+        const joined = new Map<number, JsProgramStatement[]>()
+        for (const statement of statements) {
+            const arr = joined.get(statement.sourceLine)
+            if (arr) {
+                arr.push(statement)
+            } else {
+                joined.set(statement.sourceLine, [statement])
+            }
+        }
+        const values = [...joined.values()]
+        const nonBasic = values.filter((v) => v.length > 1).map(v => {
+            const original = joined.get(v[0].sourceLine)
+            const indent = original[0].source.length - original[0].source.trimStart().length
+            const lines = v.map(s => `${' '.repeat(indent)}${s.assemblyStatement}`.replace(/,/g, ', '))
+            return {
+                type: 'below-line',
+                note: 'Assembled instructions',
+                belowLine: v[0].sourceLine,
+                md: `\`\`\`mips\n${lines.join('\n')}\n\`\`\``
+            } satisfies EmulatorDecoration
+        })
+        state.decorations = nonBasic
+    }
+
     function compile(historySize: number, codeOverride?: string): Promise<void> {
         return new Promise((res, rej) => {
             try {
@@ -175,9 +206,9 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 if (result.hasErrors) {
                     return rej(result.report)
                 }
+                addDecorations()
                 mips.setUndoEnabled(historySize > 0)
                 mips.initialize(true)
-
                 registerHandlers(mips, getHandlers())
 
                 //TODO add interrupts
@@ -224,6 +255,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         state = {
             ...state,
             terminated: false,
+            decorations: [],
             line: -1,
             stdOut: '',
             errors: [],
@@ -317,7 +349,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
             try {
                 const ins = mips.getStatementAtAddress(step.pc)
                 line = ins.sourceLine - 1
-            } catch (e) {}
+            } catch (e) { }
             return {
                 pc: step.pc,
                 old_ccr: {
@@ -408,7 +440,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
             try {
                 const ins = mips.getNextStatement()
                 state.line = ins.sourceLine - 1
-            } catch (e) {}
+            } catch (e) { }
 
             state.canUndo = mips.canUndo
         } catch (e) {
@@ -730,7 +762,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 const ins = mips.getNextStatement()
                 //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
                 state.line = ins.sourceLine - 1
-            } catch (e) {}
+            } catch (e) { }
 
             state.canUndo = mips.canUndo
 
@@ -778,7 +810,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
             state.stdOut += `\n❌ ${results.length - results.filter((r) => r.passed).length} testcases not passed\n`
         }
         if (passedTests.length > 0) {
-            if(!state.stdOut.endsWith('testcases not passed')){
+            if (!state.stdOut.endsWith('testcases not passed')) {
                 state.stdOut += '\n'
             }
             state.stdOut += `✅ ${passedTests.length} testcases passed \n`
@@ -804,6 +836,9 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         },
         get compilerErrors() {
             return state.compilerErrors
+        },
+        get decorations() {
+            return state.decorations
         },
         get callStack() {
             return state.callStack
