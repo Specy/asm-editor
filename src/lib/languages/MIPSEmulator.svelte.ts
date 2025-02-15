@@ -501,7 +501,11 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
             try {
                 const ins = mips.getNextStatement()
                 //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
-                state.line = ins.sourceLine - 1
+                if(!terminated){
+                    state.line = ins.sourceLine - 1
+                }else{
+                    state.line = -1
+                }
             } catch (e) {
                 state.line = -1
             }
