@@ -131,7 +131,7 @@ function formatStatement(statement: string){
         statement = statement.replace(new RegExp(`\\$${MIPSRegisterNames.length - i}`, 'g'), reg)
     })
     //replaces all empty hex like 0x0000ffff with 0xffff
-    statement = statement.replace(/0x0+/g, '0x')
+    statement = statement.replace(/0x0*(?=[0-9a-fA-F])/g, '0x')
     return statement
 }
 
