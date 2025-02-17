@@ -29,7 +29,7 @@
         placeholder = '',
         focus = false,
         hideStatus = true,
-        el = $bindable(null)
+        el = $bindable()
     }: Props = $props()
     onMount(() => {
         if (focus) el?.focus()

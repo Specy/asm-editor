@@ -123,6 +123,18 @@ function assembleErrorToMonacoError(error: MIPSAssembleError): MonacoError {
     }
 }
 
+
+function formatStatement(statement: string){
+    statement = statement.replace(/,/g, ', ');
+    //reverse because it's from bigger to smaller, prevents $10 from being replaced by $1
+    ([...MIPSRegisterNames]).reverse().forEach((reg, i) => {
+        statement = statement.replace(new RegExp(`\\$${MIPSRegisterNames.length - i}`, 'g'), reg)
+    })
+    //replaces all empty hex like 0x0000ffff with 0xffff
+    statement = statement.replace(/0x0+/g, '0x')
+    return statement
+}
+
 export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
     options = {
         globalPageSize: PAGE_SIZE,
@@ -184,7 +196,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         const nonBasic = values.filter((v) => v.length > 1).map(v => {
             const original = joined.get(v[0].sourceLine)
             const indent = original[0].source.length - original[0].source.trimStart().length
-            const lines = v.map(s => `${' '.repeat(indent)}${s.assemblyStatement}`.replace(/,/g, ', '))
+            const lines = v.map(s => `${' '.repeat(indent)}${formatStatement(s.assemblyStatement)}`)
             return {
                 type: 'below-line',
                 note: 'Assembled instructions',

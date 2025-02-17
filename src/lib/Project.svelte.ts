@@ -1,4 +1,3 @@
-import { get } from 'svelte/store'
 import { BASE_CODE } from './Config'
 
 export type AvailableLanguages = 'M68K' | 'MIPS'

@@ -1,4 +1,4 @@
-import { ThemeStore } from '$stores/themeStore'
+import { ThemeStore } from '$stores/themeStore.svelte'
 import { TinyColor } from '@ctrl/tinycolor'
 import type monaco from 'monaco-editor'
 export function generateTheme(): monaco.editor.IStandaloneThemeData {

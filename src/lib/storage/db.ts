@@ -2,7 +2,7 @@ import Dexie from 'dexie'
 import type { Table } from 'dexie'
 import { makeProject, type Project, type ProjectData } from '../Project.svelte'
 
-function id(length = 7) {
+export function id(length = 7) {
     let result = ''
     for (let i = 0; i < length; i++) {
         const random = Math.random()

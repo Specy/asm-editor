@@ -10,7 +10,7 @@
     import MainPageSection from '$cmp/specific/landing/HeroSection.svelte'
     import AnimatedRgbLine from '$cmp/shared/misc/AnimatedRgbLine.svelte'
     import GoLinkExternal from 'svelte-icons/go/GoLinkExternal.svelte'
-    import { ThemeStore } from '$stores/themeStore'
+    import { ThemeStore } from '$stores/themeStore.svelte'
     import { onMount } from 'svelte'
     import FaDownload from 'svelte-icons/fa/FaDownload.svelte'
     import FaDonate from 'svelte-icons/fa/FaDonate.svelte'

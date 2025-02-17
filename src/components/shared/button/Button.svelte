@@ -2,7 +2,7 @@
     import { createBubbler } from 'svelte/legacy'
 
     const bubble = createBubbler()
-    import type { ThemeKeys } from '$stores/themeStore'
+    import type { ThemeKeys } from '$stores/themeStore.svelte'
 
     interface Props {
         disabled?: boolean

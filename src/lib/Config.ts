@@ -1,4 +1,3 @@
-import { DEFAULT_THEME } from "$stores/themeStore"
 import type { AvailableLanguages } from "./Project.svelte"
 
 export const PAGE_SIZE = 16 * 16
@@ -12,28 +11,6 @@ export const DEFAULT_MEMORY_VALUE = {
     M68K: 0xff,
     MIPS: 0x00
 }
-
-export const LANG_ACCENT = {
-    M68K: {
-        accent: DEFAULT_THEME.accent.color,
-        accent2: DEFAULT_THEME.accent2.color,
-        background: DEFAULT_THEME.background.color,
-        primary: DEFAULT_THEME.primary.color,
-        secondary: DEFAULT_THEME.secondary.color,
-        tertiary: DEFAULT_THEME.tertiary.color,
-        scrollbar: DEFAULT_THEME.scrollbar.color
-    },
-    MIPS: {
-        accent: '#553b6a',
-        accent2: '#4e4456',
-        background: 'rgb(25 23 33)',
-        primary: 'rgb(25 23 33)',
-        secondary: '#201d29',
-        tertiary: '#322d45',
-        scrollbar: '#433d6f'
-    }
-} as const
-
 
 export const BASE_CODE = {
     MIPS: `
@@ -52,6 +29,12 @@ START:
 END: * Jump here to end the program
 `.trim()
 }
+
+
+export const LANGUAGE_THEMES = {
+    M68K: 'default',
+    MIPS: 'default-mips'
+} satisfies Record<AvailableLanguages, string>
 
 
 export const LANGUAGE_EXTENSIONS = {

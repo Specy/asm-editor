@@ -7,7 +7,9 @@
     import '@cartamd/plugin-code/default.css'
     import { code } from '@cartamd/plugin-code'
 
-    const theme = 'one-dark-pro'
+    let isDark = $derived(ThemeStore.isColorDark(ThemeStore.theme.background.color))
+
+    let theme = $derived(isDark ? ('one-dark-pro' as const) : ('one-light' as const))
 
     const ext: Plugin = {
         transformers: [
@@ -59,6 +61,7 @@
 
 <script lang="ts">
     import { Markdown } from 'carta-md'
+    import { ThemeStore } from '$stores/themeStore.svelte'
 
     interface Props {
         source: string
@@ -72,7 +75,7 @@
 </script>
 
 <div class="_markdown" {style}>
-    {#key source}
+    {#key source + theme}
         <Markdown value={source} {carta} />
     {/key}
 </div>

@@ -1,7 +1,7 @@
 <script lang="ts">
     import Column from './Column.svelte'
     import type { Justify } from './layoutUtils'
-    import type { ThemeKeys } from '$stores/themeStore'
+    import type { ThemeKeys } from '$stores/themeStore.svelte'
 
     interface Props {
         justify?: Justify | undefined

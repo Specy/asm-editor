@@ -1,8 +1,6 @@
 <script lang="ts">
-    import { ThemeStore } from '$stores/themeStore'
-    import type { ThemeProp } from '$stores/themeStore'
+    import { ThemeStore } from '$stores/themeStore.svelte'
     import { TinyColor } from '@ctrl/tinycolor'
-    import { onMount } from 'svelte'
     import { Body } from 'svelte-body'
     interface Props {
         style?: string
@@ -10,24 +8,17 @@
     }
 
     let { style = '', children }: Props = $props()
-    let theme: ThemeProp[] = $state(ThemeStore.toArray())
-    let store = $state(ThemeStore)
-    onMount(() => {
-        ThemeStore.theme.subscribe(() => {
-            theme = ThemeStore.toArray()
-            store = ThemeStore
-        })
-    })
-    let scrollbar = $derived(store.get('scrollbar'))
-    let accent = $derived(store.get('accent'))
-    let background = $derived(store.get('background'))
+    let theme = ThemeStore.themeList
+    let scrollbar = $derived(ThemeStore.theme.scrollbar)
+    let background = $derived(ThemeStore.theme.background)
+
 </script>
 
 <Body
     style={`
-		--scroll-accent: ${$scrollbar.color};
-		background-color: ${$background.color};
-		color: ${new TinyColor($background.color).isDark() ? ThemeStore.textForDark : ThemeStore.textForLight};
+		--scroll-accent: ${scrollbar.color};
+		background-color: ${background.color};
+		color: ${new TinyColor(background.color).isDark() ? ThemeStore.meta.textForDark : ThemeStore.meta.textForLight};
 	`}
 />
 
@@ -37,8 +28,8 @@
     ${theme
         .map(({ name, color }) => {
             const text = new TinyColor(color).isDark()
-                ? ThemeStore.textForDark
-                : ThemeStore.textForLight
+                ? ThemeStore.meta.textForDark
+                : ThemeStore.meta.textForLight
             return `
     --${name}: ${color};
     --${name}-text: ${text};

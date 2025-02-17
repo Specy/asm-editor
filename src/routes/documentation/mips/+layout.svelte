@@ -13,29 +13,19 @@
     import { mipsInstructionNames } from '$lib/languages/MIPS-documentation'
     import MenuLink from '../m68k/instruction/MenuLink.svelte'
     import InstructionsMenu from '../m68k/InstructionsMenu.svelte'
-    import { LANG_ACCENT } from '$lib/Config'
-    import { ThemeStore, type ThemeKeys } from '$stores/themeStore'
-    import { onDestroy } from 'svelte'
+    import { LANGUAGE_THEMES } from '$lib/Config'
+    import { DEFAULT_THEME, ThemeStore, type ThemeKeys } from '$stores/themeStore.svelte'
+    import { onDestroy, onMount, untrack } from 'svelte'
     interface Props {
         children?: import('svelte').Snippet
     }
 
+    let oldTheme = ThemeStore.getChosenTheme()
 
-    let oldTheme = {}
-
-    $effect(() => {
-        const obj = LANG_ACCENT['MIPS']
-        for(const key in obj) {
-            oldTheme[key] = ThemeStore.getColor(key as ThemeKeys)
-            ThemeStore.set(key as ThemeKeys, obj[key], true)
-        }
-    })
-
-    onDestroy(() => {
-        const obj = LANG_ACCENT['MIPS']
-        for(const key in obj) {
-            ThemeStore.set(key as ThemeKeys, oldTheme[key], true)
-        }
+    onMount(() => {
+        if (ThemeStore.meta.id !== DEFAULT_THEME.id) return //prefer the user's theme
+        ThemeStore.select(LANGUAGE_THEMES.MIPS, true)
+        return () => ThemeStore.select(oldTheme, true)
     })
 
     let { children }: Props = $props()

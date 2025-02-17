@@ -1,11 +1,12 @@
 <script lang="ts">
     import { run } from 'svelte/legacy'
 
-    import { ThemeStore, type ThemeProp } from '$stores/themeStore'
+    import { ThemeStore, type ThemeKeys, type ThemeProp } from '$stores/themeStore.svelte'
     import { TinyColor } from '@ctrl/tinycolor'
     import FaUndo from 'svelte-icons/fa/FaUndo.svelte'
     import Button from '$cmp/shared/button/Button.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
+    import { browser } from '$app/environment'
     interface Props {
         color: ThemeProp
     }
@@ -37,13 +38,17 @@
                 </Icon>
             </Button>
         {/if}
-        <input
-            type="color"
-            bind:value={color.color}
-            class="color"
-            style={`outline: solid 0.1rem ${parsed.isDark() ? '#dbdbdb' : '#181818'};`}
-            onblur={() => ThemeStore.set(color.prop, color.color)}
-        />
+        {#if browser}
+            <input
+                type="color"
+                bind:value={color.color}
+                class="color"
+                style={`outline: solid 0.1rem ${parsed.isDark() ? '#dbdbdb' : '#181818'};`}
+                onblur={() => {
+                    ThemeStore.set(color.prop, color.color)
+                }}
+            />
+        {/if}
     </div>
 </div>
 

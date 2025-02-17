@@ -10,7 +10,7 @@
     import Footer from '$cmp/shared/layout/Footer.svelte'
     import { onMount } from 'svelte'
     import { registerServiceWorker } from '$lib/register-sw'
-    import { ThemeStore } from '$stores/themeStore'
+    import { ThemeStore } from '$stores/themeStore.svelte'
     import { beforeNavigate } from '$app/navigation'
     import { navigationStore } from '$stores/navigationStore'
     interface Props {
@@ -27,10 +27,10 @@
     beforeNavigate((p) => {
         navigationStore.navigatingTo(p.to.url.pathname, p.from.url.pathname, p.to.url.searchParams)
     })
-    const color = ThemeStore.get('secondary')
+    const color = ThemeStore.theme.secondary
     $effect(() => {
         if (metaTheme) {
-            metaTheme.content = $color.color
+            metaTheme.content = color.color
         }
     })
 </script>

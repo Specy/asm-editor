@@ -4,13 +4,13 @@
     import { ProjectStore } from '$stores/projectsStore.svelte'
     import FaTrashAlt from 'svelte-icons/fa/FaTrashAlt.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
-    import { Prompt, PromptType } from '$stores/promptStore'
+    import { Prompt } from '$stores/promptStore'
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
     import Button from '$cmp/shared/button/Button.svelte'
     import FaDownload from 'svelte-icons/fa/FaDownload.svelte'
     import { createEventDispatcher } from 'svelte'
-    import { DEFAULT_THEME, ThemeStore } from '$stores/themeStore'
-    import { LANG_ACCENT } from '$lib/Config'
+    import { BUILTIN_THEMES, ThemeStore } from '$stores/themeStore.svelte'
+    import { LANGUAGE_THEMES } from '$lib/Config'
     interface Props {
         project: Project
     }
@@ -20,7 +20,9 @@
     let descriptionContent = $state(project.description || '')
     const dispatcher = createEventDispatcher<{ download: Project }>()
 
-    const colors = $derived(LANG_ACCENT[project.language])
+    const colors = $derived(
+        BUILTIN_THEMES.find((t) => t.id === LANGUAGE_THEMES[project.language]) ?? BUILTIN_THEMES[0]
+    )
     function save() {
         project.name = textContent
         project.description = descriptionContent
@@ -80,8 +82,8 @@
             </button>
 
             <ButtonLink
-                bg={colors.accent2}
-                color="var(--accent2-text)"
+                bg={colors.theme.accent2.color}
+                color={ThemeStore.textOfColor(colors.theme.accent2.color)}
                 href={`/projects/${project.id}`}
                 title="Open this project"
             >

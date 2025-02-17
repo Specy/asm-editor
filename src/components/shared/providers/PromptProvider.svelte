@@ -49,12 +49,27 @@
         <div class="prompt-row">
             {#if $Prompt.type === PromptType.Text}
                 {#if !$Prompt.cancellable}
-                    <Button onClick={() => Prompt.answer(false)} cssVar="secondary">Cancel</Button>
+                    <Button
+                        onClick={() => Prompt.answer(false)}
+                        cssVar="secondary"
+                        style="padding: 0.5rem 1.5rem">Cancel</Button
+                    >
                 {/if}
-                <Button onClick={() => Prompt.answer(value)} style="margin-left: auto;">Ok</Button>
+                <Button
+                    onClick={() => Prompt.answer(value)}
+                    style="padding: 0.5rem 1.5rem; margin-left:auto">Ok</Button
+                >
             {:else}
-                <Button onClick={() => Prompt.answer(false)} cssVar="secondary">No</Button>
-                <Button onClick={() => Prompt.answer(true)} cssVar="accent2">Yes</Button>
+                <Button
+                    onClick={() => Prompt.answer(false)}
+                    cssVar="secondary"
+                    style="padding: 0.5rem 1.5rem">No</Button
+                >
+                <Button
+                    onClick={() => Prompt.answer(true)}
+                    cssVar="accent2"
+                    style="padding: 0.5rem 1.5rem">Yes</Button
+                >
             {/if}
         </div>
     </form>
@@ -71,6 +86,7 @@
         color: var(--secondary-text);
         backdrop-filter: blur(3px);
         border-radius: 0.5rem;
+        border: solid 0.1rem var(--tertiary);
         background-color: rgba(var(--RGB-secondary), 0.8);
         box-shadow: 0 3px 10px rgb(0 0 0 / 20%);
         z-index: 20;

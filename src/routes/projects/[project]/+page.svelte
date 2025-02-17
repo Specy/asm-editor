@@ -2,7 +2,7 @@
     import { page } from '$app/stores'
     import { makeProject, type Project } from '$lib/Project.svelte'
     import { ProjectStore, SHARE_ID } from '$stores/projectsStore.svelte'
-    import { onDestroy, onMount } from 'svelte'
+    import { onDestroy, onMount, untrack } from 'svelte'
     import { toast } from '$stores/toastStore'
     import ProjectEditor from './Project.svelte'
     import { Monaco } from '$lib/monaco/Monaco'
@@ -11,26 +11,23 @@
     import Page from '$cmp/shared/layout/Page.svelte'
     import lzstring from 'lz-string'
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
-    import { DEFAULT_THEME, ThemeStore, type ThemeKeys } from '$stores/themeStore'
-    import { LANG_ACCENT } from '$lib/Config'
+    import { DEFAULT_THEME, ThemeStore, type ThemeKeys } from '$stores/themeStore.svelte'
+    import { LANGUAGE_THEMES } from '$lib/Config'
 
     let project = makeProject()
     let status: 'loading' | 'loaded' | 'error' = $state('loading')
-
-    let oldTheme = {}
+    let oldTheme = ThemeStore.getChosenTheme()
 
     $effect(() => {
-        const obj = LANG_ACCENT[project.language]
-        for(const key in obj) {
-            oldTheme[key] = ThemeStore.getColor(key as ThemeKeys)
-            ThemeStore.set(key as ThemeKeys, obj[key], true)
-        }
+        const theme = LANGUAGE_THEMES[project.language]
+        untrack(() => {
+            if (ThemeStore.meta.id !== DEFAULT_THEME.id) return //prefer the user's theme
+            ThemeStore.select(theme, true)
+        })
     })
-
-    onDestroy(() => {
-        const obj = LANG_ACCENT[project.language]
-        for(const key in obj) {
-            ThemeStore.set(key as ThemeKeys, oldTheme[key], true)
+    onMount(() => {
+        return () => {
+            ThemeStore.select(oldTheme, true)
         }
     })
 

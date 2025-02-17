@@ -45,6 +45,12 @@
     }>()
     let el: HTMLDivElement = $state()
 
+    $effect(() => {
+        if (editor) {
+            Monaco.setCustomTheme(generateTheme())
+        }
+    })
+
     onMount(async () => {
         monacoInstance = await Monaco.get()
         if (!el) return console.log('Wrapper element not valid', el)
@@ -73,7 +79,6 @@
                 height: bounds.height
             })
         })
-        Monaco.setCustomTheme(generateTheme())
         observer.observe(mockEditor)
 
         toDispose.push(
@@ -151,7 +156,7 @@
                     })
                     const observer = new ResizeObserver(() => {
                         const height = wrapper.getBoundingClientRect().height
-                        if(!height) return
+                        if (!height) return
                         editor?.changeViewZones((accessor) => {
                             accessor.layoutZone(id)
                         })
