@@ -237,11 +237,11 @@ type StoredTheme<T extends string = string> = {
 export const BUILTIN_THEMES = [
     DEFAULT_THEME,
     DEFAULT_MIPS_THEME,
-    DEFAULT_WHITE_THEME
+    //DEFAULT_WHITE_THEME
 ]
 
 function makeThemeStore<T extends string>(_theme: StoredTheme<T>) {
-    const [debouncer] = createDebouncer(1000)
+    const [debouncer] = createDebouncer(100)
     let themes = $state(cloneDeep(BUILTIN_THEMES))
     let meta = $state({
         name: _theme.name,

@@ -21,6 +21,7 @@
     $effect(() => {
         const theme = LANGUAGE_THEMES[project.language]
         untrack(() => {
+            console.log(oldTheme, theme)
             if (ThemeStore.meta.id !== DEFAULT_THEME.id) return //prefer the user's theme
             ThemeStore.select(theme, true)
         })
