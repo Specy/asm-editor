@@ -17,10 +17,11 @@
     let theme = ThemeStore.themeList
     let previousPage: string = $state('/projects')
 
-
     afterNavigate(({ from }) => {
         previousPage = from?.url.pathname ?? previousPage
     })
+
+ 
 </script>
 
 <svelte:head>
@@ -132,7 +133,7 @@
         {/if}
         {#each theme as color, i (color.name)}
             {#if !color.readonly}
-                <div in:scale|global={{ delay: i * 50 + 200, start: 0.9, duration: 150 }}>
+                <div in:scale|global={{ delay: i * 50 + 200, start: 0.9, duration: 200 }}>
                     <ColorThemeRow bind:color={theme[i]} />
                 </div>
             {/if}

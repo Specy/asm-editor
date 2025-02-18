@@ -253,13 +253,7 @@ function makeThemeStore<T extends string>(_theme: StoredTheme<T>) {
         editable: _theme.editable
     })
     let theme = $state(_theme.theme)
-    let themeArray = $derived.by(() => {
-        const arr = [] as ThemeProp<T>[]
-        for (const key in theme) {
-            arr.push(theme[key])
-        }
-        return arr
-    })
+    let themeArray = $derived(Object.values(theme) as ThemeProp<T>[])
 
     function isDefault(key: string, color: string) {
         const extended = BUILTIN_THEMES.find(t => t.id === meta.extends)
@@ -375,7 +369,9 @@ function makeThemeStore<T extends string>(_theme: StoredTheme<T>) {
             extends: meta.extends,
             theme: cloneDeep(theme)
         } satisfies StoredTheme<T>
-        theme = newTheme.theme
+        for (const key in newTheme.theme) {
+            set(key as T, newTheme.theme[key].color)
+        }
         meta = {
             textForDark: '#dbdbdb',
             textForLight: '#181818',

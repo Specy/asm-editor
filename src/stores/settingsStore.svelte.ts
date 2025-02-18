@@ -1,9 +1,11 @@
 import { browser } from '$app/environment'
+import type { AvailableLanguages } from '$lib/Project.svelte'
 
 export type SettingValue<T> = {
     name: string
     type: 'boolean' | 'number' | 'string'
-    value: T
+    value: T,
+    onlyFor?: AvailableLanguages
 }
 export type SettingValues = {
     useDecimalAsDefault: SettingValue<boolean>
@@ -12,6 +14,7 @@ export type SettingValues = {
     autoSave: SettingValue<boolean>
     maxHistorySize: SettingValue<number>
     maxVisibleHistoryModifications: SettingValue<number>
+    showPseudoInstructions: SettingValue<boolean>
 }
 export type Settings = {
     meta: {
@@ -19,22 +22,25 @@ export type Settings = {
     }
     values: SettingValues
 }
-function createValue<T>(name: string, value: T) {
+function createValue<T>(name: string, value: T, onlyFor?: AvailableLanguages) {
     return {
         name,
         value,
-        type: typeof value
+        type: typeof value,
+        onlyFor
     } as SettingValue<T>
 }
-const baseValues: SettingValues = {
+const baseValues = {
     useDecimalAsDefault: createValue('Use decimal as default for registers', false),
-    autoScrollStackTab: createValue('Auto scroll stack memory tab', true),
-    autoSave: createValue('Auto save', false),
-    instructionsLimit: createValue('Maximum instructions iteration, 0 to ignore', 50_000_000),
-    maxHistorySize: createValue('Maximum undo history size, 0 to disable', 100),
-    maxVisibleHistoryModifications: createValue('Maximum visible history modifications', 10)
-}
-const CURRENT_VERSION = '1.1.4'
+    autoScrollStackTab: createValue('Auto scroll the stack memory tab', true),
+    autoSave: createValue('Auto save', true),
+    showPseudoInstructions: createValue('Show pseudo instructions', true, 'MIPS'),
+    instructionsLimit: createValue('Instruction execution limit, 0 to ignore', 50_000_000),
+    maxHistorySize: createValue('Maximum undo steps, 0 to disable', 100),
+    maxVisibleHistoryModifications: createValue('Maximum visible history steps', 10),
+} satisfies SettingValues
+
+const CURRENT_VERSION = '1.1.6'
 function createSettingsStore() {
     let data = $state({
         meta: {

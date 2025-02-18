@@ -12,6 +12,7 @@
     }
 
     let { color = $bindable() }: Props = $props()
+
     let parsed = $derived(new TinyColor(color.color))
 </script>
 

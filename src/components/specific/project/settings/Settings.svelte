@@ -5,23 +5,27 @@
     import FaPalette from 'svelte-icons/fa/FaPalette.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import Button from '$cmp/shared/button/Button.svelte'
+    import type { AvailableLanguages } from '$lib/Project.svelte'
     interface Props {
         visible: boolean
+        language: AvailableLanguages
     }
 
-    let { visible = $bindable() }: Props = $props()
+    let { visible = $bindable(), language }: Props = $props()
 </script>
 
 <FloatingContainer bind:visible title="Settings">
     <div class="settings-values">
         {#each Object.entries(settingsStore.values) as entry, i (i)}
-            <Setting
-                entry={entry[1]}
-                on:changeValue={(e) => {
-                    //@ts-expect-error
-                    settingsStore.setValue(entry[0], e.detail)
-                }}
-            />
+            {#if !entry[1].onlyFor || entry[1].onlyFor === language}
+                <Setting
+                    entry={entry[1]}
+                    on:changeValue={(e) => {
+                        //@ts-expect-error
+                        settingsStore.setValue(entry[0], e.detail)
+                    }}
+                />
+            {/if}
         {/each}
         <div
             class="row"

@@ -271,7 +271,10 @@
         </Button>
     </Row>
     <ShortcutEditor bind:visible={shortcutsVisible} />
-    <Settings bind:visible={settingsVisible} />
+    <Settings 
+    bind:visible={settingsVisible} 
+    language={project.language}
+    />
     <FloatingLanguageDocumentation
         bind:visible={documentationVisible}
         language={project.language}
@@ -333,13 +336,15 @@
         >
             {#key project.language}
                 <Editor
-                    viewZones={emulator.decorations.map(v => {
-                        return {
-                            afterLineNumber: v.belowLine,
-                            content: BelowLineContent,
-                            props: { md: v.md, note: v.note }
-                        }
-                    })}
+                    viewZones={settingsStore.values.showPseudoInstructions.value
+                        ? emulator.decorations.map((v) => {
+                              return {
+                                  afterLineNumber: v.belowLine,
+                                  content: BelowLineContent,
+                                  props: { md: v.md, note: v.note }
+                              }
+                          })
+                        : []}
                     on:change={(d) => {
                         if (emulator.canExecute && emulator.terminated && emulator.line >= 0) {
                             emulator.resetSelectedLine()
