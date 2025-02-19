@@ -13,7 +13,6 @@
     import FaArrowRight from 'svelte-icons/fa/FaArrowRight.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     let wrapper: HTMLDivElement = $state()
-    import { createMarkdownWithOptions } from '$lib/markdown'
     import AddressingModes from './M68KAddressingModes.svelte'
     import M68KConditionCodes from './M68KConditionCodes.svelte'
     import M68KShiftRotations from './M68KShiftDirections.svelte'
@@ -167,5 +166,5 @@
 </div>
 
 <style lang="scss">
-    @import './style.scss';
+    @use './style.scss' as *;;
 </style>

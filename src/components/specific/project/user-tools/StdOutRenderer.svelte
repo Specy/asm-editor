@@ -1,10 +1,9 @@
 <script lang="ts">
-    import { run } from 'svelte/legacy'
 
-    import type { MonacoError } from '$lib/languages/M68KEmulator.svelte'
     import FaExclamationTriangle from 'svelte-icons/fa/FaExclamationTriangle.svelte'
     import { fly } from 'svelte/transition'
     import Console from '$cmp/shared/Console.svelte'
+    import type { MonacoError } from '$lib/languages/commonLanguageFeatures.svelte'
     interface Props {
         stdOut: string
         compilerErrors?: MonacoError[]

@@ -8,5 +8,5 @@
 </div>
 
 <style lang="scss">
-    @import './style.scss';
+    @use './style.scss' as *;;
 </style>

@@ -23,6 +23,7 @@
         "@sveltejs/vite-plugin-svelte": "^5.0.3",
         "@types/fuzzy-search": "^2.1.5",
         "@types/string-similarity": "^4.0.2",
+        "@types/wicg-file-system-access": "^2023.10.5",
         "@xterm/xterm": "^5.5.0",
         "carta-md": "^4.6.7",
         "clone-deep": "^4.0.1",

@@ -72,6 +72,7 @@
             await ProjectStore.load()
             try {
                 if ('launchQueue' in window) {
+                    //@ts-expect-error setConsumer is not in the types
                     window.launchQueue.setConsumer(async (launchParams) => {
                         let lastId = ''
                         for (const file of launchParams.files) {
@@ -105,6 +106,7 @@
         run()
         return () => {
             if ('launchQueue' in window) {
+                //@ts-expect-error launchQueue is not in the types
                 window.launchQueue.setConsumer(() => {})
             }
         }
@@ -142,6 +144,7 @@
                         <Button
                             cssVar="secondary"
                             onClick={async () => {
+                                //@ts-expect-error showOpenFilePicker is not in the types
                                 const files = await window.showOpenFilePicker({ multiple: true })
                                 try {
                                     await importFromFileHandle(files)
@@ -159,7 +162,7 @@
                     {:else}
                         <FileImporter
                             on:import={(e) => {
-                                importFromText(e.detail.data)
+                                importFromText(e.detail.data as string)
                             }}
                             as="text"
                         >

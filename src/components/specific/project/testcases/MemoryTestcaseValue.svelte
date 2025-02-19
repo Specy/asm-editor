@@ -18,7 +18,7 @@
     }
 
     function parseNumber(value: string): number {
-        if(!value) return 0
+        if (!value) return 0
         if (value.startsWith('0x')) {
             return parseInt(value.slice(2), 16)
         } else {
@@ -39,6 +39,7 @@
                         class="input"
                         bind:value={value.address}
                         onblur={(e) => {
+                            //@ts-expect-error .value
                             value.address = parseNumber(e.target.value)
                         }}
                     />
@@ -57,6 +58,7 @@
                         class="input"
                         bind:value={value.expected}
                         onblur={(e) => {
+                            //@ts-expect-error .value
                             value.expected = parseNumber(e.target.value)
                         }}
                     />
@@ -70,6 +72,7 @@
                         class="input"
                         bind:value={value.address}
                         onblur={(e) => {
+                            //@ts-expect-error .value
                             value.address = parseNumber(e.target.value)
                         }}
                     />
@@ -79,6 +82,7 @@
                     class="input"
                     style="width: 100%;"
                     onchange={(e) => {
+                        //@ts-expect-error .value
                         value.expected = e.target.value
                     }}>{value.expected}</textarea
                 >
@@ -90,6 +94,7 @@
                     class="input"
                     bind:value={value.address}
                     onblur={(e) => {
+                        //@ts-expect-error .value
                         value.address = parseNumber(e.target.value)
                     }}
                 />
@@ -98,7 +103,9 @@
                     class="input"
                     style="width: 100%;"
                     onchange={(e) => {
-                        if(!e.target.value) return value.expected = []
+                        //@ts-expect-error .value
+                        if (!e.target.value) return (value.expected = [])
+                        //@ts-expect-error .value
                         value.expected = e.target.value.split(',').map((v) => parseNumber(v))
                     }}>{value.expected.join(', ')}</textarea
                 >

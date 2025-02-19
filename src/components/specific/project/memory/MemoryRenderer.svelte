@@ -1,7 +1,6 @@
 <script lang="ts">
     import Button from '$cmp/shared/button/Button.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
-    import type { DiffedMemory } from '$lib/languages/M68KEmulator.svelte'
     import ValueDiff from '$cmp/specific/project/user-tools/ValueDiffer.svelte'
     import MdTextFields from 'svelte-icons/md/MdTextFields.svelte'
     import FaTimes from 'svelte-icons/fa/FaTimes.svelte'
@@ -14,6 +13,7 @@
         inRange
     } from '$cmp/specific/project/memory/memoryTabUtils'
     import Row from '$cmp/shared/layout/Row.svelte'
+    import type { DiffedMemory } from '$lib/languages/commonLanguageFeatures.svelte'
 
     const id = Math.random().toString(36).substring(8)
 

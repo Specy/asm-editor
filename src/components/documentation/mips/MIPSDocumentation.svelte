@@ -6,7 +6,6 @@
     import FaArrowRight from 'svelte-icons/fa/FaArrowRight.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     let wrapper: HTMLDivElement = $state()
-    import { createMarkdownWithOptions } from '$lib/markdown'
     import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
     import {
     aggregateArgs,
@@ -141,5 +140,5 @@
 </div>
 
 <style lang="scss">
-    @import '../m68k/style.scss';
+    @use '../m68k/style.scss' as *;
 </style>

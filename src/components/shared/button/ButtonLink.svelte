@@ -1,10 +1,6 @@
 <script>
-    import { createBubbler } from 'svelte/legacy'
-
-    const bubble = createBubbler()
-    /** @type {{disabled?: boolean, href: any, color?: string, style?: string, bg?: string, onClick?: (e: MouseEvent) => void , hasIcon?: boolean, title?: string, cssVar?: string, children?: import('svelte').Snippet}} */
+    /** @type {{ href: any, color?: string, style?: string, bg?: string, onClick?: (e: MouseEvent) => void , hasIcon?: boolean, title?: string, cssVar?: string, children?: import('svelte').Snippet}} */
     let {
-        disabled = false,
         href,
         color = 'var(--accent-text)',
         style = '',
@@ -24,7 +20,6 @@
     {href}
     {title}
     style={`--btn-color:var(--${cssVar},${bg}); --btn-text:var(--${cssVar}-text,${color});${style}; `}
-    {disabled}
     onclick={onClick}
 >
     {@render children?.()}

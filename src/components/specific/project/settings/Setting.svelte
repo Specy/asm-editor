@@ -3,10 +3,9 @@
 
     import type { SettingValue } from '$stores/settingsStore.svelte'
     import { createEventDispatcher } from 'svelte'
-    type T = $$Generic
 
     interface Props {
-        entry: SettingValue<T>
+        entry: SettingValue<unknown>
     }
 
     let { entry }: Props = $props()
@@ -19,7 +18,7 @@
         value = prev
     })
     const dispatcher = createEventDispatcher<{
-        changeValue: T
+        changeValue: unknown
     }>()
 </script>
 
@@ -31,7 +30,7 @@
         {#if entry.type === 'boolean'}
             <input
                 type="checkbox"
-                bind:checked={value}
+                bind:checked={value as boolean}
                 onchange={() => {
                     dispatcher('changeValue', value)
                 }}

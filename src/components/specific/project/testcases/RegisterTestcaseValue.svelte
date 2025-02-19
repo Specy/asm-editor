@@ -32,6 +32,7 @@
         onchange={(e) =>
             dispatcher('change-key', {
                 old: name,
+                //@ts-expect-error .value
                 new: e.target.value
             })}
     >

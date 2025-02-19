@@ -4,7 +4,6 @@
         M68KDirectiveDocumentationList,
         fromSizesToString
     } from '$lib/languages/M68K-documentation'
-    import { createMarkdownWithOptions } from '$lib/markdown'
     interface Props {
         openLinksInNewTab?: boolean
     }
@@ -40,5 +39,5 @@
 </div>
 
 <style lang="scss">
-    @import './style.scss';
+    @use './style.scss' as *;;
 </style>

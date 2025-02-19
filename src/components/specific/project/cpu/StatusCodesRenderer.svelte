@@ -1,5 +1,6 @@
 <script lang="ts">
-    import type { StatusRegister } from '$lib/languages/M68KEmulator.svelte'
+    import type { StatusRegister } from "$lib/languages/commonLanguageFeatures.svelte"
+
     interface Props {
         statusCodes: StatusRegister[]
         style?: string
