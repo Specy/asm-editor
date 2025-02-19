@@ -17,6 +17,7 @@
     import Button from '$cmp/shared/button/Button.svelte'
     import Page from '$cmp/shared/layout/Page.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
+    import { ProjectStore } from '$stores/projectsStore.svelte'
 
     const textShadowPrimary = ThemeStore.getColor('primary').isDark()
     const textShadowSecondary = ThemeStore.getColor('secondary').isDark()
@@ -40,15 +41,19 @@
             <img src="/images/ASM-editor.webp" alt="ASM editor" class="preview-image" />
             <div class="presentation">
                 <div class="welcome-title" class:textShadow={textShadowPrimary}>
-                    The all in one web editor for M68K & MIPS
+                    The all in one web IDE for Assembly <span style="font-size: 1.5rem;" >M68K & MIPS</span>
                 </div>
                 <Row gap="0.6rem">
                     <ButtonLink
-                        href="/projects"
+                        href={ProjectStore.projects.length > 0 ? '/projects' : '/projects/create'}
                         style={textShadowPrimary && 'box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);'}
                         title="Open the editor"
                     >
-                        Go to the editor
+                        {#if ProjectStore.projects.length > 0}
+                            Go to your projects
+                        {:else}
+                            Create your first project
+                        {/if}
                     </ButtonLink>
                     <ButtonLink
                         style={textShadowPrimary && 'box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);'}
@@ -144,9 +149,9 @@
                 <div>Documentation</div>
             {/snippet}
             <div class="description" class:textShadow={textShadowPrimary}>
-                The editor comes with a built-in documentation for the M68K and MIPS instruction set
-                including the valid addressing modes, description, examples for each instruction and
-                directive.
+                The editor comes with built-in documentation for the M68K and MIPS instruction set
+                including the valid addressing modes, description and examples for each instruction,
+                directive and syscall.
                 <a href="/documentation" title="View documentation" class="external-link">
                     Visit the documentation
                     <div style="width: 1rem; height: 1rem; margin-top: 0.2rem; margin-left: 0.3rem">
@@ -162,7 +167,7 @@
             <div class="description" class:textShadow={textShadowSecondary}>
                 Write and learn faster with the code completion tools, suggesting you with the valid
                 addressing modes and shortcuts for labels and other keywords. Real time semantic
-                errors that warn you before you compile the code
+                errors that warn you before you compile the code.
             </div>
         </MainPageSection>
         <MainPageSection id="tools" imageUrl="/images/ASM-Tools.webp">
@@ -208,7 +213,8 @@
 
     .welcome-title {
         font-size: 3rem;
-        max-width: 33rem;
+        padding: 1rem;
+        max-width: 35rem;
         text-align: center;
         margin-bottom: 2rem;
         color: var(--primary-text);

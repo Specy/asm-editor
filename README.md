@@ -8,13 +8,13 @@ Mainly made to help people approaching assembly by providing the tools necessary
 
 ## App features
 
-- Simple code completition and full syntax highlighting
+- Code completion and syntax highlighting
 - Run the program or step through it
 - Code breakpoints, settings, input/output interrupts, undo, formatter and more
 - Inspect the value of each register and memory address to see which was changed with each instruction
 - Create new projects and manage them all in the webapp
-- Integrated IDE with semantic checks and useful errors to help you learn assembly
-- Integrated documentation and intellisense with addressing modes, descriptions and examples
+- IDE with semantic checks and useful errors to help you learn assembly
+- Built-in documentation and intellisense with addressing modes, descriptions and examples
 - Customisable settings and shortcuts, including theme customization
 
 ## Editor Tools
@@ -67,3 +67,19 @@ for:
 
 This runs 30 million instructions, make sure you set the Maximum instructions iteration, Maximum history size and Maximum visible history size to 0, as well as not having any breakpoints, this will turn off the
 debugging tools and run the code as fast as possible.
+
+# Benchmarks MIPS
+
+The MIPS interpreter runs at round 2mhz on the browser.
+Just like the M68K you can run this code to benchmark your own browser:
+```asm
+main:
+    li   $t0, 1000000
+    li   $t1, 0 
+for:
+    addi $t1, $t1, 1 
+    addi $t0, $t0, -1
+    bne  $t0, $zero, for
+
+```
+This runs 3 million instructions.

@@ -56,7 +56,7 @@
             <Title>Create new project</Title>
         </div>
         <Form style="display: grid; gap: 1.2rem; margin:0.5rem 0" on:submit={create}>
-            <Input title="Name" bind:value={name} />
+            <Input title="Name" placeholder='Name' bind:value={name} />
             <Textarea title="Description" bind:value={description} />
             <Select title="Language" options={['M68K', 'MIPS']} bind:value={language} />
         </Form>
