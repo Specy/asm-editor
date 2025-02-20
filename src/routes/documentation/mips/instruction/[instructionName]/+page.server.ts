@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit'
 import type { PageServerLoad } from './$types'
-import { mipsInstructionMap } from '$lib/languages/MIPS-documentation'
+import { mipsInstructionMap } from '$lib/languages/MIPS/MIPS-documentation'
 
 export const load = (async ({ params }) => {
     const instruction = mipsInstructionMap.get(params.instructionName)

@@ -2,7 +2,7 @@
     import DocsOperand from '$cmp/documentation/DocsOperand.svelte'
     import M68KConditionCodes from '$cmp/documentation/m68k/M68KConditionCodes.svelte'
     import Page from '$cmp/shared/layout/Page.svelte'
-    import { branchConditionsFlags } from '$lib/languages/M68K-documentation'
+    import { branchConditionsFlags } from '$lib/languages/M68K/M68K-documentation'
     import Column from '$cmp/shared/layout/Column.svelte'
     const flags = Array.from(branchConditionsFlags.entries())
 </script>

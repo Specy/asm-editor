@@ -1,7 +1,7 @@
 <script lang="ts">
     import NavigationLinkButton from '$cmp/shared/button/NavigationLinkButton.svelte'
     import Page from '$cmp/shared/layout/Page.svelte'
-    import { instructionsDocumentationList } from '$lib/languages/M68K-documentation'
+    import { instructionsDocumentationList } from '$lib/languages/M68K/M68K-documentation'
 </script>
 
 <svelte:head>

@@ -14,7 +14,7 @@
         mipsDirectivesMap,
         mipsInstructionMap,
         mipsInstructionNames
-    } from '$lib/languages/MIPS-documentation'
+    } from '$lib/languages/MIPS/MIPS-documentation'
     import MipsDirectiveDocumentation from './MIPSDirectiveDocumentation.svelte'
     import MipsSyscall from './MIPSSyscall.svelte'
     interface Props {

@@ -8,7 +8,7 @@
         fromSizesToString,
         fromSizeToString,
         getAddressingModeNames
-    } from '$lib/languages/M68K-documentation'
+    } from '$lib/languages/M68K/M68K-documentation'
     import DocsOperand from '$cmp/documentation/DocsOperand.svelte'
     import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'

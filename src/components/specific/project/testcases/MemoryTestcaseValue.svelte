@@ -6,7 +6,7 @@
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import FaTimes from 'svelte-icons/fa/FaTimes.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
-    import { toHexString } from '$lib/languages/M68kUtils'
+    import { toHexString } from '$lib/languages/M68K/M68kUtils'
 
     const dispatcher = createEventDispatcher<{
         remove: void

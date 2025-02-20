@@ -3,7 +3,7 @@
     import {
         type InstructionDocumentation,
         M68KUncompoundedInstructions
-    } from '$lib/languages/M68K-documentation'
+    } from '$lib/languages/M68K/M68K-documentation'
     import { capitalize } from '$lib/utils'
     import FaArrowRight from 'svelte-icons/fa/FaArrowRight.svelte'
 

@@ -11,9 +11,8 @@ import {
 } from '@specy/s68k'
 import { MEMORY_SIZE, PAGE_ELEMENTS_PER_ROW, PAGE_SIZE } from '$lib/Config'
 import { Prompt } from '$stores/promptStore'
-import { createDebouncer } from '../utils'
 import { settingsStore } from '$stores/settingsStore.svelte'
-import { getM68kErrorMessage } from '$lib/languages/M68kUtils'
+import { getM68kErrorMessage } from '$lib/languages/M68K/M68kUtils'
 import type { Testcase, TestcaseResult, TestcaseValidationError } from '$lib/Project.svelte'
 import {
     byteSliceToNum,
@@ -34,7 +33,8 @@ import {
     type StatusRegister,
     InterpreterStatus,
     numbersOfSizeToSlice
-} from './commonLanguageFeatures.svelte'
+} from '../commonLanguageFeatures.svelte'
+import { createDebouncer } from '$lib/utils'
 
 export type M68KEmulatorState = BaseEmulatorState & {
     interrupt?: Interrupt

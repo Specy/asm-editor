@@ -4,8 +4,8 @@ import type {
     BaseEmulatorState,
     EmulatorSettings
 } from './commonLanguageFeatures.svelte'
-import { M68KEmulator } from './M68KEmulator.svelte'
-import { MIPSEmulator } from './MIPSEmulator.svelte'
+import { M68KEmulator } from './M68K/M68KEmulator.svelte'
+import { MIPSEmulator } from './MIPS/MIPSEmulator.svelte'
 
 type EmulatorMap = {
     MIPS: typeof MIPSEmulator

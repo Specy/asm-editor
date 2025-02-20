@@ -1,10 +1,6 @@
 <script lang="ts">
-    import Column from '$cmp/shared/layout/Column.svelte'
     import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
-    import { mipsDirectivesMap } from '$lib/languages/MIPS-documentation'
     import Page from '$cmp/shared/layout/Page.svelte'
-    import Card from '$cmp/shared/layout/Card.svelte'
-    import MipsDirectiveDocumentation from '$cmp/documentation/mips/MIPSDirectiveDocumentation.svelte'
     import MipsSyscall from '$cmp/documentation/mips/MIPSSyscall.svelte'
 </script>
 

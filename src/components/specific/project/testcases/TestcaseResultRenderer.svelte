@@ -1,7 +1,7 @@
 <script lang="ts">
     import type { TestcaseResult } from '$lib/Project.svelte'
     import Card from '$cmp/shared/layout/Card.svelte'
-    import { toHexString } from '$lib/languages/M68kUtils'
+    import { toHexString } from '$lib/languages/M68K/M68kUtils'
     import ExpandableContainer from '$cmp/shared/layout/ExpandableContainer.svelte'
     import Testcase from '$cmp/specific/project/testcases/Testcase.svelte'
     import Header from '$cmp/shared/layout/Header.svelte'

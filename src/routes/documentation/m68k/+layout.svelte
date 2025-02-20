@@ -1,7 +1,7 @@
 <script lang="ts">
     import Navbar from '$cmp/shared/layout/Navbar.svelte'
     import TogglableSection from '$cmp/shared/layout/TogglableSection.svelte'
-    import { M68KUncompoundedInstructions } from '$lib/languages/M68K-documentation'
+    import { M68KUncompoundedInstructions } from '$lib/languages/M68K/M68K-documentation'
     import InstructionsMenu from './InstructionsMenu.svelte'
     import { page } from '$app/stores'
     import FaBars from 'svelte-icons/fa/FaBars.svelte'

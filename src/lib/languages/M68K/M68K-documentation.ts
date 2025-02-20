@@ -1209,3 +1209,63 @@ function makeDirective(
 /*TODO
     spl highlighted wrogn
 */
+
+
+const arithmetic = [
+    'add',
+    'sub',
+    'suba',
+    'adda',
+    'divs',
+    'divu',
+    'muls',
+    'mulu',
+    'addq',
+    'subq',
+    'addi',
+    'subi'
+]
+const logic = [
+    'tst',
+    'cmp',
+    'cmpa',
+    'cmpm',
+    'cmpi',
+    'not',
+    'or',
+    'and',
+    'eor',
+    'lsl',
+    'lsr',
+    'asr',
+    'asl',
+    'rol',
+    'ror',
+    'btst',
+    'bclr',
+    'bchg',
+    'bset',
+    'andi',
+    'ori',
+    'eori',
+    'subi'
+]
+const special = ['clr', 'exg', 'neg', 'ext', 'swap', 'move', 'movea', 'trap', 'movem']
+export const M68KDirectives = ['org', 'equ', 'dcb', 'ds', 'dc']
+const others = [
+    ...setConditions.map((e) => `s${e}`),
+    ...branchConditions.map((e) => `b${e}`),
+    ...branchConditions.map((e) => `db${e}`),
+    'dbra',
+    'bsr',
+    'bra',
+    'jsr',
+    'rts',
+    'link',
+    'unlk',
+    'lea',
+    'pea',
+    'moveq',
+    'jmp'
+]
+export const M68kInstructions = [...arithmetic, ...logic, ...special, ...others]

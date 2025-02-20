@@ -1,7 +1,7 @@
 <script lang="ts">
     import Card from '$cmp/shared/layout/Card.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
-    import { mipsSyscall } from '$lib/languages/MIPS-documentation'
+    import { mipsSyscall } from '$lib/languages/MIPS/MIPS-documentation'
     import { capitalize } from '$lib/utils'
     import DocsOperand from '../DocsOperand.svelte'
 </script>

@@ -4,7 +4,7 @@
     import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
     import { onMount } from 'svelte'
-    import { formatAggregatedArgs } from '$lib/languages/MIPS-documentation'
+    import { formatAggregatedArgs } from '$lib/languages/MIPS/MIPS-documentation'
     interface Props {
         data: PageData
     }

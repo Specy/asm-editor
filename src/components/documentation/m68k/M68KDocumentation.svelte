@@ -4,7 +4,7 @@
         fromSizeToString,
         getAddressingModeNames,
         instructionsDocumentationList
-    } from '$lib/languages/M68K-documentation'
+    } from '$lib/languages/M68K/M68K-documentation'
 
     import DocsOperand from '$cmp/documentation/DocsOperand.svelte'
     import stringSimilarity from 'string-similarity'

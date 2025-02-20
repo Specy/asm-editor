@@ -1,6 +1,6 @@
 <script lang="ts">
     import Page from '$cmp/shared/layout/Page.svelte'
-    import { mipsInstructionNames } from '$lib/languages/MIPS-documentation'
+    import { mipsInstructionNames } from '$lib/languages/MIPS/MIPS-documentation'
     import { capitalize } from '$lib/utils'
     import FaArrowRight from 'svelte-icons/fa/FaArrowRight.svelte'
 

@@ -1,7 +1,6 @@
 <script lang="ts">
     import Navbar from '$cmp/shared/layout/Navbar.svelte'
     import TogglableSection from '$cmp/shared/layout/TogglableSection.svelte'
-    import { M68KUncompoundedInstructions } from '$lib/languages/M68K-documentation'
     import { page } from '$app/stores'
     import FaBars from 'svelte-icons/fa/FaBars.svelte'
 
@@ -10,7 +9,7 @@
     import FaTimes from 'svelte-icons/fa/FaTimes.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
-    import { mipsInstructionNames } from '$lib/languages/MIPS-documentation'
+    import { mipsInstructionNames } from '$lib/languages/MIPS/MIPS-documentation'
     import MenuLink from '../m68k/instruction/MenuLink.svelte'
     import InstructionsMenu from '../m68k/InstructionsMenu.svelte'
     import { LANGUAGE_THEMES } from '$lib/Config'

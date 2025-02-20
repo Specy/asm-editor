@@ -1,6 +1,6 @@
 <script lang="ts">
     import DocsOperand from '$cmp/documentation/DocsOperand.svelte'
-    import { AddressingMode, addressingModeToString } from '$lib/languages/M68K-documentation'
+    import { AddressingMode, addressingModeToString } from '$lib/languages/M68K/M68K-documentation'
 </script>
 
 <div class="column sub-section">

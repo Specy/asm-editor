@@ -1,5 +1,4 @@
 import type { MonacoType } from '$lib/monaco/Monaco'
-import { instructionsDocumentationList } from './M68K-documentation'
 import {
     MIPSAddressingModes,
     mipsDirectivesMap,

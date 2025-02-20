@@ -3,7 +3,7 @@
     import {
         M68KDirectiveDocumentationList,
         fromSizesToString
-    } from '$lib/languages/M68K-documentation'
+    } from '$lib/languages/M68K/M68K-documentation'
     interface Props {
         openLinksInNewTab?: boolean
     }

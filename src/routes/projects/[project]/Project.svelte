@@ -1,7 +1,6 @@
 <script lang="ts">
     import Editor from '$cmp/specific/project/Editor.svelte'
     import Button from '$cmp/shared/button/Button.svelte'
-    import { M68KEmulator } from '$lib/languages/M68KEmulator.svelte'
     import MemoryVisualiser from '$cmp/specific/project/memory/MemoryRenderer.svelte'
     import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
     import { createEventDispatcher, onMount } from 'svelte'
@@ -33,7 +32,7 @@
     import MutationsViewer from '$cmp/specific/project/user-tools/MutationsRenderer.svelte'
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
     import FaDonate from 'svelte-icons/fa/FaDonate.svelte'
-    import { getM68kErrorMessage } from '$lib/languages/M68kUtils'
+    import { getM68kErrorMessage } from '$lib/languages/M68K/M68kUtils'
     import Row from '$cmp/shared/layout/Row.svelte'
     import TestcasesEditor from '$cmp/specific/project/testcases/TestcasesEditor.svelte'
     import { RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'

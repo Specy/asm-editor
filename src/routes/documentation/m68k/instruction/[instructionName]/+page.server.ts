@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit'
 import type { EntryGenerator, PageServerLoad } from './$types'
-import { M68KUncompoundedInstructions } from '$lib/languages/M68K-documentation'
+import { M68KUncompoundedInstructions } from '$lib/languages/M68K/M68K-documentation'
 
 export const load = (async ({ params }) => {
     const instruction = M68KUncompoundedInstructions.get(params.instructionName)

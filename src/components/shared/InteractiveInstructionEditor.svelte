@@ -2,7 +2,7 @@
     import { run } from 'svelte/legacy'
 
     import Editor from '$cmp/specific/project/Editor.svelte'
-    import { M68KEmulator } from '$lib/languages/M68KEmulator.svelte'
+    import { M68KEmulator } from '$lib/languages/M68K/M68KEmulator.svelte'
     import { toast } from '$stores/toastStore'
     import Controls from '$cmp/specific/project/Controls.svelte'
     import { clamp, formatTime } from '$lib/utils'
@@ -15,7 +15,7 @@
     import RegistersVisualiser from '$cmp/specific/project/cpu/RegistersRenderer.svelte'
     import SizeSelector from '$cmp/specific/project/cpu/SizeSelector.svelte'
     import { onMount } from 'svelte'
-    import { getM68kErrorMessage } from '$lib/languages/M68kUtils'
+    import { getM68kErrorMessage } from '$lib/languages/M68K/M68kUtils'
     import type { AvailableLanguages, Testcase, TestcaseResult } from '$lib/Project.svelte'
     import { GenericEmulator } from '$lib/languages/Emulator'
     import Column from './layout/Column.svelte'

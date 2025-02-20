@@ -24,10 +24,8 @@ import {
     type EmulatorSettings,
     type MonacoError,
     type MutationOperation,
-    type RegisterChunk
-} from './commonLanguageFeatures.svelte'
+} from '../commonLanguageFeatures.svelte'
 import { createDebouncer } from '$lib/utils'
-import { Prompt } from '$stores/promptStore'
 import { settingsStore } from '$stores/settingsStore.svelte'
 import type { Testcase, TestcaseResult, TestcaseValidationError } from '$lib/Project.svelte'
 import {
@@ -35,7 +33,6 @@ import {
     isMemoryChunkEqual,
     numberToByteSlice
 } from '$cmp/specific/project/memory/memoryTabUtils'
-import { Size } from './M68K-documentation'
 
 export type MIPSEmulatorState = BaseEmulatorState & {}
 

@@ -1,14 +1,15 @@
 import { browser } from '$app/environment'
 import { generateTheme } from '$lib/monaco/editorTheme'
 import {
-    M68KLanguage,
     createM68KCompletition,
     createM68kHoverProvider,
     createM68kFormatter
-} from '$lib/languages/M68K-language'
+} from '$lib/languages/M68K/M68K-language'
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import type monaco from 'monaco-editor'
-import { createMIPSCompletition, createMIPSHoverProvider } from '$lib/languages/MIPS-language'
+import { createMIPSCompletition, createMIPSHoverProvider } from '$lib/languages/MIPS/MIPS-language'
+import { M68KLanguage } from '$lib/languages/M68K/M68K-grammar'
+import { MIPSLanguage, MIPSLanguageConfiguration } from '$lib/languages/MIPS/MIPS-grammar'
 
 export type MonacoType = typeof monaco
 
@@ -62,6 +63,8 @@ class MonacoLoader {
             )
         )
         this.toDispose.push(
+            monaco.languages.setMonarchTokensProvider('mips', MIPSLanguage),
+            monaco.languages.setLanguageConfiguration('mips', MIPSLanguageConfiguration),
             monaco.languages.registerCompletionItemProvider('mips', createMIPSCompletition(monaco)),
             monaco.languages.registerHoverProvider('mips', createMIPSHoverProvider(monaco))
         )
