@@ -18,10 +18,13 @@ export type MonacoError = {
     formatted: string
 }
 
-export type Label = {
+export type StackFrame = {
     name: string
     address: number
+    sourceAddress: number
+    sp: number
     line: number
+    color: string
 }
 
 export type MemoryTab = {
@@ -165,13 +168,14 @@ export type EmulatorDecoration = {
 export type BaseEmulatorState = {
     code: string
     registers: Register[]
+    hiddenRegisters: string[]
     decorations: EmulatorDecoration[]
     statusRegisters: StatusRegister[]
     errors: string[]
     compilerErrors: MonacoError[]
     terminated: boolean
     latestSteps: ExecutionStep[]
-    callStack: Label[]
+    callStack: StackFrame[]
     line: number
     executionTime: number
     sp: number
@@ -216,6 +220,26 @@ export function createMemoryTab(
         }
     }
 }
+
+export function makeLabelColor(index: number, address: number){
+    return `hsl(${(index * 137) % 360}, 40%, 60%)`
+}
+
+export function makeColorizedLabels(labels: StackFrame[]): ColorizedLabel[]{
+    //same address and index should always be the same color
+    return labels.map((address, i) => ({
+        address: address.address,
+        sp: address.sp,
+        color: address.color
+    }))
+}
+
+export type ColorizedLabel = {
+    address: number
+    sp: number
+    color: string
+}
+
 
 export type EmulatorSettings = {
     globalPageSize?: number

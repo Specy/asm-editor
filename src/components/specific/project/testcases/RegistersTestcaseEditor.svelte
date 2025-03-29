@@ -10,9 +10,10 @@
         registers: Record<string, number>
         editable: boolean
         registerNames: string[]
+        hiddenRegistersNames?: string[]
     }
 
-    let { registers = $bindable(), editable, registerNames }: Props = $props()
+    let { registers = $bindable(), editable, registerNames, hiddenRegistersNames }: Props = $props()
 
     function makeNewRegister(defaultName?: string) {
         return {
@@ -77,6 +78,7 @@
         </div>
     {:else}
         <RegistersRenderer
+          hiddenRegistersNames={hiddenRegistersName}
             registers={Object.entries(registers).map(([name, value]) => makeRegister(name, value))}
         />
     {/if}

@@ -23,7 +23,7 @@ import {
     type EmulatorDecoration,
     type EmulatorSettings,
     type MonacoError,
-    type MutationOperation,
+    type MutationOperation, makeLabelColor
 } from '../commonLanguageFeatures.svelte'
 import { createDebouncer } from '$lib/utils'
 import { settingsStore } from '$stores/settingsStore.svelte'
@@ -35,26 +35,6 @@ import {
 } from '$cmp/specific/project/memory/memoryTabUtils'
 
 export type MIPSEmulatorState = BaseEmulatorState & {}
-
-/*
-    compile: (historySize: number, codeOverride?: string) => Promise<void>
-    step: () => Promise<boolean>
-    run: (haltLimit: number) => Promise<InterpreterStatus>
-    setGlobalMemoryAddress: (address: number) => void
-    setCode: (code: string) => void
-    clear: () => void
-    setTabMemoryAddress: (address: number, tabId: number) => void
-    toggleBreakpoint: (line: number) => void
-    undo: (amount?: number) => void
-    resetSelectedLine: () => void
-    dispose: () => void
-    test: (
-        code: string,
-        testcases: Testcase[],
-        haltLimit: number,
-        historySize?: number
-    ) => Promise<TestcaseResult[]>
-*/
 
 function getMIPSErrorMessage(e: unknown) {
     return String(e)
@@ -94,6 +74,8 @@ export const MIPSRegisterNames = [
     '$fp',
     '$ra'
 ]
+
+const STACK_POINTER_INDEX = MIPSRegisterNames.indexOf('$sp')
 
 /*
 export type MonacoError = {
@@ -141,6 +123,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
     let code = $state(baseCode)
     let state = $state<Omit<MIPSEmulatorState, 'code'>>({
         registers: [],
+        hiddenRegisters: ['$zero'],
         terminated: false,
         line: -1,
         decorations: [],
@@ -298,7 +281,6 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
     function scrollStackTab() {
         const settings = settingsStore
         const current = state
-
         if (!settings.values.autoScrollStackTab.value || !mips) return
         const stackTab = current.memory.tabs.find((e) => e.name === 'Stack')
         const sp = mips.stackPointer
@@ -320,7 +302,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         getRegistersValue().forEach((reg, i) => {
             state.registers[i].setValue(reg)
         })
-        state.sp = state.registers[state.registers.length - 1].value
+        state.sp = state.registers[STACK_POINTER_INDEX].value
     }
 
     function updateMemory() {
@@ -347,11 +329,15 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         const steps = mips
             .getUndoStack()
             .slice(0, settings.values.maxVisibleHistoryModifications.value)
-        state.callStack = mips.getCallStack().map((v) => {
+        state.callStack = mips.getCallStack().map((v, i) => {
+            const address = v.toAddress
             return {
-                address: v,
-                name: mips.getLabelAtAddress(v) ?? `0x${v.toString(16).padStart(8, '0')}`,
-                line: (mips.getStatementAtAddress(v)?.sourceLine ?? 0) - 1
+                address,
+                sourceAddress: v.pc,
+                sp: v.sp,
+                name: mips.getLabelAtAddress(address) ?? `0x${address.toString(16).padStart(8, '0')}`,
+                line: (mips.getStatementAtAddress(address)?.sourceLine ?? 0) - 1,
+                color: makeLabelColor(i, v.sp)
             }
         })
         state.latestSteps = steps.map((step) => {
@@ -848,6 +834,9 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
     return {
         get registers() {
             return state.registers
+        },
+        get hiddenRegisters() {
+            return state.hiddenRegisters
         },
         get terminated() {
             return state.terminated

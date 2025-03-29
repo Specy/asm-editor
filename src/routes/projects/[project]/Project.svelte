@@ -15,7 +15,7 @@
     import { clamp, createDebouncer, formatTime } from '$lib/utils'
     import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE } from '$lib/Config'
     import Settings from '$cmp/specific/project/settings/Settings.svelte'
-    import M68KDocumentation from '$cmp/specific/project/FloatingLanguageDocumentation.svelte'
+    import FloatingLanguageDocumentation from '$cmp/specific/project/FloatingLanguageDocumentation.svelte'
     import FaBook from 'svelte-icons/fa/FaBook.svelte'
     import { ShortcutAction, shortcutsStore } from '$stores/shortcutsStore'
     import RegistersVisualiser from '$cmp/specific/project/cpu/RegistersRenderer.svelte'
@@ -35,10 +35,8 @@
     import { getM68kErrorMessage } from '$lib/languages/M68K/M68kUtils'
     import Row from '$cmp/shared/layout/Row.svelte'
     import TestcasesEditor from '$cmp/specific/project/testcases/TestcasesEditor.svelte'
-    import { RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
+    import { makeColorizedLabels, RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
     import { GenericEmulator } from '$lib/languages/Emulator'
-    import FloatingLanguageDocumentation from '$cmp/specific/project/FloatingLanguageDocumentation.svelte'
-    import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
     import BelowLineContent from '$cmp/specific/project/user-tools/BelowLineContent.svelte'
 
     interface Props {
@@ -163,7 +161,7 @@
     })
 
     function toggleWindow(windowName: 'shortcuts' | 'documentation' | 'settings' | 'testcases') {
-        //TODO improve this lol
+        //TODO improve this
         if (windowName === 'shortcuts') {
             shortcutsVisible = !shortcutsVisible
             documentationVisible = false
@@ -324,6 +322,7 @@
             const { tab, address } = e.detail
             emulator.setTabMemoryAddress(address, tab.id)
         }}
+        callStackAddresses={makeColorizedLabels(emulator.callStack)}
     />
 {/each}
 <div class="editor-memory-wrapper">
@@ -459,6 +458,7 @@
                 {/if}
                 <RegistersVisualiser
                     size={groupSize}
+                    hiddenRegistersNames={emulator.hiddenRegisters}
                     registers={emulator.registers}
                     on:registerClick={async (e) => {
                         const value = e.detail.value
@@ -491,6 +491,7 @@
                     memory={emulator.memory.global.data}
                     currentAddress={emulator.memory.global.address}
                     sp={emulator.sp}
+                    callStackAddresses={makeColorizedLabels(emulator.callStack)}
                 />
             </div>
         </div>

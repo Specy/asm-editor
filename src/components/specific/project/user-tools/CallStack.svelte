@@ -1,15 +1,15 @@
 <script lang="ts">
     import Icon from '$cmp/shared/layout/Icon.svelte'
-    import type { Label } from '@specy/s68k'
     import { createEventDispatcher } from 'svelte'
     import FaCircle from 'svelte-icons/fa/FaCircle.svelte'
     import FaLongArrowAltUp from 'svelte-icons/fa/FaLongArrowAltUp.svelte'
+    import type { StackFrame } from '$lib/languages/commonLanguageFeatures.svelte'
     interface Props {
-        stack: Label[]
+        stack: StackFrame[]
     }
 
     let { stack }: Props = $props()
-    const dispatcher = createEventDispatcher<{ gotoLabel: Label }>()
+    const dispatcher = createEventDispatcher<{ gotoLabel: StackFrame }>()
 </script>
 
 <div class="call-stack-wrapper">
@@ -25,7 +25,10 @@
                     dispatcher('gotoLabel', label)
                 }}
             >
-                <Icon size={0.8} style="margin-left: 0.1rem">
+                <Icon
+                  size={0.8}
+                  style="margin-left: 0.1rem; color: {label.color}"
+                >
                     <FaCircle />
                 </Icon>
                 <div class="ellipsis">

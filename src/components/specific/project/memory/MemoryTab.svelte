@@ -5,7 +5,7 @@
     import MemoryControls from './MemoryControls.svelte'
     import MemoryVisualiser from './MemoryRenderer.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
-    import type { MemoryTab } from '$lib/languages/commonLanguageFeatures.svelte'
+    import type { ColorizedLabel, MemoryTab } from '$lib/languages/commonLanguageFeatures.svelte'
     interface Props {
         sp: number
         tab: MemoryTab
@@ -13,9 +13,10 @@
         memorySize: number
         defaultMemoryValue: number
         endianess: 'big' | 'little'
+        callStackAddresses: ColorizedLabel[]
     }
 
-    let { sp, tab, left = 500, memorySize, defaultMemoryValue, endianess }: Props = $props()
+    let { sp, tab, left = 500, memorySize, defaultMemoryValue, endianess, callStackAddresses }: Props = $props()
     const dispatcher = createEventDispatcher<{
         addressChange: {
             address: number
@@ -44,6 +45,7 @@
             memory={tab.data}
             currentAddress={tab.address}
             {sp}
+            {callStackAddresses}
         />
     </div>
 </ToggleableDraggable>

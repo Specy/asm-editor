@@ -12,6 +12,7 @@
     }>()
     interface Props {
         registers: Register[]
+        hiddenRegistersNames?: string[]
         withoutHeader?: boolean
         size?: RegisterSize
         style?: string
@@ -23,7 +24,8 @@
         withoutHeader = false,
         size = RegisterSize.Word,
         style = '',
-        gridStyle = ''
+        gridStyle = '',
+        hiddenRegistersNames = []
     }: Props = $props()
     let usesHex = $derived(!settingsStore.values.useDecimalAsDefault.value)
     let chunks: RegisterChunk[][] = $derived(registers.map((r) => r.toSizedGroups(size)))
@@ -34,7 +36,7 @@
         <div class="registers-header">Registers</div>
     {/if}
     <div class="registers" style={gridStyle}>
-        {#each registers as register, i (register.name)}
+        {#each registers.filter(r => !hiddenRegistersNames.includes(r.name)) as register, i (register.name)}
             <div class="register-wrapper">
                 <div class="hover-register-value">
                     {#if usesHex}
@@ -51,7 +53,7 @@
                 {#each chunks[i] as chunk}
                     <ValueDiff
                         monospaced
-                        hoverElementStyle="left: -0.1rem"
+                        hoverElementStyle="left: 50%; transform: translateX(-50%);"
                         style="padding: 0.1rem"
                         value={usesHex
                             ? chunk.hex
@@ -112,7 +114,7 @@
         grid-template-rows: auto;
         flex-direction: column;
         gap: 0.3rem;
-        padding: 0.4rem;
+        padding: 0.7rem;
         font-size: 1rem;
         flex: 1;
         @media screen and (max-width: 1000px) {
@@ -142,16 +144,15 @@
         border-radius: 0.2rem;
         position: absolute;
         cursor: text;
-        z-index: 3;
         user-select: all;
         font-family: monospace;
         font-size: 1rem;
         box-shadow: rgba(0, 0, 0, 0.4) 0px 0px 6px;
-        left: 1.6rem;
+        left: 100%;
         z-index: 3;
         top: 0;
         height: 100%;
-        padding: 0 0.7rem;
+        padding: 0 0.3rem;
         align-items: center;
         font-weight: normal;
     }

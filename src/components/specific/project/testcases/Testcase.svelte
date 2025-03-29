@@ -16,6 +16,7 @@
         editable?: boolean
         children?: import('svelte').Snippet
         registerNames: string[]
+        hiddenRegistersNames?: string[]
     }
 
     let {
@@ -23,7 +24,8 @@
         style = '',
         editable = false,
         children,
-        registerNames
+        registerNames,
+      	hiddenRegistersNames,
     }: Props = $props()
 
 </script>
@@ -35,6 +37,7 @@
                 <Header type="h3">Starting registers values</Header>
                 <RegistersTestcaseEditor
                     bind:registers={testcase.startingRegisters}
+                    {hiddenRegistersNames}
                     {registerNames}
                     editable
                 />
@@ -43,6 +46,7 @@
                 <Header type="h3">Expected registers values</Header>
                 <RegistersTestcaseEditor
                     bind:registers={testcase.expectedRegisters}
+                    {hiddenRegistersNames}
                     {registerNames}
                     editable
                 />
@@ -94,6 +98,7 @@
                         <RegistersTestcaseEditor
                             {registerNames}
                             bind:registers={testcase.startingRegisters}
+														{hiddenRegistersNames}
                             editable={false}
                         />
                     </Column>
@@ -105,6 +110,7 @@
                         <RegistersTestcaseEditor
                             {registerNames}
                             bind:registers={testcase.expectedRegisters}
+														{hiddenRegistersNames}
                             editable={false}
                         />
                     </Column>

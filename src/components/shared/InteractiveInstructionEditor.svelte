@@ -22,6 +22,7 @@
     import StdOutRenderer from '$cmp/specific/project/user-tools/StdOutRenderer.svelte'
     import TestcasesEditor from '$cmp/specific/project/testcases/TestcasesEditor.svelte'
     import Row from './layout/Row.svelte'
+    import { makeColorizedLabels } from '$lib/languages/commonLanguageFeatures.svelte'
 
     /*TODO make this agnostic */
 
@@ -184,6 +185,7 @@
                 </div>
                 <RegistersVisualiser
                     size={groupSize}
+                    hiddenRegistersNames={emulator.hiddenRegisters}
                     gridStyle="
                 grid-template-columns: min-content 1fr min-content 1fr; 
                 gap: 0.1rem; 
@@ -222,6 +224,7 @@
                         memory={emulator.memory.global.data}
                         currentAddress={emulator.memory.global.address}
                         sp={emulator.sp}
+                        callStackAddresses={makeColorizedLabels(emulator.callStack)}
                     />
                 </div>
             {/if}

@@ -1,38 +1,22 @@
-import { get, writable } from 'svelte/store'
-import {
-    ccrToFlagsArray,
-    type ExecutionStep,
-    Interpreter,
-    type Interrupt,
-    type Label,
-    type ParsedLine,
-    type RegisterOperand,
-    S68k
-} from '@specy/s68k'
-import { MEMORY_SIZE, PAGE_ELEMENTS_PER_ROW, PAGE_SIZE } from '$lib/Config'
+import { ccrToFlagsArray, Interpreter, type Interrupt, type RegisterOperand, S68k } from '@specy/s68k'
+import { PAGE_ELEMENTS_PER_ROW, PAGE_SIZE } from '$lib/Config'
 import { Prompt } from '$stores/promptStore'
 import { settingsStore } from '$stores/settingsStore.svelte'
 import { getM68kErrorMessage } from '$lib/languages/M68K/M68kUtils'
 import type { Testcase, TestcaseResult, TestcaseValidationError } from '$lib/Project.svelte'
+import { byteSliceToNum, isMemoryChunkEqual, numberToByteSlice } from '$cmp/specific/project/memory/memoryTabUtils'
 import {
-    byteSliceToNum,
-    isMemoryChunkEqual,
-    numberToByteSlice
-} from '$cmp/specific/project/memory/memoryTabUtils'
-import {
-    createMemoryTab,
-    makeRegister,
-    RegisterSize,
     type BaseEmulatorActions,
     type BaseEmulatorState,
+    createMemoryTab,
     type EmulatorSettings,
-    type MemoryTab,
+    InterpreterStatus,
+    makeLabelColor,
+    makeRegister,
     type MonacoError,
     type MutationOperation,
-    type Register,
-    type StatusRegister,
-    InterpreterStatus,
-    numbersOfSizeToSlice
+    numbersOfSizeToSlice,
+    RegisterSize
 } from '../commonLanguageFeatures.svelte'
 import { createDebouncer } from '$lib/utils'
 
@@ -87,6 +71,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
     let code = $state(baseCode)
     let state = $state<Omit<M68KEmulatorState, 'code'>>({
         registers: [],
+        hiddenRegisters: [],
         decorations: [],
         terminated: false,
         line: -1,
@@ -194,6 +179,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
             addError(getM68kErrorMessage(e))
         }
     }
+
     function clear() {
         const current = state
 
@@ -308,7 +294,16 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
     function updateData() {
         const settings = settingsStore
         state.terminated = interpreter.hasReachedBottom()
-        state.callStack = interpreter.getCallStack()
+        state.callStack = interpreter.getCallStack().map((v, i) => {
+            return {
+                address: v.address,
+                name: v.label_name,
+                line: v.label_line,
+                sp: v.registers[15],
+                sourceAddress: v.source_address,
+                color: makeLabelColor(i, v.address)
+            }
+        })
         const steps = interpreter.getUndoHistory(
             settings.values.maxVisibleHistoryModifications.value
         )
@@ -736,6 +731,9 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
     return {
         get registers() {
             return state.registers
+        },
+        get hiddenRegisters() {
+            return state.hiddenRegisters
         },
         get terminated() {
             return state.terminated

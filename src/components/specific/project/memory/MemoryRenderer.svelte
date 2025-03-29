@@ -13,7 +13,7 @@
         inRange
     } from '$cmp/specific/project/memory/memoryTabUtils'
     import Row from '$cmp/shared/layout/Row.svelte'
-    import type { DiffedMemory } from '$lib/languages/commonLanguageFeatures.svelte'
+    import type { ColorizedLabel, DiffedMemory } from '$lib/languages/commonLanguageFeatures.svelte'
 
     const id = Math.random().toString(36).substring(8)
 
@@ -26,6 +26,7 @@
     interface Props {
         memory: DiffedMemory
         currentAddress: number
+        callStackAddresses?: ColorizedLabel[]
         sp: number
         pageSize: number
         bytesPerRow: number
@@ -42,7 +43,8 @@
         bytesPerRow,
         style = '',
         defaultMemoryValue,
-        endianess
+        endianess,
+        callStackAddresses = []
     }: Props = $props()
     const maxAddresses = 4
     let selectedAddressesIndexes = $state({
@@ -139,6 +141,21 @@
             }
         }
     }
+
+    function getColorOfAddress(address: number) {
+        let last: { color: string, address: number } = {
+            color: 'inherit',
+            address: -1
+        }
+        for(const frame of callStackAddresses) {
+            if(address >= frame.sp) {
+                last = frame
+                break
+            }
+        }
+        return last?.color
+    }
+
 </script>
 
 <div class="memory-grid" style={`--bytesPerRow: ${bytesPerRow}; ${style}`}>
@@ -243,17 +260,19 @@
                     diff={getTextFromValue(memory.prevState[i] ?? defaultMemoryValue, 0, type)}
                     hasSoftDiff={word !== defaultMemoryValue}
                     hoverElementStyle={`width: 100%; min-width: fit-content; left: 50%; transform: translateX(-50%);`}
-                    style={`padding: 0.3rem; min-width: calc(0.6rem + 2ch); height: calc(2ch + 0.65rem); ${
+                    style={`padding: 0.3rem; min-width: calc(0.6rem + 2ch); height: calc(2ch + 0.65rem);
+                    ${
                         currentAddress + i === sp
                             ? ' background-color: var(--accent2); color: var(--accent2-text);'
                             : 'border-radius: 0;'
                     }
-					${
+										${
                         inRange(i, selectedAddressesIndexes.start, selectedAddressesIndexes.len)
                             ? 'background-color: var(--green); color: var(--green-text);'
                             : ''
                     }
-						`}
+                    color: ${getColorOfAddress(currentAddress + i) ?? 'inherit'};
+								`}
                     hoverElementOffset={word !== signed ? '-2.2rem' : '-1rem'}
                     monospaced
                 >
