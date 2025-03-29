@@ -8,6 +8,9 @@
     import { afterNavigate } from '$app/navigation'
     import Page from '$cmp/shared/layout/Page.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
+    import { PAST_DONATIONS } from '$src/routes/donate/pastDonations'
+    import Card from '$cmp/shared/layout/Card.svelte'
+    import Column from '$cmp/shared/layout/Column.svelte'
 
     let previousPage: string = $state('/projects')
     afterNavigate(({ from }) => {
@@ -63,6 +66,29 @@
             </Icon>
         </a>
     </div>
+    <h1 style="margin-top: 2rem">
+        Past donations
+    </h1>
+		<Column gap="0.5rem" style="margin-top: 2rem">
+			{#each PAST_DONATIONS as donation}
+				<Card background="secondary" padding="1rem" gap="1rem">
+					<Row justify="between">
+						<h3>
+							{donation.from} <span style="font-size: 1rem; opacity: 0.8; font-weight: normal; margin-left: 1rem">
+								{Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(donation.date))}
+							</span>
+						</h3>
+						<h3>
+							{donation.amount}€
+						</h3>
+					</Row>
+					<p>
+						{donation.message}
+					</p>
+				</Card>
+			{/each}
+		</Column>
+
 </Page>
 
 <style lang="scss">
