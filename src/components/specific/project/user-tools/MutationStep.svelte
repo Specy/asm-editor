@@ -38,7 +38,7 @@
         <div class="row space-between">
             <span> PC </span>
             <span class="pc">
-                {step.pc}
+                0x{step.pc.toString().toUpperCase()}
                 <button
                     class="go-to-line"
                     onclick={() => {
