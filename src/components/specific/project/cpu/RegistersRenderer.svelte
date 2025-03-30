@@ -20,13 +20,14 @@
     }
 
     let {
-        registers,
+        registers: _registers,
         withoutHeader = false,
         size = RegisterSize.Word,
         style = '',
         gridStyle = '',
         hiddenRegistersNames = []
     }: Props = $props()
+    let registers = $derived(_registers.filter(r => !hiddenRegistersNames.includes(r.name)))
     let usesHex = $derived(!settingsStore.values.useDecimalAsDefault.value)
     let chunks: RegisterChunk[][] = $derived(registers.map((r) => r.toSizedGroups(size)))
 </script>
@@ -36,7 +37,7 @@
         <div class="registers-header">Registers</div>
     {/if}
     <div class="registers" style={gridStyle}>
-        {#each registers.filter(r => !hiddenRegistersNames.includes(r.name)) as register, i (register.name)}
+        {#each registers as register, i (register.name)}
             <div class="register-wrapper">
                 <div class="hover-register-value">
                     {#if usesHex}

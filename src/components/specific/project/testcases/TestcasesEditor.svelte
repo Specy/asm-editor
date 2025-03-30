@@ -18,6 +18,7 @@
         testcases: Testcase[]
         testcasesResult: TestcaseResult[]
         registerNames: string[]
+        hiddenRegistersNames?: string[]
         editable?: boolean
     }
 
@@ -26,6 +27,7 @@
         testcases = $bindable(),
         testcasesResult,
         registerNames,
+        hiddenRegistersNames,
         editable = true
     }: Props = $props()
 
@@ -67,7 +69,7 @@
                     {passedTestcases.length} / {totalTestcases} testcases passed
                 </Header>
                 {#each failedTestcases as testcase}
-                    <TestcaseResultRenderer testcaseResult={testcase} registerNames={registerNames} />
+                    <TestcaseResultRenderer testcaseResult={testcase} {registerNames} {hiddenRegistersNames}/>
                 {/each}
             </Column>
         {/if}
@@ -89,6 +91,7 @@
                                     bind:testcase={testcases[i]}
                                     editable={false}
                                     {registerNames}
+                                    {hiddenRegistersNames}
                                 >
                                     {#if editable}
                                         <Row justify="end">
@@ -119,6 +122,7 @@
                 {#key testcaseKey}
                     <TestcaseRenderer
                         {registerNames}
+                        {hiddenRegistersNames}
                         style="border: solid 0.1rem var(--accent)"
                         editable
                         bind:testcase={newTestcase}

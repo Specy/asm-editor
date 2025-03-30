@@ -17,7 +17,7 @@
 
     function makeNewRegister(defaultName?: string) {
         return {
-            name: defaultName ?? registerNames[0],
+            name: defaultName ?? freeStartingRegisters[0],
             value: 0
         }
     }
@@ -27,12 +27,13 @@
     }
 
     function getAvailableRegisterName(usedNames: Record<string, any>) {
-        return registerNames.filter((name) => usedNames[name] === undefined)
+        return registerNames.filter((name) => usedNames[name] === undefined && !hiddenRegistersNames.includes(name))
     }
 
+    let freeStartingRegisters = $derived(getAvailableRegisterName(registers))
     let newRegister = $state(makeNewRegister())
     let startingRegisters = $derived(sortRegisters(registers))
-    let freeStartingRegisters = $derived(getAvailableRegisterName(registers))
+
 </script>
 
 <Column gap="0.3rem" style="max-width: 12rem">
@@ -78,7 +79,7 @@
         </div>
     {:else}
         <RegistersRenderer
-          hiddenRegistersNames={hiddenRegistersName}
+            hiddenRegistersNames={hiddenRegistersNames}
             registers={Object.entries(registers).map(([name, value]) => makeRegister(name, value))}
         />
     {/if}

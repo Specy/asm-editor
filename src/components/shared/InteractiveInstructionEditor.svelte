@@ -241,6 +241,7 @@
             <TestcasesEditor
                 editable={!embedded}
                 registerNames={emulator.registers.map((r) => r.name)}
+                hiddenRegistersNames={emulator.hiddenRegisters}
                 bind:visible={testcasesVisible}
                 {testcasesResult}
                 bind:testcases

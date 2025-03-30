@@ -10,9 +10,10 @@
     interface Props {
         testcaseResult: TestcaseResult
         registerNames: string[]
+        hiddenRegistersNames?: string[]
     }
 
-    let { testcaseResult, registerNames}: Props = $props()
+    let { testcaseResult, registerNames, hiddenRegistersNames}: Props = $props()
 </script>
 
 <Card border={testcaseResult.passed ? 'background' : 'red'}>
@@ -59,7 +60,7 @@
         {#snippet title()}
             <Header type="h3" noMargin>Show testcase</Header>
         {/snippet}
-        <Testcase testcase={testcaseResult.testcase} registerNames={registerNames}/>
+        <Testcase testcase={testcaseResult.testcase} registerNames={registerNames} {hiddenRegistersNames}/>
     </ExpandableContainer>
 </Card>
 
