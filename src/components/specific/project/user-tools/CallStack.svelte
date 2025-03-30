@@ -4,12 +4,14 @@
     import FaCircle from 'svelte-icons/fa/FaCircle.svelte'
     import FaLongArrowAltUp from 'svelte-icons/fa/FaLongArrowAltUp.svelte'
     import type { StackFrame } from '$lib/languages/commonLanguageFeatures.svelte'
+    import Row from '$cmp/shared/layout/Row.svelte'
     interface Props {
         stack: StackFrame[]
+        onGoToLabel: (label: StackFrame) => void
+        onGoToInstruction: (address: number)=> void
     }
 
-    let { stack }: Props = $props()
-    const dispatcher = createEventDispatcher<{ gotoLabel: StackFrame }>()
+    let { stack, onGoToInstruction, onGoToLabel }: Props = $props()
 </script>
 
 <div class="call-stack-wrapper">
@@ -18,23 +20,34 @@
             <div class="row" style="justify-content: center; padding: 0.4rem">Call stack empty</div>
         {/if}
         {#each [...stack].reverse() as label, i}
-            <button
-                class:noHover={label.name === ''}
-                class="label-name row"
-                onclick={() => {
-                    dispatcher('gotoLabel', label)
-                }}
-            >
-                <Icon
-                  size={0.8}
-                  style="margin-left: 0.1rem; color: {label.color}"
+            <Row gap="0.1rem">
+                <button
+                    class:noHover={label.name === ''}
+                    class="label-name row"
+                    onclick={() => {
+                        onGoToLabel(label)
+                    }}
                 >
-                    <FaCircle />
-                </Icon>
-                <div class="ellipsis">
-                    {label.name || `0x${label.address.toString(16).toUpperCase()}`}
-                </div>
-            </button>
+                    <Icon
+                      size={0.8}
+                      style="margin-left: 0.1rem; color: {label.color}"
+                    >
+                        <FaCircle />
+                    </Icon>
+                    <div class="ellipsis">
+                        {label.name || `0x${label.address.toString(16).toUpperCase()}`}
+                    </div>
+                </button>
+                <button
+                    onclick={() => {
+                        onGoToInstruction(label.destination)
+                    }}
+                    class="return-address row"
+                >
+                    0x{label.destination.toString(16).toUpperCase()}
+                </button>
+            </Row>
+
             {#if i < stack.length - 1}
                 <div class="separator">
                     <FaLongArrowAltUp />
@@ -61,9 +74,22 @@
         border-top-left-radius: 0;
         border-top-right-radius: 0;
     }
+    .return-address{
+        background: var(--secondary);
+        color: var(--primary-text);
+        border-radius: 0.3rem;
+        padding: 0.4rem;
+        font-size: 0.8rem;
+        cursor: pointer;
+        background-color: transparent;
+    }
+    .return-address:hover{
+        background-color: var(--tertiary);
+    }
     .label-name {
         gap: 0.4rem;
         padding: 0.2rem;
+        flex:1;
         align-items: center;
         background-color: transparent;
         color: var(--primary-text);

@@ -288,8 +288,13 @@
 <ToggleableDraggable title="Call stack" left={300}>
     <CallStack
         stack={emulator.callStack}
-        on:gotoLabel={(e) => {
-            const label = e.detail
+        onGoToInstruction={(address) => {
+            const line = emulator.getLineFromAddress(address)
+            if(line < 0) return
+            editor.revealLineInCenter(line + 1)
+            editor.setPosition({ lineNumber: line + 1, column: 1 })
+        }}
+        onGoToLabel={(label) => {
             editor.revealLineInCenter(label.line + 1)
             editor.setPosition({ lineNumber: label.line + 1, column: 1 })
         }}

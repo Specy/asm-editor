@@ -21,7 +21,7 @@ export type MonacoError = {
 export type StackFrame = {
     name: string
     address: number
-    sourceAddress: number
+    destination: number
     sp: number
     line: number
     color: string
@@ -264,4 +264,5 @@ export type BaseEmulatorActions = {
         haltLimit: number,
         historySize?: number
     ) => Promise<TestcaseResult[]>
+    getLineFromAddress: (address: number) => number
 }

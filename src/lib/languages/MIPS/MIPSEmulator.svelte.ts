@@ -333,7 +333,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
             const address = v.toAddress
             return {
                 address,
-                sourceAddress: v.pc,
+                destination: v.pc,
                 sp: v.sp,
                 name: mips.getLabelAtAddress(address) ?? `0x${address.toString(16).padStart(8, '0')}`,
                 line: (mips.getStatementAtAddress(address)?.sourceLine ?? 0) - 1,
@@ -828,6 +828,13 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         return results
     }
 
+    function getLineFromAddress(address: number) {
+        if (!mips) return -1
+        const statement = mips.getStatementAtAddress(address)
+        if (!statement) return -1
+        return statement.sourceLine - 1
+    }
+
     clear()
     semanticCheck()
 
@@ -897,7 +904,8 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         undo,
         resetSelectedLine,
         dispose,
-        test
+        test,
+        getLineFromAddress
     } satisfies MIPSEmulatorState & BaseEmulatorActions
 }
 

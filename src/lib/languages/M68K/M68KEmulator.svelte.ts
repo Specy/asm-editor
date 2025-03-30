@@ -300,7 +300,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 name: v.label_name,
                 line: v.label_line,
                 sp: v.registers[15],
-                sourceAddress: v.source_address,
+                destination: v.source_address,
                 color: makeLabelColor(i, v.address)
             }
         })
@@ -725,6 +725,12 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         return results
     }
 
+    function getLineFromAddress(address: number){
+        if (!interpreter) return -1
+        const line = interpreter.getInstructionAt(address)
+        return line?.parsed_line?.line_index ?? -1
+    }
+
     clear()
     semanticCheck()
 
@@ -797,7 +803,8 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         undo,
         resetSelectedLine,
         dispose,
-        test
+        test,
+        getLineFromAddress
     } satisfies M68KEmulatorState & BaseEmulatorActions
 }
 
