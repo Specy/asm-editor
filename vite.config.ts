@@ -31,10 +31,12 @@ const config: UserConfig = {
         sveltekit(),
         topLevelAwait(),
         wasm(),
-        visualizer({
+        /*
+         visualizer({
             emitFile: true,
             filename: 'stats.html'
         })
+         */
     ]
 }
 
