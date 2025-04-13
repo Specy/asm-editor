@@ -6,7 +6,7 @@
     },
     "scripts": {
         "dev": "vite dev",
-        "build": "cross-env NODE_OPTIONS=--max_old_space_size=8000 vite build",
+        "build": "cross-env NODE_OPTIONS=--max_old_space_size=4096 vite build",
         "preview": "vite preview",
         "format": "prettier --write .",
         "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
@@ -52,6 +52,7 @@
         "@types/cookie": "^1.0.0",
         "@typescript-eslint/eslint-plugin": "^8.28.0",
         "@typescript-eslint/parser": "^8.28.0",
+        "rollup-plugin-visualizer": "^5.14.0",
         "eslint": "^9.23.0",
         "eslint-config-prettier": "^10.1.1",
         "eslint-plugin-svelte": "^3.3.3",
