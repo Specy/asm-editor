@@ -1,5 +1,6 @@
 import { sveltekit } from '@sveltejs/kit/vite'
 import topLevelAwait from 'vite-plugin-top-level-await'
+import { visualizer } from 'rollup-plugin-visualizer';
 import wasm from 'vite-plugin-wasm'
 import type { UserConfig } from 'vite'
 import { resolve } from 'path'
@@ -18,7 +19,16 @@ const config: UserConfig = {
     optimizeDeps: {
         exclude: ['@specy/s68k', '@battlefieldduck/xterm-svelte']
     },
-    plugins: [sveltekit(), topLevelAwait(), wasm()]
+    build: {
+      sourcemap: false,
+      minify: false,
+    },
+    plugins: [
+        sveltekit(),
+        topLevelAwait(),
+        wasm(),
+
+    ]
 }
 
 export default config
