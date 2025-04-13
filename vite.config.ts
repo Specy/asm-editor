@@ -1,8 +1,10 @@
 import { sveltekit } from '@sveltejs/kit/vite'
 import topLevelAwait from 'vite-plugin-top-level-await'
+import { visualizer } from 'rollup-plugin-visualizer'
 import wasm from 'vite-plugin-wasm'
 import type { UserConfig } from 'vite'
 import { resolve } from 'path'
+
 const config: UserConfig = {
     server: {
         port: 3000
@@ -19,14 +21,20 @@ const config: UserConfig = {
         exclude: ['@specy/s68k', '@battlefieldduck/xterm-svelte']
     },
     build: {
-      sourcemap: false,
-      minify: false,
+        sourcemap: false,
+        minify: 'terser',
+        terserOptions: {
+            sourceMap: false,
+        }
     },
     plugins: [
         sveltekit(),
         topLevelAwait(),
         wasm(),
-
+        visualizer({
+            emitFile: true,
+            filename: 'stats.html'
+        })
     ]
 }
 
