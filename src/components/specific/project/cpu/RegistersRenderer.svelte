@@ -110,14 +110,14 @@
     }
 
     .registers {
+        height: fit-content;
         display: grid;
         grid-template-columns: min-content 1fr;
         grid-template-rows: auto;
         flex-direction: column;
-        gap: 0.3rem;
+        gap: 0.35rem;
         padding: 0.7rem;
         font-size: 1rem;
-        flex: 1;
         @media screen and (max-width: 1000px) {
             width: unset;
         }
@@ -158,6 +158,7 @@
         font-weight: normal;
     }
     .register-wrapper {
+        max-height: 1.35rem;
         display: flex;
         justify-content: center;
         align-items: center;
@@ -182,6 +183,7 @@
     }
     .register-hex {
         display: flex;
+        max-height: 1.35rem;
         justify-content: space-around;
         padding-left: 0.2rem;
         gap: 0.1rem;

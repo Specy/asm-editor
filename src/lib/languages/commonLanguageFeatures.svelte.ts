@@ -167,7 +167,9 @@ export type EmulatorDecoration = {
 
 export type BaseEmulatorState = {
     code: string
+    compiledCode?: string
     registers: Register[]
+    extraRegisters?: Register[]
     hiddenRegisters: string[]
     decorations: EmulatorDecoration[]
     statusRegisters: StatusRegister[]

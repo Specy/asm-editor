@@ -236,21 +236,21 @@ const desc = {
     rts: 'Returns from a subroutine, pops the return address from the stack and jumps to it',
     jsr: 'Jumps to the specified address, like the "lea" instruction, when resolving the address, it does not read the memory, so "jsr 4(a0)" will jump to the value of "a0 + 4", the address is loaded and stores the return address in the stack',
     trap: `
-        Executes a trap, the value of the operand is used as the trap number, only #15 is supported.
-        The register d0 will be used as the trap type which are: 
-| Opcode | Description                                                                                           |
+Executes a trap, the value of the operand is used as the trap number, only #15 is supported.
+The register d0 will be used as the trap type which are: 
+| Opcode | Description   |
 |:------:|-------------------------------------------------------------------------------------------------------|
-| 0      | Print string pointed by a1 with length read in d1.w, null terminated with max of 255, then prints a new line.              |
-| 1      | Print string pointed by a1 with length read in d1.w.                                              |
-| 2      | Read string from keyboard, writes the string at address of a1 and overrides the value of d1 with the length of the string.                                               |
-| 3      | Print number at d1.                                                                                  |
-| 4      | Read number, writes to d1.                                                                           |
-| 5      | Read character, writes to d1.                                                                        |
-| 6      | Print character at d1.                                                                               |
-| 8      | Get time, writes to d1.                                                                              |
-| 9      | Terminate.                                                                                             |
+| 0      | Print string pointed by a1 with length read in d1.w, null terminated with max of 255, then prints a new line.      |
+| 1      | Print string pointed by a1 with length read in d1.w.      |
+| 2      | Read string from keyboard, writes the string at address of a1 and overrides the value of d1 with the length of the string.       |
+| 3      | Print number at d1.  |
+| 4      | Read number, writes to d1.   |
+| 5      | Read character, writes to d1.|
+| 6      | Print character at d1.       |
+| 8      | Get time, writes to d1.      |
+| 9      | Terminate.     |
 | 13     | Prints null terminated string pointed by a1 then prints new line, errors if string is longer than 16kb, to prevent infinite loops.   |
-| 14     | Prints null terminated string pointed by a1, errors if string is longer than 16kb, to prevent infinite loops.                       |
+| 14     | Prints null terminated string pointed by a1, errors if string is longer than 16kb, to prevent infinite loops.       |
 `.trim()
 }
 const dirsDesc = {
@@ -272,7 +272,7 @@ export const M68KDirectiveDocumentation = {
         'dc',
         ANY_SIZE,
         dirsDesc.dc,
-        "dc.b 'Hello world!', 4, %10, $F, @8, 'a', some_label"
+        'dc.b \'Hello world!\', 4, %10, $F, @8, \'a\', some_label'
     ),
     ds: makeDirective('ds', ANY_SIZE, dirsDesc.ds, 'ds.l 100'),
     dcb: makeDirective('dcb', ANY_SIZE, dirsDesc.dcb, 'dcb.b 50, 1'),
@@ -299,9 +299,9 @@ export const M68kDocumentation: Record<InstructionName, InstructionDocumentation
         'moveq #10, d0',
         undefined,
         `
-        moveq #100, d0
-        moveq #-20, d1
-        moveq #128, d2 ;error 128 is not a valid 8 bit number
+moveq #100, d0
+moveq #-20, d1
+moveq #128, d2 ;error 128 is not a valid 8 bit number
     `
     ),
     movem: makeIns(
@@ -317,7 +317,7 @@ export const M68kDocumentation: Record<InstructionName, InstructionDocumentation
     move.l #$2, D1
     move.l #$3, A0
     bsr example_function 
-    bra END                 
+    bra END 
 
 example_function:
     movem.l D0-D1/A0, -(SP) ; Save registers to the stack
@@ -325,7 +325,7 @@ example_function:
     move.l #$ff, D1
     move.l #$ff, A0
     movem.l (SP)+, D0-D1/A0 ; Restore registers from the stack
-    rts                     
+    rts     
 END: 
     `
     ),
@@ -337,8 +337,8 @@ END:
         'movea.l d0, a0',
         Size.Word,
         `
-        move.l #10, d0        
-        movea.w d0, a0
+move.l #10, d0
+movea.w d0, a0
     `
     ),
     add: makeIns(
@@ -349,9 +349,9 @@ END:
         'add.l (a4, d3), d1',
         Size.Word,
         `
-        move #10, d0
-        move.l #20, d1
-        add.w d0, d1
+move #10, d0
+move.l #20, d1
+add.w d0, d1
     `
     ),
     adda: makeIns(
@@ -362,18 +362,18 @@ END:
         'adda.l d0, a0',
         Size.Word,
         `
-        move #10, d0
-        move.l #20, a0
-        adda.w d0, a0
+move #10, d0
+move.l #20, a0
+adda.w d0, a0
 
-        move.l	#$1C000, d1
-        move.l	#$1C000, d2
-        move.l	#$1C000, a1
-        move.l	#$1C000, a2
-	    add.l	#$6000, d1
-	    adda.l	#$6000, a1
-	    add.w	#$6000, d2
-	    adda.w	#$6000, a2 ;!
+move.l	#$1C000, d1
+move.l	#$1C000, d2
+move.l	#$1C000, a1
+move.l	#$1C000, a2
+add.l	#$6000, d1
+adda.l	#$6000, a1
+add.w	#$6000, d2
+adda.w	#$6000, a2 ;!
     `
     ),
     addq: makeIns(
@@ -384,9 +384,9 @@ END:
         'addq.w #4, d1',
         Size.Word,
         `
-        move.l #20, d1
-        addq.w #4, d1
-        addq.w #9, d1 ; error! exceeds 8
+move.l #20, d1
+addq.w #4, d1
+addq.w #9, d1 ; error! exceeds 8
     `
     ),
     addi: makeIns(
@@ -397,8 +397,8 @@ END:
         'addi.w #4, d1',
         Size.Word,
         `
-        move.l #20, d1
-        addi.w #100, d1
+move.l #20, d1
+addi.w #100, d1
     `
     ),
     sub: makeIns(
@@ -409,8 +409,8 @@ END:
         'sub.w $1000, d1',
         Size.Word,
         `
-        move.l #20, d1
-        sub.w #10, d1   
+move.l #20, d1
+sub.w #10, d1   
     `
     ),
     suba: makeIns(
@@ -421,8 +421,8 @@ END:
         'suba.w #$FF, a1',
         Size.Word,
         `
-        move.l #20, a1
-        suba.w #10, a1
+move.l #20, a1
+suba.w #10, a1
     `
     ),
     subi: makeIns(
@@ -433,8 +433,8 @@ END:
         'subi #1, d3',
         Size.Word,
         `
-        move.l #20, d3
-        subi.l #$FFFF, d3
+move.l #20, d3
+subi.l #$FFFF, d3
     `
     ),
     subq: makeIns(
@@ -445,9 +445,9 @@ END:
         'subq.b #1, d3',
         Size.Word,
         `
-        move.l #20, d3
-        subq.l #1, d3
-        subq #9, d3 ; error! exceeds 8
+move.l #20, d3
+subq.l #1, d3
+subq #9, d3 ; error! exceeds 8
     `
     ),
     divs: makeIns(
@@ -458,12 +458,12 @@ END:
         'divs #2, d1',
         undefined,
         `
-        move.l #21, d1
-        divs #2, d1
-        move.w d1, d2 ; quotient
-        ; clr.w d1 ; optional, clear quotient part
-        swap d1 ; swapping to get the remainder
-        move.w d0, d3 ; remainder
+move.l #21, d1
+divs #2, d1
+move.w d1, d2 ; quotient
+; clr.w d1 ; optional, clear quotient part
+swap d1 ; swapping to get the remainder
+move.w d0, d3 ; remainder
     `
     ),
     divu: makeIns(
@@ -474,12 +474,12 @@ END:
         'divu #@4, d1',
         undefined,
         `
-        move.l #21, d1
-        divu #2, d1
-        move.w d1, d2 ; quotient
-        ; clr.w d1 ; optional, clear quotient part
-        swap d1 ; swapping to get the remainder
-        move.w d0, d3 ; remainder
+move.l #21, d1
+divu #2, d1
+move.w d1, d2 ; quotient
+; clr.w d1 ; optional, clear quotient part
+swap d1 ; swapping to get the remainder
+move.w d0, d3 ; remainder
     `
     ),
     muls: makeIns(
@@ -490,8 +490,8 @@ END:
         'muls d0, d1',
         undefined,
         `
-        move.l #2, d1
-        muls #4, d1
+move.l #2, d1
+muls #4, d1
     `
     ),
     mulu: makeIns(
@@ -502,8 +502,8 @@ END:
         'mulu d5, d2',
         undefined,
         `
-        move.l #2, d2
-        mulu #4, d2
+move.l #2, d2
+mulu #4, d2
     `
     ),
     swap: makeIns(
@@ -514,8 +514,8 @@ END:
         'swap d0',
         undefined,
         `
-        move.l #$12345678, d0
-        swap d0
+move.l #$12345678, d0
+swap d0
     `
     ),
     clr: makeIns(
@@ -526,12 +526,12 @@ END:
         'clr.b d0',
         Size.Word,
         `
-        move.l #$ffff, d0
-        clr.b d0
-        move.l #$ffff, d1
-        clr.w d1
-        move.l #$ffff, d2
-        clr.l d2
+move.l #$ffff, d0
+clr.b d0
+move.l #$ffff, d1
+clr.w d1
+move.l #$ffff, d2
+clr.l d2
     `
     ),
     exg: makeIns(
@@ -542,9 +542,9 @@ END:
         'exg d0, a1',
         undefined,
         `
-        move.l #$ff, d0
-        move.l #$aa, a0
-        exg d0, a0
+move.l #$ff, d0
+move.l #$aa, a0
+exg d0, a0
     `
     ),
     neg: makeIns(
@@ -555,8 +555,8 @@ END:
         'neg.l d0',
         Size.Word,
         `
-        move.b #1, d0 ; 1, 0x01
-        neg.b d0 ; -1, 0xff
+move.b #1, d0 ; 1, 0x01
+neg.b d0 ; -1, 0xff
     `
     ),
     ext: makeIns(
@@ -567,10 +567,10 @@ END:
         'ext.w d0',
         Size.Word,
         `
-        move.b #8, d0
-        ext.w d0 
-        move.b #-8, d1
-        ext.w d1
+move.b #8, d0
+ext.w d0 
+move.b #-8, d1
+ext.w d1
     `
     ),
     lea: makeIns(
@@ -581,13 +581,13 @@ END:
         'lea (a0), a1',
         undefined,
         `
-        org $2000
-        someLabel: dc.l 0
+org $2000
+someLabel: dc.l 0
 
-        START:
-        lea someLabel, a0
-        lea (a0), a1
-        lea $3000, a2
+START:
+lea someLabel, a0
+lea (a0), a1
+lea $3000, a2
     `
     ),
     pea: makeIns(
@@ -598,9 +598,9 @@ END:
         'pea (a0)',
         undefined,
         `
-        move.l (sp), d0
-        pea $2000
-        move.l (sp), d1
+move.l (sp), d0
+pea $2000
+move.l (sp), d1
     `
     ),
     tst: makeIns(
@@ -611,10 +611,10 @@ END:
         'tst.b (a0)',
         Size.Word,
         `
-        move #$ff, d0
-        tst.b d0
-        smi d1 ; set if minus
-        seq d2 ; set if equal
+move #$ff, d0
+tst.b d0
+smi d1 ; set if minus
+seq d2 ; set if equal
     `
     ),
     cmp: makeIns(
@@ -625,13 +625,13 @@ END:
         'cmp.l -(sp), d0',
         Size.Word,
         `
-        move.l #10, d0
-        move.l #11, d1
-        ; compare d0 to d1
-        cmp.l d1, d0 
-        sgt d2 ; if d0 > d1
-        slt d3 ; if d0 < d1
-        ;...etc
+move.l #10, d0
+move.l #11, d1
+; compare d0 to d1
+cmp.l d1, d0 
+sgt d2 ; if d0 > d1
+slt d3 ; if d0 < d1
+;...etc
     `
     ),
     cmpi: makeIns(
@@ -642,12 +642,12 @@ END:
         'cmpi.w #10, d3',
         Size.Word,
         `
-        move.l #10, d0
-        cmpi.w #11, d0
-        ; compare d0 to 11
-        sgt d2 ; if d0 > 11
-        slt d3 ; if d0 < 11
-        ;...etc
+move.l #10, d0
+cmpi.w #11, d0
+; compare d0 to 11
+sgt d2 ; if d0 > 11
+slt d3 ; if d0 < 11
+;...etc
     `
     ),
     cmpa: makeIns(
@@ -658,10 +658,10 @@ END:
         'cmpa.l $1000, a0',
         Size.Word,
         `
-        lea $1000, a0 ; loads address of $1000 into a0
-        cmpa #$1000, a0
-        ; compare a0 t0 1000
-        seq d0 ; if a0 == 1000
+lea $1000, a0 ; loads address of $1000 into a0
+cmpa #$1000, a0
+; compare a0 t0 1000
+seq d0 ; if a0 == 1000
     `
     ),
     cmpm: makeIns(
@@ -672,13 +672,13 @@ END:
         'cmpm.b (a0)+, (a1)+',
         Size.Word,
         `
-        lea $1000, a0
-        lea $2000, a1
-        move.l #10, (a0)
-        move.l #10, (a1)
-        cmpm.b (a0)+, (a1)+
-        ; compare (a0) to (a1)
-        seq d0 ; if (a0) == (a1)
+lea $1000, a0
+lea $2000, a1
+move.l #10, (a0)
+move.l #10, (a1)
+cmpm.b (a0)+, (a1)+
+; compare (a0) to (a1)
+seq d0 ; if (a0) == (a1)
     `
     ),
     bcc: {
@@ -690,14 +690,14 @@ END:
             '`b<cc> label` Where cc is one of the condition codes',
             undefined,
             `
-        move.l #10, d0
-        move.l #2, d2
-        for_start:
-            subq.l #1, d0
-            add #1, d2
-            tst d0
-            ;if d0 != 0, branch to for_start 
-            bne for_start
+move.l #10, d0
+move.l #2, d2
+for_start:
+    subq.l #1, d0
+    add #1, d2
+    tst d0
+    ;if d0 != 0, branch to for_start 
+    bne for_start
     `
         ),
         compundNames: branchConditions.map((c) => `b${c}`)
@@ -711,13 +711,13 @@ END:
             '`s<cc> d0` Where cc is one of the condition codes',
             undefined,
             `
-        move.l #10, d0
-        tst d0 
-        spl d1 ; set if plus
-        sne d2 ; set if not equal
-        smi d3 ; set if minus
-        sgt d4 ; set if greater than
-        ; ...etc
+move.l #10, d0
+tst d0 
+spl d1 ; set if plus
+sne d2 ; set if not equal
+smi d3 ; set if minus
+sgt d4 ; set if greater than
+; ...etc
     `
         ),
         compundNames: setConditions.map((c) => `s${c}`)
@@ -731,12 +731,12 @@ END:
             '`db<cc> d0, label` Where cc is one of the condition codes',
             undefined,
             `
-        move.l #10, d0
-        move.l #2, d2
-        for_start:
-            add #1, d2
-            ; decrements and tests if d0 != 0
-            dbne d0, for_start
+move.l #10, d0
+move.l #2, d2
+for_start:
+    add #1, d2
+    ; decrements and tests if d0 != 0
+    dbne d0, for_start
     `
         ),
         compundNames: branchConditions.map((c) => `db${c}`)
@@ -749,9 +749,9 @@ END:
         'not.b d0',
         Size.Word,
         `
-        move.l #%10110100, d0
-        not.w d0 ;01001011
-        move.l #$01001011, d1
+move.l #%10110100, d0
+not.w d0 ;01001011
+move.l #$01001011, d1
     `
     ),
     or: makeIns(
@@ -762,9 +762,9 @@ END:
         'or.l #$FF, d1',
         Size.Word,
         `
-        move.l #$F00F, d0
-        move.l #$0F00, d1
-        or.l d1, d0
+move.l #$F00F, d0
+move.l #$0F00, d1
+or.l d1, d0
     `
     ),
     ori: makeIns(
@@ -775,8 +775,8 @@ END:
         'ori.l #%1100, (a0)',
         Size.Word,
         `
-        move.l #$F00F, d0
-        ori.l #$FF00, d0
+move.l #$F00F, d0
+ori.l #$FF00, d0
     `
     ),
     and: makeIns(
@@ -787,9 +787,9 @@ END:
         'and.l d0, d1',
         Size.Word,
         `
-        move.l #$FF0F, d0
-        move.l #$00FF, d1
-        and.l d1, d0
+move.l #$FF0F, d0
+move.l #$00FF, d1
+and.l d1, d0
     `
     ), //destination should only be register
     andi: makeIns(
@@ -800,8 +800,8 @@ END:
         'andi.l #$FF, (a0)',
         Size.Word,
         `
-        move.l #$FF0F, d0
-        andi.l #$00FF, d0
+move.l #$FF0F, d0
+andi.l #$00FF, d0
     `
     ),
     eor: makeIns(
@@ -812,8 +812,8 @@ END:
         'eor.l d0, d1',
         Size.Word,
         `   
-        move.l #$F00F, d0
-        move.l #$FF00, d1
+move.l #$F00F, d0
+move.l #$FF00, d1
     `
     ),
     eori: makeIns(
@@ -824,8 +824,8 @@ END:
         'eori.l #1, (sp)+',
         Size.Word,
         `
-        move.l #$F00F, d0
-        eori.l #$FF00, d0
+move.l #$F00F, d0
+eori.l #$FF00, d0
     `
     ),
     jmp: makeIns(
@@ -836,14 +836,14 @@ END:
         'jmp (a0)',
         undefined,
         `
-        move.l #10, d0
-        lea fn1, a0
-        jmp (a0)
-        ; won't reach because it jumps to fn1
-        move.l #'no', d1
+move.l #10, d0
+lea fn1, a0
+jmp (a0)
+; won't reach because it jumps to fn1
+move.l #'no', d1
 
-        fn1: 
-            move.l #$FF, d0
+fn1: 
+    move.l #$FF, d0
     `
     ),
     jsr: makeIns(
@@ -854,17 +854,17 @@ END:
         'jsr (sp)',
         undefined,
         `
-        move.l #10, d0
-        lea add_two_to_d0, a0
-        jsr (a0)
-        jsr add_two_to_d0
-        bra END
+move.l #10, d0
+lea add_two_to_d0, a0
+jsr (a0)
+jsr add_two_to_d0
+bra END
 
-        add_two_to_d0: 
-            add.l #2, d0    
-            rts        
+add_two_to_d0: 
+    add.l #2, d0    
+    rts
 
-        END:
+END:
     `
     ),
     bra: makeIns(
@@ -875,12 +875,12 @@ END:
         'bra $2000',
         undefined,
         `
-        move.l #10, d1
-        bra branch_here
+move.l #10, d1
+bra branch_here
 
-        branch_here:
-            move.l #$ff, d1
-        add #1, d0
+branch_here:
+    move.l #$ff, d1
+add #1, d0
     `
     ),
     dbra: makeIns(
@@ -891,13 +891,13 @@ END:
         'dbra d0, label',
         undefined,
         `
-        move.l #5, d0
-        move.l #0, d2
-        for_start:
-            add #1, d2
-            ; decrements and tests if d0 != 0
-            dbra d0, for_start
-        `
+move.l #5, d0
+move.l #0, d2
+for_start:
+    add #1, d2
+    ; decrements and tests if d0 != 0
+    dbra d0, for_start
+`
     ),
     link: makeIns(
         'link',
@@ -907,13 +907,13 @@ END:
         'link a0, #-16',
         undefined,
         `
-        * -- NEEDS BETTER EXAMPLE --
-        link  A6,#-12 
-        * .. code ..
-        move  D3,-8(A6)
-        * .. code ..
-        unlk  A6
-        `
+* -- NEEDS BETTER EXAMPLE --
+link  A6,#-12 
+* .. code ..
+move  D3,-8(A6)
+* .. code ..
+unlk  A6
+`
     ),
     unlk: makeIns(
         'unlk',
@@ -923,13 +923,13 @@ END:
         'unlk a0',
         undefined,
         `
-        * -- NEEDS BETTER EXAMPLE --
-        link  A6,#-12 
-        * .. code ..
-        move  D3,-8(A6)
-        * .. code ..
-        unlk  A6
-        `
+* -- NEEDS BETTER EXAMPLE --
+link  A6,#-12 
+* .. code ..
+move  D3,-8(A6)
+* .. code ..
+unlk  A6
+`
     ),
     rts: makeIns(
         'rts',
@@ -939,17 +939,17 @@ END:
         'rts',
         undefined,
         `
-        move.l #10, d0
-        lea add_two_to_d0, a0
-        jsr (a0)
-        jsr add_two_to_d0
-        bra END
+move.l #10, d0
+lea add_two_to_d0, a0
+jsr (a0)
+jsr add_two_to_d0
+bra END
 
-        add_two_to_d0: 
-            add.l #2, d0    
-            rts        
+add_two_to_d0: 
+    add.l #2, d0    
+    rts
 
-        END:
+END:
     `
     ),
     bsr: makeIns(
@@ -960,15 +960,15 @@ END:
         'bsr label',
         undefined,
         `
-        move.l #10, d0
-        bsr add_two_to_d0
-        bra END
+move.l #10, d0
+bsr add_two_to_d0
+bra END
 
-        add_two_to_d0: 
-            add.l #2, d0    
-            rts        
+add_two_to_d0: 
+    add.l #2, d0    
+    rts
 
-        END:
+END:
     `
     ),
     trap: makeIns(
@@ -979,15 +979,15 @@ END:
         'trap #15',
         undefined,
         `
-        move #4, d0
-        trap #15
-        
-        move #3, d0
-        trap #15
-        
-        move #6, d0
-        move #32, d1
-        trap #15
+move #4, d0
+trap #15
+
+move #3, d0
+trap #15
+
+move #6, d0
+move #32, d1
+trap #15
        `
     ),
     asd: {
@@ -999,12 +999,12 @@ END:
             '`as<d> d0, d3` Where d is either (l)eft or (r)ight',
             Size.Word,
             `
-        move.w #$FF00, d0
-        asr.w #4, d0
-        move.w #$0F00, d1
-        asr.w #4, d1
-        move.w #$0FF0, d2
-        asr.w #4, d2
+move.w #$FF00, d0
+asr.w #4, d0
+move.w #$0F00, d1
+asr.w #4, d1
+move.w #$0FF0, d2
+asr.w #4, d2
     `
         ),
         compundNames: ['asl', 'asr']
@@ -1018,12 +1018,12 @@ END:
             '`ls<d> #3, d7` Where d is either (l)eft or (r)ight',
             Size.Word,
             `
-        move.w #$FF00, d0
-        lsr.w #4, d0
-        move.w #$0F00, d1
-        lsr.w #4, d1
-        move.w #$0FF0, d2
-        asr.w #4, d2 
+move.w #$FF00, d0
+lsr.w #4, d0
+move.w #$0F00, d1
+lsr.w #4, d1
+move.w #$0FF0, d2
+asr.w #4, d2 
     `
         ),
         compundNames: ['lsr', 'lsl']
@@ -1037,11 +1037,11 @@ END:
             '`ro<d> d2, d5` Where d is either (l)eft or (r)ight',
             Size.Word,
             `
-        move.w #$1234, d0
-        rol.w #8, d0
-        move.w #$1234, d1
-        ror.w #8, d1
-        `
+move.w #$1234, d0
+rol.w #8, d0
+move.w #$1234, d1
+ror.w #8, d1
+`
         ),
         compundNames: ['rol', 'ror']
     },
@@ -1053,9 +1053,9 @@ END:
         'btst #4, d0',
         undefined,
         `
-        move #1, d0
-        btst #0, d0
-        sne d1
+move #1, d0
+btst #0, d0
+sne d1
     `
     ),
     bchg: makeIns(
@@ -1066,9 +1066,9 @@ END:
         'bchg #%101, d3',
         undefined,
         `
-        move #3, d0
-        bchg #0, d0
-        sne d1
+move #3, d0
+bchg #0, d0
+sne d1
     `
     ),
     bclr: makeIns(
@@ -1079,8 +1079,8 @@ END:
         'bclr d2, d7',
         undefined,
         `
-        move #3, d0
-        bclr #1, d0
+move #3, d0
+bclr #1, d0
     `
     ),
     bset: makeIns(
@@ -1091,8 +1091,8 @@ END:
         'bset #1, d1',
         undefined,
         `
-        move #1, d0
-        bset #2, d0
+move #1, d0
+bset #2, d0
     `
     )
 }

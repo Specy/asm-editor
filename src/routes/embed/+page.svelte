@@ -1,6 +1,4 @@
 <script lang="ts">
-    import { run } from 'svelte/legacy'
-
     import { onMount } from 'svelte'
     import InteractiveInstructionEditor from '$cmp/shared/InteractiveInstructionEditor.svelte'
     import { type AvailableLanguages, type Testcase } from '$lib/Project.svelte'
@@ -12,6 +10,8 @@
     import Select from '$cmp/shared/input/Select.svelte'
     import { viewStore } from '$stores/view'
     import { BASE_CODE } from '$lib/Config'
+    import Header from '$cmp/shared/layout/Header.svelte'
+    import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
 
     type Settings = {
         showMemory: boolean
@@ -49,6 +49,7 @@
             return undefined
         }
     }
+
     function getTestsFromUrl() {
         const searchParams = $page.url.searchParams
         const tests = searchParams.get('testcases')
@@ -102,71 +103,88 @@
 </script>
 
 {#if !inIframe}
-    <DefaultNavbar />
+	<DefaultNavbar />
 {/if}
 <Page contentStyle={!inIframe ? 'padding-top: 3.5rem' : ''}>
-    {#if !inIframe}
-        <Column gap="1rem" padding="1rem">
-            <p>
-                Write some assembly code, below the editor there will be generated an embed URL and
-                embed html code that you can put in your website
-            </p>
-        </Column>
-    {/if}
+	{#if !inIframe}
+		<Column gap="1rem" padding="1rem">
+			<p>
+				Write some assembly code, below the editor there will be generated an embed URL and
+				embed html code that you can put in your website
+			</p>
+		</Column>
+	{/if}
 
-    <Column style={'padding: 0.5rem; flex:1'}>
-        {#key settings.language}
-            <InteractiveInstructionEditor
-                bind:code
-                bind:testcases
-                embedded={inIframe}
-                showConsole={settings.showConsole}
-                showMemory={settings.showMemory}
-                showTestcases={settings.showTests}
-                language={settings.language}
-            />
-        {/key}
-    </Column>
+	<Column style={'padding: 0.5rem; flex:1'}>
+		{#key settings.language}
+			<EmulatorLoader
+				bind:code={code}
+				language={settings.language}
+				settings={{
+						globalPageElementsPerRow: 4,
+						globalPageSize: 4 * 8
+				}}
+			>
+				{#snippet children(emulator)}
+					<InteractiveInstructionEditor
+						{emulator}
+						bind:code
+						bind:testcases
+						embedded={inIframe}
+						showConsole={settings.showConsole}
+						showMemory={settings.showMemory}
+						showTestcases={settings.showTests}
+						language={settings.language}
+					/>
+				{/snippet}
+				{#snippet loading()}
+					<Header>
+						Loading emulator...
+					</Header>
+				{/snippet}
+			</EmulatorLoader>
+		{/key}
+	</Column>
 
-    {#if !inIframe}
-        <div class="share-container">
-            <div class="share-card" style="padding: 1rem; gap: 0.5rem">
-                <h2 style="text-align: center;">Embed Settings</h2>
-                <div class="share-settings">
-                    <span>Show memory</span>
-                    <input type="checkbox" bind:checked={settings.showMemory} />
-                </div>
-                <div class="share-settings">
-                    <span>Show console</span>
-                    <input type="checkbox" bind:checked={settings.showConsole} />
-                </div>
-                <div class="share-settings">
-                    <span>Show tests</span>
-                    <input type="checkbox" bind:checked={settings.showTests} />
-                </div>
-                <div class="share-settings" style="justify-content: space-between;">
-                    <span>Language</span>
-                    <Select
-                        onChange={() => (code = BASE_CODE[settings.language])}
-                        style="background-color: var(--tertiary); color: var(--secondary-text); text-align: center;"
-                        wrapperStyle="max-width: 5rem;"
-                        options={['M68K', 'MIPS']}
-                        bind:value={settings.language}
-                    />
-                </div>
-            </div>
-            <div class="share-card">
-                <h2 style="text-align: center;">URL</h2>
-                <textarea>{generatedCode}</textarea>
-            </div>
-            <div class="share-card">
-                <h2 style="text-align: center;">Embed code</h2>
-                <textarea
-                    >{`<iframe src="${generatedCode}" style="border: none; border-radius: 0.8rem; width: 100%; min-height: 20.4rem;"></iframe>`}</textarea
-                >
-            </div>
-        </div>
-    {/if}
+	{#if !inIframe}
+		<div class="share-container">
+			<div class="share-card" style="padding: 1rem; gap: 0.5rem">
+				<h2 style="text-align: center;">Embed Settings</h2>
+				<div class="share-settings">
+					<span>Show memory</span>
+					<input type="checkbox" bind:checked={settings.showMemory} />
+				</div>
+				<div class="share-settings">
+					<span>Show console</span>
+					<input type="checkbox" bind:checked={settings.showConsole} />
+				</div>
+				<div class="share-settings">
+					<span>Show tests</span>
+					<input type="checkbox" bind:checked={settings.showTests} />
+				</div>
+				<div class="share-settings" style="justify-content: space-between;">
+					<span>Language</span>
+					<Select
+						onChange={() => (code = BASE_CODE[settings.language])}
+						style="background-color: var(--tertiary); color: var(--secondary-text); text-align: center;"
+						wrapperStyle="max-width: 5rem;"
+						options={['M68K', 'MIPS']}
+						bind:value={settings.language}
+					/>
+				</div>
+			</div>
+			<div class="share-card">
+				<h2 style="text-align: center;">URL</h2>
+				<textarea>{generatedCode}</textarea>
+			</div>
+			<div class="share-card">
+				<h2 style="text-align: center;">Embed code</h2>
+				<textarea
+				>{`<iframe src="${generatedCode}" style="border: none; border-radius: 0.8rem; width: 100%; min-height: 20.4rem;"></iframe>`}</textarea
+				>
+			</div>
+		</div>
+	{/if}
 </Page>
 
 <style>

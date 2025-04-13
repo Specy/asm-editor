@@ -12,6 +12,7 @@ export type SettingValues = {
     autoScrollStackTab: SettingValue<boolean>
     instructionsLimit: SettingValue<number>
     autoSave: SettingValue<boolean>
+    showMemory: SettingValue<boolean>
     maxHistorySize: SettingValue<number>
     maxVisibleHistoryModifications: SettingValue<number>
     showPseudoInstructions: SettingValue<boolean>
@@ -35,12 +36,13 @@ const baseValues = {
     autoScrollStackTab: createValue('Auto scroll the stack memory tab', true),
     autoSave: createValue('Auto save', true),
     showPseudoInstructions: createValue('Show pseudo instructions', true, 'MIPS'),
+    showMemory: createValue('Show memory tab', true),
     instructionsLimit: createValue('Instruction execution limit, 0 to ignore', 50_000_000),
     maxHistorySize: createValue('Maximum undo steps, 0 to disable', 100),
     maxVisibleHistoryModifications: createValue('Maximum visible history steps', 10),
 } satisfies SettingValues
 
-const CURRENT_VERSION = '1.1.6'
+const CURRENT_VERSION = '1.1.7'
 function createSettingsStore() {
     let data = $state({
         meta: {
@@ -70,6 +72,7 @@ function createSettingsStore() {
         value: SettingValues[keyof SettingValues]['value']
     ) {
         data.values[key].value = value
+        store()
     }
 
     if (browser) fetch()

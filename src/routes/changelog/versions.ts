@@ -7,6 +7,14 @@ type Version = {
 }
 export const versions: Version[] = [
     {
+        version: '5.0.0',
+        title: 'Added X86 language!',
+        date: new Date('2025-04-13'),
+        changes: [
+            "Added X86 assembler/simulator (basic version)",
+        ]
+    },
+    {
         version: '4.0.0',
         title: 'Added MIPS language!',
         date: new Date('2025-02-13'),

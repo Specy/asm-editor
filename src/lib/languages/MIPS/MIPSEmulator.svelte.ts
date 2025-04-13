@@ -1,44 +1,46 @@
 import { PAGE_ELEMENTS_PER_ROW, PAGE_SIZE } from '$lib/Config'
 import {
-    MIPS,
-    type JsMips,
-    type RegisterName,
-    type MIPSAssembleError,
     BackStepAction,
-    registerHandlers,
-    unimplementedHandler,
     ConfirmResult,
-    type JsBackStep,
     type HandlerMapFns,
-    type JsProgramStatement
+    type JsBackStep,
+    type JsMips,
+    type JsProgramStatement,
+    MIPS,
+    type MIPSAssembleError,
+    registerHandlers,
+    type RegisterName,
+    unimplementedHandler
 } from '@specy/mips'
 import {
-    createMemoryTab,
-    InterpreterStatus,
-    makeRegister,
-    numbersOfSizeToSlice,
-    RegisterSize,
     type BaseEmulatorActions,
     type BaseEmulatorState,
+    createMemoryTab,
     type EmulatorDecoration,
     type EmulatorSettings,
+    InterpreterStatus,
+    makeLabelColor,
+    makeRegister,
     type MonacoError,
-    type MutationOperation, makeLabelColor
+    type MutationOperation,
+    numbersOfSizeToSlice,
+    RegisterSize
 } from '../commonLanguageFeatures.svelte'
 import { createDebouncer } from '$lib/utils'
 import { settingsStore } from '$stores/settingsStore.svelte'
 import type { Testcase, TestcaseResult, TestcaseValidationError } from '$lib/Project.svelte'
-import {
-    byteSliceToNum,
-    isMemoryChunkEqual,
-    numberToByteSlice
-} from '$cmp/specific/project/memory/memoryTabUtils'
+import { byteSliceToNum, isMemoryChunkEqual, numberToByteSlice } from '$cmp/specific/project/memory/memoryTabUtils'
 
 export type MIPSEmulatorState = BaseEmulatorState & {}
 
 function getMIPSErrorMessage(e: unknown) {
     return String(e)
 }
+
+export const ExtraMIPSRegisters = [
+    'hi',
+    'lo'
+]
 
 export const MIPSRegisterNames = [
     '$zero',
@@ -103,7 +105,7 @@ function assembleErrorToMonacoError(error: MIPSAssembleError): MonacoError {
 }
 
 
-function formatStatement(statement: string){
+function formatStatement(statement: string) {
     statement = statement.replace(/,/g, ', ');
     //reverse because it's from bigger to smaller, prevents $10 from being replaced by $1
     ([...MIPSRegisterNames]).reverse().forEach((reg, i) => {
@@ -123,6 +125,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
     let code = $state(baseCode)
     let state = $state<Omit<MIPSEmulatorState, 'code'>>({
         registers: [],
+        extraRegisters: [],
         hiddenRegisters: ['$zero'],
         terminated: false,
         line: -1,
@@ -244,6 +247,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
             addError(getMIPSErrorMessage(e))
         }
     }
+
     function clear() {
         state = {
             ...state,
@@ -275,7 +279,12 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
 
     function getRegistersValue() {
         if (!mips) return []
-        return mips.getRegistersValues()
+        const registers = mips.getRegistersValues()
+        return [
+            mips.getHi(),
+            mips.getLo(),
+            ...registers,
+        ]
     }
 
     function scrollStackTab() {
@@ -287,14 +296,23 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         if (stackTab) stackTab.address = sp - (sp % stackTab.pageSize)
     }
 
-    function setRegisters(override?: number[]) {
+    function setRegisters(override?: number[], extraRegisters?: number[]) {
         if (!mips && !override) {
             override = new Array(MIPSRegisterNames.length).fill(0)
         }
+
         const registers = (override ?? getRegistersValue()).map((reg, i) => {
             return makeRegister(MIPSRegisterNames[i], reg)
         })
         state.registers = registers
+
+        extraRegisters ??= [
+            mips?.getHi() ?? 0,
+            mips?.getLo() ?? 0,
+        ]
+        state.extraRegisters = extraRegisters.map((reg, i) => {
+            return makeRegister(ExtraMIPSRegisters[i], reg)
+        })
     }
 
     function updateRegisters() {
@@ -302,6 +320,8 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         getRegistersValue().forEach((reg, i) => {
             state.registers[i].setValue(reg)
         })
+        state.extraRegisters[0].setValue(mips?.getHi() ?? 0)
+        state.extraRegisters[1].setValue(mips?.getLo() ?? 0)
         state.sp = state.registers[STACK_POINTER_INDEX].value
     }
 
@@ -345,7 +365,8 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
             try {
                 const ins = mips.getStatementAtAddress(step.pc)
                 line = ins.sourceLine - 1
-            } catch (e) { }
+            } catch (e) {
+            }
             return {
                 pc: step.pc,
                 old_ccr: {
@@ -436,7 +457,8 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
             try {
                 const ins = mips.getNextStatement()
                 state.line = ins.sourceLine - 1
-            } catch (e) { }
+            } catch (e) {
+            }
 
             state.canUndo = mips.canUndo
         } catch (e) {
@@ -764,7 +786,8 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 const ins = mips.getNextStatement()
                 //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
                 state.line = ins.sourceLine - 1
-            } catch (e) { }
+            } catch (e) {
+            }
 
             state.canUndo = mips.canUndo
 

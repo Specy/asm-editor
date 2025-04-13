@@ -2,7 +2,7 @@
     import { page } from '$app/stores'
     import { makeProject, type Project } from '$lib/Project.svelte'
     import { ProjectStore, SHARE_ID } from '$stores/projectsStore.svelte'
-    import { onDestroy, onMount, untrack } from 'svelte'
+    import { onMount, untrack } from 'svelte'
     import { toast } from '$stores/toastStore'
     import ProjectEditor from './Project.svelte'
     import { Monaco } from '$lib/monaco/Monaco'
@@ -11,8 +11,9 @@
     import Page from '$cmp/shared/layout/Page.svelte'
     import lzstring from 'lz-string'
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
-    import { DEFAULT_THEME, ThemeStore, type ThemeKeys } from '$stores/themeStore.svelte'
+    import { DEFAULT_THEME, ThemeStore } from '$stores/themeStore.svelte'
     import { LANGUAGE_THEMES } from '$lib/Config'
+    import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
 
     let project = makeProject()
     let status: 'loading' | 'loaded' | 'error' = $state('loading')
@@ -112,87 +113,99 @@
 </script>
 
 <svelte:head>
-    <title>
-        {project?.name || 'Unnamed'}
-    </title>
+	<title>
+		{project?.name || 'Unnamed'}
+	</title>
 
-    <meta
-        name="description"
-        content="Use the editor to write code and run it to debug. Built in documentation and useful tools to learn and develop more easily"
-    />
+	<meta
+		name="description"
+		content="Use the editor to write code and run it to debug. Built in documentation and useful tools to learn and develop more easily"
+	/>
 </svelte:head>
 
 <svelte:window
-    onbeforeunload={(e) => {
+	onbeforeunload={(e) => {
         if (!$page.url.hostname.includes('localhost')) {
             e.preventDefault()
             e.returnValue = 'You have unsaved changes'
         }
     }}
 />
+
+{#snippet loadingScreen(errored)}
+	<div
+		class="overlay"
+		class:overlay-hidden={!(status === 'loading' || status === 'error')}
+	>
+		{#if !errored}
+			<h1 class="loading">Loading...</h1>
+		{:else}
+			<h1 class="error">Error loading project!</h1>
+			<ButtonLink href="/projects">Back to your projects</ButtonLink>
+		{/if}
+	</div>
+{/snippet}
 <Page>
-    {#key project.id}
-        <ProjectEditor
-            bind:project
-            on:wantsToLeave={() => {
+	{#key project.id}
+		<EmulatorLoader bind:code={project.code} language={project.language}>
+			{#snippet children(emulator)}
+				<ProjectEditor
+					{emulator}
+					bind:project
+					on:wantsToLeave={() => {
                 changePage('/projects')
             }}
-            on:save={async ({ detail }) => {
+					on:save={async ({ detail }) => {
                 if (!(await save(project))) return
                 console.log('Saved')
                 if (!detail.silent) toast.logPill('Project saved')
             }}
-            on:share={({ detail }) => {
+					on:share={({ detail }) => {
                 share(detail)
             }}
-        />
-        {#if status === 'loading' || status === 'error'}
-            <div
-                class="overlay"
-                class:overlay-hidden={!(status === 'loading' || status === 'error')}
-            >
-                {#if status === 'loading'}
-                    <h1 class="loading">Loading...</h1>
-                {:else}
-                    <h1 class="error">Error loading project!</h1>
-                    <ButtonLink href="/projects">Back to your projects</ButtonLink>
-                {/if}
-            </div>
-        {/if}
-    {/key}
+				/>
+			{/snippet}
+			{#snippet loading()}
+				{@render loadingScreen(false)}
+			{/snippet}
+		</EmulatorLoader>
+		{#if status === 'loading' || status === 'error'}
+			{@render loadingScreen(status === 'error')}
+		{/if}
+	{/key}
 </Page>
 
 <style lang="scss">
-    .overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.1);
-        backdrop-filter: blur(0.5rem);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        flex-direction: column;
-        gap: 2rem;
-        z-index: 10;
-    }
+  .overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(0.5rem);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    gap: 2rem;
+    z-index: 10;
+  }
 
-    .project {
-        padding: 0.8rem;
-        display: flex;
-        flex-direction: column;
-        height: 100%;
-        max-height: 100%;
-    }
+  .project {
+    padding: 0.8rem;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    max-height: 100%;
+  }
 
-    .loading {
-        font-size: 3.5rem;
-    }
+  .loading {
+    font-size: 3.5rem;
+  }
 
-    .error {
-        font-size: 2.5rem;
-        color: var(--red);
-    }
+  .error {
+    font-size: 2.5rem;
+    color: var(--red);
+  }
 </style>

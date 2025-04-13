@@ -1,29 +1,38 @@
 import type { AvailableLanguages } from '$lib/Project.svelte'
-import type {
-    BaseEmulatorActions,
-    BaseEmulatorState,
-    EmulatorSettings
-} from './commonLanguageFeatures.svelte'
-import { M68KEmulator } from './M68K/M68KEmulator.svelte'
-import { MIPSEmulator } from './MIPS/MIPSEmulator.svelte'
+import type { BaseEmulatorActions, BaseEmulatorState, EmulatorSettings } from './commonLanguageFeatures.svelte'
+import type { M68KEmulator } from './M68K/M68KEmulator.svelte'
+import type { MIPSEmulator } from './MIPS/MIPSEmulator.svelte'
+import type { X86Emulator } from '$lib/languages/X86/X86Emulator.svelte'
 
-type EmulatorMap = {
-    MIPS: typeof MIPSEmulator
-    M68K: typeof M68KEmulator
+
+const instances = {
+    M68K: null as Promise<typeof M68KEmulator> | null,
+    MIPS: null as Promise<typeof MIPSEmulator> | null,
+    X86: null as Promise<typeof X86Emulator> | null
 }
 
-type Emulator = BaseEmulatorActions & BaseEmulatorState
+function loadEmulator(type: AvailableLanguages) {
+    if (instances[type] === null) {
+        if (type === 'M68K') {
+            instances[type] = import('./M68K/M68KEmulator.svelte').then(i => i.M68KEmulator)
+        } else if (type === 'MIPS') {
+            instances[type] = import('./MIPS/MIPSEmulator.svelte').then(i => i.MIPSEmulator)
+        } else if (type === 'X86') {
+            instances[type] = import('./X86/X86Emulator.svelte').then(i => i.X86Emulator)
+        } else {
+            throw new Error(`Unknown language ${type}`)
+        }
+    }
+    return instances[type]
+}
 
-export function GenericEmulator<T extends AvailableLanguages>(
+export type Emulator = BaseEmulatorActions & BaseEmulatorState
+
+export async function GenericEmulator<T extends AvailableLanguages>(
     type: T,
     baseCode: string,
     options?: EmulatorSettings
-): Emulator {
-    if (type === 'M68K') {
-        return M68KEmulator(baseCode, options)
-    }
-    if (type === 'MIPS') {
-        return MIPSEmulator(baseCode, options)
-    }
-    throw new Error(`Unknown language ${type}`)
+): Promise<Emulator> {
+    const emulator = await loadEmulator(type)
+    return emulator(baseCode, options)
 }
