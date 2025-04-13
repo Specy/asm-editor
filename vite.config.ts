@@ -22,10 +22,7 @@ const config: UserConfig = {
     },
     build: {
         sourcemap: false,
-        minify: 'terser',
-        terserOptions: {
-            sourceMap: false,
-        }
+        minify: 'terser'
     },
     plugins: [
         sveltekit(),
