@@ -18,7 +18,7 @@ import {
     numbersOfSizeToSlice,
     RegisterSize
 } from '../commonLanguageFeatures.svelte'
-import { createDebouncer } from '$lib/utils'
+import { createDebouncer, delay } from '$lib/utils'
 
 export type M68KEmulatorState = BaseEmulatorState & {
     interrupt?: Interrupt
@@ -32,6 +32,9 @@ const defaultInterruptHandlers = {
     },
     ReadChar: async () => {
         return ((await Prompt.askText('Enter a character')) as string)[0]
+    },
+    Delay: async (ms: number) => {
+        await delay(ms)
     }
 } as const
 
@@ -454,6 +457,11 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 interpreter.answerInterrupt({ type })
                 break
             }
+            case 'Delay': {
+                await handlers.Delay(interrupt.value)
+                interpreter.answerInterrupt({ type })
+                break
+            }
             default:
                 throw new Error(`Unknown interrupt type "${type}"`)
         }
@@ -729,7 +737,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         return results
     }
 
-    function getLineFromAddress(address: number){
+    function getLineFromAddress(address: number) {
         if (!interpreter) return -1
         const line = interpreter.getInstructionAt(address)
         return line?.parsed_line?.line_index ?? -1
@@ -797,7 +805,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         get decorations() {
             return state.decorations
         },
-        get pc(){
+        get pc() {
             return state.pc
         },
         step,

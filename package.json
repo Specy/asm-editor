@@ -19,7 +19,7 @@
         "@ctrl/tinycolor": "^4.1.0",
         "@fontsource/fira-mono": "^5.2.5",
         "@specy/mips": "^1.2.0",
-        "@specy/s68k": "^1.1.10",
+        "@specy/s68k": "^1.1.11",
         "@specy/x86": "^1.1.0",
         "@sveltejs/vite-plugin-svelte": "^5.0.3",
         "@xterm/xterm": "^5.5.0",
