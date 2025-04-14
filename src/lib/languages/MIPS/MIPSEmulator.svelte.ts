@@ -37,10 +37,6 @@ function getMIPSErrorMessage(e: unknown) {
     return String(e)
 }
 
-export const ExtraMIPSRegisters = [
-    'hi',
-    'lo'
-]
 
 export const MIPSRegisterNames = [
     '$zero',
@@ -74,22 +70,14 @@ export const MIPSRegisterNames = [
     '$gp',
     '$sp',
     '$fp',
-    '$ra'
+    '$ra',
+    'pc',
+    'hi',
+    'lo'
 ]
 
 const STACK_POINTER_INDEX = MIPSRegisterNames.indexOf('$sp')
 
-/*
-export type MonacoError = {
-    lineIndex: number
-    line: {
-        line: string
-        line_index: number
-    }
-    message: string
-    formatted: string
-}
-    */
 
 function assembleErrorToMonacoError(error: MIPSAssembleError): MonacoError {
     return {
@@ -125,8 +113,8 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
     let code = $state(baseCode)
     let state = $state<Omit<MIPSEmulatorState, 'code'>>({
         registers: [],
-        extraRegisters: [],
         hiddenRegisters: ['$zero'],
+        pc: 0,
         terminated: false,
         line: -1,
         decorations: [],
@@ -216,6 +204,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 state.terminated = hasTerminated() //TODO check this
                 state.canUndo = false
                 updateMemory()
+                updateData()
                 res()
             } catch (e) {
                 addError(getMIPSErrorMessage(e))
@@ -252,6 +241,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         state = {
             ...state,
             terminated: false,
+            pc: 0,
             decorations: [],
             line: -1,
             stdOut: '',
@@ -279,11 +269,11 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
 
     function getRegistersValue() {
         if (!mips) return []
-        const registers = mips.getRegistersValues()
         return [
+            ...mips.getRegistersValues(),
+            mips.programCounter,
             mips.getHi(),
-            mips.getLo(),
-            ...registers,
+            mips.getLo()
         ]
     }
 
@@ -296,22 +286,13 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         if (stackTab) stackTab.address = sp - (sp % stackTab.pageSize)
     }
 
-    function setRegisters(override?: number[], extraRegisters?: number[]) {
+    function setRegisters(override?: number[]) {
         if (!mips && !override) {
             override = new Array(MIPSRegisterNames.length).fill(0)
         }
 
-        const registers = (override ?? getRegistersValue()).map((reg, i) => {
+        state.registers = (override ?? getRegistersValue()).map((reg, i) => {
             return makeRegister(MIPSRegisterNames[i], reg)
-        })
-        state.registers = registers
-
-        extraRegisters ??= [
-            mips?.getHi() ?? 0,
-            mips?.getLo() ?? 0,
-        ]
-        state.extraRegisters = extraRegisters.map((reg, i) => {
-            return makeRegister(ExtraMIPSRegisters[i], reg)
         })
     }
 
@@ -320,8 +301,6 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         getRegistersValue().forEach((reg, i) => {
             state.registers[i].setValue(reg)
         })
-        state.extraRegisters[0].setValue(mips?.getHi() ?? 0)
-        state.extraRegisters[1].setValue(mips?.getLo() ?? 0)
         state.sp = state.registers[STACK_POINTER_INDEX].value
     }
 
@@ -349,6 +328,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         const steps = mips
             .getUndoStack()
             .slice(0, settings.values.maxVisibleHistoryModifications.value)
+        state.pc = mips.programCounter
         state.callStack = mips.getCallStack().map((v, i) => {
             const address = v.toAddress
             return {
@@ -915,6 +895,9 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         },
         get statusRegisters() {
             return state.statusRegisters
+        },
+        get pc(){
+            return state.pc
         },
         compile,
         step,

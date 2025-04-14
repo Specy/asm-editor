@@ -169,7 +169,6 @@ export type BaseEmulatorState = {
     code: string
     compiledCode?: string
     registers: Register[]
-    extraRegisters?: Register[]
     hiddenRegisters: string[]
     decorations: EmulatorDecoration[]
     statusRegisters: StatusRegister[]
@@ -181,6 +180,7 @@ export type BaseEmulatorState = {
     line: number
     executionTime: number
     sp: number
+    pc: number
     stdOut: string
     canExecute: boolean
     canUndo: boolean

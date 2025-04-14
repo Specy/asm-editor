@@ -74,6 +74,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         hiddenRegisters: [],
         decorations: [],
         terminated: false,
+        pc: 0,
         line: -1,
         statusRegisters: ['X', 'N', 'Z', 'V', 'C'].map((n) => ({ name: n, value: 0, prev: 0 })),
         compilerErrors: [],
@@ -141,6 +142,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 state.terminated = interpreter.getStatus() !== InterpreterStatus.Running
                 state.canUndo = false
                 updateMemory()
+                updateData()
                 res()
             } catch (e) {
                 addError(getM68kErrorMessage(e))
@@ -189,6 +191,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         state = {
             ...state,
             terminated: false,
+            pc: 0,
             line: -1,
             stdOut: '',
             interrupt: undefined,
@@ -294,6 +297,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
     function updateData() {
         const settings = settingsStore
         state.terminated = interpreter.hasReachedBottom()
+        state.pc = interpreter.getPc()
         state.callStack = interpreter.getCallStack().map((v, i) => {
             return {
                 address: v.address,
@@ -792,6 +796,9 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         compile,
         get decorations() {
             return state.decorations
+        },
+        get pc(){
+            return state.pc
         },
         step,
         run,

@@ -37,7 +37,7 @@ export type X86EmulatorState = BaseEmulatorState & {}
 
 function getErrorMessage(e: unknown): string {
     const string = e instanceof Error ? e.message : String(e)
-    if(string.startsWith("Keystone.js") || string.startsWith("Capstone.js") || string.startsWith("Unicorn.js")){
+    if (string.startsWith('Keystone.js') || string.startsWith('Capstone.js') || string.startsWith('Unicorn.js')) {
         return string.split('\n').slice(1).join('\n')
     }
     return string
@@ -53,6 +53,7 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
     let code = $state(baseCode)
     let state = $state<Omit<X86EmulatorState, 'code'>>({
         registers: [],
+        pc: 0,
         hiddenRegisters: [],
         decorations: [],
         terminated: false,
@@ -106,6 +107,7 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
                 state.canUndo = false
                 state.compiledCode = x86.getAssembledStatements().map(s => s.text).join('\n')
                 updateMemory()
+                updateData()
                 res()
             } catch (e) {
                 addError(getErrorMessage(e))
@@ -144,6 +146,7 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
         if (current.interrupt) Prompt.cancel()
         state = {
             ...state,
+            pc: 0,
             terminated: false,
             compiledCode: undefined,
             line: -1,
@@ -239,13 +242,14 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
     function updateData() {
         state.terminated = x86.isTerminated()
         state.canExecute = !x86.isTerminated()
+        state.pc = x86.getProgramCounter()
     }
 
     function dispose() {
         clearDebouncer()
-        try{
+        try {
             x86?.dispose()
-        }catch (e){
+        } catch (e) {
             console.error(e)
         }
         clear()
@@ -506,7 +510,7 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
         get code() {
             return code
         },
-        get compiledCode(){
+        get compiledCode() {
             return state.compiledCode
         },
         get compilerErrors() {
@@ -550,6 +554,9 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
         },
         get decorations() {
             return state.decorations
+        },
+        get pc() {
+            return state.pc
         },
         compile,
         step,

@@ -19,6 +19,7 @@
     import FaBook from 'svelte-icons/fa/FaBook.svelte'
     import { ShortcutAction, shortcutsStore } from '$stores/shortcutsStore'
     import RegistersVisualiser from '$cmp/specific/project/cpu/RegistersRenderer.svelte'
+    import RegistersRenderer from '$cmp/specific/project/cpu/RegistersRenderer.svelte'
     import StatusCodesVisualiser from '$cmp/specific/project/cpu/StatusCodesRenderer.svelte'
     import MemoryControls from '$cmp/specific/project/memory/MemoryControls.svelte'
     import FaShareAlt from 'svelte-icons/fa/FaShareAlt.svelte'
@@ -35,7 +36,7 @@
     import { getM68kErrorMessage } from '$lib/languages/M68K/M68kUtils'
     import Row from '$cmp/shared/layout/Row.svelte'
     import TestcasesEditor from '$cmp/specific/project/testcases/TestcasesEditor.svelte'
-    import { makeColorizedLabels, RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
+    import { makeColorizedLabels, makeRegister, RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
     import { type Emulator } from '$lib/languages/Emulator'
     import BelowLineContent from '$cmp/specific/project/user-tools/BelowLineContent.svelte'
     import Card from '$cmp/shared/layout/Card.svelte'
@@ -186,6 +187,12 @@
             testcasesVisible = !testcasesVisible
         }
     }
+
+    const pc = makeRegister('PC', emulator.pc)
+
+    $effect(() => {
+        pc.setValue(emulator.pc)
+    })
 </script>
 
 <header class="project-header">
@@ -461,10 +468,18 @@
 	</div>
 	<div class="right-side">
 		<div class="memory-wrapper">
-			<div class="column" style="gap: 0.5rem;">
+			<div class="column" style="gap: 0.4rem;">
 				{#if emulator.statusRegisters && emulator.statusRegisters.length > 0}
 					<StatusCodesVisualiser statusCodes={emulator.statusRegisters} />
 				{/if}
+				<RegistersRenderer
+					size={RegisterSize.Long}
+					style="flex: unset; overflow: unset; padding: 0;"
+					gridStyle="padding: 0.2rem 0.7rem"
+					registers={[pc]}
+					withoutHeader
+					position="bottom"
+				/>
 				<RegistersVisualiser
 					size={groupSize}
 					hiddenRegistersNames={emulator.hiddenRegisters}
@@ -478,8 +493,8 @@
                     }}
 				/>
 			</div>
-			<div class="column" style="gap: 0.5rem">
-				<div class="row" style="gap: 0.5rem">
+			<div class="column" style="gap: 0.4rem">
+				<div class="row" style="gap: 0.4rem">
 					<SizeSelector bind:selected={groupSize} />
 					{#if settingsStore.values.showMemory.value}
 						<MemoryControls
@@ -567,7 +582,7 @@
     }
 
     .memory-wrapper {
-      gap: 0.5rem;
+      gap: 0.4rem;
       @media screen and (max-width: 1000px) {
         margin-top: 1rem;
         padding-bottom: 1rem;
