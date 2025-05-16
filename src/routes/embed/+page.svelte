@@ -168,7 +168,7 @@
 						onChange={() => (code = BASE_CODE[settings.language])}
 						style="background-color: var(--tertiary); color: var(--secondary-text); text-align: center;"
 						wrapperStyle="max-width: 5rem;"
-						options={['M68K', 'MIPS']}
+						options={['M68K', 'MIPS', 'RISC-V', 'X86']}
 						bind:value={settings.language}
 					/>
 				</div>

@@ -13,7 +13,7 @@
     </p>
     <p>
         Each syscall has a unique code that is used to identify it. You must put the syscall code inside the
-        the $v0 register before calling the syscall instruction.
+        the a7 register before calling the ecall instruction.
         <br />
         <br />
         As an example:
@@ -21,14 +21,13 @@
     <MarkdownRenderer 
         source={`
 \`\`\`riscv
-# Load the integer 42 into register $a0, which is
+# Load the integer 42 into register a0, which is
 # the register that will be printed by the syscall 
-li $a0, 42 
+li a0, 42
 
 # Set the syscall code for printing an integer
-li $v0, 1
-syscall
-
+li a7, 1
+ecall
 \`\`\`
         `.trim()}
     />

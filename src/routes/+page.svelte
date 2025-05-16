@@ -149,7 +149,7 @@
                 <div>Documentation</div>
             {/snippet}
             <div class="description" class:textShadow={textShadowPrimary}>
-                The editor comes with built-in documentation for the M68K and MIPS instruction set
+                The editor comes with built-in documentation for the M68K, MIPS and RISC-V instruction sets
                 including the valid addressing modes, description and examples for each instruction,
                 directive and syscall.
                 <a href="/documentation" title="View documentation" class="external-link">

@@ -1,13 +1,13 @@
 <script lang="ts">
     import Card from '$cmp/shared/layout/Card.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
-    import { mipsSyscall } from '$lib/languages/MIPS/MIPS-documentation'
+    import { riscvSyscall } from '$lib/languages/RISC-V/RISC-V-documentation'
     import { capitalize } from '$lib/utils'
     import DocsOperand from '../DocsOperand.svelte'
 </script>
 
 <Column gap="1rem">
-    {#each Object.values(mipsSyscall) as syscall}
+    {#each Object.values(riscvSyscall) as syscall}
         <Card padding="1rem" gap="1rem" background="secondary">
             <h2 style="border-bottom: solid 0.1rem var(--tertiary); padding-bottom: 0.8rem">
                 {syscall.code} - {capitalize(syscall.name)}
