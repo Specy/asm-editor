@@ -1,6 +1,6 @@
 import { BASE_CODE } from './Config'
 
-export type AvailableLanguages = 'M68K' | 'MIPS' | 'X86'
+export type AvailableLanguages = 'M68K' | 'MIPS' | 'X86' | 'RISC-V'
 export interface ProjectData {
     code: string
     createdAt: number

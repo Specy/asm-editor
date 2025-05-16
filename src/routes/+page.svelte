@@ -41,7 +41,7 @@
             <img src="/images/ASM-editor.webp" alt="ASM editor" class="preview-image" />
             <div class="presentation">
                 <div class="welcome-title" class:textShadow={textShadowPrimary}>
-                    The all in one web IDE for Assembly <span style="font-size: 1.5rem;" >M68K, MIPS, X86</span>
+                    The all in one web IDE for Assembly <span style="font-size: 1.5rem;" >M68K, MIPS, RISC-V, X86</span>
                 </div>
                 <Row gap="0.6rem">
                     <ButtonLink
@@ -214,7 +214,7 @@
     .welcome-title {
         font-size: 3rem;
         padding: 1rem;
-        max-width: 35rem;
+        max-width: 38rem;
         text-align: center;
         margin-bottom: 2rem;
         color: var(--primary-text);

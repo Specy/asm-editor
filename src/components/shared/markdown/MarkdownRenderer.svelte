@@ -18,7 +18,7 @@
                 type: 'rehype',
                 async transform({ carta }) {
                     const highlighter = await carta.highlighter()
-                    await highlighter.loadTheme(theme)
+                    await highlighter.shikiHighlighter().loadTheme(theme)
                 }
             },
             {

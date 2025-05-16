@@ -12,6 +12,8 @@ import { M68KLanguage } from '$lib/languages/M68K/M68K-grammar'
 import { MIPSLanguage, MIPSLanguageConfiguration } from '$lib/languages/MIPS/MIPS-grammar'
 import { X86Language } from '$lib/languages/X86/X86-grammar'
 import { createX86CompletitionProvider, createX86HoverProvider } from '$lib/languages/X86/X86-language'
+import { RISCVLanguage, RISCVLanguageConfiguration } from '$lib/languages/RISC-V/RISC-V-grammar'
+import { createRISCVCompletition, createRISCVHoverProvider } from '$lib/languages/RISC-V/RISC-V-language'
 
 export type MonacoType = typeof monaco
 
@@ -33,6 +35,7 @@ class MonacoLoader {
         monaco.languages.register({ id: 'm68k' })
         monaco.languages.register({ id: 'mips' })
         monaco.languages.register({ id: 'x86'})
+        monaco.languages.register({ id: 'risc-v' })
         this.monaco = monaco
         this.registerLanguages()
 
@@ -70,6 +73,12 @@ class MonacoLoader {
             monaco.languages.setLanguageConfiguration('mips', MIPSLanguageConfiguration),
             monaco.languages.registerCompletionItemProvider('mips', createMIPSCompletition(monaco)),
             monaco.languages.registerHoverProvider('mips', createMIPSHoverProvider(monaco))
+        )
+        this.toDispose.push(
+            monaco.languages.setMonarchTokensProvider('risc-v', RISCVLanguage),
+            monaco.languages.setLanguageConfiguration('risc-v', RISCVLanguageConfiguration),
+            monaco.languages.registerCompletionItemProvider('risc-v', createRISCVCompletition(monaco)),
+            monaco.languages.registerHoverProvider('risc-v', createRISCVHoverProvider(monaco))
         )
         this.toDispose.push(
             monaco.languages.setMonarchTokensProvider('x86', X86Language),

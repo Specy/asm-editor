@@ -4,6 +4,7 @@
     import M68KDocumentation from '$cmp/documentation/m68k/M68KDocumentation.svelte'
     import type { AvailableLanguages } from '$lib/Project.svelte'
     import MipsDocumentation from '$cmp/documentation/mips/MIPSDocumentation.svelte'
+    import RISCVDocumentation from '$cmp/documentation/riscv/RISCVDocumentation.svelte'
     interface Props {
         visible: boolean
         language: AvailableLanguages
@@ -38,6 +39,14 @@
                 bind:visible
                 showRedirect={false}
                 defaultOpen={false}
+            />
+        {/if}
+        {#if language === 'RISC-V'}
+            <RISCVDocumentation
+              bind:searchValue
+              bind:visible
+              showRedirect={false}
+              defaultOpen={false}
             />
         {/if}
     </div>

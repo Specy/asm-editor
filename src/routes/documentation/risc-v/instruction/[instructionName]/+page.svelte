@@ -4,7 +4,7 @@
     import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
     import { onMount } from 'svelte'
-    import { formatAggregatedArgs } from '$lib/languages/MIPS/MIPS-documentation'
+    import { formatAggregatedArgs } from '$lib/languages/RISC-V/RISC-V-documentation'
     interface Props {
         data: PageData
     }
@@ -71,7 +71,7 @@
     </div>
     {#if component}
         {@const SvelteComponent_1 = component}
-        <SvelteComponent_1 bind:code instructionKey={ins.name} language="MIPS" />
+        <SvelteComponent_1 bind:code instructionKey={ins.name} language="RISC-V" />
     {:else}
         <div class="loading">Loading...</div>
     {/if}

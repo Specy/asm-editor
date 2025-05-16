@@ -4,20 +4,22 @@ import {
     ConfirmResult,
     type HandlerMapFns,
     type JsBackStep,
-    type JsMips,
     type JsProgramStatement,
-    MIPS,
-    type MIPSAssembleError,
+    type JsRiscV,
     registerHandlers,
     type RegisterName,
+    RISCV,
+    RISCV_REGISTERS,
+    type RISCVAssembleError,
+    StopReason,
     unimplementedHandler
-} from '@specy/mips'
+} from '@specy/risc-v'
 import {
     type BaseEmulatorActions,
     type BaseEmulatorState,
     createMemoryTab,
     type EmulatorDecoration,
-    type EmulatorSettings,
+    type EmulatorSettings, type ExecutionStep,
     InterpreterStatus,
     makeLabelColor,
     makeRegister,
@@ -31,55 +33,22 @@ import { settingsStore } from '$stores/settingsStore.svelte'
 import type { Testcase, TestcaseResult, TestcaseValidationError } from '$lib/Project.svelte'
 import { byteSliceToNum, isMemoryChunkEqual, numberToByteSlice } from '$cmp/specific/project/memory/memoryTabUtils'
 
-export type MIPSEmulatorState = BaseEmulatorState & {}
+export type RISCVEmulatorState = BaseEmulatorState & {}
 
-function getMIPSErrorMessage(e: unknown) {
+function getRISCVErrorMessage(e: unknown) {
     return String(e)
 }
 
 
-export const MIPSRegisterNames = [
-    '$zero',
-    '$at',
-    '$v0',
-    '$v1',
-    '$a0',
-    '$a1',
-    '$a2',
-    '$a3',
-    '$t0',
-    '$t1',
-    '$t2',
-    '$t3',
-    '$t4',
-    '$t5',
-    '$t6',
-    '$t7',
-    '$s0',
-    '$s1',
-    '$s2',
-    '$s3',
-    '$s4',
-    '$s5',
-    '$s6',
-    '$s7',
-    '$t8',
-    '$t9',
-    '$k0',
-    '$k1',
-    '$gp',
-    '$sp',
-    '$fp',
-    '$ra',
-    'pc',
-    'hi',
-    'lo'
+export const RISCVRegisterNames = [
+    ...RISCV_REGISTERS,
+    'pc'
 ]
 
-const STACK_POINTER_INDEX = MIPSRegisterNames.indexOf('$sp')
+const STACK_POINTER_INDEX = RISCVRegisterNames.indexOf('$sp')
 
 
-function assembleErrorToMonacoError(error: MIPSAssembleError): MonacoError {
+function assembleErrorToMonacoError(error: RISCVAssembleError): MonacoError {
     return {
         lineIndex: error.lineNumber - 1,
         column: error.columnNumber,
@@ -96,24 +65,24 @@ function assembleErrorToMonacoError(error: MIPSAssembleError): MonacoError {
 function formatStatement(statement: string) {
     statement = statement.replace(/,/g, ', ');
     //reverse because it's from bigger to smaller, prevents $10 from being replaced by $1
-    ([...MIPSRegisterNames]).reverse().forEach((reg, i) => {
-        statement = statement.replace(new RegExp(`\\$${MIPSRegisterNames.length - i}`, 'g'), reg)
+    ([...RISCVRegisterNames]).reverse().forEach((reg, i) => {
+        statement = statement.replace(new RegExp(`\\$${RISCVRegisterNames.length - i}`, 'g'), reg)
     })
     //replaces all empty hex like 0x0000ffff with 0xffff
     statement = statement.replace(/0x0*(?=[0-9a-fA-F])/g, '0x')
     return statement
 }
 
-export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
+export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) {
     options = {
         globalPageSize: PAGE_SIZE,
         globalPageElementsPerRow: PAGE_ELEMENTS_PER_ROW,
         ...options
     }
     let code = $state(baseCode)
-    let state = $state<Omit<MIPSEmulatorState, 'code'>>({
+    let state = $state<Omit<RISCVEmulatorState, 'code'>>({
         registers: [],
-        hiddenRegisters: ['$zero'],
+        hiddenRegisters: ['zero'],
         pc: 0,
         terminated: false,
         line: -1,
@@ -142,7 +111,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         }
     })
 
-    let mips: JsMips | null = null
+    let riscv: JsRiscV | null = null
     const [debouncer, clearDebouncer] = createDebouncer(500)
 
     function setCode(c: string) {
@@ -152,8 +121,8 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
 
 
     function addDecorations() {
-        if (!mips) return
-        const statements = mips.getCompiledStatements()
+        if (!riscv) return
+        const statements = riscv.getCompiledStatements()
         const joined = new Map<number, JsProgramStatement[]>()
         for (const statement of statements) {
             const arr = joined.get(statement.sourceLine)
@@ -172,7 +141,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 type: 'below-line',
                 note: 'Assembled instructions',
                 belowLine: v[0].sourceLine,
-                md: `\`\`\`mips\n${lines.join('\n')}\n\`\`\``
+                md: `\`\`\`riscv\n${lines.join('\n')}\n\`\`\``
             } satisfies EmulatorDecoration
         })
         state.decorations = nonBasic
@@ -182,23 +151,23 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         return new Promise((res, rej) => {
             try {
                 clear()
-                mips = MIPS.makeMipsFromSource(codeOverride ?? code)
-                mips.setUndoSize(historySize)
-                const result = mips.assemble()
+                riscv = RISCV.makeRiscVFromSource(codeOverride ?? code)
+                riscv.setUndoSize(historySize)
+                const result = riscv.assemble()
                 state.compilerErrors = result.errors.map(assembleErrorToMonacoError)
                 state.canExecute = !result.hasErrors
                 if (result.hasErrors) {
                     return rej(result.report)
                 }
                 addDecorations()
-                mips.setUndoEnabled(historySize > 0)
-                mips.initialize(true)
-                registerHandlers(mips, getHandlers())
+                riscv.setUndoEnabled(historySize > 0)
+                riscv.initialize(true)
+                registerHandlers(riscv, getHandlers())
 
                 //TODO add interrupts
                 const stackTab = state.memory.tabs.find((e) => e.name === 'Stack')
-                if (stackTab) stackTab.address = mips.stackPointer - stackTab.pageSize
-                const next = mips.getNextStatement()
+                if (stackTab) stackTab.address = riscv.stackPointer - stackTab.pageSize
+                const next = riscv.getNextStatement()
                 state.canExecute = true
                 state.line = next.sourceLine - 1
                 state.terminated = hasTerminated() //TODO check this
@@ -207,7 +176,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 updateData()
                 res()
             } catch (e) {
-                addError(getMIPSErrorMessage(e))
+                addError(getRISCVErrorMessage(e))
                 clearDebouncer()
                 rej(e)
             }
@@ -226,14 +195,14 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
 
     function semanticCheck() {
         try {
-            const mips = MIPS.makeMipsFromSource(code)
-            const result = mips.assemble()
+            const riscv = RISCV.makeRiscVFromSource(code)
+            const result = riscv.assemble()
             const errors = result.errors.map(assembleErrorToMonacoError)
             state.compilerErrors = errors
             state.errors = []
         } catch (e) {
             console.error(e)
-            addError(getMIPSErrorMessage(e))
+            addError(getRISCVErrorMessage(e))
         }
     }
 
@@ -264,35 +233,33 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 tabs: [createMemoryTab(8 * 4, 'Stack', 0x7ffffffc, 4, 0x0, 'little')]
             }
         }
-        setRegisters(new Array(MIPSRegisterNames.length).fill(0))
+        setRegisters(new Array(RISCVRegisterNames.length).fill(0))
     }
 
     function getRegistersValue() {
-        if (!mips) return []
+        if (!riscv) return []
         return [
-            ...mips.getRegistersValues(),
-            mips.programCounter,
-            mips.getHi(),
-            mips.getLo()
+            ...riscv.getRegistersValues(),
+            riscv.programCounter
         ]
     }
 
     function scrollStackTab() {
         const settings = settingsStore
         const current = state
-        if (!settings.values.autoScrollStackTab.value || !mips) return
+        if (!settings.values.autoScrollStackTab.value || !riscv) return
         const stackTab = current.memory.tabs.find((e) => e.name === 'Stack')
-        const sp = mips.stackPointer
+        const sp = riscv.stackPointer
         if (stackTab) stackTab.address = sp - (sp % stackTab.pageSize)
     }
 
     function setRegisters(override?: number[]) {
-        if (!mips && !override) {
-            override = new Array(MIPSRegisterNames.length).fill(0)
+        if (!riscv && !override) {
+            override = new Array(RISCVRegisterNames.length).fill(0)
         }
 
         state.registers = (override ?? getRegistersValue()).map((reg, i) => {
-            return makeRegister(MIPSRegisterNames[i], reg)
+            return makeRegister(RISCVRegisterNames[i], reg)
         })
     }
 
@@ -301,14 +268,14 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         getRegistersValue().forEach((reg, i) => {
             state.registers[i].setValue(reg)
         })
-        state.sp = state.registers[STACK_POINTER_INDEX].value
+        state.sp = riscv.stackPointer
     }
 
     function updateMemory() {
-        try{
-            if (!mips) return
+        if (!riscv) return
+        try {
             const temp = state.memory.global.data.current
-            const memory = mips.readMemoryBytes(
+            const memory = riscv.readMemoryBytes(
                 state.memory.global.address,
                 state.memory.global.pageSize
             )
@@ -316,42 +283,45 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
             state.memory.global.data.prevState = temp
             state.memory.tabs.forEach((tab) => {
                 const temp = tab.data.current
-                const memory = mips.readMemoryBytes(tab.address, tab.pageSize)
+                const memory = riscv.readMemoryBytes(tab.address, tab.pageSize)
                 tab.data.current = new Uint8Array(memory)
                 tab.data.prevState = temp
             })
-        }catch (e){
+        } catch (e) {
             console.error(e)
-            addError(getMIPSErrorMessage(e))
+            addError(getRISCVErrorMessage(e))
         }
+
     }
 
     function updateData() {
         const settings = settingsStore
-        if (!mips) return
+        if (!riscv) return
         state.terminated = hasTerminated()
-        const steps = mips
+        const steps = riscv
             .getUndoStack()
             .slice(0, settings.values.maxVisibleHistoryModifications.value)
-        state.pc = mips.programCounter
-        state.callStack = mips.getCallStack().map((v, i) => {
+        state.pc = riscv.programCounter
+        state.callStack = riscv.getCallStack().map((v, i) => {
             const address = v.toAddress
             return {
                 address,
                 destination: v.pc,
                 sp: v.sp,
-                name: mips.getLabelAtAddress(address) ?? `0x${address.toString(16).padStart(8, '0')}`,
-                line: (mips.getStatementAtAddress(address)?.sourceLine ?? 0) - 1,
+                name: riscv.getLabelAtAddress(address) ?? `0x${address.toString(16).padStart(8, '0')}`,
+                line: (riscv.getStatementAtAddress(address)?.sourceLine ?? 0) - 1,
                 color: makeLabelColor(i, v.sp)
             }
         })
         state.latestSteps = steps.map((step) => {
             let line = -1
             try {
-                const ins = mips.getStatementAtAddress(step.pc)
+                const ins = riscv.getStatementAtAddress(step.pc)
                 line = ins.sourceLine - 1
             } catch (e) {
             }
+            const mutations = backstepToMutation(step)
+            if (!mutations) return null
             return {
                 pc: step.pc,
                 old_ccr: {
@@ -361,17 +331,15 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
                     bits: 0
                 },
                 line,
-                //TODO improve this, add more info from the step
-                mutations: [backstepToMutation(step)]
+                mutations: [mutations]
             }
-        })
+        }).filter(v => v !== null)
     }
 
-    function backstepToMutation(step: JsBackStep): MutationOperation {
+    function backstepToMutation(step: JsBackStep): MutationOperation | null {
         if (
             step.action === BackStepAction.REGISTER_RESTORE ||
-            step.action === BackStepAction.COPROC0_REGISTER_RESTORE ||
-            step.action === BackStepAction.COPROC1_REGISTER_RESTORE
+            step.action === BackStepAction.FLOATING_POINT_REGISTER_RESTORE
         ) {
             return {
                 type: 'WriteRegister',
@@ -406,6 +374,12 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
                     size: RegisterSize.Long
                 }
             }
+        } else if ([
+            BackStepAction.CONTROL_AND_STATUS_REGISTER_BACKDOOR,
+            BackStepAction.CONTROL_AND_STATUS_REGISTER_RESTORE,
+            -1 //here means no action
+        ].includes(step.action)) {
+            return null
         }
         return {
             type: 'Other',
@@ -415,7 +389,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
 
     function dispose() {
         clearDebouncer()
-        mips = null
+        riscv = null
         clear()
     }
 
@@ -426,7 +400,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
     function hasTerminated() {
         try {
             //TODO improve this
-            mips.getNextStatement()
+            riscv.getNextStatement()
             return false
         } catch (e) {
             return true
@@ -436,19 +410,21 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
     async function step() {
         let lastLine = -1
         try {
-            if (!mips) throw new Error('Interpreter not initialized')
-            lastLine = mips.getNextStatement()?.sourceLine ?? -1
-            state.terminated = mips.step()
+            if (!riscv) throw new Error('Interpreter not initialized')
+            lastLine = riscv.getNextStatement()?.sourceLine ?? -1
+            state.terminated = riscv.step() === StopReason.CLIFF_TERMINATION
             try {
-                const ins = mips.getNextStatement()
+                const ins = riscv.getNextStatement()
                 state.line = ins.sourceLine - 1
             } catch (e) {
             }
 
-            state.canUndo = mips.canUndo
+            state.canUndo = riscv.canUndo
+            //if it managed to step, it means it does not have valid errors
+            state.errors = []
         } catch (e) {
             console.error(e)
-            addError(getMIPSErrorMessage(e))
+            addError(getRISCVErrorMessage(e))
             state.terminated = true
             state.line = lastLine
             throw e
@@ -457,24 +433,24 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         updateMemory()
         updateData()
         scrollStackTab()
-        return mips.terminated
+        return riscv.terminated
     }
 
     function undo(amount = 1) {
         try {
-            if (!mips) return
-            for (let i = 0; i < amount && mips.canUndo; i++) {
-                mips.undo()
+            if (!riscv) return
+            for (let i = 0; i < amount && riscv.canUndo; i++) {
+                riscv.undo()
             }
-            const instruction = mips.getNextStatement()
+            const instruction = riscv.getNextStatement()
             state.line = instruction.sourceLine - 1
-            state.canUndo = mips.canUndo
+            state.canUndo = riscv.canUndo
             updateRegisters()
             updateMemory()
             updateData()
             scrollStackTab()
         } catch (e) {
-            addError(getMIPSErrorMessage(e))
+            addError(getRISCVErrorMessage(e))
             state.terminated = true
             console.error(e)
             throw e
@@ -484,7 +460,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
     function calculateBreakpoints(breakpoints: number[]) {
         const b = breakpoints
             .map((line) => {
-                const ins = mips.getStatementAtSourceLine(line + 1)
+                const ins = riscv.getStatementAtSourceLine(line + 1)
                 if (!ins) return -1
                 return ins.address
             })
@@ -497,12 +473,12 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         const start = performance.now()
         const breakpoints = state.breakpoints
         try {
-            const terminated = mips.simulateWithBreakpointsAndLimit(
+            const terminated = riscv.simulateWithBreakpointsAndLimit(
                 calculateBreakpoints(breakpoints),
                 haltLimit
-            )
+            ) === StopReason.CLIFF_TERMINATION
             try {
-                const ins = mips.getNextStatement()
+                const ins = riscv.getNextStatement()
                 //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
                 if (!terminated) {
                     state.line = ins.sourceLine - 1
@@ -512,23 +488,25 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
             } catch (e) {
                 state.line = -1
             }
-            state.canUndo = mips.canUndo
+            state.canUndo = riscv.canUndo
             updateRegisters()
             updateMemory()
             updateData()
             scrollStackTab()
             state.executionTime = performance.now() - start
             state.terminated = terminated
+            //if it managed to run, it means it does not have valid errors
+            state.errors = []
             return terminated ? InterpreterStatus.Terminated : InterpreterStatus.Running
         } catch (e) {
             console.error(e)
             let line = -1
             try {
-                line = mips.getCurrentStatementIndex()
+                line = riscv.getCurrentStatementIndex()
             } catch (e) {
                 console.error(e)
             }
-            addError(getMIPSErrorMessage(e))
+            addError(getRISCVErrorMessage(e))
             state.terminated = true
             state.line = line
         }
@@ -536,40 +514,39 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
     }
 
     function setGlobalMemoryAddress(address: number) {
-        try{
-            const bytes = mips?.readMemoryBytes(address, state.memory.global.pageSize)
+        try {
+            const bytes = riscv?.readMemoryBytes(address, state.memory.global.pageSize)
             state.memory.global.address = address
             state.memory.global.data.current = bytes
                 ? new Uint8Array(bytes)
                 : new Uint8Array(state.memory.global.pageSize).fill(0xff)
             state.memory.global.data.prevState = state.memory.global.data.current
-        }catch (e){
+        } catch (e) {
             console.error(e)
-            addError(getMIPSErrorMessage(e))
+            addError(getRISCVErrorMessage(e))
         }
-
     }
 
     function setTabMemoryAddress(address: number, tabId: number) {
-        try{
+        try {
             const tab = state.memory.tabs.find((e) => e.id == tabId)
             if (!tab) return
-            const bytes = mips?.readMemoryBytes(address, tab.pageSize)
+            const bytes = riscv?.readMemoryBytes(address, tab.pageSize)
             tab.address = address
             tab.data.current = bytes ? new Uint8Array(bytes) : new Uint8Array(tab.pageSize).fill(0xff)
             tab.data.prevState = tab.data.current
-        }catch (e){
+        } catch (e) {
             console.error(e)
-            addError(getMIPSErrorMessage(e))
+            addError(getRISCVErrorMessage(e))
         }
     }
 
     async function validateTestcase(testcase: Testcase) {
         const errors = [] as TestcaseValidationError[]
-        if (!mips) throw new Error('Interpreter not initialized')
-        const registers = mips.getRegistersValues()
+        if (!riscv) throw new Error('Interpreter not initialized')
+        const registers = riscv.getRegistersValues()
         for (const [register, value] of Object.entries(testcase.expectedRegisters)) {
-            const registerIndex = MIPSRegisterNames.indexOf(register.toUpperCase())
+            const registerIndex = RISCVRegisterNames.indexOf(register.toUpperCase())
             if (registerIndex === -1) {
                 console.error(`Register ${register} not found`)
                 continue
@@ -594,7 +571,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         }
         for (const value of testcase.expectedMemory) {
             if (value.type === 'number') {
-                const bytes = new Uint8Array(mips.readMemoryBytes(value.address, value.bytes))
+                const bytes = new Uint8Array(riscv.readMemoryBytes(value.address, value.bytes))
                 const num = byteSliceToNum(bytes, 'little')
                 if (num !== value.expected) {
                     errors.push({
@@ -606,7 +583,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
                     })
                 }
             } else if (value.type === 'number-chunk') {
-                const bytes = mips.readMemoryBytes(value.address, value.expected.length * value.bytes)
+                const bytes = riscv.readMemoryBytes(value.address, value.expected.length * value.bytes)
                 const expected = numbersOfSizeToSlice(value.expected, value.bytes, 'little')
                 if (!isMemoryChunkEqual(bytes, expected)) {
                     errors.push({
@@ -617,7 +594,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
                     })
                 }
             } else if (value.type === 'string-chunk') {
-                const bytes = mips.readMemoryBytes(value.address, value.expected.length)
+                const bytes = riscv.readMemoryBytes(value.address, value.expected.length)
                 const str = new TextDecoder().decode(new Uint8Array(bytes))
                 if (str !== value.expected) {
                     errors.push({
@@ -696,23 +673,23 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         const start = performance.now()
         try {
             const t = structuredClone($state.snapshot(testcase))
-            if (!mips) throw new Error('Interpreter not initialized')
+            if (!riscv) throw new Error('Interpreter not initialized')
             for (const [register, value] of Object.entries(t.startingRegisters)) {
-                mips.setRegisterValue(register as RegisterName, value)
+                riscv.setRegisterValue(register as RegisterName, value)
             }
             for (const value of t.startingMemory) {
                 if (value.type === 'number') {
                     const slice = numberToByteSlice(value.expected, value.bytes, 'little')
-                    mips.setMemoryBytes(value.address, slice)
+                    riscv.setMemoryBytes(value.address, slice)
                 } else if (value.type === 'number-chunk') {
                     const expected = numbersOfSizeToSlice(value.expected, value.bytes, 'little')
-                    mips.setMemoryBytes(value.address, expected)
+                    riscv.setMemoryBytes(value.address, expected)
                 } else if (value.type === 'string-chunk') {
                     const encoded = new TextEncoder().encode(value.expected)
-                    mips.setMemoryBytes(value.address, Array.from(encoded))
+                    riscv.setMemoryBytes(value.address, Array.from(encoded))
                 }
             }
-            registerHandlers(mips, {
+            registerHandlers(riscv, {
                 ...getHandlers(),
                 readChar: () => {
                     if (t.input.length === 0)
@@ -777,31 +754,31 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 outputDialog: unimplementedHandler('outputDialog'),
                 sleep: unimplementedHandler('sleep')
             })
-            mips.simulateWithLimit(haltLimit)
+            riscv.simulateWithLimit(haltLimit)
             try {
-                const ins = mips.getNextStatement()
+                const ins = riscv.getNextStatement()
                 //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
                 state.line = ins.sourceLine - 1
             } catch (e) {
             }
 
-            state.canUndo = mips.canUndo
+            state.canUndo = riscv.canUndo
 
             updateRegisters()
             updateMemory()
             updateData()
             scrollStackTab()
             state.executionTime = performance.now() - start
-            return mips.terminated ? InterpreterStatus.Terminated : InterpreterStatus.Running
+            return riscv.terminated ? InterpreterStatus.Terminated : InterpreterStatus.Running
         } catch (e) {
             console.error(e)
             let line = -1
             try {
-                line = mips.getCurrentStatementIndex()
+                line = riscv.getCurrentStatementIndex()
             } catch (e) {
                 console.error(e)
             }
-            addError(getMIPSErrorMessage(e))
+            addError(getRISCVErrorMessage(e))
             try {
                 updateRegisters()
                 updateMemory()
@@ -830,7 +807,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 })
             } catch (e) {
                 console.error(e)
-                state.errors.push(getMIPSErrorMessage(e))
+                state.errors.push(getRISCVErrorMessage(e))
             }
         }
         const passedTests = results.filter((r) => r.passed)
@@ -848,8 +825,8 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
     }
 
     function getLineFromAddress(address: number) {
-        if (!mips) return -1
-        const statement = mips.getStatementAtAddress(address)
+        if (!riscv) return -1
+        const statement = riscv.getStatementAtAddress(address)
         if (!statement) return -1
         return statement.sourceLine - 1
     }
@@ -912,7 +889,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         get statusRegisters() {
             return state.statusRegisters
         },
-        get pc(){
+        get pc() {
             return state.pc
         },
         compile,
@@ -928,26 +905,27 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         dispose,
         test,
         getLineFromAddress
-    } satisfies MIPSEmulatorState & BaseEmulatorActions
+    } satisfies RISCVEmulatorState & BaseEmulatorActions
 }
 
 const backStepActionMap = {
-    [BackStepAction.MEMORY_RESTORE_BYTE]: 'Memory restore byte',
-    [BackStepAction.MEMORY_RESTORE_HALF]: 'Memory restore half',
-    [BackStepAction.MEMORY_RESTORE_WORD]: 'Memory restore word',
     [BackStepAction.MEMORY_RESTORE_RAW_WORD]: 'Memory restore raw word',
-    [BackStepAction.COPROC0_REGISTER_RESTORE]: 'Coproc0 register restore',
-    [BackStepAction.COPROC1_REGISTER_RESTORE]: 'Coproc1 register restore',
-    [BackStepAction.COPROC1_CONDITION_CLEAR]: 'Coproc1 condition clear',
-    [BackStepAction.COPROC1_CONDITION_SET]: 'Coproc1 condition set',
-    [BackStepAction.DO_NOTHING]: 'Do nothing',
+    [BackStepAction.MEMORY_RESTORE_DOUBLE_WORD]: 'Memory restore double word',
+    [BackStepAction.MEMORY_RESTORE_WORD]: 'Memory restore word',
+    [BackStepAction.MEMORY_RESTORE_HALF]: 'Memory restore half',
+    [BackStepAction.MEMORY_RESTORE_BYTE]: 'Memory restore byte',
     [BackStepAction.REGISTER_RESTORE]: 'Register restore',
-    [BackStepAction.PC_RESTORE]: 'PC restore'
+    [BackStepAction.PC_RESTORE]: 'PC restore',
+    [BackStepAction.CONTROL_AND_STATUS_REGISTER_RESTORE]: 'Control and status register restore',
+    [BackStepAction.CONTROL_AND_STATUS_REGISTER_BACKDOOR]: 'Control and status register backdoor',
+    [BackStepAction.FLOATING_POINT_REGISTER_RESTORE]: 'Floating point register restore',
+    [BackStepAction.DO_NOTHING]: 'Do nothing'
 } satisfies Record<BackStepAction, string>
 
 const memorySizeMap = {
     [BackStepAction.MEMORY_RESTORE_BYTE]: RegisterSize.Byte,
     [BackStepAction.MEMORY_RESTORE_HALF]: RegisterSize.Word,
     [BackStepAction.MEMORY_RESTORE_WORD]: RegisterSize.Long,
-    [BackStepAction.MEMORY_RESTORE_RAW_WORD]: RegisterSize.Long
+    [BackStepAction.MEMORY_RESTORE_RAW_WORD]: RegisterSize.Long,
+    [BackStepAction.MEMORY_RESTORE_DOUBLE_WORD]: RegisterSize.Double
 }

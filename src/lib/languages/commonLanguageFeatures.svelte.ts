@@ -47,7 +47,8 @@ export type RegisterHex = [hi: string, lo: string]
 export enum RegisterSize {
     Byte = 1,
     Word = 2,
-    Long = 4
+    Long = 4,
+    Double = 8
 }
 
 export type RegisterChunk = {
