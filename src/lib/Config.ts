@@ -59,7 +59,7 @@ export const LANGUAGE_THEMES = {
     M68K: 'default',
     MIPS: 'default-mips',
     X86: 'default',
-    'RISC-V': 'default'
+    'RISC-V': 'default-risc-v'
 } satisfies Record<AvailableLanguages, string>
 
 

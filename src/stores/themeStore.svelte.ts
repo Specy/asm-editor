@@ -145,6 +145,75 @@ export const DEFAULT_MIPS_THEME = {
     }
 } as const
 
+export const DEFAULT_RISCV_THEME = {
+    version: 1,
+    id: LANGUAGE_THEMES['RISC-V'],
+    extends: LANGUAGE_THEMES['RISC-V'],
+    name: 'Default risc-v',
+    editable: false,
+    theme: {
+        background: {
+            color: '#070915',
+            name: 'background',
+            prop: 'background'
+        },
+        primary: {
+            color: '#070915',
+            name: 'primary',
+            prop: 'primary'
+        },
+        secondary: {
+            color: '#121527',
+            name: 'secondary',
+            prop: 'secondary'
+        },
+        tertiary: {
+            color: '#1b1f39',
+            name: 'tertiary',
+            prop: 'tertiary'
+        },
+        accent: {
+            color: '#fdb515',
+            name: 'accent',
+            prop: 'accent'
+        },
+        accent2: {
+            color: '#283272',
+            name: 'accent2',
+            prop: 'accent2'
+        },
+        hint: {
+            color: '#939393',
+            name: 'hint',
+            prop: 'hint',
+            readonly: true
+        },
+        textDarker: {
+            color: '#c1c1c1',
+            name: 'text-layered',
+            prop: 'textDarker',
+            readonly: true
+        },
+        scrollbar: {
+            color: '#3d446f',
+            name: 'scrollbar',
+            prop: 'scrollbar'
+        },
+        red: {
+            color: '#ed4f4f',
+            name: 'red', //TODO rename to warn
+            prop: 'red',
+            readonly: true
+        },
+        green: {
+            color: '#356a59', //TODO rename to success
+            name: 'green',
+            prop: 'green',
+            readonly: true
+        }
+    }
+} as const
+
 const DEFAULT_WHITE_THEME = {
     version: 1,
     id: 'default-white',
@@ -237,6 +306,7 @@ type StoredTheme<T extends string = string> = {
 export const BUILTIN_THEMES = [
     DEFAULT_THEME,
     DEFAULT_MIPS_THEME,
+    DEFAULT_RISCV_THEME,
     //DEFAULT_WHITE_THEME
 ]
 
