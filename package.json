@@ -1,5 +1,6 @@
 {
     "name": "asm-editor",
+    "license": "AGPL-3.0",
     "version": "0.0.1",
     "engines": {
         "node": ">=16.17.0"
@@ -53,6 +54,7 @@
         "eslint": "^9.26.0",
         "eslint-config-prettier": "^10.1.5",
         "eslint-plugin-svelte": "^3.7.0",
+        "mdsvex": "^0.12.3",
         "prettier": "^3.5.3",
         "prettier-plugin-svelte": "^3.4.0",
         "rollup-plugin-visualizer": "^5.14.0",
