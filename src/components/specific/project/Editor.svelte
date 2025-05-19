@@ -52,6 +52,7 @@
         }
     })
 
+
     onMount(async () => {
         monacoInstance = await Monaco.get()
         if (!el) return console.log('Wrapper element not valid', el)
@@ -66,6 +67,7 @@
                 horizontal: 'auto'
             },
             glyphMargin: true,
+						lineNumbersMinChars: 3,
             cursorBlinking: 'phase',
             fontSize: 16,
             smoothScrolling: true,

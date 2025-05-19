@@ -92,7 +92,7 @@
 
 		<Controls
 			{running}
-			hasTests={testcases.length > 0}
+			hasTests={testcases.length > 0 && !showTestcases}
 			canEditTests={showTestcases}
 			hasErrorsInTests={testcasesResult.some((r) => !r.passed)}
 			hasNoErrorsInTests={testcasesResult.every((r) => r.passed) &&

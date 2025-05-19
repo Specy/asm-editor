@@ -2,7 +2,7 @@
     import { navigationStore } from '$stores/navigationStore'
     import { fly } from 'svelte/transition'
     interface Props {
-        cropped?: boolean
+        cropped?: boolean | string
         style?: string
         contentStyle?: string
         children?: import('svelte').Snippet
@@ -18,7 +18,7 @@
 >
     <div
         class="column"
-        style="max-width: {cropped ? '60rem' : 'unset'}; width:100%;height: 100%; {contentStyle}"
+        style="max-width: {cropped ? (typeof cropped === 'string' ? cropped : '60rem') : 'unset'}; width:100%;height: 100%; {contentStyle}"
     >
         {@render children?.()}
     </div>

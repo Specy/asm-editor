@@ -79,7 +79,7 @@
     function createCodeUrl(code: string, settings: Settings, testcases: Testcase[]) {
         const showMemory = settings.showMemory ? 'showMemory=true&' : ''
         const showConsole = settings.showConsole ? 'showConsole=true&' : ''
-        const showTests = settings.showTests ? 'showTests=true&' : ''
+        const showTests = settings.showTests ? 'showTests=true&' : 'showTests=false&'
         const lang = `language=${settings.language}&`
         const compressed = lzstring.compressToEncodedURIComponent(code)
         const tests =

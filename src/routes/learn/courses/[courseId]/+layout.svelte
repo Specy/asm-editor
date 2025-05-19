@@ -11,7 +11,10 @@
     import type { PageData } from './$types'
     import LecturesMenu from '$cmp/content/LecturesMenu.svelte'
     import Header from '$cmp/shared/layout/Header.svelte'
-    import { page } from '$app/state';
+    import { page } from '$app/state'
+    import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
+    import { ProjectStore } from '$stores/projectsStore.svelte'
+
     interface Props {
         children?: import('svelte').Snippet,
         data: PageData
@@ -19,7 +22,7 @@
 
     let { children, data }: Props = $props()
 
-		let currentLectureName = $derived(page.params.lectureId)
+    let currentLectureName = $derived(page.params.lectureId)
 
     let menuOpen = $state(false)
 
@@ -46,7 +49,7 @@
 </Navbar>
 
 <Sidebar bind:menuOpen>
-	<Column padding="1rem" gap="1rem">
+	<Column padding="1rem" gap="1rem" style="padding-top: 0;">
 		<a
 			href={`/learn/courses/${data.course.slug}`}
 		>
@@ -77,6 +80,20 @@
 			</Column>
 		</TogglableSection>
 	{/each}
+	<Row style="margin-top: auto;" padding="0.5rem">
+
+		<ButtonLink
+			style="width: 100%;"
+			href={ProjectStore.projects.length > 0 ? '/projects' : '/projects/create'}
+			title="Open the editor"
+		>
+			{#if ProjectStore.projects.length > 0}
+				Go to your projects
+			{:else}
+				Create your first project
+			{/if}
+		</ButtonLink>
+	</Row>
 
 
 	{#snippet content()}

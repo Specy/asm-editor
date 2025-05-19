@@ -1,7 +1,8 @@
 <script>
-    /** @type {{ href: any, color?: string, style?: string, bg?: string, onClick?: (e: MouseEvent) => void , hasIcon?: boolean, title?: string, cssVar?: string, children?: import('svelte').Snippet}} */
+    /** @type {{ href: any, color?: string, style?: string, bg?: string, onClick?: (e: MouseEvent) => void , hasIcon?: boolean, title?: string, cssVar?: string, disabled?: boolean, children?: import('svelte').Snippet}} */
     let {
         href,
+        disabled = false,
         color = 'var(--accent-text)',
         style = '',
         bg = 'var(--accent)',
@@ -16,11 +17,15 @@
 <a
     type="button"
     class="btn"
+    class:disabled={disabled}
     class:hasIcon
     {href}
     {title}
     style={`--btn-color:var(--${cssVar},${bg}); --btn-text:var(--${cssVar}-text,${color});${style}; `}
-    onclick={onClick}
+    onclick={(e) => {
+        if (disabled) return e.preventDefault()
+        if (onClick) onClick(e)
+    }}
 >
     {@render children?.()}
 </a>
@@ -46,11 +51,11 @@
     .btn:hover {
         filter: brightness(1.2);
     }
-    .btn:disabled {
+    .disabled {
         opacity: 0.5;
         cursor: not-allowed;
     }
-    .btn:disabled:hover {
+    .disabled:hover {
         filter: none !important;
     }
     .hasIcon {

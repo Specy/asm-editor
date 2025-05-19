@@ -37,6 +37,7 @@
         canUndo,
         running
     }: Props = $props()
+
 </script>
 
 <div class="project-controls">

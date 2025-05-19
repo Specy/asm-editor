@@ -26,14 +26,14 @@
     function createCodeUrl(code: string, settings: Settings, testcases: Testcase[]) {
         const showMemory = settings.showMemory ? 'showMemory=true&' : ''
         const showConsole = settings.showConsole ? 'showConsole=true&' : ''
-        const showTests = settings.showTests ? 'showTests=true&' : ''
+        const showTests = settings.showTests ? 'showTests=true&' : 'showTests=false&'
         const lang = `language=${settings.language}&`
         const compressed = lzstring.compressToEncodedURIComponent(code)
         const tests =
             testcases.length > 0
                 ? `testcases=${lzstring.compressToEncodedURIComponent(JSON.stringify(testcases))}&`
                 : ''
-        return `https://asm-editor.specy.app/embed?${showMemory}${showTests}${showConsole}${lang}${tests}code=${compressed}`
+        return `/embed?${showMemory}${showTests}${showConsole}${lang}${tests}code=${compressed}`
     }
 
     const rehypePlaygroundTransformer = () => (tree: Root) => {
