@@ -253,6 +253,9 @@
 
   :global(._markdown p) {
     white-space: pre-line;
+    line-height: 1.5;
+    font-family: 'Noto Serif', Rubik, sans-serif;
+    font-weight: 500;
   }
 	:global(.code-playground){
     border: none;

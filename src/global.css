@@ -1,6 +1,11 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,100..900;1,100..900&display=swap');
 @font-face {
     font-family: Orienta;
     src: url(/fonts/Orienta-Regular.ttf);
+}
+@font-face {
+    font-family: Rubik;
+    src: url("https://fonts.gstatic.com/s/rubik/v28/iJWKBXyIfDnIV7nBrXw.woff2");
 }
 
 @font-face {
@@ -29,7 +34,7 @@ html {
     background-color: var(--background, #171a21);
     color: var(--background-text, #dbdbdb);
     display: flex;
-    font-family: Orienta;
+    font-family: Rubik;
     flex-direction: column;
     overflow-x: hidden;
 }
