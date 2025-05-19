@@ -1,0 +1,5 @@
+{
+  "name": "Addressing modes",
+  "description": "Get familiar with the basic syntax of assembly languages, how instructions are written, and how operands are used. We’ll also introduce key features like labels, macros, and directives used to structure and simplify code.",
+  "order": 4
+}

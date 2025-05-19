@@ -1,0 +1,5 @@
+{
+  "name": "Memory",
+  "description": "Learn how memory works in a computer system. Learn about memory addressing, memory layout, and how to read memory tables. We'll also explore the concept of byte offsets, endianess and how data is stored in memory.",
+  "order": 2
+}

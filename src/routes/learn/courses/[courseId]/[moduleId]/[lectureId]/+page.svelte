@@ -9,6 +9,7 @@
     import FaChevronRight from 'svelte-icons/fa/FaChevronRight.svelte'
     import { page } from '$app/state'
     import Icon from '$cmp/shared/layout/Icon.svelte'
+    import Card from '$cmp/shared/layout/Card.svelte'
 
     interface Props {
         data: PageData
@@ -60,9 +61,11 @@
 	<Header noMargin>
 		{data.lecture.name}
 	</Header>
-	<p>
-		{data.lecture.description}
-	</p>
+	<Card padding="1rem" background="secondary">
+		<p class="description">
+			{data.lecture.description}
+		</p>
+	</Card>
 	<MarkdownRenderer
 		source={data.content}
 	/>
@@ -70,6 +73,10 @@
 	<Row justify="between" wrap gap="1rem" style="margin-top: 3rem">
 		{#if previousLecture}
 			<ButtonLink
+				style="gap: 1rem"
+				onClick={() => {
+        	document.body.scrollTo({top: 0, behavior: 'smooth'})
+				}}
 				href={`/learn/courses/${data.course.slug}/${previousLecture?.module.slug}/${previousLecture?.slug}`}
 			>
 				<Icon>
@@ -83,13 +90,17 @@
 
 		{#if nextLecture}
 			<ButtonLink
+				style="gap: 1rem"
 				disabled={!nextLecture}
+				onClick={() => {
+        	document.body.scrollTo({top: 0, behavior: 'smooth'})
+				}}
 				href={`/learn/courses/${data.course.slug}/${nextLecture?.module.slug}/${nextLecture?.slug}`}
 			>
+				Next Lecture
 				<Icon>
 					<FaChevronRight />
 				</Icon>
-				Next Lecture
 			</ButtonLink>
 		{:else}
 			<div></div>
@@ -97,3 +108,13 @@
 	</Row>
 </Page>
 
+
+<style>
+    .description {
+        white-space: pre-line;
+        line-height: 1.5;
+        font-family: 'Noto Serif', Rubik, sans-serif;
+        font-weight: 500;
+        max-width: 70ch;
+    }
+</style>

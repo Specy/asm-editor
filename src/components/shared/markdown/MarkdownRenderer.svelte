@@ -3,6 +3,7 @@
     import { Carta } from 'carta-md'
     import DOMPurify from 'isomorphic-dompurify'
     import rehypeRaw from 'rehype-raw'
+    import remarkGfm from 'remark-gfm'
     import rehypeExternalLinks from 'rehype-external-links'
     import '@cartamd/plugin-code/default.css'
     import { code } from '@cartamd/plugin-code'
@@ -119,7 +120,9 @@
                 execution: 'sync',
                 type: 'rehype',
                 transform({ processor }) {
-                    processor.use(rehypeRaw)
+                    processor
+												.use(remarkGfm)
+												.use(rehypeRaw)
                 }
             }
         ]
@@ -130,7 +133,10 @@
                 execution: 'sync',
                 type: 'rehype',
                 transform({ processor }) {
-                    processor.use(rehypeExternalLinks, {
+                    processor
+                        .use(remarkGfm)
+                        .use(rehypeRaw)
+                    		.use(rehypeExternalLinks, {
                         target: '_blank'
                     })
                 }
@@ -197,6 +203,11 @@
 		line-height: 1.4;
   }
 
+	:global(pre:has(code)){
+    background: var(--secondary) !important;
+		padding: 1rem;
+		border-radius: 0.5rem;
+	}
   :global(.shiki) {
     padding: 0.5rem;
     overflow-x: auto;
@@ -219,6 +230,11 @@
     overflow: hidden;
     margin: 0.5rem 0;
   }
+	:global(._markdown code:not(pre code)){
+		background: var(--secondary);
+		padding: 0.2rem 0.4rem;
+		border-radius: 0.3rem;
+	}
 
   :global(._markdown table:last-child) {
     margin-bottom: 0;
@@ -252,10 +268,10 @@
   }
 
   :global(._markdown p) {
-    white-space: pre-line;
     line-height: 1.5;
     font-family: 'Noto Serif', Rubik, sans-serif;
     font-weight: 500;
+		max-width: 70ch;
   }
 	:global(.code-playground){
     border: none;

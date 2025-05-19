@@ -1,0 +1,5 @@
+{
+  "name": "Flags",
+  "description": "Explore flags, the CPU’s way of recording the results of operations. Learn how flags like Zero, Carry, and Overflow are used to influence program control flow and implement logic like comparisons and conditional jumps.",
+  "order": 5
+}

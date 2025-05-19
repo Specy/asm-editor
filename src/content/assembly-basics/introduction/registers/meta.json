@@ -1,0 +1,5 @@
+{
+  "name": "Registers",
+  "description": "Discover what registers are, why they are critical for performance, and how CPUs use them to store and process data quickly. We'll explore general-purpose and special-purpose registers across different architectures.",
+  "order": 1
+}

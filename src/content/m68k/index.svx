@@ -1,4 +1,0 @@
-
-### M68K course
-
-Hello! We wanted to create a course for various assembly languages, if anyone wants to help, reach out on github!

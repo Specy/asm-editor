@@ -6,13 +6,13 @@
     import Column from '$cmp/shared/layout/Column.svelte'
     import LecturesMenu from '$cmp/content/LecturesMenu.svelte'
     import Card from '$cmp/shared/layout/Card.svelte'
+    import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
 
     interface Props {
         data: PageData
     }
 
     let { data }: Props = $props()
-
 </script>
 
 <svelte:head>
@@ -31,9 +31,7 @@
 	</Header>
 
 	<Column gap="0.8rem">
-		{#each data.children as child}
-			{@render child()}
-		{/each}
+		<MarkdownRenderer source={data.content} />
 	</Column>
 	<Column gap="1rem">
 		{#each data.course.modules as module}

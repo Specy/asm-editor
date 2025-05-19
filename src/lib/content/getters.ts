@@ -133,23 +133,10 @@ export async function getLectureContent(courseSlug: string, moduleSlug: string, 
 }
 
 export async function getCourseContent(courseSlug: string) {
-    const entries = await import.meta.glob(`$content/*/index.svx`, { eager: true })
-    const content = Object.entries(entries).find(([path]) => {
-        return path.startsWith(`/src/content/${courseSlug}/`)
-    })
-    if (!content) {
-        throw new Error(`Course content with slug ${courseSlug} not found`)
-    }
-    return content[1].default
+    return await fs.readFile(`src/content/${courseSlug}/index.md`, 'utf-8')
+
 }
 
 export async function getModuleContent(courseSlug: string, moduleSlug: string) {
-    const entries = await import.meta.glob(`$content/*/*/index.svx`, { eager: true })
-    const content = Object.entries(entries).find(([path]) => {
-        return path.startsWith(`/src/content/${courseSlug}/${moduleSlug}/`)
-    })
-    if (!content) {
-        throw new Error(`Module content with slug ${moduleSlug} not found`)
-    }
-    return content[1].default
+    return await fs.readFile(`src/content/${courseSlug}/${moduleSlug}/index.md`, 'utf-8')
 }
