@@ -1,9 +1,11 @@
+🟢 We are looking for people to help with documentation and courses, you can look at more info [here](https://github.com/Specy/asm-editor/issues/27)
+
 # Asm editor
 
 A webapp made with [sveltekit](https://kit.svelte.dev/), [rust](https://www.rust-lang.org/it) webassembly and [java TEAVM](https://teavm.org/) to learn, write and run M68K, MIPS and X86 assembly code.
-Uses monaco-editor for the editor, my [WASM M68K interpreter](https://github.com/Specy/s68k) to run the code, and a Java [MIPS Assembler (mars)](https://github.com/Specy/mars) compiled to javascript.
+Uses monaco-editor for the editor, my [WASM M68K interpreter](https://github.com/Specy/s68k) to run the code, a Java [MIPS Assembler (mars)](https://github.com/Specy/mars) compiled to javascript and a Java [RISC-V Assembler (rars)](https://github.com/Specy/rars) compiled to javascript.
 
-Mainly made to help people approaching assembly by providing the tools necessary to write and debug code more easily.
+It is made to help people approaching assembly by providing the tools necessary to write and debug code more easily.
 ![localImage](https://asm-editor.specy.app/images/ASM-editor.webp)
 
 ## App features
@@ -49,6 +51,19 @@ Projects are stored locally on your browser, and with the app also working offli
 ## Embed the editor
 
 You can embed the editor [here](https://asm-editor.specy.app/embed), by using an iframe, you can set the initial code and additional settings by passing them as query parameters. Which can be built by visiting the link above.
+
+# Local setup
+You must have node.js 20+ installed, then you can clone the repository and run:
+```bash
+npm install
+npm run dev # to run the dev server
+# npm run build # to build the app
+```
+
+# Contributing
+If you wish to contribute, make a new issue to discuss the changes you want to make (or comment on an existing one).
+
+We are looking for people to help with documentation and courses, you can look at more info [here](https://github.com/Specy/asm-editor/issues/27)
 
 # Benchmarks M68K
 
