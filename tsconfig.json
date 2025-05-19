@@ -32,7 +32,10 @@
             "$stores": ["src/stores/"],
             "$stores/*": ["src/stores/*"],
             "$utils": ["src/utils/"],
-            "$utils/*": ["src/utils/*"]
+            "$utils/*": ["src/utils/*"],
+            "$content/*": ["src/content/*"],
+            "$overrides": ["src/components/content/custom"],
+            "$embed": ["src/components/content/Embed.svelte"],
         }
     },
 

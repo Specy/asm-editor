@@ -1,35 +1,28 @@
 <script lang="ts">
     import Navbar from '$cmp/shared/layout/Navbar.svelte'
     import TogglableSection from '$cmp/shared/layout/TogglableSection.svelte'
-    import { M68KUncompoundedInstructions } from '$lib/languages/M68K/M68K-documentation'
-    import InstructionsMenu from './InstructionsMenu.svelte'
-    import { page } from '$app/stores'
     import FaBars from 'svelte-icons/fa/FaBars.svelte'
 
-    import FuzzySearch from 'fuzzy-search'
-    import MenuLink from './instruction/MenuLink.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import FaTimes from 'svelte-icons/fa/FaTimes.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
     import Sidebar from '$cmp/shared/layout/Sidebar.svelte'
-
+    import type { PageData } from './$types'
+    import LecturesMenu from '$cmp/content/LecturesMenu.svelte'
+    import Header from '$cmp/shared/layout/Header.svelte'
+    import { page } from '$app/state';
     interface Props {
-        children?: import('svelte').Snippet
+        children?: import('svelte').Snippet,
+        data: PageData
     }
 
-    let { children }: Props = $props()
+    let { children, data }: Props = $props()
 
-    let instructions = Array.from(M68KUncompoundedInstructions.values()).sort((a, b) =>
-        a.name.localeCompare(b.name)
-    )
+		let currentLectureName = $derived(page.params.lectureId)
+
     let menuOpen = $state(false)
-    let search = $state('')
-    const searcher = new FuzzySearch(instructions, ['name', 'description'], {
-        sort: true
-    })
-    let currentInstructionName = $derived($page.params.instructionName ?? '')
-    let filteredInstructions = $derived(searcher.search(search.toLowerCase()))
+
 </script>
 
 <Navbar style="border-bottom-left-radius: 0;">
@@ -39,9 +32,7 @@
 			Home
 		</a>
 		<a class="icon" href="/projects" title="Go to your projects"> Projects </a>
-		<a href="/embed"> Embed </a>
 
-		<a href="/documentation"> Docs </a>
 		<div class="mobile-only" style="margin-left: auto; margin-right: 0.5rem">
 			<Icon onClick={() => (menuOpen = !menuOpen)}>
 				{#if menuOpen}
@@ -55,53 +46,38 @@
 </Navbar>
 
 <Sidebar bind:menuOpen>
+	<Column padding="1rem" gap="1rem">
+		<a
+			href={`/learn/courses/${data.course.slug}`}
+		>
+			<Header noMargin>
+				{data.course.name}
+			</Header>
+		</a>
 
-	<Column gap="1rem" padding="0 1rem">
-		<MenuLink href="/documentation/m68k" title="M68K" onClick={() => (menuOpen = false)} />
-		<MenuLink
-			href="/documentation/m68k/addressing-mode"
-			title="Addressing Modes"
-			onClick={() => (menuOpen = false)}
-		/>
-		<MenuLink
-			href="/documentation/m68k/condition-codes"
-			title="Condition Codes"
-			onClick={() => (menuOpen = false)}
-		/>
-		<MenuLink
-			href="/documentation/m68k/shift-direction"
-			title="Shifts & directions"
-			onClick={() => (menuOpen = false)}
-		/>
-		<MenuLink
-			href="/documentation/m68k/directive"
-			title="Directives"
-			onClick={() => (menuOpen = false)}
-		/>
-		<MenuLink
-			href="/documentation/m68k/assembler-features"
-			title="Assembler features"
-			onClick={() => (menuOpen = false)}
-		/>
 	</Column>
-	<TogglableSection
-		open={true}
-		sectionStyle="margin-left: 0; padding-left: 0.5rem;"
-		style="padding: 0 0.5rem;"
-	>
-		{#snippet title()}
-			<h2 style="font-size: 1rem; font-weight: normal; margin-left: -0.1rem">
-				Instructions
-			</h2>
-		{/snippet}
-		<input bind:value={search} placeholder="Search" class="instruction-search" />
-		<InstructionsMenu
-			instructions={filteredInstructions.map((ins) => ins.name)}
-			hrefBase="/documentation/m68k/instruction"
-			onClick={() => (menuOpen = false)}
-			{currentInstructionName}
-		/>
-	</TogglableSection>
+	{#each data.course.modules as module}
+		<TogglableSection
+			open={true}
+			sectionStyle="margin-left: 0; padding-left: 0.4rem;"
+			style="padding: 0 0.5rem;"
+		>
+			{#snippet title()}
+				<h2 style="font-size: 1rem; font-weight: normal; margin-left: -0.1rem">
+					{module.name}
+				</h2>
+			{/snippet}
+			<Column>
+				<LecturesMenu
+					currentLecture={module.lectures.find(l => l.slug === currentLectureName)}
+					lectures={module.lectures}
+					lectureStyle="padding-left: 1rem"
+					hrefBase={`/learn/courses/${data.course.slug}/${module.slug}`}
+				/>
+			</Column>
+		</TogglableSection>
+	{/each}
+
 
 	{#snippet content()}
 		<Column flex1 style="padding-top: 4rem;">

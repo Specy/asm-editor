@@ -7,6 +7,7 @@
     import FaSearch from 'svelte-icons/fa/FaSearch.svelte'
     import FaTools from 'svelte-icons/fa/FaTools.svelte'
     import FaCode from 'svelte-icons/fa/FaCode.svelte'
+    import FaGraduationCap from 'svelte-icons/fa/FaGraduationCap.svelte'
     import MainPageSection from '$cmp/specific/landing/HeroSection.svelte'
     import AnimatedRgbLine from '$cmp/shared/misc/AnimatedRgbLine.svelte'
     import GoLinkExternal from 'svelte-icons/go/GoLinkExternal.svelte'
@@ -76,6 +77,16 @@
                         </Icon>
                     </ButtonLink>
                 </Row>
+                <ButtonLink
+                  href="/learn/courses"
+                  cssVar="accent2"
+                  style={`gap: 1rem; ${textShadowPrimary && 'box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);'}`}
+                >
+                    View courses
+                    <Icon>
+                        <FaGraduationCap />
+                    </Icon>
+                </ButtonLink>
                 {#if installEvent}
                     <Button
                         style="margin-top: 1rem; gap: 0.5rem;"
@@ -216,7 +227,7 @@
         padding: 1rem;
         max-width: 38rem;
         text-align: center;
-        margin-bottom: 2rem;
+        margin-bottom: 1rem;
         color: var(--primary-text);
     }
 
@@ -235,6 +246,7 @@
     .presentation {
         display: flex;
         flex: 1;
+        gap: 1rem;
         flex-direction: column;
         justify-content: center;
         align-items: center;

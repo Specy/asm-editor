@@ -1,9 +1,14 @@
 <script lang="ts">
     import type { PageData } from './$types'
+
     interface Props {
         data: PageData
     }
 
     let { data }: Props = $props()
+
 </script>
 
+{#each data.children as child}
+	{@render child()}
+{/each}

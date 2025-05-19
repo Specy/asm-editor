@@ -14,7 +14,11 @@ const config: UserConfig = {
             $cmp: resolve('./src/components/'),
             $src: resolve('./src/'),
             $stores: resolve('./src/stores/'),
-            $utils: resolve('./src/utils/')
+            $utils: resolve('./src/utils/'),
+            $lib: resolve('./src/lib/'),
+            $content: resolve('./src/content/'),
+            $overrides: resolve("./src/components/content/custom"),
+            $embed: resolve('./src/components/content/Embed.svelte')
         }
     },
     optimizeDeps: {

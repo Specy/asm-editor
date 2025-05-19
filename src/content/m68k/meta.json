@@ -1,0 +1,13 @@
+{
+  "id": "m68k",
+  "name": "M68000",
+  "author": "M68000",
+  "description": "68000 assembler",
+  "image": "",
+  "tags": [
+    "m68k",
+    "assembly"
+  ],
+  "date": "2025-05-18",
+  "order": 1
+}

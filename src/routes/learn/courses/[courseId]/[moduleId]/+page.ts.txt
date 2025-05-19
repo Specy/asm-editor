@@ -1,0 +1,15 @@
+import type { Load } from '@sveltejs/kit'
+import { type Course, type CourseWithModules, getModuleContent, type Lecture } from '$lib/content/getters'
+
+export const load: Load<Record<'courseId' | 'moduleId', string>, { course: CourseWithModules }> = async ({ data, params }) => {
+
+    return {
+        ...data,
+        children: [
+            await getModuleContent(
+                params.courseId,
+                params.moduleId
+            )
+        ]
+    }
+}

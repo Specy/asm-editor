@@ -45,6 +45,7 @@
     }
     .instruction-link-inner {
         transition: transform 0.1s;
+        opacity: 0.9;
     }
     a:hover > .instruction-link-inner {
         transform: translateX(0.2rem);
