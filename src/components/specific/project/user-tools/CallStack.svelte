@@ -93,7 +93,7 @@
         align-items: center;
         background-color: transparent;
         color: var(--primary-text);
-        font-family: Orienta;
+        font-family: Rubik;
         font-size: 0.9rem;
         border-radius: 0.3rem;
         cursor: pointer;

@@ -46,9 +46,9 @@
             Home
         </a>
         <a class="icon" href="/projects" title="Go to your projects"> Projects </a>
-        <a href="/embed"> Embed </a>
-
         <a href="/documentation"> Docs </a>
+        <a href="/learn/courses"> Learn </a>
+
         <div class="mobile-only" style="margin-left: auto; margin-right: 0.5rem">
             <Icon onClick={() => (menuOpen = !menuOpen)}>
                 {#if menuOpen}

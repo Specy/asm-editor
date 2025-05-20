@@ -109,7 +109,7 @@
         justify-content: center;
         font-size: 0.8rem;
         transition: all 0.2s;
-        font-family: Orienta;
+        font-family: Rubik;
         border-radius: 0.2rem;
     }
 
@@ -127,7 +127,7 @@
         background-color: var(--accent);
         color: var(--accent-text);
         font-size: 0.8rem;
-        font-family: Orienta;
+        font-family: Rubik;
         border-radius: 0.2rem;
         opacity: 0;
     }

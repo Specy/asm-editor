@@ -1,7 +1,5 @@
 <script lang="ts">
-    import { createBubbler } from 'svelte/legacy'
 
-    const bubble = createBubbler()
     import type { ThemeKeys } from '$stores/themeStore.svelte'
 
     interface Props {
@@ -59,7 +57,7 @@
         border: none;
         width: fit-content;
         user-select: none;
-        font-family: Orienta;
+        font-family: Rubik;
         position: relative;
         cursor: pointer;
     }

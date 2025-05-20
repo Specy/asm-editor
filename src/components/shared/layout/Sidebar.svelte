@@ -15,7 +15,7 @@
 </script>
 
 
-<Row gap="1rem" flex1>
+<Row flex1>
 	<button
 		class="side-menu-underlay"
 		aria-label="close menu"
@@ -26,14 +26,18 @@
 	<aside class="side-menu column" class:menu-open={menuOpen}>
 		{@render children?.()}
 	</aside>
-	{@render content?.()}
+	<div class="content">
+		{@render content?.()}
+
+	</div>
 </Row>
 
 <style lang="scss">
   .side-menu {
     background-color: var(--secondary);
     color: var(--secondary-text);
-    width: 15rem;
+    width: 16rem;
+		min-width: 16rem;
     gap: 1rem;
     top: 3.2rem;
     padding-top: 1rem;
@@ -46,7 +50,15 @@
     display: none;
   }
 
+	.content {
+		width: 100%;
+		max-width: calc(100vw - 16rem);
+	}
+
   @media (max-width: 600px) {
+		.content{
+			max-width: unset;
+		}
     .side-menu {
       position: fixed;
       width: calc(100vw - 4rem);

@@ -57,7 +57,7 @@
 	<meta property="og:image" content={data.course.image} />
 </svelte:head>
 
-<Page cropped="80ch" style="padding: 1rem" contentStyle="gap: 1rem;">
+<Page cropped="80ch" style="padding: 1rem;" contentStyle="gap: 1rem;">
 	<Header noMargin>
 		{data.lecture.name}
 	</Header>
@@ -67,7 +67,9 @@
 		</p>
 	</Card>
 	<MarkdownRenderer
+		style="font-size: 1.1rem;"
 		source={data.content}
+		spacing="1.2rem"
 	/>
 
 	<Row justify="between" wrap gap="1rem" style="margin-top: 3rem">

@@ -32,7 +32,7 @@
 
 <style lang="scss">
     .btn {
-        padding: 0.5rem 1rem;
+        padding: 0.6rem 1rem;
         border-radius: 0.4rem;
         color: var(--btn-text, --accent-text);
         background-color: var(--btn-color, --accent);
@@ -48,6 +48,7 @@
         position: relative;
         cursor: pointer;
     }
+
     .btn:hover {
         filter: brightness(1.2);
     }

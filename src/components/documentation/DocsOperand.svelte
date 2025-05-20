@@ -29,7 +29,7 @@
         height: 100%;
         padding: 0 0.5rem;
         font-size: 1rem;
-        font-family: Orienta;
+        font-family: Rubik;
     }
     .op {
         height: 100%;

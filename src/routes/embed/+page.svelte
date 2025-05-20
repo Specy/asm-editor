@@ -18,13 +18,21 @@
         language: AvailableLanguages
         showConsole: boolean
         showTests: boolean
+				showPc: boolean
+				showRegisters: boolean
+				showSizes: boolean
+				showFlags: boolean
     }
 
     let settings: Settings = $state({
         showMemory: true,
         language: 'M68K',
         showConsole: false,
-        showTests: true
+        showTests: true,
+				showPc: false,
+				showRegisters: true,
+				showSizes: true,
+				showFlags: false
     })
     let inIframe = $state(true)
     let code = $state(BASE_CODE[settings.language])
@@ -68,11 +76,20 @@
         const language = (searchParams.get('language') ?? 'M68K') as AvailableLanguages
         const showConsole = searchParams.get('showConsole') === 'true'
         const showTests = (searchParams.get('showTests') ?? 'true') === 'true'
+				const showPc = searchParams.get('showPc') === 'true'
+				const showRegisters = searchParams.get('showRegisters') !== 'false'
+				const showSizes = searchParams.get('showSizes') !== 'false'
+				const showFlags = searchParams.get('showFlags') === 'true'
+
         return {
             showMemory,
             language,
             showConsole,
-            showTests
+            showTests,
+						showPc,
+						showRegisters,
+						showSizes,
+						showFlags
         } satisfies Settings
     }
 
@@ -80,13 +97,18 @@
         const showMemory = settings.showMemory ? 'showMemory=true&' : ''
         const showConsole = settings.showConsole ? 'showConsole=true&' : ''
         const showTests = settings.showTests ? 'showTests=true&' : 'showTests=false&'
+				const showPc = settings.showPc ? 'showPc=true&' : ''
+				const showRegisters = settings.showRegisters ? 'showRegisters=true&' : 'showRegisters=false&'
+				const showSizes = settings.showSizes ? 'showSizes=true&' : ''
+				const showFlags = settings.showFlags ? 'showFlags=true&' : 'showFlags=false&'
+				const props = [showMemory, showConsole, showTests, showPc, showRegisters, showSizes, showFlags].join('')
         const lang = `language=${settings.language}&`
         const compressed = lzstring.compressToEncodedURIComponent(code)
         const tests =
             testcases.length > 0
                 ? `testcases=${lzstring.compressToEncodedURIComponent(JSON.stringify(testcases))}&`
                 : ''
-        return `${window.location.origin}/embed?${showMemory}${showTests}${showConsole}${lang}${tests}code=${compressed}`
+        return `${window.location.origin}/embed?${lang}${props}${tests}code=${compressed}`
     }
 
     function generateCodeUrl(code: string, settings: Settings, testcases: Testcase[]) {
@@ -107,7 +129,7 @@
 {/if}
 <Page contentStyle={!inIframe ? 'padding-top: 3.5rem' : ''}>
 	{#if !inIframe}
-		<Column gap="1rem" padding="1rem">
+		<Column gap="1rem" padding="0.6rem 1rem">
 			<p>
 				Write some assembly code, below the editor there will be generated an embed URL and
 				embed html code that you can put in your website
@@ -134,7 +156,12 @@
 						showConsole={settings.showConsole}
 						showMemory={settings.showMemory}
 						showTestcases={settings.showTests}
+						showPc={settings.showPc}
+						showRegisters={settings.showRegisters}
+						showSizes={settings.showSizes}
+						showFlags={settings.showFlags}
 						language={settings.language}
+
 					/>
 				{/snippet}
 				{#snippet loading()}
@@ -161,6 +188,22 @@
 				<div class="share-settings">
 					<span>Show tests</span>
 					<input type="checkbox" bind:checked={settings.showTests} />
+				</div>
+				<div class="share-settings">
+					<span>Show PC</span>
+					<input type="checkbox" bind:checked={settings.showPc} />
+				</div>
+				<div class="share-settings">
+					<span>Show registers</span>
+					<input type="checkbox" bind:checked={settings.showRegisters} />
+				</div>
+				<div class="share-settings">
+					<span>Show sizes</span>
+					<input type="checkbox" bind:checked={settings.showSizes} />
+				</div>
+				<div class="share-settings">
+					<span>Show flags</span>
+					<input type="checkbox" bind:checked={settings.showFlags} />
 				</div>
 				<div class="share-settings" style="justify-content: space-between;">
 					<span>Language</span>
@@ -192,7 +235,7 @@
         display: flex;
         flex-wrap: wrap;
         gap: 1rem;
-        padding: 1rem;
+        padding: 0.5rem;
         border-top: 0.2rem dashed var(--tertiary);
     }
 

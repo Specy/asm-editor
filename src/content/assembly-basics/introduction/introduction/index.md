@@ -1,6 +1,8 @@
-**Welcome to our course on the basics of assembly language programming!**
-In this first lecture, we'll explore *what assembly languages are*, *why it matters*, and *how it relates to the way
-computers actually work at a fundamental level*.
+This course is generalist, it covers topics that are commonly used in most assembly languages. It might feel a bit too
+"rushed" as we will cover a lot of topics shallowly and quickly, it's ok if you don't understand everything, the individual
+courses for each assembly language will go more in depth on all of the topics, and show you examples of how to use them.
+
+The goal of the course is to give you a *general understanding* of the fundamentals needed to understand assembly.
 
 ## Why assembly?
 

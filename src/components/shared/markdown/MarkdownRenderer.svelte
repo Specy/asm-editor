@@ -11,6 +11,7 @@
     import { visit } from 'unist-util-visit'
     import type { AvailableLanguages, Testcase } from '$lib/Project.svelte'
     import lzstring from 'lz-string'
+    import { ThemeStore } from '$stores/themeStore.svelte'
     let isDark = $derived(ThemeStore.isColorDark(ThemeStore.theme.background.color))
 
     let theme = $derived(isDark ? ('one-dark-pro' as const) : ('one-light' as const))
@@ -21,6 +22,10 @@
         language: AvailableLanguages
         showConsole: boolean
         showTests: boolean
+        showPc: boolean
+        showRegisters: boolean
+        showSizes: boolean
+        showFlags: boolean
     }
 
 
@@ -28,13 +33,18 @@
         const showMemory = settings.showMemory ? 'showMemory=true&' : ''
         const showConsole = settings.showConsole ? 'showConsole=true&' : ''
         const showTests = settings.showTests ? 'showTests=true&' : 'showTests=false&'
+        const showPc = settings.showPc ? 'showPc=true&' : ''
+        const showRegisters = settings.showRegisters ? 'showRegisters=true&' : 'showRegisters=false&'
+        const showSizes = settings.showSizes ? 'showSizes=true&' : 'showSizes=false&'
+        const showFlags = settings.showFlags ? 'showFlags=true&' : 'showFlags=false&'
+        const props = [showMemory, showConsole, showTests, showPc, showRegisters, showSizes, showFlags].join('')
         const lang = `language=${settings.language}&`
         const compressed = lzstring.compressToEncodedURIComponent(code)
         const tests =
             testcases.length > 0
                 ? `testcases=${lzstring.compressToEncodedURIComponent(JSON.stringify(testcases))}&`
                 : ''
-        return `/embed?${showMemory}${showTests}${showConsole}${lang}${tests}code=${compressed}`
+        return `/embed?${lang}${props}${tests}code=${compressed}`
     }
 
     const rehypePlaygroundTransformer = () => (tree: Root) => {
@@ -56,6 +66,10 @@
 												const showMemory = entries.includes('memory')
 												const showConsole = entries.includes('console')
 												const showTests = entries.includes('tests')
+												const showPc = entries.includes('pc')
+												const showRegisters = !entries.includes('no-registers')
+												const showSizes = !entries.includes('no-sizes')
+												const showFlags = !entries.includes('no-flags')
                         if (isPlayground) {
                             const actualLanguage = entries[0]
 
@@ -66,7 +80,6 @@
                                 }
                                 return ''
                             }
-
                             if (parent && typeof index === 'number' && parent.children) {
                                 // Replace the <pre> node with our placeholder <div>
                                 const placeholder: Element = {
@@ -74,10 +87,14 @@
                                     tagName: 'iframe',
                                     properties: {
                                         className: 'code-playground',
-                                        src: createCodeUrl(getAllText(codeNode), {
+                                        src: createCodeUrl(getAllText(codeNode).trimEnd(), {
                                             showMemory,
 																						showConsole,
 																						showTests,
+																						showPc,
+																						showRegisters: showRegisters,
+																						showSizes,
+																						showFlags,
 																						language: actualLanguage.toUpperCase()
                                         }, []),
                                     },
@@ -177,20 +194,24 @@
 
 <script lang="ts">
     import { Markdown } from 'carta-md'
-    import { ThemeStore } from '$stores/themeStore.svelte'
 
     interface Props {
         source: string
         linksInNewTab?: boolean
         style?: string
+				spacing?: string
     }
 
-    let { source, linksInNewTab, style }: Props = $props()
+    let { source, linksInNewTab, style, spacing }: Props = $props()
 
     const carta = linksInNewTab ? cartaWithExternalLins : cartaNormal
 </script>
 
-<div class="_markdown" {style}>
+<div
+	class="_markdown"
+	{style}
+	style:--gap={spacing}
+>
 	{#key source + theme}
 		<Markdown value={source} {carta} />
 	{/key}
@@ -201,6 +222,7 @@
     display: flex;
     flex-direction: column;
 		line-height: 1.4;
+    letter-spacing: .01em;
   }
 
 	:global(pre:has(code)){
@@ -217,23 +239,31 @@
 	:global(._markdown .markdown-body){
     display: flex;
     flex-direction: column;
-		gap: 1rem;
+		gap: var(--gap, 1rem);
 	}
   :global(._markdown p){
-		opacity: 0.9;
+		opacity: 0.95;
   }
 
+	:global(.markdown-body h1:not(:first-child)),
+  :global(.markdown-body h2:not(:first-child)){
+		margin-top: 2rem;
+		margin-bottom: 0;
+	}
+
   :global(._markdown table) {
-    border-radius: 0.4rem;
     border-collapse: collapse;
     border-style: hidden;
-    overflow: hidden;
+		overflow-x: auto;
+		display: block;
     margin: 0.5rem 0;
   }
 	:global(._markdown code:not(pre code)){
 		background: var(--secondary);
 		padding: 0.2rem 0.4rem;
 		border-radius: 0.3rem;
+    color: var(--accent);
+
 	}
 
   :global(._markdown table:last-child) {
@@ -241,22 +271,22 @@
   }
 
   :global(._markdown thead) {
-    background-color: var(--accent2);
-    color: var(--accent2-text);
+    background-color: var(--tertiary);
+    color: var(--tertiary-text);
   }
 
   :global(._markdown thead th) {
     padding: 0.4rem;
-    border: 0.1rem solid var(--secondary);
+    border-left: 0.1rem solid var(--secondary);
+		border-right: 0.1rem solid var(--secondary);
   }
-
   :global(._markdown tbody) {
-    background-color: var(--tertiary);
+    background-color: var(--secondary);
   }
 
   :global(._markdown td) {
-    border: 0.1rem solid var(--secondary);
     padding: 0.2rem 0.4rem;
+    border: 0.1rem solid var(--tertiary);
   }
 
   :global(._markdown ul, ._markdown ol) {
@@ -267,7 +297,8 @@
     margin-bottom: 0.5rem;
   }
 
-  :global(._markdown p) {
+  :global(._markdown p),
+  :global(._markdown li){
     line-height: 1.5;
     font-family: 'Noto Serif', Rubik, sans-serif;
     font-weight: 500;

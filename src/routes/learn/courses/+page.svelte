@@ -21,6 +21,8 @@
 			Home
 		</a>
 		<a class="icon" href="/projects" title="Go to your projects"> Projects </a>
+		<a class="icon" href="/documentation/" title="Go to the docs"> Docs </a>
+		<a href="/learn/courses" title="Learn assembly"> Learn </a>
 	</Row>
 </Navbar>
 

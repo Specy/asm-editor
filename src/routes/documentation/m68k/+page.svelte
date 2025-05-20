@@ -16,7 +16,7 @@
     />
     <meta name="tags" content={instructionsDocumentationList.map((i) => i.name).join(', ')} />
 </svelte:head>
-<Page contentStyle="padding: 1rem; gap: 1rem">
+<Page cropped contentStyle="padding: 1rem; gap: 1rem">
     <h1 style="margin-top: 1rem; gap: 1rem; flex-wrap: wrap" class="row">M68K Documentation</h1>
     <div class="links">
         <NavigationLinkButton href="/documentation/m68k/instruction">

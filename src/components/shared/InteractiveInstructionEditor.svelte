@@ -9,6 +9,7 @@
     import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE } from '$lib/Config'
     import StatusCodesVisualiser from '$cmp/specific/project/cpu/StatusCodesRenderer.svelte'
     import RegistersVisualiser from '$cmp/specific/project/cpu/RegistersRenderer.svelte'
+    import RegistersRenderer from '$cmp/specific/project/cpu/RegistersRenderer.svelte'
     import SizeSelector from '$cmp/specific/project/cpu/SizeSelector.svelte'
     import { onMount } from 'svelte'
     import { getM68kErrorMessage } from '$lib/languages/M68K/M68kUtils'
@@ -18,7 +19,7 @@
     import StdOutRenderer from '$cmp/specific/project/user-tools/StdOutRenderer.svelte'
     import TestcasesEditor from '$cmp/specific/project/testcases/TestcasesEditor.svelte'
     import Row from './layout/Row.svelte'
-    import { makeColorizedLabels } from '$lib/languages/commonLanguageFeatures.svelte'
+    import { makeColorizedLabels, makeRegister, RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
 
     /*TODO make this agnostic */
 
@@ -30,6 +31,10 @@
         showMemory?: boolean
         showConsole?: boolean
         showTestcases?: boolean
+        showPc?: boolean
+        showRegisters?: boolean
+        showSizes?: boolean
+        showFlags?: boolean
         embedded?: boolean
         language?: AvailableLanguages
         emulator: Emulator
@@ -37,10 +42,14 @@
 
     let {
         code = $bindable(),
-        showMemory = true,
         language,
-        showConsole,
-        showTestcases,
+        showMemory = true,
+        showFlags = true,
+        showSizes = true,
+        showRegisters = true,
+        showConsole = false,
+        showTestcases = false,
+        showPc = false,
         testcases = $bindable([]),
         embedded,
         emulator = $bindable()
@@ -60,12 +69,29 @@
         }
     })
 
+    const pc = makeRegister('PC', emulator.pc)
+
+    $effect(() => {
+        pc.setValue(emulator.pc)
+    })
+
     let errorStrings = $derived(emulator.errors.join('\n'))
     let info = $derived(
         emulator.terminated && emulator.executionTime >= 0
             ? `Ran in ${formatTime(emulator.executionTime)}`
             : ''
     )
+    let sizes = $derived(`calc(${[
+        (showSizes || (showFlags && emulator.statusRegisters?.length > 0)) ? '3.5rem' : '0px',
+        showConsole ? '4.5rem' : '0px',
+        showPc ? '2.25rem' : '0px',
+        '1rem'
+    ].join(' + ')})`)
+
+    let allHidden = $derived(
+        !showRegisters && !showMemory && !showConsole && !showTestcases
+    )
+
 </script>
 
 <div class="editor-wrapper" style="gap: 0.5rem">
@@ -167,35 +193,54 @@
             }}
 		/>
 	</div>
-	<Column>
+	<Column style={allHidden ? 'display:none' : undefined}>
 		<Row wrap gap="0.5rem" flex1>
-			<div class="column data-registers-wrapper">
-				<div class="data-cpu-status-wrapper">
-					{#if emulator.statusRegisters?.length > 0}
-						<StatusCodesVisualiser
-							statusCodes={emulator.statusRegisters}
-							style="flex:1"
-						/>
-					{/if}
-					<SizeSelector bind:selected={groupSize} style="flex:1" />
-				</div>
-				<RegistersVisualiser
-					size={groupSize}
-					hiddenRegistersNames={emulator.hiddenRegisters}
-					gridStyle="
-                grid-template-columns: min-content 1fr min-content 1fr; 
-                gap: 0.1rem; 
-                height: 100%; 
+			<div
+				class="column data-registers-wrapper"
+				style={(!showPc && !showRegisters && !(emulator.statusRegisters?.length > 0 && showFlags) && !showSizes) ? 'display:none' : undefined}
+			>
+				{#if showPc}
+					<RegistersRenderer
+						size={RegisterSize.Long}
+						style="flex: unset; overflow: unset; padding: 0;"
+						gridStyle="padding: 0.2rem 0.7rem"
+						registers={[pc]}
+						withoutHeader
+						position="bottom"
+					/>
+				{/if}
+				{#if (emulator.statusRegisters?.length > 0 && showFlags) || showSizes}
+					<div class="data-cpu-status-wrapper">
+						{#if emulator.statusRegisters?.length > 0 && showFlags}
+							<StatusCodesVisualiser
+								statusCodes={emulator.statusRegisters}
+								style="flex:1"
+							/>
+						{/if}
+						{#if showSizes}
+							<SizeSelector bind:selected={groupSize} style="flex:1" />
+						{/if}
+					</div>
+				{/if}
+				{#if showRegisters}
+					<RegistersVisualiser
+						size={groupSize}
+						hiddenRegistersNames={emulator.hiddenRegisters}
+						gridStyle="
+                grid-template-columns: min-content 1fr min-content 1fr;
+                gap: 0.1rem;
+                height: 100%;
                 justify-content: space-evenly;
                 "
-					style={`max-height: ${embedded ? 'calc(100vh - 7.2rem)' : '16.3rem'}; min-height: 11.5rem;`}
-					registers={emulator.registers}
-					on:registerClick={async (e) => {
+						style={`max-height: ${embedded ? `calc(100vh - ${sizes})` : '16.3rem'}; min-height: 11.5rem;`}
+						registers={emulator.registers}
+						on:registerClick={async (e) => {
                         const value = e.detail.value
                         const clampedSize = value - (value % emulator.memory.global.pageSize)
                         emulator.setGlobalMemoryAddress(clamp(clampedSize, 0, MEMORY_SIZE['M68K']))
                     }}
-				/>
+					/>
+				{/if}
 			</div>
 			{#if showMemory}
 				<div class="column code-data-memory-controls">

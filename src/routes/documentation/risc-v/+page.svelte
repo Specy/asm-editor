@@ -14,7 +14,7 @@
         content="Read the RISC-V Documentation, including all the instructions with addressing modes and the assembler features"
     />
 </svelte:head>
-<Page contentStyle="padding: 1rem; gap: 1rem">
+<Page cropped contentStyle="padding: 1rem; gap: 1rem">
     <h1 style="margin-top: 1rem; gap: 1rem; flex-wrap: wrap" class="row">RISC-V Documentation</h1>
     <div class="links">
         <NavigationLinkButton href="/documentation/risc-v/directive">

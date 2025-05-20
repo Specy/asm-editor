@@ -73,7 +73,7 @@
         cursor: move;
         background-color: var(--secondary);
         color: var(--secondary-text);
-        font-family: Orienta;
+        font-family: Rubik;
         position: relative;
         border-top-left-radius: 0.4rem;
         border-top-right-radius: 0.4rem;
