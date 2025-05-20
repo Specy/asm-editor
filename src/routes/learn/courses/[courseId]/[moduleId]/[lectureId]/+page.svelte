@@ -76,6 +76,7 @@
 		{#if previousLecture}
 			<ButtonLink
 				style="gap: 1rem"
+				cssVar="secondary"
 				onClick={() => {
         	document.body.scrollTo({top: 0, behavior: 'smooth'})
 				}}

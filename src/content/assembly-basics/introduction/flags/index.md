@@ -1,5 +1,3 @@
-## Flags
-
 When the CPU executes operations, it keeps information about the outcome of each instruction in something called **flags**.
 Each CPU has a different set of flags, but they usually follow similar patterns.
 

@@ -4,7 +4,6 @@ Each instruction is identified by an **OP code**, which is a **binary number** t
 To make it easier to understand, assembly languages convert this binary number into a human-readable format, which we call a *mnemonic*,
 and is what we usually consider "*an instruction*".
 
----
 
 ## The assembler
 
@@ -16,7 +15,6 @@ Even though instructions often share the same structure, the way that **data is 
 The assembler hides this complexity from the programmer, who usually just needs to worry about **picking the right instruction** and
 the **right operands**.
 
----
 
 ## Syntax of assembly languages
 
@@ -45,7 +43,6 @@ add $t0, $t1, $t2
 add d0, d1
 ```
 
----
 
 ## Labels, macros and directives
 

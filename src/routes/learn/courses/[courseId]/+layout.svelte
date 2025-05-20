@@ -2,6 +2,7 @@
     import Navbar from '$cmp/shared/layout/Navbar.svelte'
     import TogglableSection from '$cmp/shared/layout/TogglableSection.svelte'
     import FaBars from 'svelte-icons/fa/FaBars.svelte'
+    import FaDonate from 'svelte-icons/fa/FaDonate.svelte'
 
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import FaTimes from 'svelte-icons/fa/FaTimes.svelte'
@@ -81,8 +82,18 @@
 			</Column>
 		</TogglableSection>
 	{/each}
-	<Row style="margin-top: auto;" padding="0.5rem">
-
+	<Column style="margin-top: auto;" padding="0.5rem" gap="0.5rem">
+		<ButtonLink
+			style="width: 100%; gap: 0.5rem"
+			cssVar="tertiary"
+			href="/donate"
+			title="Donate to the project"
+		>
+			<Icon>
+				<FaDonate />
+			</Icon>
+			Donate
+		</ButtonLink>
 		<ButtonLink
 			style="width: 100%;"
 			href={ProjectStore.projects.length > 0 ? '/projects' : '/projects/create'}
@@ -94,7 +105,7 @@
 				Create your first project
 			{/if}
 		</ButtonLink>
-	</Row>
+	</Column>
 
 
 	{#snippet content()}

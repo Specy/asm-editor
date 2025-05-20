@@ -7,8 +7,16 @@ type Version = {
 }
 export const versions: Version[] = [
     {
+        version: '6.1.0',
+        title: 'Assembly Courses',
+        date: new Date('2025-05-20'),
+        changes: [
+            "Added a learning section where you can learn assembly language, we are looking for people to help us create courses!",
+        ]
+    },
+    {
         version: '6.0.0',
-        title: 'Added RISC-V language!',
+        title: 'RISC-V language',
         date: new Date('2025-05-16'),
         changes: [
             "Added RISC-V assembler/simulator",
@@ -17,7 +25,7 @@ export const versions: Version[] = [
     },
     {
         version: '5.0.0',
-        title: 'Added X86 language!',
+        title: 'X86 language',
         date: new Date('2025-04-13'),
         changes: [
             "Added X86 assembler/simulator (basic version)",
@@ -25,7 +33,7 @@ export const versions: Version[] = [
     },
     {
         version: '4.0.0',
-        title: 'Added MIPS language!',
+        title: 'MIPS language',
         date: new Date('2025-02-13'),
         changes: [
             'Added MIPS assembler/simulator (mars)',

@@ -253,17 +253,26 @@
 
   :global(._markdown table) {
     border-collapse: collapse;
-    border-style: hidden;
 		overflow-x: auto;
 		display: block;
     margin: 0.5rem 0;
+    border-radius: 0.5rem;
+    border: solid 0.1rem var(--tertiary);
+		max-width: fit-content;
   }
+
 	:global(._markdown code:not(pre code)){
 		background: var(--secondary);
 		padding: 0.2rem 0.4rem;
 		border-radius: 0.3rem;
     color: var(--accent);
 
+	}
+
+	:global(._markdown hr){
+    border: none;
+    height: 2px;
+    background-color: var(--secondary);
 	}
 
   :global(._markdown table:last-child) {
@@ -277,9 +286,20 @@
 
   :global(._markdown thead th) {
     padding: 0.4rem;
-    border-left: 0.1rem solid var(--secondary);
 		border-right: 0.1rem solid var(--secondary);
   }
+  :global(._markdown thead th:first-child){
+		border-top-left-radius: 0.3rem;
+	}
+	:global(._markdown thead th:last-child){
+		border-top-right-radius: 0.3rem;
+		border-right: unset;
+  }
+	:global(._markdown tbody tr:nth-child(odd)) {
+		background-color: color-mix(in srgb, var(--secondary), var(--tertiary) 20%);
+	}
+
+
   :global(._markdown tbody) {
     background-color: var(--secondary);
   }
@@ -287,6 +307,15 @@
   :global(._markdown td) {
     padding: 0.2rem 0.4rem;
     border: 0.1rem solid var(--tertiary);
+  }
+  :global(._markdown td:first-child){
+		border-left: unset;
+	}
+	:global(._markdown td:last-child){
+		border-right: unset;
+  }
+	:global(._markdown tr:last-child td){
+		border-bottom: unset;
   }
 
   :global(._markdown ul, ._markdown ol) {
