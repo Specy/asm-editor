@@ -12,6 +12,7 @@
     import type { AvailableLanguages, Testcase } from '$lib/Project.svelte'
     import lzstring from 'lz-string'
     import { ThemeStore } from '$stores/themeStore.svelte'
+
     let isDark = $derived(ThemeStore.isColorDark(ThemeStore.theme.background.color))
 
     let theme = $derived(isDark ? ('one-dark-pro' as const) : ('one-light' as const))
@@ -26,6 +27,7 @@
         showRegisters: boolean
         showSizes: boolean
         showFlags: boolean
+        openButton: boolean
     }
 
 
@@ -37,7 +39,8 @@
         const showRegisters = settings.showRegisters ? 'showRegisters=true&' : 'showRegisters=false&'
         const showSizes = settings.showSizes ? 'showSizes=true&' : 'showSizes=false&'
         const showFlags = settings.showFlags ? 'showFlags=true&' : 'showFlags=false&'
-        const props = [showMemory, showConsole, showTests, showPc, showRegisters, showSizes, showFlags].join('')
+				const showOpenButton = settings.openButton ? 'openButton=true&' : ''
+        const props = [showMemory, showConsole, showTests, showPc, showRegisters, showSizes, showFlags, showOpenButton].join('')
         const lang = `language=${settings.language}&`
         const compressed = lzstring.compressToEncodedURIComponent(code)
         const tests =
@@ -61,19 +64,26 @@
 
                     if (langClass) {
                         const fullLanguage = langClass.substring('language-'.length)
-												const entries = fullLanguage.split('|')
-												const isPlayground = entries.includes('playground')
-												const showMemory = entries.includes('memory')
-												const showConsole = entries.includes('console')
-												const showTests = entries.includes('tests')
-												const showPc = entries.includes('pc')
-												const showRegisters = !entries.includes('no-registers')
-												const showSizes = !entries.includes('no-sizes')
-												const showFlags = !entries.includes('no-flags')
+                        const entries = fullLanguage.split('|')
+                        const isPlayground = entries.includes('playground')
+                        const showMemory = entries.includes('memory')
+                        const showConsole = entries.includes('console')
+                        const showTests = entries.includes('tests')
+                        const showPc = entries.includes('pc')
+                        const showRegisters = !entries.includes('no-registers')
+                        const showSizes = !entries.includes('no-sizes')
+                        const showFlags = !entries.includes('no-flags')
+												const large = entries.includes('large') || showMemory
+												const tall = entries.includes('tall')
+												const openButton = entries.includes('allow-open')
                         if (isPlayground) {
-                            const actualLanguage = entries[0]
+                            let actualLanguage = entries[0].toUpperCase()
+                            if (actualLanguage === 'RISCV') {
+                                actualLanguage = 'RISC-V'
+                            }
 
                             const getAllText = (n: import('hast').Node | import('hast').Parent): string => {
+                                //@ts-ignore
                                 if (n.type === 'text') return n.value as string
                                 if ('children' in n && Array.isArray(n.children)) {
                                     return (n.children as Array<import('hast').Node | import('hast').Parent>).map(getAllText).join('')
@@ -86,17 +96,22 @@
                                     type: 'element',
                                     tagName: 'iframe',
                                     properties: {
+                                        style: `
+                                        	${!large ? 'max-width: 70ch; margin: 1.5rem auto;' : ''}
+                                        	${tall ? 'height: 70vh;' : ''}
+                                        `,
                                         className: 'code-playground',
                                         src: createCodeUrl(getAllText(codeNode).trimEnd(), {
                                             showMemory,
-																						showConsole,
-																						showTests,
-																						showPc,
-																						showRegisters: showRegisters,
-																						showSizes,
-																						showFlags,
-																						language: actualLanguage.toUpperCase()
-                                        }, []),
+                                            showConsole,
+                                            showTests,
+                                            showPc,
+                                            showRegisters: showRegisters,
+                                            showSizes,
+                                            showFlags,
+                                            language: actualLanguage as AvailableLanguages,
+                                            openButton,
+                                        }, [])
                                     },
                                     children: []
                                 }
@@ -122,7 +137,6 @@
     }
 
 
-
     const ext: Plugin = {
         transformers: [
             {
@@ -138,8 +152,8 @@
                 type: 'rehype',
                 transform({ processor }) {
                     processor
-												.use(remarkGfm)
-												.use(rehypeRaw)
+                        .use(remarkGfm)
+                        .use(rehypeRaw)
                 }
             }
         ]
@@ -153,9 +167,9 @@
                     processor
                         .use(remarkGfm)
                         .use(rehypeRaw)
-                    		.use(rehypeExternalLinks, {
-                        target: '_blank'
-                    })
+                        .use(rehypeExternalLinks, {
+                            target: '_blank'
+                        })
                 }
             }
         ]
@@ -164,13 +178,13 @@
         sanitizer: (html) => {
             return DOMPurify.sanitize(html, {
                 ADD_TAGS: ['iframe']
-						})
-				},
+            })
+        },
         extensions: [
             ext,
-						customPlaygroundPlugin,
-						code({ theme, langs: ['mips', 'riscv', 'asm'] })
-				],
+            customPlaygroundPlugin,
+            code({ theme, langs: ['mips', 'riscv', 'asm'] })
+        ],
         rehypeOptions: {
             allowDangerousHtml: true
         }
@@ -183,9 +197,9 @@
         },
         extensions: [
             extWithExternalLins,
-						customPlaygroundPlugin,
-						code({ theme, langs: ['mips', 'riscv', 'asm'] })
-				],
+            customPlaygroundPlugin,
+            code({ theme, langs: ['mips', 'riscv', 'asm'] })
+        ],
         rehypeOptions: {
             allowDangerousHtml: true
         }
@@ -199,7 +213,7 @@
         source: string
         linksInNewTab?: boolean
         style?: string
-				spacing?: string
+        spacing?: string
     }
 
     let { source, linksInNewTab, style, spacing }: Props = $props()
@@ -221,59 +235,64 @@
   ._markdown {
     display: flex;
     flex-direction: column;
-		line-height: 1.4;
+    line-height: 1.4;
     letter-spacing: .01em;
   }
 
-	:global(pre:has(code)){
+  :global(pre:has(code)) {
     background: var(--secondary) !important;
-		padding: 1rem;
-		border-radius: 0.5rem;
-	}
+    padding: 1rem;
+    border-radius: 0.5rem;
+    overflow-x: auto;
+  }
+
   :global(.shiki) {
     padding: 0.5rem;
-    overflow-x: auto;
     border-radius: 0.3rem;
     width: 100%;
   }
-	:global(._markdown .markdown-body){
+
+	:global(.shiki),
+  :global(pre:has(code)) {
+    max-width: fit-content;
+    min-width: min(100%, 71ch);
+    margin: 1rem auto;
+    box-shadow: 0 0 2rem 10px rgb(3 4 5 / 15%);
+	}
+
+  :global(._markdown .markdown-body) {
     display: flex;
     flex-direction: column;
-		gap: var(--gap, 1rem);
-	}
-  :global(._markdown p){
-		opacity: 0.95;
+    gap: var(--gap, 1rem);
   }
 
-	:global(.markdown-body h1:not(:first-child)),
-  :global(.markdown-body h2:not(:first-child)){
-		margin-top: 2rem;
-		margin-bottom: 0;
-	}
+  :global(._markdown p) {
+    opacity: 0.95;
+  }
 
   :global(._markdown table) {
     border-collapse: collapse;
-		overflow-x: auto;
-		display: block;
-    margin: 0.5rem 0;
+    overflow-x: auto;
+    display: block;
+    margin: 0.5rem auto;
     border-radius: 0.5rem;
     border: solid 0.1rem var(--tertiary);
-		max-width: fit-content;
+    max-width: fit-content;
   }
 
-	:global(._markdown code:not(pre code)){
-		background: var(--secondary);
-		padding: 0.2rem 0.4rem;
-		border-radius: 0.3rem;
+  :global(._markdown code:not(pre code)) {
+    background: var(--secondary);
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.3rem;
     color: var(--accent);
 
-	}
+  }
 
-	:global(._markdown hr){
+  :global(._markdown hr) {
     border: none;
     height: 2px;
     background-color: var(--secondary);
-	}
+  }
 
   :global(._markdown table:last-child) {
     margin-bottom: 0;
@@ -286,18 +305,21 @@
 
   :global(._markdown thead th) {
     padding: 0.4rem;
-		border-right: 0.1rem solid var(--secondary);
+    border-right: 0.1rem solid var(--secondary);
   }
-  :global(._markdown thead th:first-child){
-		border-top-left-radius: 0.3rem;
-	}
-	:global(._markdown thead th:last-child){
-		border-top-right-radius: 0.3rem;
-		border-right: unset;
+
+  :global(._markdown thead th:first-child) {
+    border-top-left-radius: 0.3rem;
   }
-	:global(._markdown tbody tr:nth-child(odd)) {
-		background-color: color-mix(in srgb, var(--secondary), var(--tertiary) 20%);
-	}
+
+  :global(._markdown thead th:last-child) {
+    border-top-right-radius: 0.3rem;
+    border-right: unset;
+  }
+
+  :global(._markdown tbody tr:nth-child(odd)) {
+    background-color: color-mix(in srgb, var(--secondary), var(--tertiary) 20%);
+  }
 
 
   :global(._markdown tbody) {
@@ -308,14 +330,17 @@
     padding: 0.2rem 0.4rem;
     border: 0.1rem solid var(--tertiary);
   }
-  :global(._markdown td:first-child){
-		border-left: unset;
-	}
-	:global(._markdown td:last-child){
-		border-right: unset;
+
+  :global(._markdown td:first-child) {
+    border-left: unset;
   }
-	:global(._markdown tr:last-child td){
-		border-bottom: unset;
+
+  :global(._markdown td:last-child) {
+    border-right: unset;
+  }
+
+  :global(._markdown tr:last-child td) {
+    border-bottom: unset;
   }
 
   :global(._markdown ul, ._markdown ol) {
@@ -327,17 +352,40 @@
   }
 
   :global(._markdown p),
-  :global(._markdown li){
+  :global(._markdown ul),
+  :global(._markdown ol) {
     line-height: 1.5;
     font-family: 'Noto Serif', Rubik, sans-serif;
     font-weight: 500;
-		max-width: 70ch;
+    width: min(100%, 70ch);
+    margin: 0 auto;
   }
-	:global(.code-playground){
-    border: none;
+
+  :global(.markdown-body h1),
+  :global(.markdown-body h2),
+  :global(.markdown-body h3),
+  :global(.markdown-body h4),
+  :global(.markdown-body h5),
+  :global(.markdown-body h6) {
+    width: min(100%, 46rem);
+    margin: 0 auto;
+  }
+
+  :global(.markdown-body h1:not(:first-child)),
+  :global(.markdown-body h2:not(:first-child)) {
+    margin-top: 2rem;
+    margin-bottom: 0;
+  }
+
+
+  :global(.code-playground) {
+		border: none;
     border-radius: 0.8rem;
     width: 100%;
-    min-height: 20.4rem;
-		background-color: var(--secondary);
-	}
+    min-height: 20.8rem;
+		margin: 1.5rem auto;
+    background-color: var(--secondary);
+    box-shadow: 0 0 2rem 10px rgba(0, 0, 0, 0.2);
+
+  }
 </style>

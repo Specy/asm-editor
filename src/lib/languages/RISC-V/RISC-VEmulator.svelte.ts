@@ -201,7 +201,6 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
             state.compilerErrors = errors
             state.errors = []
         } catch (e) {
-            console.error(e)
             addError(getRISCVErrorMessage(e))
         }
     }

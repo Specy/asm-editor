@@ -1,0 +1,5 @@
+{
+  "name": "Recursive Fibonacci",
+  "description": "A recursive implementation of the Fibonacci sequence in MIPS assembly.",
+  "order": 0
+}

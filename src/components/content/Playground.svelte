@@ -52,6 +52,6 @@
         border: none;
         border-radius: 0.8rem;
         width: 100%;
-        min-height: 20.4rem;
+        min-height: 20.8rem;
     }
 </style>

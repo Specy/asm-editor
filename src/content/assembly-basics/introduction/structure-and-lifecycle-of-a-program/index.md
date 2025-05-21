@@ -47,7 +47,7 @@ execute.
 
 ## The Program Counter (PC)
 
-The program counter is a special register in CPUs that stores the address in memory where the *next instruction to execute* is located.
+The program counter is a special purpose register in CPUs that stores the address in memory where the *next instruction to execute* is located.
 
 At the very beginning of a program, the Program Counter is initialized to whichever address the first instruction to execute is located.
 In our previous example, it will be where the `main` is written, aka the `li a7, 4` instruction.
@@ -61,7 +61,7 @@ Once the instruction finishes execution, the Program Counter is incremented by t
 Look at this example in m68k that adds 1 to a register a few times, click compile and then `step` until the end. Look at the Program Counter on the 
 top right increasing as you run the code.
 
-```m68k|playground|pc|no-sizes|no-flags
+```m68k|playground
 add #1, d0
 add #1, d0
 add #1, d0

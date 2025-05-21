@@ -63,7 +63,7 @@ function Toast() {
     }
     function close() {
         update((data) => {
-            return { ...data, visible: false, duration: 0 }
+            return { ...data, visible: false, duration: 0, message: '' }
         })
         clearTimeout(timeout)
     }

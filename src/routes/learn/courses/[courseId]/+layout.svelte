@@ -23,7 +23,7 @@
 
     let { children, data }: Props = $props()
 
-    let currentLectureName = $derived(page.params.lectureId)
+    let currentLectureName = $derived(`${page.params.moduleId}-${page.params.lectureId}`)
 
     let menuOpen = $state(false)
 
@@ -74,7 +74,7 @@
 			{/snippet}
 			<Column>
 				<LecturesMenu
-					currentLecture={module.lectures.find(l => l.slug === currentLectureName)}
+					currentLecture={module.lectures.find(l => `${module.slug}-${l.slug}` === currentLectureName)}
 					lectures={module.lectures}
 					lectureStyle="padding-left: 1rem"
 					hrefBase={`/learn/courses/${data.course.slug}/${module.slug}`}

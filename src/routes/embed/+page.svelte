@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onMount } from 'svelte'
     import InteractiveInstructionEditor from '$cmp/shared/InteractiveInstructionEditor.svelte'
-    import { type AvailableLanguages, type Testcase } from '$lib/Project.svelte'
+    import { type AvailableLanguages, makeProject, type Testcase } from '$lib/Project.svelte'
     import Page from '$cmp/shared/layout/Page.svelte'
     import lzstring from 'lz-string'
     import { page } from '$app/stores'
@@ -12,16 +12,21 @@
     import { BASE_CODE } from '$lib/Config'
     import Header from '$cmp/shared/layout/Header.svelte'
     import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
-
+    import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
+    import { createShareLink } from '$lib/utils'
+    import Button from '$cmp/shared/button/Button.svelte'
+		import FaExternal from 'svelte-icons/fa/FaExternalLinkAlt.svelte'
+    import Icon from '$cmp/shared/layout/Icon.svelte'
     type Settings = {
         showMemory: boolean
         language: AvailableLanguages
         showConsole: boolean
         showTests: boolean
-				showPc: boolean
-				showRegisters: boolean
-				showSizes: boolean
-				showFlags: boolean
+        showPc: boolean
+        showRegisters: boolean
+        showSizes: boolean
+        showFlags: boolean
+        openButton: boolean
     }
 
     let settings: Settings = $state({
@@ -29,10 +34,11 @@
         language: 'M68K',
         showConsole: false,
         showTests: true,
-				showPc: false,
-				showRegisters: true,
-				showSizes: true,
-				showFlags: false
+        showPc: false,
+        showRegisters: true,
+        showSizes: true,
+        showFlags: false,
+        openButton: false
     })
     let inIframe = $state(true)
     let code = $state(BASE_CODE[settings.language])
@@ -76,20 +82,22 @@
         const language = (searchParams.get('language') ?? 'M68K') as AvailableLanguages
         const showConsole = searchParams.get('showConsole') === 'true'
         const showTests = (searchParams.get('showTests') ?? 'true') === 'true'
-				const showPc = searchParams.get('showPc') === 'true'
-				const showRegisters = searchParams.get('showRegisters') !== 'false'
-				const showSizes = searchParams.get('showSizes') !== 'false'
-				const showFlags = searchParams.get('showFlags') === 'true'
+        const showPc = searchParams.get('showPc') === 'true'
+        const showRegisters = searchParams.get('showRegisters') !== 'false'
+        const showSizes = searchParams.get('showSizes') !== 'false'
+        const showFlags = searchParams.get('showFlags') === 'true'
+        const openButton = searchParams.get('openButton') === 'true'
 
         return {
             showMemory,
             language,
             showConsole,
             showTests,
-						showPc,
-						showRegisters,
-						showSizes,
-						showFlags
+            showPc,
+            showRegisters,
+            showSizes,
+            showFlags,
+            openButton
         } satisfies Settings
     }
 
@@ -97,11 +105,12 @@
         const showMemory = settings.showMemory ? 'showMemory=true&' : ''
         const showConsole = settings.showConsole ? 'showConsole=true&' : ''
         const showTests = settings.showTests ? 'showTests=true&' : 'showTests=false&'
-				const showPc = settings.showPc ? 'showPc=true&' : ''
-				const showRegisters = settings.showRegisters ? 'showRegisters=true&' : 'showRegisters=false&'
-				const showSizes = settings.showSizes ? 'showSizes=true&' : ''
-				const showFlags = settings.showFlags ? 'showFlags=true&' : 'showFlags=false&'
-				const props = [showMemory, showConsole, showTests, showPc, showRegisters, showSizes, showFlags].join('')
+        const showPc = settings.showPc ? 'showPc=true&' : ''
+        const showRegisters = settings.showRegisters ? 'showRegisters=true&' : 'showRegisters=false&'
+        const showSizes = settings.showSizes ? 'showSizes=true&' : ''
+        const showFlags = settings.showFlags ? 'showFlags=true&' : 'showFlags=false&'
+        const openButton = settings.openButton ? 'openButton=true&' : ''
+        const props = [showMemory, showConsole, showTests, showPc, showRegisters, showSizes, showFlags, openButton].join('')
         const lang = `language=${settings.language}&`
         const compressed = lzstring.compressToEncodedURIComponent(code)
         const tests =
@@ -162,7 +171,26 @@
 						showFlags={settings.showFlags}
 						language={settings.language}
 
-					/>
+					>
+						{#snippet controls()}
+							{#if settings.openButton  }
+								<Button
+									cssVar="secondary"
+									style="gap: 0.5rem; margin-left: auto"
+									onClick={() => {
+										const project = makeProject({code})
+										const url = createShareLink(project)
+										window.open(url, '_blank')
+									}}
+								>
+									<Icon>
+										<FaExternal />
+									</Icon> Open in editor
+								</Button>
+							{/if}
+						{/snippet}
+
+					</InteractiveInstructionEditor>
 				{/snippet}
 				{#snippet loading()}
 					<Header>
@@ -205,6 +233,10 @@
 					<span>Show flags</span>
 					<input type="checkbox" bind:checked={settings.showFlags} />
 				</div>
+				<div class="share-settings">
+					<span>Open in asm editor</span>
+					<input type="checkbox" bind:checked={settings.openButton} />
+				</div>
 				<div class="share-settings" style="justify-content: space-between;">
 					<span>Language</span>
 					<Select
@@ -223,7 +255,7 @@
 			<div class="share-card">
 				<h2 style="text-align: center;">Embed code</h2>
 				<textarea
-				>{`<iframe src="${generatedCode}" style="border: none; border-radius: 0.8rem; width: 100%; min-height: 20.4rem;"></iframe>`}</textarea
+				>{`<iframe src="${generatedCode}" style="border: none; border-radius: 0.8rem; width: 100%; min-height: 20.8rem;"></iframe>`}</textarea
 				>
 			</div>
 		</div>

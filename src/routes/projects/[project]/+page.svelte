@@ -14,6 +14,7 @@
     import { DEFAULT_THEME, ThemeStore } from '$stores/themeStore.svelte'
     import { LANGUAGE_THEMES } from '$lib/Config'
     import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
+    import { createShareLink } from '$lib/utils'
 
     let project = makeProject()
     let status: 'loading' | 'loaded' | 'error' = $state('loading')
@@ -75,10 +76,7 @@
 
     function share(pr: Project) {
         if (!pr) return
-        const p = pr.toObject()
-        p.id = SHARE_ID
-        const code = lzstring.compressToEncodedURIComponent(JSON.stringify(p))
-        const url = `${window.location.origin}/projects/share?project=${code}`
+        const url = createShareLink(pr)
         navigator.clipboard.writeText(url)
         toast.logPill('Copied to clipboard')
     }

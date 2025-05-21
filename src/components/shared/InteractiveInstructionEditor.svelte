@@ -11,7 +11,7 @@
     import RegistersVisualiser from '$cmp/specific/project/cpu/RegistersRenderer.svelte'
     import RegistersRenderer from '$cmp/specific/project/cpu/RegistersRenderer.svelte'
     import SizeSelector from '$cmp/specific/project/cpu/SizeSelector.svelte'
-    import { onMount } from 'svelte'
+    import { onMount, type Snippet } from 'svelte'
     import { getM68kErrorMessage } from '$lib/languages/M68K/M68kUtils'
     import type { AvailableLanguages, Testcase, TestcaseResult } from '$lib/Project.svelte'
     import { type Emulator } from '$lib/languages/Emulator'
@@ -38,6 +38,7 @@
         embedded?: boolean
         language?: AvailableLanguages
         emulator: Emulator
+				controls?: Snippet
     }
 
     let {
@@ -52,7 +53,8 @@
         showPc = false,
         testcases = $bindable([]),
         embedded,
-        emulator = $bindable()
+        emulator = $bindable(),
+				controls
     }: Props = $props()
     let memoryAddress = $state(0x1000)
     let groupSize = $state(2)
@@ -117,6 +119,7 @@
 		</div>
 
 		<Controls
+			children={controls}
 			{running}
 			hasTests={testcases.length > 0 && !showTestcases}
 			canEditTests={showTestcases}
@@ -232,7 +235,7 @@
                 height: 100%;
                 justify-content: space-evenly;
                 "
-						style={`max-height: ${embedded ? `calc(100vh - ${sizes})` : '16.3rem'}; min-height: 11.5rem;`}
+						style={`flex: unset; max-height: ${embedded ? `calc(100vh - ${sizes})` : '16.3rem'}; min-height: 16.3rem;`}
 						registers={emulator.registers}
 						on:registerClick={async (e) => {
                         const value = e.detail.value
@@ -259,7 +262,6 @@
 					<MemoryVisualiser
 						endianess={emulator.memory.global.endianess}
 						defaultMemoryValue={DEFAULT_MEMORY_VALUE[language]}
-						style="height: 100%; flex: 1;"
 						bytesPerRow={4}
 						pageSize={4 * 8}
 						memory={emulator.memory.global.data}

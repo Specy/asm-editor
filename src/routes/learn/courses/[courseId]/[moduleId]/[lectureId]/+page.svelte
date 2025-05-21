@@ -57,12 +57,12 @@
 	<meta property="og:image" content={data.course.image} />
 </svelte:head>
 
-<Page cropped="80ch" style="padding: 1rem;" contentStyle="gap: 1rem;">
-	<Header noMargin>
-		{data.lecture.name}
-	</Header>
-	<Card padding="1rem" background="secondary">
-		<p class="description">
+<Page cropped="100ch" style="padding: 1rem;" contentStyle="gap: 1rem;">
+	<Card padding="1.5rem" gap="1rem" background="secondary">
+		<Header noMargin style="width: min(100%, 46rem); margin: 0 auto">
+			{data.lecture.name}
+		</Header>
+		<p class="description" >
 			{data.lecture.description}
 		</p>
 	</Card>
@@ -118,6 +118,9 @@
         line-height: 1.5;
         font-family: 'Noto Serif', Rubik, sans-serif;
         font-weight: 500;
-        max-width: 70ch;
+        width: min(100%, 70ch);
+				font-size: 1.1rem;
+				margin: 0 auto;
+
     }
 </style>

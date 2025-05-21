@@ -123,6 +123,8 @@
         font-size: 0.9rem;
         display: flex;
         margin-top: auto;
+        overflow-y: auto;
+        white-space: pre-wrap;
     }
     @media (max-width: 480px) {
         .toast-wrapper {

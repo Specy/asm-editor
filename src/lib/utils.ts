@@ -1,3 +1,7 @@
+import { SHARE_ID } from '$stores/projectsStore.svelte'
+import lzstring from 'lz-string'
+import type { Project } from '$lib/Project.svelte'
+
 export function clamp(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value))
 }
@@ -44,4 +48,12 @@ export function formatTime(s: number) {
 
 export function capitalize(word: string) {
     return word[0].toUpperCase() + word.slice(1)
+}
+
+
+export function createShareLink(project: Project){
+    const p = project.toObject()
+    p.id = SHARE_ID
+    const code = lzstring.compressToEncodedURIComponent(JSON.stringify(p))
+    return `${window.location.origin}/projects/share?project=${code}`
 }

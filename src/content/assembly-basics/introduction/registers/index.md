@@ -7,7 +7,7 @@ They are usually (depending on the CPU) between **8 and 32** in total, and can h
 are *physically inside the CPU* itself — unlike memory, which is further away and *slower* to access.
 
 Each register has a **name** that identifies it.
-For example, in **M68K** there are registers: `d0`, `d1`, ... `d7`, `a0`, `a1`, ... `a7`.
+For example, in **M68K** there are registers: `d0`, `d1`, ..., `d7`, `a0`, `a1`, ..., `a7`.
 
 ## General Purpose Registers
 
@@ -21,5 +21,6 @@ Some architectures split this category further into:
 
 ## Special Purpose Registers
 
-They are *special registers* usually managed by the CPU itself and used for **specific purposes**.
+They are *special registers* usually managed by the CPU itself and used for **specific purposes**, there will be a more in depth explaination 
+in future lectures.
 
