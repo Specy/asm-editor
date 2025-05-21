@@ -178,7 +178,7 @@
 									cssVar="secondary"
 									style="gap: 0.5rem; margin-left: auto"
 									onClick={() => {
-										const project = makeProject({code})
+										const project = makeProject({code, language: settings.language})
 										const url = createShareLink(project)
 										window.open(url, '_blank')
 									}}
