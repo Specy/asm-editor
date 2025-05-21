@@ -234,7 +234,7 @@
 					<input type="checkbox" bind:checked={settings.showFlags} />
 				</div>
 				<div class="share-settings">
-					<span>Open in asm editor</span>
+					<span>Open in editor button</span>
 					<input type="checkbox" bind:checked={settings.openButton} />
 				</div>
 				<div class="share-settings" style="justify-content: space-between;">
