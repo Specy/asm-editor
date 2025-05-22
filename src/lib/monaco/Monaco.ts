@@ -16,6 +16,7 @@ class MonacoLoader {
     }
 
     dispose = () => {
+        this.registeredLanguages = []
         this.toDispose.forEach((d) => d.dispose())
     }
 
