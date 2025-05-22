@@ -86,7 +86,7 @@
 				</Row>
 				<Row wrap gap="0.5rem">
 						<Button
-							style={`${shadow} gap: 0.5rem; ${installEvent ? 'pointer-events: none; opacity: 0': ''}`}
+							style={`${shadow} gap: 0.5rem; ${!installEvent ? 'pointer-events: none; opacity: 0': ''}`}
 							cssVar="secondary"
 							onClick={async () => {
                             try {
