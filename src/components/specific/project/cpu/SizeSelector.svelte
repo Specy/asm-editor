@@ -22,7 +22,7 @@
 </script>
 
 
-<div class='size-selector-2'>
+<div class='size-selector-2' {style}>
 	{#each sizes as size}
 		<button
 			onclick={() => {
@@ -58,18 +58,18 @@
     }
 
     .size-selector-2-button:hover:not(.size-selector-2-button-selected):not(:active) {
-        background-color: rgba(var(--RGB-accent), 0.3);
+        background-color: rgba(var(--RGB-accent2), 0.3);
     }
 
     .size-selector-2-button:active {
-        background-color: var(--accent);
-        color: var(--accent-text);
+        background-color: var(--accent2);
+        color: var(--accent2-text);
     }
 
     .size-selector-2-button-selected {
         transition: background-color 0s;
-        background-color: var(--accent);
-        color: var(--accent-text);
+        background-color: var(--accent2);
+        color: var(--accent2-text);
     }
 
 </style>

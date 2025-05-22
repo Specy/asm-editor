@@ -38,6 +38,7 @@
 		<div class="registers-header">
 			Registers
 			<SizeSelector
+				style="border-bottom-right-radius: 0.2rem;"
 				bind:selected={size}
 			/>
 		</div>
