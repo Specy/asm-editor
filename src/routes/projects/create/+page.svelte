@@ -41,8 +41,8 @@
 <svelte:head>
 	<title>Create Project</title>
 	<meta name="description" content="Create a new project" />
-	<meta name="og:description" content="Create a new project" />
-	<meta name="og:title" content="Create Project" />
+	<meta property="og:description" content="Create a new project" />
+	<meta property="og:title" content="Create Project" />
 </svelte:head>
 
 <Page cropped contentStyle="max-width: 40rem">

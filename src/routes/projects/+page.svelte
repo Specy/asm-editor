@@ -116,8 +116,8 @@
 <svelte:head>
     <title>Projects</title>
     <meta name="description" content="Create, edit or delete your projects" />
-    <meta name="og:description" content="Create, edit or delete your projects" />
-    <meta name="og:title" content="Projects" />
+    <meta property="og:description" content="Create, edit or delete your projects" />
+    <meta property="og:title" content="Projects" />
 </svelte:head>
 <Page>
     <div class="project-display">

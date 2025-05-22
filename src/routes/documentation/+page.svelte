@@ -16,7 +16,7 @@
         property="og:description"
         content="All the documentations for the languages and features available in the asm-editor"
     />
-    <meta name="og:title" content="Documentation" />
+    <meta property="og:title" content="Documentation" />
 </svelte:head>
 
 <Page cropped contentStyle="margin-top: 4rem; gap: 1rem; padding: 1rem">

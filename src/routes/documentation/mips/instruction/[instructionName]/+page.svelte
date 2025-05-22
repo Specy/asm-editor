@@ -31,13 +31,13 @@
 
 <svelte:head>
     <meta name="description" content={`The ${ins.name} instruction.\n${ins.description}`} />
-    <meta name="og:description" content={`The ${ins.name} instruction.\n${ins.description}`} />
+    <meta property="og:description" content={`The ${ins.name} instruction.\n${ins.description}`} />
     <meta name="keywords" content={ins.name} />
     <meta name="author" content="specy" />
     <title>
         Docs - {ins.name}
     </title>
-    <meta name="og:title" content="Docs - {ins.name}" />
+    <meta property="og:title" content="Docs - {ins.name}" />
 </svelte:head>
 
 <Page contentStyle="padding: 1rem; gap: 1rem;">
