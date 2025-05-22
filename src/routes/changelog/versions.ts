@@ -7,6 +7,16 @@ type Version = {
 }
 export const versions: Version[] = [
     {
+        version: '6.2.0',
+        title: 'Slight redesign and examples course',
+        date: new Date('2025-05-22'),
+        changes: [
+            "Changed fonts, colors and some UI elements",
+            "Improved loading performance",
+            "Added examples course, where you can find different assembly examples for each language",
+        ]
+    },
+    {
         version: '6.1.0',
         title: 'Assembly Courses',
         date: new Date('2025-05-20'),
