@@ -11,6 +11,7 @@
     import { ThemeStore } from '$stores/themeStore.svelte'
     import { beforeNavigate } from '$app/navigation'
     import { navigationStore } from '$stores/navigationStore'
+
     interface Props {
         children?: import('svelte').Snippet
     }
@@ -34,36 +35,37 @@
 </script>
 
 <svelte:head>
-    <meta
-        name="description"
-        content="Write, learn and run M68K, MIPS, RISC-V, X86 assembly code on your browser. View registers and memory, step and undo the program."
-    />
-    <meta
-        property="og:description"
-        content="Write, learn and run M68K, MIPS, RISC-V, X86 assembly code on your browser. View registers and memory, step and undo the program."
-    />
-    <meta property="og:title" content="Asm Editor" />
+	<meta
+		name="description"
+		content="Write, learn and run M68K, MIPS, RISC-V, X86 assembly code on your browser. View registers and memory, step and undo the program."
+	/>
+	<meta
+		property="og:description"
+		content="Write, learn and run M68K, MIPS, RISC-V, X86 assembly code on your browser. View registers and memory, step and undo the program."
+	/>
+	<meta property="og:title" content="Asm Editor" />
 </svelte:head>
 
 <ThemeProvider>
-    <ErrorLogger>
-        <PromptProvider>
-            <PageTransition refresh={$page.url.pathname} />
-            {@render children?.()}
+	<ErrorLogger>
+		<PromptProvider>
+			<PageTransition refresh={$page.url.pathname} />
+			{@render children?.()}
 
-            <!-- fix this -->
-            <Footer
-                pages={[
-                    '/projects',
-                    '/projects/create',
-                    '',
-                    '/',
-                    '/themes',
-                    '/donate',
-                    '/changelog',
-                    '/documentation'
+			<!-- fix this -->
+			<Footer
+				pages={[
+                    /^\/projects$/, 
+                    /^\/projects\/create$/,
+                    /^\/learn\/courses$/,
+                    /^\\$/, 
+                    /^\/$/, 
+                    /^\/themes$/, 
+                    /^\/donate$/, 
+                    /^\/changelog$/, 
+                    /^\/documentation$/
                 ]}
-            />
-        </PromptProvider>
-    </ErrorLogger>
+			/>
+		</PromptProvider>
+	</ErrorLogger>
 </ThemeProvider>

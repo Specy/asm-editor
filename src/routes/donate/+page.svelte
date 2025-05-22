@@ -11,6 +11,7 @@
     import { PAST_DONATIONS } from '$src/routes/donate/pastDonations'
     import Card from '$cmp/shared/layout/Card.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
+    import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
 
     let previousPage: string = $state('/projects')
     afterNavigate(({ from }) => {

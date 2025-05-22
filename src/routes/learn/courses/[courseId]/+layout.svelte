@@ -16,6 +16,7 @@
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
     import { ProjectStore } from '$stores/projectsStore.svelte'
     import MenuLink from '$src/routes/documentation/m68k/instruction/MenuLink.svelte'
+    import Footer from '$cmp/shared/layout/Footer.svelte'
 
     interface Props {
         children?: import('svelte').Snippet,
@@ -117,6 +118,7 @@
 		</Column>
 	{/snippet}
 </Sidebar>
+
 
 <style lang="scss">
   .side-menu {

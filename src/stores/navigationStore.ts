@@ -21,7 +21,12 @@ function createNavigationStore() {
             } else {
                 const from = removeRoot(fromUrl)
                 const to = removeRoot(toUrl)
-                goingBack = from.split('/').length >= to.split('/').length && from !== ''
+                const isSubpath = to.startsWith(from) || from.startsWith(to)
+                if(!isSubpath) {
+                    goingBack = false;
+                }else {
+                    goingBack = from.split('/').length >= to.split('/').length && from !== ''
+                }
             }
         } catch (e) {
             console.error(e)

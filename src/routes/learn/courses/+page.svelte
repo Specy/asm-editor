@@ -6,6 +6,7 @@
     import Row from '$cmp/shared/layout/Row.svelte'
     import Navbar from '$cmp/shared/layout/Navbar.svelte'
     import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
+    import Footer from '$cmp/shared/layout/Footer.svelte'
 
     interface Props {
         data: PageData
@@ -17,7 +18,7 @@
 
 <DefaultNavbar />
 
-<Page cropped style="padding: 1rem; padding-top: 4rem;">
+<Page hasNavbar cropped contentStyle="padding: 1rem;">
 	<Header>
 		Courses
 	</Header>

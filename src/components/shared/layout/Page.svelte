@@ -14,12 +14,12 @@
 
 <main
     class="content"
+    class:has-nav={hasNavbar}
     {style}
-    in:fly|global={{ x: $navigationStore.direction === 'back' ? 30 : -30, duration: 500 }}
+    in:fly|global={{ x: $navigationStore.direction === 'back' ? 16 : -16, duration: 500 }}
 >
     <div
         class="column"
-        class:has-nav={hasNavbar}
         style="max-width: {cropped ? (typeof cropped === 'string' ? cropped : '60rem') : 'unset'}; width:100%;height: 100%; {contentStyle}"
     >
         {@render children?.()}
@@ -36,6 +36,6 @@
         flex: 1;
     }
     .has-nav{
-        padding-top: 3.2rem;
+        margin-top: 3.2rem;
     }
 </style>

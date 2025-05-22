@@ -122,7 +122,7 @@
 </svelte:head>
 
 <DefaultNavbar />
-<Page style="padding-top: 2rem">
+<Page hasNavbar style="padding-top: 2rem">
     <div class="project-display">
         <div class="content">
             <div class="top-row">
@@ -212,7 +212,6 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-top: 4rem;
         margin-bottom: 2rem;
     }
 

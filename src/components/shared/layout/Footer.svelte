@@ -3,17 +3,17 @@
     import FaRegCopyright from 'svelte-icons/fa/FaRegCopyright.svelte'
     import Icon from './Icon.svelte'
     import { toast } from '$stores/toastStore'
-    import { page } from '$app/stores'
+    import { page } from '$app/state'
     import AnimatedRgbLine from '$cmp/shared/misc/AnimatedRgbLine.svelte'
     import FaDonate from 'svelte-icons/fa/FaDonate.svelte'
     interface Props {
-        pages?: any
+        pages?: RegExp[]
     }
 
     let { pages = [] }: Props = $props()
 </script>
 
-{#if pages.includes($page.url.pathname)}
+{#if pages.some(p => page.url.pathname.match(p))}
     <footer class="footer">
         <div class="footer-inner">
             <AnimatedRgbLine />

@@ -2,6 +2,7 @@
     import Page from '$cmp/shared/layout/Page.svelte'
     import NavigationLinkButton from '$cmp/shared/button/NavigationLinkButton.svelte'
     import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
+    import Header from '$cmp/shared/layout/Header.svelte'
     const langs = ['M68K', 'MIPS', 'RISC-V']
 </script>
 
@@ -19,8 +20,8 @@
     <meta property="og:title" content="Documentation" />
 </svelte:head>
 
-<Page cropped contentStyle="margin-top: 4rem; gap: 1rem; padding: 1rem">
-    <h1>Languages</h1>
+<Page cropped hasNavbar contentStyle="padding: 1rem">
+    <Header>Languages</Header>
     <div class="langs">
         {#each langs as lang}
             <NavigationLinkButton href="/documentation/{lang.toLowerCase()}">
@@ -37,7 +38,6 @@
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
         gap: 1rem;
-        padding: 1rem;
     }
     h1 {
         font-size: 1.8rem;
