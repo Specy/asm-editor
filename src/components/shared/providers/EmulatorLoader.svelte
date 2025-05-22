@@ -23,7 +23,7 @@
 </script>
 
 {#await emulator}
-	<Column justify="center" align="center">
+	<Column justify="center" align="center" flex1>
 		{#if loading}
 			{@render loading()}
 		{:else}

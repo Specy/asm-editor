@@ -2,7 +2,7 @@
     import '../global.css'
     import ErrorLogger from '$cmp/shared/providers/LoggerProvider.svelte'
     import PageTransition from '$cmp/shared/providers/PageTransition.svelte'
-    import { page } from '$app/stores'
+    import { page } from '$app/state'
     import ThemeProvider from '$cmp/shared/providers/ThemeProvider.svelte'
     import PromptProvider from '$cmp/shared/providers/PromptProvider.svelte'
     import Footer from '$cmp/shared/layout/Footer.svelte'
@@ -21,6 +21,7 @@
 
     onMount(() => {
         registerServiceWorker()
+				import('$lib/monaco/Monaco').then(i => i.Monaco.registerLanguages())
         metaTheme = document.querySelector('meta[name="theme-color"]')
     })
     beforeNavigate((p) => {
@@ -49,7 +50,7 @@
 <ThemeProvider>
 	<ErrorLogger>
 		<PromptProvider>
-			<PageTransition refresh={$page.url.pathname} />
+			<PageTransition refresh={page.url.pathname} />
 			{@render children?.()}
 
 			<!-- fix this -->

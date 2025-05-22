@@ -56,7 +56,7 @@
     onMount(async () => {
         monacoInstance = await Monaco.get()
         if (!el) return console.log('Wrapper element not valid', el)
-        Monaco.registerLanguages()
+        await Monaco.registerLanguage(language)
         editor = monacoInstance.editor.create(el, {
             value: code,
             language: language.toLowerCase(),
