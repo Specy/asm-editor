@@ -143,8 +143,7 @@
     }
 
     function getColorOfAddress(address: number) {
-        let last: { color: string, address: number } = {
-            color: 'inherit',
+        let last: { color?: string, address: number } = {
             address: -1
         }
         for(const frame of callStackAddresses) {
@@ -271,7 +270,11 @@
                             ? 'background-color: var(--green); color: var(--green-text);'
                             : ''
                     }
-                    color: ${getColorOfAddress(currentAddress + i) ?? 'inherit'};
+                    ${
+                        getColorOfAddress(currentAddress + i)
+                            ? `color: ${getColorOfAddress(currentAddress + i)}`
+                            : ''
+                    }
 								`}
                     hoverElementOffset={word !== signed ? '-2.2rem' : '-1rem'}
                     monospaced

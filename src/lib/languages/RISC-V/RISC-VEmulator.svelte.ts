@@ -69,7 +69,7 @@ function formatStatement(statement: string) {
     statement = statement.replace(/,/g, ', ');
     //reverse because it's from bigger to smaller, prevents $10 from being replaced by $1
     ([...RISCVRegisterNames]).reverse().forEach((reg, i) => {
-        statement = statement.replace(new RegExp(`\\$${RISCVRegisterNames.length - i}`, 'g'), reg)
+        statement = statement.replace(new RegExp(`x${RISCVRegisterNames.length - i}`, 'g'), reg)
     })
     //replaces all empty hex like 0x0000ffff with 0xffff
     statement = statement.replace(/0x0*(?=[0-9a-fA-F])/g, '0x')

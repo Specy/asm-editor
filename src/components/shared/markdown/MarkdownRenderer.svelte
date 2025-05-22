@@ -210,15 +210,17 @@
         linksInNewTab?: boolean
         style?: string
         spacing?: string
+        simpleCode?: boolean
     }
 
-    let { source, linksInNewTab, style, spacing }: Props = $props()
+    let { source, linksInNewTab, style, spacing, simpleCode}: Props = $props()
 
     const carta = linksInNewTab ? cartaWithExternalLins : cartaNormal
 </script>
 
 <div
 	class="_markdown"
+	class:simple-code={simpleCode}
 	{style}
 	style:--gap={spacing}
 >
@@ -387,4 +389,15 @@
 	:global(.code-playground:first-child){
 		margin: 0 auto;
 	}
+
+  :global(.simple-code .shiki){
+    border-radius: 0;
+    background-color: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: unset !important;
+    max-width: unset !important;
+    min-width: unset !important;
+		box-shadow: unset !important;
+  }
 </style>

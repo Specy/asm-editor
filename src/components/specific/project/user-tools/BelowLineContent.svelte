@@ -9,7 +9,7 @@
 </script>
 
 <div class="below-line-content">
-    <MarkdownRenderer source={md} />
+    <MarkdownRenderer source={md} simpleCode/>
     {#if note}
         <div class="note">
             {note}
@@ -26,12 +26,6 @@
         border-left: solid 1px #404040;
         padding: 0.1rem 0;
         font-size: 1rem;
-    }
-
-    :global(._markdown .shiki) {
-        border-radius: 0;
-        background-color: transparent !important;
-        padding: 0 !important;
     }
 
     .note {
