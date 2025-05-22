@@ -20,6 +20,7 @@
     import Page from '$cmp/shared/layout/Page.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
     import { ProjectStore } from '$stores/projectsStore.svelte'
+    import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
 
     const textShadowPrimary = ThemeStore.getColor('primary').isDark()
     const textShadowSecondary = ThemeStore.getColor('secondary').isDark()
@@ -38,6 +39,7 @@
 	<title>Welcome to Asm-Editor</title>
 </svelte:head>
 
+<DefaultNavbar />
 <Page>
 	<div class="main">
 		<div class="content row">

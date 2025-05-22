@@ -5,6 +5,7 @@
     import Page from '$cmp/shared/layout/Page.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
     import Navbar from '$cmp/shared/layout/Navbar.svelte'
+    import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
 
     interface Props {
         data: PageData
@@ -14,17 +15,7 @@
 
 </script>
 
-<Navbar style="border-bottom-left-radius: 0;">
-	<Row gap="1rem" align="center" flex1>
-		<a class="icon" href="/" title="Go to the home">
-			<img src="/favicon.png" alt="logo" />
-			Home
-		</a>
-		<a class="icon" href="/projects" title="Go to your projects"> Projects </a>
-		<a class="icon" href="/documentation/" title="Go to the docs"> Docs </a>
-		<a href="/learn/courses" title="Learn assembly"> Learn </a>
-	</Row>
-</Navbar>
+<DefaultNavbar />
 
 <Page cropped style="padding: 1rem; padding-top: 4rem;">
 	<Header>

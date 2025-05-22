@@ -6,9 +6,10 @@
         style?: string
         contentStyle?: string
         children?: import('svelte').Snippet
+        hasNavbar?: boolean
     }
 
-    let { cropped = false, style = '', contentStyle = '', children }: Props = $props()
+    let { cropped = false, style = '', contentStyle = '', children, hasNavbar }: Props = $props()
 </script>
 
 <main
@@ -18,6 +19,7 @@
 >
     <div
         class="column"
+        class:has-nav={hasNavbar}
         style="max-width: {cropped ? (typeof cropped === 'string' ? cropped : '60rem') : 'unset'}; width:100%;height: 100%; {contentStyle}"
     >
         {@render children?.()}
@@ -32,5 +34,8 @@
         max-width: 100vw;
         position: relative;
         flex: 1;
+    }
+    .has-nav{
+        padding-top: 3.2rem;
     }
 </style>

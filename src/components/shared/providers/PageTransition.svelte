@@ -51,6 +51,7 @@
         position: absolute;
         z-index: 1000;
         overflow: hidden;
+        opacity: 0.6;
         > div {
             border-radius: 1rem;
             transform: translateX(-110%);
@@ -76,10 +77,11 @@
         @keyframes progressToFinish {
             from {
                 transform: translateX(-30%);
+                opacity: 0.5;
             }
             to {
                 transform: translateX(0%);
-                opacity: 0.4;
+                opacity: 0;
             }
         }
     }

@@ -19,6 +19,7 @@
     import Page from '$cmp/shared/layout/Page.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
     import { LANGUAGE_EXTENSIONS } from '$lib/Config'
+    import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
 
     let hasFileHandleSupport = false
 
@@ -119,23 +120,13 @@
     <meta property="og:description" content="Create, edit or delete your projects" />
     <meta property="og:title" content="Projects" />
 </svelte:head>
-<Page>
+
+<DefaultNavbar />
+<Page style="padding-top: 2rem">
     <div class="project-display">
         <div class="content">
             <div class="top-row">
                 <Row align="center">
-                    <a href="/" class="go-back" title="Go to the main page">
-                        <Button
-                            hasIcon
-                            cssVar="primary"
-                            style="padding: 0.4rem"
-                            title="Go to the main page"
-                        >
-                            <Icon size={2}>
-                                <FaAngleLeft />
-                            </Icon>
-                        </Button>
-                    </a>
                     <Title style="margin: 0">Your projects</Title>
                 </Row>
                 <div class="row top-row-buttons">
@@ -251,7 +242,7 @@
     @media screen and (min-width: 650px) {
         .go-back {
             position: absolute;
-            top: 1rem;
+            top: 4.2rem;
             left: 1rem;
         }
     }

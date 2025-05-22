@@ -6,7 +6,6 @@
     <div class="row" style="gap: 1rem; align-items:center; flex: 1">
         <a class="icon" href="/" title="Go to the home">
             <img src="/favicon.png" alt="logo" />
-            Home
         </a>
         <a class="icon" href="/projects" title="Go to your projects"> Projects </a>
         <a class="icon" href="/documentation/" title="Go to the docs"> Docs </a>

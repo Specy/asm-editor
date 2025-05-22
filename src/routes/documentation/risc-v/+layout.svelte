@@ -43,7 +43,6 @@
     <Row gap="1rem" align="center" flex1>
         <a class="icon" href="/" title="Go to the home">
             <img src="/favicon.png" alt="logo" />
-            Home
         </a>
         <a class="icon" href="/projects" title="Go to your projects"> Projects </a>
 

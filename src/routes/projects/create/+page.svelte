@@ -14,6 +14,7 @@
     import { ProjectStore } from '$stores/projectsStore.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import Page from '$cmp/shared/layout/Page.svelte'
+    import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
 
     let name = $state('')
     let description = $state('')
@@ -45,7 +46,8 @@
 	<meta property="og:title" content="Create Project" />
 </svelte:head>
 
-<Page cropped contentStyle="max-width: 40rem">
+<DefaultNavbar />
+<Page cropped="40rem" style="padding-top: 3rem">
 	<div class="create-project">
 		<div class="row top-title">
 			<a href="/projects" class="go-back" title="Go to the projects page">
@@ -96,8 +98,9 @@
   @media screen and (min-width: 650px) {
     .go-back {
       position: absolute;
-      top: 1rem;
+      top: 4.2rem;
       left: 1rem;
+
     }
   }
 </style>
