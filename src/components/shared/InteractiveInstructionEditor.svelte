@@ -33,7 +33,6 @@
         showTestcases?: boolean
         showPc?: boolean
         showRegisters?: boolean
-        showSizes?: boolean
         showFlags?: boolean
         embedded?: boolean
         language?: AvailableLanguages
@@ -46,7 +45,6 @@
         language,
         showMemory = true,
         showFlags = true,
-        showSizes = true,
         showRegisters = true,
         showConsole = false,
         showTestcases = false,
@@ -84,7 +82,7 @@
             : ''
     )
     let sizes = $derived(`calc(${[
-        (showSizes || (showFlags && emulator.statusRegisters?.length > 0)) ? '3.5rem' : '0px',
+        ((showFlags && emulator.statusRegisters?.length > 0)) ? '3.5rem' : '0px',
         showConsole ? '4.5rem' : '0px',
         showPc ? '2.25rem' : '0px',
         '1rem'
@@ -200,7 +198,7 @@
 		<Row wrap gap="0.5rem" flex1>
 			<div
 				class="column data-registers-wrapper"
-				style={(!showPc && !showRegisters && !(emulator.statusRegisters?.length > 0 && showFlags) && !showSizes) ? 'display:none' : undefined}
+				style={(!showPc && !showRegisters && !(emulator.statusRegisters?.length > 0 && showFlags)) ? 'display:none' : undefined}
 			>
 				{#if showPc}
 					<RegistersRenderer
@@ -212,16 +210,13 @@
 						position="bottom"
 					/>
 				{/if}
-				{#if (emulator.statusRegisters?.length > 0 && showFlags) || showSizes}
+				{#if (emulator.statusRegisters?.length > 0 && showFlags)}
 					<div class="data-cpu-status-wrapper">
 						{#if emulator.statusRegisters?.length > 0 && showFlags}
 							<StatusCodesVisualiser
 								statusCodes={emulator.statusRegisters}
 								style="flex:1"
 							/>
-						{/if}
-						{#if showSizes}
-							<SizeSelector bind:selected={groupSize} style="flex:1" />
 						{/if}
 					</div>
 				{/if}

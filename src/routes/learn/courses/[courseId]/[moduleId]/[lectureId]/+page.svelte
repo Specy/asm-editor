@@ -19,31 +19,34 @@
 
     let currentLectureName = $derived(page.params.lectureId)
 
+		let currentModuleName = $derived(page.params.moduleId)
 
-    let lectures = $derived(data.course.modules.flatMap(m => m.lectures))
+
+    let lectures = $derived(
+        data.course.modules
+            .flatMap(m =>
+                m.lectures.map(l => ({
+                        ...l,
+                        module: m
+                    }
+                ))
+            )
+    )
 
     let nextLecture = $derived.by(() => {
-        const currentLectureIndex = lectures.findIndex(l => l.slug === currentLectureName)
+        const currentLectureIndex = lectures.findIndex(l => l.slug === currentLectureName && l.module.slug === currentModuleName)
         if (currentLectureIndex === -1) return null
         const next = lectures[currentLectureIndex + 1]
         if (!next) return null
-        const module = data.course.modules.find(m => m.lectures.some(l => l.slug === next?.slug))
-        return {
-            ...lectures[currentLectureIndex + 1],
-            module: module
-        }
+        return lectures[currentLectureIndex + 1]
     })
 
     let previousLecture = $derived.by(() => {
-        const currentLectureIndex = lectures.findIndex(l => l.slug === currentLectureName)
+        const currentLectureIndex = lectures.findIndex(l => l.slug === currentLectureName && l.module.slug === currentModuleName)
         if (currentLectureIndex === -1) return null
         const prev = lectures[currentLectureIndex - 1]
         if (!prev) return null
-        const module = data.course.modules.find(m => m.lectures.some(l => l.slug === prev?.slug))
-        return {
-            ...lectures[currentLectureIndex - 1],
-            module: module
-        }
+        return lectures[currentLectureIndex - 1]
     })
 
 </script>
@@ -57,12 +60,12 @@
 	<meta property="og:image" content={data.course.image} />
 </svelte:head>
 
-<Page cropped="100ch" style="padding: 1rem;" contentStyle="gap: 1rem;">
+<Page cropped="110ch" style="padding: 1rem;" contentStyle="gap: 1rem;">
 	<Card padding="1.5rem" gap="1rem" background="secondary">
 		<Header noMargin style="width: min(100%, 46rem); margin: 0 auto">
 			{data.lecture.name}
 		</Header>
-		<p class="description" >
+		<p class="description">
 			{data.lecture.description}
 		</p>
 	</Card>
@@ -119,8 +122,8 @@
         font-family: 'Noto Serif', Rubik, sans-serif;
         font-weight: 500;
         width: min(100%, 70ch);
-				font-size: 1.1rem;
-				margin: 0 auto;
+        font-size: 1.1rem;
+        margin: 0 auto;
 
     }
 </style>

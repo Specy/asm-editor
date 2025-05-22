@@ -15,6 +15,7 @@
     import { page } from '$app/state'
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
     import { ProjectStore } from '$stores/projectsStore.svelte'
+    import MenuLink from '$src/routes/documentation/m68k/instruction/MenuLink.svelte'
 
     interface Props {
         children?: import('svelte').Snippet,
@@ -53,6 +54,7 @@
 <Sidebar bind:menuOpen>
 	<Column padding="1rem" gap="1rem" style="padding-top: 0;">
 		<a
+			onclick={() => (menuOpen = false)}
 			href={`/learn/courses/${data.course.slug}`}
 		>
 			<Header noMargin>
@@ -77,6 +79,7 @@
 					currentLecture={module.lectures.find(l => `${module.slug}-${l.slug}` === currentLectureName)}
 					lectures={module.lectures}
 					lectureStyle="padding-left: 1rem"
+					onClick={() => (menuOpen = false)}
 					hrefBase={`/learn/courses/${data.course.slug}/${module.slug}`}
 				/>
 			</Column>
@@ -109,7 +112,7 @@
 
 
 	{#snippet content()}
-		<Column flex1 style="padding-top: 4rem;">
+		<Column flex1 style="padding-top: 3.2rem;">
 			{@render children?.()}
 		</Column>
 	{/snippet}

@@ -7,77 +7,69 @@
     }
 
     let { style = '', selected = $bindable(RegisterSize.Word) }: Props = $props()
+
+    const sizes = [
+        RegisterSize.Byte,
+        RegisterSize.Word,
+        RegisterSize.Long
+    ]
+    const sizeMap = {
+        [RegisterSize.Byte]: 'B',
+        [RegisterSize.Word]: 'W',
+        [RegisterSize.Long]: 'L',
+        [RegisterSize.Double]: 'D'
+    } satisfies Record<RegisterSize, string>
 </script>
 
-<div class="row" {style}>
-    <label for={`${RegisterSize.Long}`}>
-        L
-        <input
-            type="radio"
-            name="size"
-            id={`${RegisterSize.Long}`}
-            value={RegisterSize.Long}
-            bind:group={selected}
-        />
-    </label>
-    <label for={`${RegisterSize.Word}`}>
-        W
-        <input
-            type="radio"
-            name="size"
-            id={`${RegisterSize.Word}`}
-            value={RegisterSize.Word}
-            bind:group={selected}
-        />
-    </label>
-    <label for={`${RegisterSize.Byte}`}>
-        B
-        <input
-            type="radio"
-            name="size"
-            id={`${RegisterSize.Byte}`}
-            value={RegisterSize.Byte}
-            bind:group={selected}
-        />
-    </label>
+
+<div class='size-selector-2'>
+	{#each sizes as size}
+		<button
+			onclick={() => {
+				selected = size
+			}}
+			class="size-selector-2-button"
+			class:size-selector-2-button-selected={selected === size}
+		>
+			{sizeMap[size]}
+		</button>
+	{/each}
 </div>
 
 <style>
-    .row {
-        display: flex;
-        flex-direction: row;
-        justify-content: space-around;
-        height: 3rem;
-        background-color: var(--secondary);
-        color: var(--secondary-text);
+
+    .size-selector-2 {
         border-radius: 0.4rem;
-        min-width: 6rem;
-        padding: 0.3rem;
-    }
-    input {
-        appearance: none;
-        border-radius: 2rem;
-        border: 2px solid #666;
-        background-color: var(--secondary-text);
-        margin-bottom: 0.2rem;
-        width: 0.8rem;
-        height: 0.8rem;
-        position: relative;
-        cursor: pointer;
+        overflow: hidden;
+        display: flex;
+        height: fit-content;
     }
 
-    input:checked {
-        border: 0.2rem solid;
-        border-color: var(--accent);
-        background-color: transparent;
-    }
-    label {
+    .size-selector-2-button {
         display: flex;
-        flex: 1;
-        width: 100%;
-        justify-content: space-between;
-        align-items: center;
-        flex-direction: column;
+        justify-content: center;
         cursor: pointer;
+        align-items: center;
+        font-family: Rubik;
+        padding: 0.25rem 0.5rem;
+        background-color: var(--secondary);
+        color: var(--secondary-text);
+        transition: background-color 0.2s;
     }
+
+    .size-selector-2-button:hover:not(.size-selector-2-button-selected):not(:active) {
+        background-color: rgba(var(--RGB-accent), 0.3);
+    }
+
+    .size-selector-2-button:active {
+        background-color: var(--accent);
+        color: var(--accent-text);
+    }
+
+    .size-selector-2-button-selected {
+        transition: background-color 0s;
+        background-color: var(--accent);
+        color: var(--accent-text);
+    }
+
 </style>

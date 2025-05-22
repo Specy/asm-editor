@@ -10,8 +10,7 @@ Programmers are often used to working with **code**, which is a *high-level abst
 understand,
 but that is **not** what the computer (or rather the CPU) actually executes.
 
-CPUs are *"dumb"*, that is, they don't understand code, or meaning behind it, they only understand **numbers**, **zeros
-**, and **ones**, and can only perform a limited set of operations on them.
+CPUs are *"dumb"*, that is, they don't understand code, or meaning behind it, they only understand **numbers**, **zeros**, and **ones**, and can only perform a limited set of operations on them.
 
 Those operations are called **"machine instructions"**, often basic operations like *addition*, *multiplication*,
 or *moving data around*.
@@ -63,8 +62,7 @@ The first 4 bits are the **OP code**, it tells the CPU what operation it needs t
 OP code for the `moveq` instruction.
 Each instruction has its own **OP code**.
 
-The next bits are dependent on the instruction itself. In this case, the next 3 bits tell us the **destination register
-**
+The next bits are dependent on the instruction itself. In this case, the next 3 bits tell us the **destination register**
 (we will explain later what *registers* are — pretend it's a variable for now), where `000` is the register `d0` and
 `111` is the register `d7`.
 

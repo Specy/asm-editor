@@ -60,6 +60,7 @@
         justify-content: center;
         cursor: default;
         text-align: center;
+        opacity: 0.8;
     }
 
     .softDiff {

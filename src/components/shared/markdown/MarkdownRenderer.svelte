@@ -25,7 +25,6 @@
         showTests: boolean
         showPc: boolean
         showRegisters: boolean
-        showSizes: boolean
         showFlags: boolean
         openButton: boolean
     }
@@ -37,10 +36,9 @@
         const showTests = settings.showTests ? 'showTests=true&' : 'showTests=false&'
         const showPc = settings.showPc ? 'showPc=true&' : ''
         const showRegisters = settings.showRegisters ? 'showRegisters=true&' : 'showRegisters=false&'
-        const showSizes = settings.showSizes ? 'showSizes=true&' : 'showSizes=false&'
         const showFlags = settings.showFlags ? 'showFlags=true&' : 'showFlags=false&'
 				const showOpenButton = settings.openButton ? 'openButton=true&' : ''
-        const props = [showMemory, showConsole, showTests, showPc, showRegisters, showSizes, showFlags, showOpenButton].join('')
+        const props = [showMemory, showConsole, showTests, showPc, showRegisters, showFlags, showOpenButton].join('')
         const lang = `language=${settings.language}&`
         const compressed = lzstring.compressToEncodedURIComponent(code)
         const tests =
@@ -71,7 +69,6 @@
                         const showTests = entries.includes('tests')
                         const showPc = entries.includes('pc')
                         const showRegisters = !entries.includes('no-registers')
-                        const showSizes = !entries.includes('no-sizes')
                         const showFlags = !entries.includes('no-flags')
 												const large = entries.includes('large') || showMemory
 												const tall = entries.includes('tall')
@@ -98,7 +95,7 @@
                                     properties: {
                                         style: `
                                         	${!large ? 'max-width: 70ch; margin: 1.5rem auto;' : ''}
-                                        	${tall ? 'height: 70vh;' : ''}
+                                        	${tall ? 'height: 80dvh;' : ''}
                                         `,
                                         className: 'code-playground',
                                         src: createCodeUrl(getAllText(codeNode).trimEnd(), {
@@ -107,7 +104,6 @@
                                             showTests,
                                             showPc,
                                             showRegisters: showRegisters,
-                                            showSizes,
                                             showFlags,
                                             language: actualLanguage as AvailableLanguages,
                                             openButton,
@@ -277,7 +273,8 @@
     margin: 0.5rem auto;
     border-radius: 0.5rem;
     border: solid 0.1rem var(--tertiary);
-    max-width: fit-content;
+    width: fit-content;
+    max-width: 100%;
   }
 
   :global(._markdown code:not(pre code)) {
@@ -386,6 +383,8 @@
 		margin: 1.5rem auto;
     background-color: var(--secondary);
     box-shadow: 0 0 2rem 10px rgba(0, 0, 0, 0.2);
-
   }
+	:global(.code-playground:first-child){
+		margin: 0 auto;
+	}
 </style>

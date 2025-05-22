@@ -495,7 +495,6 @@
 			</div>
 			<div class="column" style="gap: 0.4rem">
 				<div class="row" style="gap: 0.4rem">
-					<SizeSelector bind:selected={groupSize} />
 					{#if settingsStore.values.showMemory.value}
 						<MemoryControls
 							bytesPerPage={emulator.memory.global.pageSize}

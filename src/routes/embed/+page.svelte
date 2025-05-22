@@ -24,7 +24,6 @@
         showTests: boolean
         showPc: boolean
         showRegisters: boolean
-        showSizes: boolean
         showFlags: boolean
         openButton: boolean
     }
@@ -36,7 +35,6 @@
         showTests: true,
         showPc: false,
         showRegisters: true,
-        showSizes: true,
         showFlags: false,
         openButton: false
     })
@@ -84,7 +82,6 @@
         const showTests = (searchParams.get('showTests') ?? 'true') === 'true'
         const showPc = searchParams.get('showPc') === 'true'
         const showRegisters = searchParams.get('showRegisters') !== 'false'
-        const showSizes = searchParams.get('showSizes') !== 'false'
         const showFlags = searchParams.get('showFlags') === 'true'
         const openButton = searchParams.get('openButton') === 'true'
 
@@ -95,7 +92,6 @@
             showTests,
             showPc,
             showRegisters,
-            showSizes,
             showFlags,
             openButton
         } satisfies Settings
@@ -107,10 +103,9 @@
         const showTests = settings.showTests ? 'showTests=true&' : 'showTests=false&'
         const showPc = settings.showPc ? 'showPc=true&' : ''
         const showRegisters = settings.showRegisters ? 'showRegisters=true&' : 'showRegisters=false&'
-        const showSizes = settings.showSizes ? 'showSizes=true&' : ''
         const showFlags = settings.showFlags ? 'showFlags=true&' : 'showFlags=false&'
         const openButton = settings.openButton ? 'openButton=true&' : ''
-        const props = [showMemory, showConsole, showTests, showPc, showRegisters, showSizes, showFlags, openButton].join('')
+        const props = [showMemory, showConsole, showTests, showPc, showRegisters, showFlags, openButton].join('')
         const lang = `language=${settings.language}&`
         const compressed = lzstring.compressToEncodedURIComponent(code)
         const tests =
@@ -167,7 +162,6 @@
 						showTestcases={settings.showTests}
 						showPc={settings.showPc}
 						showRegisters={settings.showRegisters}
-						showSizes={settings.showSizes}
 						showFlags={settings.showFlags}
 						language={settings.language}
 
@@ -224,10 +218,6 @@
 				<div class="share-settings">
 					<span>Show registers</span>
 					<input type="checkbox" bind:checked={settings.showRegisters} />
-				</div>
-				<div class="share-settings">
-					<span>Show sizes</span>
-					<input type="checkbox" bind:checked={settings.showSizes} />
 				</div>
 				<div class="share-settings">
 					<span>Show flags</span>

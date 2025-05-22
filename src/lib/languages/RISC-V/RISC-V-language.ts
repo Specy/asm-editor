@@ -7,7 +7,15 @@ import {
     riscvInstructionsWithDuplicates,
     type RISCVInstruction
 } from './RISC-V-documentation'
-import { RISCVRegisterNames } from './RISC-VEmulator.svelte'
+import {
+    ALTERNATIVE_RISCVRegister_NAMES,
+} from './RISC-VEmulator.svelte'
+import { RISCV_REGISTERS } from '@specy/risc-v'
+
+const RISCVRegisterNames = [
+    ...RISCV_REGISTERS,
+    ...ALTERNATIVE_RISCVRegister_NAMES
+]
 
 function splitAtChars(text: string, chars: string[]) {
     const result = []

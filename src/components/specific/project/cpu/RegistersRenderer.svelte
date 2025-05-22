@@ -3,6 +3,7 @@
     import { type Register, type RegisterChunk, RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
     import { settingsStore } from '$stores/settingsStore.svelte'
     import { createEventDispatcher } from 'svelte'
+    import SizeSelector from '$cmp/specific/project/cpu/SizeSelector.svelte'
 
     const dispatcher = createEventDispatcher<{
         registerClick: Register
@@ -21,7 +22,7 @@
     let {
         registers: _registers,
         withoutHeader = false,
-        size = RegisterSize.Word,
+        size = $bindable(RegisterSize.Word),
         style = '',
         gridStyle = '',
         hiddenRegistersNames = [],
@@ -34,7 +35,12 @@
 
 <div class="registers-wrapper" class:withoutHeader {style}>
 	{#if !withoutHeader}
-		<div class="registers-header">Registers</div>
+		<div class="registers-header">
+			Registers
+			<SizeSelector
+				bind:selected={size}
+			/>
+		</div>
 	{/if}
 	<div class="registers" style={gridStyle}>
 		{#each registers as register, i (register.name)}
@@ -47,7 +53,7 @@
 					{/if}
 				</div>
 				<button class="register-name" onclick={() => dispatcher('registerClick', register)}>
-					{register.name}
+					{register.name.toUpperCase()}
 				</button>
 			</div>
 			<div class="register-hex">
@@ -97,7 +103,7 @@
     min-width: 8.6rem;
     position: relative;
     flex: 1;
-    max-height: calc(100vh - 14.05rem); //HOTFIX
+    max-height: calc(100vh - 14.5rem); //HOTFIX
     overflow-y: auto;
 
     @media screen and (max-width: 1000px) {
@@ -115,7 +121,7 @@
     grid-template-columns: min-content 1fr;
     grid-template-rows: auto;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: 0.22rem;
     padding: 0.4rem 0.7rem;
     font-size: 1rem;
     @media screen and (max-width: 1000px) {
@@ -125,14 +131,15 @@
 
   .registers-header {
     display: flex;
+		font-size: 0.9rem;
+		padding: 0.2rem 0.2rem 0.2rem 0.5rem;
+		gap: 0.5rem;
     position: sticky;
     top: 0;
     z-index: 2;
     align-items: center;
-    justify-content: center;
+    justify-content: space-between;
     background-color: var(--tertiary);
-    height: 2rem;
-    min-height: 2rem;
   }
 
   .withoutHeader {
@@ -174,6 +181,7 @@
   .register-name {
     font-weight: bold;
     padding: 0.2rem;
+		font-family: Rubik;
     border-radius: 0.2rem;
     border: none;
     min-width: 1.6rem;

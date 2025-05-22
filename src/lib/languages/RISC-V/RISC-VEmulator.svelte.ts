@@ -19,7 +19,7 @@ import {
     type BaseEmulatorState,
     createMemoryTab,
     type EmulatorDecoration,
-    type EmulatorSettings, type ExecutionStep,
+    type EmulatorSettings,
     InterpreterStatus,
     makeLabelColor,
     makeRegister,
@@ -44,6 +44,9 @@ export const RISCVRegisterNames = [
     ...RISCV_REGISTERS,
     'pc'
 ]
+
+export const ALTERNATIVE_RISCVRegister_NAMES = new Array(RISCV_REGISTERS.length)
+        .fill(0).map((_, i) => `x${i}`)
 
 const STACK_POINTER_INDEX = RISCVRegisterNames.indexOf('$sp')
 

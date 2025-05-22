@@ -75,6 +75,7 @@
         @media screen and (max-width: 1000px) {
             min-height: 4rem;
             width: 100%;
+            max-height: 10rem;
         }
     }
     .info {

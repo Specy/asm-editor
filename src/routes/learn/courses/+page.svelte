@@ -33,7 +33,7 @@
 	<p>
 
 	</p>
-	<Row gap="1rem">
+	<Row gap="1rem" wrap>
 		{#each data.courses as course}
 			<a href="/learn/courses/{course.slug}">
 				<Card
