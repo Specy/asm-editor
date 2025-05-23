@@ -9,7 +9,6 @@
     import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE } from '$lib/Config'
     import StatusCodesVisualiser from '$cmp/specific/project/cpu/StatusCodesRenderer.svelte'
     import RegistersVisualiser from '$cmp/specific/project/cpu/RegistersRenderer.svelte'
-    import RegistersRenderer from '$cmp/specific/project/cpu/RegistersRenderer.svelte'
     import { onMount, type Snippet } from 'svelte'
     import { getM68kErrorMessage } from '$lib/languages/M68K/M68kUtils'
     import type { AvailableLanguages, Testcase, TestcaseResult } from '$lib/Project.svelte'
@@ -205,7 +204,7 @@
                     : undefined}
             >
                 {#if showPc}
-                    <RegistersRenderer
+                    <RegistersVisualiser
                         systemSize={emulator.systemSize}
                         size={emulator.systemSize}
                         style="flex: unset; overflow: unset; padding: 0;"
@@ -227,6 +226,7 @@
                 {/if}
                 {#if showRegisters}
                     <RegistersVisualiser
+                        systemSize={emulator.systemSize}
                         size={groupSize}
                         hiddenRegistersNames={emulator.hiddenRegisters}
                         gridStyle="
