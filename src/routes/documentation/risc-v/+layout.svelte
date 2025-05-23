@@ -69,7 +69,11 @@
     </button>
     <aside class="side-menu column" class:menu-open={menuOpen}>
         <Column gap="1rem" padding="0 1rem">
-            <MenuLink href="/documentation/risc-v" title="RISC-V" onClick={() => (menuOpen = false)} />
+            <MenuLink
+                href="/documentation/risc-v"
+                title="RISC-V"
+                onClick={() => (menuOpen = false)}
+            />
             <MenuLink
                 href="/documentation/risc-v/directive"
                 title="Directives"

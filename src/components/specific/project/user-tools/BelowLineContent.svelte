@@ -5,11 +5,10 @@
         md: string
         note: string
     }>()
-
 </script>
 
 <div class="below-line-content">
-    <MarkdownRenderer source={md} simpleCode/>
+    <MarkdownRenderer source={md} simpleCode />
     {#if note}
         <div class="note">
             {note}

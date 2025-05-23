@@ -13,38 +13,32 @@
     }
 
     let { data }: Props = $props()
-
 </script>
 
 <DefaultNavbar />
 
 <Page hasNavbar cropped contentStyle="padding: 1rem;">
-	<Header>
-		Courses
-	</Header>
-	<p>
-
-	</p>
-	<Row gap="1rem" wrap>
-		{#each data.courses as course}
-			<a href="/learn/courses/{course.slug}">
-				<Card
-					background="secondary"
-					gap="1rem"
-					padding="1rem"
-					style="width: min(100vw - 2rem,25rem)"
-				>
-					<Header type="h2" noMargin>
-						{course.name}
-					</Header>
-					<p>
-						{course.description}
-					</p>
-				</Card>
-			</a>
-		{/each}
-	</Row>
-
+    <Header>Courses</Header>
+    <p></p>
+    <Row gap="1rem" wrap>
+        {#each data.courses as course}
+            <a href="/learn/courses/{course.slug}">
+                <Card
+                    background="secondary"
+                    gap="1rem"
+                    padding="1rem"
+                    style="width: min(100vw - 2rem,25rem)"
+                >
+                    <Header type="h2" noMargin>
+                        {course.name}
+                    </Header>
+                    <p>
+                        {course.description}
+                    </p>
+                </Card>
+            </a>
+        {/each}
+    </Row>
 </Page>
 
 <style>

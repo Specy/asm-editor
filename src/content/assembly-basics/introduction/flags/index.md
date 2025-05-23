@@ -2,7 +2,7 @@ When the CPU executes operations, it keeps information about the outcome of each
 Each CPU has a different set of flags, but they usually follow similar patterns.
 
 **Flags** are a way for the CPU to track the result of the **most recent operation**, and they are commonly used in **conditional instructions**
-(e.g., *branch if zero*, *branch if negative*, etc.) to decide what to do next in the program.
+(e.g., _branch if zero_, _branch if negative_, etc.) to decide what to do next in the program.
 
 Flags are stored in a special register inside the CPU, often called the **status register**, **condition code register (CCR)**, or **flags register**, depending on the architecture.
 

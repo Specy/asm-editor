@@ -1,6 +1,8 @@
-import { BASE_CODE } from './Config'
+import { BASE_CODE, COMMENT_CHARACTER } from './Config'
+import { serializer } from '$lib/json'
 
 export type AvailableLanguages = 'M68K' | 'MIPS' | 'X86' | 'RISC-V'
+
 export interface ProjectData {
     code: string
     createdAt: number
@@ -14,63 +16,63 @@ export interface ProjectData {
 
 export type MemoryValue =
     | {
-          type: 'number'
-          address: number
-          bytes: number
-          expected: number
-      }
+    type: 'number'
+    address: bigint
+    bytes: number
+    expected: bigint
+}
     | {
-          type: 'string-chunk'
-          address: number
-          expected: string
-      }
+    type: 'string-chunk'
+    address: bigint
+    expected: string
+}
     | {
-          type: 'number-chunk'
-          address: number
-          bytes: number
-          expected: number[]
-      }
+    type: 'number-chunk'
+    address: bigint
+    bytes: number
+    expected: bigint[]
+}
 
 export type Testcase = {
     input: string[]
     expectedOutput: string
-    startingRegisters: Record<string, number>
-    expectedRegisters: Record<string, number>
+    startingRegisters: Record<string, bigint>
+    expectedRegisters: Record<string, bigint>
     startingMemory: MemoryValue[]
     expectedMemory: MemoryValue[]
 }
 
 export type TestcaseValidationError =
     | {
-          type: 'wrong-register'
-          register: string
-          expected: number
-          got: number
-      }
+    type: 'wrong-register'
+    register: string
+    expected: bigint
+    got: bigint
+}
     | {
-          type: 'wrong-memory-number'
-          address: number
-          bytes: number
-          expected: number
-          got: number
-      }
+    type: 'wrong-memory-number'
+    address: bigint
+    bytes: number
+    expected: bigint
+    got: bigint
+}
     | {
-          type: 'wrong-memory-string'
-          address: number
-          expected: string
-          got: string
-      }
+    type: 'wrong-memory-string'
+    address: bigint
+    expected: string
+    got: string
+}
     | {
-          type: 'wrong-memory-chunk'
-          address: number
-          expected: number[]
-          got: number[]
-      }
+    type: 'wrong-memory-chunk'
+    address: bigint
+    expected: number[]
+    got: number[]
+}
     | {
-          type: 'wrong-output'
-          expected: string
-          got: string
-      }
+    type: 'wrong-output'
+    expected: string
+    got: string
+}
 
 export type TestcaseResult = {
     errors: TestcaseValidationError[]
@@ -79,7 +81,6 @@ export type TestcaseResult = {
 }
 
 const CODE_SEPARATOR = '---METADATA---'
-
 
 type ProjectMetadata = {
     version: number
@@ -96,10 +97,11 @@ const metaVersion = 1
 
 export function makeProjectFromExternal(codeAndMeta: string) {
     const lines = codeAndMeta.split('\n')
-    const regex = new RegExp(`^\\*.*${CODE_SEPARATOR}`)
-    const threshold = lines.findIndex((line) => line.match(regex))
+    const threshold = lines.findIndex((line) => line.includes(CODE_SEPARATOR))
     const code = lines.slice(0, threshold).join('\n').trimEnd()
     const metaLines = lines.slice(threshold + 1)
+    const commentCharacters = Object.values(COMMENT_CHARACTER)
+    const separator = lines[threshold].split('').find(c => commentCharacters.includes(c)) ?? '*'
     let metaJson: ProjectMetadata = {
         name: '',
         description: '',
@@ -111,8 +113,8 @@ export function makeProjectFromExternal(codeAndMeta: string) {
         id: ''
     }
     try {
-        const noComments = metaLines.map((l) => removeUntil('*', l)).join('\n')
-        const temp = JSON.parse(noComments.trim())
+        const noComments = metaLines.map((l) => removeUntil(separator, l)).join('\n')
+        const temp = serializer.parse<ProjectMetadata>(noComments.trim())
         if (typeof temp === 'object' && temp.version === metaVersion) {
             metaJson = temp
         }
@@ -161,17 +163,21 @@ export function makeProject(data?: Partial<ProjectData>) {
             testcases: state.testcases,
             id: state.id
         }
-        const metaJson = JSON.stringify(meta, null, 4)
+        const metaJson = serializer.stringify($state.snapshot(meta), null, 4)
+        const commentCharacter = COMMENT_CHARACTER[state.language]
         const commentedJson = metaJson
             .split('\n')
-            .map((e) => `* ${e}`)
+            .map((e) => `${commentCharacter} ${e}`)
             .join('\n')
-        const separator = `* ${CODE_SEPARATOR} do not write below here`
+        const separator = `${commentCharacter} ${CODE_SEPARATOR} do not write below here`
         return `${state.code}\n\n\n${separator}\n${commentedJson}`
     }
 
     function set(data: Partial<ProjectData & { id: string }>) {
         Object.assign(state, data)
+        if(data.testcases){
+            state.testcases = cleanTestcases(data.testcases)
+        }
     }
 
     return {
@@ -236,4 +242,64 @@ function removeUntil(char: string, value: string) {
     const split = value.split(char)
     split.shift()
     return split.join(char)
+}
+
+export function cleanTestcases(testcases: Testcase[]) {
+    return testcases.map((testcase) => {
+        return {
+            ...testcase,
+            expectedMemory: testcase.expectedMemory.map((memory) => {
+                if (memory.type === 'number-chunk') {
+                    return {
+                        ...memory,
+                        expected: memory.expected.map((e) => BigInt(e)),
+                        address: BigInt(memory.address)
+                    }
+                } else if (memory.type === 'string-chunk') {
+                    return {
+                        ...memory,
+                        address: BigInt(memory.address)
+
+                    }
+                } else if (memory.type === 'number') {
+                    return {
+                        ...memory,
+                        address: BigInt(memory.address),
+                        expected: BigInt(memory.address)
+                    }
+                } else {
+                    return memory
+                }
+            }),
+            expectedRegisters: Object.fromEntries(Object.entries(testcase.expectedRegisters).map(([key, value]) => {
+                return [key, BigInt(value)]
+            })),
+            startingMemory: testcase.startingMemory.map((memory) => {
+                if (memory.type === 'number-chunk') {
+                    return {
+                        ...memory,
+                        expected: memory.expected.map((e) => BigInt(e)),
+                        address: BigInt(memory.address)
+                    }
+                } else if (memory.type === 'string-chunk') {
+                    return {
+                        ...memory,
+                        address: BigInt(memory.address)
+
+                    }
+                } else if (memory.type === 'number') {
+                    return {
+                        ...memory,
+                        address: BigInt(memory.address),
+                        expected: BigInt(memory.address)
+                    }
+                } else {
+                    return memory
+                }
+            }),
+            startingRegisters: Object.fromEntries(Object.entries(testcase.startingRegisters).map(([key, value]) => {
+                return [key, BigInt(value)]
+            }))
+        }
+    })
 }

@@ -8,17 +8,17 @@
     <h1>RISC-V Syscalls</h1>
     <p>
         RISC-V syscalls are used to make requests to the operating system. They are not instructions
-        that are executed by the CPU, but rather instructions that are used by the simulator to
-        make requests to the operating system.
+        that are executed by the CPU, but rather instructions that are used by the simulator to make
+        requests to the operating system.
     </p>
     <p>
-        Each syscall has a unique code that is used to identify it. You must put the syscall code inside the
-        the a7 register before calling the ecall instruction.
+        Each syscall has a unique code that is used to identify it. You must put the syscall code
+        inside the the a7 register before calling the ecall instruction.
         <br />
         <br />
         As an example:
     </p>
-    <MarkdownRenderer 
+    <MarkdownRenderer
         source={`
 \`\`\`riscv
 # Load the integer 42 into register a0, which is

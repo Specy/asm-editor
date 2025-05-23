@@ -13,5 +13,5 @@
 </div>
 
 <style lang="scss">
-    @use './style.scss' as *;;
+    @use './style.scss' as *;
 </style>

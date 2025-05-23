@@ -9,41 +9,39 @@
 
     // Define the props the component expects
     interface Props {
-        language: AvailableLanguages,
+        language: AvailableLanguages
         code: string
         children: Snippet<[Emulator]>
-        loading?: Snippet,
+        loading?: Snippet
         settings?: EmulatorSettings
     }
 
     let { language, code = $bindable(), children, loading, settings }: Props = $props()
 
     const emulator = GenericEmulator(language, code, settings)
-
 </script>
 
 {#await emulator}
-	<Column justify="center" align="center" flex1>
-		{#if loading}
-			{@render loading()}
-		{:else}
-			<Header>Loading...</Header>
-		{/if}
-	</Column>
-
+    <Column justify="center" align="center" flex1>
+        {#if loading}
+            {@render loading()}
+        {:else}
+            <Header>Loading...</Header>
+        {/if}
+    </Column>
 {:then data}
-	{@render children(data)}
+    {@render children(data)}
 {:catch error}
-	<Header>
-		<h1>Error</h1>
-		<p>Failed to load the emulator.</p>
-		<p>
-			{#if error instanceof Error}
-				{error.message}
-			{:else}
-				{JSON.stringify(error)}
-			{/if}
-		</p>
-		<ButtonLink href="/projects">Go to Projects</ButtonLink>
-	</Header>
+    <Header>
+        <h1>Error</h1>
+        <p>Failed to load the emulator.</p>
+        <p>
+            {#if error instanceof Error}
+                {error.message}
+            {:else}
+                {JSON.stringify(error)}
+            {/if}
+        </p>
+        <ButtonLink href="/projects">Go to Projects</ButtonLink>
+    </Header>
 {/await}

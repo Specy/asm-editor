@@ -1,12 +1,10 @@
 {
-  "id": "assembly-basics",
-  "name": "Assembly basics",
-  "author": "Specy",
-  "description": "Learn the basics of all assembly language and how CPUs execute code.",
-  "image": "",
-  "tags": [
-    "assembly"
-  ],
-  "date": "2025-05-18",
-  "order": 0
+    "id": "assembly-basics",
+    "name": "Assembly basics",
+    "author": "Specy",
+    "description": "Learn the basics of all assembly language and how CPUs execute code.",
+    "image": "",
+    "tags": ["assembly"],
+    "date": "2025-05-18",
+    "order": 0
 }

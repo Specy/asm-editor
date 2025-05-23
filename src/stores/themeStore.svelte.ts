@@ -221,71 +221,69 @@ const DEFAULT_WHITE_THEME = {
     name: 'Default white',
     editable: false,
     theme: {
-        "background": {
-            "color": "#dfe2e5",
-            "name": "background",
-            "prop": "background"
+        background: {
+            color: '#dfe2e5',
+            name: 'background',
+            prop: 'background'
         },
-        "primary": {
-            "color": "#f2f2f2",
-            "name": "primary",
-            "prop": "primary"
+        primary: {
+            color: '#f2f2f2',
+            name: 'primary',
+            prop: 'primary'
         },
-        "secondary": {
-            "color": "#f8f8f8",
-            "name": "secondary",
-            "prop": "secondary"
+        secondary: {
+            color: '#f8f8f8',
+            name: 'secondary',
+            prop: 'secondary'
         },
-        "tertiary": {
-            "color": "#f8f8f8",
-            "name": "tertiary",
-            "prop": "tertiary"
+        tertiary: {
+            color: '#f8f8f8',
+            name: 'tertiary',
+            prop: 'tertiary'
         },
-        "accent": {
-            "color": "#a89dd8",
-            "name": "accent",
-            "prop": "accent"
+        accent: {
+            color: '#a89dd8',
+            name: 'accent',
+            prop: 'accent'
         },
-        "accent2": {
-            "color": "#b1bdc4",
-            "name": "accent2",
-            "prop": "accent2"
+        accent2: {
+            color: '#b1bdc4',
+            name: 'accent2',
+            prop: 'accent2'
         },
-        "hint": {
-            "color": "#939393",
-            "name": "hint",
-            "prop": "hint",
-            "readonly": true
+        hint: {
+            color: '#939393',
+            name: 'hint',
+            prop: 'hint',
+            readonly: true
         },
-        "textDarker": {
-            "color": "#c1c1c1",
-            "name": "text-layered",
-            "prop": "textDarker",
-            "readonly": true
+        textDarker: {
+            color: '#c1c1c1',
+            name: 'text-layered',
+            prop: 'textDarker',
+            readonly: true
         },
-        "scrollbar": {
-            "color": "#a497d3",
-            "name": "scrollbar",
-            "prop": "scrollbar"
+        scrollbar: {
+            color: '#a497d3',
+            name: 'scrollbar',
+            prop: 'scrollbar'
         },
-        "red": {
-            "color": "#ed4f4f",
-            "name": "red",
-            "prop": "red",
-            "readonly": true
+        red: {
+            color: '#ed4f4f',
+            name: 'red',
+            prop: 'red',
+            readonly: true
         },
-        "green": {
-            "color": "#356a59",
-            "name": "green",
-            "prop": "green",
-            "readonly": true
+        green: {
+            color: '#356a59',
+            name: 'green',
+            prop: 'green',
+            readonly: true
         }
     }
 }
 
-
-
-export type ThemeKeys = keyof typeof DEFAULT_THEME['theme']
+export type ThemeKeys = keyof (typeof DEFAULT_THEME)['theme']
 export type ThemeProp<T = ThemeKeys> = {
     name: string
     color: string
@@ -302,11 +300,10 @@ type StoredTheme<T extends string = string> = {
     theme: Record<T, ThemeProp<T>>
 }
 
-
 export const BUILTIN_THEMES = [
     DEFAULT_THEME,
     DEFAULT_MIPS_THEME,
-    DEFAULT_RISCV_THEME,
+    DEFAULT_RISCV_THEME
     //DEFAULT_WHITE_THEME
 ]
 
@@ -326,16 +323,18 @@ function makeThemeStore<T extends string>(_theme: StoredTheme<T>) {
     let themeArray = $derived(Object.values(theme) as ThemeProp<T>[])
 
     function isDefault(key: string, color: string) {
-        const extended = BUILTIN_THEMES.find(t => t.id === meta.extends)
+        const extended = BUILTIN_THEMES.find((t) => t.id === meta.extends)
         if (extended) {
-            return new TinyColor(extended.theme[key]?.color).toHex() === new TinyColor(color).toHex()
+            return (
+                new TinyColor(extended.theme[key]?.color).toHex() === new TinyColor(color).toHex()
+            )
         } else {
             return false
         }
     }
 
     function reset(key: T) {
-        const extended = BUILTIN_THEMES.find(t => t.id === meta.extends)
+        const extended = BUILTIN_THEMES.find((t) => t.id === meta.extends)
         if (extended) {
             // @ts-ignore
             set(key, extended.theme[key].color)
@@ -373,14 +372,17 @@ function makeThemeStore<T extends string>(_theme: StoredTheme<T>) {
 
     function save() {
         if (!browser) return
-        themes = themes.map(t => {
+        themes = themes.map((t) => {
             if (t.id === meta.id) {
                 t.theme = cloneDeep(theme)
             }
             return t
         })
         debouncer(() => {
-            localStorage.setItem('themes', JSON.stringify($state.snapshot(themes.filter(t => t.editable))))
+            localStorage.setItem(
+                'themes',
+                JSON.stringify($state.snapshot(themes.filter((t) => t.editable)))
+            )
             localStorage.setItem('selected_theme', meta.id)
         })
     }
@@ -388,7 +390,9 @@ function makeThemeStore<T extends string>(_theme: StoredTheme<T>) {
     function load() {
         try {
             if (!browser) return
-            const savedThemes = JSON.parse(localStorage.getItem('themes')) as StoredTheme<T>[] | null
+            const savedThemes = JSON.parse(localStorage.getItem('themes')) as
+                | StoredTheme<T>[]
+                | null
             if (!savedThemes) return
             themes = [...BUILTIN_THEMES, ...savedThemes]
             select(getChosenTheme())
@@ -424,7 +428,7 @@ function makeThemeStore<T extends string>(_theme: StoredTheme<T>) {
     }
 
     function select(id: string, dontSave = false) {
-        const selected = themes.find(t => t.id === id)
+        const selected = themes.find((t) => t.id === id)
         if (!selected) return
         setTheme(selected, dontSave)
     }
@@ -449,7 +453,7 @@ function makeThemeStore<T extends string>(_theme: StoredTheme<T>) {
             id: newTheme.id,
             version: newTheme.version,
             editable: newTheme.editable,
-            extends: newTheme.extends,
+            extends: newTheme.extends
         }
         themes.push(newTheme)
         save()
@@ -457,9 +461,9 @@ function makeThemeStore<T extends string>(_theme: StoredTheme<T>) {
     }
 
     function deleteTheme(themeId: string) {
-        const theme = themes.find(t => t.id === themeId)
+        const theme = themes.find((t) => t.id === themeId)
         if (!theme || !theme.editable) return
-        themes = themes.filter(t => t.id !== themeId)
+        themes = themes.filter((t) => t.id !== themeId)
         if (meta.id === themeId) {
             // @ts-ignore
             setTheme(BUILTIN_THEMES[0])
@@ -499,9 +503,5 @@ function makeThemeStore<T extends string>(_theme: StoredTheme<T>) {
     }
 }
 
-
-
 // @ts-ignore
 export const ThemeStore = makeThemeStore(BUILTIN_THEMES[0])
-
-

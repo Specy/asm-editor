@@ -3,37 +3,45 @@
     import RegisterTestcaseValue from '$cmp/specific/project/testcases/RegisterTestcaseValue.svelte'
     import FaPlus from 'svelte-icons/fa/FaPlus.svelte'
     import RegistersRenderer from '$cmp/specific/project/cpu/RegistersRenderer.svelte'
-    import { makeRegister } from '$lib/languages/commonLanguageFeatures.svelte'
+    import { makeRegister, RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
 
     interface Props {
-        registers: Record<string, number>
+        registers: Record<string, bigint>
         editable: boolean
         registerNames: string[]
         hiddenRegistersNames?: string[]
+        systemSize: RegisterSize
     }
 
-    let { registers = $bindable(), editable, registerNames, hiddenRegistersNames }: Props = $props()
+    let {
+        systemSize,
+        registers = $bindable(),
+        editable,
+        registerNames,
+        hiddenRegistersNames
+    }: Props = $props()
 
     function makeNewRegister(defaultName?: string) {
         return {
             name: defaultName ?? freeStartingRegisters[0],
-            value: 0
+            value: 0n
         }
     }
 
-    function sortRegisters(registers: Record<string, number>) {
+    function sortRegisters(registers: Record<string, bigint>) {
         return Object.entries(registers).sort((a, b) => a[0].localeCompare(b[0]))
     }
 
     function getAvailableRegisterName(usedNames: Record<string, any>) {
-        return registerNames.filter((name) => usedNames[name] === undefined && !hiddenRegistersNames.includes(name))
+        return registerNames.filter(
+            (name) => usedNames[name] === undefined && !hiddenRegistersNames.includes(name)
+        )
     }
 
     let freeStartingRegisters = $derived(getAvailableRegisterName(registers))
     let newRegister = $state(makeNewRegister())
     let startingRegisters = $derived(sortRegisters(registers))
-
 </script>
 
 <Column gap="0.3rem" style="max-width: 12rem">
@@ -79,8 +87,10 @@
         </div>
     {:else}
         <RegistersRenderer
-            hiddenRegistersNames={hiddenRegistersNames}
-            registers={Object.entries(registers).map(([name, value]) => makeRegister(name, value))}
+            {hiddenRegistersNames}
+            registers={Object.entries(registers).map(([name, value]) =>
+                makeRegister(name, value, systemSize)
+            )}
         />
     {/if}
 </Column>

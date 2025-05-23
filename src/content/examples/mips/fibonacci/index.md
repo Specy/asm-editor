@@ -1,4 +1,4 @@
-```mips|playground|allow-open|large|tall|memory
+```mips|playground|allow-open|large|tall|memory|console
 .data
 
 .text

@@ -1,4 +1,4 @@
-import type { DiffedMemory } from '$lib/languages/commonLanguageFeatures.svelte'
+import { type DiffedMemory, RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
 
 export function findElInTree(e: HTMLElement, baseId: string) {
     let el = e
@@ -17,8 +17,9 @@ export function findElInTree(e: HTMLElement, baseId: string) {
     return null
 }
 
-export function getGroupSignedValue(groupValue: number, groupLength: number) {
-    return (groupValue << (32 - groupLength * 4)) >> (32 - groupLength * 4)
+export function getGroupSignedValue(groupValue: bigint, groupLength: bigint, size: RegisterSize) {
+    const bits = BigInt(size * 8)
+    return (groupValue << (bits - groupLength * 4n)) >> (bits - groupLength * 4n)
 }
 
 export function inRange(value: number, start: number, len: number) {
@@ -30,33 +31,36 @@ export function inRange(value: number, start: number, len: number) {
 }
 
 export function byteSliceToNum(bytes: Uint8Array, endianess: 'big' | 'little' = 'big') {
-    let num = 0
+    let num = 0n
     if (endianess === 'big') {
         for (let i = 0; i < bytes.length; i++) {
-            num = (num << 8) | bytes[i]
+            num = (num << 8n) | BigInt(bytes[i])
         }
     } else {
         for (let i = bytes.length - 1; i >= 0; i--) {
-            num = (num << 8) | bytes[i]
+            num = (num << 8n) | BigInt(bytes[i])
         }
     }
     return num
 }
-export function numberToByteSlice(num: number, bytes: number, endianess: 'big' | 'little' = 'big'): number[] {
-    const arr = new Array(bytes)
+export function numberToByteSlice(
+    num: bigint,
+    bytes: number,
+    endianess: 'big' | 'little' = 'big'
+): number[] {
+    const arr = new Array(bytes) as number[]
     if (endianess === 'big') {
         for (let i = bytes - 1; i >= 0; i--) {
-            arr[i] = num & 0xff
-            num >>= 8
+            arr[i] = Number(num & 0xffn)
+            num >>= 8n
         }
     } else {
         for (let i = 0; i < bytes; i++) {
-            arr[i] = num & 0xff
-            num >>= 8
+            arr[i] = Number(num & 0xffn)
+            num >>= 8n
         }
     }
     return arr
-    
 }
 
 export function isMemoryChunkEqual(memory: number[] | Uint8Array, to: number[] | Uint8Array) {

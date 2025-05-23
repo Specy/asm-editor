@@ -45,16 +45,17 @@ for (const ins of riscvInstructionsWithDuplicates) {
     }
 }
 
-
 export function aggregateArgs(ins: RISCVInstruction[]): RISCVAddressingMode[][] {
-    const args = new Array(Math.max(...ins.map(i => i.args.length))).fill(undefined) as RISCVAddressingMode[][]
+    const args = new Array(Math.max(...ins.map((i) => i.args.length))).fill(
+        undefined
+    ) as RISCVAddressingMode[][]
     for (const i of ins) {
         i.args.forEach((a, idx) => {
             if (args[idx] === undefined) {
                 args[idx] = []
             }
             for (const arg of a) {
-                if (!args[idx].some(e => e.type === arg.type)) {
+                if (!args[idx].some((e) => e.type === arg.type)) {
                     args[idx].push(arg)
                 }
             }
@@ -68,14 +69,16 @@ export const riscvInstructionsVariants = [...riscvInstructionMap.values()]
 export const riscvInstructionNames = [...riscvInstructionMap.keys()]
 
 export function formatAggregatedArgs(ins: RISCVInstruction[]): string {
-    return aggregateArgs(ins).map(a => {
-        const args = a.map(arg => RISCVAddressingModes[arg.type].label)
-        if (args.length > 1) {
-            return `[{args.join('/')}]`
-        } else {
-            return args[0]
-        }
-    }).join(', ')
+    return aggregateArgs(ins)
+        .map((a) => {
+            const args = a.map((arg) => RISCVAddressingModes[arg.type].label)
+            if (args.length > 1) {
+                return `[{args.join('/')}]`
+            } else {
+                return args[0]
+            }
+        })
+        .join(', ')
 }
 
 export const RISCVAddressingModes = {
@@ -185,7 +188,6 @@ export const RISCVAddressingModes = {
     }
 } as const
 
-
 export const riscvDirectivesMap = {
     data: {
         name: 'data',
@@ -193,7 +195,8 @@ export const riscvDirectivesMap = {
     },
     text: {
         name: 'text',
-        description: 'Subsequent items (instructions) stored in Text segment at next available address'
+        description:
+            'Subsequent items (instructions) stored in Text segment at next available address'
     },
     word: {
         name: 'word',
@@ -221,7 +224,8 @@ export const riscvDirectivesMap = {
     },
     align: {
         name: 'align',
-        description: 'Align next data item on specified byte boundary (0=byte, 1=half, 2=word, 3=double)'
+        description:
+            'Align next data item on specified byte boundary (0=byte, 1=half, 2=word, 3=double)'
     },
     half: {
         name: 'half',
@@ -253,7 +257,8 @@ export const riscvDirectivesMap = {
     },
     eqv: {
         name: 'eqv',
-        description: 'Substitute second operand for first. First operand is symbol, second operand is expression (like #define)'
+        description:
+            'Substitute second operand for first. First operand is symbol, second operand is expression (like #define)'
     },
     macro: {
         name: 'macro',
@@ -269,10 +274,10 @@ export const riscvDirectivesMap = {
     },
     section: {
         name: 'section',
-        description: 'Allows specifying sections without .text or .data directives. Included for gcc comparability'
+        description:
+            'Allows specifying sections without .text or .data directives. Included for gcc comparability'
     }
 }
-
 
 export const riscvSyscall = {
     [1]: {
@@ -325,7 +330,7 @@ export const riscvSyscall = {
             { name: 'a1', description: 'maximum number of characters to read' }
         ],
         result: {
-            other: 'Service 8 - Follows semantics of UNIX \'fgets\'. For specified length n, string can be no longer than n-1. If less than that, adds newline to end. In either case, then pads with null byte If n = 1, input is ignored and null byte placed at buffer address. If n < 1, input is ignored and nothing is written to the buffer.'
+            other: "Service 8 - Follows semantics of UNIX 'fgets'. For specified length n, string can be no longer than n-1. If less than that, adds newline to end. In either case, then pads with null byte If n = 1, input is ignored and null byte placed at buffer address. If n < 1, input is ignored and nothing is written to the buffer."
         }
     },
     [9]: {
@@ -344,7 +349,9 @@ export const riscvSyscall = {
         name: 'print character',
         code: 11,
         arguments: [{ name: 'a0', description: 'character to print' }],
-        result: { other: 'Service 11 - Prints ASCII character corresponding to contents of low-order byte.' }
+        result: {
+            other: 'Service 11 - Prints ASCII character corresponding to contents of low-order byte.'
+        }
     },
     [12]: {
         name: 'read character',
@@ -367,7 +374,9 @@ export const riscvSyscall = {
             { name: 'a2', description: 'mode' }
         ],
         result: {
-            arguments: [{ name: 'v0', description: 'contains file descriptor (negative if error)' }],
+            arguments: [
+                { name: 'v0', description: 'contains file descriptor (negative if error)' }
+            ],
             other: 'Service 1024 - MARS implements three flag values: 0 for read-only, 1 for write-only with create, and 9 for write-only with create and append. It ignores mode. The returned file descriptor will be negative if the operation failed. MARS maintains file descriptors internally and allocates them starting with 3. File descriptors 0, 1 and 2 are always open for: reading from standard input, writing to standard output, and writing to standard error, respectively (new in release 4.3).'
         }
     },
@@ -380,10 +389,13 @@ export const riscvSyscall = {
             { name: 'a2', description: 'maximum number of characters to read' }
         ],
         result: {
-            arguments: [{
-                name: 'v0',
-                description: 'contains number of characters read (0 if end-of-file, negative if error)'
-            }]
+            arguments: [
+                {
+                    name: 'v0',
+                    description:
+                        'contains number of characters read (0 if end-of-file, negative if error)'
+                }
+            ]
         }
     },
     [64]: {
@@ -395,7 +407,12 @@ export const riscvSyscall = {
             { name: 'a2', description: 'number of characters to write' }
         ],
         result: {
-            arguments: [{ name: 'v0', description: 'contains number of characters written (negative if error)' }]
+            arguments: [
+                {
+                    name: 'v0',
+                    description: 'contains number of characters written (negative if error)'
+                }
+            ]
         }
     },
     [57]: {
@@ -408,7 +425,9 @@ export const riscvSyscall = {
         name: 'exit2 (terminate with value)',
         code: 93,
         arguments: [{ name: 'a0', description: 'termination result' }],
-        result: { other: 'Service 93 - If the RISCV program is run under control of the MARS graphical interface (GUI), the exit code in a0 is ignored.' }
+        result: {
+            other: 'Service 93 - If the RISCV program is run under control of the MARS graphical interface (GUI), the exit code in a0 is ignored.'
+        }
     },
     [30]: {
         name: 'time (system time)',
@@ -436,7 +455,9 @@ export const riscvSyscall = {
         name: 'print integer in hexadecimal',
         code: 34,
         arguments: [{ name: 'a0', description: 'integer to print' }],
-        result: { other: 'Displayed value is 8 hexadecimal digits, left-padding with zeroes if necessary.' }
+        result: {
+            other: 'Displayed value is 8 hexadecimal digits, left-padding with zeroes if necessary.'
+        }
     },
     [35]: {
         name: 'print integer in binary',
@@ -466,10 +487,13 @@ export const riscvSyscall = {
         code: 41,
         arguments: [{ name: 'a0', description: 'i.d. of pseudorandom number generator (any int)' }],
         result: {
-            arguments: [{
-                name: 'a0',
-                description: 'contains the next pseudorandom, uniformly distributed int value from this random number generator\'s sequence'
-            }],
+            arguments: [
+                {
+                    name: 'a0',
+                    description:
+                        "contains the next pseudorandom, uniformly distributed int value from this random number generator's sequence"
+                }
+            ],
             other: 'Each stream (identified by a0 contents) is modeled by a different Random object. There are no default seed values, so use the Set Seed service (40) if replicated random sequences are desired.'
         }
     },
@@ -481,10 +505,13 @@ export const riscvSyscall = {
             { name: 'a1', description: 'upper bound of range of returned values' }
         ],
         result: {
-            arguments: [{
-                name: 'a0',
-                description: 'contains pseudorandom, uniformly distributed int value in the range 0 <= [int] < [upper bound], drawn from this random number generator\'s sequence'
-            }],
+            arguments: [
+                {
+                    name: 'a0',
+                    description:
+                        "contains pseudorandom, uniformly distributed int value in the range 0 <= [int] < [upper bound], drawn from this random number generator's sequence"
+                }
+            ],
             other: 'Each stream (identified by a0 contents) is modeled by a different Random object. There are no default seed values, so use the Set Seed service (40) if replicated random sequences are desired.'
         }
     },
@@ -493,10 +520,13 @@ export const riscvSyscall = {
         code: 43,
         arguments: [{ name: 'a0', description: 'i.d. of pseudorandom number generator (any int)' }],
         result: {
-            arguments: [{
-                name: 'f0',
-                description: 'contains the next pseudorandom, uniformly distributed float value in the range 0.0 <= f < 1.0 from this random number generator\'s sequence'
-            }],
+            arguments: [
+                {
+                    name: 'f0',
+                    description:
+                        "contains the next pseudorandom, uniformly distributed float value in the range 0.0 <= f < 1.0 from this random number generator's sequence"
+                }
+            ],
             other: 'Each stream (identified by a0 contents) is modeled by a different Random object. There are no default seed values, so use the Set Seed service (40) if replicated random sequences are desired.'
         }
     },
@@ -505,31 +535,50 @@ export const riscvSyscall = {
         code: 44,
         arguments: [{ name: 'a0', description: 'i.d. of pseudorandom number generator (any int)' }],
         result: {
-            arguments: [{
-                name: 'f0',
-                description: 'contains the next pseudorandom, uniformly distributed double value in the range 0.0 <= f < 1.0 from this random number generator\'s sequence'
-            }],
+            arguments: [
+                {
+                    name: 'f0',
+                    description:
+                        "contains the next pseudorandom, uniformly distributed double value in the range 0.0 <= f < 1.0 from this random number generator's sequence"
+                }
+            ],
             other: 'Each stream (identified by a0 contents) is modeled by a different Random object. There are no default seed values, so use the Set Seed service (40) if replicated random sequences are desired.'
         }
     },
     [50]: {
         name: 'ConfirmDialog',
         code: 50,
-        arguments: [{ name: 'a0', description: 'address of null-terminated string that is the message to user' }],
+        arguments: [
+            {
+                name: 'a0',
+                description: 'address of null-terminated string that is the message to user'
+            }
+        ],
         result: {
-            arguments: [{ name: 'a0', description: 'contains value of user-chosen option\n0: Yes\n1: No\n2: Cancel' }]
+            arguments: [
+                {
+                    name: 'a0',
+                    description: 'contains value of user-chosen option\n0: Yes\n1: No\n2: Cancel'
+                }
+            ]
         }
     },
     [51]: {
         name: 'InputDialogInt',
         code: 51,
-        arguments: [{ name: 'a0', description: 'address of null-terminated string that is the message to user' }],
+        arguments: [
+            {
+                name: 'a0',
+                description: 'address of null-terminated string that is the message to user'
+            }
+        ],
         result: {
             arguments: [
                 { name: 'a0', description: 'contains int read' },
                 {
                     name: 'a1',
-                    description: 'contains status value\n0: OK status\n-1: input data cannot be correctly parsed\n-2: Cancel was chosen\n-3: OK was chosen but no data had been input into field'
+                    description:
+                        'contains status value\n0: OK status\n-1: input data cannot be correctly parsed\n-2: Cancel was chosen\n-3: OK was chosen but no data had been input into field'
                 }
             ]
         }
@@ -537,13 +586,19 @@ export const riscvSyscall = {
     [52]: {
         name: 'InputDialogFloat',
         code: 52,
-        arguments: [{ name: 'a0', description: 'address of null-terminated string that is the message to user' }],
+        arguments: [
+            {
+                name: 'a0',
+                description: 'address of null-terminated string that is the message to user'
+            }
+        ],
         result: {
             arguments: [
                 { name: 'f0', description: 'contains float read' },
                 {
                     name: 'a1',
-                    description: 'contains status value\n0: OK status\n-1: input data cannot be correctly parsed\n-2: Cancel was chosen\n-3: OK was chosen but no data had been input into field'
+                    description:
+                        'contains status value\n0: OK status\n-1: input data cannot be correctly parsed\n-2: Cancel was chosen\n-3: OK was chosen but no data had been input into field'
                 }
             ]
         }
@@ -551,13 +606,19 @@ export const riscvSyscall = {
     [53]: {
         name: 'InputDialogDouble',
         code: 53,
-        arguments: [{ name: 'a0', description: 'address of null-terminated string that is the message to user' }],
+        arguments: [
+            {
+                name: 'a0',
+                description: 'address of null-terminated string that is the message to user'
+            }
+        ],
         result: {
             arguments: [
                 { name: 'f0', description: 'contains double read' },
                 {
                     name: 'a1',
-                    description: 'contains status value\n0: OK status\n-1: input data cannot be correctly parsed\n-2: Cancel was chosen\n-3: OK was chosen but no data had been input into field'
+                    description:
+                        'contains status value\n0: OK status\n-1: input data cannot be correctly parsed\n-2: Cancel was chosen\n-3: OK was chosen but no data had been input into field'
                 }
             ]
         }
@@ -566,7 +627,10 @@ export const riscvSyscall = {
         name: 'InputDialogString',
         code: 54,
         arguments: [
-            { name: 'a0', description: 'address of null-terminated string that is the message to user' },
+            {
+                name: 'a0',
+                description: 'address of null-terminated string that is the message to user'
+            },
             { name: 'a1', description: 'address of input buffer' },
             { name: 'a2', description: 'maximum number of characters to read' }
         ],
@@ -574,7 +638,8 @@ export const riscvSyscall = {
             arguments: [
                 {
                     name: 'a1',
-                    description: 'contains status value\n0: OK status. Buffer contains the input string.\n-2: Cancel was chosen. No change to buffer.\n-3: OK was chosen but no data had been input into field. No change to buffer.\n-4: length of the input string exceeded the specified maximum. Buffer contains the maximum allowable input string plus a terminating null.'
+                    description:
+                        'contains status value\n0: OK status. Buffer contains the input string.\n-2: Cancel was chosen. No change to buffer.\n-3: OK was chosen but no data had been input into field. No change to buffer.\n-4: length of the input string exceeded the specified maximum. Buffer contains the maximum allowable input string plus a terminating null.'
                 }
             ],
             other: 'See Service 8 note below table'
@@ -584,10 +649,14 @@ export const riscvSyscall = {
         name: 'MessageDialog',
         code: 55,
         arguments: [
-            { name: 'a0', description: 'address of null-terminated string that is the message to user' },
+            {
+                name: 'a0',
+                description: 'address of null-terminated string that is the message to user'
+            },
             {
                 name: 'a1',
-                description: 'the type of message to be displayed:\n0: error message, indicated by Error icon\n1: information message, indicated by Information icon\n2: warning message, indicated by Warning icon\n3: question message, indicated by Question icon\nother: plain message (no icon displayed)'
+                description:
+                    'the type of message to be displayed:\n0: error message, indicated by Error icon\n1: information message, indicated by Information icon\n2: warning message, indicated by Warning icon\n3: question message, indicated by Question icon\nother: plain message (no icon displayed)'
             }
         ],
         result: {}
@@ -599,9 +668,13 @@ export const riscvSyscall = {
         arguments: [
             {
                 name: 'a0',
-                description: 'address of null-terminated string that is an information-type message to user'
+                description:
+                    'address of null-terminated string that is an information-type message to user'
             },
-            { name: 'a1', description: 'int value to display in string form after the first string' }
+            {
+                name: 'a1',
+                description: 'int value to display in string form after the first string'
+            }
         ],
         result: {}
     },
@@ -611,12 +684,15 @@ export const riscvSyscall = {
         arguments: [
             {
                 name: 'a0',
-                description: 'address of null-terminated string that is an information-type message to user'
+                description:
+                    'address of null-terminated string that is an information-type message to user'
             },
-            { name: 'f12', description: 'float value to display in string form after the first string' }
+            {
+                name: 'f12',
+                description: 'float value to display in string form after the first string'
+            }
         ],
         result: {}
-
     },
     [58]: {
         name: 'MessageDialogDouble',
@@ -624,12 +700,15 @@ export const riscvSyscall = {
         arguments: [
             {
                 name: 'a0',
-                description: 'address of null-terminated string that is an information-type message to user'
+                description:
+                    'address of null-terminated string that is an information-type message to user'
             },
-            { name: 'f12', description: 'double value to display in string form after the first string' }
+            {
+                name: 'f12',
+                description: 'double value to display in string form after the first string'
+            }
         ],
         result: {}
-
     },
     [59]: {
         name: 'MessageDialogString',
@@ -637,28 +716,31 @@ export const riscvSyscall = {
         arguments: [
             {
                 name: 'a0',
-                description: 'address of null-terminated string that is an information-type message to user'
+                description:
+                    'address of null-terminated string that is an information-type message to user'
             },
-            { name: 'a1', description: 'address of null-terminated string to display after the first string' }
+            {
+                name: 'a1',
+                description: 'address of null-terminated string to display after the first string'
+            }
         ],
         result: {}
     }
-
 } as Record<number, Syscall>
 
 export interface SyscallArgument {
-    name: string;
-    description: string;
+    name: string
+    description: string
 }
 
 export interface SyscallResult {
-    arguments?: SyscallArgument[]; // Optional, as some syscalls have no result arguments
-    other?: string;                // Optional, for additional notes
+    arguments?: SyscallArgument[] // Optional, as some syscalls have no result arguments
+    other?: string // Optional, for additional notes
 }
 
 export interface Syscall {
-    name: string;
-    code: number;
-    arguments: SyscallArgument[];
-    result: SyscallResult;
+    name: string
+    code: number
+    arguments: SyscallArgument[]
+    result: SyscallResult
 }

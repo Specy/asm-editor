@@ -21,7 +21,7 @@
 
     onMount(() => {
         registerServiceWorker()
-				import('$lib/monaco/Monaco').then(i => i.Monaco.registerLanguages())
+        import('$lib/monaco/Monaco').then((i) => i.Monaco.registerLanguages())
         metaTheme = document.querySelector('meta[name="theme-color"]')
     })
     beforeNavigate((p) => {
@@ -36,37 +36,37 @@
 </script>
 
 <svelte:head>
-	<meta
-		name="description"
-		content="Write, learn and run M68K, MIPS, RISC-V, X86 assembly code on your browser. View registers and memory, step and undo the program."
-	/>
-	<meta
-		property="og:description"
-		content="Write, learn and run M68K, MIPS, RISC-V, X86 assembly code on your browser. View registers and memory, step and undo the program."
-	/>
-	<meta property="og:title" content="Asm Editor" />
+    <meta
+        name="description"
+        content="Write, learn and run M68K, MIPS, RISC-V, X86 assembly code on your browser. View registers and memory, step and undo the program."
+    />
+    <meta
+        property="og:description"
+        content="Write, learn and run M68K, MIPS, RISC-V, X86 assembly code on your browser. View registers and memory, step and undo the program."
+    />
+    <meta property="og:title" content="Asm Editor" />
 </svelte:head>
 
 <ThemeProvider>
-	<ErrorLogger>
-		<PromptProvider>
-			<PageTransition refresh={page.url.pathname} />
-			{@render children?.()}
+    <ErrorLogger>
+        <PromptProvider>
+            <PageTransition refresh={page.url.pathname} />
+            {@render children?.()}
 
-			<!-- fix this -->
-			<Footer
-				pages={[
-                    /^\/projects$/, 
+            <!-- fix this -->
+            <Footer
+                pages={[
+                    /^\/projects$/,
                     /^\/projects\/create$/,
                     /^\/learn\/courses$/,
-                    /^\\$/, 
-                    /^\/$/, 
-                    /^\/themes$/, 
-                    /^\/donate$/, 
-                    /^\/changelog$/, 
+                    /^\\$/,
+                    /^\/$/,
+                    /^\/themes$/,
+                    /^\/donate$/,
+                    /^\/changelog$/,
                     /^\/documentation$/
                 ]}
-			/>
-		</PromptProvider>
-	</ErrorLogger>
+            />
+        </PromptProvider>
+    </ErrorLogger>
 </ThemeProvider>

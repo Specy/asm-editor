@@ -8,8 +8,10 @@
     import Card from '$cmp/shared/layout/Card.svelte'
     import MemoryTestcaseEditor from '$cmp/specific/project/testcases/MemoryTestcaseEditor.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
+    import type { RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
 
     let newInput = $state('')
+
     interface Props {
         testcase: Testcase
         style?: string
@@ -17,6 +19,7 @@
         children?: import('svelte').Snippet
         registerNames: string[]
         hiddenRegistersNames?: string[]
+        systemSize: RegisterSize
     }
 
     let {
@@ -25,9 +28,9 @@
         editable = false,
         children,
         registerNames,
-      	hiddenRegistersNames,
+        hiddenRegistersNames,
+        systemSize
     }: Props = $props()
-
 </script>
 
 <Card padding="0.8rem" gap="1rem" {style} radius="0.8rem">
@@ -36,6 +39,7 @@
             <Column gap="1rem">
                 <Header type="h3">Starting registers values</Header>
                 <RegistersTestcaseEditor
+                    {systemSize}
                     bind:registers={testcase.startingRegisters}
                     {hiddenRegistersNames}
                     {registerNames}
@@ -45,6 +49,7 @@
             <Column gap="1rem">
                 <Header type="h3">Expected registers values</Header>
                 <RegistersTestcaseEditor
+                    {systemSize}
                     bind:registers={testcase.expectedRegisters}
                     {hiddenRegistersNames}
                     {registerNames}
@@ -54,9 +59,9 @@
         </Row>
 
         <Header type="h3">Starting memory values</Header>
-        <MemoryTestcaseEditor bind:memoryValues={testcase.startingMemory} editable />
+        <MemoryTestcaseEditor {systemSize} bind:memoryValues={testcase.startingMemory} editable />
         <Header type="h3">Expected memory values</Header>
-        <MemoryTestcaseEditor bind:memoryValues={testcase.expectedMemory} editable />
+        <MemoryTestcaseEditor {systemSize} bind:memoryValues={testcase.expectedMemory} editable />
 
         <Header type="h3">Inputs</Header>
         <Row gap="0.3rem" style="flex-wrap: wrap">
@@ -96,9 +101,10 @@
                     <Column gap="0.5rem">
                         <Header type="h3">Starting registers</Header>
                         <RegistersTestcaseEditor
+                            {systemSize}
                             {registerNames}
                             bind:registers={testcase.startingRegisters}
-														{hiddenRegistersNames}
+                            {hiddenRegistersNames}
                             editable={false}
                         />
                     </Column>
@@ -108,9 +114,10 @@
                     <Column gap="0.5rem">
                         <Header type="h3">Expected registers</Header>
                         <RegistersTestcaseEditor
+                            {systemSize}
                             {registerNames}
                             bind:registers={testcase.expectedRegisters}
-														{hiddenRegistersNames}
+                            {hiddenRegistersNames}
                             editable={false}
                         />
                     </Column>
@@ -119,11 +126,20 @@
         {/if}
         {#if testcase.startingMemory.length !== 0}
             <Header type="h3">Starting memory values</Header>
-            <MemoryTestcaseEditor bind:memoryValues={testcase.startingMemory} editable={false} />
+            <MemoryTestcaseEditor
+                {systemSize}
+                bind:memoryValues={testcase.startingMemory}
+                editable={false}
+            />
         {/if}
         {#if testcase.expectedMemory.length !== 0}
             <Header type="h3">Expected memory values</Header>
-            <MemoryTestcaseEditor bind:memoryValues={testcase.expectedMemory} editable={false} />
+
+            <MemoryTestcaseEditor
+                {systemSize}
+                bind:memoryValues={testcase.expectedMemory}
+                editable={false}
+            />
         {/if}
         {#if testcase.input.length > 0}
             <Header type="h3">Inputs</Header>
@@ -153,6 +169,7 @@
         border-radius: 0.3rem;
         word-break: break-all;
     }
+
     .input-textarea {
         width: 6rem;
         min-width: 6rem;

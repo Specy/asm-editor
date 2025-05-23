@@ -1,5 +1,5 @@
 {
-  "name": "Structure and Lifecycle of a program",
-  "description": "This lecture explains the structure and lifecycle of a program. It covers how code and data are organized using assembly sections, how programs are loaded into memory by the operating system, and the role of the Program Counter (PC) in guiding execution during the Fetch-Decode-Execute cycle.",
-  "order": 6
+    "name": "Structure and Lifecycle of a program",
+    "description": "This lecture explains the structure and lifecycle of a program. It covers how code and data are organized using assembly sections, how programs are loaded into memory by the operating system, and the role of the Program Counter (PC) in guiding execution during the Fetch-Decode-Execute cycle.",
+    "order": 6
 }

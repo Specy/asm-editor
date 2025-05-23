@@ -17,7 +17,7 @@
 <a
     type="button"
     class="btn"
-    class:disabled={disabled}
+    class:disabled
     class:hasIcon
     {href}
     {title}

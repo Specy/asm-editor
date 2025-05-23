@@ -1,5 +1,5 @@
 {
-  "name": "Instruction Set",
-  "description": "Understand what an Instruction Set Architecture (ISA) is and how it defines what the CPU can do. Learn how assemblers work to translate human-readable mnemonics into binary machine code, and how different ISAs use different instruction formats.",
-  "order": 3
+    "name": "Instruction Set",
+    "description": "Understand what an Instruction Set Architecture (ISA) is and how it defines what the CPU can do. Learn how assemblers work to translate human-readable mnemonics into binary machine code, and how different ISAs use different instruction formats.",
+    "order": 3
 }

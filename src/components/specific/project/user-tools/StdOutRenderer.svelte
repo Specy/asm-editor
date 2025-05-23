@@ -1,5 +1,4 @@
 <script lang="ts">
-
     import FaExclamationTriangle from 'svelte-icons/fa/FaExclamationTriangle.svelte'
     import { fly } from 'svelte/transition'
     import Console from '$cmp/shared/Console.svelte'

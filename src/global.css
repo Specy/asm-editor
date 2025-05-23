@@ -2,7 +2,7 @@
 
 @font-face {
     font-family: Rubik;
-    src: url("https://fonts.gstatic.com/s/rubik/v28/iJWKBXyIfDnIV7nBrXw.woff2");
+    src: url('https://fonts.gstatic.com/s/rubik/v28/iJWKBXyIfDnIV7nBrXw.woff2');
 }
 
 @font-face {
@@ -102,7 +102,7 @@ input:disabled {
     background: #555;
 }
 
-button{
+button {
     cursor: pointer;
     font-family: Rubik;
 }

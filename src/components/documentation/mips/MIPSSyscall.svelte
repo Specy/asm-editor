@@ -46,7 +46,6 @@
     {/each}
 </Column>
 
-
 <style>
     p {
         line-height: 1.3;

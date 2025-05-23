@@ -13,7 +13,7 @@
         name: string
         canDelete?: boolean
         registersNames: string[]
-        value: number
+        value: bigint
         style?: string
     }
 
@@ -53,7 +53,14 @@
         </button>
     {/if}
 
-    <input type="number" bind:value />
+    <input
+        type="number"
+        {value}
+        onchange={(e) => {
+            //@ts-expect-error .value
+            value = BigInt(e.target.value)
+        }}
+    />
 </div>
 
 <style>

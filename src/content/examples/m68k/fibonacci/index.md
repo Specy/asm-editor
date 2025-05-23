@@ -1,4 +1,4 @@
-```m68k|playground|allow-open|large|tall|memory
+```m68k|playground|allow-open|large|tall|memory|console
 * --- Main Program ---
 ORG     $1000       ; Starting address for code
 

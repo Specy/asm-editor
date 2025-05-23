@@ -11,9 +11,9 @@ export const versions: Version[] = [
         title: 'Slight redesign and examples course',
         date: new Date('2025-05-22'),
         changes: [
-            "Changed fonts, colors and some UI elements",
-            "Improved loading performance",
-            "Added examples course, where you can find different assembly examples for each language",
+            'Changed fonts, colors and some UI elements',
+            'Improved loading performance',
+            'Added examples course, where you can find different assembly examples for each language'
         ]
     },
     {
@@ -21,25 +21,20 @@ export const versions: Version[] = [
         title: 'Assembly Courses',
         date: new Date('2025-05-20'),
         changes: [
-            "Added a learning section where you can learn assembly language, we are looking for people to help us create courses!",
+            'Added a learning section where you can learn assembly language, we are looking for people to help us create courses!'
         ]
     },
     {
         version: '6.0.0',
         title: 'RISC-V language',
         date: new Date('2025-05-16'),
-        changes: [
-            "Added RISC-V assembler/simulator",
-            "Added RISC-V documentation",
-        ]
+        changes: ['Added RISC-V assembler/simulator', 'Added RISC-V documentation']
     },
     {
         version: '5.0.0',
         title: 'X86 language',
         date: new Date('2025-04-13'),
-        changes: [
-            "Added X86 assembler/simulator (basic version)",
-        ]
+        changes: ['Added X86 assembler/simulator (basic version)']
     },
     {
         version: '4.0.0',

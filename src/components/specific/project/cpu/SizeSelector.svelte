@@ -8,11 +8,7 @@
 
     let { style = '', selected = $bindable(RegisterSize.Word) }: Props = $props()
 
-    const sizes = [
-        RegisterSize.Byte,
-        RegisterSize.Word,
-        RegisterSize.Long
-    ]
+    const sizes = [RegisterSize.Byte, RegisterSize.Word, RegisterSize.Long]
     const sizeMap = {
         [RegisterSize.Byte]: 'B',
         [RegisterSize.Word]: 'W',
@@ -21,23 +17,21 @@
     } satisfies Record<RegisterSize, string>
 </script>
 
-
-<div class='size-selector-2' {style}>
-	{#each sizes as size}
-		<button
-			onclick={() => {
-				selected = size
-			}}
-			class="size-selector-2-button"
-			class:size-selector-2-button-selected={selected === size}
-		>
-			{sizeMap[size]}
-		</button>
-	{/each}
+<div class="size-selector-2" {style}>
+    {#each sizes as size}
+        <button
+            onclick={() => {
+                selected = size
+            }}
+            class="size-selector-2-button"
+            class:size-selector-2-button-selected={selected === size}
+        >
+            {sizeMap[size]}
+        </button>
+    {/each}
 </div>
 
 <style>
-
     .size-selector-2 {
         border-radius: 0.4rem;
         overflow: hidden;
@@ -71,5 +65,4 @@
         background-color: var(--accent2);
         color: var(--accent2-text);
     }
-
 </style>

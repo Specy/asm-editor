@@ -5,7 +5,8 @@ import {
     type EmulatorSettings,
     InterpreterStatus,
     makeRegister,
-    numbersOfSizeToSlice
+    numbersOfSizeToSlice,
+    RegisterSize
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import { PAGE_ELEMENTS_PER_ROW, PAGE_SIZE } from '$lib/Config'
 import { X86_REGISTERS, X86ConditionFlags, X86Interpreter, X86Register } from '@specy/x86'
@@ -13,21 +14,15 @@ import { createDebouncer } from '$lib/utils'
 import { Prompt } from '$stores/promptStore'
 import { settingsStore } from '$stores/settingsStore.svelte'
 import type { Testcase, TestcaseResult, TestcaseValidationError } from '$lib/Project.svelte'
-import { byteSliceToNum, isMemoryChunkEqual, numberToByteSlice } from '$cmp/specific/project/memory/memoryTabUtils'
+import {
+    byteSliceToNum,
+    isMemoryChunkEqual,
+    numberToByteSlice
+} from '$cmp/specific/project/memory/memoryTabUtils'
 
 const emultor = X86Interpreter.create('')
 
-
-export type X86RegisterNames = [
-    'EAX',
-    'EBX',
-    'ECX',
-    'EDX',
-    'ESI',
-    'EDI',
-    'EBP',
-    'ESP',
-]
+export type X86RegisterNames = ['EAX', 'EBX', 'ECX', 'EDX', 'ESI', 'EDI', 'EBP', 'ESP']
 
 function registerNameToType(name: string) {
     return X86Register[name] as X86Register
@@ -37,7 +32,11 @@ export type X86EmulatorState = BaseEmulatorState & {}
 
 function getErrorMessage(e: unknown): string {
     const string = e instanceof Error ? e.message : String(e)
-    if (string.startsWith('Keystone.js') || string.startsWith('Capstone.js') || string.startsWith('Unicorn.js')) {
+    if (
+        string.startsWith('Keystone.js') ||
+        string.startsWith('Capstone.js') ||
+        string.startsWith('Unicorn.js')
+    ) {
         return string.split('\n').slice(1).join('\n')
     }
     return string
@@ -52,17 +51,22 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
 
     let code = $state(baseCode)
     let state = $state<Omit<X86EmulatorState, 'code'>>({
+        systemSize: RegisterSize.Long,
         registers: [],
-        pc: 0,
+        pc: 0n,
         hiddenRegisters: [],
         decorations: [],
         terminated: false,
         line: -1,
-        statusRegisters: ['C', 'P', 'A', 'Z', 'S', 'O'].map((n) => ({ name: n, value: 0, prev: 0 })),
+        statusRegisters: ['C', 'P', 'A', 'Z', 'S', 'O'].map((n) => ({
+            name: n,
+            value: 0,
+            prev: 0
+        })),
         compilerErrors: [],
         callStack: [],
         errors: [],
-        sp: 0,
+        sp: 0n,
         latestSteps: [],
         stdOut: '',
         executionTime: -1,
@@ -73,12 +77,21 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
             global: createMemoryTab(
                 options.globalPageSize,
                 'Global',
-                X86Interpreter.START_ADDRESS,
+                BigInt(X86Interpreter.START_ADDRESS),
                 options.globalPageElementsPerRow,
                 0,
                 'little'
             ),
-            tabs: [createMemoryTab(8 * 4, 'Stack', X86Interpreter.STACK_START_ADDRESS + X86Interpreter.STACK_SIZE, 4, 0, 'little')]
+            tabs: [
+                createMemoryTab(
+                    8 * 4,
+                    'Stack',
+                    BigInt(X86Interpreter.STACK_START_ADDRESS + X86Interpreter.STACK_SIZE),
+                    4,
+                    0,
+                    'little'
+                )
+            ]
         },
         interrupt: undefined
     })
@@ -99,13 +112,16 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
                 x86.assemble()
                 x86.initialize()
                 const stackTab = state.memory.tabs.find((e) => e.name === 'Stack')
-                if (stackTab) stackTab.address = x86.getStackPointer() - stackTab.pageSize
+                if (stackTab) stackTab.address = BigInt(x86.getStackPointer() - stackTab.pageSize)
                 const next = x86.getNextStatement()
                 state.canExecute = true
                 state.line = next ? next.line : -1
                 state.terminated = !next
                 state.canUndo = false
-                state.compiledCode = x86.getAssembledStatements().map(s => s.text).join('\n')
+                state.compiledCode = x86
+                    .getAssembledStatements()
+                    .map((s) => s.text)
+                    .join('\n')
                 updateMemory()
                 updateData()
                 res()
@@ -146,7 +162,8 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
         if (current.interrupt) Prompt.cancel()
         state = {
             ...state,
-            pc: 0,
+            pc: 0n,
+            sp: 0n,
             terminated: false,
             compiledCode: undefined,
             line: -1,
@@ -163,12 +180,21 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
                 global: createMemoryTab(
                     options.globalPageSize,
                     'Global',
-                    X86Interpreter.START_ADDRESS,
+                    BigInt(X86Interpreter.START_ADDRESS),
                     options.globalPageElementsPerRow,
                     0,
                     'little'
                 ),
-                tabs: [createMemoryTab(8 * 4, 'Stack', X86Interpreter.STACK_START_ADDRESS + X86Interpreter.STACK_SIZE, 4, 0, 'little')]
+                tabs: [
+                    createMemoryTab(
+                        8 * 4,
+                        'Stack',
+                        BigInt(X86Interpreter.STACK_START_ADDRESS + X86Interpreter.STACK_SIZE),
+                        4,
+                        0,
+                        'little'
+                    )
+                ]
             }
         }
     }
@@ -185,16 +211,15 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
         if (!settings.values.autoScrollStackTab.value || !x86) return
         const stackTab = current.memory.tabs.find((e) => e.name === 'Stack')
         const sp = x86.getStackPointer() - stackTab.pageSize
-        if (stackTab) stackTab.address = sp - (sp % stackTab.pageSize)
+        if (stackTab) stackTab.address = BigInt(sp - (sp % stackTab.pageSize))
     }
 
     function updateStatusRegisters(override?: number[]) {
-
         const x86Flags = x86?.getConditionFlags()
         const flags = (
             override ??
             (x86Flags
-                ? state.statusRegisters.map(s => x86Flags[X86ConditionFlags[s.name]])
+                ? state.statusRegisters.map((s) => x86Flags[X86ConditionFlags[s.name]])
                 : new Array(6).fill(0))
         ).reverse()
         state.statusRegisters = state.statusRegisters.map((s, i) => ({
@@ -209,7 +234,7 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
             override = new Array(X86_REGISTERS.length).fill(0)
         }
         const registers = (override ?? getRegistersValue()).map((reg, i) => {
-            return makeRegister(X86_REGISTERS[i], reg)
+            return makeRegister(X86_REGISTERS[i], reg, RegisterSize.Long)
         })
         state.registers = registers
     }
@@ -226,14 +251,14 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
         if (!x86) return
         const temp = state.memory.global.data.current
         const memory = x86.readMemoryBytes(
-            state.memory.global.address,
+            Number(state.memory.global.address),
             state.memory.global.pageSize
         )
         state.memory.global.data.current = new Uint8Array(memory)
         state.memory.global.data.prevState = temp
         state.memory.tabs.forEach((tab) => {
             const temp = tab.data.current
-            const memory = x86.readMemoryBytes(tab.address, tab.pageSize)
+            const memory = x86.readMemoryBytes(Number(tab.address), tab.pageSize)
             tab.data.current = new Uint8Array(memory)
             tab.data.prevState = temp
         })
@@ -242,7 +267,7 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
     function updateData() {
         state.terminated = x86.isTerminated()
         state.canExecute = !x86.isTerminated()
-        state.pc = x86.getProgramCounter()
+        state.pc = BigInt(x86.getProgramCounter())
     }
 
     function dispose() {
@@ -283,14 +308,15 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
         return x86.isTerminated()
     }
 
-    function undo(amount = 1) {
-    }
+    function undo(amount = 1) {}
 
     async function run(haltLimit: number) {
         if (!x86) throw new Error('Interpreter not initialized')
         if (haltLimit <= 0) haltLimit = Number.MAX_SAFE_INTEGER
         const start = performance.now()
-        const breakpoints = state.breakpoints.map(line => x86.getStatementAtSourceLine(line).address)
+        const breakpoints = state.breakpoints.map(
+            (line) => x86.getStatementAtSourceLine(line).address
+        )
         const hasBreakpoints = breakpoints.length > 0
         try {
             if (!hasBreakpoints) {
@@ -324,20 +350,20 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
         return InterpreterStatus.TerminatedWithException
     }
 
-    function setGlobalMemoryAddress(address: number) {
+    function setGlobalMemoryAddress(address: bigint) {
         state.memory.global.address = address
         state.memory.global.data.current =
-            x86?.readMemoryBytes(address, state.memory.global.pageSize) ??
+            x86?.readMemoryBytes(Number(address), state.memory.global.pageSize) ??
             new Uint8Array(state.memory.global.pageSize).fill(0)
         state.memory.global.data.prevState = state.memory.global.data.current
     }
 
-    function setTabMemoryAddress(address: number, tabId: number) {
+    function setTabMemoryAddress(address: bigint, tabId: number) {
         const tab = state.memory.tabs.find((e) => e.id == tabId)
         if (!tab) return
         tab.address = address
         tab.data.current =
-            x86?.readMemoryBytes(address, tab.pageSize) ??
+            x86?.readMemoryBytes(Number(address), tab.pageSize) ??
             new Uint8Array(tab.pageSize).fill(0)
         tab.data.prevState = tab.data.current
     }
@@ -352,7 +378,7 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
                 console.error(`Register ${register} not found`)
                 continue
             }
-            const registerValue = registers[registerIndex]
+            const registerValue = BigInt(registers[registerIndex])
             if (registerValue !== value) {
                 errors.push({
                     type: 'wrong-register',
@@ -372,7 +398,7 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
         }
         for (const value of testcase.expectedMemory) {
             if (value.type === 'number') {
-                const bytes = x86.readMemoryBytes(value.address, value.bytes)
+                const bytes = x86.readMemoryBytes(Number(value.address), value.bytes)
                 const num = byteSliceToNum(bytes, 'big')
                 if (num !== value.expected) {
                     errors.push({
@@ -384,7 +410,10 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
                     })
                 }
             } else if (value.type === 'number-chunk') {
-                const bytes = x86.readMemoryBytes(value.address, value.expected.length * value.bytes)
+                const bytes = x86.readMemoryBytes(
+                    Number(value.address),
+                    value.expected.length * value.bytes
+                )
                 const expected = numbersOfSizeToSlice(value.expected, value.bytes)
                 if (!isMemoryChunkEqual(bytes, expected)) {
                     errors.push({
@@ -395,7 +424,7 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
                     })
                 }
             } else if (value.type === 'string-chunk') {
-                const bytes = x86.readMemoryBytes(value.address, value.expected.length)
+                const bytes = x86.readMemoryBytes(Number(value.address), value.expected.length)
                 const str = new TextDecoder().decode(bytes)
                 if (str !== value.expected) {
                     errors.push({
@@ -416,18 +445,18 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
         try {
             if (!x86) throw new Error('Interpreter not initialized')
             for (const [register, value] of Object.entries(testcase.startingRegisters)) {
-                x86.setRegisterValue(registerNameToType(register), value)
+                x86.setRegisterValue(registerNameToType(register), Number(value))
             }
             for (const value of testcase.startingMemory) {
                 if (value.type === 'number') {
                     const slice = new Uint8Array(numberToByteSlice(value.expected, value.bytes))
-                    x86.setMemoryBytes(value.address, [...slice])
+                    x86.setMemoryBytes(Number(value.address), [...slice])
                 } else if (value.type === 'number-chunk') {
                     const expected = numbersOfSizeToSlice(value.expected, value.bytes)
-                    x86.setMemoryBytes(value.address, expected)
+                    x86.setMemoryBytes(Number(value.address), expected)
                 } else if (value.type === 'string-chunk') {
                     const encoded = new TextEncoder().encode(value.expected)
-                    x86.setMemoryBytes(value.address, [...encoded])
+                    x86.setMemoryBytes(Number(value.address), [...encoded])
                 }
             }
             x86.simulate(haltLimit)
@@ -485,9 +514,9 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
         return results
     }
 
-    function getLineFromAddress(address: number) {
+    function getLineFromAddress(address: bigint) {
         if (!x86) return -1
-        const line = x86.getStatementAtAddress(address)
+        const line = x86.getStatementAtAddress(Number(address))
         return line?.line ?? -1
     }
 
@@ -557,6 +586,9 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
         },
         get pc() {
             return state.pc
+        },
+        get systemSize() {
+            return state.systemSize
         },
         compile,
         step,

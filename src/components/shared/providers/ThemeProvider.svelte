@@ -11,7 +11,6 @@
     let theme = ThemeStore.themeList
     let scrollbar = $derived(ThemeStore.theme.scrollbar)
     let background = $derived(ThemeStore.theme.background)
-
 </script>
 
 <Body

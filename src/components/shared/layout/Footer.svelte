@@ -13,7 +13,7 @@
     let { pages = [] }: Props = $props()
 </script>
 
-{#if pages.some(p => page.url.pathname.match(p))}
+{#if pages.some((p) => page.url.pathname.match(p))}
     <footer class="footer">
         <div class="footer-inner">
             <AnimatedRgbLine />

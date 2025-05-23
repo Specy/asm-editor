@@ -1,9 +1,33 @@
 import { SHARE_ID } from '$stores/projectsStore.svelte'
 import lzstring from 'lz-string'
 import type { Project } from '$lib/Project.svelte'
+import { serializer } from '$lib/json'
+
 
 export function clamp(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value))
+}
+
+export function minBigInt(a: bigint, b: bigint): bigint {
+    return a < b ? a : b
+}
+export function maxBigInt(a: bigint, b: bigint): bigint {
+    return a > b ? a : b
+}
+export function clampBigInt(value: bigint, min: bigint, max: bigint): bigint {
+    return maxBigInt(min, minBigInt(value, max))
+}
+
+export function unsignedBigIntToSigned(unsignedBigInt: bigint, numBytes: number) {
+    const bitLength = numBytes * 8;
+    const signBitMask = 1n << (BigInt(bitLength) - 1n);
+
+    if ((unsignedBigInt & signBitMask) !== 0n) {
+        const twoComplementMask = (1n << BigInt(bitLength)) - 1n;
+        return unsignedBigInt - (twoComplementMask + 1n);
+    }
+
+    return unsignedBigInt;
 }
 
 export type Timer = NodeJS.Timeout | number
@@ -50,10 +74,10 @@ export function capitalize(word: string) {
     return word[0].toUpperCase() + word.slice(1)
 }
 
-
-export function createShareLink(project: Project){
+export function createShareLink(project: Project) {
     const p = project.toObject()
     p.id = SHARE_ID
-    const code = lzstring.compressToEncodedURIComponent(JSON.stringify(p))
+    const code = lzstring.compressToEncodedURIComponent(serializer.stringify(p))
     return `${window.location.origin}/projects/share?project=${code}`
 }
+

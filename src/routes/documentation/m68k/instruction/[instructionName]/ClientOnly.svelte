@@ -14,21 +14,19 @@
 </script>
 
 {#key instructionKey}
-	<EmulatorLoader
-		bind:code={code}
-		language={language}
-		settings={{
-						globalPageElementsPerRow: 4,
-						globalPageSize: 4 * 8
-				}}
-	>
-		{#snippet children(emulator)}
-			<InteractiveEditor bind:code {language} {emulator} />
-		{/snippet}
-		{#snippet loading()}
-			<Header>
-				Loading emulator...
-			</Header>
-		{/snippet}
-	</EmulatorLoader>
+    <EmulatorLoader
+        bind:code
+        {language}
+        settings={{
+            globalPageElementsPerRow: 4,
+            globalPageSize: 4 * 8
+        }}
+    >
+        {#snippet children(emulator)}
+            <InteractiveEditor bind:code {language} {emulator} />
+        {/snippet}
+        {#snippet loading()}
+            <Header>Loading emulator...</Header>
+        {/snippet}
+    </EmulatorLoader>
 {/key}

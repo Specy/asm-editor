@@ -49,7 +49,7 @@
         </Column>
 
         <Column gap="1rem" flex1>
-            <Column gap='1rem'>
+            <Column gap="1rem">
                 <h2>Operands</h2>
                 <span>
                     {formatAggregatedArgs(data.props.instruction)}

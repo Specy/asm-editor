@@ -3,13 +3,15 @@
     import Column from '$cmp/shared/layout/Column.svelte'
     import MemoryTestcaseValue from '$cmp/specific/project/testcases/MemoryTestcaseValue.svelte'
     import NewMemoryTestcase from '$cmp/specific/project/testcases/NewMemoryTestcase.svelte'
+    import type { RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
 
     interface Props {
         memoryValues: MemoryValue[]
         editable?: boolean
+        systemSize: RegisterSize
     }
 
-    let { memoryValues = $bindable(), editable = true }: Props = $props()
+    let { systemSize, memoryValues = $bindable(), editable = true }: Props = $props()
 </script>
 
 <Column gap="0.5rem">
@@ -18,6 +20,7 @@
             {#each memoryValues as memoryValue, i}
                 <div class="value">
                     <MemoryTestcaseValue
+                        {systemSize}
                         bind:value={memoryValues[i]}
                         canRemove={editable}
                         editable={false}
@@ -30,12 +33,15 @@
     {/if}
 
     {#if editable}
-        <NewMemoryTestcase on:create={(e) => (memoryValues = [...memoryValues, e.detail.value])} />
+        <NewMemoryTestcase
+            {systemSize}
+            on:create={(e) => (memoryValues = [...memoryValues, e.detail.value])}
+        />
     {/if}
 </Column>
 
 <style>
-    .values{
+    .values {
         border-radius: 0.5rem;
         overflow: hidden;
         display: flex;
@@ -47,5 +53,4 @@
         padding-left: 1rem;
         background-color: var(--secondary);
     }
-
 </style>

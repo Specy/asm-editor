@@ -7,13 +7,17 @@
     import { onMount } from 'svelte'
     import {
         findElInTree,
-        getGroupSignedValue,
         getNumberInRange,
         goesNextLineBy,
         inRange
     } from '$cmp/specific/project/memory/memoryTabUtils'
     import Row from '$cmp/shared/layout/Row.svelte'
-    import type { ColorizedLabel, DiffedMemory } from '$lib/languages/commonLanguageFeatures.svelte'
+    import {
+        type ColorizedLabel,
+        type DiffedMemory,
+        RegisterSize
+    } from '$lib/languages/commonLanguageFeatures.svelte'
+    import { unsignedBigIntToSigned } from '$lib/utils'
 
     const id = Math.random().toString(36).substring(8)
 
@@ -25,14 +29,15 @@
 
     interface Props {
         memory: DiffedMemory
-        currentAddress: number
+        currentAddress: bigint
         callStackAddresses?: ColorizedLabel[]
-        sp: number
+        sp: bigint
         pageSize: number
         bytesPerRow: number
         style?: string
         defaultMemoryValue: number
         endianess: 'big' | 'little'
+        systemSize: RegisterSize
     }
 
     let {
@@ -44,7 +49,8 @@
         style = '',
         defaultMemoryValue,
         endianess,
-        callStackAddresses = []
+        callStackAddresses = [],
+        systemSize
     }: Props = $props()
     const maxAddresses = 4
     let selectedAddressesIndexes = $state({
@@ -55,7 +61,9 @@
 
     let type = $state(DisplayType.Hex) as (typeof DisplayType)[keyof typeof DisplayType]
     let visibleAddresses = $derived(
-        new Array(pageSize / bytesPerRow).fill(0).map((_, i) => currentAddress + i * bytesPerRow)
+        new Array(pageSize / bytesPerRow)
+            .fill(0)
+            .map((_, i) => currentAddress + BigInt(i * bytesPerRow))
     )
 
     onMount(() => {
@@ -80,7 +88,7 @@
     })
 
     function getTextFromValue(
-        value: number,
+        value: bigint,
         padding?: number,
         typeOverride?: (typeof DisplayType)[keyof typeof DisplayType]
     ) {
@@ -92,7 +100,9 @@
                     .toUpperCase()
             case DisplayType.Char:
                 //hides last extended ascii to have prettier view
-                return value === defaultMemoryValue ? '' : String.fromCharCode(value)
+                return value === BigInt(defaultMemoryValue)
+                    ? ''
+                    : String.fromCharCode(Number(value))
             case DisplayType.Decimal:
                 return value.toString().padStart(padding ?? 2, '0')
             default:
@@ -142,26 +152,25 @@
         }
     }
 
-    function getColorOfAddress(address: number) {
-        let last: { color?: string, address: number } = {
-            address: -1
+    function getColorOfAddress(address: bigint) {
+        let last: { color?: string; address: bigint } = {
+            address: -1n
         }
-        for(const frame of callStackAddresses) {
-            if(address >= frame.sp) {
+        for (const frame of callStackAddresses) {
+            if (address >= frame.sp) {
                 last = frame
                 break
             }
         }
         return last?.color
     }
-
 </script>
 
 <div class="memory-grid" style={`--bytesPerRow: ${bytesPerRow}; ${style}`}>
     <div class="memory-offsets">
         {#each new Array(bytesPerRow).fill(0) as _, offset}
             <div>
-                {getTextFromValue(offset, 2, DisplayType.Hex)}
+                {getTextFromValue(BigInt(offset), 2, DisplayType.Hex)}
             </div>
         {/each}
     </div>
@@ -214,7 +223,7 @@
         onpointermove={selectingAddresses ? handlePointerMove : undefined}
     >
         {#each memory.current as word, i}
-            {@const signed = getGroupSignedValue(word, 1)}
+            {@const signed = unsignedBigIntToSigned(BigInt(word), 1)}
             {@const selectionValue = getNumberInRange(
                 memory,
                 selectedAddressesIndexes.start,
@@ -228,9 +237,9 @@
             )}
             <div class="memory-number">
                 {#if i === selectedAddressesIndexes.start}
-                    {@const signedSelection = getGroupSignedValue(
+                    {@const signedSelection = unsignedBigIntToSigned(
                         selectionValue.current,
-                        selectionValue.len * 2
+                        selectionValue.len,
                     )}
                     <div
                         class="selection-value"
@@ -254,34 +263,42 @@
                     </div>
                 {/if}
                 <ValueDiff
-                    value={getTextFromValue(word, 0, type)}
+                    value={getTextFromValue(BigInt(word), 0, type)}
                     id={`${id}-${i}`}
-                    diff={getTextFromValue(memory.prevState[i] ?? defaultMemoryValue, 0, type)}
+                    diff={getTextFromValue(
+                        BigInt(memory.prevState[i] ?? defaultMemoryValue),
+                        0,
+                        type
+                    )}
                     hasSoftDiff={word !== defaultMemoryValue}
                     hoverElementStyle={`width: 100%; min-width: fit-content; left: 50%; transform: translateX(-50%);`}
                     style={`padding: 0.3rem; min-width: calc(0.6rem + 2ch); height: calc(2ch + 0.65rem);
                     ${
-                        currentAddress + i === sp
+                        currentAddress + BigInt(i) === sp
                             ? ' background-color: var(--accent2); color: var(--accent2-text);'
                             : 'border-radius: 0;'
                     }
 										${
-                        inRange(i, selectedAddressesIndexes.start, selectedAddressesIndexes.len)
-                            ? 'background-color: var(--green); color: var(--green-text);'
-                            : ''
-                    }
+                                            inRange(
+                                                i,
+                                                selectedAddressesIndexes.start,
+                                                selectedAddressesIndexes.len
+                                            )
+                                                ? 'background-color: var(--green); color: var(--green-text);'
+                                                : ''
+                                        }
                     ${
-                        getColorOfAddress(currentAddress + i)
-                            ? `color: ${getColorOfAddress(currentAddress + i)}`
+                        getColorOfAddress(currentAddress + BigInt(i))
+                            ? `color: ${getColorOfAddress(currentAddress + BigInt(i))}`
                             : ''
                     }
 								`}
-                    hoverElementOffset={word !== signed ? '-2.2rem' : '-1rem'}
+                    hoverElementOffset={BigInt(word) !== signed ? '-2.2rem' : '-1rem'}
                     monospaced
                 >
                     {#snippet hoverValue()}
                         <div>
-                            {#if word !== signed}
+                            {#if BigInt(word) !== signed}
                                 <div style="user-select: all;">
                                     {signed}
                                 </div>

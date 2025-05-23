@@ -90,7 +90,7 @@
     </div>
     {#if component}
         {@const SvelteComponent_1 = component}
-        <SvelteComponent_1 bind:code instructionKey={ins.name}  language="M68K"/>
+        <SvelteComponent_1 bind:code instructionKey={ins.name} language="M68K" />
     {:else}
         <div class="loading">Loading...</div>
     {/if}

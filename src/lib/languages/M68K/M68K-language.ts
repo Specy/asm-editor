@@ -7,10 +7,8 @@ import {
     getAddressingModeNames,
     getInstructionDocumentation,
     M68KDirectives,
-    M68kInstructions,
+    M68kInstructions
 } from './M68K-documentation'
-
-
 
 const formattableTokens = [...M68kInstructions, ...M68KDirectives]
 const formattableTokensMap = new Map(formattableTokens.map((e) => [e, true]))

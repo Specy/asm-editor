@@ -1,6 +1,3 @@
-
-
-
 export function viewStore(obj: any) {
     for (const key in obj) {
         if (obj.hasOwnProperty(key)) {

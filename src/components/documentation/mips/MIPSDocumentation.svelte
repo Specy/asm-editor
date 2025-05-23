@@ -8,7 +8,7 @@
     let wrapper: HTMLDivElement = $state()
     import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
     import {
-    aggregateArgs,
+        aggregateArgs,
         formatAggregatedArgs,
         MIPSAddressingModes,
         mipsDirectivesMap,
@@ -75,7 +75,7 @@
     </DocsSection>
     <DocsSection>
         {#snippet title()}
-        <h4>Instructions</h4>
+            <h4>Instructions</h4>
         {/snippet}
         <div class="column sub-section">
             {#each mipsInstructionNames as ins}
@@ -89,10 +89,16 @@
                                     class="sub-hover"
                                     title="click to create quick link"
                                 >
-                                    {ins} <span style="font-size: 1rem; font-weight: normal">{formatAggregatedArgs(instruction)}</span>
+                                    {ins}
+                                    <span style="font-size: 1rem; font-weight: normal"
+                                        >{formatAggregatedArgs(instruction)}</span
+                                    >
                                 </a>
                             {:else}
-                                {ins} <span style="font-size: 1rem; font-weight: normal">{formatAggregatedArgs(instruction)}</span>
+                                {ins}
+                                <span style="font-size: 1rem; font-weight: normal"
+                                    >{formatAggregatedArgs(instruction)}</span
+                                >
                             {/if}
                         </h1>
                     </div>
@@ -106,9 +112,8 @@
                         </span>
                     {/if}
                     {#if instruction.length > 1}
-                        
                         <MarkdownRenderer
-                        style="background-color: rgba(var(--RGB-secondary), 0.7); border-radius: 0.5rem; padding: 0.5rem;"
+                            style="background-color: rgba(var(--RGB-secondary), 0.7); border-radius: 0.5rem; padding: 0.5rem;"
                             source={instruction
                                 .slice(1)
                                 .map((i) => `- ${i.description}: **${i.example}**`)

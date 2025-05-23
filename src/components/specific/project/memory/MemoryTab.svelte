@@ -1,43 +1,53 @@
 <script lang="ts">
     import ToggleableDraggable from '$cmp/shared/draggable/DraggableContainer.svelte'
-    import { MEMORY_SIZE } from '$lib/Config'
-    import { createEventDispatcher } from 'svelte'
     import MemoryControls from './MemoryControls.svelte'
     import MemoryVisualiser from './MemoryRenderer.svelte'
-    import Column from '$cmp/shared/layout/Column.svelte'
-    import type { ColorizedLabel, MemoryTab } from '$lib/languages/commonLanguageFeatures.svelte'
+    import {
+        type ColorizedLabel,
+        type MemoryTab,
+        RegisterSize
+    } from '$lib/languages/commonLanguageFeatures.svelte'
+
     interface Props {
-        sp: number
+        sp: bigint
         tab: MemoryTab
         left?: number
-        memorySize: number
+        memorySize: bigint
         defaultMemoryValue: number
         endianess: 'big' | 'little'
         callStackAddresses: ColorizedLabel[]
+        onAddressChange?: (address: bigint, tab: MemoryTab) => void
+        systemSize: RegisterSize
     }
 
-    let { sp, tab, left = 500, memorySize, defaultMemoryValue, endianess, callStackAddresses }: Props = $props()
-    const dispatcher = createEventDispatcher<{
-        addressChange: {
-            address: number
-            tab: MemoryTab
-        }
-    }>()
+    let {
+        systemSize,
+        sp,
+        tab,
+        left = 500,
+        memorySize,
+        defaultMemoryValue,
+        endianess,
+        callStackAddresses,
+        onAddressChange
+    }: Props = $props()
 </script>
 
 <ToggleableDraggable title="Stack pointer" {left}>
     <div class="tab column">
         <MemoryControls
+            {systemSize}
             bytesPerPage={tab.pageSize}
             {memorySize}
             currentAddress={tab.address}
             inputStyle="width: 6rem"
-            on:addressChange={async (e) => {
-                dispatcher('addressChange', { address: e.detail, tab })
+            onAddressChange={async (e) => {
+                onAddressChange?.(e, tab)
             }}
             hideLabel
         />
         <MemoryVisualiser
+            {systemSize}
             {endianess}
             {defaultMemoryValue}
             bytesPerRow={tab.rowSize}

@@ -12,6 +12,7 @@
     import { toast } from '$stores/toastStore'
     import TestcaseResultRenderer from '$cmp/specific/project/testcases/TestcaseResultRenderer.svelte'
     import ExpandableContainer from '$cmp/shared/layout/ExpandableContainer.svelte'
+    import type { RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
 
     interface Props {
         visible: boolean
@@ -20,6 +21,7 @@
         registerNames: string[]
         hiddenRegistersNames?: string[]
         editable?: boolean
+        systemSize: RegisterSize
     }
 
     let {
@@ -28,7 +30,8 @@
         testcasesResult,
         registerNames,
         hiddenRegistersNames,
-        editable = true
+        editable = true,
+        systemSize
     }: Props = $props()
 
     function makeNewTestcase() {
@@ -68,8 +71,13 @@
                     {failedTestcases.length === 0 ? '✅' : '❌'}
                     {passedTestcases.length} / {totalTestcases} testcases passed
                 </Header>
-                {#each failedTestcases as testcase}
-                    <TestcaseResultRenderer testcaseResult={testcase} {registerNames} {hiddenRegistersNames}/>
+                {#each failedTestcases as _, i}
+                    <TestcaseResultRenderer
+                        {systemSize}
+                        bind:testcaseResult={failedTestcases[i]}
+                        {registerNames}
+                        {hiddenRegistersNames}
+                    />
                 {/each}
             </Column>
         {/if}
@@ -87,6 +95,7 @@
                         {#each testcases as testcase, i}
                             <div class="testcase-wrapper">
                                 <TestcaseRenderer
+                                    {systemSize}
                                     style="padding-top: 0.3rem"
                                     bind:testcase={testcases[i]}
                                     editable={false}
@@ -121,6 +130,7 @@
                 <Header noMargin>New Testcase</Header>
                 {#key testcaseKey}
                     <TestcaseRenderer
+                        {systemSize}
                         {registerNames}
                         {hiddenRegistersNames}
                         style="border: solid 0.1rem var(--accent)"

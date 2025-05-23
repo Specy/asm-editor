@@ -1,4 +1,4 @@
-import type { Load } from '@sveltejs/kit';
+import type { Load } from '@sveltejs/kit'
 import { getCourse, getCourseContent } from '$lib/content/getters'
 
 export const load: Load = async ({ params }) => {
@@ -6,4 +6,4 @@ export const load: Load = async ({ params }) => {
         course: await getCourse(params.courseId),
         content: await getCourseContent(params.courseId)
     }
-};
+}

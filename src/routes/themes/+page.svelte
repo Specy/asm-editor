@@ -20,8 +20,6 @@
     afterNavigate(({ from }) => {
         previousPage = from?.url.pathname ?? previousPage
     })
-
- 
 </script>
 
 <svelte:head>

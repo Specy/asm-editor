@@ -12,7 +12,7 @@
     import { toast } from '$stores/toastStore'
     import Controls from '$cmp/specific/project/Controls.svelte'
     import StdOut from '$cmp/specific/project/user-tools/StdOutRenderer.svelte'
-    import { clamp, createDebouncer, formatTime } from '$lib/utils'
+    import { clamp, clampBigInt, createDebouncer, formatTime } from '$lib/utils'
     import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE } from '$lib/Config'
     import Settings from '$cmp/specific/project/settings/Settings.svelte'
     import FloatingLanguageDocumentation from '$cmp/specific/project/FloatingLanguageDocumentation.svelte'
@@ -25,7 +25,6 @@
     import FaShareAlt from 'svelte-icons/fa/FaShareAlt.svelte'
     import MemoryTab from '$cmp/specific/project/memory/MemoryTab.svelte'
     import ShortcutEditor from '$cmp/specific/project/settings/ShortcutEditor.svelte'
-    import SizeSelector from '$cmp/specific/project/cpu/SizeSelector.svelte'
     import { settingsStore } from '$stores/settingsStore.svelte'
     import type monaco from 'monaco-editor'
     import ToggleableDraggable from '$cmp/shared/draggable/DraggableContainer.svelte'
@@ -36,7 +35,11 @@
     import { getM68kErrorMessage } from '$lib/languages/M68K/M68kUtils'
     import Row from '$cmp/shared/layout/Row.svelte'
     import TestcasesEditor from '$cmp/specific/project/testcases/TestcasesEditor.svelte'
-    import { makeColorizedLabels, makeRegister, RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
+    import {
+        makeColorizedLabels,
+        makeRegister,
+        RegisterSize
+    } from '$lib/languages/commonLanguageFeatures.svelte'
     import { type Emulator } from '$lib/languages/Emulator'
     import BelowLineContent from '$cmp/specific/project/user-tools/BelowLineContent.svelte'
     import Card from '$cmp/shared/layout/Card.svelte'
@@ -48,7 +51,6 @@
     }
 
     let { project = $bindable(), emulator = $bindable() }: Props = $props()
-
 
     $effect(() => {
         emulator.setCode(project.code)
@@ -188,168 +190,167 @@
         }
     }
 
-    const pc = makeRegister('PC', emulator.pc)
+    const pc = makeRegister('PC', emulator.pc, emulator.systemSize)
 
     $effect(() => {
         pc.setValue(emulator.pc)
+        pc.setSize(emulator.systemSize)
     })
 </script>
 
 <header class="project-header">
-	<a
-		href="/projects"
-		title="Go back to your projects"
-		onclick={(e) => {
+    <a
+        href="/projects"
+        title="Go back to your projects"
+        onclick={(e) => {
             e.preventDefault()
             dispatcher('wantsToLeave')
         }}
-	>
-		<Icon size={2}>
-			<FaAngleLeft />
-		</Icon>
-	</a>
-	<h1 style="font-size: 1.6rem; margin-left: 0.4rem" class="ellipsis">{project.name}</h1>
-	<Row gap="0.5rem" style="margin-left: auto;">
-		<Button
-			onClick={() => dispatcher('share', project)}
-			hasIcon
-			cssVar="accent2"
-			style="padding:0; width:2.2rem; height:2.2rem;"
-		>
-			<Icon>
-				<FaShareAlt />
-			</Icon>
-		</Button>
-		<ButtonLink
-			href="/donate"
-			cssVar="accent2"
-			style="padding:0; width:2.2rem; height:2.2rem;"
-			hasIcon
-		>
-			<Icon>
-				<FaDonate />
-			</Icon>
-		</ButtonLink>
-		<Button
-			onClick={() => toggleWindow('shortcuts')}
-			hasIcon
-			cssVar="accent2"
-			style="padding:0; width:2.2rem; height:2.2rem"
-		>
-			<Icon>
-				<FaKeyboard />
-			</Icon>
-		</Button>
-		<Button
-			onClick={() => toggleWindow('documentation')}
-			hasIcon
-			cssVar="accent2"
-			style="padding:0; width:2.2rem; height:2.2rem"
-		>
-			<Icon>
-				<FaBook />
-			</Icon>
-		</Button>
-		<Button
-			onClick={() => toggleWindow('settings')}
-			hasIcon
-			cssVar="accent2"
-			style="padding:0; width:2.2rem; height:2.2rem"
-		>
-			<Icon>
-				<FaCog />
-			</Icon>
-		</Button>
-		<Button
-			onClick={() => {
+    >
+        <Icon size={2}>
+            <FaAngleLeft />
+        </Icon>
+    </a>
+    <h1 style="font-size: 1.6rem; margin-left: 0.4rem" class="ellipsis">{project.name}</h1>
+    <Row gap="0.5rem" style="margin-left: auto;">
+        <Button
+            onClick={() => dispatcher('share', project)}
+            hasIcon
+            cssVar="accent2"
+            style="padding:0; width:2.2rem; height:2.2rem;"
+        >
+            <Icon>
+                <FaShareAlt />
+            </Icon>
+        </Button>
+        <ButtonLink
+            href="/donate"
+            cssVar="accent2"
+            style="padding:0; width:2.2rem; height:2.2rem;"
+            hasIcon
+        >
+            <Icon>
+                <FaDonate />
+            </Icon>
+        </ButtonLink>
+        <Button
+            onClick={() => toggleWindow('shortcuts')}
+            hasIcon
+            cssVar="accent2"
+            style="padding:0; width:2.2rem; height:2.2rem"
+        >
+            <Icon>
+                <FaKeyboard />
+            </Icon>
+        </Button>
+        <Button
+            onClick={() => toggleWindow('documentation')}
+            hasIcon
+            cssVar="accent2"
+            style="padding:0; width:2.2rem; height:2.2rem"
+        >
+            <Icon>
+                <FaBook />
+            </Icon>
+        </Button>
+        <Button
+            onClick={() => toggleWindow('settings')}
+            hasIcon
+            cssVar="accent2"
+            style="padding:0; width:2.2rem; height:2.2rem"
+        >
+            <Icon>
+                <FaCog />
+            </Icon>
+        </Button>
+        <Button
+            onClick={() => {
                 dispatcher('save', {
                     silent: false,
                     data: project
                 })
             }}
-			cssVar="accent2"
-			hasIcon
-			style="padding:0; width:2.2rem; height:2.2rem"
-		>
-			<Icon>
-				<FaSave />
-			</Icon>
-		</Button>
-	</Row>
-	<ShortcutEditor bind:visible={shortcutsVisible} />
-	<Settings
-		bind:visible={settingsVisible}
-		language={project.language}
-	/>
-	<FloatingLanguageDocumentation
-		bind:visible={documentationVisible}
-		language={project.language}
-	/>
-	<TestcasesEditor
-		registerNames={emulator.registers.map((r) => r.name)}
-		hiddenRegistersNames={emulator.hiddenRegisters}
-		bind:visible={testcasesVisible}
-		{testcasesResult}
-		bind:testcases={project.testcases}
-	/>
+            cssVar="accent2"
+            hasIcon
+            style="padding:0; width:2.2rem; height:2.2rem"
+        >
+            <Icon>
+                <FaSave />
+            </Icon>
+        </Button>
+    </Row>
+    <ShortcutEditor bind:visible={shortcutsVisible} />
+    <Settings bind:visible={settingsVisible} language={project.language} />
+    <FloatingLanguageDocumentation
+        bind:visible={documentationVisible}
+        language={project.language}
+    />
+    <TestcasesEditor
+        systemSize={emulator.systemSize}
+        registerNames={emulator.registers.map((r) => r.name)}
+        hiddenRegistersNames={emulator.hiddenRegisters}
+        bind:visible={testcasesVisible}
+        {testcasesResult}
+        bind:testcases={project.testcases}
+    />
 </header>
 
 <ToggleableDraggable title="Call stack" left={300}>
-	<CallStack
-		stack={emulator.callStack}
-		onGoToInstruction={(address) => {
+    <CallStack
+        stack={emulator.callStack}
+        onGoToInstruction={(address) => {
             const line = emulator.getLineFromAddress(address)
-            if(line < 0) return
+            if (line < 0) return
             editor.revealLineInCenter(line + 1)
             editor.setPosition({ lineNumber: line + 1, column: 1 })
         }}
-		onGoToLabel={(label) => {
+        onGoToLabel={(label) => {
             editor.revealLineInCenter(label.line + 1)
             editor.setPosition({ lineNumber: label.line + 1, column: 1 })
         }}
-	/>
+    />
 </ToggleableDraggable>
 
 <ToggleableDraggable title="History" left={500}>
-	<MutationsViewer
-		statusRegisterNames={emulator.statusRegisters.map((r) => r.name)}
-		on:undo={(e) => {
+    <MutationsViewer
+        statusRegisterNames={emulator.statusRegisters.map((r) => r.name)}
+        on:undo={(e) => {
             const amount = e.detail
             emulator.undo(amount)
         }}
-		on:highlight={(e) => {
+        on:highlight={(e) => {
             const line = e.detail
             editor.revealLineInCenter(line + 1)
             editor.setPosition({ lineNumber: line + 1, column: 0 })
         }}
-		steps={emulator.latestSteps}
-	/>
+        steps={emulator.latestSteps}
+    />
 </ToggleableDraggable>
 {#each emulator.memory.tabs as tab, i}
-	<MemoryTab
-		endianess={tab.endianess}
-		{tab}
-		defaultMemoryValue={DEFAULT_MEMORY_VALUE[project.language]}
-		memorySize={MEMORY_SIZE[project.language]}
-		left={700 + i * 300}
-		sp={emulator.sp}
-		on:addressChange={(e) => {
-            const { tab, address } = e.detail
+    <MemoryTab
+        endianess={tab.endianess}
+        {tab}
+        defaultMemoryValue={DEFAULT_MEMORY_VALUE[project.language]}
+        memorySize={MEMORY_SIZE[project.language]}
+        left={700 + i * 300}
+        systemSize={emulator.systemSize}
+        sp={emulator.sp}
+        onAddressChange={(address, tab) => {
             emulator.setTabMemoryAddress(address, tab.id)
         }}
-		callStackAddresses={makeColorizedLabels(emulator.callStack)}
-	/>
+        callStackAddresses={makeColorizedLabels(emulator.callStack)}
+    />
 {/each}
 <div class="editor-memory-wrapper">
-	<div class="editor-wrapper">
-		<div
-			class="editor-border"
-			class:gradientBorder={emulator.canExecute && !emulator.terminated}
-			class:redBorder={emulator.errors.length > 0}
-		>
-			{#key project.language}
-				<Editor
-					viewZones={settingsStore.values.showPseudoInstructions.value
+    <div class="editor-wrapper">
+        <div
+            class="editor-border"
+            class:gradientBorder={emulator.canExecute && !emulator.terminated}
+            class:redBorder={emulator.errors.length > 0}
+        >
+            {#key project.language}
+                <Editor
+                    viewZones={settingsStore.values.showPseudoInstructions.value
                         ? emulator.decorations.map((v) => {
                               return {
                                   afterLineNumber: v.belowLine,
@@ -358,7 +359,7 @@
                               }
                           })
                         : []}
-					on:change={(d) => {
+                    on:change={(d) => {
                         if (emulator.canExecute && emulator.terminated && emulator.line >= 0) {
                             emulator.resetSelectedLine()
                         }
@@ -371,37 +372,38 @@
                             })
                         }
                     }}
-					on:breakpointPress={(d) => {
+                    on:breakpointPress={(d) => {
                         emulator.toggleBreakpoint(d.detail - 1)
                     }}
-					bind:editor
-					bind:code={project.code}
-					codeOverride={emulator.compiledCode}
-					breakpoints={emulator.breakpoints}
-					errors={emulator.compilerErrors}
-					language={project.language}
-					highlightedLine={emulator.line}
-					disabled={emulator.canExecute && !emulator.terminated || !!emulator.compiledCode}
-					hasError={emulator.errors.length > 0}
-				/>
-			{/key}
-		</div>
+                    bind:editor
+                    bind:code={project.code}
+                    codeOverride={emulator.compiledCode}
+                    breakpoints={emulator.breakpoints}
+                    errors={emulator.compilerErrors}
+                    language={project.language}
+                    highlightedLine={emulator.line}
+                    disabled={(emulator.canExecute && !emulator.terminated) ||
+                        !!emulator.compiledCode}
+                    hasError={emulator.errors.length > 0}
+                />
+            {/key}
+        </div>
 
-		<Controls
-			{running}
-			hasTests={project.testcases.length > 0}
-			hasErrorsInTests={testcasesResult.some((r) => !r.passed)}
-			hasNoErrorsInTests={testcasesResult.every((r) => r.passed) &&
+        <Controls
+            {running}
+            hasTests={project.testcases.length > 0}
+            hasErrorsInTests={testcasesResult.some((r) => !r.passed)}
+            hasNoErrorsInTests={testcasesResult.every((r) => r.passed) &&
                 testcasesResult.length > 0}
-			canEditTests={true}
-			executionDisabled={emulator.terminated || emulator.interrupt !== undefined}
-			buildDisabled={emulator.compilerErrors.length > 0}
-			hasCompiled={emulator.canExecute || !!emulator.compiledCode}
-			canUndo={emulator.canUndo}
-			on:edit-tests={() => {
+            canEditTests={true}
+            executionDisabled={emulator.terminated || emulator.interrupt !== undefined}
+            buildDisabled={emulator.compilerErrors.length > 0}
+            hasCompiled={emulator.canExecute || !!emulator.compiledCode}
+            canUndo={emulator.canUndo}
+            on:edit-tests={() => {
                 toggleWindow('testcases')
             }}
-			on:test={async () => {
+            on:test={async () => {
                 running = true
                 setTimeout(async () => {
                     try {
@@ -419,7 +421,7 @@
                     }
                 }, 50)
             }}
-			on:run={async () => {
+            on:run={async () => {
                 running = true
                 testcasesResult = []
                 setTimeout(() => {
@@ -433,7 +435,7 @@
                     }
                 }, 50)
             }}
-			on:build={async () => {
+            on:build={async () => {
                 try {
                     running = false
                     //give the latest code to the emulator
@@ -443,7 +445,7 @@
                     toast.error('Error compiling code. ' + getM68kErrorMessage(e))
                 }
             }}
-			on:step={() => {
+            on:step={() => {
                 try {
                     emulator.step()
                 } catch (e) {
@@ -451,7 +453,7 @@
                     toast.error('Error executing code. ' + getM68kErrorMessage(e))
                 }
             }}
-			on:undo={() => {
+            on:undo={() => {
                 try {
                     emulator.undo()
                 } catch (e) {
@@ -459,214 +461,220 @@
                     toast.error('Error executing undo ' + getM68kErrorMessage(e))
                 }
             }}
-			on:stop={() => {
+            on:stop={() => {
                 emulator.clear()
                 running = false
                 testcasesResult = []
             }}
-		/>
-	</div>
-	<div class="right-side">
-		<div class="memory-wrapper">
-			<div class="column" style="gap: 0.4rem;">
-				{#if emulator.statusRegisters && emulator.statusRegisters.length > 0}
-					<StatusCodesVisualiser statusCodes={emulator.statusRegisters} />
-				{/if}
-				<RegistersRenderer
-					size={RegisterSize.Long}
-					style="flex: unset; overflow: unset; padding: 0;"
-					gridStyle="padding: 0.2rem 0.7rem"
-					registers={[pc]}
-					withoutHeader
-					position="bottom"
-				/>
-				<RegistersVisualiser
-					size={groupSize}
-					hiddenRegistersNames={emulator.hiddenRegisters}
-					registers={emulator.registers}
-					on:registerClick={async (e) => {
+        />
+    </div>
+    <div class="right-side">
+        <div class="memory-wrapper">
+            <div class="column" style="gap: 0.4rem;">
+                {#if emulator.statusRegisters && emulator.statusRegisters.length > 0}
+                    <StatusCodesVisualiser statusCodes={emulator.statusRegisters} />
+                {/if}
+                <RegistersRenderer
+                    size={RegisterSize.Long}
+                    style="flex: unset; overflow: unset; padding: 0;"
+                    gridStyle="padding: 0.2rem 0.7rem"
+                    registers={[pc]}
+                    withoutHeader
+                    position="bottom"
+                />
+                <RegistersVisualiser
+                    size={groupSize}
+                    hiddenRegistersNames={emulator.hiddenRegisters}
+                    registers={emulator.registers}
+                    on:registerClick={async (e) => {
                         const value = e.detail.value
-                        const clampedSize = value - (value % emulator.memory.global.pageSize)
+                        const clampedSize =
+                            value - (value % BigInt(emulator.memory.global.pageSize))
                         emulator.setGlobalMemoryAddress(
-                            clamp(clampedSize, 0, MEMORY_SIZE[project.language])
+                            clampBigInt(clampedSize, 0n, MEMORY_SIZE[project.language])
                         )
                     }}
-				/>
-			</div>
-			<div class="column" style="gap: 0.4rem">
-				<div class="row" style="gap: 0.4rem">
-					{#if settingsStore.values.showMemory.value}
-						<MemoryControls
-							bytesPerPage={emulator.memory.global.pageSize}
-							memorySize={MEMORY_SIZE[project.language]}
-							inputStyle="height: 100%"
-							currentAddress={emulator.memory.global.address}
-							on:addressChange={(e) => {
-                            emulator.setGlobalMemoryAddress(e.detail)
-                        }}
-						/>
-					{/if}
+                />
+            </div>
+            <div class="column" style="gap: 0.4rem">
+                <div class="row" style="gap: 0.4rem">
+                    {#if settingsStore.values.showMemory.value}
+                        <MemoryControls
+                            systemSize={emulator.systemSize}
+                            bytesPerPage={emulator.memory.global.pageSize}
+                            memorySize={MEMORY_SIZE[project.language]}
+                            inputStyle="height: 100%"
+                            currentAddress={emulator.memory.global.address}
+                            onAddressChange={(e) => {
+                                emulator.setGlobalMemoryAddress(e)
+                            }}
+                        />
+                    {/if}
+                </div>
 
-				</div>
-
-				{#if settingsStore.values.showMemory.value}
-					<MemoryVisualiser
-						endianess={emulator.memory.global.endianess}
-						defaultMemoryValue={DEFAULT_MEMORY_VALUE[project.language]}
-						bytesPerRow={emulator.memory.global.rowSize}
-						pageSize={emulator.memory.global.pageSize}
-						memory={emulator.memory.global.data}
-						currentAddress={emulator.memory.global.address}
-						sp={emulator.sp}
-						callStackAddresses={makeColorizedLabels(emulator.callStack)}
-					/>
-				{:else}
-					<button
-						style="background: transparent; height: 100%; cursor: pointer"
-						onclick={() => settingsStore.setValue('showMemory', true) }
-					>
-						<Card background="secondary" style="height: 100%" justify="center" align="center">
-							<Header type="h3" style="font-weight: normal">
-								Show Memory
-							</Header>
-						</Card>
-					</button>
-				{/if}
-			</div>
-		</div>
-		<StdOut
-			{info}
-			stdOut={errorStrings ? `${errorStrings}\n${emulator.stdOut}` : emulator.stdOut}
-			compilerErrors={emulator.compilerErrors}
-		/>
-	</div>
+                {#if settingsStore.values.showMemory.value}
+                    <MemoryVisualiser
+                        systemSize={emulator.systemSize}
+                        endianess={emulator.memory.global.endianess}
+                        defaultMemoryValue={DEFAULT_MEMORY_VALUE[project.language]}
+                        bytesPerRow={emulator.memory.global.rowSize}
+                        pageSize={emulator.memory.global.pageSize}
+                        memory={emulator.memory.global.data}
+                        currentAddress={emulator.memory.global.address}
+                        sp={emulator.sp}
+                        callStackAddresses={makeColorizedLabels(emulator.callStack)}
+                    />
+                {:else}
+                    <button
+                        style="background: transparent; height: 100%; cursor: pointer"
+                        onclick={() => settingsStore.setValue('showMemory', true)}
+                    >
+                        <Card
+                            background="secondary"
+                            style="height: 100%"
+                            justify="center"
+                            align="center"
+                        >
+                            <Header type="h3" style="font-weight: normal">Show Memory</Header>
+                        </Card>
+                    </button>
+                {/if}
+            </div>
+        </div>
+        <StdOut
+            {info}
+            stdOut={errorStrings ? `${errorStrings}\n${emulator.stdOut}` : emulator.stdOut}
+            compilerErrors={emulator.compilerErrors}
+        />
+    </div>
 </div>
 
 <style lang="scss">
-  .project-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.5rem;
-    background-color: var(--secondary);
-    color: var(--secondary-text);
-  }
-
-  .editor-memory-wrapper {
-    display: flex;
-    flex: 1;
-    padding: 0.5rem;
-
-    .editor-wrapper,
-    .memory-wrapper {
-      display: flex;
+    .project-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.5rem;
+        background-color: var(--secondary);
+        color: var(--secondary-text);
     }
 
-    .editor-wrapper {
-      flex-direction: column;
-      flex: 1;
-      gap: 0.4rem;
-      @media screen and (max-width: 1000px) {
-        min-height: 70vh;
-      }
-
-      .editor-border {
-        position: relative;
+    .editor-memory-wrapper {
         display: flex;
         flex: 1;
-        padding: 0.2rem;
-        margin-left: -0.2rem;
-        border-radius: 0.5rem;
-      }
+        padding: 0.5rem;
+
+        .editor-wrapper,
+        .memory-wrapper {
+            display: flex;
+        }
+
+        .editor-wrapper {
+            flex-direction: column;
+            flex: 1;
+            gap: 0.4rem;
+            @media screen and (max-width: 1000px) {
+                min-height: 70vh;
+            }
+
+            .editor-border {
+                position: relative;
+                display: flex;
+                flex: 1;
+                padding: 0.2rem;
+                margin-left: -0.2rem;
+                border-radius: 0.5rem;
+            }
+        }
+
+        .memory-wrapper {
+            gap: 0.4rem;
+            @media screen and (max-width: 1000px) {
+                margin-top: 1rem;
+                padding-bottom: 1rem;
+                overflow-x: auto;
+                width: 100%;
+            }
+        }
+
+        @media screen and (max-width: 1000px) {
+            flex-direction: column;
+        }
     }
 
-    .memory-wrapper {
-      gap: 0.4rem;
-      @media screen and (max-width: 1000px) {
-        margin-top: 1rem;
-        padding-bottom: 1rem;
-        overflow-x: auto;
-        width: 100%;
-      }
+    .right-side {
+        margin-left: 0.5rem;
+        width: min-content;
+        max-height: calc(100vh - 4.2rem);
+        padding-top: 0.2rem;
+        display: flex;
+        overflow-y: auto;
+        flex-direction: column;
     }
 
     @media screen and (max-width: 1000px) {
-      flex-direction: column;
-    }
-  }
-
-  .right-side {
-    margin-left: 0.5rem;
-    width: min-content;
-    max-height: calc(100vh - 4.2rem);
-    padding-top: 0.2rem;
-    display: flex;
-    overflow-y: auto;
-    flex-direction: column;
-  }
-
-  @media screen and (max-width: 1000px) {
-    .editor-memory-wrapper {
-      grid-template-columns: 1fr;
-    }
-    .right-side {
-      margin: 0;
-      padding: 0.2rem;
-      margin-top: 1rem;
-      width: unset;
-      max-height: unset;
-      align-items: center;
-      flex-direction: column-reverse;
-    }
-  }
-
-  .gradientBorder,
-  .redBorder {
-    position: relative;
-
-    &::before {
-      position: absolute;
-      content: '';
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(
-                      60deg,
-                      hsl(224, 85%, 66%),
-                      hsl(269, 85%, 66%),
-                      hsl(314, 85%, 66%),
-                      hsl(359, 85%, 66%),
-                      hsl(44, 85%, 66%),
-                      hsl(89, 85%, 66%),
-                      hsl(134, 85%, 66%),
-                      hsl(179, 85%, 66%)
-      );
-      background-size: 300% 300%;
-      background-position: 0 50%;
-      border-radius: 0.5rem;
-      animation: moveGradient 5s alternate infinite,
-      appear 0.3s ease-in;
+        .editor-memory-wrapper {
+            grid-template-columns: 1fr;
+        }
+        .right-side {
+            margin: 0;
+            padding: 0.2rem;
+            margin-top: 1rem;
+            width: unset;
+            max-height: unset;
+            align-items: center;
+            flex-direction: column-reverse;
+        }
     }
 
-    @keyframes appear {
-      from {
-        opacity: 0;
-      }
-      to {
-        opacity: 1;
-      }
-    }
-    @keyframes moveGradient {
-      50% {
-        background-position: 100% 50%;
-      }
-    }
-  }
+    .gradientBorder,
+    .redBorder {
+        position: relative;
 
-  .redBorder {
-    &::before {
-      background: linear-gradient(60deg, hsl(359, 85%, 66%), hsl(0, 85%, 66%));
+        &::before {
+            position: absolute;
+            content: '';
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                60deg,
+                hsl(224, 85%, 66%),
+                hsl(269, 85%, 66%),
+                hsl(314, 85%, 66%),
+                hsl(359, 85%, 66%),
+                hsl(44, 85%, 66%),
+                hsl(89, 85%, 66%),
+                hsl(134, 85%, 66%),
+                hsl(179, 85%, 66%)
+            );
+            background-size: 300% 300%;
+            background-position: 0 50%;
+            border-radius: 0.5rem;
+            animation:
+                moveGradient 5s alternate infinite,
+                appear 0.3s ease-in;
+        }
+
+        @keyframes appear {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+        @keyframes moveGradient {
+            50% {
+                background-position: 100% 50%;
+            }
+        }
     }
-  }
+
+    .redBorder {
+        &::before {
+            background: linear-gradient(60deg, hsl(359, 85%, 66%), hsl(0, 85%, 66%));
+        }
+    }
 </style>

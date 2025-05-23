@@ -73,17 +73,18 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
 
     let code = $state(baseCode)
     let state = $state<Omit<M68KEmulatorState, 'code'>>({
+        systemSize: RegisterSize.Long,
         registers: [],
         hiddenRegisters: [],
         decorations: [],
         terminated: false,
-        pc: 0,
+        pc: 0n,
         line: -1,
         statusRegisters: ['X', 'N', 'Z', 'V', 'C'].map((n) => ({ name: n, value: 0, prev: 0 })),
         compilerErrors: [],
         callStack: [],
         errors: [],
-        sp: 0,
+        sp: 0n,
         latestSteps: [],
         stdOut: '',
         executionTime: -1,
@@ -94,12 +95,12 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
             global: createMemoryTab(
                 options.globalPageSize,
                 'Global',
-                0x1000,
+                0x1000n,
                 options.globalPageElementsPerRow,
                 0xff,
                 'big'
             ),
-            tabs: [createMemoryTab(8 * 4, 'Stack', 0x2000, 4, 0xff, 'big')]
+            tabs: [createMemoryTab(8 * 4, 'Stack', 0x2000n, 4, 0xff, 'big')]
         },
         interrupt: undefined
     })
@@ -138,7 +139,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
                     keep_history: historySize > 0
                 })
                 const stackTab = state.memory.tabs.find((e) => e.name === 'Stack')
-                if (stackTab) stackTab.address = interpreter.getSp() - stackTab.pageSize
+                if (stackTab) stackTab.address = BigInt(interpreter.getSp() - stackTab.pageSize)
                 const next = interpreter.getNextInstruction()
                 state.canExecute = true
                 state.line = next ? next.parsed_line.line_index : -1
@@ -194,7 +195,8 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         state = {
             ...state,
             terminated: false,
-            pc: 0,
+            pc: 0n,
+            sp: 0n,
             line: -1,
             stdOut: '',
             interrupt: undefined,
@@ -209,12 +211,12 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 global: createMemoryTab(
                     options.globalPageSize,
                     'Global',
-                    0x1000,
+                    0x1000n,
                     options.globalPageElementsPerRow,
                     0xff,
                     'big'
                 ),
-                tabs: [createMemoryTab(8 * 4, 'Stack', 0x2000, 4, 0xff, 'big')]
+                tabs: [createMemoryTab(8 * 4, 'Stack', 0x2000n, 4, 0xff, 'big')]
             }
         }
     }
@@ -232,7 +234,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         if (!settings.values.autoScrollStackTab.value || !interpreter) return
         const stackTab = current.memory.tabs.find((e) => e.name === 'Stack')
         const sp = interpreter.getSp()
-        if (stackTab) stackTab.address = sp - (sp % stackTab.pageSize)
+        if (stackTab) stackTab.address = BigInt(sp - (sp % stackTab.pageSize))
     }
 
     function updateStatusRegisters(override?: number[]) {
@@ -267,7 +269,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
             override = new Array(registerName.length).fill(0)
         }
         const registers = (override ?? getRegistersValue()).map((reg, i) => {
-            return makeRegister(registerName[i], reg)
+            return makeRegister(registerName[i], reg, RegisterSize.Long)
         })
         state.registers = registers
     }
@@ -284,14 +286,14 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         if (!interpreter) return
         const temp = state.memory.global.data.current
         const memory = interpreter.readMemoryBytes(
-            state.memory.global.address,
+            Number(state.memory.global.address),
             state.memory.global.pageSize
         )
         state.memory.global.data.current = memory
         state.memory.global.data.prevState = temp
         state.memory.tabs.forEach((tab) => {
             const temp = tab.data.current
-            const memory = interpreter.readMemoryBytes(tab.address, tab.pageSize)
+            const memory = interpreter.readMemoryBytes(Number(tab.address), tab.pageSize)
             tab.data.current = memory
             tab.data.prevState = temp
         })
@@ -300,14 +302,14 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
     function updateData() {
         const settings = settingsStore
         state.terminated = interpreter.hasReachedBottom()
-        state.pc = interpreter.getPc()
+        state.pc = BigInt(interpreter.getPc())
         state.callStack = interpreter.getCallStack().map((v, i) => {
             return {
-                address: v.address,
+                address: BigInt(v.address),
                 name: v.label_name,
                 line: v.label_line,
-                sp: v.registers[15],
-                destination: v.source_address,
+                sp: BigInt(v.registers[15]),
+                destination: BigInt(v.source_address),
                 color: makeLabelColor(i, v.address)
             }
         })
@@ -327,13 +329,45 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
                         return {
                             type: 'WriteRegister',
                             value: {
-                                old: m.value.old,
+                                old: BigInt(m.value.old),
                                 size: sizeMap[m.value.size] as RegisterSize,
                                 register: registerOperandToString(m.value.register)
                             }
-                        } as MutationOperation
+                        } satisfies MutationOperation
+                    } else if (m.type === 'WriteMemoryBytes') {
+                        return {
+                            type: 'WriteMemoryBytes',
+                            value: {
+                                address: BigInt(m.value.address),
+                                old: m.value.old
+                            }
+                        } satisfies MutationOperation
+                    } else if (m.type === 'WriteMemory') {
+                        return {
+                            type: 'WriteMemory',
+                            value: {
+                                address: BigInt(m.value.address),
+                                old: BigInt(m.value.old),
+                                size: sizeMap[m.value.size] as RegisterSize
+                            }
+                        } satisfies MutationOperation
+                    } else if (m.type === 'PushCall') {
+                        return {
+                            type: 'PushCallStack',
+                            value: {
+                                to: m.value.to,
+                                from: m.value.from
+                            }
+                        }
+                    } else if(m.type === 'PopCall') {
+                        return {
+                            type: 'PopCallStack',
+                            value: {
+                                to: m.value.to,
+                                from: m.value.from
+                            }
+                        }
                     }
-                    return m as MutationOperation
                 })
             }
         })
@@ -517,22 +551,32 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         return InterpreterStatus.TerminatedWithException
     }
 
-    function setGlobalMemoryAddress(address: number) {
-        state.memory.global.address = address
-        state.memory.global.data.current =
-            interpreter?.readMemoryBytes(address, state.memory.global.pageSize) ??
-            new Uint8Array(state.memory.global.pageSize).fill(0xff)
-        state.memory.global.data.prevState = state.memory.global.data.current
+    function setGlobalMemoryAddress(address: bigint) {
+        try {
+            state.memory.global.address = address
+            state.memory.global.data.current =
+                interpreter?.readMemoryBytes(Number(address), state.memory.global.pageSize) ??
+                new Uint8Array(state.memory.global.pageSize).fill(0xff)
+            state.memory.global.data.prevState = state.memory.global.data.current
+        } catch (e) {
+            addError(getM68kErrorMessage(e, e.message))
+        }
+
     }
 
-    function setTabMemoryAddress(address: number, tabId: number) {
-        const tab = state.memory.tabs.find((e) => e.id == tabId)
-        if (!tab) return
-        tab.address = address
-        tab.data.current =
-            interpreter?.readMemoryBytes(address, tab.pageSize) ??
-            new Uint8Array(tab.pageSize).fill(0xff)
-        tab.data.prevState = tab.data.current
+    function setTabMemoryAddress(address: bigint, tabId: number) {
+        try {
+            const tab = state.memory.tabs.find((e) => e.id == tabId)
+            if (!tab) return
+            tab.address = address
+            tab.data.current =
+                interpreter?.readMemoryBytes(Number(address), tab.pageSize) ??
+                new Uint8Array(tab.pageSize).fill(0xff)
+            tab.data.prevState = tab.data.current
+        } catch (e) {
+            addError(getM68kErrorMessage(e, e.message))
+        }
+
     }
 
     async function handleInterpreterInterruption(
@@ -582,7 +626,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 console.error(`Register ${register} not found`)
                 continue
             }
-            const registerValue = registers[registerIndex]
+            const registerValue = BigInt(registers[registerIndex])
             if (registerValue !== value) {
                 errors.push({
                     type: 'wrong-register',
@@ -602,7 +646,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         }
         for (const value of testcase.expectedMemory) {
             if (value.type === 'number') {
-                const bytes = interpreter.readMemoryBytes(value.address, value.bytes)
+                const bytes = interpreter.readMemoryBytes(Number(value.address), value.bytes)
                 const num = byteSliceToNum(bytes, 'big')
                 if (num !== value.expected) {
                     errors.push({
@@ -614,7 +658,10 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
                     })
                 }
             } else if (value.type === 'number-chunk') {
-                const bytes = interpreter.readMemoryBytes(value.address, value.expected.length * value.bytes)
+                const bytes = interpreter.readMemoryBytes(
+                    Number(value.address),
+                    value.expected.length * value.bytes
+                )
                 const expected = numbersOfSizeToSlice(value.expected, value.bytes)
                 if (!isMemoryChunkEqual(bytes, expected)) {
                     errors.push({
@@ -625,7 +672,10 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
                     })
                 }
             } else if (value.type === 'string-chunk') {
-                const bytes = interpreter.readMemoryBytes(value.address, value.expected.length)
+                const bytes = interpreter.readMemoryBytes(
+                    Number(value.address),
+                    value.expected.length
+                )
                 const str = new TextDecoder().decode(bytes)
                 if (str !== value.expected) {
                     errors.push({
@@ -646,18 +696,18 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         try {
             if (!interpreter) throw new Error('Interpreter not initialized')
             for (const [register, value] of Object.entries(testcase.startingRegisters)) {
-                interpreter.setRegisterValue(registerNameToType(register), value)
+                interpreter.setRegisterValue(registerNameToType(register), Number(value))
             }
             for (const value of testcase.startingMemory) {
                 if (value.type === 'number') {
                     const slice = new Uint8Array(numberToByteSlice(value.expected, value.bytes))
-                    interpreter.writeMemoryBytes(value.address, slice)
+                    interpreter.writeMemoryBytes(Number(value.address), slice)
                 } else if (value.type === 'number-chunk') {
                     const expected = numbersOfSizeToSlice(value.expected, value.bytes)
-                    interpreter.writeMemoryBytes(value.address, new Uint8Array(expected))
+                    interpreter.writeMemoryBytes(Number(value.address), new Uint8Array(expected))
                 } else if (value.type === 'string-chunk') {
                     const encoded = new TextEncoder().encode(value.expected)
-                    interpreter.writeMemoryBytes(value.address, encoded)
+                    interpreter.writeMemoryBytes(Number(value.address), encoded)
                 }
             }
             while (!interpreter.hasTerminated()) {
@@ -737,9 +787,9 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         return results
     }
 
-    function getLineFromAddress(address: number) {
+    function getLineFromAddress(address: bigint) {
         if (!interpreter) return -1
-        const line = interpreter.getInstructionAt(address)
+        const line = interpreter.getInstructionAt(Number(address))
         return line?.parsed_line?.line_index ?? -1
     }
 
@@ -807,6 +857,9 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         },
         get pc() {
             return state.pc
+        },
+        get systemSize() {
+            return state.systemSize
         },
         step,
         run,

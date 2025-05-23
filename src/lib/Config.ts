@@ -1,13 +1,13 @@
-import type { AvailableLanguages } from "./Project.svelte"
+import type { AvailableLanguages } from './Project.svelte'
 
 export const PAGE_SIZE = 16 * 16
 export const PAGE_ELEMENTS_PER_ROW = Math.sqrt(PAGE_SIZE)
 export const MEMORY_SIZE = {
-    M68K: 0xffffff,
-    MIPS: 0xffffffff,
-    X86:  0xffffff,
-    'RISC-V': 0xffffffff
-} satisfies Record<AvailableLanguages, number>
+    M68K: 0xffffffn,
+    MIPS: 0xffffffffn,
+    X86: 0xffffffn,
+    'RISC-V': 0xffffffffn
+} satisfies Record<AvailableLanguages, bigint>
 
 export const DEFAULT_MEMORY_VALUE = {
     M68K: 0xff,
@@ -16,6 +16,14 @@ export const DEFAULT_MEMORY_VALUE = {
     'RISC-V': 0x00
 } satisfies Record<AvailableLanguages, number>
 
+export const COMMENT_CHARACTER = {
+    M68K: ';',
+    MIPS: '#',
+    X86: ';',
+    'RISC-V': '#'
+} satisfies Record<AvailableLanguages, string>
+
+
 export const BASE_CODE = {
     MIPS: `
 .data
@@ -23,14 +31,15 @@ export const BASE_CODE = {
     
 .text
 main:
-    li $v0, 42
     # Write here your code
+    li $v0, 42
 `.trim(),
     M68K: `
 ORG $1000
 START:
     * Write here your code
-    move.l 42, d0
+    move.l #42, d0
+    
 END: * Jump here to end the program
 `.trim(),
     X86: `
@@ -40,20 +49,19 @@ section .data
 section .text
 global START
 START:
-    mov eax, 42
     ; Write here your code
+    mov eax, 42
 `.trim(),
     'RISC-V': `
-    .data
+.data
     # Write here your data
     
 .text
 main:
-    li t0, 42
     # Write here your code
+    li t0, 42
     `.trim()
 } satisfies Record<AvailableLanguages, string>
-
 
 export const LANGUAGE_THEMES = {
     M68K: 'default',
@@ -61,7 +69,6 @@ export const LANGUAGE_THEMES = {
     X86: 'default',
     'RISC-V': 'default-risc-v'
 } satisfies Record<AvailableLanguages, string>
-
 
 export const LANGUAGE_EXTENSIONS = {
     M68K: 's68k',

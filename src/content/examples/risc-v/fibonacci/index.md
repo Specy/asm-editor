@@ -1,4 +1,4 @@
-```riscv|playground|allow-open|large|tall|memory
+```riscv|playground|allow-open|large|tall|memory|console
 .data
 prompt_msg:   .string "Enter a non-negative integer n: "
 result_msg:   .string "Fibonacci(n) is: "

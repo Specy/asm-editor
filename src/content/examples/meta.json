@@ -1,12 +1,10 @@
 {
-  "id": "examples",
-  "name": "Assembly Examples",
-  "author": "Specy",
-  "description": "See some examples of assembly code in different languages.",
-  "image": "",
-  "tags": [
-    "assembly"
-  ],
-  "date": "2025-05-21",
-  "order": 1
+    "id": "examples",
+    "name": "Assembly Examples",
+    "author": "Specy",
+    "description": "See some examples of assembly code in different languages.",
+    "image": "",
+    "tags": ["assembly"],
+    "date": "2025-05-21",
+    "order": 1
 }

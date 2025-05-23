@@ -28,7 +28,7 @@ class MonacoLoader {
         this.monaco = monaco
         // @ts-ignore add worker
         self.MonacoEnvironment = {
-            getWorker: function(_moduleId: any, label: string) {
+            getWorker: function (_moduleId: any, label: string) {
                 return new editorWorker()
             }
         }
@@ -53,8 +53,14 @@ class MonacoLoader {
             this.toDispose.push(
                 //@ts-ignore custom language
                 monaco.languages.setMonarchTokensProvider('m68k', grammar.M68KLanguage),
-                monaco.languages.registerCompletionItemProvider('m68k', language.createM68KCompletition(monaco)),
-                monaco.languages.registerHoverProvider('m68k', language.createM68kHoverProvider(monaco)),
+                monaco.languages.registerCompletionItemProvider(
+                    'm68k',
+                    language.createM68KCompletition(monaco)
+                ),
+                monaco.languages.registerHoverProvider(
+                    'm68k',
+                    language.createM68kHoverProvider(monaco)
+                ),
                 monaco.languages.registerDocumentFormattingEditProvider(
                     'm68k',
                     language.createM68kFormatter(monaco)
@@ -67,9 +73,18 @@ class MonacoLoader {
             ])
             this.toDispose.push(
                 monaco.languages.setMonarchTokensProvider('mips', grammar.MIPSLanguage),
-                monaco.languages.setLanguageConfiguration('mips', grammar.MIPSLanguageConfiguration),
-                monaco.languages.registerCompletionItemProvider('mips', language.createMIPSCompletition(monaco)),
-                monaco.languages.registerHoverProvider('mips', language.createMIPSHoverProvider(monaco))
+                monaco.languages.setLanguageConfiguration(
+                    'mips',
+                    grammar.MIPSLanguageConfiguration
+                ),
+                monaco.languages.registerCompletionItemProvider(
+                    'mips',
+                    language.createMIPSCompletition(monaco)
+                ),
+                monaco.languages.registerHoverProvider(
+                    'mips',
+                    language.createMIPSHoverProvider(monaco)
+                )
             )
         } else if (lang === 'RISC-V') {
             const [grammar, language] = await Promise.all([
@@ -78,9 +93,18 @@ class MonacoLoader {
             ])
             this.toDispose.push(
                 monaco.languages.setMonarchTokensProvider('risc-v', grammar.RISCVLanguage),
-                monaco.languages.setLanguageConfiguration('risc-v', grammar.RISCVLanguageConfiguration),
-                monaco.languages.registerCompletionItemProvider('risc-v', language.createRISCVCompletition(monaco)),
-                monaco.languages.registerHoverProvider('risc-v', language.createRISCVHoverProvider(monaco))
+                monaco.languages.setLanguageConfiguration(
+                    'risc-v',
+                    grammar.RISCVLanguageConfiguration
+                ),
+                monaco.languages.registerCompletionItemProvider(
+                    'risc-v',
+                    language.createRISCVCompletition(monaco)
+                ),
+                monaco.languages.registerHoverProvider(
+                    'risc-v',
+                    language.createRISCVHoverProvider(monaco)
+                )
             )
         } else if (lang === 'X86') {
             const [grammar, language] = await Promise.all([
@@ -89,8 +113,14 @@ class MonacoLoader {
             ])
             this.toDispose.push(
                 monaco.languages.setMonarchTokensProvider('x86', grammar.X86Language),
-                monaco.languages.registerCompletionItemProvider('x86', language.createX86CompletitionProvider(monaco)),
-                monaco.languages.registerHoverProvider('x86', language.createX86HoverProvider(monaco))
+                monaco.languages.registerCompletionItemProvider(
+                    'x86',
+                    language.createX86CompletitionProvider(monaco)
+                ),
+                monaco.languages.registerHoverProvider(
+                    'x86',
+                    language.createX86HoverProvider(monaco)
+                )
             )
         }
     }

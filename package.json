@@ -10,8 +10,8 @@
         "build": "cross-env NODE_OPTIONS=--max_old_space_size=6000 vite build",
         "preview": "vite preview",
         "format": "prettier --write .",
-        "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-        "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+        "check": "svelte-kit sync && svelte-check --threshold error --tsconfig ./tsconfig.json",
+        "check:watch": "svelte-kit sync && svelte-check --threshold error --tsconfig ./tsconfig.json --watch",
         "lint": "eslint ."
     },
     "dependencies": {
@@ -40,6 +40,7 @@
         "remark-gfm": "^4.0.1",
         "s-ago": "^2.2.0",
         "string-similarity": "^4.0.4",
+        "superjson": "^2.2.2",
         "svelte-icons": "^2.1.0",
         "unist-util-visit": "^5.0.0"
     },

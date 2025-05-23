@@ -5,7 +5,7 @@
         "moduleResolution": "node",
         "module": "es2020",
         "lib": ["es2020", "DOM"],
-        "target": "es2019",
+        "target": "es2020",
         /**
 			svelte-preprocess cannot figure out whether you have a value or a type, so tell TypeScript
 			to enforce using \`import type\` instead of \`import\` for Types.
@@ -35,14 +35,9 @@
             "$utils/*": ["src/utils/*"],
             "$content/*": ["src/content/*"],
             "$overrides": ["src/components/content/custom"],
-            "$embed": ["src/components/content/Embed.svelte"],
+            "$embed": ["src/components/content/Embed.svelte"]
         }
     },
 
-    "include": [
-        "src/**/*.d.ts",
-        "src/**/*.js",
-        "src/**/*.ts",
-        "src/**/*.svelte",
-    ]
+    "include": ["src/**/*.d.ts", "src/**/*.js", "src/**/*.ts", "src/**/*.svelte"]
 }

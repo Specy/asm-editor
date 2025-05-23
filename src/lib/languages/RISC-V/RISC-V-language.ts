@@ -7,15 +7,10 @@ import {
     riscvInstructionsWithDuplicates,
     type RISCVInstruction
 } from './RISC-V-documentation'
-import {
-    ALTERNATIVE_RISCVRegister_NAMES,
-} from './RISC-VEmulator.svelte'
+import { ALTERNATIVE_RISCVRegister_NAMES } from './RISC-VEmulator.svelte'
 import { RISCV_REGISTERS } from '@specy/risc-v'
 
-const RISCVRegisterNames = [
-    ...RISCV_REGISTERS,
-    ...ALTERNATIVE_RISCVRegister_NAMES
-]
+const RISCVRegisterNames = [...RISCV_REGISTERS, ...ALTERNATIVE_RISCVRegister_NAMES]
 
 function splitAtChars(text: string, chars: string[]) {
     const result = []
@@ -73,7 +68,7 @@ export function createRISCVCompletition(monaco: MonacoType) {
             let suggestions = []
             const ins = getPossibleInstruction(args)
             const lastArg = args[args.length - 1]
-            const someInstruction = RISCVRegisterNames.some(r => r.startsWith(lastArg))
+            const someInstruction = RISCVRegisterNames.some((r) => r.startsWith(lastArg))
             if (someInstruction && !CompletitionMap[lastArg]) {
                 suggestions.push(
                     ...RISCVRegisterNames.map((r) => {
@@ -247,7 +242,6 @@ export function createRISCVHoverProvider(monaco: MonacoType) {
                         value: ins.map((ins, i) => `${i + 1}. ${formatInstruction(ins)}`).join('\n')
                     })
                 }
-
             }
             if (RISCVRegistersMap[word]) {
                 contents.push({
@@ -272,7 +266,6 @@ const possibleArgs = riscvInstructionsWithDuplicates.flatMap((i) =>
     i.args.flatMap((a) => a.map((b) => b.type))
 )
 const possibleArgsSet = new Set(possibleArgs)
-
 
 const RISCVRegistersMap = Object.fromEntries(
     RISCVRegisterNames.map((r) => {

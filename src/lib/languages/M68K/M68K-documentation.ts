@@ -272,7 +272,7 @@ export const M68KDirectiveDocumentation = {
         'dc',
         ANY_SIZE,
         dirsDesc.dc,
-        'dc.b \'Hello world!\', 4, %10, $F, @8, \'a\', some_label'
+        "dc.b 'Hello world!', 4, %10, $F, @8, 'a', some_label"
     ),
     ds: makeDirective('ds', ANY_SIZE, dirsDesc.ds, 'ds.l 100'),
     dcb: makeDirective('dcb', ANY_SIZE, dirsDesc.dcb, 'dcb.b 50, 1'),
@@ -1209,7 +1209,6 @@ function makeDirective(
 /*TODO
     spl highlighted wrogn
 */
-
 
 const arithmetic = [
     'add',

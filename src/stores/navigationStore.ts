@@ -22,9 +22,9 @@ function createNavigationStore() {
                 const from = removeRoot(fromUrl)
                 const to = removeRoot(toUrl)
                 const isSubpath = to.startsWith(from) || from.startsWith(to)
-                if(!isSubpath) {
-                    goingBack = false;
-                }else {
+                if (!isSubpath) {
+                    goingBack = false
+                } else {
                     goingBack = from.split('/').length >= to.split('/').length && from !== ''
                 }
             }

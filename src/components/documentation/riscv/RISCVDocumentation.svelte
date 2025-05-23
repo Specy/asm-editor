@@ -84,14 +84,20 @@
                         <h1 class="sub-title" id={ins}>
                             {#if showRedirect}
                                 <a
-                                  href="#{ins}"
-                                  class="sub-hover"
-                                  title="click to create quick link"
+                                    href="#{ins}"
+                                    class="sub-hover"
+                                    title="click to create quick link"
                                 >
-                                    {ins} <span style="font-size: 1rem; font-weight: normal">{formatAggregatedArgs(instruction)}</span>
+                                    {ins}
+                                    <span style="font-size: 1rem; font-weight: normal"
+                                        >{formatAggregatedArgs(instruction)}</span
+                                    >
                                 </a>
                             {:else}
-                                {ins} <span style="font-size: 1rem; font-weight: normal">{formatAggregatedArgs(instruction)}</span>
+                                {ins}
+                                <span style="font-size: 1rem; font-weight: normal"
+                                    >{formatAggregatedArgs(instruction)}</span
+                                >
                             {/if}
                         </h1>
                     </div>
@@ -99,16 +105,15 @@
                     {#if instruction[0].description}
                         <span class="sub-description">
                             <MarkdownRenderer
-                              source={instruction[0].description}
-                              linksInNewTab={openLinksInNewTab}
+                                source={instruction[0].description}
+                                linksInNewTab={openLinksInNewTab}
                             />
                         </span>
                     {/if}
                     {#if instruction.length > 1}
-
                         <MarkdownRenderer
-                          style="background-color: rgba(var(--RGB-secondary), 0.7); border-radius: 0.5rem; padding: 0.5rem;"
-                          source={instruction
+                            style="background-color: rgba(var(--RGB-secondary), 0.7); border-radius: 0.5rem; padding: 0.5rem;"
+                            source={instruction
                                 .slice(1)
                                 .map((i) => `- ${i.description}: **${i.example}**`)
                                 .join('\n')}
@@ -122,8 +127,8 @@
                         {/if}
                         {#if showRedirect}
                             <ButtonLink
-                              href="/documentation/riscv/instruction/{ins}"
-                              cssVar="tertiary"
+                                href="/documentation/riscv/instruction/{ins}"
+                                cssVar="tertiary"
                             >
                                 Try it
                                 <Icon style="margin-left: 0.5rem" size={0.8}>

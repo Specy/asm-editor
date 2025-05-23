@@ -1,6 +1,7 @@
 import { numberToByteSlice } from '$cmp/specific/project/memory/memoryTabUtils'
 import type { Testcase, TestcaseResult } from '$lib/Project.svelte'
 import type { Interrupt } from '@specy/s68k'
+import { unsignedBigIntToSigned } from '$lib/utils'
 
 export type StatusRegister = {
     name: string
@@ -20,9 +21,9 @@ export type MonacoError = {
 
 export type StackFrame = {
     name: string
-    address: number
-    destination: number
-    sp: number
+    address: bigint
+    destination: bigint
+    sp: bigint
     line: number
     color: string
 }
@@ -30,7 +31,7 @@ export type StackFrame = {
 export type MemoryTab = {
     id: number
     name: string
-    address: number
+    address: bigint
     rowSize: number
     pageSize: number
     endianess: 'big' | 'little'
@@ -53,48 +54,68 @@ export enum RegisterSize {
 
 export type RegisterChunk = {
     hex: string
-    value: number
-    valueSigned: number
-    groupSize: number
+    value: bigint
+    valueSigned: bigint
+    groupSize: bigint
     prev: {
         hex: string
-        value: number
+        value: bigint
     }
 }
 
-
-export function numbersOfSizeToSlice(numbers: number[], bytes: number, endianess: 'big' | 'little' = 'big') {
-    return numbers.flatMap(v => numberToByteSlice(v, bytes, endianess))
+export function numbersOfSizeToSlice(
+    numbers: bigint[],
+    bytes: number,
+    endianess: 'big' | 'little' = 'big'
+) {
+    return numbers.flatMap((v) => numberToByteSlice(v, bytes, endianess))
 }
 
-export function makeRegister(name: string, v: number) {
-    let value = $state(v)
-    let prev = $state(v)
+export function toHexString(_value: bigint | number, _size: bigint | number): string {
+    const value = BigInt(_value)
+    const size = BigInt(_size)
+    const bits = size * 8n
+    const mask = (1n << bits) - 1n
+    const hexDigits = Number(size * 2n)
+    return (value & mask).toString(16).padStart(hexDigits, '0')
+}
 
-    function setValue(v: number) {
+export function makeRegister(name: string, v: bigint | number, _size: RegisterSize) {
+    let value = $state(BigInt(v))
+    let prev = $state(BigInt(v))
+    let size = $state(BigInt(_size))
+    let bits = $derived(size * 8n)
+
+    function setValue(v: number | bigint) {
         prev = value
-        value = v
+        value = BigInt(v)
     }
 
     function toHex() {
-        return (value >>> 0).toString(16).padStart(8, '0')
+        return toHexString(value, size)
     }
 
-    function toSizedGroups(size: RegisterSize): RegisterChunk[] {
-        const groupLength = size === RegisterSize.Byte ? 2 : size === RegisterSize.Word ? 4 : 8
+    function setSize(newSize: RegisterSize) {
+        size = BigInt(newSize)
+    }
+
+    function toSizedGroups(groupSize: RegisterSize): RegisterChunk[] {
+        const groupLength = BigInt(groupSize) * 2n
         const hex = toHex()
-        const prevHex = (prev >>> 0).toString(16).padStart(8, '0')
+        const prevHex = toHexString(prev, size)
         const chunks: RegisterChunk[] = []
-        for (let i = 0; i < hex.length; i += groupLength) {
-            const groupValue = parseInt(hex.slice(i, i + groupLength), 16)
+        for (let i = 0n; i < hex.length; i += groupLength) {
+            const index = Number(i)
+            const offset = Number(i + groupLength)
+            const groupValue = BigInt(`0x${hex.slice(index, offset)}`)
             chunks.push({
-                hex: hex.slice(i, i + groupLength),
+                hex: hex.slice(index, offset),
                 value: groupValue,
-                valueSigned: (groupValue << (32 - groupLength * 4)) >> (32 - groupLength * 4),
+                valueSigned: unsignedBigIntToSigned(groupValue, groupSize),
                 groupSize: groupLength,
                 prev: {
-                    hex: prevHex.slice(i, i + groupLength),
-                    value: parseInt(prevHex.slice(i, i + groupLength), 16)
+                    hex: prevHex.slice(index, offset),
+                    value: BigInt(`0x${prevHex.slice(index, offset)}`)
                 }
             })
         }
@@ -109,6 +130,7 @@ export function makeRegister(name: string, v: number) {
         get prev() {
             return prev
         },
+        setSize,
         setValue,
         toHex,
         toSizedGroups
@@ -132,25 +154,39 @@ export type MutationOperation =
           type: 'WriteRegister'
           value: {
               register: string
-              old: number
+              old: bigint
               size: RegisterSize
           }
       }
     | {
           type: 'WriteMemory'
           value: {
-              address: number
-              old: number
+              address: bigint
+              old: bigint
               size: RegisterSize
           }
       }
     | {
           type: 'WriteMemoryBytes'
           value: {
-              address: number
+              address: bigint
               old: number[]
           }
       }
+      | {
+            type: 'PopCallStack'
+            value: {
+                to: bigint,
+                from: bigint
+            }
+        }
+    | {
+    type: 'PushCallStack'
+    value: {
+        to: bigint,
+        from: bigint
+    }
+}
     | {
           type: 'Other'
           value: string
@@ -165,9 +201,9 @@ export type EmulatorDecoration = {
     md: string
 }
 
-
 export type BaseEmulatorState = {
     code: string
+    systemSize: RegisterSize
     compiledCode?: string
     registers: Register[]
     hiddenRegisters: string[]
@@ -180,8 +216,8 @@ export type BaseEmulatorState = {
     callStack: StackFrame[]
     line: number
     executionTime: number
-    sp: number
-    pc: number
+    sp: bigint
+    pc: bigint
     stdOut: string
     canExecute: boolean
     canUndo: boolean
@@ -205,7 +241,7 @@ let currentTabId = 0
 export function createMemoryTab(
     pageSize: number,
     name: string,
-    address: number,
+    address: bigint,
     rowSize: number,
     initialValue: number,
     endianess: 'big' | 'little'
@@ -224,11 +260,11 @@ export function createMemoryTab(
     }
 }
 
-export function makeLabelColor(index: number, address: number){
+export function makeLabelColor(index: number, address: number) {
     return `hsl(${(index * 137) % 360}, 40%, 60%)`
 }
 
-export function makeColorizedLabels(labels: StackFrame[]): ColorizedLabel[]{
+export function makeColorizedLabels(labels: StackFrame[]): ColorizedLabel[] {
     //same address and index should always be the same color
     return labels.map((address, i) => ({
         address: address.address,
@@ -238,11 +274,10 @@ export function makeColorizedLabels(labels: StackFrame[]): ColorizedLabel[]{
 }
 
 export type ColorizedLabel = {
-    address: number
-    sp: number
+    address: bigint
+    sp: bigint
     color: string
 }
-
 
 export type EmulatorSettings = {
     globalPageSize?: number
@@ -253,10 +288,10 @@ export type BaseEmulatorActions = {
     compile: (historySize: number, codeOverride?: string) => Promise<void>
     step: () => Promise<boolean>
     run: (haltLimit: number) => Promise<InterpreterStatus>
-    setGlobalMemoryAddress: (address: number) => void
+    setGlobalMemoryAddress: (address: bigint) => void
     setCode: (code: string) => void
     clear: () => void
-    setTabMemoryAddress: (address: number, tabId: number) => void
+    setTabMemoryAddress: (address: bigint, tabId: number) => void
     toggleBreakpoint: (line: number) => void
     undo: (amount?: number) => void
     resetSelectedLine: () => void
@@ -267,5 +302,5 @@ export type BaseEmulatorActions = {
         haltLimit: number,
         historySize?: number
     ) => Promise<TestcaseResult[]>
-    getLineFromAddress: (address: number) => number
+    getLineFromAddress: (address: bigint) => number
 }

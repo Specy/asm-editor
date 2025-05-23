@@ -1,5 +1,4 @@
 <script lang="ts">
-
     import type { ThemeKeys } from '$stores/themeStore.svelte'
 
     interface Props {

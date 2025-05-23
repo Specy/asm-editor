@@ -1,6 +1,6 @@
 <script lang="ts">
     import Page from '$cmp/shared/layout/Page.svelte'
-    import RISCVDirectiveDocumentation from '$cmp/documentation/riscv/RISCVDirectiveDocumentation.svelte';
+    import RISCVDirectiveDocumentation from '$cmp/documentation/riscv/RISCVDirectiveDocumentation.svelte'
 </script>
 
 <Page cropped contentStyle="padding: 1rem; gap: 1rem;">

@@ -43,10 +43,10 @@
         {/if}
         {#if language === 'RISC-V'}
             <RISCVDocumentation
-              bind:searchValue
-              bind:visible
-              showRedirect={false}
-              defaultOpen={false}
+                bind:searchValue
+                bind:visible
+                showRedirect={false}
+                defaultOpen={false}
             />
         {/if}
     </div>

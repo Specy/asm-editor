@@ -1,5 +1,5 @@
 {
-  "name": "Introduction",
-  "description": "Learn what assembly language is, why it matters, and how it relates to how CPUs execute instructions. We'll introduce the concept of machine code and the role of assembly as a human-readable layer between high-level languages and the CPU.",
-  "order": 0
+    "name": "Introduction",
+    "description": "Learn what assembly language is, why it matters, and how it relates to how CPUs execute instructions. We'll introduce the concept of machine code and the role of assembly as a human-readable layer between high-level languages and the CPU.",
+    "order": 0
 }

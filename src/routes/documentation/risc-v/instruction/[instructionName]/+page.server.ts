@@ -14,4 +14,3 @@ export const load = (async ({ params }) => {
         }
     }
 }) satisfies PageServerLoad
-

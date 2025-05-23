@@ -10,6 +10,13 @@
     import FaPlus from 'svelte-icons/fa/FaPlus.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
+    import type { RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
+
+    interface Props {
+        systemSize: RegisterSize
+    }
+
+    let { systemSize }: Props = $props()
 
     const dispatcher = createEventDispatcher<{
         create: { value: MemoryValue }
@@ -19,21 +26,21 @@
         if (kind === 'number-chunk') {
             return {
                 type: 'number-chunk',
-                address: 0,
+                address: 0n,
                 bytes: 1,
                 expected: []
             }
         } else if (kind === 'string-chunk') {
             return {
                 type: 'string-chunk',
-                address: 0,
+                address: 0n,
                 expected: ''
             }
         } else {
             return {
                 type: 'number',
-                address: 0,
-                expected: 0,
+                address: 0n,
+                expected: 0n,
                 bytes: 1
             }
         }
@@ -63,12 +70,12 @@
         </select>
     </Row>
     <Column padding="0.5rem 1rem">
-        <MemoryTestcaseValue bind:value={memoryValue} canRemove={false} />
+        <MemoryTestcaseValue {systemSize} bind:value={memoryValue} canRemove={false} />
     </Column>
     <Row justify="end" padding="0.5rem">
         <Button
             cssVar="accent2"
-            style='padding: 0.5rem 0.6rem'
+            style="padding: 0.5rem 0.6rem"
             onClick={() => {
                 dispatcher('create', { value: memoryValue })
                 memoryValue = makeEmptyMemoryValue(type)

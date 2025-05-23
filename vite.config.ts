@@ -17,7 +17,7 @@ const config: UserConfig = {
             $utils: resolve('./src/utils/'),
             $lib: resolve('./src/lib/'),
             $content: resolve('./src/content/'),
-            $overrides: resolve("./src/components/content/custom"),
+            $overrides: resolve('./src/components/content/custom'),
             $embed: resolve('./src/components/content/Embed.svelte')
         }
     },
@@ -26,12 +26,12 @@ const config: UserConfig = {
     },
     build: {
         sourcemap: false,
-        minify: 'terser',
+        minify: 'terser'
     },
     plugins: [
         sveltekit(),
         topLevelAwait(),
-        wasm(),
+        wasm()
         /*
          visualizer({
             emitFile: true,

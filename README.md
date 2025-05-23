@@ -53,7 +53,9 @@ Projects are stored locally on your browser, and with the app also working offli
 You can embed the editor [here](https://asm-editor.specy.app/embed), by using an iframe, you can set the initial code and additional settings by passing them as query parameters. Which can be built by visiting the link above.
 
 # Local setup
+
 You must have node.js 20+ installed, then you can clone the repository and run:
+
 ```bash
 npm install
 npm run dev # to run the dev server
@@ -61,6 +63,7 @@ npm run dev # to run the dev server
 ```
 
 # Contributing
+
 If you wish to contribute, make a new issue to discuss the changes you want to make (or comment on an existing one).
 
 We are looking for people to help with documentation and courses, you can look at more info [here](https://github.com/Specy/asm-editor/issues/27)
@@ -87,14 +90,16 @@ debugging tools and run the code as fast as possible.
 
 The MIPS interpreter runs at round 2mhz on the browser.
 Just like the M68K you can run this code to benchmark your own browser:
+
 ```asm
 main:
     li   $t0, 1000000
-    li   $t1, 0 
+    li   $t1, 0
 for:
-    addi $t1, $t1, 1 
+    addi $t1, $t1, 1
     addi $t0, $t0, -1
     bne  $t0, $zero, for
 
 ```
+
 This runs 3 million instructions.

@@ -31,7 +31,11 @@ import {
 import { createDebouncer } from '$lib/utils'
 import { settingsStore } from '$stores/settingsStore.svelte'
 import type { Testcase, TestcaseResult, TestcaseValidationError } from '$lib/Project.svelte'
-import { byteSliceToNum, isMemoryChunkEqual, numberToByteSlice } from '$cmp/specific/project/memory/memoryTabUtils'
+import {
+    byteSliceToNum,
+    isMemoryChunkEqual,
+    numberToByteSlice
+} from '$cmp/specific/project/memory/memoryTabUtils'
 
 export type RISCVEmulatorState = BaseEmulatorState & {}
 
@@ -39,17 +43,13 @@ function getRISCVErrorMessage(e: unknown) {
     return String(e)
 }
 
-
-export const RISCVRegisterNames = [
-    ...RISCV_REGISTERS,
-    'pc'
-]
+export const RISCVRegisterNames = [...RISCV_REGISTERS, 'pc']
 
 export const ALTERNATIVE_RISCVRegister_NAMES = new Array(RISCV_REGISTERS.length)
-        .fill(0).map((_, i) => `x${i}`)
+    .fill(0)
+    .map((_, i) => `x${i}`)
 
 const STACK_POINTER_INDEX = RISCVRegisterNames.indexOf('$sp')
-
 
 function assembleErrorToMonacoError(error: RISCVAssembleError): MonacoError {
     return {
@@ -64,11 +64,10 @@ function assembleErrorToMonacoError(error: RISCVAssembleError): MonacoError {
     }
 }
 
-
 function formatStatement(statement: string) {
-    statement = statement.replace(/,/g, ', ');
+    statement = statement.replace(/,/g, ', ')
     //reverse because it's from bigger to smaller, prevents $10 from being replaced by $1
-    ([...RISCVRegisterNames]).reverse().forEach((reg, i) => {
+    ;[...RISCVRegisterNames].reverse().forEach((reg, i) => {
         statement = statement.replace(new RegExp(`x${RISCVRegisterNames.length - i}`, 'g'), reg)
     })
     //replaces all empty hex like 0x0000ffff with 0xffff
@@ -84,9 +83,10 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
     }
     let code = $state(baseCode)
     let state = $state<Omit<RISCVEmulatorState, 'code'>>({
+        systemSize: RegisterSize.Long,
         registers: [],
         hiddenRegisters: ['zero'],
-        pc: 0,
+        pc: 0n,
         terminated: false,
         line: -1,
         decorations: [],
@@ -94,7 +94,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
         compilerErrors: [],
         callStack: [],
         errors: [],
-        sp: 0,
+        sp: 0n,
         latestSteps: [],
         stdOut: '',
         executionTime: -1,
@@ -105,12 +105,12 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
             global: createMemoryTab(
                 options.globalPageSize,
                 'Global',
-                0x10010000,
+                0x10010000n,
                 options.globalPageElementsPerRow,
                 0x0,
                 'little'
             ),
-            tabs: [createMemoryTab(8 * 4, 'Stack', 0x7ffffffc, 4, 0x0, 'little')]
+            tabs: [createMemoryTab(8 * 4, 'Stack', 0x7ffffffcn, 4, 0x0, 'little')]
         }
     })
 
@@ -121,7 +121,6 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
         code = c
         debouncer(semanticCheck)
     }
-
 
     function addDecorations() {
         if (!riscv) return
@@ -136,17 +135,21 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
             }
         }
         const values = [...joined.values()]
-        const nonBasic = values.filter((v) => v.length > 1).map(v => {
-            const original = joined.get(v[0].sourceLine)
-            const indent = original[0].source.length - original[0].source.trimStart().length
-            const lines = v.map(s => `${' '.repeat(indent)}${formatStatement(s.assemblyStatement)}`)
-            return {
-                type: 'below-line',
-                note: 'Assembled instructions',
-                belowLine: v[0].sourceLine,
-                md: `\`\`\`riscv\n${lines.join('\n')}\n\`\`\``
-            } satisfies EmulatorDecoration
-        })
+        const nonBasic = values
+            .filter((v) => v.length > 1)
+            .map((v) => {
+                const original = joined.get(v[0].sourceLine)
+                const indent = original[0].source.length - original[0].source.trimStart().length
+                const lines = v.map(
+                    (s) => `${' '.repeat(indent)}${formatStatement(s.assemblyStatement)}`
+                )
+                return {
+                    type: 'below-line',
+                    note: 'Assembled instructions',
+                    belowLine: v[0].sourceLine,
+                    md: `\`\`\`riscv\n${lines.join('\n')}\n\`\`\``
+                } satisfies EmulatorDecoration
+            })
         state.decorations = nonBasic
     }
 
@@ -169,7 +172,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
 
                 //TODO add interrupts
                 const stackTab = state.memory.tabs.find((e) => e.name === 'Stack')
-                if (stackTab) stackTab.address = riscv.stackPointer - stackTab.pageSize
+                if (stackTab) stackTab.address = BigInt(riscv.stackPointer - stackTab.pageSize)
                 const next = riscv.getNextStatement()
                 state.canExecute = true
                 state.line = next.sourceLine - 1
@@ -212,7 +215,8 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
         state = {
             ...state,
             terminated: false,
-            pc: 0,
+            pc: 0n,
+            sp: 0n,
             decorations: [],
             line: -1,
             stdOut: '',
@@ -227,12 +231,12 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
                 global: createMemoryTab(
                     options.globalPageSize,
                     'Global',
-                    0x10010000,
+                    0x10010000n,
                     options.globalPageElementsPerRow,
                     0x0,
                     'little'
                 ),
-                tabs: [createMemoryTab(8 * 4, 'Stack', 0x7ffffffc, 4, 0x0, 'little')]
+                tabs: [createMemoryTab(8 * 4, 'Stack', 0x7ffffffcn, 4, 0x0, 'little')]
             }
         }
         setRegisters(new Array(RISCVRegisterNames.length).fill(0))
@@ -240,10 +244,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
 
     function getRegistersValue() {
         if (!riscv) return []
-        return [
-            ...riscv.getRegistersValues(),
-            riscv.programCounter
-        ]
+        return [...riscv.getRegistersValues(), riscv.programCounter]
     }
 
     function scrollStackTab() {
@@ -252,7 +253,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
         if (!settings.values.autoScrollStackTab.value || !riscv) return
         const stackTab = current.memory.tabs.find((e) => e.name === 'Stack')
         const sp = riscv.stackPointer
-        if (stackTab) stackTab.address = sp - (sp % stackTab.pageSize)
+        if (stackTab) stackTab.address = BigInt(sp - (sp % stackTab.pageSize))
     }
 
     function setRegisters(override?: number[]) {
@@ -261,7 +262,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
         }
 
         state.registers = (override ?? getRegistersValue()).map((reg, i) => {
-            return makeRegister(RISCVRegisterNames[i], reg)
+            return makeRegister(RISCVRegisterNames[i], reg, state.systemSize)
         })
     }
 
@@ -270,7 +271,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
         getRegistersValue().forEach((reg, i) => {
             state.registers[i].setValue(reg)
         })
-        state.sp = riscv.stackPointer
+        state.sp = BigInt(riscv.stackPointer)
     }
 
     function updateMemory() {
@@ -278,14 +279,14 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
         try {
             const temp = state.memory.global.data.current
             const memory = riscv.readMemoryBytes(
-                state.memory.global.address,
+                Number(state.memory.global.address),
                 state.memory.global.pageSize
             )
             state.memory.global.data.current = new Uint8Array(memory)
             state.memory.global.data.prevState = temp
             state.memory.tabs.forEach((tab) => {
                 const temp = tab.data.current
-                const memory = riscv.readMemoryBytes(tab.address, tab.pageSize)
+                const memory = riscv.readMemoryBytes(Number(tab.address), tab.pageSize)
                 tab.data.current = new Uint8Array(memory)
                 tab.data.prevState = temp
             })
@@ -293,7 +294,6 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
             console.error(e)
             addError(getRISCVErrorMessage(e))
         }
-
     }
 
     function updateData() {
@@ -303,39 +303,42 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
         const steps = riscv
             .getUndoStack()
             .slice(0, settings.values.maxVisibleHistoryModifications.value)
-        state.pc = riscv.programCounter
+        state.pc = BigInt(riscv.programCounter)
         state.callStack = riscv.getCallStack().map((v, i) => {
             const address = v.toAddress
             return {
-                address,
-                destination: v.pc,
-                sp: v.sp,
-                name: riscv.getLabelAtAddress(address) ?? `0x${address.toString(16).padStart(8, '0')}`,
+                address: BigInt(address),
+                destination: BigInt(v.pc),
+                sp: BigInt(v.sp),
+                name:
+                    riscv.getLabelAtAddress(address) ??
+                    `0x${address.toString(16).padStart(8, '0')}`,
                 line: (riscv.getStatementAtAddress(address)?.sourceLine ?? 0) - 1,
                 color: makeLabelColor(i, v.sp)
             }
         })
-        state.latestSteps = steps.map((step) => {
-            let line = -1
-            try {
-                const ins = riscv.getStatementAtAddress(step.pc)
-                line = ins.sourceLine - 1
-            } catch (e) {
-            }
-            const mutations = backstepToMutation(step)
-            if (!mutations) return null
-            return {
-                pc: step.pc,
-                old_ccr: {
-                    bits: 0
-                },
-                new_ccr: {
-                    bits: 0
-                },
-                line,
-                mutations: [mutations]
-            }
-        }).filter(v => v !== null)
+        state.latestSteps = steps
+            .map((step) => {
+                let line = -1
+                try {
+                    const ins = riscv.getStatementAtAddress(step.pc)
+                    line = ins.sourceLine - 1
+                } catch (e) {}
+                const mutations = backstepToMutation(step)
+                if (!mutations) return null
+                return {
+                    pc: step.pc,
+                    old_ccr: {
+                        bits: 0
+                    },
+                    new_ccr: {
+                        bits: 0
+                    },
+                    line,
+                    mutations: [mutations]
+                }
+            })
+            .filter((v) => v !== null)
     }
 
     function backstepToMutation(step: JsBackStep): MutationOperation | null {
@@ -347,7 +350,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
                 type: 'WriteRegister',
                 value: {
                     register: state.registers[step.param1].name,
-                    old: 0,
+                    old: 0n,
                     size: RegisterSize.Long
                 }
             }
@@ -362,25 +365,27 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
             return {
                 type: 'WriteMemory',
                 value: {
-                    address: step.param1,
+                    address: BigInt(step.param1),
                     size: memorySizeMap[step.action],
-                    old: 0
+                    old: 0n
                 }
             }
         } else if (step.action === BackStepAction.PC_RESTORE) {
             return {
                 type: 'WriteRegister',
                 value: {
-                    register: '$pc',
-                    old: 0,
+                    register: 'pc',
+                    old: 0n,
                     size: RegisterSize.Long
                 }
             }
-        } else if ([
-            BackStepAction.CONTROL_AND_STATUS_REGISTER_BACKDOOR,
-            BackStepAction.CONTROL_AND_STATUS_REGISTER_RESTORE,
-            -1 //here means no action
-        ].includes(step.action)) {
+        } else if (
+            [
+                BackStepAction.CONTROL_AND_STATUS_REGISTER_BACKDOOR,
+                BackStepAction.CONTROL_AND_STATUS_REGISTER_RESTORE,
+                -1 //here means no action
+            ].includes(step.action)
+        ) {
             return null
         }
         return {
@@ -418,8 +423,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
             try {
                 const ins = riscv.getNextStatement()
                 state.line = ins.sourceLine - 1
-            } catch (e) {
-            }
+            } catch (e) {}
 
             state.canUndo = riscv.canUndo
             //if it managed to step, it means it does not have valid errors
@@ -475,10 +479,11 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
         const start = performance.now()
         const breakpoints = state.breakpoints
         try {
-            const terminated = riscv.simulateWithBreakpointsAndLimit(
-                calculateBreakpoints(breakpoints),
-                haltLimit
-            ) === StopReason.CLIFF_TERMINATION
+            const terminated =
+                riscv.simulateWithBreakpointsAndLimit(
+                    calculateBreakpoints(breakpoints),
+                    haltLimit
+                ) === StopReason.CLIFF_TERMINATION
             try {
                 const ins = riscv.getNextStatement()
                 //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
@@ -515,9 +520,9 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
         return InterpreterStatus.TerminatedWithException
     }
 
-    function setGlobalMemoryAddress(address: number) {
+    function setGlobalMemoryAddress(address: bigint) {
         try {
-            const bytes = riscv?.readMemoryBytes(address, state.memory.global.pageSize)
+            const bytes = riscv?.readMemoryBytes(Number(address), state.memory.global.pageSize)
             state.memory.global.address = address
             state.memory.global.data.current = bytes
                 ? new Uint8Array(bytes)
@@ -529,13 +534,15 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
         }
     }
 
-    function setTabMemoryAddress(address: number, tabId: number) {
+    function setTabMemoryAddress(address: bigint, tabId: number) {
         try {
             const tab = state.memory.tabs.find((e) => e.id == tabId)
             if (!tab) return
-            const bytes = riscv?.readMemoryBytes(address, tab.pageSize)
+            const bytes = riscv?.readMemoryBytes(Number(address), tab.pageSize)
             tab.address = address
-            tab.data.current = bytes ? new Uint8Array(bytes) : new Uint8Array(tab.pageSize).fill(0xff)
+            tab.data.current = bytes
+                ? new Uint8Array(bytes)
+                : new Uint8Array(tab.pageSize).fill(0xff)
             tab.data.prevState = tab.data.current
         } catch (e) {
             console.error(e)
@@ -553,7 +560,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
                 console.error(`Register ${register} not found`)
                 continue
             }
-            const registerValue = registers[registerIndex]
+            const registerValue = BigInt(registers[registerIndex])
             if (registerValue !== value) {
                 errors.push({
                     type: 'wrong-register',
@@ -573,7 +580,9 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
         }
         for (const value of testcase.expectedMemory) {
             if (value.type === 'number') {
-                const bytes = new Uint8Array(riscv.readMemoryBytes(value.address, value.bytes))
+                const bytes = new Uint8Array(
+                    riscv.readMemoryBytes(Number(value.address), value.bytes)
+                )
                 const num = byteSliceToNum(bytes, 'little')
                 if (num !== value.expected) {
                     errors.push({
@@ -585,7 +594,10 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
                     })
                 }
             } else if (value.type === 'number-chunk') {
-                const bytes = riscv.readMemoryBytes(value.address, value.expected.length * value.bytes)
+                const bytes = riscv.readMemoryBytes(
+                    Number(value.address),
+                    value.expected.length * value.bytes
+                )
                 const expected = numbersOfSizeToSlice(value.expected, value.bytes, 'little')
                 if (!isMemoryChunkEqual(bytes, expected)) {
                     errors.push({
@@ -596,7 +608,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
                     })
                 }
             } else if (value.type === 'string-chunk') {
-                const bytes = riscv.readMemoryBytes(value.address, value.expected.length)
+                const bytes = riscv.readMemoryBytes(Number(value.address), value.expected.length)
                 const str = new TextDecoder().decode(new Uint8Array(bytes))
                 if (str !== value.expected) {
                     errors.push({
@@ -761,8 +773,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
                 const ins = riscv.getNextStatement()
                 //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
                 state.line = ins.sourceLine - 1
-            } catch (e) {
-            }
+            } catch (e) {}
 
             state.canUndo = riscv.canUndo
 
@@ -786,9 +797,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
                 updateMemory()
                 updateData()
                 scrollStackTab()
-            } catch (e) {
-
-            }
+            } catch (e) {}
             state.terminated = true
             state.line = line
         }
@@ -826,9 +835,9 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
         return results
     }
 
-    function getLineFromAddress(address: number) {
+    function getLineFromAddress(address: bigint) {
         if (!riscv) return -1
-        const statement = riscv.getStatementAtAddress(address)
+        const statement = riscv.getStatementAtAddress(Number(address))
         if (!statement) return -1
         return statement.sourceLine - 1
     }
@@ -893,6 +902,9 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
         },
         get pc() {
             return state.pc
+        },
+        get systemSize() {
+            return state.systemSize
         },
         compile,
         step,

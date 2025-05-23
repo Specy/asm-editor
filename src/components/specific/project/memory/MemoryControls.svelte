@@ -8,17 +8,19 @@
     import FaAngleRight from 'svelte-icons/fa/FaAngleRight.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import Form from '$cmp/shared/layout/Form.svelte'
-    import { createEventDispatcher } from 'svelte'
-    import { clamp } from '$lib/utils'
+    import { clampBigInt } from '$lib/utils'
+    import { type RegisterSize, toHexString } from '$lib/languages/commonLanguageFeatures.svelte'
 
     let hexAddress = $state('00000000')
     interface Props {
-        currentAddress: number
+        currentAddress: bigint
         bytesPerPage: number
-        memorySize: number
+        memorySize: bigint
         hideLabel?: boolean
         inputStyle?: string
         style?: string
+        systemSize: RegisterSize
+        onAddressChange: (address: bigint) => void
     }
 
     let {
@@ -27,23 +29,22 @@
         memorySize,
         hideLabel = false,
         inputStyle = '',
-        style = ''
+        style = '',
+        systemSize,
+        onAddressChange
     }: Props = $props()
 
     function searchAddress() {
-        const newAddress = parseInt(hexAddress, 16)
-        hexAddress = currentAddress.toString(16)
+        const newAddress = BigInt(`0x${hexAddress || '0'}`)
+        hexAddress = toHexString(newAddress, systemSize)
         updateAddress(newAddress)
     }
 
-    function updateAddress(value: number) {
-        const clampedSize = value - (value % bytesPerPage)
-        dispatcher('addressChange', clamp(clampedSize, 0, memorySize - bytesPerPage + 1))
+    function updateAddress(value: bigint) {
+        const clampedSize = value - (value % BigInt(bytesPerPage))
+        onAddressChange(clampBigInt(clampedSize, 0n, memorySize - BigInt(bytesPerPage + 1)))
     }
 
-    const dispatcher = createEventDispatcher<{
-        addressChange: number
-    }>()
     $effect(() => {
         hexAddress = currentAddress.toString(16)
     })
@@ -62,7 +63,7 @@
             style="padding:0 0.5rem; height:100%; width:2.2rem; margin-left: 0.2rem; min-height: 1.8rem;"
             cssVar="primary"
             title="Search address"
-            active={parseInt(hexAddress, 16) !== currentAddress}
+            active={BigInt(`0x${hexAddress || '0'}`) !== currentAddress}
         >
             <Icon size={1}>
                 <FaSearch />
@@ -70,7 +71,7 @@
         </Button>
 
         <Button
-            onClick={() => updateAddress(currentAddress - bytesPerPage)}
+            onClick={() => updateAddress(currentAddress - BigInt(bytesPerPage))}
             hasIcon
             style="padding:0 0.5rem; height:100%; min-height: 1.8rem;"
             cssVar="primary"
@@ -82,7 +83,7 @@
         </Button>
 
         <Button
-            onClick={() => updateAddress(currentAddress + bytesPerPage)}
+            onClick={() => updateAddress(currentAddress + BigInt(bytesPerPage))}
             hasIcon
             style="padding:0 0.5rem; height:100%; min-height: 1.8rem;"
             cssVar="primary"

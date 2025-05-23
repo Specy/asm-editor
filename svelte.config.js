@@ -5,12 +5,12 @@ import { resolve } from 'path'
 
 const config = {
     preprocess: [
-      vitePreprocess(),
+        vitePreprocess(),
         mdsvex({
             layout: {
                 //_: resolve('./src/components/content/Layout.svelte')
-              //lecture: resolve('./src/components/content/Layout.svelte')
-            },
+                //lecture: resolve('./src/components/content/Layout.svelte')
+            }
         })
     ],
     kit: { adapter: adapter({ fallback: '404.html' }) },

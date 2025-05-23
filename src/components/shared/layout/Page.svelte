@@ -20,7 +20,11 @@
 >
     <div
         class="column"
-        style="max-width: {cropped ? (typeof cropped === 'string' ? cropped : '60rem') : 'unset'}; width:100%;height: 100%; {contentStyle}"
+        style="max-width: {cropped
+            ? typeof cropped === 'string'
+                ? cropped
+                : '60rem'
+            : 'unset'}; width:100%;height: 100%; {contentStyle}"
     >
         {@render children?.()}
     </div>
@@ -35,7 +39,7 @@
         position: relative;
         flex: 1;
     }
-    .has-nav{
+    .has-nav {
         margin-top: 3.2rem;
     }
 </style>

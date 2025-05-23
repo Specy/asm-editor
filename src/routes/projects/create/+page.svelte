@@ -40,67 +40,71 @@
 </script>
 
 <svelte:head>
-	<title>Create Project</title>
-	<meta name="description" content="Create a new project" />
-	<meta property="og:description" content="Create a new project" />
-	<meta property="og:title" content="Create Project" />
+    <title>Create Project</title>
+    <meta name="description" content="Create a new project" />
+    <meta property="og:description" content="Create a new project" />
+    <meta property="og:title" content="Create Project" />
 </svelte:head>
 
 <DefaultNavbar />
 <Page cropped="40rem" style="padding-top: 3rem">
-	<div class="create-project">
-		<div class="row top-title">
-			<a href="/projects" class="go-back" title="Go to the projects page">
-				<Button hasIcon cssVar="primary" style="padding: 0.4rem">
-					<Icon size={2}>
-						<FaAngleLeft />
-					</Icon>
-				</Button>
-			</a>
-			<Title>Create new project</Title>
-		</div>
-		<Form style="display: grid; gap: 1.2rem; margin:0.5rem 0" on:submit={create}>
-			<Input title="Name" placeholder='Name' bind:value={name} />
-			<Textarea title="Description" bind:value={description} />
-			<Select title="Language" options={['M68K', 'MIPS', 'X86', 'RISC-V']} bind:value={language} />
-		</Form>
-		<div
-			style="display:flex; justify-content: space-between; align-items:center; margin-top: 1rem;"
-		>
-			<ButtonLink href="/projects" cssVar="primary" title="Cancel new project"
-			>Cancel
-			</ButtonLink
-			>
-			<Button onClick={create}>Create</Button>
-		</div>
-		{#if language === 'X86'}
-			<p style="margin-top: 2rem; background: rgba(var(--RGB-red), 0.3); padding: 1rem; border-radius: 0.5rem;">
-				X86 is in experimental stage. It has less features compared to M68K and MIPS and might have
-				bugs. Please report any issues you find.
-			</p>
-		{/if}
-	</div>
+    <div class="create-project">
+        <div class="row top-title">
+            <a href="/projects" class="go-back" title="Go to the projects page">
+                <Button hasIcon cssVar="primary" style="padding: 0.4rem">
+                    <Icon size={2}>
+                        <FaAngleLeft />
+                    </Icon>
+                </Button>
+            </a>
+            <Title>Create new project</Title>
+        </div>
+        <Form style="display: grid; gap: 1.2rem; margin:0.5rem 0" on:submit={create}>
+            <Input title="Name" placeholder="Name" bind:value={name} />
+            <Textarea title="Description" bind:value={description} />
+            <Select
+                title="Language"
+                options={['M68K', 'MIPS', 'X86', 'RISC-V']}
+                bind:value={language}
+            />
+        </Form>
+        <div
+            style="display:flex; justify-content: space-between; align-items:center; margin-top: 1rem;"
+        >
+            <ButtonLink href="/projects" cssVar="primary" title="Cancel new project"
+                >Cancel
+            </ButtonLink>
+            <Button onClick={create}>Create</Button>
+        </div>
+        {#if language === 'X86'}
+            <p
+                style="margin-top: 2rem; background: rgba(var(--RGB-red), 0.3); padding: 1rem; border-radius: 0.5rem;"
+            >
+                X86 is in experimental stage. It has less features compared to M68K and MIPS and
+                might have bugs. Please report any issues you find.
+            </p>
+        {/if}
+    </div>
 </Page>
 
 <style lang="scss">
-  .create-project {
-    padding-top: 2rem;
+    .create-project {
+        padding-top: 2rem;
 
-    @media screen and (max-width: 650px) {
-      padding: 1rem;
+        @media screen and (max-width: 650px) {
+            padding: 1rem;
+        }
     }
-  }
 
-  .top-title {
-    align-items: center;
-  }
-
-  @media screen and (min-width: 650px) {
-    .go-back {
-      position: absolute;
-      top: 4.2rem;
-      left: 1rem;
-
+    .top-title {
+        align-items: center;
     }
-  }
+
+    @media screen and (min-width: 650px) {
+        .go-back {
+            position: absolute;
+            top: 4.2rem;
+            left: 1rem;
+        }
+    }
 </style>

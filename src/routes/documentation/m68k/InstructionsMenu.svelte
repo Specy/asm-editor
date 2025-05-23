@@ -9,7 +9,7 @@
         hrefBase: string
     }
 
-    let { currentInstructionName = '', instructions, onClick, hrefBase}: Props = $props()
+    let { currentInstructionName = '', instructions, onClick, hrefBase }: Props = $props()
 </script>
 
 <Column>

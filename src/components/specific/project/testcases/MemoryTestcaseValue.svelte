@@ -6,27 +6,25 @@
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import FaTimes from 'svelte-icons/fa/FaTimes.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
-    import { toHexString } from '$lib/languages/M68K/M68kUtils'
+    import { RegisterSize, toHexString } from '$lib/languages/commonLanguageFeatures.svelte'
 
     const dispatcher = createEventDispatcher<{
         remove: void
     }>()
+
     interface Props {
         value: MemoryValue
         editable?: boolean
         canRemove?: boolean
+        systemSize: RegisterSize
     }
 
-    function parseNumber(value: string): number {
-        if (!value) return 0
-        if (value.startsWith('0x')) {
-            return parseInt(value.slice(2), 16)
-        } else {
-            return parseInt(value)
-        }
+    function parseNumber(value: string): bigint {
+        if (!value) return 0n
+        return BigInt(value)
     }
 
-    let { value = $bindable(), editable = true, canRemove = true }: Props = $props()
+    let { value = $bindable(), editable = true, canRemove = true, systemSize }: Props = $props()
 </script>
 
 <div class="memory-testcase">
@@ -39,17 +37,19 @@
                         class="input"
                         bind:value={value.address}
                         onblur={(e) => {
-                            //@ts-expect-error .value
-                            value.address = parseNumber(e.target.value)
+                            value.address = parseNumber(
+                                //@ts-expect-error .value
+                                e.target.value
+                            )
                         }}
                     />
                 </Row>
                 <Row align="center" gap="0.5rem">
                     <div>Of bytes</div>
                     <select bind:value={value.bytes} class="select">
-                        <option value={1}>1</option>
-                        <option value={2}>2</option>
-                        <option value={4}>4</option>
+                        {#each [1, 2, 4, 8, 16].filter((v) => v <= systemSize) as size}
+                            <option value={size}>{size}</option>
+                        {/each}
                     </select>
                 </Row>
                 <Row align="center" gap="0.5rem">
@@ -120,20 +120,26 @@
     {:else}
         {#if value.type === 'number'}
             <div style="word-break: break-all;">
-                At address <b>${toHexString(value.address)}</b>, expect
-                <b>${toHexString(value.expected, value.bytes * 2)}</b>
+                At address <b>${toHexString(value.address, systemSize)}</b>, expect
+                <b>${toHexString(value.expected, value.bytes)}</b>
                 (of <b>{value.bytes}</b> bytes)
             </div>
         {/if}
         {#if value.type === 'string-chunk'}
             <div style="word-break: break-all;">
-                At address <b>${toHexString(value.address)}</b>, expect "<b>{value.expected}</b>"
+                At address <b>${toHexString(value.address, systemSize)}</b>, expect "<b
+                    >{value.expected}</b
+                >"
             </div>
         {/if}
         {#if value.type === 'number-chunk'}
             <div style="word-break: break-all;">
-                At address <b>${toHexString(value.address)}</b>, expect
-                <b>[{value.expected.map((v) => `0x${toHexString(v, 2)}`).join(', ')}]</b>
+                At address <b>${toHexString(value.address, systemSize)}</b>, expect
+                <b
+                    >[{value.expected
+                        .map((v) => `0x${toHexString(v, RegisterSize.Byte)}`)
+                        .join(', ')}]</b
+                >
                 each of <b>{value.bytes}</b> bytes
             </div>
         {/if}

@@ -8,7 +8,7 @@
     interface Props {
         stack: StackFrame[]
         onGoToLabel: (label: StackFrame) => void
-        onGoToInstruction: (address: number)=> void
+        onGoToInstruction: (address: bigint) => void
     }
 
     let { stack, onGoToInstruction, onGoToLabel }: Props = $props()
@@ -28,10 +28,7 @@
                         onGoToLabel(label)
                     }}
                 >
-                    <Icon
-                      size={0.8}
-                      style="margin-left: 0.1rem; color: {label.color}"
-                    >
+                    <Icon size={0.8} style="margin-left: 0.1rem; color: {label.color}">
                         <FaCircle />
                     </Icon>
                     <div class="ellipsis">
@@ -74,7 +71,7 @@
         border-top-left-radius: 0;
         border-top-right-radius: 0;
     }
-    .return-address{
+    .return-address {
         background: var(--secondary);
         color: var(--primary-text);
         border-radius: 0.3rem;
@@ -83,13 +80,13 @@
         cursor: pointer;
         background-color: transparent;
     }
-    .return-address:hover{
+    .return-address:hover {
         background-color: var(--tertiary);
     }
     .label-name {
         gap: 0.4rem;
         padding: 0.2rem;
-        flex:1;
+        flex: 1;
         align-items: center;
         background-color: transparent;
         color: var(--primary-text);

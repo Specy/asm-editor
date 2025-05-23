@@ -1,8 +1,4 @@
-import {
-    M68KDirectives,
-    M68kInstructions,
-} from './M68K-documentation'
-
+import { M68KDirectives, M68kInstructions } from './M68K-documentation'
 
 export const M68KLanguage = {
     defaultToken: '',
@@ -133,4 +129,3 @@ export const M68KLanguage = {
         ]
     }
 }
-

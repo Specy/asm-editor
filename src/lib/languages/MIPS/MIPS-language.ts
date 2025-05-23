@@ -238,7 +238,6 @@ export function createMIPSHoverProvider(monaco: MonacoType) {
                         value: ins.map((ins, i) => `${i + 1}. ${formatInstruction(ins)}`).join('\n')
                     })
                 }
-
             }
             if (MIPSRegistersMap['$' + word]) {
                 contents.push({
@@ -263,7 +262,6 @@ const possibleArgs = mipsInstructionsWithDuplicates.flatMap((i) =>
     i.args.flatMap((a) => a.map((b) => b.type))
 )
 const possibleArgsSet = new Set(possibleArgs)
-
 
 const MIPSRegistersMap = Object.fromEntries(
     MIPSRegisterNames.map((r) => {

@@ -42,7 +42,3 @@ export function getM68kErrorMessage(error: unknown, lineNumber?: number): string
     }
     return `${prepend} ${JSON.stringify(error)}`
 }
-
-export function toHexString(value: number, padStart = 4) {
-    return (value >>> 0).toString(16).padStart(padStart, '0')
-}
