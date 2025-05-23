@@ -1,7 +1,12 @@
 <script lang="ts">
     import { onMount } from 'svelte'
     import InteractiveInstructionEditor from '$cmp/shared/InteractiveInstructionEditor.svelte'
-    import { type AvailableLanguages, cleanTestcases, makeProject, type Testcase } from '$lib/Project.svelte'
+    import {
+        type AvailableLanguages,
+        cleanTestcases,
+        makeProject,
+        type Testcase
+    } from '$lib/Project.svelte'
     import Page from '$cmp/shared/layout/Page.svelte'
     import lzstring from 'lz-string'
     import { page } from '$app/stores'

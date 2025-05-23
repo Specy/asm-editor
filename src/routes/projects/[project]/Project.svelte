@@ -12,7 +12,7 @@
     import { toast } from '$stores/toastStore'
     import Controls from '$cmp/specific/project/Controls.svelte'
     import StdOut from '$cmp/specific/project/user-tools/StdOutRenderer.svelte'
-    import { clamp, clampBigInt, createDebouncer, formatTime } from '$lib/utils'
+    import { clampBigInt, createDebouncer, formatTime } from '$lib/utils'
     import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE } from '$lib/Config'
     import Settings from '$cmp/specific/project/settings/Settings.svelte'
     import FloatingLanguageDocumentation from '$cmp/specific/project/FloatingLanguageDocumentation.svelte'
@@ -497,8 +497,8 @@
                 />
             </div>
             <div class="column" style="gap: 0.4rem">
-                <div class="row" style="gap: 0.4rem">
-                    {#if settingsStore.values.showMemory.value}
+                {#if settingsStore.values.showMemory.value}
+                    <div class="row" style="gap: 0.4rem">
                         <MemoryControls
                             systemSize={emulator.systemSize}
                             bytesPerPage={emulator.memory.global.pageSize}
@@ -509,10 +509,7 @@
                                 emulator.setGlobalMemoryAddress(e)
                             }}
                         />
-                    {/if}
-                </div>
-
-                {#if settingsStore.values.showMemory.value}
+                    </div>
                     <MemoryVisualiser
                         systemSize={emulator.systemSize}
                         endianess={emulator.memory.global.endianess}
@@ -531,7 +528,7 @@
                     >
                         <Card
                             background="secondary"
-                            style="height: 100%"
+                            style="height: 100%; padding: 0.5rem"
                             justify="center"
                             align="center"
                         >

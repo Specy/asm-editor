@@ -16,22 +16,22 @@ export interface ProjectData {
 
 export type MemoryValue =
     | {
-    type: 'number'
-    address: bigint
-    bytes: number
-    expected: bigint
-}
+          type: 'number'
+          address: bigint
+          bytes: number
+          expected: bigint
+      }
     | {
-    type: 'string-chunk'
-    address: bigint
-    expected: string
-}
+          type: 'string-chunk'
+          address: bigint
+          expected: string
+      }
     | {
-    type: 'number-chunk'
-    address: bigint
-    bytes: number
-    expected: bigint[]
-}
+          type: 'number-chunk'
+          address: bigint
+          bytes: number
+          expected: bigint[]
+      }
 
 export type Testcase = {
     input: string[]
@@ -44,35 +44,35 @@ export type Testcase = {
 
 export type TestcaseValidationError =
     | {
-    type: 'wrong-register'
-    register: string
-    expected: bigint
-    got: bigint
-}
+          type: 'wrong-register'
+          register: string
+          expected: bigint
+          got: bigint
+      }
     | {
-    type: 'wrong-memory-number'
-    address: bigint
-    bytes: number
-    expected: bigint
-    got: bigint
-}
+          type: 'wrong-memory-number'
+          address: bigint
+          bytes: number
+          expected: bigint
+          got: bigint
+      }
     | {
-    type: 'wrong-memory-string'
-    address: bigint
-    expected: string
-    got: string
-}
+          type: 'wrong-memory-string'
+          address: bigint
+          expected: string
+          got: string
+      }
     | {
-    type: 'wrong-memory-chunk'
-    address: bigint
-    expected: number[]
-    got: number[]
-}
+          type: 'wrong-memory-chunk'
+          address: bigint
+          expected: number[]
+          got: number[]
+      }
     | {
-    type: 'wrong-output'
-    expected: string
-    got: string
-}
+          type: 'wrong-output'
+          expected: string
+          got: string
+      }
 
 export type TestcaseResult = {
     errors: TestcaseValidationError[]
@@ -101,7 +101,7 @@ export function makeProjectFromExternal(codeAndMeta: string) {
     const code = lines.slice(0, threshold).join('\n').trimEnd()
     const metaLines = lines.slice(threshold + 1)
     const commentCharacters = Object.values(COMMENT_CHARACTER)
-    const separator = lines[threshold].split('').find(c => commentCharacters.includes(c)) ?? '*'
+    const separator = lines[threshold].split('').find((c) => commentCharacters.includes(c)) ?? '*'
     let metaJson: ProjectMetadata = {
         name: '',
         description: '',
@@ -175,7 +175,7 @@ export function makeProject(data?: Partial<ProjectData>) {
 
     function set(data: Partial<ProjectData & { id: string }>) {
         Object.assign(state, data)
-        if(data.testcases){
+        if (data.testcases) {
             state.testcases = cleanTestcases(data.testcases)
         }
     }
@@ -259,7 +259,6 @@ export function cleanTestcases(testcases: Testcase[]) {
                     return {
                         ...memory,
                         address: BigInt(memory.address)
-
                     }
                 } else if (memory.type === 'number') {
                     return {
@@ -271,9 +270,11 @@ export function cleanTestcases(testcases: Testcase[]) {
                     return memory
                 }
             }),
-            expectedRegisters: Object.fromEntries(Object.entries(testcase.expectedRegisters).map(([key, value]) => {
-                return [key, BigInt(value)]
-            })),
+            expectedRegisters: Object.fromEntries(
+                Object.entries(testcase.expectedRegisters).map(([key, value]) => {
+                    return [key, BigInt(value)]
+                })
+            ),
             startingMemory: testcase.startingMemory.map((memory) => {
                 if (memory.type === 'number-chunk') {
                     return {
@@ -285,7 +286,6 @@ export function cleanTestcases(testcases: Testcase[]) {
                     return {
                         ...memory,
                         address: BigInt(memory.address)
-
                     }
                 } else if (memory.type === 'number') {
                     return {
@@ -297,9 +297,11 @@ export function cleanTestcases(testcases: Testcase[]) {
                     return memory
                 }
             }),
-            startingRegisters: Object.fromEntries(Object.entries(testcase.startingRegisters).map(([key, value]) => {
-                return [key, BigInt(value)]
-            }))
+            startingRegisters: Object.fromEntries(
+                Object.entries(testcase.startingRegisters).map(([key, value]) => {
+                    return [key, BigInt(value)]
+                })
+            )
         }
     })
 }

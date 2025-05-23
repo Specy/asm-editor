@@ -3,7 +3,6 @@ import lzstring from 'lz-string'
 import type { Project } from '$lib/Project.svelte'
 import { serializer } from '$lib/json'
 
-
 export function clamp(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value))
 }
@@ -19,15 +18,15 @@ export function clampBigInt(value: bigint, min: bigint, max: bigint): bigint {
 }
 
 export function unsignedBigIntToSigned(unsignedBigInt: bigint, numBytes: number) {
-    const bitLength = numBytes * 8;
-    const signBitMask = 1n << (BigInt(bitLength) - 1n);
+    const bitLength = numBytes * 8
+    const signBitMask = 1n << (BigInt(bitLength) - 1n)
 
     if ((unsignedBigInt & signBitMask) !== 0n) {
-        const twoComplementMask = (1n << BigInt(bitLength)) - 1n;
-        return unsignedBigInt - (twoComplementMask + 1n);
+        const twoComplementMask = (1n << BigInt(bitLength)) - 1n
+        return unsignedBigInt - (twoComplementMask + 1n)
     }
 
-    return unsignedBigInt;
+    return unsignedBigInt
 }
 
 export type Timer = NodeJS.Timeout | number
@@ -80,4 +79,3 @@ export function createShareLink(project: Project) {
     const code = lzstring.compressToEncodedURIComponent(serializer.stringify(p))
     return `${window.location.origin}/projects/share?project=${code}`
 }
-

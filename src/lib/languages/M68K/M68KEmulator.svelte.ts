@@ -1,10 +1,20 @@
-import { ccrToFlagsArray, Interpreter, type Interrupt, type RegisterOperand, S68k } from '@specy/s68k'
+import {
+    ccrToFlagsArray,
+    Interpreter,
+    type Interrupt,
+    type RegisterOperand,
+    S68k
+} from '@specy/s68k'
 import { PAGE_ELEMENTS_PER_ROW, PAGE_SIZE } from '$lib/Config'
 import { Prompt } from '$stores/promptStore'
 import { settingsStore } from '$stores/settingsStore.svelte'
 import { getM68kErrorMessage } from '$lib/languages/M68K/M68kUtils'
 import type { Testcase, TestcaseResult, TestcaseValidationError } from '$lib/Project.svelte'
-import { byteSliceToNum, isMemoryChunkEqual, numberToByteSlice } from '$cmp/specific/project/memory/memoryTabUtils'
+import {
+    byteSliceToNum,
+    isMemoryChunkEqual,
+    numberToByteSlice
+} from '$cmp/specific/project/memory/memoryTabUtils'
 import {
     type BaseEmulatorActions,
     type BaseEmulatorState,
@@ -359,7 +369,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
                                 from: m.value.from
                             }
                         }
-                    } else if(m.type === 'PopCall') {
+                    } else if (m.type === 'PopCall') {
                         return {
                             type: 'PopCallStack',
                             value: {
@@ -561,7 +571,6 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         } catch (e) {
             addError(getM68kErrorMessage(e, e.message))
         }
-
     }
 
     function setTabMemoryAddress(address: bigint, tabId: number) {
@@ -576,7 +585,6 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         } catch (e) {
             addError(getM68kErrorMessage(e, e.message))
         }
-
     }
 
     async function handleInterpreterInterruption(

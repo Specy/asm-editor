@@ -38,7 +38,9 @@
         const id = $page.params.project
         if (id === 'share') {
             const code = $page.url.searchParams.get('project')
-            const parsed = serializer.parse<Project>(lzstring.decompressFromEncodedURIComponent(code))
+            const parsed = serializer.parse<Project>(
+                lzstring.decompressFromEncodedURIComponent(code)
+            )
             parsed.id = SHARE_ID
             project.set(parsed)
         } else {

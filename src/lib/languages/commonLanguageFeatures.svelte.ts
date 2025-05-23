@@ -173,20 +173,20 @@ export type MutationOperation =
               old: number[]
           }
       }
-      | {
-            type: 'PopCallStack'
-            value: {
-                to: bigint,
-                from: bigint
-            }
-        }
     | {
-    type: 'PushCallStack'
-    value: {
-        to: bigint,
-        from: bigint
-    }
-}
+          type: 'PopCallStack'
+          value: {
+              to: bigint
+              from: bigint
+          }
+      }
+    | {
+          type: 'PushCallStack'
+          value: {
+              to: bigint
+              from: bigint
+          }
+      }
     | {
           type: 'Other'
           value: string

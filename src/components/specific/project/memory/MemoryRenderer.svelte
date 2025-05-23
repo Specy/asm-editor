@@ -239,7 +239,7 @@
                 {#if i === selectedAddressesIndexes.start}
                     {@const signedSelection = unsignedBigIntToSigned(
                         selectionValue.current,
-                        selectionValue.len,
+                        selectionValue.len
                     )}
                     <div
                         class="selection-value"

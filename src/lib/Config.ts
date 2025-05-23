@@ -23,7 +23,6 @@ export const COMMENT_CHARACTER = {
     'RISC-V': '#'
 } satisfies Record<AvailableLanguages, string>
 
-
 export const BASE_CODE = {
     MIPS: `
 .data
