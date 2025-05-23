@@ -77,10 +77,10 @@
         return true
     }
 
-    function share(pr: Project) {
+    async function share(pr: Project) {
         if (!pr) return
         const url = createShareLink(pr)
-        navigator.clipboard.writeText(url)
+        await navigator.clipboard.writeText(url)
         toast.logPill('Copied to clipboard')
     }
 

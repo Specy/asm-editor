@@ -87,6 +87,7 @@
         </div>
     {:else}
         <RegistersRenderer
+            {systemSize}
             {hiddenRegistersNames}
             registers={Object.entries(registers).map(([name, value]) =>
                 makeRegister(name, value, systemSize)

@@ -64,7 +64,7 @@
             <Textarea title="Description" bind:value={description} />
             <Select
                 title="Language"
-                options={['M68K', 'MIPS', 'X86', 'RISC-V']}
+                options={['M68K', 'MIPS', 'X86', 'RISC-V', 'RISC-V-64']}
                 bind:value={language}
             />
         </Form>

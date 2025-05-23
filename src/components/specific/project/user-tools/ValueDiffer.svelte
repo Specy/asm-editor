@@ -4,6 +4,7 @@
         style?: string
         hoverElementStyle?: string
         value: string | number
+        hoverValueElementStyle?: string //TODO rename
         hasSoftDiff?: boolean | undefined
         monospaced?: boolean
         hoverElementOffset?: string
@@ -16,6 +17,7 @@
         diff,
         style = '',
         hoverElementStyle = '',
+        hoverValueElementStyle = '',
         value,
         hasSoftDiff = undefined,
         monospaced = false,
@@ -29,7 +31,7 @@
 <div style="position: relative;">
     <div class="hover-element" style={`--top: ${hoverElementOffset}; ${hoverElementStyle}`}>
         {#if hoverValue}
-            <div class:monospaced>
+            <div class:monospaced style={hoverValueElementStyle}>
                 {@render hoverValue?.()}
             </div>
         {/if}

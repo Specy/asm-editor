@@ -10,7 +10,7 @@
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
     import { scale } from 'svelte/transition'
     import FileImporter from '$cmp/shared/fileImporter/FileImporter.svelte'
-    import { textDownloader } from '$lib/utils'
+    import { createShareLink, textDownloader } from '$lib/utils'
     import FaUpload from 'svelte-icons/fa/FaUpload.svelte'
     import { toast } from '$stores/toastStore'
     import { makeProjectFromExternal } from '$lib/Project.svelte'
@@ -187,6 +187,11 @@
                     >
                         <ProjectCard
                             {project}
+                            on:share={async (e) => {
+                                const link = createShareLink(e.detail)
+                                await navigator.clipboard.writeText(link)
+       												  toast.logPill('Copied to clipboard')
+                            }}
                             on:download={(e) => {
                                 textDownloader(
                                     e.detail.toExternal(),

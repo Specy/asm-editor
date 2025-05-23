@@ -11,6 +11,8 @@
     import { createEventDispatcher } from 'svelte'
     import { BUILTIN_THEMES, ThemeStore } from '$stores/themeStore.svelte'
     import { LANGUAGE_THEMES } from '$lib/Config'
+    import FaShareAlt from 'svelte-icons/fa/FaShareAlt.svelte'
+
     interface Props {
         project: Project
     }
@@ -18,7 +20,7 @@
     let { project = $bindable() }: Props = $props()
     let textContent = $state(project.name || 'Unnamed')
     let descriptionContent = $state(project.description || '')
-    const dispatcher = createEventDispatcher<{ download: Project }>()
+    const dispatcher = createEventDispatcher<{ download: Project, share: Project }>()
 
     const colors = $derived(
         BUILTIN_THEMES.find((t) => t.id === LANGUAGE_THEMES[project.language]) ?? BUILTIN_THEMES[0]
@@ -65,6 +67,16 @@
             {project.language.toUpperCase()}
         </div>
         <div style="display: flex; gap: 0.4rem">
+            <Button
+              cssVar="secondary"
+              style="width: 2.2rem; height: 2.2rem;"
+              title="Share this project"
+              onClick={() => dispatcher('share', project)}
+            >
+                <Icon>
+                    <FaShareAlt />
+                </Icon>
+            </Button>
             <Button
                 cssVar="secondary"
                 style="width: 2.2rem; height: 2.2rem;"

@@ -31,11 +31,7 @@ import {
 import { createDebouncer } from '$lib/utils'
 import { settingsStore } from '$stores/settingsStore.svelte'
 import type { Testcase, TestcaseResult, TestcaseValidationError } from '$lib/Project.svelte'
-import {
-    byteSliceToNum,
-    isMemoryChunkEqual,
-    numberToByteSlice
-} from '$cmp/specific/project/memory/memoryTabUtils'
+import { byteSliceToNum, isMemoryChunkEqual, numberToByteSlice } from '$cmp/specific/project/memory/memoryTabUtils'
 
 export type RISCVEmulatorState = BaseEmulatorState & {}
 
@@ -81,9 +77,10 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
         globalPageElementsPerRow: PAGE_ELEMENTS_PER_ROW,
         ...options
     }
+    RISCV.setIs64Bit(options.language === 'RISC-V-64')
     let code = $state(baseCode)
     let state = $state<Omit<RISCVEmulatorState, 'code'>>({
-        systemSize: RegisterSize.Long,
+        systemSize: options.language === 'RISC-V-64' ? RegisterSize.Double : RegisterSize.Long,
         registers: [],
         hiddenRegisters: ['zero'],
         pc: 0n,
@@ -172,7 +169,9 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
 
                 //TODO add interrupts
                 const stackTab = state.memory.tabs.find((e) => e.name === 'Stack')
-                if (stackTab) stackTab.address = BigInt(riscv.stackPointer - stackTab.pageSize)
+                if (stackTab) stackTab.address = options.language === 'RISC-V-64'
+                    ? BigInt(riscv.stackPointerLong) - BigInt(stackTab.pageSize)
+                    : BigInt(riscv.stackPointer - stackTab.pageSize)
                 const next = riscv.getNextStatement()
                 state.canExecute = true
                 state.line = next.sourceLine - 1
@@ -244,7 +243,14 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
 
     function getRegistersValue() {
         if (!riscv) return []
-        return [...riscv.getRegistersValues(), riscv.programCounter]
+
+        if (options.language === 'RISC-V-64') {
+            return [...riscv.getRegistersValuesLong().map(BigInt), BigInt(riscv.programCounterLong)]
+
+        } else {
+            return [...riscv.getRegistersValues().map(BigInt), riscv.programCounter]
+
+        }
     }
 
     function scrollStackTab() {
@@ -252,8 +258,8 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
         const current = state
         if (!settings.values.autoScrollStackTab.value || !riscv) return
         const stackTab = current.memory.tabs.find((e) => e.name === 'Stack')
-        const sp = riscv.stackPointer
-        if (stackTab) stackTab.address = BigInt(sp - (sp % stackTab.pageSize))
+        const sp = options.language === 'RISC-V-64' ? BigInt(riscv.stackPointerLong) :  BigInt(riscv.stackPointer)
+        if (stackTab) stackTab.address = sp - (sp % BigInt(stackTab.pageSize))
     }
 
     function setRegisters(override?: number[]) {
@@ -271,7 +277,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
         getRegistersValue().forEach((reg, i) => {
             state.registers[i].setValue(reg)
         })
-        state.sp = BigInt(riscv.stackPointer)
+        state.sp = options.language === 'RISC-V-64' ? BigInt(riscv.stackPointerLong) : BigInt(riscv.stackPointer)
     }
 
     function updateMemory() {
@@ -303,7 +309,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
         const steps = riscv
             .getUndoStack()
             .slice(0, settings.values.maxVisibleHistoryModifications.value)
-        state.pc = BigInt(riscv.programCounter)
+        state.pc = options.language === 'RISC-V-64' ? BigInt(riscv.programCounterLong) : BigInt(riscv.programCounter)
         state.callStack = riscv.getCallStack().map((v, i) => {
             const address = v.toAddress
             return {
@@ -323,7 +329,8 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
                 try {
                     const ins = riscv.getStatementAtAddress(step.pc)
                     line = ins.sourceLine - 1
-                } catch (e) {}
+                } catch (e) {
+                }
                 const mutations = backstepToMutation(step)
                 if (!mutations) return null
                 return {
@@ -423,7 +430,8 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
             try {
                 const ins = riscv.getNextStatement()
                 state.line = ins.sourceLine - 1
-            } catch (e) {}
+            } catch (e) {
+            }
 
             state.canUndo = riscv.canUndo
             //if it managed to step, it means it does not have valid errors
@@ -553,7 +561,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
     async function validateTestcase(testcase: Testcase) {
         const errors = [] as TestcaseValidationError[]
         if (!riscv) throw new Error('Interpreter not initialized')
-        const registers = riscv.getRegistersValues()
+        const registers = options.language === 'RISC-V-64' ? riscv.getRegistersValuesLong() : riscv.getRegistersValues().map(BigInt)
         for (const [register, value] of Object.entries(testcase.expectedRegisters)) {
             const registerIndex = RISCVRegisterNames.indexOf(register.toUpperCase())
             if (registerIndex === -1) {
@@ -773,7 +781,8 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
                 const ins = riscv.getNextStatement()
                 //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
                 state.line = ins.sourceLine - 1
-            } catch (e) {}
+            } catch (e) {
+            }
 
             state.canUndo = riscv.canUndo
 
@@ -797,7 +806,8 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
                 updateMemory()
                 updateData()
                 scrollStackTab()
-            } catch (e) {}
+            } catch (e) {
+            }
             state.terminated = true
             state.line = line
         }

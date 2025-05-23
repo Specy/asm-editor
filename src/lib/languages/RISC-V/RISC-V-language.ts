@@ -2,13 +2,13 @@ import type { MonacoType } from '$lib/monaco/Monaco'
 import {
     RISCVAddressingModes,
     riscvDirectivesMap,
+    type RISCVInstruction,
     riscvInstructionMap,
     riscvInstructionsVariants,
-    riscvInstructionsWithDuplicates,
-    type RISCVInstruction
+    riscvInstructionsWithDuplicates
 } from './RISC-V-documentation'
 import { ALTERNATIVE_RISCVRegister_NAMES } from './RISC-VEmulator.svelte'
-import { RISCV_REGISTERS } from '@specy/risc-v'
+import { RISCV, RISCV_REGISTERS } from '@specy/risc-v'
 
 const RISCVRegisterNames = [...RISCV_REGISTERS, ...ALTERNATIVE_RISCVRegister_NAMES]
 
@@ -48,10 +48,13 @@ function getPossibleInstruction(args: string[]): { instruction: string; other: s
     return { instruction: clone[0], other: clone.slice(1) }
 }
 
-export function createRISCVCompletition(monaco: MonacoType) {
+export function createRISCVCompletition(monaco: MonacoType, is64 = false) {
     return {
         triggerCharacters: ['.', ',', ' ', 'deleteLeft', 'tab'],
         provideCompletionItems: (model, position) => {
+            if (RISCV.is64Bit() === is64) {
+                RISCV.setIs64Bit(is64)
+            }
             const data: string = model.getValueInRange({
                 startLineNumber: position.lineNumber,
                 startColumn: 1,
@@ -170,8 +173,9 @@ export function createRISCVCompletition(monaco: MonacoType) {
                     suggestions.push(...rest, ...onlyRegs)
                 } else {
                     const prefixed = riscvInstructionsVariants.filter((i) =>
-                        i[0].name.startsWith(ins.instruction)
+                        i[0].name.startsWith(ins.instruction) && (is64 ? true : i.some(ins => !ins.isRv64Only))
                     )
+                    console.log(prefixed)
                     suggestions.push(
                         ...prefixed.map((i) => {
                             return {
@@ -207,9 +211,13 @@ function formatInstruction(ins: RISCVInstruction) {
     return `**${left.trim()}**: ${right}`
 }
 
-export function createRISCVHoverProvider(monaco: MonacoType) {
+export function createRISCVHoverProvider(monaco: MonacoType, is64 = false) {
+
     return {
         provideHover: (model, position) => {
+            if (RISCV.is64Bit() === is64) {
+                RISCV.setIs64Bit(is64)
+            }
             const range = new monaco.Range(position.lineNumber, 1, position.lineNumber, 1000)
             const line = model.getValueInRange(range).trim()
             const contents = []

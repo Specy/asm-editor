@@ -475,14 +475,16 @@
                     <StatusCodesVisualiser statusCodes={emulator.statusRegisters} />
                 {/if}
                 <RegistersRenderer
-                    size={RegisterSize.Long}
+                    systemSize={emulator.systemSize}
                     style="flex: unset; overflow: unset; padding: 0;"
                     gridStyle="padding: 0.2rem 0.7rem"
+                    size={emulator.systemSize}
                     registers={[pc]}
                     withoutHeader
                     position="bottom"
                 />
                 <RegistersVisualiser
+                    systemSize={emulator.systemSize}
                     size={groupSize}
                     hiddenRegistersNames={emulator.hiddenRegisters}
                     registers={emulator.registers}

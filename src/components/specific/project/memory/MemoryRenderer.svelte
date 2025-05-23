@@ -52,7 +52,7 @@
         callStackAddresses = [],
         systemSize
     }: Props = $props()
-    const maxAddresses = 4
+    const maxAddresses = systemSize
     let selectedAddressesIndexes = $state({
         start: -1,
         len: 0

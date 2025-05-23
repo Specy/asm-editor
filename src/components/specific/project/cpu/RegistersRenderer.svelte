@@ -21,6 +21,7 @@
         size?: RegisterSize
         style?: string
         gridStyle?: string
+        systemSize: RegisterSize,
     }
 
     let {
@@ -30,18 +31,24 @@
         style = '',
         gridStyle = '',
         hiddenRegistersNames = [],
-        position = 'top'
+        position = 'top',
+        systemSize
     }: Props = $props()
     let registers = $derived(_registers.filter((r) => !hiddenRegistersNames.includes(r.name)))
     let usesHex = $derived(!settingsStore.values.useDecimalAsDefault.value)
     let chunks: RegisterChunk[][] = $derived(registers.map((r) => r.toSizedGroups(size)))
+
 </script>
 
 <div class="registers-wrapper" class:withoutHeader {style}>
     {#if !withoutHeader}
         <div class="registers-header">
             Registers
-            <SizeSelector style="border-bottom-right-radius: 0.2rem;" bind:selected={size} />
+            <SizeSelector
+              maxSize={systemSize}
+              style="border-bottom-right-radius: 0.2rem;"
+              bind:selected={size}
+            />
         </div>
     {/if}
     <div class="registers" style={gridStyle}>
@@ -62,11 +69,12 @@
                 {#each chunks[i] as chunk}
                     <ValueDiff
                         monospaced
-                        hoverElementStyle="left: 50%; transform: translateX(-50%); {position ===
+                        hoverElementStyle="left: 50%; transform: translateX(-50%);{position ===
                         'bottom'
                             ? 'bottom: var(--top); top: unset;'
                             : ''}"
-                        style="padding: 0.1rem"
+                        style="padding: 0.1rem;"
+                        hoverValueElementStyle={chunk.groupSize > (RegisterSize.Long * 2) ? "font-size: 0.95rem" : ""}
                         value={usesHex
                             ? chunk.hex
                             : `${chunk.value}`.padStart(Number(chunk.groupSize), '0')}
@@ -110,7 +118,7 @@
         flex: 1;
         max-height: calc(100vh - 14.5rem); //HOTFIX
         overflow-y: auto;
-
+        overflow-x: hidden;
         @media screen and (max-width: 1000px) {
             max-height: 33.7rem; //HOTFIX
         }

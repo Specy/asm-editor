@@ -1,5 +1,5 @@
 import { numberToByteSlice } from '$cmp/specific/project/memory/memoryTabUtils'
-import type { Testcase, TestcaseResult } from '$lib/Project.svelte'
+import type { AvailableLanguages, Testcase, TestcaseResult } from '$lib/Project.svelte'
 import type { Interrupt } from '@specy/s68k'
 import { unsignedBigIntToSigned } from '$lib/utils'
 
@@ -280,6 +280,7 @@ export type ColorizedLabel = {
 }
 
 export type EmulatorSettings = {
+    language?: AvailableLanguages,
     globalPageSize?: number
     globalPageElementsPerRow?: number
 }

@@ -206,7 +206,8 @@
             >
                 {#if showPc}
                     <RegistersRenderer
-                        size={RegisterSize.Long}
+                        systemSize={emulator.systemSize}
+                        size={emulator.systemSize}
                         style="flex: unset; overflow: unset; padding: 0;"
                         gridStyle="padding: 0.2rem 0.7rem"
                         registers={[pc]}

@@ -28,7 +28,7 @@ class MonacoLoader {
         this.monaco = monaco
         // @ts-ignore add worker
         self.MonacoEnvironment = {
-            getWorker: function (_moduleId: any, label: string) {
+            getWorker: function(_moduleId: any, label: string) {
                 return new editorWorker()
             }
         }
@@ -104,6 +104,26 @@ class MonacoLoader {
                 monaco.languages.registerHoverProvider(
                     'risc-v',
                     language.createRISCVHoverProvider(monaco)
+                )
+            )
+        } else if (lang === 'RISC-V-64') {
+            const [grammar, language] = await Promise.all([
+                import('$lib/languages/RISC-V/RISC-V-grammar'),
+                import('$lib/languages/RISC-V/RISC-V-language')
+            ])
+            this.toDispose.push(
+                monaco.languages.setMonarchTokensProvider('risc-v-64', grammar.RISCVLanguage),
+                monaco.languages.setLanguageConfiguration(
+                    'risc-v-64',
+                    grammar.RISCVLanguageConfiguration
+                ),
+                monaco.languages.registerCompletionItemProvider(
+                    'risc-v-64',
+                    language.createRISCVCompletition(monaco, true)
+                ),
+                monaco.languages.registerHoverProvider(
+                    'risc-v-64',
+                    language.createRISCVHoverProvider(monaco, true)
                 )
             )
         } else if (lang === 'X86') {

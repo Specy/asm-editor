@@ -88,6 +88,9 @@
                             if (actualLanguage === 'RISCV') {
                                 actualLanguage = 'RISC-V'
                             }
+                            if(actualLanguage === 'riscv64'){
+                                actualLanguage = 'RISC-V-64'
+                            }
 
                             const getAllText = (
                                 n: import('hast').Node | import('hast').Parent

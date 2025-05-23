@@ -13,12 +13,12 @@
         code: string
         children: Snippet<[Emulator]>
         loading?: Snippet
-        settings?: EmulatorSettings
+        settings?: Omit<EmulatorSettings, 'language'>
     }
 
     let { language, code = $bindable(), children, loading, settings }: Props = $props()
 
-    const emulator = GenericEmulator(language, code, settings)
+    const emulator = GenericEmulator(language, code, { ...settings, language })
 </script>
 
 {#await emulator}

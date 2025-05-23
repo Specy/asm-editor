@@ -41,7 +41,7 @@
                 defaultOpen={false}
             />
         {/if}
-        {#if language === 'RISC-V'}
+        {#if language === 'RISC-V' || language === 'RISC-V-64'}
             <RISCVDocumentation
                 bind:searchValue
                 bind:visible

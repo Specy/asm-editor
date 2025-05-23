@@ -4,11 +4,12 @@
     interface Props {
         style?: string
         selected?: RegisterSize
+        maxSize: RegisterSize
     }
 
-    let { style = '', selected = $bindable(RegisterSize.Word) }: Props = $props()
+    let { maxSize, style = '', selected = $bindable(RegisterSize.Word) }: Props = $props()
 
-    const sizes = [RegisterSize.Byte, RegisterSize.Word, RegisterSize.Long]
+    const sizes = $derived([RegisterSize.Byte, RegisterSize.Word, RegisterSize.Long, RegisterSize.Double].filter(v => v <= maxSize))
     const sizeMap = {
         [RegisterSize.Byte]: 'B',
         [RegisterSize.Word]: 'W',
@@ -18,17 +19,17 @@
 </script>
 
 <div class="size-selector-2" {style}>
-    {#each sizes as size}
-        <button
-            onclick={() => {
+	{#each sizes as size}
+		<button
+			onclick={() => {
                 selected = size
             }}
-            class="size-selector-2-button"
-            class:size-selector-2-button-selected={selected === size}
-        >
-            {sizeMap[size]}
-        </button>
-    {/each}
+			class="size-selector-2-button"
+			class:size-selector-2-button-selected={selected === size}
+		>
+			{sizeMap[size]}
+		</button>
+	{/each}
 </div>
 
 <style>
