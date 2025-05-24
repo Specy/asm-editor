@@ -52,3 +52,20 @@ The assembler will also allow you to use _macros_ and _directives_.
 
 - _Directives_ are **special instructions** that are **not executed by the CPU**, but are used by the **assembler** to control the assembly process.
   They can, for example, be used to **define constants**, **reserve space in memory**, or **include other files**.
+
+## Instruction naming
+
+Instructions in assembly languages are usually named after the operation they perform, which makes it easier to understand what the code does.
+
+For example, the `add` instruction is used to add two values, since the word "add" is pretty short. 
+
+For more complex operations, the names are usually either shorthands of a word, or an acronym of the operation.
+
+A few examples:
+
+- `mov` (move): moves a value from one place to another.
+- `cmp` (compare): compares two values.
+- `jmp` (jump): jumps to a specific address.
+- `bge` (branch if greater or equal): branches to a specific address if the first value is greater than or equal to the second value.
+- `bclr` (bit clear): clears a specific bit in a value.
+- etc...

@@ -1,0 +1,5 @@
+{
+  "name": "Branching and Control Flow",
+  "description": "Learn how to control the flow of your assembly programs using branching instructions. This lecture covers conditional and unconditional jumps, and the significance of labels in managing program execution paths.",
+  "order": 0
+}

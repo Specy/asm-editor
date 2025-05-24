@@ -1,0 +1,5 @@
+{
+  "name": "Loops",
+  "description": "Learn how to implement loops in assembly language. This lecture covers the mechanics of creating loops using jump instructions.",
+  "order": 1
+}
