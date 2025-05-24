@@ -263,7 +263,7 @@
     :global(.shiki),
     :global(pre:has(code)) {
         max-width: fit-content;
-        padding: 1rem;
+        padding: 0.5rem 1rem;
         min-width: min(100%, 71ch);
         margin: 1rem auto;
         box-shadow: 0 0 2rem 10px rgb(3 4 5 / 15%);

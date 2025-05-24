@@ -60,7 +60,7 @@ while_end:
 ```
 
 Now let's convert it to M68K assembly:
-```m68k|playground
+```m68k|playground|allow-open
     move.l #0, d0   ; i = 0
 while_start:
     cmp.l #10, d0   ; compare i with 10
@@ -71,7 +71,7 @@ while_end:
     add.l #20, d0   ; i = i + 20
 ```
 And let's also try to convert it to RISC-V assembly:
-```riscv|playground
+```riscv|playground|allow-open
     li t0, 0         # i = 0
     li t6, 10        # t6 = 10
 while_start:
