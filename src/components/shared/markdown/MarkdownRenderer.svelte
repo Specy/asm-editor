@@ -284,6 +284,7 @@
         overflow-x: auto;
         display: block;
         margin: 0.5rem auto;
+        font-family: "Fira Code", monospace;
         border-radius: 0.5rem;
         border: solid 0.1rem var(--tertiary);
         width: fit-content;
