@@ -180,7 +180,7 @@ Stack Pointer.
 Let's now do the same thing but in M68K assembly language.
 Execute this code step by step and look at the memory to see how the stack is manipulated.
 
-```m68k|playground|no-registers|memory|no-flags
+```m68k|playground|no-registers|memory|no-flags|allow-open
 * ignore this, it sets things up *
 move.l #$11111111, $101C
 move.l #$22222222, $1018
