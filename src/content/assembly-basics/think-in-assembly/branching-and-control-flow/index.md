@@ -11,7 +11,7 @@ This is where **branching** and **control flow** come into play.
 Branching is the ability of a program to change (or branch) to a different part of code, based on some condition.
 Think of branching like an "if" statement. If the condition is true, go somewhere, if it is false, go somewhere else (or continue executing the next instruction).
 
-The terminology we usually use in branching and control flo is that if a condition is true, then we "jump to" a specific point in code (the branch).
+The terminology we usually use in branching and control flow is that if a condition is true, then we "jump to" a specific point in code (the branch).
 
 If you have experience in C or similar low level languages, this might look like a `goto` statement.
 Let's first try to understand the logic behind the structure of how an `if` statement is converted to branching with a `goto` statement.

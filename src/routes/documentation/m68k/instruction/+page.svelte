@@ -32,7 +32,7 @@
         property="og:description"
         content="Read the M68K documentation, including all the instructions with addressing modes and the assembler features"
     />
-
+</svelte:head>
 <Page contentStyle="padding-top: 4rem; gap: 1rem; padding: 1rem">
     <h1>M68K Instructions</h1>
     {#each groups as group}

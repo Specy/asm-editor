@@ -31,7 +31,7 @@
     import CallStack from '$cmp/specific/project/user-tools/CallStack.svelte'
     import MutationsViewer from '$cmp/specific/project/user-tools/MutationsRenderer.svelte'
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
-    import FaDonate from 'svelte-icons/fa/FaDonate.svelte'
+    import FaDonate from 'svelte-icons/fa/FaHeart.svelte'
     import { getM68kErrorMessage } from '$lib/languages/M68K/M68kUtils'
     import Row from '$cmp/shared/layout/Row.svelte'
     import TestcasesEditor from '$cmp/specific/project/testcases/TestcasesEditor.svelte'

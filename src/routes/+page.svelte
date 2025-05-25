@@ -15,7 +15,7 @@
     import { ThemeStore } from '$stores/themeStore.svelte'
     import { onMount } from 'svelte'
     import FaDownload from 'svelte-icons/fa/FaDownload.svelte'
-    import FaDonate from 'svelte-icons/fa/FaDonate.svelte'
+    import FaDonate from 'svelte-icons/fa/FaHeart.svelte'
     import Button from '$cmp/shared/button/Button.svelte'
     import Page from '$cmp/shared/layout/Page.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
@@ -57,8 +57,7 @@
 			<div class="presentation">
 				<div class="welcome-title" class:textShadow={textShadowPrimary}>
 					The all in one web IDE for Assembly <span style="font-size: 1.5rem;"
-				>M68K, MIPS, RISC-V, X86</span
-				>
+				>M68K, MIPS, RISC-V, X86</span>
 				</div>
 				<Row gap="0.6rem" wrap>
 					<ButtonLink

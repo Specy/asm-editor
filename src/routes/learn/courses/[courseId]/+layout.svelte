@@ -2,7 +2,7 @@
     import Navbar from '$cmp/shared/layout/Navbar.svelte'
     import TogglableSection from '$cmp/shared/layout/TogglableSection.svelte'
     import FaBars from 'svelte-icons/fa/FaBars.svelte'
-    import FaDonate from 'svelte-icons/fa/FaDonate.svelte'
+    import FaDonate from 'svelte-icons/fa/FaHeart.svelte'
     import FaStar from 'svelte-icons/fa/FaStar.svelte'
 
     import Icon from '$cmp/shared/layout/Icon.svelte'

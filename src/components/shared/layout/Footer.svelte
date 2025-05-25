@@ -5,7 +5,7 @@
     import { toast } from '$stores/toastStore'
     import { page } from '$app/state'
     import AnimatedRgbLine from '$cmp/shared/misc/AnimatedRgbLine.svelte'
-    import FaDonate from 'svelte-icons/fa/FaDonate.svelte'
+    import FaDonate from 'svelte-icons/fa/FaHeart.svelte'
     interface Props {
         pages?: RegExp[]
     }
