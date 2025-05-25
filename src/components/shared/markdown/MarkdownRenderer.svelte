@@ -248,6 +248,7 @@
     }
 
     :global(pre:has(code)) {
+        width: 100%;
         background: var(--secondary) !important;
         padding: 1rem;
         border-radius: 0.5rem;

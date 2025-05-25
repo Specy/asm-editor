@@ -8,6 +8,19 @@
     import Row from '$cmp/shared/layout/Row.svelte'
 </script>
 
+
+<svelte:head>
+    <meta
+      name="description"
+      content="Write, learn and run M68K, MIPS, RISC-V, X86 assembly code in your browser. View registers and memory, step and undo the execution."
+    />
+    <meta
+      property="og:description"
+      content="Write, learn and run M68K, MIPS, RISC-V, X86 assembly code in your browser. View registers and memory, step and undo the execution."
+    />
+    <meta property="og:title" content="Asm Editor" />
+</svelte:head>
+
 <DefaultNavbar />
 
 <Page cropped contentStyle="padding: 1rem; padding-top: 4rem">

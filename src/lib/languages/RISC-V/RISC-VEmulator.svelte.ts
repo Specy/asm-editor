@@ -45,7 +45,6 @@ export const ALTERNATIVE_RISCVRegister_NAMES = new Array(RISCV_REGISTERS.length)
     .fill(0)
     .map((_, i) => `x${i}`)
 
-const STACK_POINTER_INDEX = RISCVRegisterNames.indexOf('$sp')
 
 function assembleErrorToMonacoError(error: RISCVAssembleError): MonacoError {
     return {

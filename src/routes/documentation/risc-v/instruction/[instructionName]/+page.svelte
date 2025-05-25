@@ -32,7 +32,6 @@
 <svelte:head>
     <meta name="description" content={`The ${ins.name} instruction.\n${ins.description}`} />
     <meta property="og:description" content={`The ${ins.name} instruction.\n${ins.description}`} />
-    <meta name="keywords" content={ins.name} />
     <meta name="author" content="specy" />
     <title>
         Docs - {ins.name}

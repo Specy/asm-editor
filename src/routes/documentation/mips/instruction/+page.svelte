@@ -20,6 +20,18 @@
 
 <title> MIPS Instructions </title>
 
+<svelte:head>
+    <title>MIPS Instructions</title>
+    <meta
+        name="description"
+        content="Read the MIPS documentation, including all the instructions with addressing modes and the assembler features"
+    />
+    <meta
+        property="og:description"
+        content="Read the MIPS documentation, including all the instructions with addressing modes and the assembler features"
+    />
+</svelte:head>
+
 <Page contentStyle="padding-top: 4rem; gap: 1rem; padding: 1rem">
     <h1>MIPS Instructions</h1>
     {#each groups as group}

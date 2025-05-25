@@ -22,6 +22,16 @@
 </script>
 
 <title> M68K Instructions </title>
+<svelte:head>
+    <title>M68K Instructions</title>
+    <meta
+        name="description"
+        content="Read the M68K documentation, including all the instructions with addressing modes and the assembler features"
+    />
+    <meta
+        property="og:description"
+        content="Read the M68K documentation, including all the instructions with addressing modes and the assembler features"
+    />
 
 <Page contentStyle="padding-top: 4rem; gap: 1rem; padding: 1rem">
     <h1>M68K Instructions</h1>

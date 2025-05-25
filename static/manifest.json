@@ -6,7 +6,7 @@
     "display": "fullscreen",
     "scope": "/",
     "start_url": "/projects",
-    "description": "Write, learn and run M68K assembly code on your browser. View registers and memory, step and undo the program.",
+    "description": "Write, learn and run M68K assembly code in your browser. View registers and memory, step and undo the execution.",
     "screenshots": [
         {
             "src": "/images/ASM-editor.webp",

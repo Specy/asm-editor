@@ -145,6 +145,14 @@
     })
 </script>
 
+<svelte:head>
+    <title>Embed - Assembly Emulator</title>
+    <meta name="description" content="Embed an assembly emulator in your website" />
+    <meta property="og:title" content="Embed - Asm Editor" />
+    <meta property="og:description" content="Embed an assembly emulator in your website" />
+</svelte:head>
+
+
 {#if !inIframe}
     <DefaultNavbar />
 {/if}

@@ -22,8 +22,8 @@
 
 <svelte:head>
     <title>Donate</title>
-    <meta name="description" content="Donate and support me" />
-    <meta property="og:description" content="Donate and support me" />
+    <meta name="description" content="Donate and support the development of asm-editor" />
+    <meta property="og:description" content="Donate and support the development of asm-editor" />
     <meta property="og:title" content="Donate" />
 </svelte:head>
 

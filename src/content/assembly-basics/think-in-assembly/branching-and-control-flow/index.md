@@ -103,7 +103,6 @@ false_branch:
     move #200, d0   ; x = 200
 end:
 ```
-Even though it's not important now, let's explain what each instruction does in this code
 
 Try to change the `move #50, d0` to `move #0, d0` and see how the code is executed differently.
 

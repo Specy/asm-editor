@@ -3,6 +3,18 @@
     import MipsDirectiveDocumentation from '$cmp/documentation/mips/MIPSDirectiveDocumentation.svelte'
 </script>
 
+<svelte:head>
+    <title>MIPS Directives</title>
+    <meta
+      name="description"
+      content="MIPS directives are used by the assembler to execute operations at assembly time. Learn how to use them and the available directives."
+    />
+    <meta
+      property="og:description"
+      content="MIPS directives are used by the assembler to execute operations at assembly time. Learn how to use them and the available directives."
+    />
+</svelte:head>
+
 <Page cropped contentStyle="padding: 1rem; gap: 1rem;">
     <h1>MIPS directives</h1>
     <p>
