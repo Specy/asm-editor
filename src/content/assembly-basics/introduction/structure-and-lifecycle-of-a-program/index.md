@@ -63,7 +63,7 @@ Once the instruction finishes execution, the Program Counter is incremented by t
 Look at this example in m68k that adds 1 to a register a few times, click compile and then `step` until the end. Look at the Program Counter on the
 top right increasing as you run the code.
 
-```m68k|playground
+```m68k|playground|pc|no-flags
 add #1, d0
 add #1, d0
 add #1, d0

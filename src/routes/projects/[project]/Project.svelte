@@ -378,7 +378,7 @@
                     bind:editor
                     bind:code={project.code}
                     codeOverride={emulator.compiledCode}
-                    breakpoints={emulator.breakpoints}
+                    breakpoints={emulator.breakpoints.map(Number)}
                     errors={emulator.compilerErrors}
                     language={project.language}
                     highlightedLine={emulator.line}

@@ -4,7 +4,7 @@ import topLevelAwait from 'vite-plugin-top-level-await'
 import wasm from 'vite-plugin-wasm'
 import type { UserConfig } from 'vite'
 import { resolve } from 'path'
-
+import devtoolsJson from 'vite-plugin-devtools-json';
 const config: UserConfig = {
     server: {
         port: 3000
@@ -29,6 +29,7 @@ const config: UserConfig = {
         minify: 'terser'
     },
     plugins: [
+        devtoolsJson(),
         sveltekit(),
         topLevelAwait(),
         wasm()

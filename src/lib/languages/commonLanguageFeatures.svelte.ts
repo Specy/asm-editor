@@ -283,6 +283,9 @@ export type EmulatorSettings = {
     language?: AvailableLanguages,
     globalPageSize?: number
     globalPageElementsPerRow?: number
+    baseAddress?: bigint
+    stackAddress?: bigint
+    initialMemoryValue?: number
 }
 
 export type BaseEmulatorActions = {
