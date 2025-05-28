@@ -14,11 +14,7 @@ import { createDebouncer } from '$lib/utils'
 import { Prompt } from '$stores/promptStore'
 import { settingsStore } from '$stores/settingsStore.svelte'
 import type { Testcase, TestcaseResult, TestcaseValidationError } from '$lib/Project.svelte'
-import {
-    byteSliceToNum,
-    isMemoryChunkEqual,
-    numberToByteSlice
-} from '$cmp/specific/project/memory/memoryTabUtils'
+import { byteSliceToNum, isMemoryChunkEqual, numberToByteSlice } from '$cmp/specific/project/memory/memoryTabUtils'
 
 const emultor = X86Interpreter.create('')
 
@@ -250,6 +246,7 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
     function updateMemory() {
         if (!x86) return
         const temp = state.memory.global.data.current
+        console.log(Number(state.memory.global.address), state.memory.global.pageSize)
         const memory = x86.readMemoryBytes(
             Number(state.memory.global.address),
             state.memory.global.pageSize
@@ -259,6 +256,7 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
         state.memory.tabs.forEach((tab) => {
             const temp = tab.data.current
             const memory = x86.readMemoryBytes(Number(tab.address), tab.pageSize)
+            console.log(Number(tab.address), tab.pageSize)
             tab.data.current = new Uint8Array(memory)
             tab.data.prevState = temp
         })
@@ -308,7 +306,8 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
         return x86.isTerminated()
     }
 
-    function undo(amount = 1) {}
+    function undo(amount = 1) {
+    }
 
     async function run(haltLimit: number) {
         if (!x86) throw new Error('Interpreter not initialized')
@@ -317,8 +316,8 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
         const breakpoints = state.breakpoints.map(
             (line) => x86.getStatementAtSourceLine(line).address
         )
-        const hasBreakpoints = breakpoints.length > 0
         try {
+            const hasBreakpoints = breakpoints.length > 0
             if (!hasBreakpoints) {
                 x86.simulate(haltLimit)
             } else {

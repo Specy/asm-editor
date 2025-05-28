@@ -14,12 +14,14 @@ export type CompilationError = {
 }
 
 export enum EmulatorStatus {
-
+    Terminated = 0,
+    Running = 0,
 }
 
-type Instruction = {
-    address: number
+export type Instruction = {
+    address: bigint
     lineNumber: number
+    code: string
 }
 
 export type EmulatorConfig<R extends string> = {
@@ -89,7 +91,7 @@ export abstract class BaseEmulator<T, R extends string> {
 
     abstract _getSp(): bigint;
 
-    abstract _getFlags(): {name: string, set: boolean}[];
+    abstract _getFlags(): {name: string, value: number, prev?: number}[];
 
     abstract _getCallStack(): StackFrame[];
 

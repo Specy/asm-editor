@@ -34,6 +34,7 @@
         position = 'top',
         systemSize
     }: Props = $props()
+
     let registers = $derived(_registers.filter((r) => !hiddenRegistersNames.includes(r.name)))
     let usesHex = $derived(!settingsStore.values.useDecimalAsDefault.value)
     let chunks: RegisterChunk[][] = $derived(registers.map((r) => r.toSizedGroups(size)))
