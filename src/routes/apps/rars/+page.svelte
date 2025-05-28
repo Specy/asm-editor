@@ -18,7 +18,11 @@
 
         async function onload() {
             if (!('cheerpjRunJar' in window)) {
-                await (window as any).cheerpjInit({version: 11})
+                await (window as any).cheerpjInit({
+										version: 11,
+                    clipboardMode: 'system',
+                    overrideShortcuts: () => true,
+                })
             }
             CHEERP = {
                 cheerpjRunJar: (window as any).cheerpjRunJar,
