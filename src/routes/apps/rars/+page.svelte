@@ -21,7 +21,6 @@
                 await (window as any).cheerpjInit({
 										version: 11,
                     clipboardMode: 'system',
-                    overrideShortcuts: () => true,
                 })
             }
             CHEERP = {
