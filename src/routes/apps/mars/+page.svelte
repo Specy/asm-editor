@@ -20,7 +20,7 @@
             if (!('cheerpjRunJar' in window)) {
                 await (window as any).cheerpjInit({
 										version: 11,
-                    clipboardMode: 'system',
+                    clipboardMode: 'permission',
                 })
             }
             CHEERP = {
