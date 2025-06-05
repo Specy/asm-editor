@@ -71,7 +71,7 @@ Say you want to add 1 byte of data to the stack:
 
 ### Pop (remove an item)
 
-When you want to "remove" data from the stack, you just need to decrease the Stack Pointer by the size of the data you
+When you want to "remove" data from the stack, you just need to increase the Stack Pointer by the size of the data you
 want to remove.
 This will not actually "delete" the data itself (as in, erase the bits from memory), but since you are not "supposed to"
 use

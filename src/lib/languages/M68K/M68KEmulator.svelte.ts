@@ -365,16 +365,16 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
                         return {
                             type: 'PushCallStack',
                             value: {
-                                to: m.value.to,
-                                from: m.value.from
+                                to: BigInt(m.value.to),
+                                from: BigInt(m.value.from)
                             }
                         }
                     } else if (m.type === 'PopCall') {
                         return {
                             type: 'PopCallStack',
                             value: {
-                                to: m.value.to,
-                                from: m.value.from
+                                to: BigInt(m.value.to),
+                                from: BigInt(m.value.from)
                             }
                         }
                     }

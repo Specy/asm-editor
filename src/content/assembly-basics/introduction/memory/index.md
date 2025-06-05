@@ -46,8 +46,6 @@ bytes.
 In **little endian**, the **least significant byte (LSB)** is stored at the _lowest address_, and the **most significant
 byte (MSB)**
 is stored at the _highest address_.
-This means that when you read a multi-byte value from memory, you start reading from the **offset** (which will have the
-LSB) and move **to the right**.
 
 For example, if you have the value `0x12345678` at address `0x00000000` in memory, it would be represented as:
 
@@ -59,8 +57,6 @@ For example, if you have the value `0x12345678` at address `0x00000000` in memor
 
 In **big endian**, it's the _opposite_ — the **most significant byte (MSB)** is stored at the _lowest address_, and the
 **least significant byte (LSB)** is stored at the _highest address_.
-This means that when you read a multi-byte value from memory, you start reading from the **offset** (which will have the
-MSB) and move **to the left**.
 
 This is _easier to understand_, because it reads the **same way we write numbers**.
 
