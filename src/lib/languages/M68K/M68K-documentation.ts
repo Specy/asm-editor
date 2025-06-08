@@ -243,7 +243,7 @@ The register d0 will be used as the trap type which are:
 | 0      | Print string pointed by a1 with length read in d1.w, null terminated with max of 255, then prints a new line.      |
 | 1      | Print string pointed by a1 with length read in d1.w.      |
 | 2      | Read string from keyboard, writes the string at address of a1 and overrides the value of d1 with the length of the string.       |
-| 3      | Print number at d1.  |
+| 3      | Print signed number at d1.  |
 | 4      | Read number, writes to d1.   |
 | 5      | Read character, writes to d1.|
 | 6      | Print character at d1.       |
@@ -251,6 +251,8 @@ The register d0 will be used as the trap type which are:
 | 9      | Terminate.     |
 | 13     | Prints null terminated string pointed by a1 then prints new line, errors if string is longer than 16kb, to prevent infinite loops.   |
 | 14     | Prints null terminated string pointed by a1, errors if string is longer than 16kb, to prevent infinite loops.       |
+| 15     | Prints unsigned number at d1 in base (from 2 to 36) specified in d2.b
+| 23     | Delays the execution of the simulator by milliseconds of the value in d1.
 `.trim()
 }
 const dirsDesc = {

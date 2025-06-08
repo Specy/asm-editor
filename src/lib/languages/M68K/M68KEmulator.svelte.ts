@@ -471,6 +471,13 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 interpreter.answerInterrupt({ type })
                 break
             }
+            case 'DisplayNumberInBase': {
+                const { value, base } = interrupt.value
+                const str = value.toString(base)
+                state.stdOut += str
+                interpreter.answerInterrupt({ type })
+                break
+            }
             case 'ReadChar': {
                 const char = await handlers.ReadChar()
                 if (!char) throw new Error(`Expected a character, got "${char}"`)
