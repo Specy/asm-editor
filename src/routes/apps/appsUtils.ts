@@ -13,7 +13,3 @@ export async function isClipboardReadSupported() {
         return false;
     }
 }
-
-isClipboardReadSupported().then((supported) => {
-    console.log("Clipboard read supported:", supported);
-});
