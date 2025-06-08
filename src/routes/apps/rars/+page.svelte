@@ -5,6 +5,7 @@
     import { onMount } from 'svelte'
     import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
     import Page from '$cmp/shared/layout/Page.svelte'
+    import { isClipboardReadSupported } from '$src/routes/apps/appsUtils'
 
     let CHEERP = $state<null | {
         cheerpjRunJar: (jarUrl: string) => void,
@@ -17,10 +18,12 @@
     onMount(() => {
 
         async function onload() {
+            const clipboardSupported = await isClipboardReadSupported()
             if (!('cheerpjRunJar' in window)) {
                 await (window as any).cheerpjInit({
 										version: 11,
-                    clipboardMode: 'permission',
+                    clipboardMode: clipboardSupported ? 'permission' : 'system',
+
                 })
             }
             CHEERP = {
@@ -41,8 +44,6 @@
     })
 
     let wrapper = $state<HTMLElement | null>(null)
-
-    $inspect(CHEERP)
 
     $effect(() => {
         if (CHEERP && wrapper) {
