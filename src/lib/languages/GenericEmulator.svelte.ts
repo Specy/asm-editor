@@ -95,7 +95,14 @@ export abstract class GenericEmulator<T, R extends string> extends BaseEmulator<
         if (!settings.values.autoScrollStackTab.value || !this.getInstance()) return
         const stackTab = current.memory.tabs.find((e) => e.name === 'Stack')
         const sp = this._getSp()
-        if (stackTab) stackTab.address = sp - (sp % BigInt(stackTab.pageSize)) - BigInt(stackTab.pageSize)
+        if (!stackTab) return
+        const newAddress = sp - (sp % BigInt(stackTab.pageSize)) - BigInt(stackTab.pageSize)
+        if (stackTab.address !== newAddress) {
+            stackTab.address = newAddress
+            this.updateMemory()
+            //reset the prevState as we don't know what the previous state was
+            stackTab.data.prevState = stackTab.data.current
+        }
     }
 
     protected semanticCheck() {

@@ -284,7 +284,14 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         if (!settings.values.autoScrollStackTab.value || !mips) return
         const stackTab = current.memory.tabs.find((e) => e.name === 'Stack')
         const sp = mips.stackPointer
-        if (stackTab) stackTab.address = BigInt(sp - (sp % stackTab.pageSize))
+        if (!stackTab) return
+        const newAddress = BigInt(sp - (sp % stackTab.pageSize))
+        if (stackTab.address !== newAddress) {
+            stackTab.address = newAddress
+            updateMemory()
+            //reset the prevState as we don't know what the previous state was
+            stackTab.data.prevState = stackTab.data.current
+        }
     }
 
     function setRegisters(override?: number[]) {

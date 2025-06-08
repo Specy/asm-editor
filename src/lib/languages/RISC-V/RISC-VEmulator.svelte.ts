@@ -257,8 +257,15 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
         const current = state
         if (!settings.values.autoScrollStackTab.value || !riscv) return
         const stackTab = current.memory.tabs.find((e) => e.name === 'Stack')
-        const sp = options.language === 'RISC-V-64' ? BigInt(riscv.stackPointerLong) :  BigInt(riscv.stackPointer)
-        if (stackTab) stackTab.address = sp - (sp % BigInt(stackTab.pageSize))
+        const sp = options.language === 'RISC-V-64' ? BigInt(riscv.stackPointerLong) : BigInt(riscv.stackPointer)
+        if (!stackTab) return
+        const newAddress = sp - (sp % BigInt(stackTab.pageSize))
+        if (stackTab.address !== newAddress) {
+            stackTab.address = newAddress
+            updateMemory()
+            //reset the prevState as we don't know what the previous state was
+            stackTab.data.prevState = stackTab.data.current
+        }
     }
 
     function setRegisters(override?: number[]) {

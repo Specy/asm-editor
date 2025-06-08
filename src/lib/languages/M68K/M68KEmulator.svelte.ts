@@ -244,7 +244,14 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         if (!settings.values.autoScrollStackTab.value || !interpreter) return
         const stackTab = current.memory.tabs.find((e) => e.name === 'Stack')
         const sp = interpreter.getSp()
-        if (stackTab) stackTab.address = BigInt(sp - (sp % stackTab.pageSize))
+        if (!stackTab) return
+        const newAddress = BigInt(sp - (sp % stackTab.pageSize))
+        if (stackTab.address !== newAddress) {
+            stackTab.address = newAddress
+            updateMemory()
+            //reset the prevState as we don't know what the previous state was
+            stackTab.data.prevState = stackTab.data.current
+        }
     }
 
     function updateStatusRegisters(override?: number[]) {
