@@ -287,6 +287,7 @@
         flex-direction: column;
         gap: 2rem;
         z-index: 10;
+        padding: 1rem;
     }
 
     .project {
@@ -299,6 +300,7 @@
 
     .loading {
         font-size: 3.5rem;
+        text-align: center;
     }
 
     .error {
