@@ -5,6 +5,16 @@
 	$border: #2b3138;
 	$accent: #1f6feb;
 
+
+	button {
+		background-color: transparent;
+		color: white;
+	}
+
+	.carta-toolbar-left :last-child {
+		display: none;
+	}
+
 	&.carta-editor {
 		background-color: $background;
 		border: 1px solid $border;
@@ -16,13 +26,13 @@
 
 		.carta-wrapper {
 			padding: 1rem;
+			overflow: auto;
 			flex-grow: 1;
 		}
 
 		.carta-input,
 		.carta-renderer {
-			min-height: 120px;
-			max-height: 160px;
+
 			overflow: auto;
 		}
 
@@ -44,6 +54,7 @@
 				width: 2rem;
 				height: 2rem;
 
+
 				&:hover {
 					color: white;
 					background-color: $border;
@@ -58,11 +69,11 @@
 		}
 
 		.carta-toolbar-left {
-			& > *:first-child {
+			&>*:first-child {
 				border-top-left-radius: 0.5rem;
 			}
 
-			& > * {
+			&>* {
 				padding-left: 1rem;
 				padding-right: 1rem;
 				font-size: 0.95rem;
@@ -101,6 +112,7 @@
 				padding-right: 6px;
 
 				margin-top: 2px;
+
 				&:first-child {
 					margin-top: 0;
 				}

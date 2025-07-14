@@ -153,16 +153,7 @@
 						<div>Code completion</div>
 					{/snippet}
 				</MainPageLinkPreview>
-				<MainPageLinkPreview href="#tools" title="Tools section">
-					{#snippet icon()}
-						<div>
-							<FaTools />
-						</div>
-					{/snippet}
-					{#snippet description()}
-						<div>Tools</div>
-					{/snippet}
-				</MainPageLinkPreview>
+				
 				<MainPageLinkPreview href="/embed" title="Embed the app in your website">
 					{#snippet icon()}
 						<div>
@@ -181,6 +172,16 @@
 					{/snippet}
 					{#snippet description()}
 						<div>Exam</div>
+					{/snippet}
+				</MainPageLinkPreview>
+				<MainPageLinkPreview href="#tools" title="Tools section">
+					{#snippet icon()}
+						<div>
+							<FaTools />
+						</div>
+					{/snippet}
+					{#snippet description()}
+						<div>Tools</div>
 					{/snippet}
 				</MainPageLinkPreview>
 			</div>
@@ -239,6 +240,20 @@
 					<GoLinkExternal />
 				</div>
 			</a>
+			</div>
+		</MainPageSection>
+		<MainPageSection id="exam">
+			{#snippet title()}
+				<div>Exam</div>
+			{/snippet}
+			<div class="description" class:textShadow={textShadowPrimary}>
+				Create exams for students with the <a href="/exam" title="Exam tool" class="external-link">
+					Exam tool
+					<div style="width: 1rem; height: 1rem; margin-top: 0.2rem; margin-left: 0.3rem">
+						<GoLinkExternal />
+					</div>
+				</a>
+				where the editor is locked down.
 			</div>
 		</MainPageSection>
 	</div>

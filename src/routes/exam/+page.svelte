@@ -88,7 +88,10 @@
                     bind:value={settings.password}
                 />
             </Row>
-            <Column flex1>
+            <Column 
+            flex1
+            style="max-height: 20rem; overflow: hidden;"
+            >
                 <MarkdownEditor bind:value={settings.track} />
             </Column>
             <p style="padding: 1rem; max-width: 70ch">

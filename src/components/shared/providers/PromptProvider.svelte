@@ -119,7 +119,7 @@
         font-size: 0.9rem;
         display: flex;
         margin-top: auto;
-        line-height: 1.3;
+        line-height: 1.5;
         white-space: pre-wrap;
     }
 </style>

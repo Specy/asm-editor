@@ -59,7 +59,7 @@
             project.set(parsed)
             if (isExam && !parsed.exam?.submission) {
                 const name = await Prompt.askText(
-                    'Welcome to the exam! The app will go full screen soon.\nIF YOU EXIT FULL SCREEN OR CHANGE PAGE, YOUR EDITOR WILL BE DISABLED.\nPlease write your name to start the exam.',
+                    'Welcome to the exam! The app will go full screen soon.\n\nIF YOU EXIT FULL SCREEN OR CHANGE PAGE, YOUR EDITOR WILL BE DISABLED.\n\nPlease write your name to start the exam.',
                     false
                 )
                 examSubmission.name = name
@@ -118,7 +118,7 @@
 
     async function finishExam(exam: Project) {
         if (!isExam) return
-        const wantsToFinish = await Prompt.confirm('Do you want to finish the exam?')
+        const wantsToFinish = await Prompt.confirm('Do you want to finish the exam? You will not be able to edit the code anymore.')
         if (!wantsToFinish) return
         examDisabled = true
         examSubmission.submissionTimestamp = Date.now()
