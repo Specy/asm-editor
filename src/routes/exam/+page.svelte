@@ -75,7 +75,7 @@
             <Row align="center" justify="between" gap="1rem">
                 <Header type="h2">Language</Header>
                 <Select
-                    wrapperStyle="max-width: 14rem"
+                    wrapperStyle="max-width: 12.6rem"
                     bind:value={settings.language}
                     options={Object.keys(BASE_CODE) as AvailableLanguages[]}
                 />

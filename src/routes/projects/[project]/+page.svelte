@@ -234,7 +234,7 @@
                 unlock it
             </p>
             <Row gap="1rem">
-                <Input type="password" placeholder="Unlock password" bind:value={examPassword} />
+                <Input type="text" placeholder="Unlock password" bind:value={examPassword} />
                 <Button onClick={unlockExam}>Unlock</Button>
             </Row>
         </div>
