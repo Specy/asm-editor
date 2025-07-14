@@ -62,10 +62,10 @@
 </script>
 
 <svelte:head>
-    <title>Embed - Assembly Emulator</title>
-    <meta name="description" content="Embed an assembly emulator in your website" />
-    <meta property="og:title" content="Embed - Asm Editor" />
-    <meta property="og:description" content="Embed an assembly emulator in your website" />
+    <title>Exam Mode - Asm Editor</title>
+    <meta name="description" content="Create an assembly exam" />
+    <meta property="og:title" content="Exam Mode - Asm Editor" />
+    <meta property="og:description" content="Create an assembly exam" />
 </svelte:head>
 
 <DefaultNavbar />
