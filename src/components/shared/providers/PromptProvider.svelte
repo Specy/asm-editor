@@ -79,7 +79,7 @@
         position: fixed;
         top: 1rem;
         overflow: hidden;
-        max-height: 15rem;
+        max-height: 20rem;
         max-width: 25rem;
         min-width: 20rem;
         color: var(--secondary-text);
