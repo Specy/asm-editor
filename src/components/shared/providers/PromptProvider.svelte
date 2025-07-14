@@ -1,6 +1,4 @@
 <script lang="ts">
-    import { run } from 'svelte/legacy'
-
     import { Prompt, PromptType } from '$stores/promptStore'
     import { fade } from 'svelte/transition'
 
@@ -81,8 +79,9 @@
         position: fixed;
         top: 1rem;
         overflow: hidden;
-        max-height: 10rem;
-        width: 20rem;
+        max-height: 15rem;
+        max-width: 25rem;
+        min-width: 20rem;
         color: var(--secondary-text);
         backdrop-filter: blur(3px);
         border-radius: 0.5rem;
@@ -120,5 +119,7 @@
         font-size: 0.9rem;
         display: flex;
         margin-top: auto;
+        line-height: 1.3;
+        white-space: pre-wrap;
     }
 </style>

@@ -3,6 +3,7 @@ import { db } from '$lib/storage/db'
 import { makeProjectFromExternal, type Project } from '$lib/Project.svelte'
 
 export const SHARE_ID = '__share__'
+export const EXAM_ID = '__exam__'
 
 function createProjectStore() {
     let inited = $state(false)

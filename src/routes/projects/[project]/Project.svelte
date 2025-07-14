@@ -44,13 +44,16 @@
     import BelowLineContent from '$cmp/specific/project/user-tools/BelowLineContent.svelte'
     import Card from '$cmp/shared/layout/Card.svelte'
     import Header from '$cmp/shared/layout/Header.svelte'
+    import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
 
     interface Props {
         project: Project
         emulator: Emulator
+        isExam?: boolean
+        examSubmission: Project['exam']['submission']
     }
 
-    let { project = $bindable(), emulator = $bindable() }: Props = $props()
+    let { project = $bindable(), emulator = $bindable(), isExam, examSubmission }: Props = $props()
 
     $effect(() => {
         emulator.setCode(project.code)
@@ -65,6 +68,7 @@
     let testcasesVisible = $state(false)
     let groupSize = $state(RegisterSize.Word)
     let errorStrings = $derived(emulator.errors.join('\n'))
+    let elapsedTime = $state(0)
     let info = $derived(
         emulator.terminated && emulator.executionTime >= 0
             ? `Ran in ${formatTime(emulator.executionTime)}`
@@ -77,6 +81,7 @@
         }
         wantsToLeave: void
         share: Project
+        finishedExam: Project
     }>()
     const pressedKeys = new Map<String, boolean>()
     const [debounced] = createDebouncer(3000)
@@ -157,11 +162,15 @@
         window.addEventListener('keydown', handleKeyDown)
         window.addEventListener('keyup', handleKeyUp)
         window.addEventListener('blur', clearPressed)
+        const interval = setInterval(() => {
+            elapsedTime += 1000
+        }, 1000)
         return () => {
             window.removeEventListener('keydown', handleKeyDown)
             window.removeEventListener('keyup', handleKeyUp)
             window.removeEventListener('blur', clearPressed)
             emulator.dispose()
+            clearInterval(interval)
         }
     })
 
@@ -196,105 +205,132 @@
         pc.setValue(emulator.pc)
         pc.setSize(emulator.systemSize)
     })
+
+    const remainingMinutes = $derived(
+        project.exam?.timeLimit && project.exam?.timeLimit > 0
+            ? Math.floor((project.exam.timeLimit - elapsedTime) / 60000)
+            : -1
+    )
+
+    const formattedSubmissionTime = $derived(
+        project.exam?.submission?.submissionTimestamp
+            ? new Date(project.exam.submission.submissionTimestamp).toLocaleString()
+            : ''
+    )
 </script>
 
 <header class="project-header">
-    <a
-        href="/projects"
-        title="Go back to your projects"
-        onclick={(e) => {
-            e.preventDefault()
-            dispatcher('wantsToLeave')
-        }}
-    >
-        <Icon size={2}>
-            <FaAngleLeft />
-        </Icon>
-    </a>
-    <h1 style="font-size: 1.6rem; margin-left: 0.4rem" class="ellipsis">{project.name}</h1>
-    <Row gap="0.5rem" style="margin-left: auto;">
-        <Button
-            onClick={() => dispatcher('share', project)}
-            hasIcon
-            cssVar="accent2"
-            style="padding:0; width:2.2rem; height:2.2rem;"
-        >
-            <Icon>
-                <FaShareAlt />
-            </Icon>
-        </Button>
-        <ButtonLink
-            href="/donate"
-            cssVar="accent2"
-            style="padding:0; width:2.2rem; height:2.2rem;"
-            hasIcon
-        >
-            <Icon>
-                <FaDonate />
-            </Icon>
-        </ButtonLink>
-        <Button
-            onClick={() => toggleWindow('shortcuts')}
-            hasIcon
-            cssVar="accent2"
-            style="padding:0; width:2.2rem; height:2.2rem"
-        >
-            <Icon>
-                <FaKeyboard />
-            </Icon>
-        </Button>
-        <Button
-            onClick={() => toggleWindow('documentation')}
-            hasIcon
-            cssVar="accent2"
-            style="padding:0; width:2.2rem; height:2.2rem"
-        >
-            <Icon>
-                <FaBook />
-            </Icon>
-        </Button>
-        <Button
-            onClick={() => toggleWindow('settings')}
-            hasIcon
-            cssVar="accent2"
-            style="padding:0; width:2.2rem; height:2.2rem"
-        >
-            <Icon>
-                <FaCog />
-            </Icon>
-        </Button>
-        <Button
-            onClick={() => {
-                dispatcher('save', {
-                    silent: false,
-                    data: project
-                })
+    {#if !isExam}
+        <a
+            href="/projects"
+            title="Go back to your projects"
+            onclick={(e) => {
+                e.preventDefault()
+                dispatcher('wantsToLeave')
             }}
-            cssVar="accent2"
-            hasIcon
-            style="padding:0; width:2.2rem; height:2.2rem"
         >
-            <Icon>
-                <FaSave />
+            <Icon size={2}>
+                <FaAngleLeft />
             </Icon>
-        </Button>
-    </Row>
-    <ShortcutEditor bind:visible={shortcutsVisible} />
-    <Settings bind:visible={settingsVisible} language={project.language} />
-    <FloatingLanguageDocumentation
-        bind:visible={documentationVisible}
-        language={project.language}
-    />
-    <TestcasesEditor
-        systemSize={emulator.systemSize}
-        registerNames={emulator.registers.map((r) => r.name)}
-        hiddenRegistersNames={emulator.hiddenRegisters}
-        bind:visible={testcasesVisible}
-        {testcasesResult}
-        bind:testcases={project.testcases}
-    />
+        </a>
+        <h1 style="font-size: 1.6rem; margin-left: 0.4rem" class="ellipsis">{project.name}</h1>
+        <Row gap="0.5rem" style="margin-left: auto;">
+            <Button
+                onClick={() => dispatcher('share', project)}
+                hasIcon
+                cssVar="accent2"
+                style="padding:0; width:2.2rem; height:2.2rem;"
+            >
+                <Icon>
+                    <FaShareAlt />
+                </Icon>
+            </Button>
+            <ButtonLink
+                href="/donate"
+                cssVar="accent2"
+                style="padding:0; width:2.2rem; height:2.2rem;"
+                hasIcon
+            >
+                <Icon>
+                    <FaDonate />
+                </Icon>
+            </ButtonLink>
+            <Button
+                onClick={() => toggleWindow('shortcuts')}
+                hasIcon
+                cssVar="accent2"
+                style="padding:0; width:2.2rem; height:2.2rem"
+            >
+                <Icon>
+                    <FaKeyboard />
+                </Icon>
+            </Button>
+            <Button
+                onClick={() => toggleWindow('documentation')}
+                hasIcon
+                cssVar="accent2"
+                style="padding:0; width:2.2rem; height:2.2rem"
+            >
+                <Icon>
+                    <FaBook />
+                </Icon>
+            </Button>
+            <Button
+                onClick={() => toggleWindow('settings')}
+                hasIcon
+                cssVar="accent2"
+                style="padding:0; width:2.2rem; height:2.2rem"
+            >
+                <Icon>
+                    <FaCog />
+                </Icon>
+            </Button>
+            <Button
+                onClick={() => {
+                    dispatcher('save', {
+                        silent: false,
+                        data: project
+                    })
+                }}
+                cssVar="accent2"
+                hasIcon
+                style="padding:0; width:2.2rem; height:2.2rem"
+            >
+                <Icon>
+                    <FaSave />
+                </Icon>
+            </Button>
+        </Row>
+        <ShortcutEditor bind:visible={shortcutsVisible} />
+        <Settings bind:visible={settingsVisible} language={project.language} />
+        <FloatingLanguageDocumentation
+            bind:visible={documentationVisible}
+            language={project.language}
+        />
+    {:else}
+        <Header type="h2">
+            {examSubmission.name} ({examSubmission.hash}){formattedSubmissionTime
+                ? ` - submitted at ${formattedSubmissionTime}`
+                : remainingMinutes >= 0
+                  ? ` - ${remainingMinutes} minutes left`
+                  : ''}
+        </Header>
+        {#if !examSubmission.submissionTimestamp}
+            <Button style="margin-left: auto;" onClick={() => dispatcher('finishedExam', project)}>
+                Finish exam
+            </Button>
+        {/if}
+    {/if}
 </header>
-
+<TestcasesEditor
+    editable={!isExam}
+    systemSize={emulator.systemSize}
+    registerNames={emulator.registers.map((r) => r.name)}
+    hiddenRegistersNames={emulator.hiddenRegisters}
+    bind:visible={testcasesVisible}
+    {testcasesResult}
+    bind:testcases={project.testcases}
+/>
 <ToggleableDraggable title="Call stack" left={300}>
     <CallStack
         stack={emulator.callStack}
@@ -498,8 +534,9 @@
                     }}
                 />
             </div>
+
             <div class="column" style="gap: 0.4rem">
-                {#if settingsStore.values.showMemory.value}
+                {#if settingsStore.values.showMemory.value && !(!running && !(emulator.canExecute || !!emulator.compiledCode))}
                     <div class="row" style="gap: 0.4rem">
                         <MemoryControls
                             systemSize={emulator.systemSize}
@@ -523,6 +560,16 @@
                         sp={emulator.sp}
                         callStackAddresses={makeColorizedLabels(emulator.callStack)}
                     />
+                {:else if !running && isExam}
+                    <Card
+                        background="secondary"
+                        style="padding: 1rem; overflow-y: auto; width: 32.9rem; height: 34.9rem;"
+                    >
+                        <MarkdownRenderer
+                            source={project.exam?.track || ''}
+                            style="padding: 0.5rem; font-size: 1.2rem"
+                        ></MarkdownRenderer>
+                    </Card>
                 {:else}
                     <button
                         style="background: transparent; height: 100%; cursor: pointer"

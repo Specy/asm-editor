@@ -34,7 +34,7 @@
         errors,
         breakpoints,
         editor = $bindable(),
-        viewZones = []
+        viewZones = [],
     }: Props = $props()
     let mockEditor: HTMLDivElement | null = $state()
     let monacoInstance: MonacoType | null = $state.raw()

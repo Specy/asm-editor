@@ -21,8 +21,8 @@
         registerNames: string[]
         hiddenRegistersNames?: string[]
         editable?: boolean
-        systemSize: RegisterSize
-    }
+        systemSize: RegisterSize,
+     }
 
     let {
         visible = $bindable(),
@@ -31,7 +31,8 @@
         registerNames,
         hiddenRegistersNames,
         editable = true,
-        systemSize
+        systemSize,
+
     }: Props = $props()
 
     function makeNewTestcase() {

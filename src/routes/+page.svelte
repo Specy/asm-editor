@@ -21,7 +21,7 @@
     import Row from '$cmp/shared/layout/Row.svelte'
     import { ProjectStore } from '$stores/projectsStore.svelte'
     import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
-
+	import FaDumbbell from 'svelte-icons/fa/FaDumbbell.svelte'
     const textShadowPrimary = ThemeStore.getColor('primary').isDark()
     const textShadowSecondary = ThemeStore.getColor('secondary').isDark()
     let installEvent: any = $state(null)
@@ -173,6 +173,16 @@
 						<div>Embed</div>
 					{/snippet}
 				</MainPageLinkPreview>
+				<MainPageLinkPreview href="/exam" title="Embed the app in your website">
+					{#snippet icon()}
+						<div>
+							<FaDumbbell />
+						</div>
+					{/snippet}
+					{#snippet description()}
+						<div>Exam</div>
+					{/snippet}
+				</MainPageLinkPreview>
 			</div>
 		</div>
 	</div>
@@ -299,7 +309,7 @@
 
   .links-row {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     @media screen and (max-width: 650px) {
       display: flex;
       flex-wrap: wrap;

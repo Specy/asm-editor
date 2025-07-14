@@ -12,6 +12,7 @@ export interface ProjectData {
     id: string
     language: AvailableLanguages
     testcases: Testcase[]
+    exam?: Exam
 }
 
 export type MemoryValue =
@@ -74,6 +75,20 @@ export type TestcaseValidationError =
           got: string
       }
 
+
+export type Exam = {
+    track: string
+    passwordHash: string,
+    timeLimit: number,
+    submission?: {
+        name: string
+        submissionTimestamp: number
+        hash: string
+        startedAt: number
+    }
+}
+
+
 export type TestcaseResult = {
     errors: TestcaseValidationError[]
     passed: boolean
@@ -91,6 +106,7 @@ type ProjectMetadata = {
     updatedAt: number
     id: string
     testcases: Testcase[]
+    exam?: Exam
 }
 
 const metaVersion = 1
@@ -136,7 +152,8 @@ export function makeProject(data?: Partial<ProjectData>) {
         name: data?.name ?? 'Untitled',
         language: lang,
         description: data?.description ?? '',
-        testcases: (data?.testcases ?? []) as Testcase[]
+        testcases: (data?.testcases ?? []) as Testcase[],
+        exam: data?.exam,
     })
 
     function toObject(): ProjectData {
@@ -148,7 +165,8 @@ export function makeProject(data?: Partial<ProjectData>) {
             language: state.language,
             description: state.description,
             testcases: state.testcases,
-            id: state.id
+            id: state.id,
+            exam: state.exam
         })
     }
 
@@ -161,7 +179,8 @@ export function makeProject(data?: Partial<ProjectData>) {
             createdAt: state.createdAt,
             updatedAt: state.updatedAt,
             testcases: state.testcases,
-            id: state.id
+            id: state.id,
+            exam: state.exam
         }
         const metaJson = serializer.stringify($state.snapshot(meta), null, 4)
         const commentCharacter = COMMENT_CHARACTER[state.language]
@@ -205,6 +224,9 @@ export function makeProject(data?: Partial<ProjectData>) {
         get testcases() {
             return state.testcases
         },
+        get exam() {
+            return state.exam
+        },
 
         set code(v: string) {
             state.code = v
@@ -229,6 +251,9 @@ export function makeProject(data?: Partial<ProjectData>) {
         },
         set updatedAt(v: number) {
             state.updatedAt = v
+        },
+        set exam(v: Exam | undefined) {
+            state.exam = v
         },
         set,
         toObject,

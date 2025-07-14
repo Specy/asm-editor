@@ -1,7 +1,7 @@
 <script lang="ts">
     import { page } from '$app/stores'
     import { makeProject, type Project } from '$lib/Project.svelte'
-    import { ProjectStore, SHARE_ID } from '$stores/projectsStore.svelte'
+    import { ProjectStore, SHARE_ID, EXAM_ID } from '$stores/projectsStore.svelte'
     import { onMount, untrack } from 'svelte'
     import { toast } from '$stores/toastStore'
     import ProjectEditor from './Project.svelte'
@@ -14,10 +14,23 @@
     import { DEFAULT_THEME, ThemeStore } from '$stores/themeStore.svelte'
     import { LANGUAGE_THEMES } from '$lib/Config'
     import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
-    import { createShareLink } from '$lib/utils'
+    import { createShareLink, makeHash } from '$lib/utils'
     import { serializer } from '$lib/json'
+    import PromptProvider from '$cmp/shared/providers/PromptProvider.svelte'
+    import Row from '$cmp/shared/layout/Row.svelte'
+    import Input from '$cmp/shared/input/Input.svelte'
+    import Button from '$cmp/shared/button/Button.svelte'
 
     let project = makeProject()
+    let isExam = $state(false)
+    let examSubmission = $state({
+        name: '',
+        submissionTimestamp: 0,
+        startedAt: 0,
+        hash: ''
+    } satisfies Project['exam']['submission'])
+    let examDisabled = $state(false)
+    let examPassword = $state('')
     let status: 'loading' | 'loaded' | 'error' = $state('loading')
     let oldTheme = ThemeStore.getChosenTheme()
 
@@ -36,13 +49,27 @@
 
     async function loadProject() {
         const id = $page.params.project
-        if (id === 'share') {
+        if (id === 'share' || id === 'exam') {
             const code = $page.url.searchParams.get('project')
             const parsed = serializer.parse<Project>(
                 lzstring.decompressFromEncodedURIComponent(code)
             )
-            parsed.id = SHARE_ID
+            parsed.id = id === 'share' ? SHARE_ID : EXAM_ID
+            isExam = id === 'exam'
             project.set(parsed)
+            if (isExam && !parsed.exam?.submission) {
+                const name = await Prompt.askText(
+                    'Welcome to the exam! The app will go full screen soon.\nIF YOU EXIT FULL SCREEN OR CHANGE PAGE, YOUR EDITOR WILL BE DISABLED.\nPlease write your name to start the exam.',
+                    false
+                )
+                examSubmission.name = name
+                examSubmission.startedAt = Date.now()
+                const hash = (await makeHash(`${name}${examSubmission.startedAt}`)).slice(0, 6)
+                examSubmission.hash = hash
+                startExam()
+            } else {
+                examSubmission = parsed.exam?.submission || examSubmission
+            }
         } else {
             project.set(await ProjectStore.getProject(id))
             if (!project) {
@@ -57,7 +84,12 @@
     onMount(() => {
         loadProject()
         Monaco.load()
-        return Monaco.dispose
+        return () => {
+            window.removeEventListener('visibilitychange', listenVisibilityChange)
+            window.removeEventListener('fullscreenchange', listenFullscreenChange)
+            window.removeEventListener('blur', listenVisibilityChange)
+            Monaco.dispose()
+        }
     })
 
     async function save(project: Project): Promise<boolean> {
@@ -82,6 +114,56 @@
         const url = createShareLink(pr)
         await navigator.clipboard.writeText(url)
         toast.logPill('Copied to clipboard')
+    }
+
+    async function finishExam(exam: Project) {
+        if (!isExam) return
+        const wantsToFinish = await Prompt.confirm('Do you want to finish the exam?')
+        if (!wantsToFinish) return
+        examDisabled = true
+        examSubmission.submissionTimestamp = Date.now()
+        exam.exam.submission = examSubmission
+        const url = createShareLink(exam, 'exam')
+        await navigator.clipboard.writeText(url)
+        toast.logPill('Exam submission copied to clipboard')
+        document.exitFullscreen()
+
+    }
+
+    async function unlockExam() {
+        const hash = (await makeHash(examPassword)).slice(0, 6)
+        examPassword = ''
+        if (hash === project.exam?.passwordHash) {
+            examDisabled = false
+            toast.logPill('Exam unlocked')
+        } else {
+            toast.error('Wrong password')
+        }
+        examSubmission.submissionTimestamp = 0
+        await document.documentElement.requestFullscreen()
+    }
+
+    function listenVisibilityChange(){
+        if( document.visibilityState === 'hidden') {
+            examDisabled = true
+        }
+        if(!document.hasFocus()) {
+            examDisabled = true
+        }
+    }
+
+
+    function listenFullscreenChange() {
+        if (!document.fullscreenElement) {
+            examDisabled = true
+        }
+    }
+
+    async function startExam() {
+        window.addEventListener('visibilitychange', listenVisibilityChange)
+        window.addEventListener('fullscreenchange', listenFullscreenChange)
+        window.addEventListener('blur', listenVisibilityChange)
+        await document.documentElement.requestFullscreen()
     }
 
     async function changePage(page: string) {
@@ -144,10 +226,25 @@
     </div>
 {/snippet}
 <Page>
+    {#if examDisabled}
+        <div class="overlay">
+            <h1 class="loading">Exam disabled</h1>
+            <p>
+                The exam has been disabled. If you want to unlock it, ask the owner of the exam to
+                unlock it
+            </p>
+            <Row gap="1rem">
+                <Input type="password" placeholder="Unlock password" bind:value={examPassword} />
+                <Button onClick={unlockExam}>Unlock</Button>
+            </Row>
+        </div>
+    {/if}
     {#key project.id}
         <EmulatorLoader bind:code={project.code} language={project.language}>
             {#snippet children(emulator)}
                 <ProjectEditor
+                    {isExam}
+                    {examSubmission}
                     {emulator}
                     bind:project
                     on:wantsToLeave={() => {
@@ -160,6 +257,9 @@
                     }}
                     on:share={({ detail }) => {
                         share(detail)
+                    }}
+                    on:finishedExam={({ detail }) => {
+                        finishExam(detail)
                     }}
                 />
             {/snippet}

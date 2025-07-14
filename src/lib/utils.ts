@@ -30,7 +30,7 @@ export function unsignedBigIntToSigned(unsignedBigInt: bigint, numBytes: number)
     return unsignedBigInt
 }
 
-export function bigIntOfSize(number: bigint, bytes: RegisterSize){
+export function bigIntOfSize(number: bigint, bytes: RegisterSize) {
     const mask = 1n << BigInt(bytes * 8)
     return number & mask
 }
@@ -79,11 +79,16 @@ export function capitalize(word: string) {
     return word[0].toUpperCase() + word.slice(1)
 }
 
-export function createShareLink(project: Project) {
+export function createShareLink(project: Project, mode: 'exam' | 'project' = 'project'): string {
     const p = project.toObject()
     p.id = SHARE_ID
     const code = lzstring.compressToEncodedURIComponent(serializer.stringify(p))
-    return `${window.location.origin}/projects/share?project=${code}`
+    if (mode === 'exam') {
+        return `${window.location.origin}/projects/exam?project=${code}`
+    } else {
+        return `${window.location.origin}/projects/share?project=${code}`
+
+    }
 }
 
 
@@ -91,3 +96,24 @@ export function getEnumKeys<T extends Record<string, string | number>>(enumObj: 
     return Object.keys(enumObj).filter(key => isNaN(Number(key))) as (keyof T)[]
 }
 
+
+function hexDigest(buffer) {
+    let digest = ''
+    const view = new DataView(buffer)
+    for (let i = 0; i < view.byteLength; i += 4) {
+        const value = view.getUint32(i)
+        const stringValue = value.toString(16)
+        const padding = '00000000'
+        const paddedValue = (padding + stringValue).slice(-padding.length)
+        digest += paddedValue
+    }
+
+    return digest
+}
+
+export async function makeHash(data: string) {
+    const encoder = new TextEncoder()
+    const password = encoder.encode(data)
+    const hash = await window.crypto.subtle.digest('SHA-256', password)
+    return hexDigest(hash)
+}
