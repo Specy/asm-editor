@@ -4,7 +4,7 @@
     import { ProjectStore } from '$stores/projectsStore.svelte'
     import FaTrashAlt from 'svelte-icons/fa/FaTrashAlt.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
-    import { Prompt } from '$stores/promptStore'
+    import { Prompt } from '$stores/promptStore.svelte'
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
     import Button from '$cmp/shared/button/Button.svelte'
     import FaDownload from 'svelte-icons/fa/FaDownload.svelte'

@@ -1,4 +1,3 @@
-import { writable } from 'svelte/store'
 export enum PromptType {
     Text,
     Confirm
@@ -13,7 +12,7 @@ type Prompt = {
     cancellable: boolean
 }
 function createPromptStore() {
-    const { subscribe, set, update } = writable<Prompt>({
+    const prompt = $state<Prompt>({
         promise: null,
         question: '',
         id: 0,
@@ -22,30 +21,23 @@ function createPromptStore() {
         resolve: null,
         cancellable: true
     })
-    let current: Prompt
-    subscribe((value) => (current = value))
     function ask(
         question: string,
         type: PromptType,
         cancellable = true,
         placeholder = ''
     ): Promise<string | boolean> {
-        current.resolve?.(null)
+        prompt.resolve?.(null)
         const promise = new Promise<string | boolean>((resolve) => {
-            set({
-                promise: null,
-                question,
-                placeholder,
-                type,
-                resolve,
-                cancellable,
-                id: current.id + 1
-            })
+            prompt.promise = null
+            prompt.question = question
+            prompt.placeholder = placeholder
+            prompt.type = type
+            prompt.resolve = resolve
+            prompt.cancellable = cancellable
+            prompt.id = prompt.id + 1
         })
-        update((s) => {
-            s.promise = promise
-            return s
-        })
+        prompt.promise = promise
         return promise
     }
     function confirm(question: string, cancellable = true): Promise<boolean> {
@@ -55,27 +47,38 @@ function createPromptStore() {
         return ask(question, PromptType.Text, cancellable, placeholder) as any as Promise<string>
     }
     function answer(value: string | boolean) {
-        current.resolve?.(value)
+        prompt.resolve?.(value)
         cancel()
     }
     function cancel() {
-        update((s) => {
-            s.promise = null
-            s.resolve = null
-            return s
-        })
+        prompt.promise = null
+        prompt.resolve = null
         reset()
     }
     function reset() {
-        update((s) => {
-            s.question = ''
-            s.placeholder = ''
-            s.cancellable = true
-            return s
-        })
+        prompt.question = ''
+        prompt.placeholder = ''
+        prompt.cancellable = true
     }
     return {
-        subscribe,
+        get question() {
+            return prompt.question
+        },
+        get placeholder() {
+            return prompt.placeholder
+        },
+        get type() {
+            return prompt.type
+        },
+        get cancellable() {
+            return prompt.cancellable
+        },
+        get id() {
+            return prompt.id
+        },
+        get promise() {
+            return prompt.promise
+        },
         confirm,
         askText,
         ask,

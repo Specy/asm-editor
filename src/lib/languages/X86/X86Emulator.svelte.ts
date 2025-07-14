@@ -11,7 +11,7 @@ import {
 import { PAGE_ELEMENTS_PER_ROW, PAGE_SIZE } from '$lib/Config'
 import { X86_REGISTERS, X86ConditionFlags, X86Interpreter, X86Register } from '@specy/x86'
 import { createDebouncer } from '$lib/utils'
-import { Prompt } from '$stores/promptStore'
+import { Prompt } from '$stores/promptStore.svelte'
 import { settingsStore } from '$stores/settingsStore.svelte'
 import type { Testcase, TestcaseResult, TestcaseValidationError } from '$lib/Project.svelte'
 import { byteSliceToNum, isMemoryChunkEqual, numberToByteSlice } from '$cmp/specific/project/memory/memoryTabUtils'

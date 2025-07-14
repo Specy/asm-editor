@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { Prompt, PromptType } from '$stores/promptStore'
+    import { Prompt, PromptType } from '$stores/promptStore.svelte'
     import { fade } from 'svelte/transition'
 
     import Button from '$cmp/shared/button/Button.svelte'
@@ -14,15 +14,15 @@
     let value = $state('')
     let currentId = $state(0)
     $effect(() => {
-        if ($Prompt.id !== currentId) {
-            currentId = $Prompt.id
+        if (Prompt.id !== currentId) {
+            currentId = Prompt.id
             value = ''
         }
     })
 </script>
 
 {@render children?.()}
-{#if $Prompt.promise}
+{#if Prompt.promise}
     <form
         class="prompt-wrapper"
         out:fade|global={{ duration: 150 }}
@@ -32,9 +32,9 @@
         }}
     >
         <div class="prompt-text">
-            {$Prompt.question}
+            {Prompt.question}
         </div>
-        {#if $Prompt.type === PromptType.Text}
+        {#if Prompt.type === PromptType.Text}
             <Input
                 bind:el={input}
                 focus
@@ -45,8 +45,8 @@
         {/if}
 
         <div class="prompt-row">
-            {#if $Prompt.type === PromptType.Text}
-                {#if !$Prompt.cancellable}
+            {#if Prompt.type === PromptType.Text}
+                {#if Prompt.cancellable}
                     <Button
                         onClick={() => Prompt.answer(false)}
                         cssVar="secondary"

@@ -6,7 +6,7 @@ import {
     S68k
 } from '@specy/s68k'
 import { PAGE_ELEMENTS_PER_ROW, PAGE_SIZE } from '$lib/Config'
-import { Prompt } from '$stores/promptStore'
+import { Prompt } from '$stores/promptStore.svelte'
 import { settingsStore } from '$stores/settingsStore.svelte'
 import { getM68kErrorMessage } from '$lib/languages/M68K/M68kUtils'
 import type { Testcase, TestcaseResult, TestcaseValidationError } from '$lib/Project.svelte'

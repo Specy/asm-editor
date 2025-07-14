@@ -11,7 +11,7 @@
     import Column from '$cmp/shared/layout/Column.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
     import FaPlus from 'svelte-icons/fa/FaPlus.svelte'
-    import { Prompt } from '$stores/promptStore'
+    import { Prompt } from '$stores/promptStore.svelte'
     import FaTrashAlt from 'svelte-icons/fa/FaTrashAlt.svelte'
 
     let theme = ThemeStore.themeList
