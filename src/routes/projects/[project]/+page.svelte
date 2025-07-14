@@ -230,8 +230,7 @@
         <div class="overlay">
             <h1 class="loading">Exam disabled</h1>
             <p>
-                The exam has been disabled. If you want to unlock it, ask the owner of the exam to
-                unlock it
+                The exam has been disabled. If you want to unlock it, ask the owner of the exam.
             </p>
             <Row gap="1rem">
                 <Input type="text" placeholder="Unlock password" bind:value={examPassword} />
