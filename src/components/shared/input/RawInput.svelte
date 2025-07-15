@@ -15,7 +15,7 @@
             {label}
         </div>
     {/if}
-    <input bind:value class="form-input" class:no-label={!label} {placeholder} />
+    <input spellcheck="false" bind:value class="form-input" class:no-label={!label} {placeholder} />
 </div>
 
 <style lang="scss">

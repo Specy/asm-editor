@@ -48,6 +48,7 @@
     {/if}
     <div class="input-row" {style}>
         <input
+            spellcheck="false"
             bind:value
             class="form-input"
             use:setType

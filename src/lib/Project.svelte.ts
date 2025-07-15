@@ -79,6 +79,7 @@ export type TestcaseValidationError =
 export type Exam = {
     track: string
     passwordHash: string,
+    accessPasswordHash?: string,
     timeLimit: number,
     submission?: {
         name: string

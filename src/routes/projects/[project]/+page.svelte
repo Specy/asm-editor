@@ -20,6 +20,8 @@
     import Row from '$cmp/shared/layout/Row.svelte'
     import Input from '$cmp/shared/input/Input.svelte'
     import Button from '$cmp/shared/button/Button.svelte'
+    import Card from '$cmp/shared/layout/Card.svelte'
+    import Header from '$cmp/shared/layout/Header.svelte'
 
     let project = makeProject()
     let isExam = $state(false)
@@ -66,6 +68,17 @@
                 examSubmission.startedAt = Date.now()
                 const hash = (await makeHash(`${name}${examSubmission.startedAt}`)).slice(0, 6)
                 examSubmission.hash = hash
+                if (project.exam.accessPasswordHash) {
+                    while (true) {
+                        const accessPassword = await Prompt.askText(
+                            'Please enter the exam access password to start the exam.',
+                            false
+                        )
+                        const hash = (await makeHash(accessPassword)).slice(0, 6)
+                        if (hash === project.exam.accessPasswordHash) break
+                        toast.error('Wrong access password')
+                    }
+                }
                 startExam()
             } else {
                 examSubmission = parsed.exam?.submission || examSubmission
@@ -94,6 +107,9 @@
 
     async function save(project: Project): Promise<boolean> {
         if (status !== 'loaded') return false
+        if (project.id === EXAM_ID) {
+            return false
+        }
         if (project.id === SHARE_ID) {
             if (
                 !(await Prompt.confirm('Do you want to save this shared project in your projects?'))
@@ -118,7 +134,9 @@
 
     async function finishExam(exam: Project) {
         if (!isExam) return
-        const wantsToFinish = await Prompt.confirm('Do you want to finish the exam? You will not be able to edit the code anymore.')
+        const wantsToFinish = await Prompt.confirm(
+            'Do you want to finish the exam? You will not be able to edit the code anymore.'
+        )
         if (!wantsToFinish) return
         examDisabled = true
         examSubmission.submissionTimestamp = Date.now()
@@ -127,7 +145,6 @@
         await navigator.clipboard.writeText(url)
         toast.logPill('Exam submission copied to clipboard')
         document.exitFullscreen()
-
     }
 
     async function unlockExam() {
@@ -136,22 +153,21 @@
         if (hash === project.exam?.passwordHash) {
             examDisabled = false
             toast.logPill('Exam unlocked')
+            examSubmission.submissionTimestamp = 0
+            await document.documentElement.requestFullscreen()
         } else {
             toast.error('Wrong password')
         }
-        examSubmission.submissionTimestamp = 0
-        await document.documentElement.requestFullscreen()
     }
 
-    function listenVisibilityChange(){
-        if( document.visibilityState === 'hidden') {
+    function listenVisibilityChange() {
+        if (document.visibilityState === 'hidden') {
             examDisabled = true
         }
-        if(!document.hasFocus()) {
+        if (!document.hasFocus()) {
             examDisabled = true
         }
     }
-
 
     function listenFullscreenChange() {
         if (!document.fullscreenElement) {
@@ -218,7 +234,22 @@
 {#snippet loadingScreen(errored)}
     <div class="overlay" class:overlay-hidden={!(status === 'loading' || status === 'error')}>
         {#if !errored}
-            <h1 class="loading">Loading...</h1>
+            {#if isExam}
+                <h1 class="loading">Exam</h1>
+                <Card
+                    padding="1rem 2rem"
+                    style="margin-top: 1rem; visibility: {examSubmission.name
+                        ? 'visible'
+                        : 'hidden'}"
+                    background="tertiary"
+                >
+                    <Header type="h2">
+                        {examSubmission.name} ({examSubmission.hash})
+                    </Header>
+                </Card>
+            {:else}
+                <h1 class="loading">Loading...</h1>
+            {/if}
         {:else}
             <h1 class="error">Error loading project!</h1>
             <ButtonLink href="/projects">Back to your projects</ButtonLink>
@@ -229,13 +260,16 @@
     {#if examDisabled}
         <div class="overlay">
             <h1 class="loading">Exam disabled</h1>
-            <p>
-                The exam has been disabled. If you want to unlock it, ask the owner of the exam.
-            </p>
+            <p>The exam has been disabled. If you want to unlock it, ask the owner of the exam.</p>
             <Row gap="1rem">
-                <Input type="text" placeholder="Unlock password" bind:value={examPassword} />
+                <Input type="password" placeholder="Unlock password" bind:value={examPassword} />
                 <Button onClick={unlockExam}>Unlock</Button>
             </Row>
+            <Card padding="1rem 2rem" style="margin-top: 1rem;" background="tertiary">
+                <Header type="h2">
+                    {examSubmission.name} ({examSubmission.hash})
+                </Header>
+            </Card>
         </div>
     {/if}
     {#key project.id}
@@ -286,7 +320,7 @@
         align-items: center;
         flex-direction: column;
         gap: 2rem;
-        z-index: 10;
+        z-index: 20;
         padding: 1rem;
     }
 

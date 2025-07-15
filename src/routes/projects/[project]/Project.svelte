@@ -308,13 +308,16 @@
             language={project.language}
         />
     {:else}
-        <Header type="h2">
-            {examSubmission.name} ({examSubmission.hash}){formattedSubmissionTime
-                ? ` - submitted at ${formattedSubmissionTime}`
-                : remainingMinutes >= 0
-                  ? ` - ${remainingMinutes} minutes left`
-                  : ''}
-        </Header>
+        {#if examSubmission.name}
+            <Header type="h2">
+                {examSubmission.name || 'Unknown'} ({examSubmission.hash}){formattedSubmissionTime
+                    ? ` - ${formattedSubmissionTime}`
+                    : remainingMinutes >= 0
+                      ? ` - ${remainingMinutes} minutes left`
+                      : ''}
+            </Header>
+        {/if}
+
         {#if !examSubmission.submissionTimestamp}
             <Button style="margin-left: auto;" onClick={() => dispatcher('finishedExam', project)}>
                 Finish exam
