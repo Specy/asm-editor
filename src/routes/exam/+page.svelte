@@ -96,11 +96,11 @@
 
             <Column
                 flex1
-                style="min-height: 25rem; max-height: 25rem; overflow: hidden; max-width: calc(100vw - 2rem);"
+                style="min-height: 20rem; max-height: 20rem; overflow: hidden; max-width: calc(100vw - 2rem);"
             >
                 <MarkdownEditor bind:value={settings.track} />
             </Column>
-            <p style="padding: 0 1rem; max-width: 70ch; font-size: 0.9rem; margin-top: auto;">
+            <p style="padding: 0 1rem; padding-bottom: 1rem; max-width: 70ch; font-size: 0.9rem; margin-top: auto;">
                 When people open the exam, they will put their name and the exam access password,
                 which will generate a random code that identifies them, which you can save. If they
                 reload the page, or if they reset the website, a new code will be generated. Once
