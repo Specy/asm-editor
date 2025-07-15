@@ -50,10 +50,11 @@
         project: Project
         emulator: Emulator
         isExam?: boolean
+        isExamLocked?: boolean
         examSubmission: Project['exam']['submission']
     }
 
-    let { project = $bindable(), emulator = $bindable(), isExam, examSubmission }: Props = $props()
+    let { project = $bindable(), emulator = $bindable(), isExam, examSubmission , isExamLocked}: Props = $props()
 
     $effect(() => {
         emulator.setCode(project.code)
@@ -569,7 +570,7 @@
                         style="padding: 1rem; overflow-y: auto; width: 32.9rem; height: 34.9rem;"
                     >
                         <MarkdownRenderer
-                            source={project.exam?.track || ''}
+                            source={isExamLocked ? '' : project.exam?.track || ''}
                             style="padding: 0.5rem; font-size: 1.2rem"
                         ></MarkdownRenderer>
                     </Card>

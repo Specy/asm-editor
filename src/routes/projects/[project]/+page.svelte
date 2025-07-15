@@ -279,6 +279,7 @@
                     {isExam}
                     {examSubmission}
                     {emulator}
+                    isExamLocked={examSubmission.startedAt === 0 || status === 'loading' || examDisabled}
                     bind:project
                     on:wantsToLeave={() => {
                         changePage('/projects')
