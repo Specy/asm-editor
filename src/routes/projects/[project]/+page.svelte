@@ -14,7 +14,7 @@
     import { DEFAULT_THEME, ThemeStore } from '$stores/themeStore.svelte'
     import { LANGUAGE_THEMES } from '$lib/Config'
     import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
-    import { createShareLink, makeHash } from '$lib/utils'
+    import { createShareLink, decryptData, makeHash } from '$lib/utils'
     import { serializer } from '$lib/json'
     import PromptProvider from '$cmp/shared/providers/PromptProvider.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
@@ -75,7 +75,14 @@
                             false
                         )
                         const hash = (await makeHash(accessPassword)).slice(0, 6)
-                        if (hash === project.exam.accessPasswordHash) break
+                        if (hash === project.exam.accessPasswordHash) {
+                            project.exam.track = await decryptData(
+                                project.exam.track,
+                                accessPassword
+                            )
+                            break;
+
+                        }
                         toast.error('Wrong access password')
                     }
                 }

@@ -1,10 +1,6 @@
 <script lang="ts">
     import InteractiveInstructionEditor from '$cmp/shared/InteractiveInstructionEditor.svelte'
-    import {
-        type AvailableLanguages,
-        makeProject,
-        type Testcase
-    } from '$lib/Project.svelte'
+    import { type AvailableLanguages, makeProject, type Testcase } from '$lib/Project.svelte'
     import Page from '$cmp/shared/layout/Page.svelte'
     import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
@@ -16,7 +12,7 @@
     import MarkdownEditor from '$cmp/shared/markdown/MarkdownEditor.svelte'
     import Button from '$cmp/shared/button/Button.svelte'
     import Input from '$cmp/shared/input/Input.svelte'
-    import { createShareLink, makeHash } from '$lib/utils'
+    import { createShareLink, encryptData, makeHash } from '$lib/utils'
     import { toast } from '$stores/toastStore'
     import FaDumbbell from 'svelte-icons/fa/FaDumbbell.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
@@ -44,7 +40,9 @@
             testcases,
             language: settings.language,
             exam: {
-                track: settings.track,
+                track: settings.examAccessPassword
+                    ? await encryptData(settings.track, settings.examAccessPassword)
+                    : settings.track,
                 passwordHash: hash,
                 timeLimit: -1,
                 accessPasswordHash: settings.examAccessPassword
@@ -52,6 +50,8 @@
                     : undefined
             }
         })
+
+
         const url = createShareLink(pr, 'exam')
         await navigator.clipboard.writeText(url)
         toast.logPill('Copied to clipboard')
@@ -94,17 +94,20 @@
                 />
             </Row>
 
-            <Column flex1 style="min-height: 25rem; max-height: 25rem; overflow: hidden; max-width: calc(100vw - 2rem);">
+            <Column
+                flex1
+                style="min-height: 25rem; max-height: 25rem; overflow: hidden; max-width: calc(100vw - 2rem);"
+            >
                 <MarkdownEditor bind:value={settings.track} />
             </Column>
             <p style="padding: 0 1rem; max-width: 70ch; font-size: 0.9rem; margin-top: auto;">
-                When people open the exam, they will put their name and the exam access password, which 
-                will generate a random code that identifies them, which you can save. If
-                they reload the page, or if they reset the website, a new code will be
-                generated. Once ready to start, the page will go full screen and any
-                attempt to leave the page will result with the editor being blocked. To unlock the
-                page, the user will need to enter the unlock password. Letting you know
-                that they might have either accidentally or intentionally left the exam.
+                When people open the exam, they will put their name and the exam access password,
+                which will generate a random code that identifies them, which you can save. If they
+                reload the page, or if they reset the website, a new code will be generated. Once
+                ready to start, the page will go full screen and any attempt to leave the page will
+                result with the editor being blocked. To unlock the page, the user will need to
+                enter the unlock password. Letting you know that they might have either accidentally
+                or intentionally left the exam.
             </p>
         </Column>
 

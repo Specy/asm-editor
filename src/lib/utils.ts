@@ -117,3 +117,54 @@ export async function makeHash(data: string) {
     const hash = await window.crypto.subtle.digest('SHA-256', password)
     return hexDigest(hash)
 }
+
+
+export async function encryptData(data: string, key: string): Promise<string> {
+    const password = (await makeHash(key)).slice(0, 128 / 8)
+    const encoder = new TextEncoder()
+    const iv = window.crypto.getRandomValues(new Uint8Array(12)) // AES-GCM requires a 12-byte IV
+    const keyBuffer = await window.crypto.subtle.importKey(
+        'raw',
+        encoder.encode(password),
+        { name: 'AES-GCM' },
+        false,
+        ['encrypt']
+    )
+    const encrypted = await window.crypto.subtle.encrypt(
+        {
+            name: 'AES-GCM',
+            iv: iv
+        },
+        keyBuffer,
+        encoder.encode(data)
+    )
+    const encryptedArray = new Uint8Array(encrypted)
+    const encryptedBase64 = btoa(String.fromCharCode(...encryptedArray))
+    const ivBase64 = btoa(String.fromCharCode(...iv))
+    return `${ivBase64}:${encryptedBase64}`
+}
+
+export async function decryptData(encryptedData: string, key: string): Promise<string> {
+     const password = (await makeHash(key)).slice(0, 128 / 8)
+    const encoder = new TextEncoder()
+    const [ivBase64, encryptedBase64] = encryptedData.split(':')
+    const iv = Uint8Array.from(atob(ivBase64), c => c.charCodeAt(0))
+    const encryptedArray = Uint8Array.from(atob(encryptedBase64), c => c.charCodeAt(0))
+    const keyBuffer = await window.crypto.subtle.importKey(
+        'raw',
+        encoder.encode(password),
+        { name: 'AES-GCM' },
+        false,
+        ['decrypt']
+    )
+    const decrypted = await window.crypto.subtle.decrypt(
+        {
+            name: 'AES-GCM',
+            iv: iv
+        },
+        keyBuffer,
+        encryptedArray
+    )
+    const decoder = new TextDecoder()
+    return decoder.decode(decrypted)
+}
