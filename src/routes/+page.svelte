@@ -164,7 +164,7 @@
 						<div>Embed</div>
 					{/snippet}
 				</MainPageLinkPreview>
-				<MainPageLinkPreview href="/exam" title="Embed the app in your website">
+				<MainPageLinkPreview href="/exam" title="Create an exam for students">
 					{#snippet icon()}
 						<div>
 							<FaDumbbell />
