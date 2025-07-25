@@ -540,7 +540,7 @@
             </div>
 
             <div class="column" style="gap: 0.4rem">
-                {#if settingsStore.values.showMemory.value && !(!running && !(emulator.canExecute || !!emulator.compiledCode))}
+                {#if settingsStore.values.showMemory.value && (!isExam || !(!running && !(emulator.canExecute || !!emulator.compiledCode)))}
                     <div class="row" style="gap: 0.4rem">
                         <MemoryControls
                             systemSize={emulator.systemSize}
