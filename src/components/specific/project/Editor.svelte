@@ -17,6 +17,7 @@
         errors: MonacoError[]
         breakpoints: number[]
         editor?: monaco.editor.IStandaloneCodeEditor
+        vimMode?: boolean
         viewZones?: {
             afterLineNumber: number
             content: Component
@@ -34,6 +35,7 @@
         errors,
         breakpoints,
         editor = $bindable(),
+        vimMode = false,
         viewZones = [],
     }: Props = $props()
     let mockEditor: HTMLDivElement | null = $state()
@@ -186,6 +188,10 @@
     })
 
     $effect(() => {
+        if (editor) vimMode ? Monaco.enableVim() : Monaco.disableVim()
+    })
+
+    $effect(() => {
         if (editor && decorations) {
             decorations.set([
                 ...(highlightedLine >= 0
@@ -262,6 +268,7 @@
 </div>
 
 <div bind:this={el} class="editor"></div>
+<div id="vim-statusbar"></div>
 
 <style lang="scss">
     :global(.selected-line) {
