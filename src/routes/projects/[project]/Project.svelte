@@ -425,6 +425,7 @@
                     disabled={(emulator.canExecute && !emulator.terminated) ||
                         !!emulator.compiledCode}
                     hasError={emulator.errors.length > 0}
+                    vimMode={settingsStore.values.vimMode.value}
                 />
             {/key}
         </div>

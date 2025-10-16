@@ -12,6 +12,7 @@ export type SettingValues = {
     autoScrollStackTab: SettingValue<boolean>
     instructionsLimit: SettingValue<number>
     autoSave: SettingValue<boolean>
+    vimMode: SettingValue<boolean>
     showMemory: SettingValue<boolean>
     maxHistorySize: SettingValue<number>
     maxVisibleHistoryModifications: SettingValue<number>
@@ -37,12 +38,13 @@ const baseValues = {
     autoSave: createValue('Auto save', true),
     showPseudoInstructions: createValue('Show pseudo instructions', true, 'MIPS'),
     showMemory: createValue('Show memory tab', true),
+    vimMode: createValue('Enable Vim mode in editor', false),
     instructionsLimit: createValue('Instruction execution limit, 0 to ignore', 2_000_000),
     maxHistorySize: createValue('Maximum undo steps, 0 to disable', 100),
     maxVisibleHistoryModifications: createValue('Maximum visible history steps', 10)
 } satisfies SettingValues
 
-const CURRENT_VERSION = '1.1.7'
+const CURRENT_VERSION = '1.1.8'
 function createSettingsStore() {
     let data = $state({
         meta: {

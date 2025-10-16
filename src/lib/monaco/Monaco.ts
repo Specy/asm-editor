@@ -3,11 +3,13 @@ import { generateTheme } from '$lib/monaco/editorTheme'
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import type monaco from 'monaco-editor'
 import type { AvailableLanguages } from '$lib/Project.svelte'
+import { initVimMode } from 'monaco-vim'
 
 export type MonacoType = typeof monaco
 
 class MonacoLoader {
     private monaco: MonacoType
+    private vimMode: any
     loading: Promise<MonacoType>
     toDispose: monaco.IDisposable[] = []
 
@@ -159,6 +161,18 @@ class MonacoLoader {
             this.registerLanguage('RISC-V'),
             this.registerLanguage('X86')
         ])
+    }
+
+    enableVim = () => {
+        this.vimMode = initVimMode(
+            // initVimMode requires an ICoreEditor, so...
+            this.monaco.editor.getEditors().at(0),
+            document.getElementById('vim-statusbar')
+        )
+    }
+
+    disableVim = () => {
+        this.vimMode?.dispose()
     }
 
     async get() {
