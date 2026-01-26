@@ -111,6 +111,7 @@
         border: none;
         border-right: solid 1px gray;
         background-color: transparent;
+        color: inherit;
         padding: 0.6rem 1rem;
     }
     input::placeholder {
