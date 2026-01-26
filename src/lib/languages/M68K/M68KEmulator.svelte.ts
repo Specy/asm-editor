@@ -112,7 +112,8 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
             ),
             tabs: [createMemoryTab(8 * 4, 'Stack', 0x2000n, 4, 0xff, 'big')]
         },
-        interrupt: undefined
+        interrupt: undefined,
+        isExamMode: false,
     })
     let s68k: S68k | null = null
     let interpreter: Interpreter | null = null
@@ -882,6 +883,12 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         },
         get systemSize() {
             return state.systemSize
+        },
+        get isExamMode(){
+            return state.isExamMode
+        },
+        set isExamMode(value: boolean){
+            state.isExamMode = value
         },
         step,
         run,

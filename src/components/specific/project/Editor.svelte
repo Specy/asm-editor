@@ -72,7 +72,10 @@
             smoothScrolling: true,
             cursorSmoothCaretAnimation: 'on'
         })
-
+        const model = editor.getModel()
+        if(model){
+            model.setEOL(0)
+        }
         const observer = new ResizeObserver(() => {
             if (!mockEditor) return
             const bounds = mockEditor.getBoundingClientRect()

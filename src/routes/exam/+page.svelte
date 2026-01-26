@@ -73,7 +73,14 @@
                 <Header type="h2">Language</Header>
                 <Select
                     wrapperStyle="max-width: 12.6rem"
-                    bind:value={settings.language}
+                    value={settings.language}
+                    onChange={(e) => {
+                        const newValue = (e.target as HTMLSelectElement).value as AvailableLanguages
+                        if (code === BASE_CODE[settings.language]) {
+                            code = BASE_CODE[newValue]
+                        }
+                        settings.language = newValue
+                    }}
                     options={Object.keys(BASE_CODE) as AvailableLanguages[]}
                 />
             </Row>

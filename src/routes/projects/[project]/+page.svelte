@@ -22,6 +22,7 @@
     import Button from '$cmp/shared/button/Button.svelte'
     import Card from '$cmp/shared/layout/Card.svelte'
     import Header from '$cmp/shared/layout/Header.svelte'
+    import { Keyboard } from 'trs80-emulator'
 
     let project = makeProject()
     let isExam = $state(false)
@@ -33,6 +34,7 @@
     } satisfies Project['exam']['submission'])
     let examDisabled = $state(false)
     let examPassword = $state('')
+    let submissionUrl = $state('')
     let status: 'loading' | 'loaded' | 'error' = $state('loading')
     let oldTheme = ThemeStore.getChosenTheme()
 
@@ -149,6 +151,7 @@
         examSubmission.submissionTimestamp = Date.now()
         exam.exam.submission = examSubmission
         const url = createShareLink(exam, 'exam')
+        submissionUrl = url
         await navigator.clipboard.writeText(url)
         toast.logPill('Exam submission copied to clipboard')
         document.exitFullscreen()
@@ -157,11 +160,14 @@
     async function unlockExam() {
         const hash = (await makeHash(examPassword)).slice(0, 6)
         examPassword = ''
+        submissionUrl = ''
         if (hash === project.exam?.passwordHash) {
             examDisabled = false
             toast.logPill('Exam unlocked')
             examSubmission.submissionTimestamp = 0
             await document.documentElement.requestFullscreen()
+            //@ts-ignore
+            navigator.keyboard?.lock(['Escape', 'F11', 'F12'])
         } else {
             toast.error('Wrong password')
         }
@@ -187,6 +193,8 @@
         window.addEventListener('fullscreenchange', listenFullscreenChange)
         window.addEventListener('blur', listenVisibilityChange)
         await document.documentElement.requestFullscreen()
+        //@ts-ignore
+        navigator.keyboard?.lock(['Escape', 'F11', 'F12'])
     }
 
     async function changePage(page: string) {
@@ -264,7 +272,7 @@
     </div>
 {/snippet}
 <Page>
-    {#if examDisabled}
+    {#if examDisabled && !submissionUrl}
         <div class="overlay">
             <h1 class="loading">Exam disabled</h1>
             <p>The exam has been disabled. If you want to unlock it, ask the owner of the exam.</p>
@@ -279,6 +287,28 @@
             </Card>
         </div>
     {/if}
+    {#if examDisabled && submissionUrl}
+        <div class="overlay">
+            <h1 class="loading">Exam submitted</h1>
+            <p>The exam has been disabled. If you want to unlock it, ask the owner of the exam.</p>
+            <Row gap="1rem">
+                <Input type="password" placeholder="Unlock password" bind:value={examPassword} />
+                <Button onClick={unlockExam}>Unlock</Button>
+            </Row>
+            <p>Your exam submission link has been copied to the clipboard, click here to copy it again</p>
+            <Button onClick={async () => {
+                await navigator.clipboard.writeText(submissionUrl)
+                toast.logPill('Exam submission link copied to clipboard')
+            }}>
+                Copy submission link
+            </Button>
+            <Card padding="1rem 2rem" style="margin-top: 1rem;" background="tertiary">
+                <Header type="h2">
+                    {examSubmission.name} ({examSubmission.hash})
+                </Header>
+            </Card>
+        </div>
+    {/if}
     {#key project.id}
         <EmulatorLoader bind:code={project.code} language={project.language}>
             {#snippet children(emulator)}
@@ -286,7 +316,7 @@
                     {isExam}
                     {examSubmission}
                     {emulator}
-                    isExamLocked={examSubmission.startedAt === 0 || status === 'loading' || examDisabled}
+                    isExamLocked={examSubmission.startedAt === 0 || status === 'loading' || examDisabled }
                     bind:project
                     on:wantsToLeave={() => {
                         changePage('/projects')

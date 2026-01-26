@@ -44,7 +44,7 @@
     let startingRegisters = $derived(sortRegisters(registers))
 </script>
 
-<Column gap="0.3rem" style="max-width: 12rem">
+<Column gap="0.3rem" style="max-width: 15rem">
     {#if editable}
         {#each startingRegisters as [key, value] (key)}
             <RegisterTestcaseValue
@@ -83,6 +83,7 @@
                 <Icon>
                     <FaPlus />
                 </Icon>
+                Add
             </button>
         </div>
     {:else}
@@ -105,6 +106,9 @@
     }
 
     .add-input-btn {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
         background-color: var(--accent2);
         color: var(--accent2-text);
         padding: 0.2rem 0.5rem;

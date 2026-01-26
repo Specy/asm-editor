@@ -35,6 +35,9 @@
 
 <Card padding="0.8rem" gap="1rem" {style} radius="0.8rem">
     {#if editable}
+        <p style="text-align: center; margin-bottom: 2rem">
+            Press "Add" to add that value to the testcase.
+        </p>
         <Row gap="1rem" wrap justify="around">
             <Column gap="1rem">
                 <Header type="h3">Starting registers values</Header>
@@ -84,6 +87,7 @@
                     <Icon>
                         <FaPlus />
                     </Icon>
+                    Add
                 </button>
             </div>
         </Row>
@@ -188,7 +192,10 @@
     }
 
     .add-input-btn {
-        background-color: var(--accent2);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+            background-color: var(--accent2);
         color: var(--accent2-text);
         padding: 0.2rem 0.5rem;
     }

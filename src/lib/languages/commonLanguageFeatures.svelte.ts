@@ -227,6 +227,7 @@ export type BaseEmulatorState = {
         global: MemoryTab
         tabs: MemoryTab[]
     }
+    isExamMode: boolean
 }
 
 export enum InterpreterStatus {

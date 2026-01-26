@@ -1,7 +1,7 @@
 import { BASE_CODE, COMMENT_CHARACTER } from './Config'
 import { serializer } from '$lib/json'
 
-export type AvailableLanguages = 'M68K' | 'MIPS' | 'X86' | 'RISC-V' | 'RISC-V-64'
+export type AvailableLanguages = 'M68K' | 'MIPS' | 'X86' | 'RISC-V' | 'RISC-V-64' | 'Z80'
 
 export interface ProjectData {
     code: string

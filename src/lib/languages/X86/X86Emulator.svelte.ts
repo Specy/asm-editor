@@ -89,7 +89,8 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
                 )
             ]
         },
-        interrupt: undefined
+        interrupt: undefined,
+        isExamMode: false,
     })
     let x86: X86Interpreter | null = null
     const [debouncer, clearDebouncer] = createDebouncer(500)
@@ -595,6 +596,12 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
         },
         get systemSize() {
             return state.systemSize
+        },
+        get isExamMode(){
+            return state.isExamMode
+        },
+        set isExamMode(value: boolean){
+            state.isExamMode = value
         },
         compile,
         step,

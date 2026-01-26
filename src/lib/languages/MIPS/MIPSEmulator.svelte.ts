@@ -141,7 +141,8 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 'little'
             ),
             tabs: [createMemoryTab(8 * 4, 'Stack', 0x7ffffffcn, 4, 0x0, 'little')]
-        }
+        },
+        isExamMode: false,
     })
 
     let mips: JsMips | null = null
@@ -645,12 +646,30 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         return errors
     }
 
+    function throwIfExamMode(){
+        if(state.isExamMode){
+            throw new Error('Operation not allowed in exam mode')
+        }
+    }
+
     function getHandlers() {
         return {
-            askDouble: (props: string) => Number(prompt(props)),
-            askFloat: (props: string) => Number(prompt(props)),
-            askInt: (props: string) => Number(prompt(props)),
-            askString: (props: string) => prompt(props),
+            askDouble: (props: string) => {
+                throwIfExamMode()
+                return Number(prompt(props))
+            },
+            askFloat: (props: string) => {
+                throwIfExamMode()
+                return Number(prompt(props))
+            },
+            askInt: (props: string) => {
+                throwIfExamMode()
+                return Number(prompt(props))
+            },
+            askString: (props: string) => {
+                throwIfExamMode()
+                return prompt(props)
+            },
 
             printChar: (char: string) => {
                 state.stdOut += char
@@ -679,14 +698,27 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
             },
 
             readChar: () => {
+                throwIfExamMode()
                 const str = prompt('Enter a character')
                 if (str.length !== 1) throw new Error('Invalid character')
                 return str[0]
             },
-            readDouble: () => Number(prompt('Enter a double')),
-            readFloat: () => Number(prompt('Enter a float')),
-            readInt: () => Number(prompt('Enter an integer')),
-            readString: () => prompt('Enter a string'),
+            readDouble: () => {
+                throwIfExamMode()
+                return Number(prompt('Enter a double'))
+            },
+            readFloat: () => {
+                throwIfExamMode()
+                return Number(prompt('Enter a float'))
+            },
+            readInt: () => {
+                throwIfExamMode()
+                return Number(prompt('Enter an integer'))
+            },
+            readString: () => {
+                throwIfExamMode()
+                return prompt('Enter a string')
+            },
 
             log: (message: string) => {
                 state.stdOut += message
@@ -697,7 +729,10 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
 
             confirm: (message: string) =>
                 Number(confirm(`${message}; 1 = yes, 0 = no, -1 = cancel`)) as ConfirmResult,
-            inputDialog: (message: string) => prompt(message),
+            inputDialog: (message: string) => {
+                throwIfExamMode()
+                return prompt(message)
+            },
             outputDialog: (message: string) => alert(message),
 
             sleep: unimplementedHandler('sleep')
@@ -927,6 +962,12 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         },
         get systemSize() {
             return state.systemSize
+        },
+        get isExamMode(){
+            return state.isExamMode
+        },
+        set isExamMode(value: boolean){
+            state.isExamMode = value
         },
         compile,
         step,
