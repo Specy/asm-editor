@@ -862,6 +862,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
     }
 
     async function test(code: string, testcases: Testcase[], haltLimit: number, historySize = 0) {
+        testcases = structuredClone(testcases)
         const results = [] as TestcaseResult[]
         for (const testcase of testcases) {
             try {
