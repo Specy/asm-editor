@@ -448,8 +448,8 @@
                 setTimeout(async () => {
                     try {
                         testcasesResult = await emulator.test(
-                            project.code,
-                            project.testcases,
+                            $state.snapshot(project.code),
+                            $state.snapshot(project.testcases),
                             settingsStore.values.instructionsLimit.value,
                             settingsStore.values.maxHistorySize.value
                         )
