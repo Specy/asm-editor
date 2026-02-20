@@ -241,12 +241,14 @@
                 hasIcon
                 cssVar="accent2"
                 style="padding:0; width:2.2rem; height:2.2rem;"
+                title="Share"
             >
                 <Icon>
                     <FaShareAlt />
                 </Icon>
             </Button>
             <ButtonLink
+              	title="donate"
                 href="/donate"
                 cssVar="accent2"
                 style="padding:0; width:2.2rem; height:2.2rem;"
@@ -261,6 +263,7 @@
                 hasIcon
                 cssVar="accent2"
                 style="padding:0; width:2.2rem; height:2.2rem"
+                title="Shortcuts"
             >
                 <Icon>
                     <FaKeyboard />
@@ -271,6 +274,7 @@
                 hasIcon
                 cssVar="accent2"
                 style="padding:0; width:2.2rem; height:2.2rem"
+                title="Documentation"
             >
                 <Icon>
                     <FaBook />
@@ -281,6 +285,7 @@
                 hasIcon
                 cssVar="accent2"
                 style="padding:0; width:2.2rem; height:2.2rem"
+                title="Settings"
             >
                 <Icon>
                     <FaCog />
@@ -296,6 +301,7 @@
                 cssVar="accent2"
                 hasIcon
                 style="padding:0; width:2.2rem; height:2.2rem"
+                title="Save"
             >
                 <Icon>
                     <FaSave />
@@ -713,11 +719,6 @@
             }
             to {
                 opacity: 1;
-            }
-        }
-        @keyframes moveGradient {
-            50% {
-                background-position: 100% 50%;
             }
         }
     }

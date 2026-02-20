@@ -407,11 +407,6 @@
                 opacity: 1;
             }
         }
-        @keyframes moveGradient {
-            50% {
-                background-position: 100% 50%;
-            }
-        }
     }
 
     .redBorder {
