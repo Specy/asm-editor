@@ -65,6 +65,7 @@
                 vertical: 'auto',
                 horizontal: 'auto'
             },
+            colorDecorators: false,
             glyphMargin: true,
             lineNumbersMinChars: 3,
             cursorBlinking: 'phase',
