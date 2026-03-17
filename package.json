@@ -76,7 +76,6 @@
         "tslib": "^2.8.1",
         "typescript": "^5.9.3",
         "vite": "^8.0.0",
-        "vite-plugin-devtools-json": "^1.0.0",
         "vite-plugin-top-level-await": "^1.6.0",
         "vite-plugin-wasm": "^3.6.0"
     },
