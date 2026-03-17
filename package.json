@@ -67,7 +67,6 @@
         "mdsvex": "^0.12.7",
         "prettier": "^3.8.1",
         "prettier-plugin-svelte": "^3.5.1",
-        "rollup-plugin-visualizer": "^7.0.1",
         "sass": "^1.98.0",
         "svelte": "^5.53.12",
         "svelte-body": "^2.0.0",
