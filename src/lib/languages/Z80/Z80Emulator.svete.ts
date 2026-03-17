@@ -1,3 +1,4 @@
+/*
 import { GenericEmulator } from '$lib/languages/GenericEmulator.svelte'
 import type { Testcase } from '$lib/Project.svelte'
 import { EmulatorStatus, type CompilationError, type Instruction } from '../BaseEmulator.svelte'
@@ -128,3 +129,4 @@ export class Z80Emulator extends GenericEmulator<Trs80, Z80RegisterName> {
     }
 
 }
+ */
