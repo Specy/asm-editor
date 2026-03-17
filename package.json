@@ -38,6 +38,7 @@
         "rehype-external-links": "^3.0.0",
         "rehype-raw": "^7.0.0",
         "remark-gfm": "^4.0.1",
+        "rollup": "^4.59.0",
         "s-ago": "^2.2.0",
         "string-similarity": "^4.0.4",
         "superjson": "^2.2.6",
