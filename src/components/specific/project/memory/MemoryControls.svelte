@@ -71,8 +71,8 @@
                 </span>
             {/if}
             <span
-
-                style="margin-left: 0.5rem; padding: 0.3rem 0 0.3rem 0.5rem; border-left: 1px solid var(--primary-text); opacity: 0.6"
+                class="hex-address-label"
+                class:hex-address-label-no-prefix={hideLabel}
             >
                 0x
             </span>
@@ -123,6 +123,17 @@
 </Form>
 
 <style lang="scss">
+    .hex-address-label{
+        margin-left: 0.5rem;
+        padding: 0.3rem 0 0.3rem 0.5rem;
+        opacity: 0.6;
+        border-left: solid 1px var(--primary-text);
+    }
+    .hex-address-label-no-prefix{
+        margin-left: 0;
+        padding: 0.3rem 0;
+        border-left: none;
+    }
     .address-search {
         display: flex;
         gap: 0.2rem;

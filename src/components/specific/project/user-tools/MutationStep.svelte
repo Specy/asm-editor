@@ -27,6 +27,7 @@
 <div class="column step">
     <div class="step-header column">
         <button
+            title="Undo to here"
             class="undo-to-here"
             onclick={() => {
                 dispatcher('undo')
@@ -39,8 +40,11 @@
         <div class="row space-between">
             <span> PC </span>
             <span class="pc">
-                0x{step.pc.toString().toUpperCase()}
+                <span style="opacity: 0.6">
+                    0x
+                </span>{step.pc.toString().toUpperCase()}
                 <button
+                    title="Go to line"
                     class="go-to-line"
                     onclick={() => {
                         dispatcher('highlight', step.line)
@@ -141,12 +145,6 @@
 
     .pc {
         position: relative;
-
-        &:hover {
-            .go-to-line {
-                opacity: 1;
-            }
-        }
     }
 
     .step-header {
@@ -154,8 +152,15 @@
         justify-content: center;
         position: relative;
 
-        &:hover {
+        &:hover:not(:has(.go-to-line:hover)) {
             .undo-to-here {
+                opacity: 1;
+                cursor: pointer;
+                pointer-events: all;
+            }
+        }
+        &:hover:not(:has(.undo-to-here:hover)) {
+            .go-to-line {
                 opacity: 1;
                 cursor: pointer;
                 pointer-events: all;
