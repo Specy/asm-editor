@@ -1,6 +1,4 @@
 <script lang="ts">
-    import { run } from 'svelte/legacy'
-
     import { ThemeStore, type ThemeKeys, type ThemeProp } from '$stores/themeStore.svelte'
     import { TinyColor } from '@ctrl/tinycolor'
     import FaUndo from 'svelte-icons/fa/FaUndo.svelte'

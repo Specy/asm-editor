@@ -34,15 +34,22 @@
         onAddressChange
     }: Props = $props()
 
+    let inputRef = $state<HTMLInputElement>(null)
+
     function searchAddress() {
-        const newAddress = BigInt(`0x${hexAddress || '0'}`)
+        const cleaned = hexAddress.replace('0x', '')
+        const newAddress = BigInt(`0x${cleaned || '0'}`)
         hexAddress = toHexString(newAddress, systemSize)
         updateAddress(newAddress)
     }
 
     function updateAddress(value: bigint) {
         const clampedSize = value - (value % BigInt(bytesPerPage))
-        onAddressChange(clampBigInt(clampedSize, 0n, memorySize - BigInt(bytesPerPage + 1)))
+        const minMaxAddress = clampBigInt(
+          clampedSize,
+          0n,
+          memorySize - BigInt(bytesPerPage - 1))
+        onAddressChange(minMaxAddress)
     }
 
     $effect(() => {
@@ -52,11 +59,30 @@
 
 <Form style="width:100%; {style}" on:submit={searchAddress}>
     <div class="address-search">
-        <RawInput
-            bind:value={hexAddress}
-            label={hideLabel ? '' : 'Address'}
-            style={`flex:1; padding-right: 0; ${inputStyle}`}
-        />
+        <div
+          class="hex-address"
+          onclick={() => {
+              inputRef?.focus()
+          }}
+        >
+            {#if !hideLabel}
+                <span>
+                    Address
+                </span>
+            {/if}
+            <span
+
+                style="margin-left: 0.5rem; padding: 0.3rem 0 0.3rem 0.5rem; border-left: 1px solid var(--primary-text); opacity: 0.6"
+            >
+                0x
+            </span>
+            <input
+              bind:this={inputRef}
+              spellcheck="false"
+              bind:value={hexAddress}
+              class="hex-address-input"
+            />
+        </div>
         <Button
             onClick={searchAddress}
             hasIcon
@@ -103,5 +129,27 @@
         align-items: center;
         flex: 1;
         width: 100%;
+    }
+
+    .hex-address{
+        display: flex;
+        border-radius: 0.4rem;
+        padding: 0.4rem 0.8rem;
+        align-items: center;
+        font-size: 0.9rem;
+        background-color: var(--secondary);
+        color: var(--secondary-text);
+
+    }
+    .hex-address-input{
+        width: 100%;
+        padding: 0.3rem 0.8rem 0.3rem 0;
+        font-size: 1rem;
+        font-family: monospace;
+        color: var(--secondary-text);
+        display: flex;
+        flex: 1;
+        border: none;
+        background-color: transparent;
     }
 </style>
