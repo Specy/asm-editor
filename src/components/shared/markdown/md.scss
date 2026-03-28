@@ -24,15 +24,20 @@
 			outline: 2px solid $accent;
 		}
 
+		.carta-container{
+			min-height: 100%;
+		}
 		.carta-wrapper {
-			padding: 1rem;
 			overflow: auto;
 			flex-grow: 1;
 		}
 
+		.carta-input{
+			background-color: rgba(255, 255, 255, 0.05);
+		}
 		.carta-input,
 		.carta-renderer {
-
+			padding: 0.4rem;
 			overflow: auto;
 		}
 

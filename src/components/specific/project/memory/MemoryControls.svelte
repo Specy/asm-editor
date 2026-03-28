@@ -143,6 +143,7 @@
     }
 
     .hex-address{
+        flex:1;
         display: flex;
         border-radius: 0.4rem;
         padding: 0.4rem 0.8rem;

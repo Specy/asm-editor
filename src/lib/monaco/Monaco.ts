@@ -2,7 +2,7 @@ import { browser } from '$app/environment'
 import { generateTheme } from '$lib/monaco/editorTheme'
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import type monaco from 'monaco-editor'
-import type { AvailableLanguages } from '$lib/Project.svelte'
+import type { AvailableLanguages, AvailableProgrammingLanguages } from '$lib/Project.svelte'
 
 export type MonacoType = typeof monaco
 
@@ -37,12 +37,13 @@ class MonacoLoader {
 
     private registeredLanguages: AvailableLanguages[] = []
 
-    async registerLanguage(lang: AvailableLanguages) {
+    async registerLanguage(lang: AvailableLanguages | AvailableProgrammingLanguages) {
         if (!this.monaco) await this.load()
         const { monaco } = this
         if (!monaco) return
-        if (this.registeredLanguages.includes(lang)) return
-        this.registeredLanguages.push(lang)
+        if(lang === 'c') return 
+        if (this.registeredLanguages.includes(lang as AvailableLanguages)) return
+        this.registeredLanguages.push(lang as AvailableLanguages)
         console.log('loading language', lang)
         monaco.languages.register({ id: lang.toLowerCase() })
         if (lang === 'M68K') {

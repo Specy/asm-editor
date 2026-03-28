@@ -25,7 +25,7 @@
     <select
         onchange={onChange}
         bind:value
-        style={`background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' height='24' viewBox='0 0 24 24' width='24' fill='#FFFFFF'><path d='M0 0h24v24H0z' fill='none'/><path d='M16.59 8.59L12 13.17 7.41 8.59 6 10l6 6 6-6z'/></svg>"); ${style}`}
+        style={style}
     >
         {#each options as option, i}
             <option value={option} disabled={disabled[i] !== undefined}>
@@ -40,16 +40,19 @@
         display: flex;
         align-items: center;
         border-radius: 0.4rem;
-        padding: 0.2rem;
         background-color: var(--secondary);
         color: var(--secondary-text);
-        padding: 0.6rem 1rem;
-        margin-top: 0.3rem;
+        padding: 0.7rem 1.4rem 0.7rem 1rem;
+        -moz-appearance: none;
         -webkit-appearance: none;
+        appearance: none;
+        background-image: url("data:image/svg+xml;utf8,<svg fill='rgb(219, 219, 219)' height='28' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/><path d='M0 0h24v24H0z' fill='none'/></svg>");
+        background-repeat: no-repeat;
+        background-position-x: 100%;
+        background-position-y: 5px;
     }
     .wrapper {
         display: flex;
         flex-direction: column;
-        flex: 1;
     }
 </style>

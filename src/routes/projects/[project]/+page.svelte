@@ -1,7 +1,7 @@
 <script lang="ts">
     import { page } from '$app/stores'
     import { makeProject, type Project } from '$lib/Project.svelte'
-    import { ProjectStore, SHARE_ID, EXAM_ID } from '$stores/projectsStore.svelte'
+    import { ProjectStore, SHARE_ID } from '$stores/projectsStore.svelte'
     import { onMount, untrack } from 'svelte'
     import { toast } from '$stores/toastStore'
     import ProjectEditor from './Project.svelte'
@@ -14,27 +14,11 @@
     import { DEFAULT_THEME, ThemeStore } from '$stores/themeStore.svelte'
     import { LANGUAGE_THEMES } from '$lib/Config'
     import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
-    import { createShareLink, decryptData, makeHash } from '$lib/utils'
+    import { createShareLink } from '$lib/utils'
     import { serializer } from '$lib/json'
-    import PromptProvider from '$cmp/shared/providers/PromptProvider.svelte'
-    import Row from '$cmp/shared/layout/Row.svelte'
-    import Input from '$cmp/shared/input/Input.svelte'
-    import Button from '$cmp/shared/button/Button.svelte'
-    import Card from '$cmp/shared/layout/Card.svelte'
-    import Header from '$cmp/shared/layout/Header.svelte'
-    import { Keyboard } from 'trs80-emulator'
+    import { createExamSessionLink, parseLegacyProjectExamPayload } from '$lib/exam'
 
-    let project = makeProject()
-    let isExam = $state(false)
-    let examSubmission = $state({
-        name: '',
-        submissionTimestamp: 0,
-        startedAt: 0,
-        hash: ''
-    } satisfies Project['exam']['submission'])
-    let examDisabled = $state(false)
-    let examPassword = $state('')
-    let submissionUrl = $state('')
+    let project = $state(makeProject())
     let status: 'loading' | 'loaded' | 'error' = $state('loading')
     let oldTheme = ThemeStore.getChosenTheme()
 
@@ -53,52 +37,45 @@
 
     async function loadProject() {
         const id = $page.params.project
-        if (id === 'share' || id === 'exam') {
+        if (id === 'exam') {
             const code = $page.url.searchParams.get('project')
-            const parsed = serializer.parse<Project>(
-                lzstring.decompressFromEncodedURIComponent(code)
-            )
-            parsed.id = id === 'share' ? SHARE_ID : EXAM_ID
-            isExam = id === 'exam'
-            project.set(parsed)
-            if (isExam && !parsed.exam?.submission) {
-                const name = await Prompt.askText(
-                    'Welcome to the exam! The app will go full screen soon.\n\nIF YOU EXIT FULL SCREEN OR CHANGE PAGE, YOUR EDITOR WILL BE DISABLED.\n\nPlease write your name to start the exam.',
-                    false
-                )
-                examSubmission.name = name
-                examSubmission.startedAt = Date.now()
-                const hash = (await makeHash(`${name}${examSubmission.startedAt}`)).slice(0, 6)
-                examSubmission.hash = hash
-                if (project.exam.accessPasswordHash) {
-                    while (true) {
-                        const accessPassword = await Prompt.askText(
-                            'Please enter the exam access password to start the exam.',
-                            false
-                        )
-                        const hash = (await makeHash(accessPassword)).slice(0, 6)
-                        if (hash === project.exam.accessPasswordHash) {
-                            project.exam.track = await decryptData(
-                                project.exam.track,
-                                accessPassword
-                            )
-                            break;
-
-                        }
-                        toast.error('Wrong access password')
-                    }
-                }
-                startExam()
-            } else {
-                examSubmission = parsed.exam?.submission || examSubmission
+            if (!code) {
+                toast.error('Invalid legacy exam link', 10000)
+                status = 'error'
+                return
             }
+
+            const migratedExam = parseLegacyProjectExamPayload(code)
+            if (!migratedExam) {
+                toast.error('Could not migrate legacy exam link', 10000)
+                status = 'error'
+                return
+            }
+
+            await goto(createExamSessionLink(migratedExam), { replaceState: true })
+            return
+        }
+
+        if (id === 'share') {
+            const code = $page.url.searchParams.get('project')
+            const parsedCode = lzstring.decompressFromEncodedURIComponent(code)
+            if (!parsedCode) {
+                toast.error('Invalid shared project link', 10000)
+                status = 'error'
+                return
+            }
+
+            const parsed = serializer.parse<Project>(parsedCode)
+            parsed.id = SHARE_ID
+            project.set(parsed)
         } else {
-            project.set(await ProjectStore.getProject(id))
-            if (!project) {
+            const loadedProject = await ProjectStore.getProject(id)
+            if (!loadedProject) {
                 toast.error('Project not found', 10000)
                 status = 'error'
                 return
             }
+            project.set(loadedProject)
         }
         status = 'loaded'
     }
@@ -107,18 +84,12 @@
         loadProject()
         Monaco.load()
         return () => {
-            window.removeEventListener('visibilitychange', listenVisibilityChange)
-            window.removeEventListener('fullscreenchange', listenFullscreenChange)
-            window.removeEventListener('blur', listenVisibilityChange)
             Monaco.dispose()
         }
     })
 
     async function save(project: Project): Promise<boolean> {
         if (status !== 'loaded') return false
-        if (project.id === EXAM_ID) {
-            return false
-        }
         if (project.id === SHARE_ID) {
             if (
                 !(await Prompt.confirm('Do you want to save this shared project in your projects?'))
@@ -139,62 +110,6 @@
         const url = createShareLink(pr)
         await navigator.clipboard.writeText(url)
         toast.logPill('Copied to clipboard')
-    }
-
-    async function finishExam(exam: Project) {
-        if (!isExam) return
-        const wantsToFinish = await Prompt.confirm(
-            'Do you want to finish the exam? You will not be able to edit the code anymore.'
-        )
-        if (!wantsToFinish) return
-        examDisabled = true
-        examSubmission.submissionTimestamp = Date.now()
-        exam.exam.submission = examSubmission
-        const url = createShareLink(exam, 'exam')
-        submissionUrl = url
-        await navigator.clipboard.writeText(url)
-        toast.logPill('Exam submission copied to clipboard')
-        document.exitFullscreen()
-    }
-
-    async function unlockExam() {
-        const hash = (await makeHash(examPassword)).slice(0, 6)
-        examPassword = ''
-        submissionUrl = ''
-        if (hash === project.exam?.passwordHash) {
-            examDisabled = false
-            toast.logPill('Exam unlocked')
-            examSubmission.submissionTimestamp = 0
-            await document.documentElement.requestFullscreen()
-            //@ts-ignore
-            navigator.keyboard?.lock(['Escape', 'F11', 'F12'])
-        } else {
-            toast.error('Wrong password')
-        }
-    }
-
-    function listenVisibilityChange() {
-        if (document.visibilityState === 'hidden') {
-            examDisabled = true
-        }
-        if (!document.hasFocus()) {
-            examDisabled = true
-        }
-    }
-
-    function listenFullscreenChange() {
-        if (!document.fullscreenElement) {
-            examDisabled = true
-        }
-    }
-
-    async function startExam() {
-        window.addEventListener('visibilitychange', listenVisibilityChange)
-        window.addEventListener('fullscreenchange', listenFullscreenChange)
-        window.addEventListener('blur', listenVisibilityChange)
-        await document.documentElement.requestFullscreen()
-        //@ts-ignore
-        navigator.keyboard?.lock(['Escape', 'F11', 'F12'])
     }
 
     async function changePage(page: string) {
@@ -249,22 +164,7 @@
 {#snippet loadingScreen(errored)}
     <div class="overlay" class:overlay-hidden={!(status === 'loading' || status === 'error')}>
         {#if !errored}
-            {#if isExam}
-                <h1 class="loading">Exam</h1>
-                <Card
-                    padding="1rem 2rem"
-                    style="margin-top: 1rem; visibility: {examSubmission.name
-                        ? 'visible'
-                        : 'hidden'}"
-                    background="tertiary"
-                >
-                    <Header type="h2">
-                        {examSubmission.name} ({examSubmission.hash})
-                    </Header>
-                </Card>
-            {:else}
-                <h1 class="loading">Loading...</h1>
-            {/if}
+            <h1 class="loading">Loading...</h1>
         {:else}
             <h1 class="error">Error loading project!</h1>
             <ButtonLink href="/projects">Back to your projects</ButtonLink>
@@ -272,52 +172,15 @@
     </div>
 {/snippet}
 <Page>
-    {#if examDisabled && !submissionUrl}
-        <div class="overlay">
-            <h1 class="loading">Exam disabled</h1>
-            <p>The exam has been disabled. If you want to unlock it, ask the owner of the exam.</p>
-            <Row gap="1rem">
-                <Input type="password" placeholder="Unlock password" bind:value={examPassword} />
-                <Button onClick={unlockExam}>Unlock</Button>
-            </Row>
-            <Card padding="1rem 2rem" style="margin-top: 1rem;" background="tertiary">
-                <Header type="h2">
-                    {examSubmission.name} ({examSubmission.hash})
-                </Header>
-            </Card>
-        </div>
-    {/if}
-    {#if examDisabled && submissionUrl}
-        <div class="overlay">
-            <h1 class="loading">Exam submitted</h1>
-            <p>The exam has been disabled. If you want to unlock it, ask the owner of the exam.</p>
-            <Row gap="1rem">
-                <Input type="password" placeholder="Unlock password" bind:value={examPassword} />
-                <Button onClick={unlockExam}>Unlock</Button>
-            </Row>
-            <p>Your exam submission link has been copied to the clipboard, click here to copy it again</p>
-            <Button onClick={async () => {
-                await navigator.clipboard.writeText(submissionUrl)
-                toast.logPill('Exam submission link copied to clipboard')
-            }}>
-                Copy submission link
-            </Button>
-            <Card padding="1rem 2rem" style="margin-top: 1rem;" background="tertiary">
-                <Header type="h2">
-                    {examSubmission.name} ({examSubmission.hash})
-                </Header>
-            </Card>
-        </div>
-    {/if}
     {#key project.id}
         <EmulatorLoader bind:code={project.code} language={project.language}>
             {#snippet children(emulator)}
                 <ProjectEditor
-                    {isExam}
-                    {examSubmission}
                     {emulator}
-                    isExamLocked={examSubmission.startedAt === 0 || status === 'loading' || examDisabled }
-                    bind:project
+                    name={project.name}
+                    language={project.language}
+                    bind:code={project.code}
+                    bind:testcases={project.testcases}
                     on:wantsToLeave={() => {
                         changePage('/projects')
                     }}
@@ -326,11 +189,8 @@
                         console.log('Saved')
                         if (!detail.silent) toast.logPill('Project saved')
                     }}
-                    on:share={({ detail }) => {
-                        share(detail)
-                    }}
-                    on:finishedExam={({ detail }) => {
-                        finishExam(detail)
+                    on:share={() => {
+                        share(project)
                     }}
                 />
             {/snippet}
@@ -360,14 +220,6 @@
         gap: 2rem;
         z-index: 20;
         padding: 1rem;
-    }
-
-    .project {
-        padding: 0.8rem;
-        display: flex;
-        flex-direction: column;
-        height: 100%;
-        max-height: 100%;
     }
 
     .loading {

@@ -49,7 +49,10 @@ a {
 
 input:disabled {
     cursor: not-allowed !important;
-    filter: saturate(0.6) !important;
+}
+
+input[type="checkbox"], input[type="radio"] {
+    accent-color: var(--accent);
 }
 
 #svelte {

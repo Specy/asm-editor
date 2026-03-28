@@ -1,7 +1,7 @@
 <script lang="ts">
     import { type Component, createEventDispatcher, mount, onDestroy, onMount } from 'svelte'
     import type monaco from 'monaco-editor'
-    import type { AvailableLanguages } from '../../../lib/Project.svelte'
+    import type { AvailableLanguages, AvailableProgrammingLanguages} from '../../../lib/Project.svelte'
     import type { MonacoType } from '$lib/monaco/Monaco'
     import { Monaco } from '$lib/monaco/Monaco'
     import { generateTheme } from '$lib/monaco/editorTheme'
@@ -11,11 +11,11 @@
         disabled?: boolean
         code: string
         codeOverride?: string
-        highlightedLine: number
+        highlightedLine?: number
         hasError?: boolean
-        language: AvailableLanguages
-        errors: MonacoError[]
-        breakpoints: number[]
+        language: AvailableLanguages | AvailableProgrammingLanguages
+        errors?: MonacoError[]
+        breakpoints?: number[]
         editor?: monaco.editor.IStandaloneCodeEditor
         viewZones?: {
             afterLineNumber: number
@@ -28,11 +28,11 @@
         disabled = false,
         code = $bindable(),
         codeOverride,
-        highlightedLine,
+        highlightedLine = -1,
         hasError = false,
         language,
-        errors,
-        breakpoints,
+        errors = [],
+        breakpoints = [],
         editor = $bindable(),
         viewZones = [],
     }: Props = $props()

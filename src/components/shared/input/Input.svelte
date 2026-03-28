@@ -13,6 +13,7 @@
         value: any
         status?: statusType
         style?: string
+        wrapperStyle?: string
         type?: string
         placeholder?: string
         focus?: boolean
@@ -29,6 +30,7 @@
         placeholder = '',
         focus = false,
         hideStatus = true,
+        wrapperStyle,
         el = $bindable()
     }: Props = $props()
     onMount(() => {
@@ -42,7 +44,7 @@
     })
 </script>
 
-<div class="input-wrapper">
+<div class="input-wrapper" style={wrapperStyle}>
     {#if title}
         <div>{title}</div>
     {/if}

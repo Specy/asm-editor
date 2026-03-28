@@ -53,7 +53,7 @@
     .floating-container {
         display: flex;
         flex-direction: column;
-        position: absolute;
+        position: fixed;
         width: 30rem;
         overflow: hidden;
         max-width: calc(100vw - 2rem);

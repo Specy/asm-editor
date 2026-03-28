@@ -3,9 +3,9 @@
     import Button from '$cmp/shared/button/Button.svelte'
     import MemoryVisualiser from '$cmp/specific/project/memory/MemoryRenderer.svelte'
     import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
-    import { createEventDispatcher, onMount } from 'svelte'
+    import { createEventDispatcher, onMount, type Snippet } from 'svelte'
     import FaKeyboard from 'svelte-icons/fa/FaKeyboard.svelte'
-    import type { Project, TestcaseResult } from '$lib/Project.svelte'
+    import type { AvailableLanguages, Testcase, TestcaseResult } from '$lib/Project.svelte'
     import FaSave from 'svelte-icons/fa/FaSave.svelte'
     import FaCog from 'svelte-icons/fa/FaCog.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
@@ -44,20 +44,29 @@
     import BelowLineContent from '$cmp/specific/project/user-tools/BelowLineContent.svelte'
     import Card from '$cmp/shared/layout/Card.svelte'
     import Header from '$cmp/shared/layout/Header.svelte'
-    import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
 
     interface Props {
-        project: Project
+        name?: string
+        language?: AvailableLanguages
+        code?: string
+        testcases?: Testcase[]
         emulator: Emulator
-        isExam?: boolean
-        isExamLocked?: boolean
-        examSubmission: Project['exam']['submission']
+        embedded?: boolean
+        children?: Snippet
     }
 
-    let { project = $bindable(), emulator = $bindable(), isExam, examSubmission , isExamLocked}: Props = $props()
+    let {
+        name = 'Untitled',
+        language = 'M68K',
+        code = $bindable(''),
+        testcases = $bindable([] as Testcase[]),
+        emulator = $bindable(),
+        embedded = false,
+        children
+    }: Props = $props()
 
     $effect(() => {
-        emulator.setCode(project.code)
+        emulator.setCode(code)
     })
 
     let editor: monaco.editor.IStandaloneCodeEditor = $state()
@@ -69,7 +78,6 @@
     let testcasesVisible = $state(false)
     let groupSize = $state(RegisterSize.Word)
     let errorStrings = $derived(emulator.errors.join('\n'))
-    let elapsedTime = $state(0)
     let info = $derived(
         emulator.terminated && emulator.executionTime >= 0
             ? `Ran in ${formatTime(emulator.executionTime)}`
@@ -78,11 +86,9 @@
     const dispatcher = createEventDispatcher<{
         save: {
             silent: boolean
-            data: Project
         }
         wantsToLeave: void
-        share: Project
-        finishedExam: Project
+        share: void
     }>()
     const pressedKeys = new Map<String, boolean>()
     const [debounced] = createDebouncer(3000)
@@ -122,8 +128,7 @@
             }
             case ShortcutAction.SaveCode: {
                 dispatcher('save', {
-                    silent: false,
-                    data: project
+                    silent: false
                 })
                 break
             }
@@ -163,15 +168,11 @@
         window.addEventListener('keydown', handleKeyDown)
         window.addEventListener('keyup', handleKeyUp)
         window.addEventListener('blur', clearPressed)
-        const interval = setInterval(() => {
-            elapsedTime += 1000
-        }, 1000)
         return () => {
             window.removeEventListener('keydown', handleKeyDown)
             window.removeEventListener('keyup', handleKeyUp)
             window.removeEventListener('blur', clearPressed)
             emulator.dispose()
-            clearInterval(interval)
         }
     })
 
@@ -207,21 +208,13 @@
         pc.setSize(emulator.systemSize)
     })
 
-    const remainingMinutes = $derived(
-        project.exam?.timeLimit && project.exam?.timeLimit > 0
-            ? Math.floor((project.exam.timeLimit - elapsedTime) / 60000)
-            : -1
-    )
-
-    const formattedSubmissionTime = $derived(
-        project.exam?.submission?.submissionTimestamp
-            ? new Date(project.exam.submission.submissionTimestamp).toLocaleString()
-            : ''
-    )
+    $effect(() => {
+        console.log(running)
+    })
 </script>
 
-<header class="project-header">
-    {#if !isExam}
+{#if !embedded}
+    <header class="project-header">
         <a
             href="/projects"
             title="Go back to your projects"
@@ -234,10 +227,10 @@
                 <FaAngleLeft />
             </Icon>
         </a>
-        <h1 style="font-size: 1.6rem; margin-left: 0.4rem" class="ellipsis">{project.name}</h1>
+        <h1 style="font-size: 1.6rem; margin-left: 0.4rem" class="ellipsis">{name}</h1>
         <Row gap="0.5rem" style="margin-left: auto;">
             <Button
-                onClick={() => dispatcher('share', project)}
+                onClick={() => dispatcher('share')}
                 hasIcon
                 cssVar="accent2"
                 style="padding:0; width:2.2rem; height:2.2rem;"
@@ -248,7 +241,7 @@
                 </Icon>
             </Button>
             <ButtonLink
-              	title="donate"
+                title="donate"
                 href="/donate"
                 cssVar="accent2"
                 style="padding:0; width:2.2rem; height:2.2rem;"
@@ -294,8 +287,7 @@
             <Button
                 onClick={() => {
                     dispatcher('save', {
-                        silent: false,
-                        data: project
+                        silent: false
                     })
                 }}
                 cssVar="accent2"
@@ -309,37 +301,18 @@
             </Button>
         </Row>
         <ShortcutEditor bind:visible={shortcutsVisible} />
-        <Settings bind:visible={settingsVisible} language={project.language} />
-        <FloatingLanguageDocumentation
-            bind:visible={documentationVisible}
-            language={project.language}
-        />
-    {:else}
-        {#if examSubmission.name}
-            <Header type="h2">
-                {examSubmission.name || 'Unknown'} ({examSubmission.hash}){formattedSubmissionTime
-                    ? ` - ${formattedSubmissionTime}`
-                    : remainingMinutes >= 0
-                      ? ` - ${remainingMinutes} minutes left`
-                      : ''}
-            </Header>
-        {/if}
-
-        {#if !examSubmission.submissionTimestamp}
-            <Button style="margin-left: auto;" onClick={() => dispatcher('finishedExam', project)}>
-                Finish exam
-            </Button>
-        {/if}
-    {/if}
-</header>
+        <Settings bind:visible={settingsVisible} {language} />
+        <FloatingLanguageDocumentation bind:visible={documentationVisible} {language} />
+    </header>
+{/if}
 <TestcasesEditor
-    editable={!isExam}
+    editable={true}
     systemSize={emulator.systemSize}
     registerNames={emulator.registers.map((r) => r.name)}
     hiddenRegistersNames={emulator.hiddenRegisters}
     bind:visible={testcasesVisible}
     {testcasesResult}
-    bind:testcases={project.testcases}
+    bind:testcases
 />
 <ToggleableDraggable title="Call stack" left={300}>
     <CallStack
@@ -376,8 +349,8 @@
     <MemoryTab
         endianess={tab.endianess}
         {tab}
-        defaultMemoryValue={DEFAULT_MEMORY_VALUE[project.language]}
-        memorySize={MEMORY_SIZE[project.language]}
+        defaultMemoryValue={DEFAULT_MEMORY_VALUE[language]}
+        memorySize={MEMORY_SIZE[language]}
         left={700 + i * 300}
         systemSize={emulator.systemSize}
         sp={emulator.sp}
@@ -394,7 +367,7 @@
             class:gradientBorder={emulator.canExecute && !emulator.terminated}
             class:redBorder={emulator.errors.length > 0}
         >
-            {#key project.language}
+            {#key language}
                 <Editor
                     viewZones={settingsStore.values.showPseudoInstructions.value
                         ? emulator.decorations.map((v) => {
@@ -412,8 +385,7 @@
                         if (settingsStore.values.autoSave.value) {
                             debounced(() => {
                                 dispatcher('save', {
-                                    silent: true,
-                                    data: project
+                                    silent: true
                                 })
                             })
                         }
@@ -422,11 +394,11 @@
                         emulator.toggleBreakpoint(d.detail - 1)
                     }}
                     bind:editor
-                    bind:code={project.code}
+                    bind:code
                     codeOverride={emulator.compiledCode}
                     breakpoints={emulator.breakpoints.map(Number)}
                     errors={emulator.compilerErrors}
-                    language={project.language}
+                    {language}
                     highlightedLine={emulator.line}
                     disabled={(emulator.canExecute && !emulator.terminated) ||
                         !!emulator.compiledCode}
@@ -437,7 +409,7 @@
 
         <Controls
             {running}
-            hasTests={project.testcases.length > 0}
+            hasTests={testcases.length > 0}
             hasErrorsInTests={testcasesResult.some((r) => !r.passed)}
             hasNoErrorsInTests={testcasesResult.every((r) => r.passed) &&
                 testcasesResult.length > 0}
@@ -454,8 +426,8 @@
                 setTimeout(async () => {
                     try {
                         testcasesResult = await emulator.test(
-                            $state.snapshot(project.code),
-                            $state.snapshot(project.testcases),
+                            $state.snapshot(code),
+                            $state.snapshot(testcases),
                             settingsStore.values.instructionsLimit.value,
                             settingsStore.values.maxHistorySize.value
                         )
@@ -485,7 +457,7 @@
                 try {
                     running = false
                     //give the latest code to the emulator
-                    await emulator.compile(settingsStore.values.maxHistorySize.value, project.code)
+                    await emulator.compile(settingsStore.values.maxHistorySize.value, code)
                 } catch (e) {
                     console.error(e)
                     toast.error('Error compiling code. ' + getM68kErrorMessage(e))
@@ -539,19 +511,19 @@
                         const clampedSize =
                             value - (value % BigInt(emulator.memory.global.pageSize))
                         emulator.setGlobalMemoryAddress(
-                            clampBigInt(clampedSize, 0n, MEMORY_SIZE[project.language])
+                            clampBigInt(clampedSize, 0n, MEMORY_SIZE[language])
                         )
                     }}
                 />
             </div>
 
             <div class="column" style="gap: 0.4rem">
-                {#if settingsStore.values.showMemory.value && (!isExam || !(!running && !(emulator.canExecute || !!emulator.compiledCode)))}
+                {#if settingsStore.values.showMemory.value && (!children || !(!running && !(emulator.canExecute || !!emulator.compiledCode)))}
                     <div class="row" style="gap: 0.4rem">
                         <MemoryControls
                             systemSize={emulator.systemSize}
                             bytesPerPage={emulator.memory.global.pageSize}
-                            memorySize={MEMORY_SIZE[project.language]}
+                            memorySize={MEMORY_SIZE[language]}
                             inputStyle="height: 100%"
                             currentAddress={emulator.memory.global.address}
                             onAddressChange={(e) => {
@@ -562,7 +534,7 @@
                     <MemoryVisualiser
                         systemSize={emulator.systemSize}
                         endianess={emulator.memory.global.endianess}
-                        defaultMemoryValue={DEFAULT_MEMORY_VALUE[project.language]}
+                        defaultMemoryValue={DEFAULT_MEMORY_VALUE[language]}
                         bytesPerRow={emulator.memory.global.rowSize}
                         pageSize={emulator.memory.global.pageSize}
                         memory={emulator.memory.global.data}
@@ -570,15 +542,12 @@
                         sp={emulator.sp}
                         callStackAddresses={makeColorizedLabels(emulator.callStack)}
                     />
-                {:else if !running && isExam}
+                {:else if !running && children}
                     <Card
                         background="secondary"
-                        style="padding: 1rem; overflow-y: auto; width: 32.9rem; height: 34.9rem;"
+                        style="padding: 1rem; overflow-y: auto; width: 31.3rem; height: 33.25rem;"
                     >
-                        <MarkdownRenderer
-                            source={isExamLocked ? '' : project.exam?.track || ''}
-                            style="padding: 0.5rem; font-size: 1.2rem"
-                        ></MarkdownRenderer>
+                        {@render children()}
                     </Card>
                 {:else}
                     <button
