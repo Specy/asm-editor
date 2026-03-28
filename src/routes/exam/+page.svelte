@@ -200,7 +200,6 @@
 <Page contentStyle={'padding-top: 3.5rem;'}>
     <div class="exam-builder">
         <section class="settings-card">
-            <Header type="h2">Overall settings</Header>
 
             <div class="settings-grid">
                 <Input type="text" title="Exam title" bind:value={settings.title} />
@@ -228,6 +227,9 @@
             <div class="markdown-editor-wrapper intro-editor">
                 <MarkdownEditor bind:value={settings.instructions} />
             </div>
+            <p>
+                When people open the exam, they will put their name and the exam access password, which will generate a random code that identifies them, which you can save. If they reload the page, or if they reset the website, a new code will be generated. Once ready to start, the page will go full screen and any attempt to leave the page will result with the editor being blocked. To unlock the page, the user will need to enter the unlock password. Letting you know that they might have either accidentally or intentionally left the exam.
+            </p>
 
             <Button
                 onClick={createExamUrl}
