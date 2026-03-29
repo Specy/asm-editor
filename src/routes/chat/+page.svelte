@@ -399,7 +399,7 @@ ${initialCodes}
         position: relative;
         overflow: auto;
         flex: 1;
-        margin-right: -1.5rem;
+        margin-right: -1rem;
         max-width: 0;
         opacity: 0;
         transition:
