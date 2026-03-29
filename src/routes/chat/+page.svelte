@@ -19,6 +19,17 @@
     let editorLanguage: SupportedLanguage | null = $state(null)
     let editorCode = $state('')
     let emulatorInstance: Emulator | null = $state(null)
+    let debugShowEmulator = $state(false)
+
+    function toggleDebugEmulator() {
+        if (debugShowEmulator) {
+            debugShowEmulator = false
+            editorLanguage = null
+        } else {
+            debugShowEmulator = true
+            editorLanguage = editorLanguage ?? 'M68K'
+        }
+    }
 
     const tools = [
         tool({
@@ -38,7 +49,6 @@
                 if (languageChanged) {
                     await delay(2000) // Wait for the emulator to load the new language
                 }
-                console.log(emulatorInstance)
                 if (emulatorInstance) {
                     emulatorInstance.setCode(code)
                     const errors = await emulatorInstance.check()
@@ -149,7 +159,7 @@
         tool({
             name: 'run_to_completion',
             description:
-                'Runs the program until it terminates or hits a breakpoint. The code must be compiled first (use compile). Returns the final emulator state.',
+                'Runs the program until it terminates or hits a breakpoint. You MUST compile the code first (use the compile tool). Returns the final emulator state.',
             schema: z.object({}),
             execute: async () => {
                 if (!emulatorInstance) {
@@ -263,23 +273,23 @@
     ]
 
     const initialCodes = Object.entries(BASE_CODE)
-        .map(([lang, code]) => `#${lang}\n${code}`)
+        .map(([lang, code]) => `#${lang}\n\`\`\`${lang}\n${code}\n\`\`\``)
         .join('\n\n')
 
     const avatarInstructions = `You are an assembly language assistant with access to an interactive code editor and emulator.
 
 ## Tools
 
-### set_code
+### set_code tool
 Use this tool to create or update the code editor with assembly code. Call it whenever you want to show the user a code example, answer a coding question, or demonstrate a concept.
 - Always set the correct language matching the code you are writing.
 - Prefer updating the existing editor code rather than describing code in text when possible.
 - This returns any type errors.
 
-### get_code
+### get_code tool
 Returns the current code and language in the editor. Use this when you need to read or reference the source code (e.g. the user says "this code" or "fix this").
 
-### get_emulator_state
+### get_emulator_state tool
 Returns the full emulator execution state. Use this to inspect registers, flags, call stack, breakpoints, errors, and execution status. Call this after stepping or running to see the result.
 
 Returned fields:
@@ -294,25 +304,25 @@ Returned fields:
 - currentLineNumber: The line number the program counter is currently pointing to during execution.
 - stackPointer: The current value of the stack pointer register.
 - programCounter: The current value of the program counter register.
-- statusRegisters: The current state of CPU status/flag registers (e.g. carry, zero, negative, overflow).
+- statusRegisters: The current state of CPU status/flag registers
 - registers: List of all CPU registers with their name and decimal/hex value.
 
-### compile
+### compile tool
 Compiles the current code in the editor. Returns any compilation errors. Use this after modifying code via set_code if you need to recompile, or to check for errors without running.
 
-### step
+### step tool
 Steps the emulator forward by a given number of instructions (default 1). Use this for single-stepping through code or executing a few instructions at a time. Returns the state after stepping, including whether the program terminated.
 
-### run_to_completion
-Runs the program until it terminates or hits a breakpoint. The code must be compiled first (use compile). Use this when the user wants to execute the entire program. Returns the final state.
+### run_to_completion tool
+Runs the program until it terminates or hits a breakpoint. You MUST compile the code first (use the compile tool). Use this when the user wants to execute the entire program. Returns the final state.
 
-### toggle_breakpoint
+### toggle_breakpoint tool
 Toggles a breakpoint on a given 0-based line index. If a breakpoint already exists on that line it is removed, otherwise it is added. Returns the updated breakpoint list.
 
-### get_line_from_address
+### get_line_from_address tool
 Maps a hex memory address to a source line number. Useful for understanding which instruction the program counter or a call stack address corresponds to.
 
-### read_memory
+### read_memory tool
 Reads a region of memory starting at a hex address for a given number of bytes (max 1024). Returns the bytes as a hex string. Useful for inspecting data sections, the stack, or memory-mapped values.
 
 # Guidelines
@@ -328,6 +338,11 @@ ${initialCodes}
 
 <DefaultNavbar />
 <Page hasNavbar>
+    <!--
+    <button class="debug-toggle" onclick={toggleDebugEmulator}>
+        {debugShowEmulator ? 'Hide' : 'Show'} Emulator
+    </button>
+    -->
     <div class="chat-layout" class:editor-open={editorLanguage}>
         <div class="agent-wrapper">
             <AiAgent
@@ -346,37 +361,57 @@ ${initialCodes}
         </div>
 
         <div class="editor-panel">
-            {#if editorLanguage}
-                {#key editorLanguage}
-                    <EmulatorLoader
-                        language={editorLanguage}
-                        code={editorCode}
-                        bind:emulator={emulatorInstance}
-                        settings={{
-                            globalPageElementsPerRow: 4,
-                            globalPageSize: 4 * 8
-                        }}
-                    >
-                        {#snippet children(emulator)}
-                            <InteractiveInstructionEditor
-                                bind:code={editorCode}
-                                language={editorLanguage as AvailableLanguages}
-                                {emulator}
-                                embedded={true}
-                                showConsole={true}
-                                showRegisters={true}
-                                showMemory={true}
-                                showFlags={true}
-                            />
-                        {/snippet}
-                    </EmulatorLoader>
-                {/key}
-            {/if}
+            <div class="editor-content">
+                {#if editorLanguage}
+                    {#key editorLanguage}
+                        <EmulatorLoader
+                            language={editorLanguage}
+                            code={editorCode}
+                            bind:emulator={emulatorInstance}
+                            settings={{
+                                globalPageElementsPerRow: 4,
+                                globalPageSize: 4 * 8
+                            }}
+                        >
+                            {#snippet children(emulator)}
+                                <InteractiveInstructionEditor
+                                    bind:code={editorCode}
+                                    language={editorLanguage as AvailableLanguages}
+                                    {emulator}
+                                    embedded={true}
+                                    showConsole={true}
+                                    showRegisters={true}
+                                    showMemory={true}
+                                    showFlags={true}
+                                />
+                            {/snippet}
+                        </EmulatorLoader>
+                    {/key}
+                {/if}
+            </div>
         </div>
     </div>
 </Page>
 
 <style lang="scss">
+    .debug-toggle {
+        position: fixed;
+        top: 4rem;
+        right: 1rem;
+        z-index: 100;
+        padding: 0.4rem 0.8rem;
+        border-radius: 0.5rem;
+        border: 1px solid var(--tertiary);
+        background: var(--secondary);
+        color: var(--text-color);
+        cursor: pointer;
+        font-size: 0.8rem;
+        opacity: 0.7;
+        &:hover {
+            opacity: 1;
+        }
+    }
+
     .chat-layout {
         display: flex;
         max-height: 100dvh;
@@ -394,37 +429,52 @@ ${initialCodes}
     }
 
     .editor-panel {
-        padding: 0.5rem;
-        display: flex;
         position: relative;
-        overflow: auto;
-        flex: 1;
-        margin-right: -1rem;
+        overflow: hidden;
+        flex: 0 0 0%;
         max-width: 0;
         opacity: 0;
         transition:
-        opacity 0.2s,
-        max-width 0.5s;
+            opacity 0.6s,
+            flex 0.5s ease,
+            max-width 0.5s ease;
     }
 
     .editor-open .editor-panel {
-        margin-right: 0;
-        flex: 2;
+        flex: 2 1 0%;
         opacity: 1;
         max-width: 100vw;
     }
 
+    .editor-content {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        min-width: calc(100vw - 1rem - min(55ch, calc(100vw - 1rem)));
+        padding: 0.5rem;
+        padding-left: 0;
+        display: flex;
+        overflow: auto;
+    }
+
     @media (max-width: 900px) {
         .editor-panel {
-            padding: 0;
             margin-right: unset;
             max-height: 0;
-            max-height: 0;
             max-width: unset;
+            overflow: unset;
         }
         .editor-open .editor-panel {
-            padding: 0.5rem;
             max-height: 80dvh;
+        }
+        .editor-content {
+            position: relative;
+            min-width: unset;
+            width: 100%;
+            min-height: 80dvh;
+            padding-left: 0.5rem;
         }
         .chat-layout {
             max-height: unset;
