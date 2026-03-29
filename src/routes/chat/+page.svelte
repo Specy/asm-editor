@@ -43,12 +43,9 @@
                     emulatorInstance.setCode(code)
                     const errors = await emulatorInstance.check()
                     if (errors.length > 0) {
-                        return $state.snapshot({ 
-                            success: false, 
-                            errors:  [
-                                ...errors.map(e => e.formatted),
-                                ...emulatorInstance.errors
-                            ]
+                        return $state.snapshot({
+                            success: false,
+                            errors: [...errors.map((e) => e.formatted), ...emulatorInstance.errors]
                         })
                     }
                 }
@@ -57,13 +54,12 @@
         }),
         tool({
             name: 'get_code',
-            description:
-                'Returns the current code and language in the editor.',
+            description: 'Returns the current code and language in the editor.',
             schema: z.object({}),
             execute: async () => {
                 return {
                     language: editorLanguage,
-                    code: editorCode,
+                    code: editorCode
                 }
             }
         }),
@@ -73,7 +69,7 @@
                 'Returns the current emulator execution state including registers, memory, errors, flags, and call stack.',
             schema: z.object({}),
             execute: async () => {
-                if(!emulatorInstance) {
+                if (!emulatorInstance) {
                     await delay(2000)
                     return { errors: ['Emulator not loaded yet'] }
                 }
@@ -81,7 +77,7 @@
 
                 return $state.snapshot({
                     errors: [
-                        ...emulatorInstance.compilerErrors.map(e => e.formatted),
+                        ...emulatorInstance.compilerErrors.map((e) => e.formatted),
                         ...emulatorInstance.errors
                     ],
                     terminated: emulatorInstance.terminated,
@@ -90,19 +86,22 @@
                     breakpoints: emulatorInstance.breakpoints,
                     canExecute: emulatorInstance.canExecute,
                     canUndo: emulatorInstance.canUndo,
-                    callStack: emulatorInstance.callStack.map(frame => ({
+                    callStack: emulatorInstance.callStack.map((frame) => ({
                         address: `decimal: ${String(frame.address)} hex: 0x${frame.address.toString(16)}`,
                         name: frame.name,
                         line: frame.line,
                         color: frame.color,
                         destinationAddress: `decimal: ${String(frame.address)} hex: 0x${frame.address.toString(16)}`,
-                        stackPointer: `decimal: ${String(frame.sp)} hex: 0x${frame.sp.toString(16)}`,
+                        stackPointer: `decimal: ${String(frame.sp)} hex: 0x${frame.sp.toString(16)}`
                     })),
                     currentLineNumber: emulatorInstance.line,
                     stackPointer: `decimal: ${String(emulatorInstance.sp)} hex: 0x${emulatorInstance.sp.toString(16)}`,
                     programCounter: `decimal: ${String(emulatorInstance.pc)} hex: 0x${emulatorInstance.pc.toString(16)}`,
                     statusRegisters: emulatorInstance.statusRegisters,
-                    registers: emulatorInstance.registers.map(r => ({ name: r.name, value: `decimal: ${String(r.value)} hex: 0x${r.value.toString(16)}`})),
+                    registers: emulatorInstance.registers.map((r) => ({
+                        name: r.name,
+                        value: `decimal: ${String(r.value)} hex: 0x${r.value.toString(16)}`
+                    }))
                 })
             }
         }),
@@ -111,14 +110,22 @@
             description:
                 'Steps the emulator forward by a given number of instructions. Returns the emulator state after stepping.',
             schema: z.object({
-                steps: z.number().int().min(1).optional().describe('Number of steps to execute (default: 1)')
+                steps: z
+                    .number()
+                    .int()
+                    .min(1)
+                    .optional()
+                    .describe('Number of steps to execute (default: 1)')
             }),
             execute: async ({ steps = 1 }) => {
                 if (!emulatorInstance) {
                     return { success: false, error: 'Emulator not loaded yet' }
                 }
                 if (!emulatorInstance.canExecute) {
-                    return { success: false, error: 'Cannot execute. Code may not be compiled or program has terminated.' }
+                    return {
+                        success: false,
+                        error: 'Cannot execute. Code may not be compiled or program has terminated.'
+                    }
                 }
                 let terminated = false
                 for (let i = 0; i < steps && !terminated; i++) {
@@ -130,9 +137,12 @@
                     currentLineNumber: emulatorInstance.line,
                     programCounter: `decimal: ${String(emulatorInstance.pc)} hex: 0x${emulatorInstance.pc.toString(16)}`,
                     stackPointer: `decimal: ${String(emulatorInstance.sp)} hex: 0x${emulatorInstance.sp.toString(16)}`,
-                    registers: emulatorInstance.registers.map(r => ({ name: r.name, value: `decimal: ${String(r.value)} hex: 0x${r.value.toString(16)}`})),
+                    registers: emulatorInstance.registers.map((r) => ({
+                        name: r.name,
+                        value: `decimal: ${String(r.value)} hex: 0x${r.value.toString(16)}`
+                    })),
                     statusRegisters: emulatorInstance.statusRegisters,
-                    stdOut: emulatorInstance.stdOut,
+                    stdOut: emulatorInstance.stdOut
                 })
             }
         }),
@@ -146,7 +156,10 @@
                     return { success: false, error: 'Emulator not loaded yet' }
                 }
                 if (!emulatorInstance.canExecute) {
-                    return { success: false, error: 'Cannot execute. Code may not be compiled or program has terminated.' }
+                    return {
+                        success: false,
+                        error: 'Cannot execute. Code may not be compiled or program has terminated.'
+                    }
                 }
                 const status = await emulatorInstance.run(1000000)
                 return $state.snapshot({
@@ -156,9 +169,12 @@
                     currentLineNumber: emulatorInstance.line,
                     programCounter: `decimal: ${String(emulatorInstance.pc)} hex: 0x${emulatorInstance.pc.toString(16)}`,
                     stackPointer: `decimal: ${String(emulatorInstance.sp)} hex: 0x${emulatorInstance.sp.toString(16)}`,
-                    registers: emulatorInstance.registers.map(r => ({ name: r.name, value: `decimal: ${String(r.value)} hex: 0x${r.value.toString(16)}`})),
+                    registers: emulatorInstance.registers.map((r) => ({
+                        name: r.name,
+                        value: `decimal: ${String(r.value)} hex: 0x${r.value.toString(16)}`
+                    })),
                     statusRegisters: emulatorInstance.statusRegisters,
-                    stdOut: emulatorInstance.stdOut,
+                    stdOut: emulatorInstance.stdOut
                 })
             }
         }),
@@ -167,7 +183,11 @@
             description:
                 'Toggles a breakpoint on the given line index. If a breakpoint exists on that line it is removed, otherwise it is added.',
             schema: z.object({
-                lineIndex: z.number().int().min(0).describe('The 0-based line index to toggle the breakpoint on')
+                lineIndex: z
+                    .number()
+                    .int()
+                    .min(0)
+                    .describe('The 0-based line index to toggle the breakpoint on')
             }),
             execute: async ({ lineIndex }) => {
                 if (!emulatorInstance) {
@@ -195,8 +215,7 @@
         }),
         tool({
             name: 'compile',
-            description:
-                'Compiles the current code in the editor. Returns any compilation errors.',
+            description: 'Compiles the current code in the editor. Returns any compilation errors.',
             schema: z.object({}),
             execute: async () => {
                 if (!emulatorInstance) {
@@ -204,13 +223,13 @@
                 }
                 await emulatorInstance.compile(100)
                 const errors = [
-                    ...emulatorInstance.compilerErrors.map(e => e.formatted),
+                    ...emulatorInstance.compilerErrors.map((e) => e.formatted),
                     ...emulatorInstance.errors
                 ]
                 return $state.snapshot({
                     success: errors.length === 0,
                     errors,
-                    canExecute: emulatorInstance.canExecute,
+                    canExecute: emulatorInstance.canExecute
                 })
             }
         }),
@@ -219,7 +238,9 @@
             description:
                 'Reads a region of memory from the emulator. Returns the bytes as a hex string.',
             schema: z.object({
-                address: z.string().describe('Hex string of the start address (e.g. "0x1000" or "1000")'),
+                address: z
+                    .string()
+                    .describe('Hex string of the start address (e.g. "0x1000" or "1000")'),
                 length: z.number().int().min(1).max(1024).describe('Number of bytes to read')
             }),
             execute: async ({ address, length }) => {
@@ -228,13 +249,22 @@
                 }
                 const addr = BigInt(address.startsWith('0x') ? address : `0x${address}`)
                 const bytes = emulatorInstance.readMemoryBytes(addr, length)
-                const hex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(' ')
-                return $state.snapshot({ success: true, address: `0x${addr.toString(16)}`, length, hex })
+                const hex = Array.from(bytes)
+                    .map((b) => b.toString(16).padStart(2, '0'))
+                    .join(' ')
+                return $state.snapshot({
+                    success: true,
+                    address: `0x${addr.toString(16)}`,
+                    length,
+                    hex
+                })
             }
-        }),
+        })
     ]
 
-    const initialCodes = Object.entries(BASE_CODE).map(([lang, code]) => `#${lang}\n${code}`).join('\n\n')
+    const initialCodes = Object.entries(BASE_CODE)
+        .map(([lang, code]) => `#${lang}\n${code}`)
+        .join('\n\n')
 
     const avatarInstructions = `You are an assembly language assistant with access to an interactive code editor and emulator.
 
@@ -357,10 +387,9 @@ ${initialCodes}
     .agent-wrapper {
         padding: 0.5rem;
         min-width: min(55ch, calc(100vw - 1rem));
-        flex:1;
+        flex: 1;
         height: 100%;
     }
-
 
     .editor-panel {
         padding: 0.5rem;
@@ -371,7 +400,9 @@ ${initialCodes}
         margin-right: -1.5rem;
         max-width: 0;
         opacity: 0;
-        transition: opacity 0.2s, max-width 0.5s;
+        transition:
+            opacity 0.2s,
+            max-width 0.5s;
     }
 
     .editor-open .editor-panel {
