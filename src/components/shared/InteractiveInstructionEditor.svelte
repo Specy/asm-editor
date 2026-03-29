@@ -367,6 +367,12 @@
         .data-cpu-status-wrapper {
             width: unset;
         }
+        .bottom-row {
+            flex-direction: column-reverse;
+        }
+        .code-data-memory-controls {
+            max-width: unset;
+        }
     }
 
     .editor-border {

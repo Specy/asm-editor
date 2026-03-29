@@ -16,7 +16,7 @@
     type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number]
 
     let accent = $derived(ThemeStore.get('accent').color)
-    let editorLanguage: SupportedLanguage | null = $state()
+    let editorLanguage: SupportedLanguage | null = $state(null)
     let editorCode = $state('')
     let emulatorInstance: Emulator | null = $state(null)
 
@@ -403,8 +403,8 @@ ${initialCodes}
         max-width: 0;
         opacity: 0;
         transition:
-            opacity 0.2s,
-            max-width 0.5s;
+        opacity 0.2s,
+        max-width 0.5s;
     }
 
     .editor-open .editor-panel {
