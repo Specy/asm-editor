@@ -16,7 +16,7 @@
     type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number]
 
     let accent = $derived(ThemeStore.get('accent').color)
-    let editorLanguage: SupportedLanguage | null = $state(null)
+    let editorLanguage: SupportedLanguage | null = $state()
     let editorCode = $state('')
     let emulatorInstance: Emulator | null = $state(null)
 
@@ -327,7 +327,7 @@ ${initialCodes}
 </svelte:head>
 
 <DefaultNavbar />
-<Page hasNavbar style="max-height: 100dvh; overflow: hidden;">
+<Page hasNavbar>
     <div class="chat-layout" class:editor-open={editorLanguage}>
         <div class="agent-wrapper">
             <AiAgent
@@ -379,6 +379,7 @@ ${initialCodes}
 <style lang="scss">
     .chat-layout {
         display: flex;
+        max-height: 100dvh;
         width: 100%;
         flex: 1;
         overflow: hidden;
@@ -386,6 +387,7 @@ ${initialCodes}
 
     .agent-wrapper {
         padding: 0.5rem;
+        min-height: 65vh;
         min-width: min(55ch, calc(100vw - 1rem));
         flex: 1;
         height: 100%;
@@ -413,6 +415,21 @@ ${initialCodes}
     }
 
     @media (max-width: 900px) {
+        .editor-panel {
+            padding: 0;
+            margin-right: unset;
+            max-height: 0;
+            max-height: 0;
+            max-width: unset;
+        }
+        .editor-open .editor-panel {
+            padding: 0.5rem;
+            max-height: 80dvh;
+        }
+        .chat-layout {
+            max-height: unset;
+            overflow: unset;
+        }
         .chat-layout {
             flex-direction: column;
         }
