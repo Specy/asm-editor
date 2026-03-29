@@ -21,6 +21,7 @@ import {
     type EmulatorDecoration,
     type EmulatorSettings,
     InterpreterStatus,
+    makeGenericMonacoError,
     makeLabelColor,
     makeRegister,
     type MonacoError,
@@ -206,8 +207,12 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
             const errors = result.errors.map(assembleErrorToMonacoError)
             state.compilerErrors = errors
             state.errors = []
+            return errors
         } catch (e) {
-            addError(getRISCVErrorMessage(e))
+            console.error(e)
+            const error = getRISCVErrorMessage(e)
+            addError(error)
+            return [makeGenericMonacoError(error)]
         }
     }
 
@@ -964,6 +969,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
         compile,
         step,
         run,
+        check: () => Promise.resolve(semanticCheck()),
         setGlobalMemoryAddress,
         setCode,
         clear,
@@ -973,7 +979,11 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
         resetSelectedLine,
         dispose,
         test,
-        getLineFromAddress
+        getLineFromAddress,
+        readMemoryBytes(address: bigint, length: number) {
+            if (!riscv) throw new Error('Emulator not initialized')
+            return new Uint8Array(riscv.readMemoryBytes(Number(address), length))
+        }
     } satisfies RISCVEmulatorState & BaseEmulatorActions
 }
 

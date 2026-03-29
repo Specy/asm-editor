@@ -630,6 +630,7 @@
     .right-side {
         margin-left: 0.5rem;
         width: min-content;
+        gap: 0.4rem;
         max-height: calc(100vh - 4.2rem);
         padding-top: 0.2rem;
         display: flex;

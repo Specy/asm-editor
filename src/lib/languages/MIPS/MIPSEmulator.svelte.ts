@@ -19,6 +19,7 @@ import {
     type EmulatorDecoration,
     type EmulatorSettings,
     InterpreterStatus,
+    makeGenericMonacoError,
     makeLabelColor,
     makeRegister,
     type MonacoError,
@@ -237,9 +238,12 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
             const errors = result.errors.map(assembleErrorToMonacoError)
             state.compilerErrors = errors
             state.errors = []
+            return errors
         } catch (e) {
             console.error(e)
-            addError(getMIPSErrorMessage(e))
+            const error = getMIPSErrorMessage(e)
+            addError(error)
+            return [makeGenericMonacoError(error)]
         }
     }
 
@@ -973,6 +977,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         compile,
         step,
         run,
+        check: () => Promise.resolve(semanticCheck()),
         setGlobalMemoryAddress,
         setCode,
         clear,
@@ -982,7 +987,11 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         resetSelectedLine,
         dispose,
         test,
-        getLineFromAddress
+        getLineFromAddress,
+        readMemoryBytes(address: bigint, length: number) {
+            if (!mips) throw new Error('Emulator not initialized')
+            return new Uint8Array(mips.readMemoryBytes(Number(address), length))
+        }
     } satisfies MIPSEmulatorState & BaseEmulatorActions
 }
 
