@@ -5,9 +5,10 @@
         children?: import('svelte').Snippet
         content?: import('svelte').Snippet
         menuOpen?: boolean
+        menuStyle?: string
     }
 
-    let { children, content, menuOpen = $bindable(false) }: Props = $props()
+    let { children, content, menuOpen = $bindable(false), menuStyle }: Props = $props()
 </script>
 
 <Row flex1>
@@ -18,7 +19,7 @@
         onclick={() => (menuOpen = false)}
     >
     </button>
-    <aside class="side-menu column" class:menu-open={menuOpen}>
+    <aside class="side-menu column" style={menuStyle} class:menu-open={menuOpen}>
         {@render children?.()}
     </aside>
     <div class="content">
@@ -46,6 +47,8 @@
 
     .content {
         width: 100%;
+        display: flex;
+        flex:1;
         max-width: calc(100vw - 16rem);
     }
 

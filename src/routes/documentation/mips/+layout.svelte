@@ -15,6 +15,7 @@
     import { LANGUAGE_THEMES } from '$lib/Config'
     import { DEFAULT_THEME, ThemeStore, type ThemeKeys } from '$stores/themeStore.svelte'
     import { onDestroy, onMount, untrack } from 'svelte'
+    import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
     interface Props {
         children?: import('svelte').Snippet
     }
@@ -40,7 +41,7 @@
 </script>
 
 <Navbar style="border-bottom-left-radius: 0;">
-    <Row gap="1rem" align="center" flex1>
+    <Row gap="0.6rem" align="center" flex1>
         <a class="icon" href="/" title="Go to the home">
             <img src="/favicon.png" alt="logo" />
         </a>
@@ -48,6 +49,10 @@
         <a href="/documentation"> Docs </a>
         <a href="/learn/courses"> Learn </a>
 
+        <a class="icon ai" href="/chat" title="AI Chat">
+            <SparklesIcon />
+            AI Chat
+        </a>
         <div class="mobile-only" style="margin-left: auto; margin-right: 0.5rem">
             <Icon onClick={() => (menuOpen = !menuOpen)}>
                 {#if menuOpen}
@@ -107,16 +112,15 @@
 </Row>
 
 <style lang="scss">
-    .side-menu {
-        background-color: var(--secondary);
-        color: var(--secondary-text);
-        width: 15rem;
-        gap: 1rem;
-        top: 3.2rem;
-        padding-top: 1rem;
-        height: calc(100vh - 3.2rem);
-        overflow-y: auto;
-        position: sticky;
+    .ai {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--accent);
+        padding: 0.3rem 0.8rem;
+        border-radius: 0.4rem;
+        background-color: color-mix(in srgb, var(--accent) 10%, transparent);
+        margin-left: auto;
     }
 
     .mobile-only {
@@ -124,17 +128,12 @@
     }
 
     @media (max-width: 600px) {
-        .side-menu {
-            position: fixed;
-            width: calc(100vw - 4rem);
-            left: 0;
-            z-index: 5;
-            transition: transform 0.3s;
-            background-color: rgba(var(--RGB-secondary), 0.9);
-            transform: translateX(calc((100vw - 4rem) * -1));
-        }
         .mobile-only {
             display: flex;
+        }
+        .ai {
+            margin-left: unset;
+            margin-right: auto;
         }
         .menu-open {
             transform: translateX(0);
@@ -163,23 +162,4 @@
         }
     }
 
-    .side-menu-underlay {
-        position: fixed;
-        top: 3.2rem;
-        left: 0;
-        width: 100vw;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.5);
-        opacity: 0;
-        pointer-events: none;
-        cursor: pointer;
-        z-index: 3;
-        transition: opacity 0.3s;
-        backdrop-filter: blur(0.2rem);
-    }
-
-    .side-menu-underlay-open {
-        opacity: 1;
-        pointer-events: all;
-    }
 </style>

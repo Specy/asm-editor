@@ -36,6 +36,7 @@
         language?: AvailableLanguages
         emulator: Emulator
         controls?: Snippet
+        forceMemoryRight?: boolean
     }
 
     let {
@@ -50,7 +51,8 @@
         testcases = $bindable([]),
         embedded,
         emulator = $bindable(),
-        controls
+        controls,
+        forceMemoryRight = false
     }: Props = $props()
     let groupSize = $state(2)
     let testcasesVisible = $state(false)
@@ -272,12 +274,15 @@
 
         {#if showRegsColumn}
             {@render regsColumn()}
+            {#if forceMemoryRight && showMemory}
+                {@render memoryPanel()}
+            {/if}
         {:else if showMemory}
             {@render memoryPanel()}
         {/if}
     </div>
 
-    {#if showRegsColumn && showMemory}
+    {#if showRegsColumn && showMemory && !forceMemoryRight}
         <div class="bottom-row">
             {#if showConsole}
                 <StdOutRenderer

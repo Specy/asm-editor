@@ -23,7 +23,12 @@
         }}
     >
         {#snippet children(emulator)}
-            <InteractiveEditor bind:code {language} {emulator} />
+            <InteractiveEditor 
+                bind:code 
+                {language} 
+                {emulator} 
+                forceMemoryRight
+            />
         {/snippet}
         {#snippet loading()}
             <Header>Loading emulator...</Header>

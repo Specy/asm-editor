@@ -46,7 +46,7 @@
     <meta property="og:title" content="Docs - {ins.name}" />
 </svelte:head>
 
-<Page contentStyle="padding: 1rem; gap: 1rem;">
+<Page contentStyle="padding: 1rem; gap: 1rem;" style="flex: 1;">
     <div class="instruction-info" style="flex: 1;">
         <Column>
             <div class="instruction-name">

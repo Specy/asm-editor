@@ -14,6 +14,7 @@
     import { LANGUAGE_THEMES } from '$lib/Config'
     import { DEFAULT_THEME, ThemeStore, type ThemeKeys } from '$stores/themeStore.svelte'
     import { onDestroy, onMount, untrack } from 'svelte'
+    import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
     import { riscvInstructionNames } from '$lib/languages/RISC-V/RISC-V-documentation'
     interface Props {
         children?: import('svelte').Snippet
@@ -40,7 +41,7 @@
 </script>
 
 <Navbar style="border-bottom-left-radius: 0;">
-    <Row gap="1rem" align="center" flex1>
+    <Row gap="0.6rem" align="center" flex1>
         <a class="icon" href="/" title="Go to the home">
             <img src="/favicon.png" alt="logo" />
         </a>
@@ -48,6 +49,10 @@
 
         <a href="/documentation"> Docs </a>
         <a href="/learn/courses"> Learn </a>
+        <a class="icon ai" href="/chat" title="AI Chat">
+            <SparklesIcon />
+            AI Chat
+        </a>
         <div class="mobile-only" style="margin-left: auto; margin-right: 0.5rem">
             <Icon onClick={() => (menuOpen = !menuOpen)}>
                 {#if menuOpen}
@@ -123,6 +128,17 @@
         position: sticky;
     }
 
+    .ai {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--accent);
+        padding: 0.3rem 0.8rem;
+        border-radius: 0.4rem;
+        background-color: color-mix(in srgb, var(--accent) 10%, transparent);
+        margin-left: auto;
+    }
+
     .mobile-only {
         display: none;
     }
@@ -139,6 +155,10 @@
         }
         .mobile-only {
             display: flex;
+        }
+        .ai {
+            margin-left: unset;
+            margin-right: auto;
         }
         .menu-open {
             transform: translateX(0);
