@@ -42,7 +42,9 @@
     </Row>
     <Row gap="0.5rem" align="center" flex1>
         <a class="icon ai" href="/chat" title="AI Chat">
-            <SparklesIcon />
+            <div class="hidden-very-small">
+                <SparklesIcon />
+            </div>
             AI Chat
         </a>
         <div class="star-on-github desktop-only">
@@ -190,6 +192,12 @@
         }
         .icon {
             font-size: 0.9rem;
+        }
+    }
+
+    @media (max-width: 370px) {
+        .hidden-very-small {
+            display: none;
         }
     }
 

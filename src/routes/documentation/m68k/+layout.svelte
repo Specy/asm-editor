@@ -44,7 +44,9 @@
         <a href="/learn/courses"> Learn </a>
 
         <a class="icon ai" href="/chat" title="AI Chat">
-            <SparklesIcon />
+            <div class="hidden-very-small">
+                <SparklesIcon />
+            </div>
             AI Chat
         </a>
         <div class="mobile-only" style="margin-left: auto; margin-right: 0.5rem">
@@ -164,6 +166,12 @@
         }
         .icon {
             font-size: 0.9rem;
+        }
+    }
+
+    @media (max-width: 370px) {
+        .hidden-very-small {
+            display: none;
         }
     }
 </style>

@@ -19,7 +19,9 @@
     </Row>
     <Row gap="0.5rem" align="center">
         <a class="icon ai" href="/chat" title="AI Chat">
-            <SparklesIcon />
+            <div class="hidden-very-small">
+                <SparklesIcon />
+            </div>
             AI Chat
         </a>
         <div class="hidden-on-mobile">
@@ -75,6 +77,12 @@
         }
         .ai {
             font-size: 0.9rem;
+        }
+    }
+
+    @media (max-width: 370px) {
+        .hidden-very-small {
+            display: none;
         }
     }
 </style>
