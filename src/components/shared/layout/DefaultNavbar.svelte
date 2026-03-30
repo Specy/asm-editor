@@ -71,7 +71,10 @@
             display: none;
         }
         .icon {
-            font-size: 0.95rem;
+            font-size: 0.9rem;
+        }
+        .ai {
+            font-size: 0.9rem;
         }
     }
 </style>

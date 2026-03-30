@@ -71,7 +71,7 @@
     </Row>
 </Navbar>
 
-<Sidebar bind:menuOpen menuStyle="gap: 0;"> 
+<Sidebar bind:menuOpen menuStyle="gap: 0;">
     <Column padding="1rem" gap="1rem" style="padding-top: 0;">
         <a onclick={() => (menuOpen = false)} href={`/learn/courses/${data.course.slug}`}>
             <Header noMargin>
@@ -177,6 +177,7 @@
         .ai {
             margin-left: unset;
             margin-right: auto;
+            font-size: 0.9rem;
         }
         .mobile-only {
             display: flex;
@@ -188,7 +189,7 @@
             transform: translateX(0);
         }
         .icon {
-            font-size: 0.95rem;
+            font-size: 0.9rem;
         }
     }
 

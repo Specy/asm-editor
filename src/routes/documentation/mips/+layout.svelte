@@ -154,6 +154,7 @@
             display: flex;
         }
         .ai {
+            font-size: 0.9rem;
             margin-left: unset;
             margin-right: auto;
         }
@@ -161,7 +162,7 @@
             transform: translateX(0);
         }
         .icon {
-            font-size: 0.95rem;
+            font-size: 0.9rem;
         }
     }
 </style>
