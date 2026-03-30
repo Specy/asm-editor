@@ -808,7 +808,7 @@ andi.l #$00FF, d0
     ),
     eor: makeIns(
         'eor',
-        [NO_Ad, NO_Ad_AND_NO_Im],
+        [ONLY_Da, NO_Ad_AND_NO_Im],
         ANY_SIZE,
         desc.eor,
         'eor.l d0, d1',
