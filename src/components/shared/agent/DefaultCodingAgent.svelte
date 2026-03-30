@@ -11,6 +11,7 @@
     import type { Emulator } from '$lib/languages/Emulator'
     import { delay } from '$lib/utils'
     import { BASE_CODE } from '$lib/Config'
+    import type { RegisteredTool } from '@discerns/sdk'
 
     interface Props {
         editorLanguage: SupportedLanguage | null
@@ -19,6 +20,7 @@
         style?: string
         canUpdateLanguage?: boolean
         additionalInstructions?: string
+        tools?: RegisteredTool[]
     }
 
     let {
@@ -27,7 +29,8 @@
         emulatorInstance,
         style,
         canUpdateLanguage = true,
-        additionalInstructions = ''
+        additionalInstructions = '',
+        tools: externalTools = []
     }: Props = $props()
 
     let accent = $derived(ThemeStore.get('accent').color)
@@ -89,7 +92,7 @@
         })
     }
 
-    let tools = $derived([
+    let allTools = $derived([
         createSetCodeTool(canUpdateLanguage),
         tool({
             name: 'get_code',
@@ -260,7 +263,7 @@
                 if (!emulatorInstance) {
                     return { success: false, error: 'Emulator not loaded yet' }
                 }
-                await emulatorInstance.compile(100)
+                await emulatorInstance.compile(20)
                 const errors = [
                     ...emulatorInstance.compilerErrors.map((e) => e.formatted),
                     ...emulatorInstance.errors
@@ -298,7 +301,8 @@
                     hex
                 })
             }
-        })
+        }),
+        ...externalTools
     ])
 
     const initialCodes = Object.entries(BASE_CODE)
@@ -361,7 +365,7 @@ ${additionalInstructions ? `\n${additionalInstructions}` : ''}
 </script>
 
 <AiAgent
-    {tools}
+    tools={allTools}
     theme="dark"
     {accent}
     avatarContext={avatarInstructions}
