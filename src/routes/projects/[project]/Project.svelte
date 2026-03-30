@@ -236,7 +236,7 @@
                 onClick={() => (agentOpen = !agentOpen)}
                 hasIcon
                 cssVar="accent"
-                style="padding:0; width:2.2rem; height:2.2rem;"
+                style="padding:0; width:2.2rem; height:2.2rem; border-radius: 1.5rem; border-bottom-right-radius: 0.4rem;"
                 title="Ask AI"
             >
                 <Icon>
