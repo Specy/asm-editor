@@ -64,7 +64,7 @@
                     </div>
                     Close
                 {:else}
-                    <SparklesIcon style={'font-size: 1rem;'}/> Ask AI
+                    <SparklesIcon style={'font-size: 1rem;'} /> Ask AI
                 {/if}
             </button>
         {/snippet}
@@ -82,7 +82,8 @@
         padding: 0.65rem 1rem;
         z-index: 101;
         font-family: Rubik, sans-serif;
-        border-radius: 0.4rem;
+        border-radius: 1.5rem;
+        border-bottom-right-radius: 0.4rem;
         font-weight: bold;
         border: none;
         gap: 0.5rem;
@@ -101,7 +102,7 @@
 
     .agent-open {
         top: 0.3rem;
-        right: min(calc(min(28rem, 100vw) + 0.3rem), calc(50vw - 3.5rem))
+        right: min(calc(min(28rem, 100vw) + 0.3rem), calc(50vw - 3.5rem));
     }
     .agent-toggle:hover {
         background-color: color-mix(in srgb, var(--accent) 80%, var(--background));
@@ -112,7 +113,7 @@
         .agent-open {
             top: 0.5rem;
             right: 3.5rem;
-            padding: 0.8rem 1rem;   
+            padding: 0.8rem 1rem;
         }
     }
 </style>

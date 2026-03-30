@@ -159,7 +159,8 @@
         gap: 0.5rem;
         color: var(--accent);
         padding: 0.3rem 0.8rem;
-        border-radius: 0.4rem;
+        border-radius: 1.5rem;
+        border-bottom-right-radius: 0.4rem;
         background-color: color-mix(in srgb, var(--accent) 10%, transparent);
         margin-left: auto;
     }
@@ -185,6 +186,9 @@
         }
         .menu-open {
             transform: translateX(0);
+        }
+        .icon {
+            font-size: 0.95rem;
         }
     }
 

@@ -46,16 +46,6 @@
         align-items: center;
         gap: 1rem;
 
-        &.ai {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            color: var(--accent);
-            padding: 0.3rem 0.8rem;
-            border-radius: 0.4rem;
-            background-color: color-mix(in srgb, var(--accent) 10%, transparent);
-        }
-
         img {
             height: 100%;
         }
@@ -65,9 +55,23 @@
         }
     }
 
+    .ai {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--accent);
+        padding: 0.3rem 0.8rem;
+        border-radius: 1.5rem;
+        border-bottom-right-radius: 0.4rem;
+        background-color: color-mix(in srgb, var(--accent) 10%, transparent);
+    }
+
     @media (max-width: 600px) {
         .hidden-on-mobile {
             display: none;
+        }
+        .icon {
+            font-size: 0.95rem;
         }
     }
 </style>

@@ -128,41 +128,8 @@
         position: sticky;
     }
 
-    .ai {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        color: var(--accent);
-        padding: 0.3rem 0.8rem;
-        border-radius: 0.4rem;
-        background-color: color-mix(in srgb, var(--accent) 10%, transparent);
-        margin-left: auto;
-    }
-
     .mobile-only {
         display: none;
-    }
-
-    @media (max-width: 600px) {
-        .side-menu {
-            position: fixed;
-            width: calc(100vw - 4rem);
-            left: 0;
-            z-index: 5;
-            transition: transform 0.3s;
-            background-color: rgba(var(--RGB-secondary), 0.9);
-            transform: translateX(calc((100vw - 4rem) * -1));
-        }
-        .mobile-only {
-            display: flex;
-        }
-        .ai {
-            margin-left: unset;
-            margin-right: auto;
-        }
-        .menu-open {
-            transform: translateX(0);
-        }
     }
 
     .instruction-search {
@@ -205,5 +172,40 @@
     .side-menu-underlay-open {
         opacity: 1;
         pointer-events: all;
+    }
+    .ai {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--accent);
+        padding: 0.3rem 0.8rem;
+        border-radius: 1.5rem;
+        border-bottom-right-radius: 0.4rem;
+        background-color: color-mix(in srgb, var(--accent) 10%, transparent);
+        margin-left: auto;
+    }
+    @media (max-width: 600px) {
+        .side-menu {
+            position: fixed;
+            width: calc(100vw - 4rem);
+            left: 0;
+            z-index: 5;
+            transition: transform 0.3s;
+            background-color: rgba(var(--RGB-secondary), 0.9);
+            transform: translateX(calc((100vw - 4rem) * -1));
+        }
+        .mobile-only {
+            display: flex;
+        }
+        .ai {
+            margin-left: unset;
+            margin-right: auto;
+        }
+        .menu-open {
+            transform: translateX(0);
+        }
+        .icon {
+            font-size: 0.95rem;
+        }
     }
 </style>

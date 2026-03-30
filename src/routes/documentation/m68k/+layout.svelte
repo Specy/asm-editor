@@ -113,34 +113,6 @@
 </Sidebar>
 
 <style lang="scss">
-    .ai {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        color: var(--accent);
-        padding: 0.3rem 0.8rem;
-        border-radius: 0.4rem;
-        background-color: color-mix(in srgb, var(--accent) 10%, transparent);
-        margin-left: auto;
-    }
-
-    .mobile-only {
-        display: none;
-    }
-
-    @media (max-width: 600px) {
-        .mobile-only {
-            display: flex;
-        }
-        .ai {
-            margin-left: unset;
-            margin-right: auto;
-        }
-        .menu-open {
-            transform: translateX(0);
-        }
-    }
-
     .instruction-search {
         background-color: var(--tertiary);
         color: var(--tertiary-text);
@@ -160,6 +132,37 @@
 
         &:hover {
             color: var(--accent);
+        }
+    }
+    .ai {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--accent);
+        padding: 0.3rem 0.8rem;
+        border-radius: 1.5rem;
+        border-bottom-right-radius: 0.4rem;
+        background-color: color-mix(in srgb, var(--accent) 10%, transparent);
+        margin-left: auto;
+    }
+
+    .mobile-only {
+        display: none;
+    }
+
+    @media (max-width: 600px) {
+        .mobile-only {
+            display: flex;
+        }
+        .ai {
+            margin-left: unset;
+            margin-right: auto;
+        }
+        .menu-open {
+            transform: translateX(0);
+        }
+        .icon {
+            font-size: 0.95rem;
         }
     }
 </style>
