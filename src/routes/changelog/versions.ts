@@ -6,6 +6,15 @@ type Version = {
     notes?: string[]
 }
 export const versions: Version[] = [
+    {
+        version: '7.0.0',
+        title: 'AI and new Exam Mode',
+        date: new Date('2026-03-30'),
+        changes: [
+            'Added an AI assistant in every editor that has control of the editor and emulator. You can ask for help with your code and get suggestions and explanations',
+            'Improved the exam mode to have sections, like assembly, c, open and closed questions.'
+        ]
+    },
         {
         version: '6.3.0',
         title: 'Exam mode',
