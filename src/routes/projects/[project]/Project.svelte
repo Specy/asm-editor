@@ -208,9 +208,6 @@
         pc.setSize(emulator.systemSize)
     })
 
-    $effect(() => {
-        console.log(running)
-    })
 </script>
 
 {#if !embedded}

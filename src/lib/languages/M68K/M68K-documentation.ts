@@ -253,7 +253,8 @@ The register d0 will be used as the trap type which are:
 | 14     | Prints null terminated string pointed by a1, errors if string is longer than 16kb, to prevent infinite loops.       |
 | 15     | Prints unsigned number at d1 in base (from 2 to 36) specified in d2.b
 | 23     | Delays the execution of the simulator by milliseconds of the value in d1.
-`.trim()
+`.trim(),
+    nop: 'This instruction is a no-operation, it does not do anything.'
 }
 const dirsDesc = {
     dc: 'Defines constants, following the directive there can be a list of constants separated by commas, the size of each constant depends on the selected size. If no size is selected, the size is determined by the value of the constant. If the constant is a string, it will be stored as a sequence of bytes, if it is a number, it will be stored as a sequence of words',
@@ -283,7 +284,7 @@ export const M68KDirectiveDocumentation = {
 }
 export const M68KDirectiveDocumentationList = Object.values(M68KDirectiveDocumentation)
 
-export const M68kDocumentation: Record<InstructionName, InstructionDocumentation> = {
+export const M68kDocumentation = {
     move: makeIns(
         'move',
         [ANY, NO_Im],
@@ -1096,8 +1097,19 @@ bclr #1, d0
 move #1, d0
 bset #2, d0
     `
+    ),
+    nop: makeIns(
+        'nop',
+        [],
+        NO_SIZE,
+        desc.nop,
+        'nop',
+        undefined,
+        `
+nop
+    `
     )
-}
+} satisfies Record<InstructionName, InstructionDocumentation>
 
 export const M68KUncompoundedInstructions = uncompoundInstructions(Object.values(M68kDocumentation))
 
@@ -1267,6 +1279,7 @@ const others = [
     'lea',
     'pea',
     'moveq',
-    'jmp'
+    'jmp',
+    'nop'
 ]
 export const M68kInstructions = [...arithmetic, ...logic, ...special, ...others]
