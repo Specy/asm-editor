@@ -9,7 +9,7 @@
         <div class="sub-description">
             Gets the content in the register directly. (the SP register is an alias of the a7)
         </div>
-        <div class="example">Ex| d0, a0, sp</div>
+        <div class="example">d0, a0, sp</div>
         <div class="row gap-03 wrap">
             <DocsOperand
                 name={addressingModeToString(AddressingMode.DataRegister)}
@@ -29,7 +29,7 @@
             addressing mode becomes indirect with displacement and the final address to read the
             memory will be (address + offset).
         </div>
-        <div class="example">Ex| (a0), 4(sp)</div>
+        <div class="example">(a0), 4(sp)</div>
         <div class="row">
             <DocsOperand
                 name={addressingModeToString(AddressingMode.Indirect)}
@@ -48,7 +48,7 @@
                 AddressingMode.Indirect
             )}, this addressing mode is valid too
         </div>
-        <div class="example">Ex| (a0)+, -(sp)</div>
+        <div class="example">(a0)+, -(sp)</div>
         <div class="row gap-03 wrap">
             <DocsOperand
                 name={addressingModeToString(AddressingMode.PostIndirect)}
@@ -68,7 +68,7 @@
             can be represented in many bases. (replace {`<num>`} with the actual number). Note, a string
             will be represented as a list of bytes.
         </div>
-        <div class="example">Ex| #1000, #$FF, #@14, #%10010, #'a', #'hey', #label</div>
+        <div class="example">#1000, #$FF, #@14, #%10010, #'a', #'hey', #label</div>
         <div class="row gap-03 wrap">
             <DocsOperand
                 name={addressingModeToString(AddressingMode.Immediate)}
@@ -88,7 +88,7 @@
             number. When the program is assembled, the labels will be converted to the address of
             the label.
         </div>
-        <div class="example">Ex| $1000, some_label, 140, %101010, @22, 'e'</div>
+        <div class="example">$1000, some_label, 140, %101010, @22, 'e'</div>
         <div class="row gap-03 wrap">
             <DocsOperand
                 name={addressingModeToString(AddressingMode.Absolute)}
@@ -108,7 +108,7 @@
                 AddressingMode.Indirect
             )}, this addressing mode is valid too
         </div>
-        <div class="example">Ex| 4(a0, d2), (sp, a0)</div>
+        <div class="example">4(a0, d2), (sp, a0)</div>
         <div class="row gap-03 wrap">
             <DocsOperand
                 name={addressingModeToString(AddressingMode.IndirectWithDisplacement)}

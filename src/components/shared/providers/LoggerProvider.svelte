@@ -135,4 +135,10 @@
             transform: translateX(calc(50vw - 50%)) translateY(1rem);
         }
     }
+
+    @media print {
+        .toast-wrapper, .pill {
+            display: none;
+        }
+    }
 </style>

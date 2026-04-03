@@ -42,4 +42,13 @@
     .has-nav {
         margin-top: 3.2rem;
     }
+    @media print {
+        .content {
+            height: auto;
+            overflow: visible;
+        }
+        .has-nav {
+            margin-top: 0;
+        }
+    }
 </style>

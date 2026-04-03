@@ -78,7 +78,7 @@ export function aggregateArgs(ins: RISCVInstruction[]): RISCVAddressingMode[][] 
 
 export const riscvInstructionsVariants = [...riscvInstructionMap.values()]
 
-export const riscvInstructionNames = [...riscvInstructionMap.keys()]
+export const riscvInstructionNames = [...riscvInstructionMap.keys()].sort((a, b) => a.localeCompare(b))
 
 
 export function formatAggregatedArgs(ins: RISCVInstruction[]): string {

@@ -16,6 +16,7 @@
     import { DEFAULT_THEME, ThemeStore, type ThemeKeys } from '$stores/themeStore.svelte'
     import { onDestroy, onMount, untrack } from 'svelte'
     import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
+    import Sidebar from '$cmp/shared/layout/Sidebar.svelte'
     interface Props {
         children?: import('svelte').Snippet
     }
@@ -67,51 +68,45 @@
     </Row>
 </Navbar>
 
-<Row gap="1rem" flex1>
-    <button
-        class="side-menu-underlay"
-        class:side-menu-underlay-open={menuOpen}
-        onclick={() => (menuOpen = false)}
-    >
-    </button>
-    <aside class="side-menu column" class:menu-open={menuOpen}>
-        <Column gap="1rem" padding="0 1rem">
-            <MenuLink href="/documentation/mips" title="MIPS" onClick={() => (menuOpen = false)} />
-            <MenuLink
-                href="/documentation/mips/directive"
-                title="Directives"
-                onClick={() => (menuOpen = false)}
-            />
-            <MenuLink
-                href="/documentation/mips/syscall"
-                title="Syscalls"
-                onClick={() => (menuOpen = false)}
-            />
-        </Column>
-        <TogglableSection
-            open={true}
-            sectionStyle="margin-left: 0; padding-left: 0.5rem;"
-            style="padding: 0 0.5rem;"
-        >
-            {#snippet title()}
-                <h2 style="font-size: 1rem; font-weight: normal; margin-left: -0.1rem">
-                    Instructions
-                </h2>
-            {/snippet}
-            <input bind:value={search} placeholder="Search" class="instruction-search" />
-            <InstructionsMenu
-                hrefBase="/documentation/mips/instruction"
-                instructions={filteredInstructions}
-                onClick={() => (menuOpen = false)}
-                {currentInstructionName}
-            />
-        </TogglableSection>
-    </aside>
-
-    <Column flex1 style="padding-top: 4rem;">
-        {@render children?.()}
+<Sidebar bind:menuOpen>
+    <Column gap="1rem" padding="0 1rem">
+        <MenuLink href="/documentation/mips" title="MIPS" onClick={() => (menuOpen = false)} />
+        <MenuLink
+            href="/documentation/mips/directive"
+            title="Directives"
+            onClick={() => (menuOpen = false)}
+        />
+        <MenuLink
+            href="/documentation/mips/syscall"
+            title="Syscalls"
+            onClick={() => (menuOpen = false)}
+        />
     </Column>
-</Row>
+    <TogglableSection
+        open={true}
+        sectionStyle="margin-left: 0; padding-left: 0.5rem;"
+        style="padding: 0 0.5rem;"
+    >
+        {#snippet title()}
+            <h2 style="font-size: 1rem; font-weight: normal; margin-left: -0.1rem">
+                Instructions
+            </h2>
+        {/snippet}
+        <input bind:value={search} placeholder="Search" class="instruction-search" />
+        <InstructionsMenu
+            hrefBase="/documentation/mips/instruction"
+            instructions={filteredInstructions}
+            onClick={() => (menuOpen = false)}
+            {currentInstructionName}
+        />
+    </TogglableSection>
+
+    {#snippet content()}
+        <Column flex1 style="padding-top: 4rem;">
+            {@render children?.()}
+        </Column>
+    {/snippet}
+</Sidebar>
 
 <style lang="scss">
     .instruction-search {
@@ -159,9 +154,6 @@
             font-size: 0.9rem;
             margin-left: unset;
             margin-right: auto;
-        }
-        .menu-open {
-            transform: translateX(0);
         }
         .icon {
             font-size: 0.9rem;

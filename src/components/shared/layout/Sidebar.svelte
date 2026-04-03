@@ -28,6 +28,20 @@
 </Row>
 
 <style lang="scss">
+    @media print {
+        .side-menu {
+            display: none;
+        }
+        .side-menu-underlay {
+            display: none;
+        }
+        .content {
+            max-width: 100%;
+            height: auto;
+            overflow: visible;
+        }
+    }
+
     .side-menu {
         background-color: var(--secondary);
         color: var(--secondary-text);

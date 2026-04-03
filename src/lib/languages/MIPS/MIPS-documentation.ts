@@ -66,7 +66,7 @@ export function aggregateArgs(ins: MIPSInstruction[]): MIPSAddressingMode[][] {
 
 export const mipsInstructionsVariants = [...mipsInstructionMap.values()]
 
-export const mipsInstructionNames = [...mipsInstructionMap.keys()]
+export const mipsInstructionNames = [...mipsInstructionMap.keys()].sort((a, b) => a.localeCompare(b))
 
 export function formatAggregatedArgs(ins: MIPSInstruction[]): string {
     return aggregateArgs(ins)

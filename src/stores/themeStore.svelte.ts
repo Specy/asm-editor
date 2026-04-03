@@ -104,7 +104,7 @@ export const DEFAULT_MIPS_THEME = {
             prop: 'tertiary'
         },
         accent: {
-            color: '#553b6a',
+            color: '#9259c1',
             name: 'accent',
             prop: 'accent'
         },
