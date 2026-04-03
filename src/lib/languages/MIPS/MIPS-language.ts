@@ -5,6 +5,8 @@ import {
     mipsInstructionMap,
     mipsInstructionsVariants,
     mipsInstructionsWithDuplicates,
+    formatAggregatedArgs,
+    groupVariantsByDescription,
     type MIPSInstruction
 } from './MIPS-documentation'
 import { MIPSRegisterNames } from './MIPSEmulator.svelte'
@@ -197,10 +199,19 @@ export function createMIPSCompletition(monaco: MonacoType) {
     }
 }
 
-function formatInstruction(ins: MIPSInstruction) {
-    const [left, right] = ins.description.split(':')
-    if (!right) return left
-    return `**${left.trim()}**: ${right}`
+function formatInstructionHover(ins: MIPSInstruction[]) {
+    const args = formatAggregatedArgs(ins)
+    const groups = groupVariantsByDescription(ins)
+    const header = `**${ins[0].name}** ${args}`
+    const body = groups.map((g) => {
+        const desc = g.description
+        const examples = g.examples.filter(Boolean)
+        if (examples.length > 0) {
+            return `${desc}\n\n\`${examples[0]}\``
+        }
+        return desc
+    }).join('\n\n---\n\n')
+    return `${header}\n\n${body}`
 }
 
 export function createMIPSHoverProvider(monaco: MonacoType) {
@@ -229,15 +240,9 @@ export function createMIPSHoverProvider(monaco: MonacoType) {
             }
             const ins = mipsInstructionMap.get(word)
             if (ins) {
-                if (ins.length === 1) {
-                    contents.push({
-                        value: formatInstruction(ins[0])
-                    })
-                } else {
-                    contents.push({
-                        value: ins.map((ins, i) => `${i + 1}. ${formatInstruction(ins)}`).join('\n')
-                    })
-                }
+                contents.push({
+                    value: formatInstructionHover(ins)
+                })
             }
             if (MIPSRegistersMap['$' + word]) {
                 contents.push({

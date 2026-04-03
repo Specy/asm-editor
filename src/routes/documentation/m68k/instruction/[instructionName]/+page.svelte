@@ -46,7 +46,7 @@
     <meta property="og:title" content="Docs - {ins.name}" />
 </svelte:head>
 
-<Page contentStyle="padding: 1rem; gap: 1rem;">
+<Page contentStyle="padding: 1rem; gap: 1rem;" style="flex: 1;">
     <div class="instruction-info" style="flex: 1;">
         <Column>
             <div class="instruction-name">
@@ -90,7 +90,13 @@
     </div>
     {#if component}
         {@const SvelteComponent_1 = component}
-        <SvelteComponent_1 bind:code instructionKey={ins.name} language="M68K" />
+        <SvelteComponent_1 
+            bind:code 
+            instructionKey={ins.name} 
+            description={ins.description}
+            arguments={ins.args.map(arg => getAddressingModeNames(arg))}
+            language="M68K" 
+        />
     {:else}
         <div class="loading">Loading...</div>
     {/if}

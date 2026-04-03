@@ -16,6 +16,7 @@
     import { page } from '$app/state'
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
     import { ProjectStore } from '$stores/projectsStore.svelte'
+    import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
 
     interface Props {
         children?: import('svelte').Snippet
@@ -30,185 +31,180 @@
 </script>
 
 <Navbar style="border-bottom-left-radius: 0;">
-	<Row gap="1rem" align="center" flex1>
-		<a class="icon" href="/" title="Go to the home">
-			<img src="/favicon.png" alt="logo" />
-		</a>
-		<a class="icon" href="/projects" title="Go to your projects"> Projects </a>
-		<a class="icon" href="/documentation/" title="Go to the docs"> Docs </a>
-		<a class="icon" href="/learn/courses" title="Learn assembly"> Learn </a>
-		<a class="icon" href="/embed" title="Embed the website"> Embed </a>
-		<div class="mobile-only" style="margin-left: auto; margin-right: 0.5rem">
-			<Icon onClick={() => (menuOpen = !menuOpen)}>
-				{#if menuOpen}
-					<FaTimes />
-				{:else}
-					<FaBars />
-				{/if}
-			</Icon>
-		</div>
-	</Row>
-	<div class="star-on-github">
-		<ButtonLink
-			style="gap: 0.5rem; padding: 0.5rem 1rem"
-			cssVar="secondary"
-			href="https://github.com/Specy/asm-editor"
-			target="_blank"
-			title="Star the project on github"
-		>
-			<Icon>
-				<FaStar />
-			</Icon>
-			Star on github
-		</ButtonLink>
-	</div>
+    <Row gap="0.6rem" align="center">
+        <a class="icon" href="/" title="Go to the home">
+            <img src="/favicon.png" alt="logo" />
+        </a>
+        <a class="icon" href="/projects" title="Go to your projects"> Projects </a>
+        <a class="icon" href="/documentation/" title="Go to the docs"> Docs </a>
+        <a class="icon" href="/learn/courses" title="Learn assembly"> Learn </a>
+        <a class="icon desktop-only" href="/embed" title="Embed the website"> Embed </a>
+    </Row>
+    <Row gap="0.5rem" align="center" flex1>
+        <a class="icon ai" href="/chat" title="AI Chat">
+            <div class="hidden-very-small">
+                <SparklesIcon />
+            </div>
+            AI Chat
+        </a>
+        <div class="star-on-github desktop-only">
+            <ButtonLink
+                style="gap: 0.5rem; padding: 0.5rem 1rem"
+                cssVar="secondary"
+                href="https://github.com/Specy/asm-editor"
+                target="_blank"
+                title="Star the project on github"
+            >
+                <Icon>
+                    <FaStar />
+                </Icon>
+                Star on github
+            </ButtonLink>
+        </div>
+        <div class="mobile-only">
+            <Icon onClick={() => (menuOpen = !menuOpen)}>
+                {#if menuOpen}
+                    <FaTimes />
+                {:else}
+                    <FaBars />
+                {/if}
+            </Icon>
+        </div>
+    </Row>
 </Navbar>
 
-<Sidebar bind:menuOpen>
-	<Column padding="1rem" gap="1rem" style="padding-top: 0;">
-		<a onclick={() => (menuOpen = false)} href={`/learn/courses/${data.course.slug}`}>
-			<Header noMargin>
-				{data.course.name}
-			</Header>
-		</a>
-	</Column>
-	<Column style="overflow-y: auto" gap="1rem">
-		{#each data.course.modules as module}
-			<TogglableSection
-				open={true}
-				sectionStyle="margin-left: 0; padding-left: 0.4rem;"
-				style="padding: 0 0.5rem;"
-			>
-				{#snippet title()}
-					<h2 style="font-size: 1rem; font-weight: normal; margin-left: -0.1rem">
-						{module.name}
-					</h2>
-				{/snippet}
-				<Column>
-					<LecturesMenu
-						currentLecture={module.lectures.find(
-                        (l) => `${module.slug}-${l.slug}` === currentLectureName
-                    )}
-						lectures={module.lectures}
-						lectureStyle="padding-left: 1rem"
-						onClick={() => (menuOpen = false)}
-						hrefBase={`/learn/courses/${data.course.slug}/${module.slug}`}
-					/>
-				</Column>
-			</TogglableSection>
-		{/each}
-	</Column>
-	<Column style="margin-top: auto;" padding="0.5rem" gap="0.5rem">
+<Sidebar bind:menuOpen menuStyle="gap: 0;">
+    <Column padding="1rem" gap="1rem" style="padding-top: 0;">
+        <a onclick={() => (menuOpen = false)} href={`/learn/courses/${data.course.slug}`}>
+            <Header noMargin>
+                {data.course.name}
+            </Header>
+        </a>
+    </Column>
+    <Column style="overflow-y: auto">
+        {#each data.course.modules as module}
+            <TogglableSection
+                open={true}
+                sectionStyle="margin-left: 0; padding-left: 0.4rem;"
+                style="padding: 0.5rem;"
+            >
+                {#snippet title()}
+                    <h2 style="font-size: 1rem; font-weight: normal; margin-left: -0.1rem">
+                        {module.name}
+                    </h2>
+                {/snippet}
+                <Column>
+                    <LecturesMenu
+                        currentLecture={module.lectures.find(
+                            (l) => `${module.slug}-${l.slug}` === currentLectureName
+                        )}
+                        lectures={module.lectures}
+                        lectureStyle="padding-left: 1rem"
+                        onClick={() => (menuOpen = false)}
+                        hrefBase={`/learn/courses/${data.course.slug}/${module.slug}`}
+                    />
+                </Column>
+            </TogglableSection>
+        {/each}
+    </Column>
+    <Column style="margin-top: auto;" padding="0.5rem" gap="0.5rem">
+        <ButtonLink
+            style="width: 100%; gap: 0.5rem"
+            cssVar="tertiary"
+            href="/donate"
+            title="Donate to the project"
+        >
+            <Icon>
+                <FaDonate />
+            </Icon>
+            Donate
+        </ButtonLink>
+        <ButtonLink
+            style="width: 100%;"
+            href={ProjectStore.projects.length > 0 ? '/projects' : '/projects/create'}
+            title="Open the editor"
+        >
+            {#if ProjectStore.projects.length > 0}
+                Go to your projects
+            {:else}
+                Create your first project
+            {/if}
+        </ButtonLink>
+    </Column>
 
-		<ButtonLink
-			style="width: 100%; gap: 0.5rem"
-			cssVar="tertiary"
-			href="/donate"
-			title="Donate to the project"
-		>
-			<Icon>
-				<FaDonate />
-			</Icon>
-			Donate
-		</ButtonLink>
-		<ButtonLink
-			style="width: 100%;"
-			href={ProjectStore.projects.length > 0 ? '/projects' : '/projects/create'}
-			title="Open the editor"
-		>
-			{#if ProjectStore.projects.length > 0}
-				Go to your projects
-			{:else}
-				Create your first project
-			{/if}
-		</ButtonLink>
-	</Column>
-
-	{#snippet content()}
-		<Column flex1 style="padding-top: 3.2rem;">
-			{@render children?.()}
-		</Column>
-	{/snippet}
+    {#snippet content()}
+        <Column flex1 style="padding-top: 3.2rem;">
+            {@render children?.()}
+        </Column>
+    {/snippet}
 </Sidebar>
 
 <style lang="scss">
-  .side-menu {
-    background-color: var(--secondary);
-    color: var(--secondary-text);
-    width: 15rem;
-    gap: 1rem;
-    top: 3.2rem;
-    padding-top: 1rem;
-    height: calc(100vh - 3.2rem);
-    overflow-y: auto;
-    position: sticky;
-  }
+    .icon {
+        height: 2.2rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
 
-  .mobile-only {
-    display: none;
-  }
+        img {
+            height: 100%;
+        }
 
-  @media (max-width: 600px) {
-    .side-menu {
-      position: fixed;
-      width: calc(100vw - 4rem);
-      left: 0;
-      z-index: 5;
-      transition: transform 0.3s;
-      background-color: rgba(var(--RGB-secondary), 0.9);
-      transform: translateX(calc((100vw - 4rem) * -1));
+        &:hover {
+            color: var(--accent);
+        }
     }
+
+    .ai {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--accent);
+        padding: 0.3rem 0.8rem;
+        border-radius: 1.5rem;
+        border-bottom-right-radius: 0.4rem;
+        background-color: color-mix(in srgb, var(--accent) 10%, transparent);
+        margin-left: auto;
+    }
+
     .mobile-only {
-      display: flex;
-    }
-    .menu-open {
-      transform: translateX(0);
-    }
-    .star-on-github {
-      display: none;
-    }
-  }
-
-  .instruction-search {
-    background-color: var(--tertiary);
-    color: var(--tertiary-text);
-    padding: 0.6rem;
-    border-radius: 0.4rem;
-  }
-
-  .icon {
-    height: 2.2rem;
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-
-    img {
-      height: 100%;
+        display: none;
     }
 
-    &:hover {
-      color: var(--accent);
+    .desktop-only {
+        display: flex;
     }
-  }
 
-  .side-menu-underlay {
-    position: fixed;
-    top: 3.2rem;
-    left: 0;
-    width: 100vw;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    opacity: 0;
-    pointer-events: none;
-    cursor: pointer;
-    z-index: 3;
-    transition: opacity 0.3s;
-    backdrop-filter: blur(0.2rem);
-  }
+    @media (max-width: 600px) {
+        .ai {
+            margin-left: unset;
+            margin-right: auto;
+            font-size: 0.9rem;
+        }
+        .mobile-only {
+            display: flex;
+        }
+        .desktop-only {
+            display: none;
+        }
+        .menu-open {
+            transform: translateX(0);
+        }
+        .icon {
+            font-size: 0.9rem;
+        }
+    }
 
-  .side-menu-underlay-open {
-    opacity: 1;
-    pointer-events: all;
-  }
+    @media (max-width: 370px) {
+        .hidden-very-small {
+            display: none;
+        }
+    }
 
+    .instruction-search {
+        background-color: var(--tertiary);
+        color: var(--tertiary-text);
+        padding: 0.6rem;
+        border-radius: 0.4rem;
+    }
 </style>

@@ -1,55 +1,88 @@
 <script>
-	import Navbar from '$cmp/shared/layout/Navbar.svelte'
-	import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
-	import FaStar from 'svelte-icons/fa/FaStar.svelte'
-	import Icon from '$cmp/shared/layout/Icon.svelte'
+    import Navbar from '$cmp/shared/layout/Navbar.svelte'
+    import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
+    import FaStar from 'svelte-icons/fa/FaStar.svelte'
+    import Icon from '$cmp/shared/layout/Icon.svelte'
+    import Row from './Row.svelte'
+    import SparklesIcon from '../agent/SparklesIcon.svelte'
 </script>
 
 <Navbar>
-	<div class="row" style="gap: 1rem; align-items:center; flex: 1">
-		<a class="icon" href="/" title="Go to the home">
-			<img src="/favicon.png" alt="logo" />
-		</a>
-		<a class="icon" href="/projects" title="Go to your projects"> Projects </a>
-		<a class="icon" href="/documentation/" title="Go to the docs"> Docs </a>
-		<a class="icon" href="/learn/courses" title="Learn assembly"> Learn </a>
-		<a class="icon" href="/embed" title="Embed the website"> Embed </a>
-	</div>
-	<div class="star-on-github">
-		<ButtonLink
-			style="gap: 0.5rem; padding: 0.5rem 1rem"
-			cssVar="secondary"
-			href="https://github.com/Specy/asm-editor"
-			target="_blank"
-			title="Star the project on github"
-		>
-			<Icon>
-				<FaStar />
-			</Icon>
-			Star on github
-		</ButtonLink>
-	</div>
+    <Row style="gap: 0.6rem; align-items:center; flex: 1">
+        <a class="icon" href="/" title="Go to the home">
+            <img src="/favicon.png" alt="logo" />
+        </a>
+        <a class="icon" href="/projects" title="Go to your projects"> Projects </a>
+        <a class="icon" href="/documentation/" title="Go to the docs"> Docs </a>
+        <a class="icon" href="/learn/courses" title="Learn assembly"> Learn </a>
+        <a class="icon hidden-on-mobile" href="/embed" title="Embed the website"> Embed </a>
+    </Row>
+    <Row gap="0.5rem" align="center">
+        <a class="icon ai" href="/chat" title="AI Chat">
+            <div class="hidden-very-small">
+                <SparklesIcon />
+            </div>
+            AI Chat
+        </a>
+        <div class="hidden-on-mobile">
+            <ButtonLink
+                style="gap: 0.5rem; padding: 0.5rem 1rem"
+                cssVar="secondary"
+                href="https://github.com/Specy/asm-editor"
+                target="_blank"
+                title="Star the project on github"
+            >
+                <Icon>
+                    <FaStar />
+                </Icon>
+                Star on github
+            </ButtonLink>
+        </div>
+    </Row>
 </Navbar>
 
 <style lang="scss">
-  .icon {
-    height: 2.2rem;
-    display: flex;
-    align-items: center;
-    gap: 1rem;
+    .icon {
+        height: 2.2rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
 
-    img {
-      height: 100%;
+        img {
+            height: 100%;
+        }
+
+        &:hover {
+            color: var(--accent);
+        }
     }
 
-    &:hover {
-      color: var(--accent);
+    .ai {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--accent);
+        padding: 0.3rem 0.8rem;
+        border-radius: 1.5rem;
+        border-bottom-right-radius: 0.4rem;
+        background-color: color-mix(in srgb, var(--accent) 10%, transparent);
     }
-  }
 
-  @media (max-width: 600px) {
-    .star-on-github {
-      display: none;
+    @media (max-width: 600px) {
+        .hidden-on-mobile {
+            display: none;
+        }
+        .icon {
+            font-size: 0.9rem;
+        }
+        .ai {
+            font-size: 0.9rem;
+        }
     }
-  }
+
+    @media (max-width: 370px) {
+        .hidden-very-small {
+            display: none;
+        }
+    }
 </style>

@@ -19,8 +19,9 @@
         "@cartamd/plugin-code": "^4.2.0",
         "@cartamd/plugin-component": "^1.1.1",
         "@ctrl/tinycolor": "^4.2.0",
+        "@discerns/sdk": "^0.1.4",
         "@fontsource/fira-mono": "^5.2.7",
-        "@specy/mips": "^1.2.7",
+        "@specy/mips": "^1.2.8",
         "@specy/risc-v": "^1.0.8",
         "@specy/s68k": "^1.2.9",
         "@specy/x86": "^1.1.0",
@@ -47,7 +48,8 @@
         "trs80-emulator": "^2.3.1",
         "unist-util-visit": "^5.1.0",
         "z80-asm": "^2.3.0",
-        "z80-base": "^2.0.1"
+        "z80-base": "^2.0.1",
+        "zod": "^4.3.6"
     },
     "devDependencies": {
         "@sveltejs/adapter-static": "^3.0.10",

@@ -65,7 +65,6 @@
     .std-out {
         position: relative;
         border-radius: 0.5rem;
-        margin-top: 0.4rem;
         overflow-y: auto;
         display: flex;
         flex: 1;

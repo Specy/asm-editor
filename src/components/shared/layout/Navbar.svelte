@@ -27,4 +27,10 @@
         backdrop-filter: blur(0.4rem);
         z-index: 4;
     }
+
+    @media print {
+        .navbar {
+            display: none;
+        }
+    }
 </style>

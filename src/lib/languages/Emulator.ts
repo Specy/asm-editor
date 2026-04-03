@@ -44,5 +44,5 @@ export async function GenericEmulator<T extends AvailableLanguages>(
     options?: EmulatorSettings
 ): Promise<Emulator> {
     const emulator = await loadEmulator(type)
-    return emulator(baseCode, options)
+    return emulator!(baseCode, options)
 }

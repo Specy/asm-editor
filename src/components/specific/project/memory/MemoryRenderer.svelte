@@ -101,7 +101,7 @@
             case DisplayType.Char:
                 //hides last extended ascii to have prettier view
                 return value === BigInt(defaultMemoryValue)
-                    ? ''
+                    ? '.'
                     : String.fromCharCode(Number(value))
             case DisplayType.Decimal:
                 return value.toString().padStart(padding ?? 2, '0')

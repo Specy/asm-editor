@@ -120,7 +120,7 @@
                     <div class="row" style="gap: 1rem; justify-content: space-between;">
                         {#if ins.example}
                             <span class="example">
-                                Ex| {ins.example}
+                                {ins.example}
                             </span>
                         {/if}
                         {#if showRedirect}

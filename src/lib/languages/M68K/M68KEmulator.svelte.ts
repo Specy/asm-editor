@@ -21,6 +21,7 @@ import {
     createMemoryTab,
     type EmulatorSettings,
     InterpreterStatus,
+    makeGenericMonacoError,
     makeLabelColor,
     makeRegister,
     type MonacoError,
@@ -177,6 +178,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         state.line = -1
     }
 
+
     function semanticCheck() {
         try {
             const errors = S68k.semanticCheck(code).map((e) => {
@@ -191,9 +193,12 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
             })
             state.compilerErrors = errors
             state.errors = []
+            return errors;
         } catch (e) {
             console.error(e)
-            addError(getM68kErrorMessage(e))
+            const error = getM68kErrorMessage(e)
+            addError(error)
+            return [makeGenericMonacoError(error)]
         }
     }
 
@@ -892,6 +897,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
             state.isExamMode = value
         },
         step,
+        check: () => Promise.resolve(semanticCheck()),
         run,
         setGlobalMemoryAddress,
         setCode,
@@ -902,7 +908,11 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         resetSelectedLine,
         dispose,
         test,
-        getLineFromAddress
+        getLineFromAddress,
+        readMemoryBytes(address: bigint, length: number) {
+            if (!interpreter) throw new Error('Interpreter not initialized')
+            return interpreter.readMemoryBytes(Number(address), length)
+        }
     } satisfies M68KEmulatorState & BaseEmulatorActions
 }
 

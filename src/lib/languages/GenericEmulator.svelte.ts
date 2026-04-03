@@ -5,20 +5,31 @@ import {
     createMemoryTab,
     type EmulatorSettings,
     InterpreterStatus,
+    makeGenericMonacoError,
     makeRegister,
+    type MonacoError,
     numbersOfSizeToSlice
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import type { Testcase, TestcaseResult, TestcaseValidationError } from '$lib/Project.svelte'
 import { PAGE_ELEMENTS_PER_ROW, PAGE_SIZE } from '$lib/Config'
 import { createDebouncer } from '$lib/utils'
 import { settingsStore } from '$stores/settingsStore.svelte'
-import { byteSliceToNum, isMemoryChunkEqual, numberToByteSlice } from '$cmp/specific/project/memory/memoryTabUtils'
+import {
+    byteSliceToNum,
+    isMemoryChunkEqual,
+    numberToByteSlice
+} from '$cmp/specific/project/memory/memoryTabUtils'
+import type { Interrupt } from '@specy/s68k'
 
-
-export abstract class GenericEmulator<T, R extends string> extends BaseEmulator<T, R> implements BaseEmulatorActions, BaseEmulatorState {
+export abstract class GenericEmulator<T, R extends string>
+    extends BaseEmulator<T, R>
+    implements BaseEmulatorActions, BaseEmulatorState
+{
     protected state: Omit<BaseEmulatorState, 'code'>
     protected _code: string
-    protected _emulatorOptions: EmulatorSettings
+    protected _emulatorOptions: Required<EmulatorSettings>
+    interrupt?: Interrupt | undefined
+    isExamMode: boolean = false
 
     constructor(code: string, options: EmulatorConfig<R>, emulatorOptions: EmulatorSettings = {}) {
         super(options)
@@ -28,6 +39,7 @@ export abstract class GenericEmulator<T, R extends string> extends BaseEmulator<
             baseAddress: 0x1000n,
             stackAddress: 0x7ffffffcn,
             initialMemoryValue: 0x0,
+            language: 'M68K',
             ...emulatorOptions
         }
         this._code = $state(code)
@@ -51,6 +63,7 @@ export abstract class GenericEmulator<T, R extends string> extends BaseEmulator<
             canUndo: false,
             canExecute: false,
             breakpoints: [],
+            isExamMode: false,
             memory: {
                 global: createMemoryTab(
                     this._emulatorOptions.globalPageSize,
@@ -58,16 +71,18 @@ export abstract class GenericEmulator<T, R extends string> extends BaseEmulator<
                     this._emulatorOptions.baseAddress,
                     this._emulatorOptions.globalPageElementsPerRow,
                     this._emulatorOptions.initialMemoryValue,
-                    options.endianness
+                    options.endianness ?? 'little'
                 ),
-                tabs: [createMemoryTab(
-                    8 * 4,
-                    'Stack',
-                    this._emulatorOptions.stackAddress,
-                    4,
-                    this._emulatorOptions.initialMemoryValue,
-                    this._endianness
-                )]
+                tabs: [
+                    createMemoryTab(
+                        8 * 4,
+                        'Stack',
+                        this._emulatorOptions.stackAddress,
+                        4,
+                        this._emulatorOptions.initialMemoryValue,
+                        options.endianness ?? 'little'
+                    )
+                ]
             }
         })
         this.clear()
@@ -76,13 +91,11 @@ export abstract class GenericEmulator<T, R extends string> extends BaseEmulator<
 
     protected abstract getInstance(): T | null
 
-
     protected addDecorations() {
         if (!this.getInstance()) return
         const decorations = this._getCompiledCode()
         this.state.decorations = decorations.decorations
         this.state.compiledCode = decorations.code
-
     }
 
     protected addError(error: string) {
@@ -114,7 +127,6 @@ export abstract class GenericEmulator<T, R extends string> extends BaseEmulator<
             this.addError(this._stringifyError(e))
         }
     }
-
 
     protected setRegisters(override?: bigint[]) {
         if (!this.getInstance() && !override) {
@@ -167,9 +179,10 @@ export abstract class GenericEmulator<T, R extends string> extends BaseEmulator<
         this.state.terminated = this._hasTerminated()
         this.state.pc = this._getPc()
         this.state.callStack = this._getCallStack()
-        this.state.latestSteps = this._getUndoHistory(settings.values.maxVisibleHistoryModifications.value)
+        this.state.latestSteps = this._getUndoHistory(
+            settings.values.maxVisibleHistoryModifications.value
+        )
     }
-
 
     // ----- public api ----- //
     clear(): void {
@@ -198,20 +211,21 @@ export abstract class GenericEmulator<T, R extends string> extends BaseEmulator<
                     this._emulatorOptions.initialMemoryValue,
                     this._endianness
                 ),
-                tabs: [createMemoryTab(
-                    8 * 4,
-                    'Stack',
-                    this._emulatorOptions.stackAddress,
-                    4,
-                    this._emulatorOptions.initialMemoryValue,
-                    this._endianness
-                )]
+                tabs: [
+                    createMemoryTab(
+                        8 * 4,
+                        'Stack',
+                        this._emulatorOptions.stackAddress,
+                        4,
+                        this._emulatorOptions.initialMemoryValue,
+                        this._endianness
+                    )
+                ]
             }
         }
         this.setRegisters(new Array(this._registerNames.length).fill(0))
         this.updateStatusRegisters()
     }
-
 
     compile(historySize: number, codeOverride: string | undefined): Promise<void> {
         return new Promise((res, rej) => {
@@ -229,7 +243,9 @@ export abstract class GenericEmulator<T, R extends string> extends BaseEmulator<
                 this._initialize(historySize)
                 this.addDecorations()
                 const stackTab = this.state.memory.tabs.find((e) => e.name === 'Stack')
-                stackTab.address = BigInt(this._getSp() - BigInt(stackTab.pageSize))
+                if (stackTab) {
+                    stackTab.address = BigInt(this._getSp() - BigInt(stackTab.pageSize))
+                }
                 this.state.canExecute = true
                 this.state.canUndo = false
                 this.state.line = this._getNextInstruction()?.lineNumber ?? -1
@@ -247,13 +263,11 @@ export abstract class GenericEmulator<T, R extends string> extends BaseEmulator<
         })
     }
 
-
     dispose(): void {
         this.debouncer[1]()
         this.clear()
         this._dispose()
     }
-
 
     getLineFromAddress(address: bigint): number {
         if (!this.getInstance()) return -1
@@ -262,13 +276,11 @@ export abstract class GenericEmulator<T, R extends string> extends BaseEmulator<
         return statement.lineNumber
     }
 
-
     resetSelectedLine(): void {
         this.state.line = -1
     }
 
     updateStatusRegisters() {
-
         const flags = this._getFlags()
 
         this.state.statusRegisters = flags.map((s, i) => ({
@@ -282,14 +294,13 @@ export abstract class GenericEmulator<T, R extends string> extends BaseEmulator<
         if (haltLimit <= 0) haltLimit = Number.MAX_SAFE_INTEGER
         const start = performance.now()
         try {
-            const status =
-                await this._run(haltLimit, this.state.breakpoints)
+            const status = await this._run(haltLimit, this.state.breakpoints)
             const terminated = this._hasTerminated()
             try {
                 const ins = this._getNextInstruction()
                 //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
                 if (!terminated) {
-                    this.state.line = ins.lineNumber
+                    this.state.line = ins?.lineNumber ?? -1
                 } else {
                     this.state.line = -1
                 }
@@ -311,7 +322,7 @@ export abstract class GenericEmulator<T, R extends string> extends BaseEmulator<
             console.error(e)
             let line = -1
             try {
-                line = this._getNextInstruction().lineNumber
+                line = this._getNextInstruction()?.lineNumber ?? -1
             } catch (e) {
                 console.error(e)
             }
@@ -333,10 +344,12 @@ export abstract class GenericEmulator<T, R extends string> extends BaseEmulator<
         try {
             const bytes = this.getInstance()
                 ? this._readMemoryBytes(address, BigInt(this.state.memory.global.pageSize))
-                : new Uint8Array(this.state.memory.global.pageSize).fill(this._emulatorOptions.initialMemoryValue)
+                : new Uint8Array(this.state.memory.global.pageSize).fill(
+                      this._emulatorOptions.initialMemoryValue
+                  )
             this.state.memory.global.address = address
-            this.state.memory.global.data.current = bytes,
-                this.state.memory.global.data.prevState = this.state.memory.global.data.current
+            ;((this.state.memory.global.data.current = bytes),
+                (this.state.memory.global.data.prevState = this.state.memory.global.data.current))
         } catch (e) {
             console.error(e)
             this.addError(this._stringifyError(e))
@@ -349,7 +362,9 @@ export abstract class GenericEmulator<T, R extends string> extends BaseEmulator<
             if (!tab) return
             const bytes = this.getInstance()
                 ? this._readMemoryBytes(address, BigInt(this.state.memory.global.pageSize))
-                : new Uint8Array(this.state.memory.global.pageSize).fill(this._emulatorOptions.initialMemoryValue)
+                : new Uint8Array(this.state.memory.global.pageSize).fill(
+                      this._emulatorOptions.initialMemoryValue
+                  )
             tab.address = address
             tab.data.current = bytes
             tab.data.prevState = tab.data.current
@@ -364,7 +379,9 @@ export abstract class GenericEmulator<T, R extends string> extends BaseEmulator<
         if (!this.getInstance()) throw new Error('Interpreter not initialized')
         const registers = this._getRegisterValues()
         for (const [register, value] of Object.entries(testcase.expectedRegisters)) {
-            const registerIndex = this._registerNames.findIndex(r => r.toUpperCase() === register.toUpperCase())
+            const registerIndex = this._registerNames.findIndex(
+                (r) => r.toUpperCase() === register.toUpperCase()
+            )
             if (registerIndex === -1) {
                 console.error(`Register ${register} not found`)
                 continue
@@ -432,7 +449,6 @@ export abstract class GenericEmulator<T, R extends string> extends BaseEmulator<
         return errors
     }
 
-
     async step(): Promise<boolean> {
         let lastLine = -1
         try {
@@ -441,9 +457,8 @@ export abstract class GenericEmulator<T, R extends string> extends BaseEmulator<
             this.state.terminated = (await this._step()).terminated
             try {
                 const ins = this._getNextInstruction()
-                this.state.line = ins.lineNumber
-            } catch (e) {
-            }
+                this.state.line = ins?.lineNumber ?? -1
+            } catch (e) {}
 
             this.state.canUndo = this._canUndo()
             //if it managed to step, it means it does not have valid errors
@@ -568,10 +583,28 @@ export abstract class GenericEmulator<T, R extends string> extends BaseEmulator<
         }
     }
 
+    readMemoryBytes(address: bigint, length: number): Uint8Array {
+        if (!this.getInstance()) throw new Error('Emulator not initialized')
+        return this._readMemoryBytes(address, BigInt(length))
+    }
+
+    async check() {
+        try {
+            if (!this.getInstance()) return []
+            const errors = this._checkCode(this._code)
+            this.state.compilerErrors = errors
+            this.state.errors = []
+            return errors
+        } catch (e) {
+            console.error(e)
+            const error = this._stringifyError(e)
+            this.addError(error)
+            return [makeGenericMonacoError(error)]
+        }
+    }
 
     get breakpoints() {
         return this.state.breakpoints
-
     }
 
     get callStack() {
@@ -654,7 +687,7 @@ export abstract class GenericEmulator<T, R extends string> extends BaseEmulator<
         return this._endianness
     }
 
-    get compiledCode(){
+    get compiledCode() {
         return this.state.compiledCode
     }
 }
