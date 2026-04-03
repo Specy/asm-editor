@@ -69,16 +69,80 @@ export const mipsInstructionsVariants = [...mipsInstructionMap.values()]
 export const mipsInstructionNames = [...mipsInstructionMap.keys()].sort((a, b) => a.localeCompare(b))
 
 export function formatAggregatedArgs(ins: MIPSInstruction[]): string {
-    return aggregateArgs(ins)
-        .map((a) => {
-            const args = a.map((arg) => MIPSAddressingModes[arg.type].label)
-            if (args.length > 1) {
-                return `[${args.join('/')}]`
+    const isReg = (s: string) => s === '$reg' || s === '$freg' || s === 'regnum'
+
+    function getLabel(type: string): string {
+        if (type.startsWith('INTEGER')) return 'imm'
+        return MIPSAddressingModes[type]?.label ?? type
+    }
+
+    function parseOperands(variant: MIPSInstruction): string[] {
+        const tokens = variant.args.map((a) => a[0])
+        if (tokens.length === 0) return []
+
+        const operands: string[] = []
+        let parts: string[] = []
+
+        for (let i = 0; i < tokens.length; i++) {
+            const t = tokens[i]
+            const label = getLabel(t.type)
+
+            if (t.type === 'LEFT_PAREN') {
+                const last = parts[parts.length - 1]
+                if (parts.length > 0 && !isReg(last)) {
+                    parts.push('(')
+                } else {
+                    if (parts.length > 0) operands.push(parts.join(''))
+                    parts = ['(']
+                }
+            } else if (t.type === 'RIGHT_PAREN') {
+                parts.push(')')
+                operands.push(parts.join(''))
+                parts = []
+            } else if (t.type === 'PLUS') {
+                parts.push('+')
             } else {
-                return args[0]
+                const prevType = i > 0 ? tokens[i - 1].type : null
+                if (parts.length > 0 && prevType !== 'LEFT_PAREN' && prevType !== 'PLUS') {
+                    operands.push(parts.join(''))
+                    parts = []
+                }
+                parts.push(label)
             }
-        })
-        .join(', ')
+        }
+        if (parts.length > 0) operands.push(parts.join(''))
+        return operands
+    }
+
+    const allOps = ins.map(parseOperands)
+    const maxLen = Math.max(...allOps.map((o) => o.length))
+    const result: string[] = []
+
+    for (let pos = 0; pos < maxLen; pos++) {
+        const values = [...new Set(allOps.map((o) => o[pos]).filter(Boolean))]
+        if (values.length <= 1) {
+            result.push(values[0] ?? '')
+        } else {
+            result.push(`[${values.join(' / ')}]`)
+        }
+    }
+
+    return result.join(', ')
+}
+
+export function groupVariantsByDescription(variants: MIPSInstruction[]): { description: string; examples: string[] }[] {
+    const groups: { description: string; examples: string[] }[] = []
+    const map = new Map<string, number>()
+    for (const v of variants) {
+        const idx = map.get(v.description)
+        if (idx !== undefined) {
+            groups[idx].examples.push(v.example)
+        } else {
+            map.set(v.description, groups.length)
+            groups.push({ description: v.description, examples: [v.example] })
+        }
+    }
+    return groups
 }
 
 export const MIPSAddressingModes = {

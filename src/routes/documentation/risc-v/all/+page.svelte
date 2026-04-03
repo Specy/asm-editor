@@ -6,7 +6,8 @@
     import {
         riscvInstructionNames,
         riscvInstructionMap,
-        formatAggregatedArgs
+        formatAggregatedArgs,
+        groupVariantsByDescription
     } from '$lib/languages/RISC-V/RISC-V-documentation'
 </script>
 
@@ -38,6 +39,7 @@
         <div class="column sub-section">
             {#each riscvInstructionNames as ins}
                 {@const instruction = riscvInstructionMap.get(ins)}
+                {@const groups = groupVariantsByDescription(instruction)}
                 <div class="instruction">
                     <div class="row align-center">
                         <h3 class="sub-title" id={ins}>
@@ -48,28 +50,21 @@
                         </h3>
                     </div>
 
-                    {#if instruction[0].description}
-                        <span class="sub-description">
-                            <MarkdownRenderer
-                                source={instruction[0].description}
-                                linksInNewTab={false}
-                            />
-                        </span>
-                    {/if}
-                    {#if instruction.length > 1}
-                        <MarkdownRenderer
-                            style="background-color: rgba(var(--RGB-secondary), 0.7); border-radius: 0.5rem; padding: 0.5rem;"
-                            source={instruction
-                                .slice(1)
-                                .map((i) => `- ${i.description}: **${i.example}**`)
-                                .join('\n')}
-                        />
-                    {/if}
-                    {#if instruction[0].example}
-                        <span class="example">
-                            {instruction[0].example}
-                        </span>
-                    {/if}
+                    {#each groups as group}
+                        {#if group.description}
+                            <span class="sub-description">
+                                <MarkdownRenderer
+                                    source={group.description}
+                                    linksInNewTab={false}
+                                />
+                            </span>
+                        {/if}
+                        {#if group.examples.some(Boolean)}
+                            <span class="example">
+                                {group.examples.filter(Boolean).join('\n')}
+                            </span>
+                        {/if}
+                    {/each}
                 </div>
             {/each}
         </div>
