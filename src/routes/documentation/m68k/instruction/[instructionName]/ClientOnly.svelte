@@ -77,7 +77,7 @@
 <style>
     .agent-toggle {
         position: fixed;
-        top: 3.2rem;
+        top: 3.8rem;
         right: 0.5rem;
         padding: 0.65rem 1rem;
         z-index: 101;

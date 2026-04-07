@@ -7,11 +7,14 @@
     import {
         fromSizesToString,
         fromSizeToString,
-        getAddressingModeNames
+        getAddressingModeNames,
+        AffectedFlagKind,
+        M68KFlag
     } from '$lib/languages/M68K/M68K-documentation'
     import DocsOperand from '$cmp/documentation/DocsOperand.svelte'
     import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
+    import Row from '$cmp/shared/layout/Row.svelte'
     interface Props {
         data: PageData
     }
@@ -47,7 +50,7 @@
 </svelte:head>
 
 <Page contentStyle="padding: 1rem; gap: 1rem;" style="flex: 1;">
-    <div class="instruction-info" style="flex: 1;">
+    <article class="instruction-info" style="flex: 1;">
         <Column>
             <div class="instruction-name">
                 {ins.name}
@@ -69,33 +72,65 @@
         </Column>
 
         <Column gap="1rem">
-            <article class="column">
-                <h3>Operands</h3>
-                <Column gap="0.5rem" margin="0.8rem">
-                    {#if ins.args.length}
-                        {#each ins.args as arg, i}
-                            <DocsOperand
-                                name={`Op ${i + 1}`}
-                                content={getAddressingModeNames(arg)}
-                                style="width: fit-content;"
-                            />
+            <Row gap="1rem" wrap>
+                <div class="column">
+                    <h3>Affected Flags</h3>
+                    <div class="flags-table" style="margin: 0.8rem;">
+                        {#each [M68KFlag.Extend, M68KFlag.Negative, M68KFlag.Zero, M68KFlag.Overflow, M68KFlag.Carry] as flag}
+                            {@const kind = ins.affectsFlags[flag]}
+                            <div class="flag-header">{flag}</div>
                         {/each}
-                    {/if}
-                </Column>
-            </article>
-            <article class="description">
+                        {#each [M68KFlag.Extend, M68KFlag.Negative, M68KFlag.Zero, M68KFlag.Overflow, M68KFlag.Carry] as flag}
+                            {@const kind = ins.affectsFlags[flag]}
+                            <div
+                                class="flag-cell"
+                                class:flag-edits={kind === AffectedFlagKind.Edits}
+                                class:flag-to-zero={kind === AffectedFlagKind.ToZero}
+                                class:flag-to-one={kind === AffectedFlagKind.ToOne}
+                                class:flag-unaffected={kind === AffectedFlagKind.Unaffected}
+                            >
+                                {#if kind === AffectedFlagKind.Edits}
+                                    {'\u2731'}
+                                {:else if kind === AffectedFlagKind.ToZero}
+                                    0
+                                {:else if kind === AffectedFlagKind.ToOne}
+                                    1
+                                {:else}
+                                    -
+                                {/if}
+                            </div>
+                        {/each}
+                    </div>
+                </div>
+                <div class="column">
+                    <h3>Operands</h3>
+                    <Column gap="0.5rem" margin="0.8rem">
+                        {#if ins.args.length}
+                            {#each ins.args as arg, i}
+                                <DocsOperand
+                                    name={`Op ${i + 1}`}
+                                    content={getAddressingModeNames(arg)}
+                                    style="width: fit-content;"
+                                />
+                            {/each}
+                        {/if}
+                    </Column>
+                </div>
+            </Row>
+
+            <div class="description">
                 <MarkdownRenderer source={ins.description} />
-            </article>
+            </div>
         </Column>
-    </div>
+    </article>
     {#if component}
         {@const SvelteComponent_1 = component}
-        <SvelteComponent_1 
-            bind:code 
-            instructionKey={ins.name} 
+        <SvelteComponent_1
+            bind:code
+            instructionKey={ins.name}
             description={ins.description}
-            arguments={ins.args.map(arg => getAddressingModeNames(arg))}
-            language="M68K" 
+            arguments={ins.args.map((arg) => getAddressingModeNames(arg))}
+            language="M68K"
         />
     {:else}
         <div class="loading">Loading...</div>
@@ -138,6 +173,33 @@
     :global(.description a) {
         color: var(--accent);
         text-decoration: underline;
+    }
+    .flags-table {
+        display: grid;
+        grid-template-columns: repeat(5, auto);
+        width: fit-content;
+        border-radius: 0.4rem;
+        overflow: hidden;
+        background-color: var(--secondary);
+        font-size: 0.9rem;
+        text-align: center;
+    }
+    .flag-header {
+        padding: 0.25rem 0.6rem;
+        font-weight: 600;
+        background-color: var(--secondary);
+        color: var(--secondary-text);
+    }
+    .flag-cell {
+        padding: 0.25rem 0.6rem;
+        background-color: var(--tertiary);
+        color: var(--tertiary-text);
+    }
+    .flag-edits {
+        color: var(--accent);
+    }
+    .flag-unaffected {
+        opacity: 0.5;
     }
     @media (max-width: 800px) {
         .instruction-info {

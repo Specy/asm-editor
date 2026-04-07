@@ -2,11 +2,13 @@ import type { MonacoType } from '$lib/monaco/Monaco'
 import { S68k } from '@specy/s68k'
 import {
     AddressingMode,
+    AffectedFlagKind,
     fromSizesToString,
     fromSizeToString,
     getAddressingModeNames,
     getInstructionDocumentation,
     M68KDirectives,
+    M68KFlag,
     M68kInstructions
 } from './M68K-documentation'
 
@@ -179,21 +181,37 @@ export function createM68kHoverProvider(monaco: MonacoType) {
                     ? fromSizeToString(documentation.defaultSize)
                     : ''
                 if (!documentation) return { range, contents: [] }
+                const flagSymbols = [M68KFlag.Extend, M68KFlag.Negative, M68KFlag.Zero, M68KFlag.Overflow, M68KFlag.Carry]
+                const flagHeaders = flagSymbols.map(f => f).join(' | ')
+                const flagValues = flagSymbols.map(f => {
+                    const kind = documentation.affectsFlags[f]
+                    if (kind === AffectedFlagKind.Edits) return '\u2731'
+                    if (kind === AffectedFlagKind.ToZero) return '0'
+                    if (kind === AffectedFlagKind.ToOne) return '1'
+                    return '\u2014'
+                }).join(' | ')
+                const flagsTable = `| ${flagHeaders} |\n|${flagSymbols.map(() => ' :---: ').join('|')}|\n| ${flagValues} |`
+                const contents = [
+                    {
+                        value: `
+							# ${word}
+							${documentation.args?.map((e, i) => `\n**Op ${i + 1}:** \`${getAddressingModeNames(e)}\``).join('\n') ?? ''}
+						`.trim()
+                    },
+                    {
+                        value: `**Sizes:** ${documentation.sizes?.length ? fromSizesToString(documentation.sizes) : 'Not sized'} ${defaultSize ? `\n\n**Default:**  ${defaultSize}` : ''}`
+                    },
+                ]
+                if (documentation.description) {
+                    contents.push({ value: documentation.description })
+                }
+                contents.push({ value: `${flagsTable}` })
+                if (documentation.example) {
+                    contents.push({ value: documentation.example })
+                }
                 return {
                     range,
-                    contents: [
-                        {
-                            value: `
-							**${word}**
-							${documentation.args?.map((e, i) => `\n**Op ${i + 1}:** ${getAddressingModeNames(e)}`).join('\n') ?? ''}
-						`.trim()
-                        },
-                        {
-                            value: `**Sizes:** ${documentation.sizes?.length ? fromSizesToString(documentation.sizes) : 'Not sized'} ${defaultSize ? `\n\n **Default:** ${defaultSize}` : ''}`
-                        },
-                        { value: documentation.description ?? 'No description' },
-                        { value: `${documentation.example ?? 'No examples'}` }
-                    ]
+                    contents
                 }
             }
             return {
