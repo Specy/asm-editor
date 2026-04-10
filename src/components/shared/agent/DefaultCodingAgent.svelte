@@ -96,12 +96,18 @@
         createSetCodeTool(canUpdateLanguage),
         tool({
             name: 'get_code',
-            description: 'Returns the current code and language in the editor.',
+            description:
+                'Returns the current code and language in the editor. Each line is prefixed with its 0-based line number and a "B" marker if a breakpoint is set on that line.',
             schema: z.object({}),
             execute: async () => {
+                const breakpoints = new Set(emulatorInstance?.breakpoints ?? [])
+                const lines = editorCode.split('\n').map((text, i) => {
+                    const bp = breakpoints.has(i) ? ' B' : ' '
+                    return `${String(i).padStart(4)}${bp} | ${text}`
+                })
                 return {
                     language: editorLanguage,
-                    code: editorCode
+                    code: lines.join('\n')
                 }
             }
         }),
@@ -223,19 +229,32 @@
         tool({
             name: 'toggle_breakpoint',
             description:
-                'Toggles a breakpoint on the given line index. If a breakpoint exists on that line it is removed, otherwise it is added.',
+                'Adds and/or removes breakpoints on the given 0-based line indices. Both fields are optional but at least one must be provided.',
             schema: z.object({
-                lineIndex: z
-                    .number()
-                    .int()
-                    .min(0)
-                    .describe('The 0-based line index to toggle the breakpoint on')
+                add: z
+                    .array(z.number().int().min(0))
+                    .optional()
+                    .describe('0-based line indices to add breakpoints on'),
+                remove: z
+                    .array(z.number().int().min(0))
+                    .optional()
+                    .describe('0-based line indices to remove breakpoints from')
             }),
-            execute: async ({ lineIndex }) => {
+            execute: async ({ add = [], remove = [] }) => {
                 if (!emulatorInstance) {
                     return { success: false, error: 'Emulator not loaded yet' }
                 }
-                emulatorInstance.toggleBreakpoint(lineIndex)
+                const current = new Set(emulatorInstance.breakpoints)
+                for (const line of add) {
+                    if (!current.has(line)) {
+                        emulatorInstance.toggleBreakpoint(line)
+                    }
+                }
+                for (const line of remove) {
+                    if (current.has(line)) {
+                        emulatorInstance.toggleBreakpoint(line)
+                    }
+                }
                 return $state.snapshot({ success: true, breakpoints: emulatorInstance.breakpoints })
             }
         }),
@@ -320,6 +339,7 @@ Use this tool to create or update the code editor with assembly code. Call it wh
 
 ### get_code tool
 Returns the current code and language in the editor. Use this when you need to read or reference the source code (e.g. the user says "this code" or "fix this").
+The tool will return the full code currently in the editor, for each line, it will also return the line number (0-based) and if there is a breakpoint on that line (will have a B next to it).
 
 ### get_emulator_state tool
 Returns the full emulator execution state. Use this to inspect registers, flags, call stack, breakpoints, errors, and execution status. Call this after stepping or running to see the result.
@@ -349,7 +369,7 @@ Steps the emulator forward by a given number of instructions (default 1). Use th
 Runs the program until it terminates or hits a breakpoint. You MUST compile the code first (use the compile tool). Use this when the user wants to execute the entire program. Returns the final state.
 
 ### toggle_breakpoint tool
-Toggles a breakpoint on a given 0-based line index. If a breakpoint already exists on that line it is removed, otherwise it is added. Returns the updated breakpoint list.
+Adds and/or removes breakpoints on the given 0-based line indices. Accepts two optional arrays: \`add\` (lines to add breakpoints on) and \`remove\` (lines to remove breakpoints from). Returns the updated breakpoint list.
 
 ### get_line_from_address tool
 Maps a hex memory address to a source line number. Useful for understanding which instruction the program counter or a call stack address corresponds to.
