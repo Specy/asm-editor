@@ -316,6 +316,62 @@
         border-top: 1px solid var(--accent2) !important;
     }
 
+    :global(.monaco-hover table) {
+        border-collapse: collapse;
+        overflow-x: auto;
+        display: block;
+        margin: 0.5rem 0;
+        font-family: "Fira Code", monospace;
+        border-radius: 0.5rem;
+        border: solid 0.1rem var(--primary);
+        width: fit-content;
+        max-width: 100%;
+    }
+
+    :global(.monaco-hover thead) {
+        background-color: var(--tertiary);
+        color: var(--tertiary-text);
+    }
+
+    :global(.monaco-hover thead th) {
+        padding: 0.2rem 0.4rem;
+        border-right: 0.1rem solid var(--secondary);
+    }
+
+    :global(.monaco-hover thead th:first-child) {
+        border-top-left-radius: 0.3rem;
+    }
+
+    :global(.monaco-hover thead th:last-child) {
+        border-top-right-radius: 0.3rem;
+        border-right: unset;
+    }
+
+    :global(.monaco-hover tbody tr:nth-child(odd)) {
+        background-color: color-mix(in srgb, var(--secondary), var(--tertiary) 20%);
+    }
+
+    :global(.monaco-hover tbody) {
+        background-color: var(--secondary);
+    }
+
+    :global(.monaco-hover td) {
+        padding: 0.2rem 0.4rem;
+        border: 0.1rem solid var(--tertiary);
+    }
+
+    :global(.monaco-hover td:first-child) {
+        border-left: unset;
+    }
+
+    :global(.monaco-hover td:last-child) {
+        border-right: unset;
+    }
+
+    :global(.monaco-hover tr:last-child td) {
+        border-bottom: unset;
+    }
+
     :global(.find-widget) {
         transform: translateY(calc(-100% - 1.2rem)) !important;
     }

@@ -5,7 +5,9 @@ import {
     type RISCVInstruction,
     riscvInstructionMap,
     riscvInstructionsVariants,
-    riscvInstructionsWithDuplicates
+    riscvInstructionsWithDuplicates,
+    formatAggregatedArgs,
+    groupVariantsByDescription
 } from './RISC-V-documentation'
 import { ALTERNATIVE_RISCVRegister_NAMES } from './RISC-VEmulator.svelte'
 import { RISCV, RISCV_REGISTERS } from '@specy/risc-v'
@@ -205,10 +207,19 @@ export function createRISCVCompletition(monaco: MonacoType, is64 = false) {
     }
 }
 
-function formatInstruction(ins: RISCVInstruction) {
-    const [left, right] = ins.description.split(':')
-    if (!right) return left
-    return `**${left.trim()}**: ${right}`
+function formatInstructionHover(ins: RISCVInstruction[]) {
+    const args = formatAggregatedArgs(ins)
+    const groups = groupVariantsByDescription(ins)
+    const header = `**${ins[0].name}** ${args}`
+    const body = groups.map((g) => {
+        const desc = g.description
+        const examples = g.examples.filter(Boolean)
+        if (examples.length > 0) {
+            return `${desc}\n\n\`${examples[0]}\``
+        }
+        return desc
+    }).join('\n\n---\n\n')
+    return `${header}\n\n${body}`
 }
 
 export function createRISCVHoverProvider(monaco: MonacoType, is64 = false) {
@@ -241,15 +252,9 @@ export function createRISCVHoverProvider(monaco: MonacoType, is64 = false) {
             }
             const ins = riscvInstructionMap.get(word)
             if (ins) {
-                if (ins.length === 1) {
-                    contents.push({
-                        value: formatInstruction(ins[0])
-                    })
-                } else {
-                    contents.push({
-                        value: ins.map((ins, i) => `${i + 1}. ${formatInstruction(ins)}`).join('\n')
-                    })
-                }
+                contents.push({
+                    value: formatInstructionHover(ins)
+                })
             }
             if (RISCVRegistersMap[word]) {
                 contents.push({

@@ -145,9 +145,11 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
             //TODO
             state.compilerErrors = []
             state.errors = []
+            return []
         } catch (e) {
             console.error(e)
             addError(getErrorMessage(e))
+            return []
         }
     }
 
@@ -607,6 +609,7 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
         compile,
         step,
         run,
+        check: () => Promise.resolve(semanticCheck()),
         setGlobalMemoryAddress,
         setCode,
         clear,
@@ -616,6 +619,10 @@ export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
         resetSelectedLine,
         dispose,
         test,
-        getLineFromAddress
+        getLineFromAddress,
+        readMemoryBytes(address: bigint, length: number) {
+            if (!x86) throw new Error('Emulator not initialized')
+            return new Uint8Array(x86.readMemoryBytes(Number(address), length))
+        }
     } satisfies X86EmulatorState & BaseEmulatorActions
 }

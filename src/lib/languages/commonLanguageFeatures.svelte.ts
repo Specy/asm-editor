@@ -71,6 +71,18 @@ export function numbersOfSizeToSlice(
     return numbers.flatMap((v) => numberToByteSlice(v, bytes, endianess))
 }
 
+export function makeGenericMonacoError(error: string): MonacoError {
+    return {
+        lineIndex: 0,
+        column: 0,
+        line: {
+            line: '',
+            line_index: 0
+        },
+        message: error,
+        formatted: error
+    } 
+}
 export function toHexString(_value: bigint | number, _size: bigint | number): string {
     const value = BigInt(_value)
     const size = BigInt(_size)
@@ -295,6 +307,7 @@ export type BaseEmulatorActions = {
     run: (haltLimit: number) => Promise<InterpreterStatus>
     setGlobalMemoryAddress: (address: bigint) => void
     setCode: (code: string) => void
+    check: () => Promise<MonacoError[]>
     clear: () => void
     setTabMemoryAddress: (address: bigint, tabId: number) => void
     toggleBreakpoint: (line: number) => void
@@ -308,4 +321,5 @@ export type BaseEmulatorActions = {
         historySize?: number
     ) => Promise<TestcaseResult[]>
     getLineFromAddress: (address: bigint) => number
+    readMemoryBytes: (address: bigint, length: number) => Uint8Array
 }

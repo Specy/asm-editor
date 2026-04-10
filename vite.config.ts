@@ -7,7 +7,7 @@ import { resolve } from 'path'
 //import devtoolsJson from 'vite-plugin-devtools-json';
 const config: UserConfig = {
     server: {
-        port: 3000
+        port: 4173
     },
     resolve: {
         alias: {

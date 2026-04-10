@@ -14,7 +14,9 @@
     import { LANGUAGE_THEMES } from '$lib/Config'
     import { DEFAULT_THEME, ThemeStore, type ThemeKeys } from '$stores/themeStore.svelte'
     import { onDestroy, onMount, untrack } from 'svelte'
+    import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
     import { riscvInstructionNames } from '$lib/languages/RISC-V/RISC-V-documentation'
+    import Sidebar from '$cmp/shared/layout/Sidebar.svelte'
     interface Props {
         children?: import('svelte').Snippet
     }
@@ -40,7 +42,7 @@
 </script>
 
 <Navbar style="border-bottom-left-radius: 0;">
-    <Row gap="1rem" align="center" flex1>
+    <Row gap="0.6rem" align="center" flex1>
         <a class="icon" href="/" title="Go to the home">
             <img src="/favicon.png" alt="logo" />
         </a>
@@ -48,6 +50,12 @@
 
         <a href="/documentation"> Docs </a>
         <a href="/learn/courses"> Learn </a>
+        <a class="icon ai" href="/chat" title="AI Chat">
+            <div class="hidden-very-small">
+                <SparklesIcon />
+            </div>
+            AI Chat
+        </a>
         <div class="mobile-only" style="margin-left: auto; margin-right: 0.5rem">
             <Icon onClick={() => (menuOpen = !menuOpen)}>
                 {#if menuOpen}
@@ -60,91 +68,51 @@
     </Row>
 </Navbar>
 
-<Row gap="1rem" flex1>
-    <button
-        class="side-menu-underlay"
-        class:side-menu-underlay-open={menuOpen}
-        onclick={() => (menuOpen = false)}
-    >
-    </button>
-    <aside class="side-menu column" class:menu-open={menuOpen}>
-        <Column gap="1rem" padding="0 1rem">
-            <MenuLink
-                href="/documentation/risc-v"
-                title="RISC-V"
-                onClick={() => (menuOpen = false)}
-            />
-            <MenuLink
-                href="/documentation/risc-v/directive"
-                title="Directives"
-                onClick={() => (menuOpen = false)}
-            />
-            <MenuLink
-                href="/documentation/risc-v/syscall"
-                title="Syscalls"
-                onClick={() => (menuOpen = false)}
-            />
-        </Column>
-        <TogglableSection
-            open={true}
-            sectionStyle="margin-left: 0; padding-left: 0.5rem;"
-            style="padding: 0 0.5rem;"
-        >
-            {#snippet title()}
-                <h2 style="font-size: 1rem; font-weight: normal; margin-left: -0.1rem">
-                    Instructions
-                </h2>
-            {/snippet}
-            <input bind:value={search} placeholder="Search" class="instruction-search" />
-            <InstructionsMenu
-                hrefBase="/documentation/risc-v/instruction"
-                instructions={filteredInstructions}
-                onClick={() => (menuOpen = false)}
-                {currentInstructionName}
-            />
-        </TogglableSection>
-    </aside>
-
-    <Column flex1 style="padding-top: 4rem;">
-        {@render children?.()}
+<Sidebar bind:menuOpen>
+    <Column gap="1rem" padding="0 1rem">
+        <MenuLink
+            href="/documentation/risc-v"
+            title="RISC-V"
+            onClick={() => (menuOpen = false)}
+        />
+        <MenuLink
+            href="/documentation/risc-v/directive"
+            title="Directives"
+            onClick={() => (menuOpen = false)}
+        />
+        <MenuLink
+            href="/documentation/risc-v/syscall"
+            title="Syscalls"
+            onClick={() => (menuOpen = false)}
+        />
     </Column>
-</Row>
+    <TogglableSection
+        open={true}
+        sectionStyle="margin-left: 0; padding-left: 0.5rem;"
+        style="padding: 0 0.5rem;"
+    >
+        {#snippet title()}
+            <h2 style="font-size: 1rem; font-weight: normal; margin-left: -0.1rem">
+                Instructions
+            </h2>
+        {/snippet}
+        <input bind:value={search} placeholder="Search" class="instruction-search" />
+        <InstructionsMenu
+            hrefBase="/documentation/risc-v/instruction"
+            instructions={filteredInstructions}
+            onClick={() => (menuOpen = false)}
+            {currentInstructionName}
+        />
+    </TogglableSection>
+
+    {#snippet content()}
+        <Column flex1 style="padding-top: 4rem;">
+            {@render children?.()}
+        </Column>
+    {/snippet}
+</Sidebar>
 
 <style lang="scss">
-    .side-menu {
-        background-color: var(--secondary);
-        color: var(--secondary-text);
-        width: 15rem;
-        gap: 1rem;
-        top: 3.2rem;
-        padding-top: 1rem;
-        height: calc(100vh - 3.2rem);
-        overflow-y: auto;
-        position: sticky;
-    }
-
-    .mobile-only {
-        display: none;
-    }
-
-    @media (max-width: 600px) {
-        .side-menu {
-            position: fixed;
-            width: calc(100vw - 4rem);
-            left: 0;
-            z-index: 5;
-            transition: transform 0.3s;
-            background-color: rgba(var(--RGB-secondary), 0.9);
-            transform: translateX(calc((100vw - 4rem) * -1));
-        }
-        .mobile-only {
-            display: flex;
-        }
-        .menu-open {
-            transform: translateX(0);
-        }
-    }
-
     .instruction-search {
         background-color: var(--tertiary);
         color: var(--tertiary-text);
@@ -167,23 +135,39 @@
         }
     }
 
-    .side-menu-underlay {
-        position: fixed;
-        top: 3.2rem;
-        left: 0;
-        width: 100vw;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.5);
-        opacity: 0;
-        pointer-events: none;
-        cursor: pointer;
-        z-index: 3;
-        transition: opacity 0.3s;
-        backdrop-filter: blur(0.2rem);
+    .ai {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--accent);
+        padding: 0.3rem 0.8rem;
+        border-radius: 1.5rem;
+        border-bottom-right-radius: 0.4rem;
+        background-color: color-mix(in srgb, var(--accent) 10%, transparent);
+        margin-left: auto;
     }
 
-    .side-menu-underlay-open {
-        opacity: 1;
-        pointer-events: all;
+    .mobile-only {
+        display: none;
+    }
+
+    @media (max-width: 600px) {
+        .mobile-only {
+            display: flex;
+        }
+        .ai {
+            font-size: 0.9rem;
+            margin-left: unset;
+            margin-right: auto;
+        }
+        .icon {
+            font-size: 0.9rem;
+        }
+    }
+
+    @media (max-width: 370px) {
+        .hidden-very-small {
+            display: none;
+        }
     }
 </style>

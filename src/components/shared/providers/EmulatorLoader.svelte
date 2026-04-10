@@ -14,14 +14,18 @@
         children: Snippet<[Emulator]>
         loading?: Snippet
         settings?: Omit<EmulatorSettings, 'language'>
+        emulator?: Emulator | null
     }
 
-    let { language, code = $bindable(), children, loading, settings }: Props = $props()
+    let { language, code = $bindable(), children, loading, settings, emulator = $bindable(null) }: Props = $props()
 
-    const emulator = GenericEmulator(language, code, { ...settings, language })
+    const emulatorPromise = GenericEmulator(language, code, { ...settings, language })
+    emulatorPromise.then((e) => {
+        emulator = e
+    })
 </script>
 
-{#await emulator}
+{#await emulatorPromise}
     <Column justify="center" align="center" flex1>
         {#if loading}
             {@render loading()}

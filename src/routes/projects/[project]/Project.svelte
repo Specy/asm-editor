@@ -44,6 +44,8 @@
     import BelowLineContent from '$cmp/specific/project/user-tools/BelowLineContent.svelte'
     import Card from '$cmp/shared/layout/Card.svelte'
     import Header from '$cmp/shared/layout/Header.svelte'
+    import FloatingAgentSidebar from '$cmp/shared/agent/FloatingAgentSidebar.svelte'
+    import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
 
     interface Props {
         name?: string
@@ -53,6 +55,7 @@
         emulator: Emulator
         embedded?: boolean
         children?: Snippet
+        readonly?: boolean
     }
 
     let {
@@ -62,7 +65,8 @@
         testcases = $bindable([] as Testcase[]),
         emulator = $bindable(),
         embedded = false,
-        children
+        children,
+        readonly = false
     }: Props = $props()
 
     $effect(() => {
@@ -76,6 +80,7 @@
     let documentationVisible = $state(false)
     let shortcutsVisible = $state(false)
     let testcasesVisible = $state(false)
+    let agentOpen = $state(false)
     let groupSize = $state(RegisterSize.Word)
     let errorStrings = $derived(emulator.errors.join('\n'))
     let info = $derived(
@@ -227,6 +232,17 @@
         <h1 style="font-size: 1.6rem; margin-left: 0.4rem" class="ellipsis">{name}</h1>
         <Row gap="0.5rem" style="margin-left: auto;">
             <Button
+                onClick={() => (agentOpen = !agentOpen)}
+                hasIcon
+                cssVar="accent"
+                style="padding:0; width:2.2rem; height:2.2rem; border-radius: 1.5rem; border-bottom-right-radius: 0.4rem;"
+                title="Ask AI"
+            >
+                <Icon>
+                    <SparklesIcon />
+                </Icon>
+            </Button>
+            <Button
                 onClick={() => dispatcher('share')}
                 hasIcon
                 cssVar="accent2"
@@ -248,17 +264,19 @@
                     <FaDonate />
                 </Icon>
             </ButtonLink>
-            <Button
-                onClick={() => toggleWindow('shortcuts')}
-                hasIcon
-                cssVar="accent2"
-                style="padding:0; width:2.2rem; height:2.2rem"
-                title="Shortcuts"
-            >
-                <Icon>
-                    <FaKeyboard />
-                </Icon>
-            </Button>
+            <div class="only-desktop">
+                <Button
+                    onClick={() => toggleWindow('shortcuts')}
+                    hasIcon
+                    cssVar="accent2"
+                    style="padding:0; width:2.2rem; height:2.2rem"
+                    title="Shortcuts"
+                >
+                    <Icon>
+                        <FaKeyboard />
+                    </Icon>
+                </Button>
+            </div>
             <Button
                 onClick={() => toggleWindow('documentation')}
                 hasIcon
@@ -301,6 +319,19 @@
         <Settings bind:visible={settingsVisible} {language} />
         <FloatingLanguageDocumentation bind:visible={documentationVisible} {language} />
     </header>
+    <FloatingAgentSidebar
+        bind:open={agentOpen}
+        openSize="28rem"
+        verticalOffset="3.2rem"
+        editorLanguage={language}
+        bind:editorCode={code}
+        emulatorInstance={emulator}
+        canUpdateLanguage={false}
+        additionalInstructions={`
+            The user is editing a project in the ${language} assembly language.
+            They are using the project editor which includes a code editor, registers view, memory view, and execution controls.
+        `}
+    />
 {/if}
 <TestcasesEditor
     editable={true}
@@ -397,7 +428,7 @@
                     errors={emulator.compilerErrors}
                     {language}
                     highlightedLine={emulator.line}
-                    disabled={(emulator.canExecute && !emulator.terminated) ||
+                    disabled={readonly || (emulator.canExecute && !emulator.terminated) ||
                         !!emulator.compiledCode}
                     hasError={emulator.errors.length > 0}
                 />
@@ -410,9 +441,9 @@
             hasErrorsInTests={testcasesResult.some((r) => !r.passed)}
             hasNoErrorsInTests={testcasesResult.every((r) => r.passed) &&
                 testcasesResult.length > 0}
-            canEditTests={true}
-            executionDisabled={emulator.terminated || emulator.interrupt !== undefined}
-            buildDisabled={emulator.compilerErrors.length > 0}
+            canEditTests={!readonly}
+            executionDisabled={readonly || emulator.terminated || emulator.interrupt !== undefined}
+            buildDisabled={readonly || emulator.compilerErrors.length > 0}
             hasCompiled={emulator.canExecute || !!emulator.compiledCode}
             canUndo={emulator.canUndo}
             on:edit-tests={() => {
@@ -627,6 +658,7 @@
     .right-side {
         margin-left: 0.5rem;
         width: min-content;
+        gap: 0.4rem;
         max-height: calc(100vh - 4.2rem);
         padding-top: 0.2rem;
         display: flex;
@@ -635,6 +667,9 @@
     }
 
     @media screen and (max-width: 1000px) {
+        .only-desktop{
+            display: none;
+        }
         .editor-memory-wrapper {
             grid-template-columns: 1fr;
         }

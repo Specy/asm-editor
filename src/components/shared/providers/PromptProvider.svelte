@@ -122,4 +122,10 @@
         line-height: 1.5;
         white-space: pre-wrap;
     }
+
+    @media print {
+        .prompt-wrapper {
+            display: none;  
+        }
+    }
 </style>

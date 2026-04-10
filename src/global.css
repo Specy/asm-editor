@@ -36,6 +36,17 @@ html {
     overflow-x: hidden;
 }
 
+@media print {
+    body, html {
+        height: auto;
+        overflow: visible;
+    }
+    #svelte {
+        height: auto;
+        overflow: visible;
+    }
+}
+
 .ellipsis {
     white-space: nowrap;
     overflow: hidden;

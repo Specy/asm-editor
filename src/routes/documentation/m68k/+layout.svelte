@@ -13,6 +13,8 @@
     import Row from '$cmp/shared/layout/Row.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
     import Sidebar from '$cmp/shared/layout/Sidebar.svelte'
+    import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
+    import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
 
     interface Props {
         children?: import('svelte').Snippet
@@ -33,7 +35,7 @@
 </script>
 
 <Navbar style="border-bottom-left-radius: 0;">
-    <Row gap="1rem" align="center" flex1>
+    <Row gap="0.6rem" align="center" flex1>
         <a class="icon" href="/" title="Go to the home">
             <img src="/favicon.png" alt="logo" />
         </a>
@@ -41,6 +43,12 @@
         <a href="/documentation"> Docs </a>
         <a href="/learn/courses"> Learn </a>
 
+        <a class="icon ai" href="/chat" title="AI Chat">
+            <div class="hidden-very-small">
+                <SparklesIcon />
+            </div>
+            AI Chat
+        </a>
         <div class="mobile-only" style="margin-left: auto; margin-right: 0.5rem">
             <Icon onClick={() => (menuOpen = !menuOpen)}>
                 {#if menuOpen}
@@ -107,40 +115,6 @@
 </Sidebar>
 
 <style lang="scss">
-    .side-menu {
-        background-color: var(--secondary);
-        color: var(--secondary-text);
-        width: 15rem;
-        gap: 1rem;
-        top: 3.2rem;
-        padding-top: 1rem;
-        height: calc(100vh - 3.2rem);
-        overflow-y: auto;
-        position: sticky;
-    }
-
-    .mobile-only {
-        display: none;
-    }
-
-    @media (max-width: 600px) {
-        .side-menu {
-            position: fixed;
-            width: calc(100vw - 4rem);
-            left: 0;
-            z-index: 5;
-            transition: transform 0.3s;
-            background-color: rgba(var(--RGB-secondary), 0.9);
-            transform: translateX(calc((100vw - 4rem) * -1));
-        }
-        .mobile-only {
-            display: flex;
-        }
-        .menu-open {
-            transform: translateX(0);
-        }
-    }
-
     .instruction-search {
         background-color: var(--tertiary);
         color: var(--tertiary-text);
@@ -162,24 +136,42 @@
             color: var(--accent);
         }
     }
-
-    .side-menu-underlay {
-        position: fixed;
-        top: 3.2rem;
-        left: 0;
-        width: 100vw;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.5);
-        opacity: 0;
-        pointer-events: none;
-        cursor: pointer;
-        z-index: 3;
-        transition: opacity 0.3s;
-        backdrop-filter: blur(0.2rem);
+    .ai {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--accent);
+        padding: 0.3rem 0.8rem;
+        border-radius: 1.5rem;
+        border-bottom-right-radius: 0.4rem;
+        background-color: color-mix(in srgb, var(--accent) 10%, transparent);
+        margin-left: auto;
     }
 
-    .side-menu-underlay-open {
-        opacity: 1;
-        pointer-events: all;
+    .mobile-only {
+        display: none;
+    }
+
+    @media (max-width: 600px) {
+        .mobile-only {
+            display: flex;
+        }
+        .ai {
+            font-size: 0.9rem;
+            margin-left: unset;
+            margin-right: auto;
+        }
+        .menu-open {
+            transform: translateX(0);
+        }
+        .icon {
+            font-size: 0.9rem;
+        }
+    }
+
+    @media (max-width: 370px) {
+        .hidden-very-small {
+            display: none;
+        }
     }
 </style>
