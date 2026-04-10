@@ -9,6 +9,7 @@
     import { tool } from '@discerns/sdk'
     import { z } from 'zod'
     import type { Emulator } from '$lib/languages/Emulator'
+    import { RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
     import { delay } from '$lib/utils'
     import { BASE_CODE } from '$lib/Config'
     import type { RegisteredTool } from '@discerns/sdk'
@@ -92,6 +93,68 @@
         })
     }
 
+    function fmtAddr(value: bigint | number) {
+        return `decimal: ${String(value)} hex: 0x${value.toString(16)}`
+    }
+
+    const SIZE_NAMES = {
+        [RegisterSize.Byte]: 'Byte',
+        [RegisterSize.Word]: 'Word',
+        [RegisterSize.Long]: 'Long',
+        [RegisterSize.Double]: 'Double'
+    } satisfies Record<RegisterSize, string>
+
+    function fmtSize(size: RegisterSize) {
+        return SIZE_NAMES[size] ?? String(size)
+    }
+
+    function fmtLine(lineIndex: number) {
+        const lineNumber = lineIndex + 1
+        const lines = editorCode.split('\n')
+        const lineText = lineNumber <= lines.length ? lines[lineNumber - 1] : null
+        return { lineNumber, lineText, line: `${lineNumber} | ${lineText ?? ''}` }
+    }
+
+    function formatLatestSteps(emulator: Emulator, max = 10) {
+        return emulator.latestSteps.slice(-max).map((step) => ({
+            line: fmtLine(step.line).line,
+            pc: step.pc,
+            mutations: step.mutations.map((m) => {
+                switch (m.type) {
+                    case 'WriteRegister':
+                        return {
+                            type: m.type,
+                            register: m.value.register,
+                            old: fmtAddr(m.value.old),
+                            size: fmtSize(m.value.size)
+                        }
+                    case 'WriteMemory':
+                        return {
+                            type: m.type,
+                            address: fmtAddr(m.value.address),
+                            old: fmtAddr(m.value.old),
+                            size: fmtSize(m.value.size)
+                        }
+                    case 'WriteMemoryBytes':
+                        return {
+                            type: m.type,
+                            address: fmtAddr(m.value.address),
+                            old: m.value.old
+                        }
+                    case 'PushCallStack':
+                    case 'PopCallStack':
+                        return {
+                            type: m.type,
+                            from: fmtAddr(m.value.from),
+                            to: fmtAddr(m.value.to)
+                        }
+                    case 'Other':
+                        return { type: m.type, value: m.value }
+                }
+            })
+        }))
+    }
+
     let allTools = $derived([
         createSetCodeTool(canUpdateLanguage),
         tool({
@@ -135,21 +198,22 @@
                     canExecute: emulatorInstance.canExecute,
                     canUndo: emulatorInstance.canUndo,
                     callStack: emulatorInstance.callStack.map((frame) => ({
-                        address: `decimal: ${String(frame.address)} hex: 0x${frame.address.toString(16)}`,
+                        address: fmtAddr(frame.address),
                         name: frame.name,
                         line: frame.line + 1,
                         color: frame.color,
-                        destinationAddress: `decimal: ${String(frame.address)} hex: 0x${frame.address.toString(16)}`,
-                        stackPointer: `decimal: ${String(frame.sp)} hex: 0x${frame.sp.toString(16)}`
+                        destinationAddress: fmtAddr(frame.address),
+                        stackPointer: fmtAddr(frame.sp)
                     })),
                     currentLineNumber: emulatorInstance.line + 1,
-                    stackPointer: `decimal: ${String(emulatorInstance.sp)} hex: 0x${emulatorInstance.sp.toString(16)}`,
-                    programCounter: `decimal: ${String(emulatorInstance.pc)} hex: 0x${emulatorInstance.pc.toString(16)}`,
+                    stackPointer: fmtAddr(emulatorInstance.sp),
+                    programCounter: fmtAddr(emulatorInstance.pc),
                     statusRegisters: emulatorInstance.statusRegisters,
                     registers: emulatorInstance.registers.map((r) => ({
                         name: r.name,
-                        value: `decimal: ${String(r.value)} hex: 0x${r.value.toString(16)}`
-                    }))
+                        value: fmtAddr(r.value)
+                    })),
+                    latestSteps: formatLatestSteps(emulatorInstance)
                 })
             }
         }),
@@ -175,6 +239,12 @@
                         error: 'Cannot execute. Code may not be compiled or program has terminated.'
                     }
                 }
+                if (emulatorInstance.terminated) {
+                    return { success: false, error: 'Program has already terminated.' }
+                }
+                if (emulatorInstance.interrupt !== undefined) {
+                    return { success: false, error: 'Emulator is paused on an interrupt.' }
+                }
                 let terminated = false
                 for (let i = 0; i < steps && !terminated; i++) {
                     terminated = await emulatorInstance.step()
@@ -183,14 +253,15 @@
                     success: true,
                     terminated,
                     currentLineNumber: emulatorInstance.line + 1,
-                    programCounter: `decimal: ${String(emulatorInstance.pc)} hex: 0x${emulatorInstance.pc.toString(16)}`,
-                    stackPointer: `decimal: ${String(emulatorInstance.sp)} hex: 0x${emulatorInstance.sp.toString(16)}`,
+                    programCounter: fmtAddr(emulatorInstance.pc),
+                    stackPointer: fmtAddr(emulatorInstance.sp),
                     registers: emulatorInstance.registers.map((r) => ({
                         name: r.name,
-                        value: `decimal: ${String(r.value)} hex: 0x${r.value.toString(16)}`
+                        value: fmtAddr(r.value)
                     })),
                     statusRegisters: emulatorInstance.statusRegisters,
-                    stdOut: emulatorInstance.stdOut
+                    stdOut: emulatorInstance.stdOut,
+                    latestSteps: formatLatestSteps(emulatorInstance)
                 })
             }
         }),
@@ -209,20 +280,72 @@
                         error: 'Cannot execute. Code may not be compiled or program has terminated.'
                     }
                 }
+                if (emulatorInstance.terminated) {
+                    return { success: false, error: 'Program has already terminated.' }
+                }
+                if (emulatorInstance.interrupt !== undefined) {
+                    return { success: false, error: 'Emulator is paused on an interrupt.' }
+                }
                 const status = await emulatorInstance.run(1000000)
                 return $state.snapshot({
                     success: true,
                     status,
                     terminated: emulatorInstance.terminated,
                     currentLineNumber: emulatorInstance.line + 1,
-                    programCounter: `decimal: ${String(emulatorInstance.pc)} hex: 0x${emulatorInstance.pc.toString(16)}`,
-                    stackPointer: `decimal: ${String(emulatorInstance.sp)} hex: 0x${emulatorInstance.sp.toString(16)}`,
+                    programCounter: fmtAddr(emulatorInstance.pc),
+                    stackPointer: fmtAddr(emulatorInstance.sp),
                     registers: emulatorInstance.registers.map((r) => ({
                         name: r.name,
-                        value: `decimal: ${String(r.value)} hex: 0x${r.value.toString(16)}`
+                        value: fmtAddr(r.value)
                     })),
                     statusRegisters: emulatorInstance.statusRegisters,
-                    stdOut: emulatorInstance.stdOut
+                    stdOut: emulatorInstance.stdOut,
+                    latestSteps: formatLatestSteps(emulatorInstance)
+                })
+            }
+        }),
+        tool({
+            name: 'undo',
+            description:
+                'Undoes the last execution step(s). Use this to step backwards through execution. Requires the program to have been compiled and stepped at least once.',
+            schema: z.object({
+                steps: z
+                    .number()
+                    .int()
+                    .min(1)
+                    .max(100)
+                    .optional()
+                    .describe('Number of steps to undo (default: 1)')
+            }),
+            execute: async ({ steps = 1 }) => {
+                if (!emulatorInstance) {
+                    return { success: false, error: 'Emulator not loaded yet' }
+                }
+                if (!emulatorInstance.canExecute) {
+                    return { success: false, error: 'Cannot undo. Code may not be compiled.' }
+                }
+                if (emulatorInstance.terminated) {
+                    return { success: false, error: 'Program has terminated. Recompile to restart.' }
+                }
+                if (emulatorInstance.interrupt !== undefined) {
+                    return { success: false, error: 'Emulator is paused on an interrupt.' }
+                }
+                if (!emulatorInstance.canUndo) {
+                    return { success: false, error: 'No execution history to undo.' }
+                }
+                emulatorInstance.undo(steps)
+                return $state.snapshot({
+                    success: true,
+                    currentLineNumber: emulatorInstance.line + 1,
+                    programCounter: fmtAddr(emulatorInstance.pc),
+                    stackPointer: fmtAddr(emulatorInstance.sp),
+                    registers: emulatorInstance.registers.map((r) => ({
+                        name: r.name,
+                        value: fmtAddr(r.value)
+                    })),
+                    statusRegisters: emulatorInstance.statusRegisters,
+                    canUndo: emulatorInstance.canUndo,
+                    latestSteps: formatLatestSteps(emulatorInstance)
                 })
             }
         }),
@@ -272,9 +395,9 @@
                     return { success: false, error: 'Emulator not loaded yet' }
                 }
                 const addr = BigInt(address.startsWith('0x') ? address : `0x${address}`)
-                const line = emulatorInstance.getLineFromAddress(addr)
-                const resolved = line != null && line >= 0 ? line + 1 : null
-                return $state.snapshot({ success: true, address: `0x${addr.toString(16)}`, line: resolved })
+                const lineIndex = emulatorInstance.getLineFromAddress(addr)
+                const line = lineIndex != null && lineIndex >= 0 ? fmtLine(lineIndex).line : null
+                return $state.snapshot({ success: true, address: `0x${addr.toString(16)}`, line })
             }
         }),
         tool({
@@ -285,7 +408,7 @@
                 if (!emulatorInstance) {
                     return { success: false, error: 'Emulator not loaded yet' }
                 }
-                await emulatorInstance.compile(20)
+                await emulatorInstance.compile(100)
                 const errors = [
                     ...emulatorInstance.compilerErrors.map((e) => e.formatted),
                     ...emulatorInstance.errors
@@ -333,18 +456,18 @@
 
     let avatarInstructions = $derived(`You are an assembly language assistant with access to an interactive code editor and emulator.
 
-## Tools
+# Tools
 
-### set_code tool
+## set_code tool
 Use this tool to create or update the code editor with assembly code. Call it whenever you want to show the user a code example, answer a coding question, or demonstrate a concept.${canUpdateLanguage ? '\n- Always set the correct language matching the code you are writing.' : ''}
 - Prefer updating the existing editor code rather than describing code in text when possible.
 - This returns any type errors.
 
-### get_code tool
+## get_code tool
 Returns the current code and language in the editor. Use this when you need to read or reference the source code (e.g. the user says "this code" or "fix this").
 The tool will return the full code currently in the editor, for each line, it will also return the line number (1-based) and if there is a breakpoint on that line (will have a B next to it).
 
-### get_emulator_state tool
+## get_emulator_state tool
 Returns the full emulator execution state. Use this to inspect registers, flags, call stack, breakpoints, errors, and execution status. Call this after stepping or running to see the result.
 
 Returned fields:
@@ -361,30 +484,34 @@ Returned fields:
 - programCounter: The current value of the program counter register.
 - statusRegisters: The current state of CPU status/flag registers
 - registers: List of all CPU registers with their name and decimal/hex value.
+- latestSteps: The last 10 execution steps, each containing the source line number and a list of mutations (register writes, memory writes, call stack pushes/pops) showing what that instruction changed.
 
-### compile tool
+## compile tool
 Compiles the current code in the editor. Returns any compilation errors. Use this after modifying code via set_code if you need to recompile, or to check for errors without running.
 
-### step tool
+## step tool
 Steps the emulator forward by a given number of instructions (default 1). Use this for single-stepping through code or executing a few instructions at a time. Returns the state after stepping, including whether the program terminated.
 
-### run_to_completion tool
+## run_to_completion tool
 Runs the program until it terminates or hits a breakpoint. You MUST compile the code first (use the compile tool). Use this when the user wants to execute the entire program. Returns the final state.
 
-### update_breakpoints tool
+## undo tool
+Undoes the last execution step(s), stepping backwards through execution. Only works when the program has been compiled, is not terminated, has no active interrupt, and has execution history to undo. Only the latest 100 steps are stored in history. 
+
+## update_breakpoints tool
 Adds and/or removes breakpoints on the given 1-based line numbers. Accepts two optional arrays: \`add\` (lines to add breakpoints on) and \`remove\` (lines to remove breakpoints from). Returns the updated breakpoint list.
 
-### get_line_from_address tool
-Maps a hex memory address to a source line number. Useful for understanding which instruction the program counter or a call stack address corresponds to.
+## get_line_from_address tool
+Maps a hex memory address to a source line. Useful for understanding which instruction the program counter or a call stack address corresponds to.
 
-### read_memory tool
+## read_memory tool
 Reads a region of memory starting at a hex address for a given number of bytes (max 1024). Returns the bytes as a hex string. Useful for inspecting data sections, the stack, or memory-mapped values.
 
 # Guidelines
 When starting new code, use those templates as a base for each language (except the initial example instruction):
 ${initialCodes}
 
-## Emulators information
+# Emulators information
 - The M68K emulator uses the Easy68K syntax, it stops running once it reaches the bottom of the code and does not support self-modifying code (modifying code while it's running) since it interprets the code separately from the runtime. To terminate a program you can add an END label at the end of the code and jump to it.
 - The M68K emulator implements the basic syscalls for input/output, search the trap instruction for more info. 
 - The MIPS emulator is the same emulator in the MARS MIPS emulator and uses the same syntax and system calls. 
