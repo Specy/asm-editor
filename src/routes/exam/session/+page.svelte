@@ -222,7 +222,11 @@
         examSubmission.submissionTimestamp = 0
         submissionUrl = ''
         exam.submission = undefined
-
+        try {
+            await navigator.clipboard.writeText('')
+        } catch {
+            // clipboard access may be denied
+        }
         toast.logPill('Exam unlocked')
     }
 
