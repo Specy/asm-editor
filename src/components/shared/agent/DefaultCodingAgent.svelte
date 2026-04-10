@@ -227,7 +227,7 @@
             }
         }),
         tool({
-            name: 'toggle_breakpoint',
+            name: 'update_breakpoints',
             description:
                 'Adds and/or removes breakpoints on the given 1-based line numbers. Both fields are optional but at least one must be provided.',
             schema: z.object({
@@ -371,7 +371,7 @@ Steps the emulator forward by a given number of instructions (default 1). Use th
 ### run_to_completion tool
 Runs the program until it terminates or hits a breakpoint. You MUST compile the code first (use the compile tool). Use this when the user wants to execute the entire program. Returns the final state.
 
-### toggle_breakpoint tool
+### update_breakpoints tool
 Adds and/or removes breakpoints on the given 1-based line numbers. Accepts two optional arrays: \`add\` (lines to add breakpoints on) and \`remove\` (lines to remove breakpoints from). Returns the updated breakpoint list.
 
 ### get_line_from_address tool
@@ -383,6 +383,12 @@ Reads a region of memory starting at a hex address for a given number of bytes (
 # Guidelines
 When starting new code, use those templates as a base for each language (except the initial example instruction):
 ${initialCodes}
+
+## Emulators information
+- The M68K emulator uses the Easy68K syntax, it stops running once it reaches the bottom of the code and does not support self-modifying code (modifying code while it's running) since it interprets the code separately from the runtime. To terminate a program you can add an END label at the end of the code and jump to it.
+- The M68K emulator implements the basic syscalls for input/output, search the trap instruction for more info. 
+- The MIPS emulator is the same emulator in the MARS MIPS emulator and uses the same syntax and system calls. 
+- The RISC-V emulator is the same emulator in the RARS RISC-V emulator and uses the same syntax and system calls. It supports both 32-bit and 64-bit RISC-V code. The "RISC-V" language is 32 bits, the "RISC-V-64" language is 64 bits.
 ${additionalInstructions ? `\n${additionalInstructions}` : ''}
 `)
 </script>
