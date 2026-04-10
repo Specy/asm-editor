@@ -97,13 +97,13 @@
         tool({
             name: 'get_code',
             description:
-                'Returns the current code and language in the editor. Each line is prefixed with its 0-based line number and a "B" marker if a breakpoint is set on that line.',
+                'Returns the current code and language in the editor. Each line is prefixed with its 1-based line number and a "B" marker if a breakpoint is set on that line.',
             schema: z.object({}),
             execute: async () => {
                 const breakpoints = new Set(emulatorInstance?.breakpoints ?? [])
                 const lines = editorCode.split('\n').map((text, i) => {
                     const bp = breakpoints.has(i) ? ' B' : ' '
-                    return `${String(i).padStart(4)}${bp} | ${text}`
+                    return `${String(i + 1).padStart(4)}${bp} | ${text}`
                 })
                 return {
                     language: editorLanguage,
@@ -131,18 +131,18 @@
                     terminated: emulatorInstance.terminated,
                     currentInterrupt: emulatorInstance.interrupt,
                     stdOut: emulatorInstance.stdOut,
-                    breakpoints: emulatorInstance.breakpoints,
+                    breakpoints: emulatorInstance.breakpoints.map((b: number) => b + 1),
                     canExecute: emulatorInstance.canExecute,
                     canUndo: emulatorInstance.canUndo,
                     callStack: emulatorInstance.callStack.map((frame) => ({
                         address: `decimal: ${String(frame.address)} hex: 0x${frame.address.toString(16)}`,
                         name: frame.name,
-                        line: frame.line,
+                        line: frame.line + 1,
                         color: frame.color,
                         destinationAddress: `decimal: ${String(frame.address)} hex: 0x${frame.address.toString(16)}`,
                         stackPointer: `decimal: ${String(frame.sp)} hex: 0x${frame.sp.toString(16)}`
                     })),
-                    currentLineNumber: emulatorInstance.line,
+                    currentLineNumber: emulatorInstance.line + 1,
                     stackPointer: `decimal: ${String(emulatorInstance.sp)} hex: 0x${emulatorInstance.sp.toString(16)}`,
                     programCounter: `decimal: ${String(emulatorInstance.pc)} hex: 0x${emulatorInstance.pc.toString(16)}`,
                     statusRegisters: emulatorInstance.statusRegisters,
@@ -182,7 +182,7 @@
                 return $state.snapshot({
                     success: true,
                     terminated,
-                    currentLineNumber: emulatorInstance.line,
+                    currentLineNumber: emulatorInstance.line + 1,
                     programCounter: `decimal: ${String(emulatorInstance.pc)} hex: 0x${emulatorInstance.pc.toString(16)}`,
                     stackPointer: `decimal: ${String(emulatorInstance.sp)} hex: 0x${emulatorInstance.sp.toString(16)}`,
                     registers: emulatorInstance.registers.map((r) => ({
@@ -214,7 +214,7 @@
                     success: true,
                     status,
                     terminated: emulatorInstance.terminated,
-                    currentLineNumber: emulatorInstance.line,
+                    currentLineNumber: emulatorInstance.line + 1,
                     programCounter: `decimal: ${String(emulatorInstance.pc)} hex: 0x${emulatorInstance.pc.toString(16)}`,
                     stackPointer: `decimal: ${String(emulatorInstance.sp)} hex: 0x${emulatorInstance.sp.toString(16)}`,
                     registers: emulatorInstance.registers.map((r) => ({
@@ -229,16 +229,16 @@
         tool({
             name: 'toggle_breakpoint',
             description:
-                'Adds and/or removes breakpoints on the given 0-based line indices. Both fields are optional but at least one must be provided.',
+                'Adds and/or removes breakpoints on the given 1-based line numbers. Both fields are optional but at least one must be provided.',
             schema: z.object({
                 add: z
-                    .array(z.number().int().min(0))
+                    .array(z.number().int().min(1))
                     .optional()
-                    .describe('0-based line indices to add breakpoints on'),
+                    .describe('1-based line numbers to add breakpoints on'),
                 remove: z
-                    .array(z.number().int().min(0))
+                    .array(z.number().int().min(1))
                     .optional()
-                    .describe('0-based line indices to remove breakpoints from')
+                    .describe('1-based line numbers to remove breakpoints from')
             }),
             execute: async ({ add = [], remove = [] }) => {
                 if (!emulatorInstance) {
@@ -246,16 +246,18 @@
                 }
                 const current = new Set(emulatorInstance.breakpoints)
                 for (const line of add) {
-                    if (!current.has(line)) {
-                        emulatorInstance.toggleBreakpoint(line)
+                    const idx = line - 1
+                    if (!current.has(idx)) {
+                        emulatorInstance.toggleBreakpoint(idx)
                     }
                 }
                 for (const line of remove) {
-                    if (current.has(line)) {
-                        emulatorInstance.toggleBreakpoint(line)
+                    const idx = line - 1
+                    if (current.has(idx)) {
+                        emulatorInstance.toggleBreakpoint(idx)
                     }
                 }
-                return $state.snapshot({ success: true, breakpoints: emulatorInstance.breakpoints })
+                return $state.snapshot({ success: true, breakpoints: emulatorInstance.breakpoints.map((b: number) => b + 1) })
             }
         }),
         tool({
@@ -271,7 +273,8 @@
                 }
                 const addr = BigInt(address.startsWith('0x') ? address : `0x${address}`)
                 const line = emulatorInstance.getLineFromAddress(addr)
-                return $state.snapshot({ success: true, address: `0x${addr.toString(16)}`, line })
+                const resolved = line != null && line >= 0 ? line + 1 : null
+                return $state.snapshot({ success: true, address: `0x${addr.toString(16)}`, line: resolved })
             }
         }),
         tool({
@@ -339,7 +342,7 @@ Use this tool to create or update the code editor with assembly code. Call it wh
 
 ### get_code tool
 Returns the current code and language in the editor. Use this when you need to read or reference the source code (e.g. the user says "this code" or "fix this").
-The tool will return the full code currently in the editor, for each line, it will also return the line number (0-based) and if there is a breakpoint on that line (will have a B next to it).
+The tool will return the full code currently in the editor, for each line, it will also return the line number (1-based) and if there is a breakpoint on that line (will have a B next to it).
 
 ### get_emulator_state tool
 Returns the full emulator execution state. Use this to inspect registers, flags, call stack, breakpoints, errors, and execution status. Call this after stepping or running to see the result.
@@ -369,7 +372,7 @@ Steps the emulator forward by a given number of instructions (default 1). Use th
 Runs the program until it terminates or hits a breakpoint. You MUST compile the code first (use the compile tool). Use this when the user wants to execute the entire program. Returns the final state.
 
 ### toggle_breakpoint tool
-Adds and/or removes breakpoints on the given 0-based line indices. Accepts two optional arrays: \`add\` (lines to add breakpoints on) and \`remove\` (lines to remove breakpoints from). Returns the updated breakpoint list.
+Adds and/or removes breakpoints on the given 1-based line numbers. Accepts two optional arrays: \`add\` (lines to add breakpoints on) and \`remove\` (lines to remove breakpoints from). Returns the updated breakpoint list.
 
 ### get_line_from_address tool
 Maps a hex memory address to a source line number. Useful for understanding which instruction the program counter or a call stack address corresponds to.
