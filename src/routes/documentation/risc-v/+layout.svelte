@@ -70,11 +70,7 @@
 
 <Sidebar bind:menuOpen>
     <Column gap="1rem" padding="0 1rem">
-        <MenuLink
-            href="/documentation/risc-v"
-            title="RISC-V"
-            onClick={() => (menuOpen = false)}
-        />
+        <MenuLink href="/documentation/risc-v" title="RISC-V" onClick={() => (menuOpen = false)} />
         <MenuLink
             href="/documentation/risc-v/directive"
             title="Directives"
@@ -92,9 +88,7 @@
         style="padding: 0 0.5rem;"
     >
         {#snippet title()}
-            <h2 style="font-size: 1rem; font-weight: normal; margin-left: -0.1rem">
-                Instructions
-            </h2>
+            <h2 style="font-size: 1rem; font-weight: normal; margin-left: -0.1rem">Instructions</h2>
         {/snippet}
         <input bind:value={search} placeholder="Search" class="instruction-search" />
         <InstructionsMenu
@@ -165,6 +159,9 @@
         }
     }
 
+    .hidden-very-small {
+        display: flex;
+    }
     @media (max-width: 370px) {
         .hidden-very-small {
             display: none;

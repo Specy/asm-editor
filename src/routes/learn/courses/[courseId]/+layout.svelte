@@ -195,16 +195,19 @@
         }
     }
 
-    @media (max-width: 370px) {
-        .hidden-very-small {
-            display: none;
-        }
-    }
-
     .instruction-search {
         background-color: var(--tertiary);
         color: var(--tertiary-text);
         padding: 0.6rem;
         border-radius: 0.4rem;
+    }
+
+    .hidden-very-small {
+        display: flex;
+    }
+    @media (max-width: 370px) {
+        .hidden-very-small {
+            display: none;
+        }
     }
 </style>

@@ -80,6 +80,9 @@
         }
     }
 
+    .hidden-very-small {
+        display: flex;
+    }
     @media (max-width: 370px) {
         .hidden-very-small {
             display: none;
