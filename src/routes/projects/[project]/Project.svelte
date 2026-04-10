@@ -55,6 +55,7 @@
         emulator: Emulator
         embedded?: boolean
         children?: Snippet
+        readonly?: boolean
     }
 
     let {
@@ -64,7 +65,8 @@
         testcases = $bindable([] as Testcase[]),
         emulator = $bindable(),
         embedded = false,
-        children
+        children,
+        readonly = false
     }: Props = $props()
 
     $effect(() => {
@@ -429,7 +431,7 @@
                     errors={emulator.compilerErrors}
                     {language}
                     highlightedLine={emulator.line}
-                    disabled={(emulator.canExecute && !emulator.terminated) ||
+                    disabled={readonly || (emulator.canExecute && !emulator.terminated) ||
                         !!emulator.compiledCode}
                     hasError={emulator.errors.length > 0}
                 />
@@ -442,9 +444,9 @@
             hasErrorsInTests={testcasesResult.some((r) => !r.passed)}
             hasNoErrorsInTests={testcasesResult.every((r) => r.passed) &&
                 testcasesResult.length > 0}
-            canEditTests={true}
-            executionDisabled={emulator.terminated || emulator.interrupt !== undefined}
-            buildDisabled={emulator.compilerErrors.length > 0}
+            canEditTests={!readonly}
+            executionDisabled={readonly || emulator.terminated || emulator.interrupt !== undefined}
+            buildDisabled={readonly || emulator.compilerErrors.length > 0}
             hasCompiled={emulator.canExecute || !!emulator.compiledCode}
             canUndo={emulator.canUndo}
             on:edit-tests={() => {

@@ -71,10 +71,10 @@
     const hasInstructions = $derived(!!exam?.instructions.trim() && !isReviewMode)
     const isOnInstructions = $derived(hasInstructions && activeSectionId === '')
     const canGoToPreviousSection = $derived(
-        activeSectionIndex > 0 || (activeSectionIndex === 0 && hasInstructions)
+        (activeSectionIndex > 0 || (activeSectionIndex === 0 && hasInstructions)) && !examDisabled
     )
     const canGoToNextSection = $derived(
-        activeSectionIndex < 0 ? sections.length > 0 : activeSectionIndex + 1 < sections.length
+        (activeSectionIndex < 0 ? sections.length > 0 : activeSectionIndex + 1 < sections.length) && !examDisabled
     )
     const isOnLastSection = $derived(
         activeSectionIndex >= 0 && activeSectionIndex === sections.length - 1
@@ -599,6 +599,7 @@
                             >
                                 {#snippet children(emulator)}
                                     <ProjectEditor
+                                        readonly={examDisabled}
                                         {emulator}
                                         name={assemblySection.title || 'Assembly section'}
                                         language={assemblySection.language}
@@ -627,7 +628,7 @@
                                     <textarea
                                         placeholder={openSection.placeholder}
                                         bind:value={openAnswers[openSection.id]}
-                                        readonly={isReviewMode}
+                                        readonly={isReviewMode || examDisabled}
                                     ></textarea>
                                 {:else if activeSection.type === ExamSectionType.MultipleChoice}
                                     {@const mcSection = activeSection as MultipleChoiceSection}
@@ -640,6 +641,7 @@
                                         {#each mcSection.options as option}
                                             <label class="option-row">
                                                 <input
+                                                    disabled={examDisabled}
                                                     type={mcSection.allowMultiple
                                                         ? 'checkbox'
                                                         : 'radio'}
@@ -647,7 +649,7 @@
                                                     checked={(
                                                         multipleChoiceAnswers[mcSection.id] ?? []
                                                     ).includes(option.id)}
-                                                    style={isReviewMode
+                                                    style={isReviewMode || examDisabled
                                                         ? 'pointer-events:none;'
                                                         : ''}
                                                     onchange={(e) => {
@@ -666,7 +668,7 @@
                                     {@const cSection = activeSection as CCodingSection}
                                     <Header type="h2">Your answer</Header>
                                     <div class="c-editor-wrap">
-                                        <Editor language="c" bind:code={cAnswers[cSection.id]} />
+                                        <Editor language="c" bind:code={cAnswers[cSection.id]} disabled={examDisabled} />
                                     </div>
                                 {/if}
                             </div>
