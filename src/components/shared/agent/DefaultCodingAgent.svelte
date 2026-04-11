@@ -205,7 +205,7 @@
                         destinationAddress: fmtAddr(frame.address),
                         stackPointer: fmtAddr(frame.sp)
                     })),
-                    currentLineNumber: emulatorInstance.line + 1,
+                    currentLine: fmtLine(emulatorInstance.line).line,
                     stackPointer: fmtAddr(emulatorInstance.sp),
                     programCounter: fmtAddr(emulatorInstance.pc),
                     statusRegisters: emulatorInstance.statusRegisters,
@@ -252,7 +252,7 @@
                 return $state.snapshot({
                     success: true,
                     terminated,
-                    currentLineNumber: emulatorInstance.line + 1,
+                    currentLine: fmtLine(emulatorInstance.line).line,
                     programCounter: fmtAddr(emulatorInstance.pc),
                     stackPointer: fmtAddr(emulatorInstance.sp),
                     registers: emulatorInstance.registers.map((r) => ({
@@ -291,7 +291,7 @@
                     success: true,
                     status,
                     terminated: emulatorInstance.terminated,
-                    currentLineNumber: emulatorInstance.line + 1,
+                    currentLine: fmtLine(emulatorInstance.line).line,
                     programCounter: fmtAddr(emulatorInstance.pc),
                     stackPointer: fmtAddr(emulatorInstance.sp),
                     registers: emulatorInstance.registers.map((r) => ({
@@ -336,7 +336,7 @@
                 emulatorInstance.undo(steps)
                 return $state.snapshot({
                     success: true,
-                    currentLineNumber: emulatorInstance.line + 1,
+                    currentLine: fmtLine(emulatorInstance.line).line,
                     programCounter: fmtAddr(emulatorInstance.pc),
                     stackPointer: fmtAddr(emulatorInstance.sp),
                     registers: emulatorInstance.registers.map((r) => ({
@@ -479,7 +479,7 @@ Returned fields:
 - canExecute: Whether the program can be executed/stepped.
 - canUndo: Whether the last execution step can be undone (stepped back).
 - callStack: Array of stack frames showing the current call hierarchy, each with address, name, line, destinationAddress, and stackPointer.
-- currentLineNumber: The line number the program counter is currently pointing to during execution.
+- currentLine: The formatted source line (line number and text) the program counter is currently pointing to during execution.
 - stackPointer: The current value of the stack pointer register.
 - programCounter: The current value of the program counter register.
 - statusRegisters: The current state of CPU status/flag registers
