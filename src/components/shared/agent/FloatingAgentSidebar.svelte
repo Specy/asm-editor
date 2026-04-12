@@ -66,7 +66,7 @@
             {canUpdateLanguage}
             {additionalInstructions}
             {tools}
-            style="border-radius: 0; border: none; box-shadow: none;"
+            style="border-radius: 0; border: none; box-shadow: none; opacity: 0.82;"
         />
     </div>
 {/if}
@@ -77,7 +77,8 @@
         right: 0;
         top: 0;
         width: min(var(--open-size), 100vw);
-        background-color: var(--primary);
+        background-color: color-mix(in srgb, var(--tertiary) 20%, transparent);
+        backdrop-filter: blur(0.7rem);
         height: 100dvh;
         z-index: 100;
         border: solid 0.1rem var(--tertiary);

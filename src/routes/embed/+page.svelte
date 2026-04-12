@@ -189,6 +189,7 @@
                         showRegisters={settings.showRegisters}
                         showFlags={settings.showFlags}
                         language={settings.language}
+                        forceMemoryRight={true}
                     >
                         {#snippet controls()}
                             {#if settings.openButton}
