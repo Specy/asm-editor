@@ -38,6 +38,8 @@
     import FaArrowLeft from 'svelte-icons/fa/FaArrowLeft.svelte'
     import FaArrowRight from 'svelte-icons/fa/FaArrowRight.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
+    import FloatingLanguageDocumentation from '$cmp/specific/project/FloatingLanguageDocumentation.svelte'
+    import FaBook from 'svelte-icons/fa/FaBook.svelte'
 
     let exam = $state<ExamPayload | null>(null)
     let sections = $state([] as ExamSection[])
@@ -48,6 +50,7 @@
     let examDisabled = $state(false)
     let unlockPasswordInput = $state('')
     let submissionUrl = $state('')
+    let documentationVisible = $state(false)
 
     let openAnswers = $state<Record<string, string>>({})
     let multipleChoiceAnswers = $state<Record<string, string[]>>({})
@@ -74,7 +77,8 @@
         (activeSectionIndex > 0 || (activeSectionIndex === 0 && hasInstructions)) && !examDisabled
     )
     const canGoToNextSection = $derived(
-        (activeSectionIndex < 0 ? sections.length > 0 : activeSectionIndex + 1 < sections.length) && !examDisabled
+        (activeSectionIndex < 0 ? sections.length > 0 : activeSectionIndex + 1 < sections.length) &&
+            !examDisabled
     )
     const isOnLastSection = $derived(
         activeSectionIndex >= 0 && activeSectionIndex === sections.length - 1
@@ -540,6 +544,24 @@
                     </div>
 
                     <div class="header-controls">
+                        {#if activeSection?.type === ExamSectionType.AssemblyCoding}
+                            {@const assemblySection = activeSection as AssemblyCodingSection}
+                            <Button
+                                cssVar="accent2"
+                                hasIcon
+                                onClick={() => (documentationVisible = !documentationVisible)}
+                                title="Documentation"
+                                style="padding:0.4rem; width:2.4rem; height:2.4rem; margin-right: 2rem;"
+                            >
+                                <Icon>
+                                    <FaBook />
+                                </Icon>
+                            </Button>
+                            <FloatingLanguageDocumentation
+                                bind:visible={documentationVisible}
+                                language={assemblySection.language}
+                            />
+                        {/if}
                         <Button
                             cssVar="secondary"
                             hasIcon
@@ -565,7 +587,6 @@
                                 <FaArrowRight />
                             </Icon>
                         </Button>
-
                         {#if !isReviewMode}
                             <Button
                                 cssVar="accent"
@@ -583,7 +604,7 @@
             {#if isOnInstructions && hasInstructions}
                 <Card padding="1rem" background="secondary" style="margin:0.5rem; flex:1;">
                     <Header type="h2">Instructions</Header>
-                        <MarkdownRenderer source={exam.instructions} />
+                    <MarkdownRenderer source={exam.instructions} />
                     <Row style="justify-content:flex-end; margin-top: auto">
                         <Button onClick={goToNextSection}>Start first section</Button>
                     </Row>
@@ -668,7 +689,11 @@
                                     {@const cSection = activeSection as CCodingSection}
                                     <Header type="h2">Your answer</Header>
                                     <div class="c-editor-wrap">
-                                        <Editor language="c" bind:code={cAnswers[cSection.id]} disabled={examDisabled} />
+                                        <Editor
+                                            language="c"
+                                            bind:code={cAnswers[cSection.id]}
+                                            disabled={examDisabled}
+                                        />
                                     </div>
                                 {/if}
                             </div>
