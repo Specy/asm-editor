@@ -328,8 +328,10 @@
         emulatorInstance={emulator}
         canUpdateLanguage={false}
         additionalInstructions={`
-            The user is editing a project in the ${language} assembly language.
+            The user is currently working on a project in the ${language} assembly language.
             They are using the project editor which includes a code editor, registers view, memory view, and execution controls.
+            They might be working on the project so NEVER completely override the code unless they explicitly ask you to.
+            Always read the current code before making edits to prevent accidentally deleting work.
         `}
     />
 {/if}

@@ -113,13 +113,23 @@
             })
         )
     })
+    
+    function setEditorValue(value: string) {
+        const model = editor.getModel()
+        const fullRange = model.getFullModelRange()
+        editor.executeEdits('external', [{
+            range: fullRange,
+            text: value
+        }])
+    }
+
     $effect(() => {
         if (editor && code !== editor.getValue()) {
             console.log('overridden editor code')
-            editor.setValue(code)
+            setEditorValue(code)
         }
         if (codeOverride) {
-            editor.setValue(codeOverride)
+            setEditorValue(codeOverride)
         }
     })
     onDestroy(() => {
