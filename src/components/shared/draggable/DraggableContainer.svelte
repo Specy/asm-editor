@@ -23,11 +23,32 @@
         top = 13,
         children
     }: Props = $props()
+
+    let dragStartX = 0
+    let dragStartY = 0
+
+    function onHeaderPointerDown(e: PointerEvent) {
+        dragStartX = e.clientX
+        dragStartY = e.clientY
+    }
+
+    function onHeaderClick(e: MouseEvent) {
+        const dx = e.clientX - dragStartX
+        const dy = e.clientY - dragStartY
+        if (dx * dx + dy * dy < 25) {
+            hidden = !hidden
+        }
+    }
 </script>
 
 <Draggable {hiddenOnMobile} {left} {top}>
     {#snippet header()}
-        <button class="tab-header row" class:hidden ondblclick={() => (hidden = !hidden)}>
+        <button 
+            class="tab-header row" 
+            class:hidden 
+            onpointerdown={onHeaderPointerDown}
+            onclick={onHeaderClick}
+        >
             <Icon
                 style="cursor:inherit; padding: 0.2rem 0.4rem; height: 1.4rem; width: 1.6rem; min-width: 1.6rem"
             >
@@ -37,7 +58,7 @@
             <Button
                 style="padding: 0.2rem 0.3rem; height: 1.4rem; border-radius: 0.3rem"
                 cssVar="secondary"
-                onClick={() => (hidden = !hidden)}
+                onClick={(e) => { e.stopPropagation(); hidden = !hidden }}
             >
                 <Icon size={1.1}>
                     {#if !hidden}

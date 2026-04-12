@@ -55,9 +55,8 @@
             <img src="/images/ASM-editor.webp" alt="ASM editor" class="preview-image" />
             <div class="presentation">
                 <div class="welcome-title" class:textShadow={textShadowPrimary}>
-                    The all in one web IDE for Assembly <span style="font-size: 1.5rem;"
-                        >M68K, MIPS, RISC-V, X86</span
-                    >
+                    The best web IDE for Assembly <span style="font-size: 1.5rem;"
+                        >M68K, MIPS, RISC-V, X86</span>
                 </div>
                 <Row gap="0.6rem" wrap>
                     <ButtonLink
@@ -311,7 +310,7 @@
     }
 
     .sections-wrapper {
-        padding: 4rem 0;
+        padding: 3rem 0;
         padding-bottom: 0;
         font-family: FiraCode, monospace;
         background-color: var(--primary);
