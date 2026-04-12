@@ -122,6 +122,7 @@
             border-radius: 0.5rem;
             overflow: hidden;
             margin: 0.5rem 1rem;
+            mask-image: unset;
         }
         .section-text {
             padding: 1.4rem;
