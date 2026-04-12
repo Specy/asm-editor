@@ -45,7 +45,7 @@ int i = 0;
 while(i < 10) {
     i++;
 }
-i = i + 20;
+//other code
 ```
 
 We then flatten it out:
@@ -56,7 +56,7 @@ while_start:
     i++;
     goto while_start;
 while_end:
-    i = i + 20;
+    //other code
 ```
 
 Now let's convert it to M68K assembly:
@@ -68,7 +68,7 @@ while_start:
     addq.l #1, d0   ; i++
     bra while_start ; jump back to while_start
 while_end:
-    add.l #20, d0   ; i = i + 20
+    ; other code
 ```
 And let's also try to convert it to RISC-V assembly:
 ```riscv|playground|allow-open
@@ -79,7 +79,7 @@ while_start:
     addi t0, t0, 1   # i++
     j while_start    # jump back to while_start
 while_end:
-    addi t0, t0, 20  # i = i + 20
+    # other code
 ```
 
 
