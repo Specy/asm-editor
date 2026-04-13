@@ -55,8 +55,8 @@ function extractMnemonics(code: string): string[] {
         const upperLine = line.toUpperCase()
         if (/^(ORG|EQU|DCB|DS|DC|SECTION|GLOBAL|EXTERN)\b/.test(upperLine)) continue
 
-        // Extract the first word as the mnemonic
-        const match = line.match(/^([a-zA-Z_]\w*(\.\w)?)/)
+        // Extract the first word as the mnemonic (including optional size suffix like .b, .w, .l)
+        const match = line.match(/^([a-zA-Z_]\w*(\.\w+)?)/)
         if (match) {
             mnemonics.push(match[1].toLowerCase())
         }
