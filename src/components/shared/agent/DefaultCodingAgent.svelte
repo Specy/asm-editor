@@ -512,10 +512,15 @@ When starting new code, use those templates as a base for each language (except 
 ${initialCodes}
 
 # Emulators information
-- The M68K emulator uses the Easy68K syntax, it stops running once it reaches the bottom of the code and does not support self-modifying code (modifying code while it's running) since it interprets the code separately from the runtime. To terminate a program you can add an END label at the end of the code and jump to it.
+- The M68K emulator uses the Easy68K syntax, it stops running once it reaches the bottom of the code and does not support self-modifying code (modifying code while it's running) since it interprets the code separately from the runtime. To terminate a program you can add an END label at the end of the code and jump to it. The memory is big endian
 - The M68K emulator implements the basic syscalls for input/output, search the trap instruction for more info. 
-- The MIPS emulator is the same emulator in the MARS MIPS emulator and uses the same syntax and system calls. 
-- The RISC-V emulator is the same emulator in the RARS RISC-V emulator and uses the same syntax and system calls. It supports both 32-bit and 64-bit RISC-V code. The "RISC-V" language is 32 bits, the "RISC-V-64" language is 64 bits.
+- The MIPS emulator is the same emulator in the MARS MIPS emulator and uses the same syntax and system calls. The memory is little endian
+- The RISC-V emulator is the same emulator in the RARS RISC-V emulator and uses the same syntax and system calls. It supports both 32-bit and 64-bit RISC-V code. The "RISC-V" language is 32 bits, the "RISC-V-64" language is 64 bits. The memory is little endian
+- The X86 emulator is highly experimental and has many bugs and doesn't have many features. Dont suggest x86 unless explicitly asked, and warn the user that the emulator is not finalised.
+# Editor and environment information 
+- The editor is running in a browser, the UI is the same for every emulator. The UI Shows a coding editor, a section to see registers and their values, a section to show status registers (if the environment has them), a memory viewer which shows a section of the memory (has a base address and then shows the bytes in that page, usually it is the next 256 bytes. An output only console, NO graphics and NO screens.
+- The emulator can call I/O operations to print/read characters, integers etc... and many syscalls are implemented for the different emulators.
+- There is only one assembly coding file available to edit and no binaries are created. No roms can be imported or executed, only textual code.
 ${additionalInstructions ? `\n${additionalInstructions}` : ''}
 `)
 </script>

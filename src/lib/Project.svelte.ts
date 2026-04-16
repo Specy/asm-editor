@@ -1,5 +1,6 @@
 import { BASE_CODE, COMMENT_CHARACTER } from './Config'
 import { serializer } from '$lib/json'
+import { detectAssemblyLanguage } from './languages/languageDetector'
 
 export type AvailableLanguages = 'M68K' | 'MIPS' | 'X86' | 'RISC-V' | 'RISC-V-64' //| 'Z80'
 
@@ -117,6 +118,23 @@ const metaVersion = 1
 export function makeProjectFromExternal(codeAndMeta: string) {
     const lines = codeAndMeta.split('\n')
     const threshold = lines.findIndex((line) => line.includes(CODE_SEPARATOR))
+    if (threshold === -1) {
+        // No metadata separator found — this is a raw assembly file.
+        // Detect the language from the code and create a new project.
+        const code = codeAndMeta.trimEnd()
+        const language = detectAssemblyLanguage(code)
+        const project = makeProject({
+            language,
+            name: '',
+            description: '',
+            createdAt: new Date().getTime(),
+            updatedAt: new Date().getTime(),
+            testcases: [],
+            id: ''
+        })
+        project.code = code
+        return project
+    }
     const code = lines.slice(0, threshold).join('\n').trimEnd()
     const metaLines = lines.slice(threshold + 1)
     const commentCharacters = Object.values(COMMENT_CHARACTER)
