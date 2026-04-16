@@ -34,6 +34,8 @@
         })
     })
     let shadow = $derived(textShadowPrimary && 'box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);')
+
+    let shouldGoToCurrentProjects = $derived(ProjectStore.projects.length > 0 || !ProjectStore.inited)
 </script>
 
 <svelte:head>
@@ -80,11 +82,11 @@
                         </Icon>
                     </ButtonLink>
                     <ButtonLink
-                        href={ProjectStore.projects.length > 0 ? '/projects' : '/projects/create'}
+                        href={shouldGoToCurrentProjects ? '/projects' : '/projects/create'}
                         style={`${shadow} gap: 0.5rem; min-width: 12.5rem`}
                         title="Open the editor"
                     >
-                        {#if ProjectStore.projects.length > 0}
+                        {#if shouldGoToCurrentProjects}
                             Go to your projects
                         {:else}
                             Create first project
