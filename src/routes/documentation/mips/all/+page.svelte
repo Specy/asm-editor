@@ -90,7 +90,7 @@
     </section>
 
 <section id="registers">
-	<Header type="h3">{register.name} ({register.number})</Header>
+	<Header type="h3">Registers</Header>
         <p>
             MIPS has 32 GPR registers each of 32 bits
         </p>
