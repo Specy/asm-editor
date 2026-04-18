@@ -4,6 +4,7 @@
     import MIPSDirectiveDocumentation from '$cmp/documentation/mips/MIPSDirectiveDocumentation.svelte'
     import MIPSSyscallExplanation from '$cmp/documentation/mips/MIPSSyscallExplanation.svelte'
     import MIPSRegistersDocumentation from '$cmp/documentation/mips/MIPSRegistersDocumentation.svelte'
+    import Header from '$cmp/shared/layout/Header.svelte'	
 	
     import {
         mipsInstructionNames,
@@ -89,7 +90,7 @@
     </section>
 
 <section id="registers">
-        <h3>Registers</h3>
+	<Header type="h3">{register.name} ({register.number})</Header>
         <p>
             MIPS has 32 GPR registers each of 32 bits
         </p>
