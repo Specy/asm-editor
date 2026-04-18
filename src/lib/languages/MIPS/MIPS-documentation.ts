@@ -815,9 +815,64 @@ export interface Syscall {
 }
 
 export const mipsRegisters = {
-	zero: {
-		name : '$zero',
-		number: '$0',
-		description : 'It can store only the 0 value',
-	}
+    zero: {
+        name: '$zero',
+        number: '$0',
+        description: 'Always contains the value **0**. Any write attempt to this register is silently ignored.'
+    },
+    at: {
+        name: '$at',
+        number: '$1',
+        description: '**Assembly temporary**, reserved for **assembler** internal use. It is used by macro instructions like `li` or `la` to break them into multiple real instructions. You can take control of it using the `.set noat` directive, but after that, macro instructions that rely on it will stop working.'
+    },
+    v: {
+        name: '$v0 - $v1',
+        number: '$2 - $3',
+        description: 'Used to return non-floating point values from a subroutine. If the return value fits in 32 bits, only `$v0` is used; for 64-bit values, the high word goes in `$v1`. `$v0` also holds the system call number before a `syscall` instruction.'
+    },
+    a: {
+        name: '$a0 - $a3',
+        number: '$4 - $7',
+        description: '**Arguments**, used to pass the first four non-floating point arguments to a subroutine. Additional arguments are passed on the stack.'
+    },
+    t: {
+        name: '$t0 - $t7',
+        number: '$8 - $15',
+        description: '**Temporary registers**, their values are not preserved across subroutine calls. The caller is responsible for saving them if needed.'
+    },
+    s: {
+        name: '$s0 - $s7',
+        number: '$16 - $23',
+        description: '**Saved registers**, subroutines must preserve their values across calls, either by not using them or by saving and restoring them on the stack.'
+    },
+    t2: {
+        name: '$t8 - $t9',
+        number: '$24 - $25',
+        description: 'Additional **temporary registers**, same conventions as `$t0-$t7`. Note that `$t9` has a special role in PIC code: by convention it holds the address of the called function, allowing the callee to compute `$gp`.'
+    },
+    k: {
+        name: '$k0 - $k1',
+        number: '$26 - $27',
+        description: 'Reserved for **OS/interrupt handler** use. They can be overwritten at any time by an interrupt or trap handler, so user code should never rely on their values.'
+    },
+    gp: {
+        name: '$gp',
+        number: '$28',
+        description: '**Global pointer**, used for two distinct purposes. In **PIC code** (Linux shared libraries), it points to the GOT (Global Offset Table), a table of pointers that the dynamic loader fills at runtime with the real addresses of external symbols. In **non-PIC code** (embedded systems), it points to the center of a compact region of small global/static variables, allowing them to be accessed with a single instruction using a signed 16-bit offset (covering ±32KB, 64KB total).'
+    },
+    sp: {
+        name: '$sp',
+        number: '$29',
+        description: '**Stack pointer**, points to the top of the stack. It is explicitly adjusted by the callee on subroutine entry and exit.'
+    },
+    fp: {
+        name: '$fp',
+        number: '$30',
+        description: '**Frame pointer**, also known as `$s8`. Used by a subroutine to track the stack frame when the stack pointer cannot be used directly, for example when the stack size is not known at compile time (e.g. when using `alloca()`).'
+    },
+    ra: {
+        name: '$ra',
+        number: '$31',
+        description: '**Return address**, automatically written by `jal` with the address of the instruction following the call. The subroutine returns by executing `jr $ra`. Functions that themselves call other subroutines must save `$ra` on the stack first, since `jal` would otherwise overwrite it.'
+    }
 }
