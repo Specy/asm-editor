@@ -813,3 +813,11 @@ export interface Syscall {
     arguments: SyscallArgument[]
     result: SyscallResult
 }
+
+export const mipsRegisters = {
+	zero: {
+		name : '$zero',
+		number: '$0',
+		description : 'It can store only the 0 value',
+	}
+}

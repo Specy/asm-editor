@@ -81,6 +81,13 @@
             title="Syscalls"
             onClick={() => (menuOpen = false)}
         />
+
+	<MenuLink
+    href="/documentation/mips/registers"
+    title="Registers"
+    onClick={() => (menuOpen = false)}
+/>
+
     </Column>
     <TogglableSection
         open={true}
