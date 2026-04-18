@@ -3,6 +3,9 @@
     import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
     import MIPSDirectiveDocumentation from '$cmp/documentation/mips/MIPSDirectiveDocumentation.svelte'
     import MIPSSyscallExplanation from '$cmp/documentation/mips/MIPSSyscallExplanation.svelte'
+    import MIPSRegistersDocumentation from '$cmp/documentation/mips/MIPSRegistersDocumentation.svelte'
+    import Header from '$cmp/shared/layout/Header.svelte'	
+	
     import {
         mipsInstructionNames,
         mipsInstructionMap,
@@ -32,6 +35,7 @@
         <a href="#instructions">Instructions</a>
         <a href="#directives">Directives</a>
         <a href="#syscalls">Syscalls</a>
+	<a href="#registers">Registers</a>
     </nav>
 
     <section id="instructions">
@@ -84,6 +88,16 @@
         <h2>Syscalls</h2>
         <MIPSSyscallExplanation />
     </section>
+
+<section id="registers">
+	<Header type="h3">Registers</Header>
+        <p>
+            MIPS has 32 GPR registers each of 32 bits
+        </p>
+        <MIPSRegistersDocumentation />
+    </section>
+
+
 </Page>
 
 <style lang="scss">
