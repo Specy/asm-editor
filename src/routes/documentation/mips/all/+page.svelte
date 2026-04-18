@@ -89,7 +89,7 @@
     </section>
 
 <section id="registers">
-        <h2>Registers</h2>
+        <h3>Registers</h3>
         <p>
             MIPS has 32 GPR registers each of 32 bits
         </p>
