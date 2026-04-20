@@ -188,9 +188,12 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
     function compile(historySize: number, codeOverride?: string): Promise<void> {
         return new Promise((res, rej) => {
             try {
+                const normalizedHistorySize = Number.isFinite(historySize)
+                    ? Math.max(0, Math.floor(historySize))
+                    : 0
                 clear()
                 mips = MIPS.makeMipsFromSource(codeOverride ?? code)
-                mips.setUndoSize(historySize)
+                mips.setUndoSize(Math.max(1, normalizedHistorySize))
                 const result = mips.assemble()
                 state.compilerErrors = result.errors.map(assembleErrorToMonacoError)
                 state.canExecute = !result.hasErrors
@@ -198,7 +201,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
                     return rej(result.report)
                 }
                 addDecorations()
-                mips.setUndoEnabled(historySize > 0)
+                mips.setUndoEnabled(normalizedHistorySize > 0)
                 mips.initialize(true)
                 registerHandlers(mips, getHandlers())
 
