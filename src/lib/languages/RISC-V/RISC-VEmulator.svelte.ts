@@ -155,9 +155,12 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
     function compile(historySize: number, codeOverride?: string): Promise<void> {
         return new Promise((res, rej) => {
             try {
+                const normalizedHistorySize = Number.isFinite(historySize)
+                    ? Math.max(0, Math.floor(historySize))
+                    : 0
                 clear()
                 riscv = RISCV.makeRiscVFromSource(codeOverride ?? code)
-                riscv.setUndoSize(historySize)
+                riscv.setUndoSize(Math.max(1, normalizedHistorySize))
                 const result = riscv.assemble()
                 state.compilerErrors = result.errors.map(assembleErrorToMonacoError)
                 state.canExecute = !result.hasErrors
@@ -165,7 +168,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
                     return rej(result.report)
                 }
                 addDecorations()
-                riscv.setUndoEnabled(historySize > 0)
+                riscv.setUndoEnabled(normalizedHistorySize > 0)
                 riscv.initialize(true)
                 registerHandlers(riscv, getHandlers())
 
