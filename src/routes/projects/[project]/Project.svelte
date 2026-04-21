@@ -82,23 +82,11 @@
     let testcasesVisible = $state(false)
     let agentOpen = $state(false)
     let groupSize = $state(RegisterSize.Word)
-    let memoryColumnRef = $state<HTMLDivElement>()
-    let memoryColumnHeight = $state<number>()
     let errorStrings = $derived(emulator.errors.join('\n'))
     let info = $derived(
         emulator.terminated && emulator.executionTime >= 0
             ? `Ran in ${formatTime(emulator.executionTime)}`
             : ''
-    )
-    let shouldMatchMemoryHeight = $derived(
-        settingsStore.values.showMemory.value || (!running && !!children)
-    )
-    let registersColumnStyle = $derived(
-        `gap: 0.4rem;${
-            shouldMatchMemoryHeight && memoryColumnHeight
-                ? ` max-height: ${memoryColumnHeight}px; overflow: hidden;`
-                : ''
-        }`
     )
     const dispatcher = createEventDispatcher<{
         save: {
@@ -182,20 +170,10 @@
     }
 
     onMount(() => {
-        const resizeObserver = new ResizeObserver(() => {
-            memoryColumnHeight = memoryColumnRef?.offsetHeight
-        })
-
-        if (memoryColumnRef) {
-            memoryColumnHeight = memoryColumnRef.offsetHeight
-            resizeObserver.observe(memoryColumnRef)
-        }
-
         window.addEventListener('keydown', handleKeyDown)
         window.addEventListener('keyup', handleKeyUp)
         window.addEventListener('blur', clearPressed)
         return () => {
-            resizeObserver.disconnect()
             window.removeEventListener('keydown', handleKeyDown)
             window.removeEventListener('keyup', handleKeyUp)
             window.removeEventListener('blur', clearPressed)
@@ -540,7 +518,7 @@
     </div>
     <div class="right-side">
         <div class="memory-wrapper">
-            <div class="column registers-column" style={registersColumnStyle}>
+            <div class="column registers-column" style="gap: 0.4rem">
                 {#if emulator.statusRegisters && emulator.statusRegisters.length > 0}
                     <StatusCodesVisualiser statusCodes={emulator.statusRegisters} />
                 {/if}
@@ -570,7 +548,7 @@
                 />
             </div>
 
-            <div bind:this={memoryColumnRef} class="column" style="gap: 0.4rem">
+            <div class="column" style="gap: 0.4rem">
                 {#if settingsStore.values.showMemory.value && (!children || !(!running && !(emulator.canExecute || !!emulator.compiledCode)))}
                     <div class="row" style="gap: 0.4rem">
                         <MemoryControls
@@ -694,6 +672,8 @@
 
     .registers-column {
         min-height: 0;
+        max-height: 34.94rem;
+        overflow: hidden;
     }
 
     @media screen and (max-width: 1000px) {
