@@ -212,7 +212,6 @@
         pc.setValue(emulator.pc)
         pc.setSize(emulator.systemSize)
     })
-
 </script>
 
 {#if !embedded}
@@ -430,7 +429,8 @@
                     errors={emulator.compilerErrors}
                     {language}
                     highlightedLine={emulator.line}
-                    disabled={readonly || (emulator.canExecute && !emulator.terminated) ||
+                    disabled={readonly ||
+                        (emulator.canExecute && !emulator.terminated) ||
                         !!emulator.compiledCode}
                     hasError={emulator.errors.length > 0}
                 />
@@ -518,7 +518,7 @@
     </div>
     <div class="right-side">
         <div class="memory-wrapper">
-            <div class="column" style="gap: 0.4rem;">
+            <div class="column registers-column" style="gap: 0.4rem">
                 {#if emulator.statusRegisters && emulator.statusRegisters.length > 0}
                     <StatusCodesVisualiser statusCodes={emulator.statusRegisters} />
                 {/if}
@@ -534,6 +534,7 @@
                 <RegistersVisualiser
                     systemSize={emulator.systemSize}
                     size={groupSize}
+                    style="flex: 1; min-height: 0;"
                     hiddenRegistersNames={emulator.hiddenRegisters}
                     registers={emulator.registers}
                     on:registerClick={async (e) => {
@@ -644,6 +645,7 @@
 
         .memory-wrapper {
             gap: 0.4rem;
+            align-items: flex-start;
             @media screen and (max-width: 1000px) {
                 margin-top: 1rem;
                 padding-bottom: 1rem;
@@ -668,8 +670,14 @@
         flex-direction: column;
     }
 
+    .registers-column {
+        min-height: 0;
+        height: 39.9rem;
+        overflow: hidden;
+    }
+
     @media screen and (max-width: 1000px) {
-        .only-desktop{
+        .only-desktop {
             display: none;
         }
         .editor-memory-wrapper {
@@ -683,6 +691,11 @@
             max-height: unset;
             align-items: center;
             flex-direction: column-reverse;
+        }
+        .registers-column {
+            height: unset !important;
+            max-height: unset !important;
+            overflow: visible !important;
         }
     }
 
