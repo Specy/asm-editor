@@ -672,7 +672,7 @@
 
     .registers-column {
         min-height: 0;
-        max-height: 34.94rem;
+        height: 39.4rem;
         overflow: hidden;
     }
 
@@ -693,6 +693,7 @@
             flex-direction: column-reverse;
         }
         .registers-column {
+            height: unset !important;
             max-height: unset !important;
             overflow: visible !important;
         }
