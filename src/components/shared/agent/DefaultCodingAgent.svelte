@@ -516,7 +516,8 @@ ${initialCodes}
 - The M68K emulator uses the Easy68K syntax. It stops running automatically once execution reaches the bottom of the code and does not support self-modifying code (modifying code while it's running) since it interprets the code separately from the runtime.
 - There is no END START directive in this M68K syntax.
 - END: is just a normal label name that is often placed near the bottom of the code. To terminate a program, jump to the bottom of the code (often by jumping to that label) or just fall through to it.
-- SIMHALT does not exist in M68K. The memory is big endian
+- SIMHALT does not exist in M68K.
+- The memory is big endian
 - The M68K emulator implements the basic syscalls for input/output, search the trap instruction for more info. 
 - The MIPS emulator is the same emulator in the MARS MIPS emulator and uses the same syntax and system calls. The memory is little endian
 - The RISC-V emulator is the same emulator in the RARS RISC-V emulator and uses the same syntax and system calls. It supports both 32-bit and 64-bit RISC-V code. The "RISC-V" language is 32 bits, the "RISC-V-64" language is 64 bits. The memory is little endian
