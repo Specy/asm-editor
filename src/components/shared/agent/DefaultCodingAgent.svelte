@@ -461,6 +461,7 @@
 ## set_code tool
 Use this tool to create or update the code editor with assembly code. Call it whenever you want to show the user a code example, answer a coding question, or demonstrate a concept.${canUpdateLanguage ? '\n- Always set the correct language matching the code you are writing.' : ''}
 - Prefer updating the existing editor code rather than describing code in text when possible.
+- Writing code in a markdown code block does NOT update the editor. Never say you wrote, pasted, or updated code in the editor unless you actually called set_code successfully. If you choose not to call set_code, make it clear that the code is only shown in the chat.
 - This returns any type errors.
 
 ## get_code tool
@@ -512,7 +513,7 @@ When starting new code, use those templates as a base for each language (except 
 ${initialCodes}
 
 # Emulators information
-- The M68K emulator uses the Easy68K syntax, it stops running once it reaches the bottom of the code and does not support self-modifying code (modifying code while it's running) since it interprets the code separately from the runtime. To terminate a program you can add an END label at the end of the code and jump to it. The memory is big endian
+- The M68K emulator uses the Easy68K syntax, it stops running automatically once execution reaches the bottom of the code and does not support self-modifying code (modifying code while it's running) since it interprets the code separately from the runtime. There is no END START directive in this M68K syntax. END: is just a normal label name that is often placed near the bottom of the code. To terminate a program, jump to the bottom of the code (often by jumping to that label) or just fall through to it. SIMHALT does not exist in M68K. The memory is big endian
 - The M68K emulator implements the basic syscalls for input/output, search the trap instruction for more info. 
 - The MIPS emulator is the same emulator in the MARS MIPS emulator and uses the same syntax and system calls. The memory is little endian
 - The RISC-V emulator is the same emulator in the RARS RISC-V emulator and uses the same syntax and system calls. It supports both 32-bit and 64-bit RISC-V code. The "RISC-V" language is 32 bits, the "RISC-V-64" language is 64 bits. The memory is little endian
