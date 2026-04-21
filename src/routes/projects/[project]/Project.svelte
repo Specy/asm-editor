@@ -672,7 +672,7 @@
 
     .registers-column {
         min-height: 0;
-        height: 39.4rem;
+        height: 39.9rem;
         overflow: hidden;
     }
 
