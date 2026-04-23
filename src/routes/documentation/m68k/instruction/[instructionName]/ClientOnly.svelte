@@ -14,6 +14,9 @@
         description: string
         arguments: string[]
         language: AvailableLanguages
+        showPc?: boolean
+        showFlags?: boolean
+        showConsole?: boolean
     }
 
     let {
@@ -21,7 +24,10 @@
         instructionKey,
         description,
         arguments: args,
-        language
+        language,
+        showFlags,
+        showPc,
+        showConsole
     }: Props = $props()
     let agentOpen = $state(false)
 </script>
@@ -36,7 +42,17 @@
         }}
     >
         {#snippet children(emulator)}
-            <InteractiveEditor bind:code {language} {emulator} forceMemoryRight />
+            <InteractiveEditor 
+                bind:code 
+                {language} 
+                {emulator} 
+                {showFlags}
+                {showPc}
+                {showConsole}
+
+                forceMemoryRight 
+                
+            />
             <FloatingAgentSidebar
                 bind:open={agentOpen}
                 openSize="28rem"
