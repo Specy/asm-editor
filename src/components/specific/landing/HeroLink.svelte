@@ -43,4 +43,18 @@
         font-size: 1.2rem;
         text-align: center;
     }
+
+    @media screen and (max-width: 650px) {
+        .link-element {
+            padding: 1.2rem;
+        }
+
+        .link-icon {
+            width: 1.5rem;
+            height: 1.5rem;
+        }
+        .link-description {
+            font-size: 1.1rem;
+        }
+    }
 </style>

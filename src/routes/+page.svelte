@@ -354,12 +354,8 @@
     .links-row {
         gap: 0.1rem;
         background-color: var(--background);
-        display: grid;
-        grid-template-columns: repeat(6, 1fr);
-        @media screen and (max-width: 650px) {
-            display: flex;
+         display: flex;
             flex-wrap: wrap;
-        }
     }
 
     .main {
