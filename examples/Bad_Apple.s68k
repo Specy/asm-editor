@@ -18,7 +18,7 @@ loop_pixels:
         move.b  (a0)+, d0
         cmpi.b  #1, d0
         beq   set_white
-        move.b  #0, (a2)+ 
+        move.b  #' ', (a2)+ 
         bra   next_pixel
 
 set_white:

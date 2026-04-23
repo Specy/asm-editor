@@ -63,6 +63,7 @@
         color: var(--accent2-text);
     }
     .std-out {
+        min-height: 4rem;
         position: relative;
         border-radius: 0.5rem;
         overflow-y: auto;
@@ -71,7 +72,6 @@
         background-color: var(--secondary);
         color: var(--secondary-text);
         @media screen and (max-width: 1000px) {
-            min-height: 4rem;
             width: 100%;
             max-height: 10rem;
         }

@@ -9,7 +9,12 @@
 
 <Navbar>
     <Row style="gap: 0.6rem; align-items:center; flex: 1">
-        <a class="icon" href="/" title="Go to the home">
+        <a 
+            class="icon" 
+            style="width: 2.2rem; height: 2.2rem;"
+            href="/" 
+            title="Go to the home"
+        >
             <img src="/favicon.png" alt="logo" />
         </a>
         <a class="icon" href="/projects" title="Go to your projects"> Projects </a>
