@@ -797,7 +797,7 @@
         grid-template-columns: minmax(14rem, 0.95fr) minmax(0, 1.35fr);
         gap: 0.8rem;
         height: 100%;
-        min-height: 50vh;
+        min-height: calc(var(--screen-height) * 0.5);
     }
 
     .prompt-pane {
@@ -836,7 +836,7 @@
         }
 
         .c-editor-wrap {
-            min-height: 40vh;
+            min-height: calc(var(--screen-height) * 0.4);
         }
     }
 </style>

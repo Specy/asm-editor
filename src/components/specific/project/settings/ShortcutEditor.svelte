@@ -104,7 +104,7 @@
         display: flex;
         padding: 0.8rem;
         flex-direction: column;
-        height: 80vh;
+        height: calc(var(--screen-height) * 0.8);
         padding-top: 0;
         gap: 0.4rem;
         overflow-y: auto;

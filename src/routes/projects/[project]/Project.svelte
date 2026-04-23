@@ -630,7 +630,7 @@
             flex: 1;
             gap: 0.4rem;
             @media screen and (max-width: 1000px) {
-                min-height: 70vh;
+                min-height: calc(var(--screen-height) * 0.7);
             }
 
             .editor-border {
@@ -663,7 +663,7 @@
         margin-left: 0.5rem;
         width: min-content;
         gap: 0.4rem;
-        max-height: calc(100vh - 4.2rem);
+        max-height: calc(var(--screen-height) - 4.2rem);
         padding-top: 0.2rem;
         display: flex;
         overflow-y: auto;

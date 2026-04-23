@@ -57,7 +57,7 @@
         max-width: 15rem;
     }
     .scroll {
-        height: 80vh;
+        height: calc(var(--screen-height) * 0.8);
         overflow-y: auto;
     }
 </style>

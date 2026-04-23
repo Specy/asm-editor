@@ -58,7 +58,7 @@
 </script>
 
 <FloatingContainer bind:visible title="Testcases" style="width: 45rem;">
-    <Column style="height: 80vh; overflow-y: auto;">
+    <Column style="height: calc(var(--screen-height) * 0.8); overflow-y: auto;">
         {#if testcasesResult.length > 0}
             <Column
                 padding="1rem"
