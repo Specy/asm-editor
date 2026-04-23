@@ -25,6 +25,7 @@
 
 body,
 html {
+    --screen-height: 100vh;
     min-height: 100%;
     height: 100%;
     width: 100%;
@@ -34,6 +35,13 @@ html {
     font-family: Rubik;
     flex-direction: column;
     overflow-x: hidden;
+}
+
+@supports (height: 100dvh) {
+    body,
+    html {
+        --screen-height: 100dvh;
+    }
 }
 
 @media print {

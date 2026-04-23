@@ -70,7 +70,7 @@
 
     .agent-wrapper {
         padding: 0.5rem;
-        min-height: 65vh;
+        min-height: calc(var(--screen-height) * 0.65);
         min-width: min(55ch, calc(100vw - 1rem));
         flex: 1;
         height: 100%;

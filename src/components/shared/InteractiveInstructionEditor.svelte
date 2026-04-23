@@ -127,7 +127,7 @@
                     height: 100%;
                     justify-content: space-evenly;
                 "
-                style={`flex: unset; max-height: ${embedded ? `calc(100vh - ${sizes})` : '16.3rem'}; min-height: 16.3rem;`}
+                style={`flex: unset; max-height: ${embedded ? `calc(var(--screen-height) - ${sizes})` : '16.3rem'}; min-height: 16.3rem;`}
                 registers={emulator.registers}
                 on:registerClick={async (e) => {
                     const value = e.detail.value

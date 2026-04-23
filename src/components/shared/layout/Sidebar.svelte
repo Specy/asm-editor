@@ -50,7 +50,7 @@
         gap: 1rem;
         top: 3.2rem;
         padding-top: 1rem;
-        height: calc(100vh - 3.2rem);
+        height: calc(var(--screen-height) - 3.2rem);
         overflow-y: auto;
         position: sticky;
     }

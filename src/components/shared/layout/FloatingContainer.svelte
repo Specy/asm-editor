@@ -57,7 +57,7 @@
         width: 30rem;
         overflow: hidden;
         max-width: calc(100vw - 2rem);
-        top: 50vh;
+        top: calc(var(--screen-height) * 0.5);
         left: 50vw;
         transform: translate(-50%, -50%);
         border-radius: 0.8rem;
