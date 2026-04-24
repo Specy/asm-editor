@@ -41,12 +41,6 @@
         <a class="icon desktop-only" href="/embed" title="Embed the website"> Embed </a>
     </Row>
     <Row gap="0.5rem" align="center" flex1>
-        <a class="icon ai" href="/chat" title="AI Chat">
-            <div class="hidden-very-small">
-                <SparklesIcon />
-            </div>
-            AI Chat
-        </a>
         <div class="star-on-github desktop-only">
             <ButtonLink
                 style="gap: 0.5rem; padding: 0.5rem 1rem"
@@ -61,6 +55,12 @@
                 Star on github
             </ButtonLink>
         </div>
+        <a class="icon ai" href="/chat" title="AI Chat">
+            <div class="hidden-very-small">
+                <SparklesIcon />
+            </div>
+            AI Chat
+        </a>
         <div class="mobile-only">
             <Icon onClick={() => (menuOpen = !menuOpen)}>
                 {#if menuOpen}

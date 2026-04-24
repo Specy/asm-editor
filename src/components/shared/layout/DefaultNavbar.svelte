@@ -9,12 +9,7 @@
 
 <Navbar>
     <Row style="gap: 0.6rem; align-items:center; flex: 1">
-        <a 
-            class="icon" 
-            style="width: 2.2rem; height: 2.2rem;"
-            href="/" 
-            title="Go to the home"
-        >
+        <a class="icon" style="width: 2.2rem; height: 2.2rem;" href="/" title="Go to the home">
             <img src="/favicon.png" alt="logo" />
         </a>
         <a class="icon" href="/projects" title="Go to your projects"> Projects </a>
@@ -23,12 +18,6 @@
         <a class="icon hidden-on-mobile" href="/embed" title="Embed the website"> Embed </a>
     </Row>
     <Row gap="0.5rem" align="center">
-        <a class="icon ai" href="/chat" title="AI Chat">
-            <div class="hidden-very-small">
-                <SparklesIcon />
-            </div>
-            AI Chat
-        </a>
         <div class="hidden-on-mobile">
             <ButtonLink
                 style="gap: 0.5rem; padding: 0.5rem 1rem"
@@ -43,6 +32,12 @@
                 Star on github
             </ButtonLink>
         </div>
+        <a class="icon ai" href="/chat" title="AI Chat">
+            <div class="hidden-very-small">
+                <SparklesIcon />
+            </div>
+            AI Chat
+        </a>
     </Row>
 </Navbar>
 
