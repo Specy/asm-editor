@@ -5,7 +5,6 @@
     import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
     import FloatingAgentSidebar from '$cmp/shared/agent/FloatingAgentSidebar.svelte'
     import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
-    import type { InstructionDocumentation } from '$lib/languages/M68K/M68K-documentation'
     import FaTimes from 'svelte-icons/fa/FaTimes.svelte'
 
     interface Props {
@@ -57,17 +56,31 @@
                 bind:open={agentOpen}
                 openSize="28rem"
                 verticalOffset="0px"
-                editorLanguage="M68K"
+                editorLanguage={language}
                 bind:editorCode={code}
                 emulatorInstance={emulator}
                 canUpdateLanguage={false}
                 additionalInstructions={`
-                The user is currently looking at the documentation for the instruction: ${instructionKey} in the ${language} assembly language.
+                The user is viewing the documentation for the ${language} instruction \`${instructionKey}\`. The editor language is locked to ${language}.
                 Description: ${description}
                 Arguments: ${args.join(', ')}
-                They are using the interactive editor to experiment with this instruction and see how it works in real time on an emulator. They might ask you questions about how to use this instruction, what it does, or how it interacts with other instructions. 
-                Provide clear and concise explanations, and if necessary, provide example code snippets to illustrate your points.
+
+                This context is primarily the *Explain an instruction (interactive docs)* workflow focused on this single instruction. The editor exists specifically for demonstrating it, so you are free to overwrite its contents with examples.
+                - Stay focused on \`${instructionKey}\`. Use other instructions only when they are necessary context (setting up operands, showing a branch target, calling a subroutine, handling side effects on other registers, etc.).
+                - If the user asks how \`${instructionKey}\` interacts with another instruction, show a short sequence that includes both and step through it.
                 `}
+                workflows={[
+                    {
+                        name: 'Explain an instruction (interactive docs)',
+                        description: `
+When the user asks how a specific instruction behaves, how its operands work, or how it interacts with other instructions.
+1. set_code with a short, focused program that exercises the instruction. It is fine — and often necessary — to include more than one instruction: set up operands, provide a branch/jump target, demonstrate side effects on flags/other registers, or call and return from a subroutine.
+2. Keep the example as small as possible while still being runnable end-to-end.
+3. step 1-few instructions at a time through the example and describe the concrete mutations (registers, flags, memory) from the step's return value.
+4. If a follow-up question needs a variation, modify the example via set_code and step again rather than speculating.
+`
+                    }
+                ]}
             />
             <button
                 class="agent-toggle"

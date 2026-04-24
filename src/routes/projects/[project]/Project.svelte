@@ -327,11 +327,27 @@
         emulatorInstance={emulator}
         canUpdateLanguage={false}
         additionalInstructions={`
-            The user is currently working on a project in the ${language} assembly language.
-            They are using the project editor which includes a code editor, registers view, memory view, and execution controls.
-            They might be working on the project so NEVER completely override the code unless they explicitly ask you to.
-            Always read the current code before making edits to prevent accidentally deleting work.
+            The user is working on a saved project in the ${language} assembly language. The editor language is locked to ${language} for this project.
+            The project editor has a code editor, registers view, memory view, execution controls, and breakpoints.
+
+            This context is primarily the *Modify or extend existing code* and *Debug broken code* workflows:
+            - Always call get_code before editing. The user's existing code, labels, comments, and breakpoints are their work — preserve them.
+            - NEVER completely override the code unless the user explicitly asks for a rewrite. Make minimal, targeted changes via set_code.
+            - When the user reports something isn't working, follow the *Debug broken code* workflow: run the code, set breakpoints on the suspected region, step through, and report findings based on observed register/memory values rather than speculation.
+            - When the user asks a conceptual question ("how does X work"), follow the *Explain a concept (project-safe)* workflow. Do NOT call set_code to drop an example into the editor unsolicited — it would destroy the user's work.
         `}
+        workflows={[
+            {
+                name: 'Explain a concept (project-safe)',
+                description: `
+When the user asks a conceptual question ("how does X work", "show me Y") while working on their project. The editor already holds the user's code, so you must NOT overwrite it with an unrelated example.
+1. Answer the conceptual question in chat.
+2. If code would help illustrate it, put the example in a markdown code block in chat — do NOT call set_code.
+3. At the end of your message, ask the user whether they'd like you to load the example into the editor (which will replace their current code) or apply it to their existing code instead.
+4. Only call set_code after the user confirms, and after you've used get_code to understand what you're about to change.
+`
+            }
+        ]}
     />
 {/if}
 <TestcasesEditor

@@ -168,18 +168,32 @@
     {emulatorInstance}
     canUpdateLanguage={true}
     additionalInstructions={`
-        The user is reading a lecture titled "${data.lecture.name}" from the course "${data.course.name}".
+        The user is reading the lecture "${data.lecture.name}" from the course "${data.course.name}".
         Lecture description: ${data.lecture.description}
         Course description: ${data.course.description}
-        Help the user understand the concepts in this lecture. You can write assembly code examples relevant to what they are learning.
-        When writing code, use the set_code tool to show it in the interactive editor below the lecture content.
-        Provide clear and concise explanations tailored to the lecture topic.
+
+        This context is primarily the *Teach with a runnable example (course lecture)* workflow:
+        - Ground every explanation in the lecture content below. Stay on-topic for this specific lecture; don't drift into unrelated material.
+        - Match the lecture's assembly language when writing examples. You may switch the editor language via set_code if the lecture calls for it.
+        - The editor below the lecture exists for demonstrations, so you are free to use set_code to load examples there.
 
         Here is the lecture content for reference:
         <lecture_content>
         ${data.content}
         </lecture_content>
     `}
+    workflows={[
+        {
+            name: 'Teach with a runnable example (course lecture)',
+            description: `
+When the user asks a question about the lecture topic or for a demonstration of the concept being taught.
+1. Put a small focused example in the editor via set_code so the user can see it next to the lecture content. A markdown code block in chat is not enough — the editor lets them run and modify it.
+2. step through the example and describe the concrete register/memory/stdout changes from the step's return value, tying each change back to the lecture's concept.
+3. If the lecture introduces an instruction or construct, show it running before claiming what it does.
+4. If the user asks a follow-up, modify the example in-place via set_code and step again, rather than starting over.
+`
+        }
+    ]}
 />
 <button class="agent-toggle" class:agent-open={agentOpen} onclick={() => (agentOpen = !agentOpen)}>
     {#if agentOpen}
