@@ -15,7 +15,7 @@
     import { DEFAULT_THEME, ThemeStore, type ThemeKeys } from '$stores/themeStore.svelte'
     import { onDestroy, onMount, untrack } from 'svelte'
     import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
-    import { riscvInstructionNames } from '$lib/languages/RISC-V/RISC-V-documentation'
+    import { riscvInstructionNames, riscvInstructionMap} from '$lib/languages/RISC-V/RISC-V-documentation'
     import Sidebar from '$cmp/shared/layout/Sidebar.svelte'
     interface Props {
         children?: import('svelte').Snippet
@@ -31,14 +31,15 @@
 
     let { children }: Props = $props()
 
-    let instructions = Array.from(riscvInstructionNames).sort((a, b) => a.localeCompare(b))
+    let instructionNames = Array.from(riscvInstructionNames).sort((a, b) => a.localeCompare(b))
+    let instructions = instructionNames.map(name => riscvInstructionMap.get(name)[0])
     let menuOpen = $state(false)
     let search = $state('')
     const searcher = new FuzzySearch(instructions, ['name', 'description'], {
         sort: true
     })
     let currentInstructionName = $derived($page.params.instructionName ?? '')
-    let filteredInstructions = $derived(searcher.search(search.toLowerCase()))
+    let filteredInstructions = $derived([...new Set(searcher.search(search.toLowerCase()).map(i => i.name))])
 </script>
 
 <Navbar style="border-bottom-left-radius: 0;">

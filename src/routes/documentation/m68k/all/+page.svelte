@@ -68,107 +68,45 @@
 
     <section id="instructions">
         <h2>Instructions</h2>
-        <div class="column sub-section">
-            {#each instructionsDocumentationList as ins}
-                <div class="instruction">
-                    <div class="row align-center">
-                        <h3 class="sub-title" id={ins.name}>
-                            {ins.name}
-                        </h3>
-                        {#if ins.sizes.length}
-                            <span style="font-size: 0.9rem;">
-                                ({fromSizesToString(ins.sizes)}) {ins.defaultSize
-                                    ? ` {${fromSizeToString(ins.defaultSize)}}`
-                                    : ''}
-                            </span>
-                        {/if}
-                    </div>
-                    <div class="row instruction-addressing-modes">
-                        {#if ins.args.length}
-                            {#each ins.args as arg, i}
-                                <DocsOperand
-                                    name={`Op ${i + 1}`}
-                                    content={getAddressingModeNames(arg)}
-                                />
-                            {/each}
-                        {/if}
-                    </div>
-                    {#if ins.description}
-                        <span class="sub-description">
-                            <MarkdownRenderer
-                                source={ins.description}
-                                linksInNewTab={false}
-                            />
-                        </span>
-                    {/if}
-                    {#if ins.example}
-                        <span class="example">
-                            {ins.example}
+        {#each instructionsDocumentationList as ins}
+            <div class="instruction">
+                <div class="row align-center">
+                    <h3 class="sub-title" id={ins.name}>
+                        {ins.name}
+                    </h3>
+                    {#if ins.sizes.length}
+                        <span style="font-size: 0.9rem;">
+                            ({fromSizesToString(ins.sizes)}) {ins.defaultSize
+                                ? ` {${fromSizeToString(ins.defaultSize)}}`
+                                : ''}
                         </span>
                     {/if}
                 </div>
-            {/each}
-        </div>
+                <div class="row instruction-addressing-modes">
+                    {#if ins.args.length}
+                        {#each ins.args as arg, i}
+                            <DocsOperand
+                                name={`Op ${i + 1}`}
+                                content={getAddressingModeNames(arg)}
+                            />
+                        {/each}
+                    {/if}
+                </div>
+                {#if ins.description}
+                    <span class="sub-description">
+                        <MarkdownRenderer source={ins.description} linksInNewTab={false} />
+                    </span>
+                {/if}
+                {#if ins.example}
+                    <span class="example">
+                        {ins.example}
+                    </span>
+                {/if}
+            </div>
+        {/each}
     </section>
 </Page>
 
 <style lang="scss">
     @use '$cmp/documentation/m68k/style.scss' as *;
-
-    .toc {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        a {
-            padding: 0.5rem 1rem;
-            background-color: var(--secondary);
-            color: var(--secondary-text);
-            border-radius: 0.4rem;
-            text-decoration: none;
-            &:hover {
-                background-color: var(--tertiary);
-                color: var(--tertiary-text);
-            }
-        }
-    }
-
-    section {
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-    }
-
-    h2 {
-        border-bottom: solid 0.15rem var(--accent);
-        padding-bottom: 0.5rem;
-    }
-
-    .print-button {
-        padding: 0.5rem 1rem;
-        background-color: var(--accent);
-        color: var(--accent-text);
-        border: none;
-        border-radius: 0.4rem;
-        cursor: pointer;
-        font-size: 1rem;
-        align-self: flex-start;
-        &:hover {
-            opacity: 0.8;
-        }
-    }
-
-    @media print {
-        .toc {
-            display: none;
-        }
-        .print-button {
-            display: none;
-        }
-        section {
-            page-break-inside: avoid;
-        }
-        .instruction {
-            page-break-inside: avoid;
-        }
-    }
 </style>

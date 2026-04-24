@@ -250,6 +250,23 @@
         document.removeEventListener('visibilitychange', listenVisibilityChange)
         document.removeEventListener('fullscreenchange', listenFullscreenChange)
         window.removeEventListener('blur', listenVisibilityChange)
+        window.removeEventListener('keydown', preventDefaultKeyPresses)
+    }
+
+    function preventDefaultKeyPresses(event: KeyboardEvent) {
+        const isMac = navigator.platform.toUpperCase().includes('MAC')
+        const modifierKeyPressed = isMac ? event.metaKey : event.ctrlKey
+
+        if (modifierKeyPressed) {
+            const key = event.key.toLowerCase()
+            if (key === 'f' || key === 'p') {
+                event.preventDefault()
+            }
+        }
+
+        if (event.key === 'F11' || event.key === 'F12') {
+            event.preventDefault()
+        }
     }
 
     async function requestExamFullscreen() {
@@ -267,6 +284,7 @@
         document.addEventListener('visibilitychange', listenVisibilityChange)
         document.addEventListener('fullscreenchange', listenFullscreenChange)
         window.addEventListener('blur', listenVisibilityChange)
+        window.addEventListener('keydown', preventDefaultKeyPresses)
         await requestExamFullscreen()
     }
 

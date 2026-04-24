@@ -9,7 +9,7 @@
     import FaTimes from 'svelte-icons/fa/FaTimes.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
-    import { mipsInstructionNames } from '$lib/languages/MIPS/MIPS-documentation'
+    import { mipsInstructionNames, mipsInstructionMap } from '$lib/languages/MIPS/MIPS-documentation'
     import MenuLink from '../m68k/instruction/MenuLink.svelte'
     import InstructionsMenu from '../m68k/InstructionsMenu.svelte'
     import { LANGUAGE_THEMES } from '$lib/Config'
@@ -31,14 +31,15 @@
 
     let { children }: Props = $props()
 
-    let instructions = Array.from(mipsInstructionNames).sort((a, b) => a.localeCompare(b))
+    let instructionNames = Array.from(mipsInstructionNames).sort((a, b) => a.localeCompare(b))
+    let instructions = instructionNames.map(name => mipsInstructionMap.get(name)[0])
     let menuOpen = $state(false)
     let search = $state('')
     const searcher = new FuzzySearch(instructions, ['name', 'description'], {
         sort: true
     })
     let currentInstructionName = $derived($page.params.instructionName ?? '')
-    let filteredInstructions = $derived(searcher.search(search.toLowerCase()))
+    let filteredInstructions = $derived([...new Set(searcher.search(search.toLowerCase()).map(i => i.name))])
 </script>
 
 <Navbar style="border-bottom-left-radius: 0;">
