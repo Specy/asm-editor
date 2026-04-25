@@ -22,11 +22,11 @@ const config: UserConfig = {
         }
     },
     optimizeDeps: {
-        exclude: ['@specy/s68k', '@battlefieldduck/xterm-svelte']
+        exclude: ['@specy/s68k', '@specy/x86','@battlefieldduck/xterm-svelte']
     },
     build: {
-        sourcemap: false,
-        minify: 'terser'
+        sourcemap: true,
+        //minify: 'terser'
     },
     plugins: [
         //devtoolsJson(),

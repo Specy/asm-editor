@@ -7,11 +7,15 @@ import {
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import type { Testcase } from '$lib/Project.svelte'
 
+type MaybePromise<T> = T | PromiseLike<T>
+
 
 export type CompilationError = {
     type: 'raw'
     message: string
 }
+
+export type CompileResult = { ok: true } | { ok: false; errors: MonacoError[]; report: string }
 
 export enum EmulatorStatus {
     Terminated = 0,
@@ -61,15 +65,15 @@ export abstract class BaseEmulator<T, R extends string> {
 
     abstract _getCompiledCode(): { decorations: EmulatorDecoration[], code: string }
 
-    abstract _runTestcase(testcase: Testcase, haltLimit: number)
+    abstract _runTestcase(testcase: Testcase, haltLimit: number): MaybePromise<void>
 
     abstract _dispose(): void;
 
     abstract _stringifyError(error: unknown): string;
 
-    abstract _compile(code: string): { ok: true } | { ok: false, errors: CompilationError[], report: string};
+    abstract _compile(code: string): MaybePromise<CompileResult>;
 
-    abstract _checkCode(code: string): MonacoError[];
+    abstract _checkCode(code: string): MaybePromise<MonacoError[]>;
 
     abstract _undo(): void;
 

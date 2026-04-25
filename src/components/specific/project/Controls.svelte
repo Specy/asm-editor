@@ -22,6 +22,7 @@
         hasNoErrorsInTests?: boolean
         hasCompiled: boolean
         buildDisabled: boolean
+        building?: boolean
         canUndo: boolean
         running: boolean
         children?: Snippet
@@ -35,6 +36,7 @@
         hasNoErrorsInTests = false,
         hasCompiled,
         buildDisabled,
+        building = false,
         canUndo,
         running,
         children
@@ -46,10 +48,14 @@
         <Button
             style="max-width: 5.5rem; flex:1; padding: 0.5rem 0.3rem"
             onClick={() => dispatch('build')}
-            disabled={buildDisabled}
+            disabled={buildDisabled || building || running}
         >
             <Icon size={1} style="margin-right: 0.4rem;">
-                <FaWrench />
+                {#if building}
+                    <FaRegClock />
+                {:else}
+                    <FaWrench />
+                {/if}
             </Icon>
             Build
         </Button>
@@ -57,7 +63,7 @@
             <Button
                 style="max-width: 5.5rem; flex:1; padding: 0.5rem 0.3rem"
                 onClick={() => dispatch('test')}
-                disabled={buildDisabled}
+                disabled={buildDisabled || building || running}
                 cssVar="accent2"
             >
                 <Icon size={1} style="margin-right: 0.4rem;">

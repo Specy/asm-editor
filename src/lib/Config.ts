@@ -5,7 +5,7 @@ export const PAGE_ELEMENTS_PER_ROW = Math.sqrt(PAGE_SIZE)
 export const MEMORY_SIZE = {
     M68K: 0xffffffn,
     MIPS: 0xffffffffn,
-    X86: 0xffffffn,
+    X86: 0x00007FFFFFFFFFFFn,
     'RISC-V': 0xffffffffn,
     'RISC-V-64': 0xffffffffn,
     //Z80: 0xffffn
@@ -48,14 +48,12 @@ START:
 END: * Jump here to end the program
 `.trim(),
     X86: `
-section .data
-    ; Write here your data
-    
+global _start
 section .text
-global START
-START:
-    ; Write here your code
-    mov eax, 42
+_start:
+  mov rax, 60
+  xor rdi, rdi
+  syscall
 `.trim(),
     'RISC-V': `
 .data

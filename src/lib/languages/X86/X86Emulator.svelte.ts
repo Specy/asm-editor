@@ -1,628 +1,407 @@
+import { EmulatorStatus, type CompileResult, type Instruction } from '$lib/languages/BaseEmulator.svelte'
 import {
-    type BaseEmulatorActions,
-    type BaseEmulatorState,
-    createMemoryTab,
+    type EmulatorDecoration,
     type EmulatorSettings,
-    InterpreterStatus,
-    makeRegister,
-    numbersOfSizeToSlice,
-    RegisterSize
+    type ExecutionStep,
+    type MonacoError,
+    type MutationOperation,
+    RegisterSize,
+    type StackFrame
 } from '$lib/languages/commonLanguageFeatures.svelte'
-import { PAGE_ELEMENTS_PER_ROW, PAGE_SIZE } from '$lib/Config'
-import { X86_REGISTERS, X86ConditionFlags, X86Interpreter, X86Register } from '@specy/x86'
-import { createDebouncer } from '$lib/utils'
+import { GenericEmulator } from '$lib/languages/GenericEmulator.svelte'
+import type { Testcase } from '$lib/Project.svelte'
 import { Prompt } from '$stores/promptStore.svelte'
-import { settingsStore } from '$stores/settingsStore.svelte'
-import type { Testcase, TestcaseResult, TestcaseValidationError } from '$lib/Project.svelte'
-import { byteSliceToNum, isMemoryChunkEqual, numberToByteSlice } from '$cmp/specific/project/memory/memoryTabUtils'
+import {
+    BlinkState,
+    createX86Emulator,
+    EmulatorStatus as CoreEmulatorStatus,
+    RegisterSize as CoreRegisterSize,
+    X86_REGISTER_NAMES,
+    type ExecutionStep as CoreExecutionStep,
+    type MonacoError as CoreMonacoError,
+    type MutationOperation as CoreMutationOperation,
+    type X86CompilationDiagnostic,
+    type X86CompileResult,
+    type X86Emulator as CoreX86Emulator,
+    type X86RegisterName,
+} from '@specy/x86'
 
-const emultor = X86Interpreter.create('')
 
-export type X86RegisterNames = ['EAX', 'EBX', 'ECX', 'EDX', 'ESI', 'EDI', 'EBP', 'ESP']
+export const DEFAULT_X86_FLAGS = [
+    { name: 'CF', value: 0 },
+    { name: 'PF', value: 0 },
+    { name: 'AF', value: 0 },
+    { name: 'ZF', value: 0 },
+    { name: 'SF', value: 0 },
+    { name: 'TF', value: 0 },
+    { name: 'DF', value: 0 },
+    { name: 'OF', value: 0 },
+]
 
-function registerNameToType(name: string) {
-    return X86Register[name] as X86Register
-}
-
-export type X86EmulatorState = BaseEmulatorState & {}
-
-function getErrorMessage(e: unknown): string {
-    const string = e instanceof Error ? e.message : String(e)
-    if (
-        string.startsWith('Keystone.js') ||
-        string.startsWith('Capstone.js') ||
-        string.startsWith('Unicorn.js')
-    ) {
-        return string.split('\n').slice(1).join('\n')
-    }
-    return string
-}
-
-export function X86Emulator(baseCode: string, options: EmulatorSettings = {}) {
-    options = {
-        globalPageSize: PAGE_SIZE,
-        globalPageElementsPerRow: PAGE_ELEMENTS_PER_ROW,
-        ...options
-    }
-
-    let code = $state(baseCode)
-    let state = $state<Omit<X86EmulatorState, 'code'>>({
-        systemSize: RegisterSize.Long,
-        registers: [],
-        pc: 0n,
-        hiddenRegisters: [],
-        decorations: [],
-        terminated: false,
-        line: -1,
-        statusRegisters: ['C', 'P', 'A', 'Z', 'S', 'O'].map((n) => ({
-            name: n,
-            value: 0,
-            prev: 0
-        })),
-        compilerErrors: [],
-        callStack: [],
-        errors: [],
-        sp: 0n,
-        latestSteps: [],
-        stdOut: '',
-        executionTime: -1,
-        canUndo: false,
-        canExecute: false,
-        breakpoints: [],
-        memory: {
-            global: createMemoryTab(
-                options.globalPageSize,
-                'Global',
-                BigInt(X86Interpreter.START_ADDRESS),
-                options.globalPageElementsPerRow,
-                0,
-                'little'
-            ),
-            tabs: [
-                createMemoryTab(
-                    8 * 4,
-                    'Stack',
-                    BigInt(X86Interpreter.STACK_START_ADDRESS + X86Interpreter.STACK_SIZE),
-                    4,
-                    0,
-                    'little'
-                )
-            ]
-        },
-        interrupt: undefined,
-        isExamMode: false,
+export async function X86Emulator(code: string, options: EmulatorSettings = {}) {
+    let wrapper: AsmEditorX86Emulator | null = null
+    const core = await createX86Emulator({
+        mode: 'NASM_trunk',
+        callbacks: {
+            stdout: (charCode) => wrapper?.appendOutput(charCode),
+            stderr: (charCode) => wrapper?.appendOutput(charCode)
+        }
     })
-    let x86: X86Interpreter | null = null
-    const [debouncer, clearDebouncer] = createDebouncer(500)
+    wrapper = new AsmEditorX86Emulator(code, options, core)
+    return wrapper
+}
 
-    function setCode(c: string) {
-        code = c
-        debouncer(semanticCheck)
-    }
+class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterName> {
+    private core: CoreX86Emulator | null = null
+    private diagnosticCore: CoreX86Emulator | null = null
+    private testcaseInput: string[] | null = null
+    private compileQueue: Promise<void> = Promise.resolve()
+    private checkCodeQueue: Promise<void> = Promise.resolve()
 
-    function compile(historySize: number, codeOverride?: string): Promise<void> {
-        return new Promise((res, rej) => {
-            try {
-                clear()
-                x86?.dispose()
-                x86 = X86Interpreter.create(codeOverride ?? code)
-                x86.assemble()
-                x86.initialize()
-                const stackTab = state.memory.tabs.find((e) => e.name === 'Stack')
-                if (stackTab) stackTab.address = BigInt(x86.getStackPointer() - stackTab.pageSize)
-                const next = x86.getNextStatement()
-                state.canExecute = true
-                state.line = next ? next.line : -1
-                state.terminated = !next
-                state.canUndo = false
-                state.compiledCode = x86
-                    .getAssembledStatements()
-                    .map((s) => s.text)
-                    .join('\n')
-                updateMemory()
-                updateData()
-                res()
-            } catch (e) {
-                addError(getErrorMessage(e))
-                clearDebouncer() //stop semantic checker from overriding errors
-                rej(e)
+    constructor(code: string, options: EmulatorSettings, core: CoreX86Emulator) {
+        super(
+            code,
+            {
+                systemSize: RegisterSize.Double,
+                registerNames: [...X86_REGISTER_NAMES],
+                endianness: 'little'
+            },
+            {
+                language: 'X86',
+                stackAddress: 0x4FFFFFFFFFF0n,
+                baseAddress: 0x4FFFFFFFFFF0n,
+                initialMemoryValue: 0x0,
+                ...options
             }
-        })
-    }
-
-    function toggleBreakpoint(line: number) {
-        const index = state.breakpoints.indexOf(line)
-        if (index === -1) state.breakpoints.push(line)
-        else state.breakpoints.splice(index, 1)
-    }
-
-    function resetSelectedLine() {
-        state.line = -1
-    }
-
-    function semanticCheck() {
-        try {
-            //TODO
-            state.compilerErrors = []
-            state.errors = []
-            return []
-        } catch (e) {
-            console.error(e)
-            addError(getErrorMessage(e))
-            return []
-        }
-    }
-
-    function clear() {
-        const current = state
-
-        setRegisters(new Array(X86_REGISTERS.length).fill(0))
-        updateStatusRegisters(new Array(6).fill(0))
-        if (current.interrupt) Prompt.cancel()
-        state = {
-            ...state,
-            pc: 0n,
-            sp: 0n,
-            terminated: false,
-            compiledCode: undefined,
-            line: -1,
-            stdOut: '',
-            interrupt: undefined,
-            errors: [],
-            canUndo: false,
-            executionTime: -1,
-            canExecute: false,
-            latestSteps: [],
-            callStack: [],
-            compilerErrors: [],
-            memory: {
-                global: createMemoryTab(
-                    options.globalPageSize,
-                    'Global',
-                    BigInt(X86Interpreter.START_ADDRESS),
-                    options.globalPageElementsPerRow,
-                    0,
-                    'little'
-                ),
-                tabs: [
-                    createMemoryTab(
-                        8 * 4,
-                        'Stack',
-                        BigInt(X86Interpreter.STACK_START_ADDRESS + X86Interpreter.STACK_SIZE),
-                        4,
-                        0,
-                        'little'
-                    )
-                ]
-            }
-        }
-    }
-
-    function getRegistersValue() {
-        if (!x86) return []
-        return x86.getRegistersValues()
-    }
-
-    function scrollStackTab() {
-        const settings = settingsStore
-        const current = state
-
-        if (!settings.values.autoScrollStackTab.value || !x86) return
-        const stackTab = current.memory.tabs.find((e) => e.name === 'Stack')
-        const sp = x86.getStackPointer() - stackTab.pageSize
-        if (!stackTab) return
-        const newAddress = BigInt(sp - (sp % stackTab.pageSize))
-        if (stackTab.address !== newAddress) {
-            stackTab.address = newAddress
-            updateMemory()
-            //reset the prevState as we don't know what the previous state was
-            stackTab.data.prevState = stackTab.data.current
-        }
-    }
-
-    function updateStatusRegisters(override?: number[]) {
-        const x86Flags = x86?.getConditionFlags()
-        const flags = (
-            override ??
-            (x86Flags
-                ? state.statusRegisters.map((s) => x86Flags[X86ConditionFlags[s.name]])
-                : new Array(6).fill(0))
-        ).reverse()
-        state.statusRegisters = state.statusRegisters.map((s, i) => ({
-            ...s,
-            value: flags[i] ?? -1,
-            prev: flags[i] ?? -1
-        }))
-    }
-
-    function setRegisters(override?: number[]) {
-        if (!x86 && !override) {
-            override = new Array(X86_REGISTERS.length).fill(0)
-        }
-        const registers = (override ?? getRegistersValue()).map((reg, i) => {
-            return makeRegister(X86_REGISTERS[i], reg, RegisterSize.Long)
-        })
-        state.registers = registers
-    }
-
-    function updateRegisters() {
-        if (state.registers.length === 0) return
-        getRegistersValue().forEach((reg, i) => {
-            state.registers[i].setValue(reg)
-        })
-        state.sp = state.registers[state.registers.length - 1].value
-    }
-
-    function updateMemory() {
-        if (!x86) return
-        const temp = state.memory.global.data.current
-        console.log(Number(state.memory.global.address), state.memory.global.pageSize)
-        const memory = x86.readMemoryBytes(
-            Number(state.memory.global.address),
-            state.memory.global.pageSize
         )
-        state.memory.global.data.current = new Uint8Array(memory)
-        state.memory.global.data.prevState = temp
-        state.memory.tabs.forEach((tab) => {
-            const temp = tab.data.current
-            const memory = x86.readMemoryBytes(Number(tab.address), tab.pageSize)
-            console.log(Number(tab.address), tab.pageSize)
-            tab.data.current = new Uint8Array(memory)
-            tab.data.prevState = temp
+        this.core = core
+        void this.semanticCheck()
+    }
+
+    appendOutput(charCode: number): void {
+        if (!this.isProgramOutput()) return
+        this.state.stdOut += String.fromCharCode(charCode)
+    }
+
+    protected getInstance(): CoreX86Emulator | null {
+        return this.core ?? null
+    }
+
+    async compile(historySize: number, codeOverride?: string): Promise<void> {
+        const currentCompile = this.compileQueue.then(() => super.compile(historySize, codeOverride))
+        this.compileQueue = currentCompile.catch(() => undefined)
+        await currentCompile
+    }
+
+    _canUndo(): boolean {
+        return this.core?.canUndo() ?? false
+    }
+
+    async _checkCode(code: string): Promise<MonacoError[]> {
+        if (!this.core && !this.diagnosticCore) return []
+        const currentCheck = this.checkCodeQueue.then(async () => {
+            const checker = await this.getDiagnosticCore()
+            const errors = await checker.checkCode(code)
+            return errors.map(mapMonacoError)
         })
+        this.checkCodeQueue = currentCheck.catch(() => undefined).then(() => undefined)
+        return currentCheck
     }
 
-    function updateData() {
-        state.terminated = x86.isTerminated()
-        state.canExecute = !x86.isTerminated()
-        state.pc = BigInt(x86.getProgramCounter())
-    }
-
-    function dispose() {
-        clearDebouncer()
-        try {
-            x86?.dispose()
-        } catch (e) {
-            console.error(e)
+    async _compile(code: string): Promise<CompileResult> {
+        const result = await this.requireCore().compile(code)
+        if (!('errors' in result)) return { ok: true }
+        return {
+            ok: false,
+            errors: result.errors.map((error) => diagnosticToMonacoError(code, error)),
+            report: result.report
         }
-        clear()
     }
 
-    function addError(error: string) {
-        state.errors.push(error)
+    _initialize(undoSize: number): void {
+        const core = this.requireCore()
+        core.initialize(undoSize)
+        this.updateMemoryAddresses()
     }
 
-    async function step() {
-        let lastLine = -1
+    _dispose(): void {
+        Prompt.cancel()
+        this.core?.dispose()
+        this.diagnosticCore?.dispose()
+        this.core = null
+        this.diagnosticCore = null
+    }
+
+    _getCallStack(): StackFrame[] {
+        return this.core?.getCallStack().map((frame) => ({ ...frame })) ?? []
+    }
+
+    _getCompiledCode(): { decorations: EmulatorDecoration[]; code: string } {
+        if (!this.core) return { decorations: [], code: '' }
+        const compiled = this.core.getCompiledCode()
+        return {
+            decorations: compiled.decorations.map((decoration) => ({ ...decoration })),
+            code: compiled.code
+        }
+    }
+
+    _getFlags(): { name: string; value: number; prev?: number }[] {
+        return this.core?.getFlags().map((flag) => ({ ...flag })) ?? structuredClone(DEFAULT_X86_FLAGS)
+    }
+
+    _getInstructionAt(address: bigint): Instruction | null {
+        return this.core?.getInstructionAt(address) ?? null
+    }
+
+    _getNextInstruction(): Instruction | null {
+        return this.core?.getNextInstruction() ?? null
+    }
+
+    _getPc(): bigint {
+        return this.core?.getPc() ?? 0n
+    }
+
+    _getRegisterValue(register: X86RegisterName, size: RegisterSize | undefined = RegisterSize.Double): bigint {
+        return this.requireCore().getRegisterValue(normalizeRegisterName(register), toCoreRegisterSize(size))
+    }
+
+    _getRegisterValues(): bigint[] {
+        return this.core?.getRegisterValues() ?? new Array(this._registerNames.length).fill(0n)
+    }
+
+    _getRegisterValuesRecord(): Record<X86RegisterName, bigint> {
+        if (!this.core) {
+            return Object.fromEntries(this._registerNames.map((register) => [register, 0n])) as Record<
+                X86RegisterName,
+                bigint
+            >
+        }
+        return this.core.getRegisterValuesRecord()
+    }
+
+    _getSp(): bigint {
+        return this.core?.getSp() ?? 0n
+    }
+
+    _getStatus(): EmulatorStatus {
+        return toLocalStatus(this.core?.getStatus() ?? CoreEmulatorStatus.NotReady)
+    }
+
+    _getUndoHistory(max: number): ExecutionStep[] {
+        return this.core?.getUndoHistory(max).map(mapExecutionStep) ?? []
+    }
+
+    _hasTerminated(): boolean {
+        return this.core?.hasTerminated() ?? true
+    }
+
+    _readMemoryBytes(address: bigint, length: bigint): Uint8Array {
         try {
-            if (!x86) throw new Error('Interpreter not initialized')
-            lastLine = x86.getNextStatement().line
-            x86.step()
-            const ins = x86.getNextStatement()
-            state.line = ins?.line ?? lastLine
-            state.canUndo = false
-        } catch (e) {
-            console.error(e)
-            addError(getErrorMessage(e))
-            state.terminated = true
-            state.line = lastLine
+        return this.requireCore().readMemoryBytes(address, length)
+        }catch(e){
+            if(String(e).includes('virtual address is not mapped')) {
+                return new Uint8Array(Number(length)).fill(0)
+            }
             throw e
         }
-        updateRegisters()
-        updateStatusRegisters()
-        updateMemory()
-        updateData()
-        scrollStackTab()
-        return x86.isTerminated()
     }
 
-    function undo(amount = 1) {
+    async _run(limit: number | undefined, breakpoints: number[] | undefined): Promise<EmulatorStatus> {
+        const status = await this.runWithInput(limit, breakpoints ?? [])
+        return toLocalStatus(status)
     }
 
-    async function run(haltLimit: number) {
-        if (!x86) throw new Error('Interpreter not initialized')
-        if (haltLimit <= 0) haltLimit = Number.MAX_SAFE_INTEGER
-        const start = performance.now()
-        const breakpoints = state.breakpoints.map(
-            (line) => x86.getStatementAtSourceLine(line).address
-        )
+    async _runTestcase(testcase: Testcase, haltLimit: number): Promise<void> {
+        const previousInput = this.testcaseInput
+        this.testcaseInput = [...testcase.input]
+        const limit = haltLimit <= 0 ? Number.MAX_SAFE_INTEGER : haltLimit
         try {
-            const hasBreakpoints = breakpoints.length > 0
-            if (!hasBreakpoints) {
-                x86.simulate(haltLimit)
-            } else {
-                x86.simulateWithBreakpoints(breakpoints, haltLimit)
-            }
-            const ins = x86.getNextStatement()
-            //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
-            state.line = ins?.line ?? -1
-            state.canUndo = false
-
-            updateRegisters()
-            updateStatusRegisters()
-            updateMemory()
-            updateData()
-            scrollStackTab()
-            state.executionTime = performance.now() - start
-        } catch (e) {
-            console.error(e)
-            let line = -1
-            try {
-                line = x86?.getNextStatement()?.line ?? -1
-            } catch (e) {
-                console.error(e)
-            }
-            addError(getErrorMessage(e))
-            state.terminated = true
-            state.line = line
+            await this.runWithInput(limit, [])
+        } finally {
+            this.testcaseInput = previousInput
         }
-        return InterpreterStatus.TerminatedWithException
     }
 
-    function setGlobalMemoryAddress(address: bigint) {
-        state.memory.global.address = address
-        state.memory.global.data.current =
-            x86?.readMemoryBytes(Number(address), state.memory.global.pageSize) ??
-            new Uint8Array(state.memory.global.pageSize).fill(0)
-        state.memory.global.data.prevState = state.memory.global.data.current
+    _setRegisterValue(register: X86RegisterName, value: bigint, size: RegisterSize | undefined = RegisterSize.Double): void {
+        this.requireCore().setRegisterValue(normalizeRegisterName(register), value, toCoreRegisterSize(size))
     }
 
-    function setTabMemoryAddress(address: bigint, tabId: number) {
-        const tab = state.memory.tabs.find((e) => e.id == tabId)
-        if (!tab) return
-        tab.address = address
-        tab.data.current =
-            x86?.readMemoryBytes(Number(address), tab.pageSize) ??
-            new Uint8Array(tab.pageSize).fill(0)
-        tab.data.prevState = tab.data.current
+    async _step(): Promise<{ terminated: boolean }> {
+        const core = this.requireCore()
+        const result = await core.step()
+        if (core.getStatus() === CoreEmulatorStatus.WaitingForInput) {
+            await this.provideProgramInput()
+        }
+        return { terminated: result.terminated || core.hasTerminated() }
     }
 
-    async function validateTestcase(testcase: Testcase) {
-        const errors = [] as TestcaseValidationError[]
-        if (!x86) throw new Error('Interpreter not initialized')
-        const registers = x86.getRegistersValues()
-        for (const [register, value] of Object.entries(testcase.expectedRegisters)) {
-            const registerIndex = X86_REGISTERS.indexOf(register.toUpperCase())
-            if (registerIndex === -1) {
-                console.error(`Register ${register} not found`)
-                continue
-            }
-            const registerValue = BigInt(registers[registerIndex])
-            if (registerValue !== value) {
-                errors.push({
-                    type: 'wrong-register',
-                    register,
-                    expected: value,
-                    got: registerValue
-                })
-            }
-        }
-        const current = state
-        if (current.stdOut !== testcase.expectedOutput) {
-            errors.push({
-                type: 'wrong-output',
-                expected: testcase.expectedOutput,
-                got: current.stdOut
-            })
-        }
-        for (const value of testcase.expectedMemory) {
-            if (value.type === 'number') {
-                const bytes = x86.readMemoryBytes(Number(value.address), value.bytes)
-                const num = byteSliceToNum(bytes, 'big')
-                if (num !== value.expected) {
-                    errors.push({
-                        type: 'wrong-memory-number',
-                        address: value.address,
-                        bytes: value.bytes,
-                        expected: value.expected,
-                        got: num
-                    })
-                }
-            } else if (value.type === 'number-chunk') {
-                const bytes = x86.readMemoryBytes(
-                    Number(value.address),
-                    value.expected.length * value.bytes
-                )
-                const expected = numbersOfSizeToSlice(value.expected, value.bytes)
-                if (!isMemoryChunkEqual(bytes, expected)) {
-                    errors.push({
-                        type: 'wrong-memory-chunk',
-                        address: value.address,
-                        expected: expected,
-                        got: Array.from(bytes)
-                    })
-                }
-            } else if (value.type === 'string-chunk') {
-                const bytes = x86.readMemoryBytes(Number(value.address), value.expected.length)
-                const str = new TextDecoder().decode(bytes)
-                if (str !== value.expected) {
-                    errors.push({
-                        type: 'wrong-memory-string',
-                        address: value.address,
-                        expected: value.expected,
-                        got: str
-                    })
-                }
-            }
-        }
-        return errors
+    _stringifyError(error: unknown): string {
+        if (error instanceof Error) return error.message
+        return String(error)
     }
 
-    async function runTestcase(testcase: Testcase, haltLimit: number) {
-        if (haltLimit <= 0) haltLimit = Number.MAX_SAFE_INTEGER
-        const start = performance.now()
-        try {
-            if (!x86) throw new Error('Interpreter not initialized')
-            for (const [register, value] of Object.entries(testcase.startingRegisters)) {
-                x86.setRegisterValue(registerNameToType(register), Number(value))
-            }
-            for (const value of testcase.startingMemory) {
-                if (value.type === 'number') {
-                    const slice = new Uint8Array(numberToByteSlice(value.expected, value.bytes))
-                    x86.setMemoryBytes(Number(value.address), [...slice])
-                } else if (value.type === 'number-chunk') {
-                    const expected = numbersOfSizeToSlice(value.expected, value.bytes)
-                    x86.setMemoryBytes(Number(value.address), expected)
-                } else if (value.type === 'string-chunk') {
-                    const encoded = new TextEncoder().encode(value.expected)
-                    x86.setMemoryBytes(Number(value.address), [...encoded])
-                }
-            }
-            x86.simulate(haltLimit)
-            const ins = x86.getNextStatement()
-            //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
-            state.line = ins?.line ?? -1
-            state.canUndo = false
-
-            updateRegisters()
-            updateStatusRegisters()
-            updateMemory()
-            updateData()
-            scrollStackTab()
-            state.executionTime = performance.now() - start
-        } catch (e) {
-            console.error(e)
-            let line = -1
-            try {
-                line = x86?.getNextStatement()?.line ?? -1
-            } catch (e) {
-                console.error(e)
-            }
-            addError(getErrorMessage(e))
-            state.terminated = true
-            state.line = line
-        }
-        return InterpreterStatus.TerminatedWithException
+    _undo(): void {
+        this.requireCore().undo()
     }
 
-    async function test(code: string, testcases: Testcase[], haltLimit: number, historySize = 0) {
-        testcases = structuredClone(testcases)
-        const results = [] as TestcaseResult[]
-        for (const testcase of testcases) {
-            try {
-                await compile(historySize, code)
-                await runTestcase(testcase, haltLimit)
-                const errors = await validateTestcase(testcase)
-                results.push({
-                    errors,
-                    passed: errors.length === 0,
-                    testcase
-                })
-            } catch (e) {
-                console.error(e)
-                state.errors.push(getErrorMessage(e))
-            }
-        }
-        const passedTests = results.filter((r) => r.passed)
-        state.stdOut = '⏳ Running tests...\n ' + state.stdOut
-        if (passedTests.length !== results.length) {
-            state.stdOut += `\n❌ ${results.length - results.filter((r) => r.passed).length} testcases not passed\n`
-        }
-        if (passedTests.length > 0) {
-            state.stdOut += `\n✅ ${passedTests.length} testcases passed \n`
-        }
-        return results
+    _writeMemoryBytes(address: bigint, data: Uint8Array): void {
+        this.requireCore().writeMemoryBytes(address, data)
     }
 
-    function getLineFromAddress(address: bigint) {
-        if (!x86) return -1
-        const line = x86.getStatementAtAddress(Number(address))
-        return line?.line ?? -1
+    private async runWithInput(limit: number | undefined, breakpoints: number[]): Promise<CoreEmulatorStatus> {
+        const core = this.requireCore()
+        let status = await core.run(limit, breakpoints)
+        while (status === CoreEmulatorStatus.WaitingForInput) {
+            await this.provideProgramInput()
+            status = await core.run(limit, breakpoints)
+        }
+        return status
     }
 
-    clear()
-    semanticCheck()
+    private async provideProgramInput(): Promise<void> {
+        const core = this.requireCore()
+        const value = this.testcaseInput ? (this.testcaseInput.shift() ?? '') : await Prompt.askText('Program input', true)
+        if (value == null) throw new Error('Input cancelled')
+        core.provideInput(ensureLineInput(value))
+    }
 
+    private async getDiagnosticCore(): Promise<CoreX86Emulator> {
+        this.diagnosticCore ??= await createX86Emulator({ mode: 'NASM_trunk' })
+        return this.diagnosticCore
+    }
+
+    private requireCore(): CoreX86Emulator {
+        if (!this.core) throw new Error('Interpreter not initialized')
+        return this.core
+    }
+
+    private updateMemoryAddresses(): void {
+        const pageSize = BigInt(this.state.memory.global.pageSize)
+        this.state.memory.global.address = alignDown(this._getSp(), pageSize)
+        const stackTab = this.state.memory.tabs.find((tab) => tab.name === 'Stack')
+        if (stackTab) {
+            const stackPageSize = BigInt(stackTab.pageSize)
+            stackTab.address = alignDown(this._getSp(), stackPageSize)
+        }
+    }
+
+    private isProgramOutput(): boolean {
+        const state = this.core?.state
+        return state !== undefined && state !== BlinkState.Assembling && state !== BlinkState.Linking
+    }
+}
+
+function normalizeRegisterName(register: string): X86RegisterName {
+    const normalized = register.toLowerCase() as X86RegisterName
+    if (!X86_REGISTER_NAMES.includes(normalized)) throw new Error(`Unknown X86 register: ${register}`)
+    return normalized
+}
+
+function toCoreRegisterSize(size: RegisterSize | undefined): CoreRegisterSize {
+    switch (size) {
+        case RegisterSize.Byte:
+            return CoreRegisterSize.Byte
+        case RegisterSize.Word:
+            return CoreRegisterSize.Word
+        case RegisterSize.Long:
+            return CoreRegisterSize.Long
+        case RegisterSize.Double:
+        default:
+            return CoreRegisterSize.Double
+    }
+}
+
+function toLocalRegisterSize(size: CoreRegisterSize): RegisterSize {
+    switch (size) {
+        case CoreRegisterSize.Byte:
+            return RegisterSize.Byte
+        case CoreRegisterSize.Word:
+            return RegisterSize.Word
+        case CoreRegisterSize.Long:
+            return RegisterSize.Long
+        case CoreRegisterSize.Double:
+        default:
+            return RegisterSize.Double
+    }
+}
+
+function toLocalStatus(status: CoreEmulatorStatus): EmulatorStatus {
+    if (status === CoreEmulatorStatus.Terminated) return EmulatorStatus.Terminated
+    return EmulatorStatus.Running
+}
+
+function mapMonacoError(error: CoreMonacoError): MonacoError {
     return {
-        get registers() {
-            return state.registers
+        lineIndex: error.lineIndex,
+        column: error.column,
+        line: { ...error.line },
+        message: error.message,
+        formatted: error.formatted
+    }
+}
+
+function diagnosticToMonacoError(code: string, diagnostic: X86CompilationDiagnostic): MonacoError {
+    const lines = code.split('\n')
+    const lineIndex = Math.max(0, diagnostic.line - 1)
+    const line = lines[lineIndex] ?? ''
+    return {
+        lineIndex,
+        column: 0,
+        line: {
+            line,
+            line_index: lineIndex
         },
-        get hiddenRegisters() {
-            return state.hiddenRegisters
-        },
-        get terminated() {
-            return state.terminated
-        },
-        get line() {
-            return state.line
-        },
-        get code() {
-            return code
-        },
-        get compiledCode() {
-            return state.compiledCode
-        },
-        get compilerErrors() {
-            return state.compilerErrors
-        },
-        get callStack() {
-            return state.callStack
-        },
-        get errors() {
-            return state.errors
-        },
-        get sp() {
-            return state.sp
-        },
-        get latestSteps() {
-            return state.latestSteps
-        },
-        get stdOut() {
-            return state.stdOut
-        },
-        get executionTime() {
-            return state.executionTime
-        },
-        get canUndo() {
-            return state.canUndo
-        },
-        get canExecute() {
-            return state.canExecute
-        },
-        get breakpoints() {
-            return state.breakpoints
-        },
-        get memory() {
-            return state.memory
-        },
-        get interrupt() {
-            return state.interrupt
-        },
-        get statusRegisters() {
-            return state.statusRegisters
-        },
-        get decorations() {
-            return state.decorations
-        },
-        get pc() {
-            return state.pc
-        },
-        get systemSize() {
-            return state.systemSize
-        },
-        get isExamMode(){
-            return state.isExamMode
-        },
-        set isExamMode(value: boolean){
-            state.isExamMode = value
-        },
-        compile,
-        step,
-        run,
-        check: () => Promise.resolve(semanticCheck()),
-        setGlobalMemoryAddress,
-        setCode,
-        clear,
-        setTabMemoryAddress,
-        toggleBreakpoint,
-        undo,
-        resetSelectedLine,
-        dispose,
-        test,
-        getLineFromAddress,
-        readMemoryBytes(address: bigint, length: number) {
-            if (!x86) throw new Error('Emulator not initialized')
-            return new Uint8Array(x86.readMemoryBytes(Number(address), length))
+        message: diagnostic.error,
+        formatted: diagnostic.error
+    }
+}
+
+function mapExecutionStep(step: CoreExecutionStep): ExecutionStep {
+    return {
+        mutations: step.mutations.map(mapMutationOperation),
+        pc: step.pc,
+        old_ccr: { ...step.old_ccr },
+        new_ccr: { ...step.new_ccr },
+        line: step.line
+    }
+}
+
+function mapMutationOperation(operation: CoreMutationOperation): MutationOperation {
+    if (operation.type === 'WriteRegister') {
+        return {
+            type: operation.type,
+            value: {
+                ...operation.value,
+                size: toLocalRegisterSize(operation.value.size)
+            }
         }
-    } satisfies X86EmulatorState & BaseEmulatorActions
+    }
+    if (operation.type === 'WriteMemory') {
+        return {
+            type: operation.type,
+            value: {
+                ...operation.value,
+                size: toLocalRegisterSize(operation.value.size)
+            }
+        }
+    }
+    if (operation.type === 'WriteMemoryBytes') {
+        return {
+            type: operation.type,
+            value: {
+                address: operation.value.address,
+                old: [...operation.value.old]
+            }
+        }
+    }
+    return { ...operation }
+}
+
+function ensureLineInput(input: string): string {
+    return input.endsWith('\n') ? input : `${input}\n`
+}
+
+function alignDown(value: bigint, size: bigint): bigint {
+    if (size <= 0n) return value
+    return value - (value % size)
 }

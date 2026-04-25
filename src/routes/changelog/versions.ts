@@ -7,9 +7,17 @@ type Version = {
 }
 export const versions: Version[] = [
     {
+        version: '8.0.0',
+        title: 'New X86 emulator',
+        date: new Date('2026-04-26'),
+        changes: [
+            'Changed the X86 emulator to Blink, which now supports the proper debugging tools and features'
+        ]
+    },
+    {
         version: '7.0.0',
         title: 'AI and new Exam Mode',
-        date: new Date('2026-03-30'),
+        date: new Date('2026-04-05'),
         changes: [
             'Added an AI assistant in every editor that has control of the editor and emulator. You can ask for help with your code and get suggestions and explanations',
             'Improved the exam mode to have sections, like assembly, c, open and closed questions.',
@@ -17,13 +25,13 @@ export const versions: Version[] = [
             'Added new single page documentation which is easier to print'
         ]
     },
-        {
+    {
         version: '6.3.0',
         title: 'Exam mode',
         date: new Date('2025-07-15'),
         changes: [
             'Added exam mode, where you can create exams for students and have their editor locked during the exam',
-            'Added initial course for general assembly languages',
+            'Added initial course for general assembly languages'
         ]
     },
     {

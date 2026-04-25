@@ -22,6 +22,7 @@
     } from '$lib/languages/commonLanguageFeatures.svelte'
 
     let running = $state(false)
+    let building = $state(false)
 
     interface Props {
         code: string
@@ -93,6 +94,21 @@
     let showRegsColumn = $derived(
         showPc || showRegisters || (showFlags && emulator.statusRegisters?.length > 0)
     )
+
+    async function buildCode() {
+        if (building || running) return
+        try {
+            running = false
+            building = true
+            emulator.setCode(code)
+            await emulator.compile(settingsStore.values.maxHistorySize.value)
+        } catch (e) {
+            console.error(e)
+            toast.error('Error compiling code. ' + getM68kErrorMessage(e))
+        } finally {
+            building = false
+        }
+    }
 </script>
 
 {#snippet regsColumn()}
@@ -196,6 +212,7 @@
             <Controls
                 children={controls}
                 {running}
+                {building}
                 hasTests={testcases.length > 0 && !showTestcases}
                 canEditTests={showTestcases}
                 hasErrorsInTests={testcasesResult.some((r) => !r.passed)}
@@ -209,6 +226,7 @@
                     testcasesVisible = !testcasesVisible
                 }}
                 on:test={async () => {
+                    if (building || running) return
                     running = true
                     setTimeout(async () => {
                         try {
@@ -218,15 +236,16 @@
                                 settingsStore.values.instructionsLimit.value,
                                 settingsStore.values.maxHistorySize.value
                             )
-                            running = false
                         } catch (e) {
                             console.error(e)
-                            running = false
                             toast.error('Error executing tests. ' + getM68kErrorMessage(e))
+                        } finally {
+                            running = false
                         }
                     }, 50)
                 }}
                 on:run={async () => {
+                    if (building || running) return
                     running = true
                     setTimeout(() => {
                         try {
@@ -240,14 +259,7 @@
                     }, 50)
                 }}
                 on:build={async () => {
-                    try {
-                        running = false
-                        emulator.setCode(code)
-                        await emulator.compile(settingsStore.values.maxHistorySize.value)
-                    } catch (e) {
-                        console.error(e)
-                        toast.error('Error compiling code. ' + getM68kErrorMessage(e))
-                    }
+                    await buildCode()
                 }}
                 on:step={() => {
                     try {

@@ -12,10 +12,12 @@
 <div class="status-codes" {style}>
     {#each statusCodes as el, i (i)}
         <div class="column">
-            <div>
+            <div style="opacity: 0.8;">
                 {el.name}
             </div>
-            <div class:edited={el.prev !== el.value}>
+            <div 
+                style="text-align: center;"
+                class:edited={el.prev !== el.value}>
                 {el.value}
             </div>
         </div>

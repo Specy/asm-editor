@@ -1486,6 +1486,7 @@ bset #2, d1 ; bit 2 was already 1 (Z clear), no change
         'nop',
         [],
         NO_SIZE,
+        UNAFFECTED,
         desc.nop,
         'nop',
         undefined,

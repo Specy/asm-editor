@@ -30,6 +30,7 @@ export abstract class GenericEmulator<T, R extends string>
     protected _emulatorOptions: Required<EmulatorSettings>
     interrupt?: Interrupt | undefined
     isExamMode: boolean = false
+    private semanticCheckId = 0
 
     constructor(code: string, options: EmulatorConfig<R>, emulatorOptions: EmulatorSettings = {}) {
         super(options)
@@ -86,7 +87,7 @@ export abstract class GenericEmulator<T, R extends string>
             }
         })
         this.clear()
-        this.semanticCheck()
+        void this.semanticCheck()
     }
 
     protected abstract getInstance(): T | null
@@ -109,7 +110,7 @@ export abstract class GenericEmulator<T, R extends string>
         const stackTab = current.memory.tabs.find((e) => e.name === 'Stack')
         const sp = this._getSp()
         if (!stackTab) return
-        const newAddress = sp - (sp % BigInt(stackTab.pageSize)) - BigInt(stackTab.pageSize)
+        const newAddress = sp - (sp % BigInt(stackTab.pageSize))
         if (stackTab.address !== newAddress) {
             stackTab.address = newAddress
             this.updateMemory()
@@ -118,13 +119,18 @@ export abstract class GenericEmulator<T, R extends string>
         }
     }
 
-    protected semanticCheck() {
+    protected async semanticCheck() {
+        const checkId = ++this.semanticCheckId
         try {
-            const errors = this._checkCode(this._code)
+            const errors = await this._checkCode(this._code)
+            if (checkId !== this.semanticCheckId) return errors
             this.state.compilerErrors = errors
             this.state.errors = []
+            return errors
         } catch (e) {
+            if (checkId !== this.semanticCheckId) return []
             this.addError(this._stringifyError(e))
+            return [makeGenericMonacoError(this._stringifyError(e))]
         }
     }
 
@@ -227,40 +233,34 @@ export abstract class GenericEmulator<T, R extends string>
         this.updateStatusRegisters()
     }
 
-    compile(historySize: number, codeOverride: string | undefined): Promise<void> {
-        return new Promise((res, rej) => {
-            try {
-                this.clear()
-                const result = this._compile(codeOverride ?? this._code)
-                //riscv.setUndoSize(historySize)
-                if (!result.ok) {
-                    //@ts-ignore
-                    this.state.compilerErrors = result.errors
-                    this.state.canExecute = false
-                    //@ts-ignore
-                    rej(result.report)
-                }
-                this._initialize(historySize)
-                this.addDecorations()
-                const stackTab = this.state.memory.tabs.find((e) => e.name === 'Stack')
-                if (stackTab) {
-                    stackTab.address = BigInt(this._getSp() - BigInt(stackTab.pageSize))
-                }
-                this.state.canExecute = true
-                this.state.canUndo = false
-                this.state.line = this._getNextInstruction()?.lineNumber ?? -1
-                this.updateRegisters()
-                this.scrollStackTab()
-                this.updateMemory()
-                this.updateData()
-                this.updateStatusRegisters()
-                res()
-            } catch (e) {
-                this.addError(this._stringifyError(e))
-                this.debouncer[1]()
-                rej(e)
+    async compile(historySize: number, codeOverride: string | undefined): Promise<void> {
+        try {
+            this.clear()
+            const result = await this._compile(codeOverride ?? this._code)
+            if ('errors' in result) {
+                this.state.compilerErrors = result.errors
+                this.state.canExecute = false
+                throw new Error(result.report)
             }
-        })
+            this._initialize(historySize)
+            this.addDecorations()
+            const stackTab = this.state.memory.tabs.find((e) => e.name === 'Stack')
+            if (stackTab) {
+                stackTab.address = BigInt(this._getSp() - BigInt(stackTab.pageSize))
+            }
+            this.state.canExecute = true
+            this.state.canUndo = false
+            this.state.line = this._getNextInstruction()?.lineNumber ?? -1
+            this.updateRegisters()
+            this.scrollStackTab()
+            this.updateMemory()
+            this.updateData()
+            this.updateStatusRegisters()
+        } catch (e) {
+            this.addError(this._stringifyError(e))
+            this.debouncer[1]()
+            throw e
+        }
     }
 
     dispose(): void {
@@ -337,7 +337,7 @@ export abstract class GenericEmulator<T, R extends string>
 
     setCode(code: string): void {
         this._code = code
-        this.debouncer[0](() => this.semanticCheck())
+        this.debouncer[0](() => void this.semanticCheck())
     }
 
     setGlobalMemoryAddress(address: bigint): void {
@@ -361,8 +361,8 @@ export abstract class GenericEmulator<T, R extends string>
             const tab = this.state.memory.tabs.find((e) => e.id == tabId)
             if (!tab) return
             const bytes = this.getInstance()
-                ? this._readMemoryBytes(address, BigInt(this.state.memory.global.pageSize))
-                : new Uint8Array(this.state.memory.global.pageSize).fill(
+                ? this._readMemoryBytes(address, BigInt(tab.pageSize))
+                : new Uint8Array(tab.pageSize).fill(
                       this._emulatorOptions.initialMemoryValue
                   )
             tab.address = address
@@ -497,7 +497,7 @@ export abstract class GenericEmulator<T, R extends string>
                     this._writeMemoryBytes(value.address, encoded)
                 }
             }
-            this._runTestcase(testcase, haltLimit)
+            await this._runTestcase(testcase, haltLimit)
             const ins = this._getNextInstruction()
             //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
             this.state.line = ins?.lineNumber ?? -1
@@ -564,11 +564,12 @@ export abstract class GenericEmulator<T, R extends string>
     undo(amount: number | undefined): void {
         try {
             if (!this.getInstance()) return
-            for (let i = 0; i < amount && this._canUndo; i++) {
+            const undoCount = Math.max(0, Math.floor(amount ?? 1))
+            for (let i = 0; i < undoCount && this._canUndo(); i++) {
                 this._undo()
             }
             const instruction = this._getNextInstruction()
-            this.state.line = instruction.lineNumber
+            this.state.line = instruction?.lineNumber ?? -1
             this.state.canUndo = this._canUndo()
             this.updateRegisters()
             this.scrollStackTab()
@@ -591,7 +592,7 @@ export abstract class GenericEmulator<T, R extends string>
     async check() {
         try {
             if (!this.getInstance()) return []
-            const errors = this._checkCode(this._code)
+            const errors = await this._checkCode(this._code)
             this.state.compilerErrors = errors
             this.state.errors = []
             return errors

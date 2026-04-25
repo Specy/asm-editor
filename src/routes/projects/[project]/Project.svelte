@@ -76,6 +76,7 @@
     let editor: monaco.editor.IStandaloneCodeEditor = $state()
     let testcasesResult: TestcaseResult[] = $state([])
     let running = $state(false)
+    let building = $state(false)
     let settingsVisible = $state(false)
     let documentationVisible = $state(false)
     let shortcutsVisible = $state(false)
@@ -122,7 +123,7 @@
                 settingsVisible = !settingsVisible
             }
             case ShortcutAction.BuildCode: {
-                emulator.compile(settingsStore.values.maxHistorySize.value)
+                void buildCode()
                 break
             }
             case ShortcutAction.RunCode: {
@@ -212,6 +213,20 @@
         pc.setValue(emulator.pc)
         pc.setSize(emulator.systemSize)
     })
+
+    async function buildCode() {
+        if (readonly || building || running) return
+        try {
+            running = false
+            building = true
+            await emulator.compile(settingsStore.values.maxHistorySize.value, code)
+        } catch (e) {
+            console.error(e)
+            toast.error('Error compiling code. ' + getM68kErrorMessage(e))
+        } finally {
+            building = false
+        }
+    }
 </script>
 
 {#if !embedded}
@@ -455,6 +470,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
 
         <Controls
             {running}
+            {building}
             hasTests={testcases.length > 0}
             hasErrorsInTests={testcasesResult.some((r) => !r.passed)}
             hasNoErrorsInTests={testcasesResult.every((r) => r.passed) &&
@@ -468,6 +484,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                 toggleWindow('testcases')
             }}
             on:test={async () => {
+                if (building || running) return
                 running = true
                 setTimeout(async () => {
                     try {
@@ -477,15 +494,16 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                             settingsStore.values.instructionsLimit.value,
                             settingsStore.values.maxHistorySize.value
                         )
-                        running = false
                     } catch (e) {
                         console.error(e)
-                        running = false
                         toast.error('Error executing tests. ' + getM68kErrorMessage(e))
+                    } finally {
+                        running = false
                     }
                 }, 50)
             }}
             on:run={async () => {
+                if (building || running) return
                 running = true
                 testcasesResult = []
                 setTimeout(() => {
@@ -500,14 +518,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                 }, 50)
             }}
             on:build={async () => {
-                try {
-                    running = false
-                    //give the latest code to the emulator
-                    await emulator.compile(settingsStore.values.maxHistorySize.value, code)
-                } catch (e) {
-                    console.error(e)
-                    toast.error('Error compiling code. ' + getM68kErrorMessage(e))
-                }
+                await buildCode()
             }}
             on:step={() => {
                 try {
