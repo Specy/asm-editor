@@ -40,7 +40,8 @@
             bytesPerPage={tab.pageSize}
             {memorySize}
             currentAddress={tab.address}
-            inputStyle="width: 6rem"
+            inputStyle="width: 6rem;"
+            
             onAddressChange={async (e) => {
                 onAddressChange?.(e, tab)
             }}
@@ -66,6 +67,7 @@
         color: var(--primary-text);
         padding: 0.4rem;
         gap: 0.4rem;
+        max-width: 16rem;
         border-radius: 0.7rem;
         box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
         border-top-left-radius: 0;

@@ -86,7 +86,7 @@
         <Button
             onClick={searchAddress}
             hasIcon
-            style="padding:0 0.5rem; height:100%; width:2.2rem; margin-left: 0.2rem; min-height: 1.8rem;"
+            style="padding:0 0.5rem; margin-left: 0.3rem; width:2.2rem; min-height: 1.8rem;"
             cssVar="primary"
             title="Search address"
             active={BigInt(`0x${hexAddress || '0'}`) !== currentAddress}
@@ -99,7 +99,7 @@
         <Button
             onClick={() => updateAddress(currentAddress - BigInt(bytesPerPage))}
             hasIcon
-            style="padding:0 0.5rem; height:100%; min-height: 1.8rem;"
+            style="padding:0 0.5rem; width:2.2rem; min-height: 1.8rem;"
             cssVar="primary"
             title="Previous page"
         >
@@ -111,7 +111,7 @@
         <Button
             onClick={() => updateAddress(currentAddress + BigInt(bytesPerPage))}
             hasIcon
-            style="padding:0 0.5rem; height:100%; min-height: 1.8rem;"
+            style="padding:0 0.5rem; width:2.2rem; min-height: 1.8rem;"
             cssVar="primary"
             title="Next page"
         >
@@ -136,8 +136,6 @@
     }
     .address-search {
         display: flex;
-        gap: 0.2rem;
-        align-items: center;
         flex: 1;
         width: 100%;
     }
