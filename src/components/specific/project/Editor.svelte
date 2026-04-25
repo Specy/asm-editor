@@ -1,7 +1,10 @@
 <script lang="ts">
     import { type Component, createEventDispatcher, mount, onDestroy, onMount } from 'svelte'
     import type monaco from 'monaco-editor'
-    import type { AvailableLanguages, AvailableProgrammingLanguages} from '../../../lib/Project.svelte'
+    import type {
+        AvailableLanguages,
+        AvailableProgrammingLanguages
+    } from '../../../lib/Project.svelte'
     import type { MonacoType } from '$lib/monaco/Monaco'
     import { Monaco } from '$lib/monaco/Monaco'
     import { generateTheme } from '$lib/monaco/editorTheme'
@@ -34,7 +37,7 @@
         errors = [],
         breakpoints = [],
         editor = $bindable(),
-        viewZones = [],
+        viewZones = []
     }: Props = $props()
     let mockEditor: HTMLDivElement | null = $state()
     let monacoInstance: MonacoType | null = $state.raw()
@@ -74,7 +77,7 @@
             cursorSmoothCaretAnimation: 'on'
         })
         const model = editor.getModel()
-        if(model){
+        if (model) {
             model.setEOL(0)
         }
         const observer = new ResizeObserver(() => {
@@ -113,14 +116,16 @@
             })
         )
     })
-    
+
     function setEditorValue(value: string) {
         const model = editor.getModel()
         const fullRange = model.getFullModelRange()
-        editor.executeEdits('external', [{
-            range: fullRange,
-            text: value
-        }])
+        editor.executeEdits('external', [
+            {
+                range: fullRange,
+                text: value
+            }
+        ])
     }
 
     $effect(() => {
@@ -299,7 +304,10 @@
     :global(.find-widget) {
         border-radius: 0.3rem !important;
         top: 1rem !important;
-        right: 1rem !important;
+        right: 2.4rem !important;
+    }
+    :global(.monaco-editor .find-widget > .button.codicon-widget-close) {
+        top: 7px !important;
     }
 
     :global(.editor-widget.suggest-widget) {
@@ -331,7 +339,7 @@
         overflow-x: auto;
         display: block;
         margin: 0.5rem 0;
-        font-family: "Fira Code", monospace;
+        font-family: 'Fira Code', monospace;
         border-radius: 0.5rem;
         border: solid 0.1rem var(--primary);
         width: fit-content;

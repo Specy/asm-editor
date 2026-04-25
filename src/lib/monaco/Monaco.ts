@@ -1,7 +1,7 @@
 import { browser } from '$app/environment'
 import { generateTheme } from '$lib/monaco/editorTheme'
-import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import type monaco from 'monaco-editor'
+import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import type { AvailableLanguages, AvailableProgrammingLanguages } from '$lib/Project.svelte'
 
 export type MonacoType = typeof monaco
