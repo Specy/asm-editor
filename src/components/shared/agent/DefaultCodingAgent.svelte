@@ -1,6 +1,35 @@
 <script lang="ts" module>
     export const SUPPORTED_LANGUAGES = ['M68K', 'MIPS', 'X86', 'RISC-V', 'RISC-V-64'] as const
     export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number]
+    export const DEFAULT_CODING_AGENT_TOOL_NAMES = [
+        'set_code',
+        'get_code',
+        'get_emulator_state',
+        'step',
+        'run_to_completion',
+        'undo',
+        'update_breakpoints',
+        'get_line_from_address',
+        'compile',
+        'read_memory'
+    ] as const
+    export type DefaultCodingAgentToolName = (typeof DEFAULT_CODING_AGENT_TOOL_NAMES)[number]
+    export type AgentToolAllowList = 'all' | DefaultCodingAgentToolName[]
+
+    export const DEFAULT_CODING_AGENT_WORKFLOW_NAMES = [
+        'debug_broken_code',
+        'write_new_code_from_scratch',
+        'modify_or_extend_existing_code',
+        'diagnose_runtime_errors_or_interrupts'
+    ] as const
+    export type DefaultCodingAgentWorkflowName =
+        (typeof DEFAULT_CODING_AGENT_WORKFLOW_NAMES)[number]
+    export type AgentWorkflowAllowList = 'all' | DefaultCodingAgentWorkflowName[]
+
+    export type AgentWorkflow = {
+        name: string
+        description: string
+    }
 </script>
 
 <script lang="ts">
@@ -14,11 +43,6 @@
     import { BASE_CODE } from '$lib/Config'
     import type { RegisteredTool } from '@discerns/sdk'
 
-    export type AgentWorkflow = {
-        name: string
-        description: string
-    }
-
     interface Props {
         editorLanguage: SupportedLanguage | null
         editorCode: string
@@ -28,6 +52,8 @@
         additionalInstructions?: string
         tools?: RegisteredTool[]
         workflows?: AgentWorkflow[]
+        allowToolList?: AgentToolAllowList
+        allowWorkflowList?: AgentWorkflowAllowList
     }
 
     let {
@@ -38,7 +64,9 @@
         canUpdateLanguage = true,
         additionalInstructions = '',
         tools: externalTools = [],
-        workflows = []
+        workflows = [],
+        allowToolList = 'all',
+        allowWorkflowList = 'all'
     }: Props = $props()
 
     let accent = $derived(ThemeStore.get('accent').color)
@@ -169,9 +197,14 @@ Use this whenever you want to show the user a code example, answer a coding ques
         }))
     }
 
-    let allTools = $derived([
-        createSetCodeTool(canUpdateLanguage),
-        tool({
+    function allowListAllows<T extends string>(allowList: 'all' | T[], name: T) {
+        return allowList === 'all' || allowList.includes(name)
+    }
+
+    const defaultToolFactories = $derived.by(() => {
+        return {
+            set_code: createSetCodeTool(canUpdateLanguage),
+            get_code: tool({
             name: 'get_code',
             description: `Returns the current code and language in the editor.
 Use this when you need to read or reference the source code, for example when the user says "this code" or asks to fix something already in the editor.
@@ -189,7 +222,7 @@ Each line is prefixed with its 1-based line number and a "B" marker if a breakpo
                 }
             }
         }),
-        tool({
+            get_emulator_state: tool({
             name: 'get_emulator_state',
             description: `Returns the full emulator execution state.
 Use this to inspect registers, flags, call stack, breakpoints, errors, and execution status. Call it after stepping or running to inspect the result.
@@ -247,7 +280,7 @@ Returned fields:
                 })
             }
         }),
-        tool({
+            step: tool({
             name: 'step',
             description:
                 'Steps the emulator forward by a given number of instructions (default 1). Use this for single-stepping or executing a few instructions at a time. Returns the emulator state after stepping, including whether the program terminated.',
@@ -295,7 +328,7 @@ Returned fields:
                 })
             }
         }),
-        tool({
+            run_to_completion: tool({
             name: 'run_to_completion',
             description:
                 'Runs the program until it terminates or hits a breakpoint. You MUST compile the code first by using the compile tool. Use this when the user wants to execute the entire program. Returns the final emulator state.',
@@ -334,7 +367,7 @@ Returned fields:
                 })
             }
         }),
-        tool({
+            undo: tool({
             name: 'undo',
             description:
                 'Undoes the last execution step(s), stepping backwards through execution. Only works when the program has been compiled, is not terminated, has no active interrupt, and has execution history to undo. Only the latest 100 steps are stored in history.',
@@ -379,7 +412,7 @@ Returned fields:
                 })
             }
         }),
-        tool({
+            update_breakpoints: tool({
             name: 'update_breakpoints',
             description:
                 'Adds and/or removes breakpoints on the given 1-based line numbers. Accepts two optional arrays: add for lines to add breakpoints on and remove for lines to remove breakpoints from. Returns the updated breakpoint list.',
@@ -413,7 +446,7 @@ Returned fields:
                 return $state.snapshot({ success: true, breakpoints: emulatorInstance.breakpoints.map((b: number) => b + 1) })
             }
         }),
-        tool({
+            get_line_from_address: tool({
             name: 'get_line_from_address',
             description:
                 'Returns the source line number corresponding to a given memory address. Use this to understand which instruction a program counter value or call stack address maps back to.',
@@ -430,10 +463,11 @@ Returned fields:
                 return $state.snapshot({ success: true, address: `0x${addr.toString(16)}`, line })
             }
         }),
-        tool({
+            compile: tool({
             name: 'compile',
-            description:
-                'Compiles the current code in the editor. Use this after modifying code via set_code if you need to recompile, or when you want to check for errors without running. Returns any compilation errors and whether the program can execute.',
+            description: allowListAllows(allowToolList, 'set_code')
+                ? 'Compiles the current code in the editor. Use this after modifying code via set_code if you need to recompile, or when you want to check for errors without running. Returns any compilation errors and whether the program can execute.'
+                : 'Compiles the current code in the editor. Use this when you want to check for assembler errors without running. Returns any compilation errors and whether the program can execute.',
             schema: z.object({}),
             execute: async () => {
                 if (!emulatorInstance) {
@@ -451,7 +485,7 @@ Returned fields:
                 })
             }
         }),
-        tool({
+            read_memory: tool({
             name: 'read_memory',
             description:
                 'Reads a region of memory starting at a hex address for a given number of bytes, up to 1024. Returns the bytes as a hex string. Use this to inspect data sections, the stack, or memory-mapped values.',
@@ -477,37 +511,35 @@ Returned fields:
                     hex
                 })
             }
-        }),
+        })
+        } satisfies Record<DefaultCodingAgentToolName, RegisteredTool>
+    })
+
+    const enabledDefaultToolNames = $derived.by(() =>
+        DEFAULT_CODING_AGENT_TOOL_NAMES.filter((name) => allowListAllows(allowToolList, name))
+    )
+    const allTools = $derived([
+        ...enabledDefaultToolNames.map((name) => defaultToolFactories[name]),
         ...externalTools
     ])
+    const hasSetCodeTool = $derived(enabledDefaultToolNames.includes('set_code'))
+    const hasStepTool = $derived(enabledDefaultToolNames.includes('step'))
+    const hasRunTool = $derived(enabledDefaultToolNames.includes('run_to_completion'))
+    const hasUpdateBreakpointsTool = $derived(enabledDefaultToolNames.includes('update_breakpoints'))
+    const hasReadMemoryTool = $derived(enabledDefaultToolNames.includes('read_memory'))
+    const hasGetLineFromAddressTool = $derived(
+        enabledDefaultToolNames.includes('get_line_from_address')
+    )
+    const hasCompileTool = $derived(enabledDefaultToolNames.includes('compile'))
 
     const initialCodes = Object.entries(BASE_CODE)
         .map(([lang, code]) => `\`\`\`${lang}\n${code}\n\`\`\``)
         .join('\n\n')
 
-    let extraWorkflows = $derived(
-        workflows.length === 0
-            ? ''
-            : workflows
-                  .map((w) => `## ${w.name}\n${w.description.trim()}`)
-                  .join('\n\n')
-    )
-
-    let avatarInstructions = $derived(`You are an assembly language assistant with access to an interactive code editor and emulator.
-
-# Core principles
-These apply to every conversation. Follow them unless the user explicitly overrides them.
-
-- **Observe, don't guess.** When diagnosing behavior, run the code and inspect the actual emulator state (\`step\`, \`get_emulator_state\`, \`read_memory\`) instead of reasoning only from the source. If you don't know what a value is, read it; do not assume.
-- **Syntactic vs semantic verification.** \`set_code\` already reports compile errors, so after it succeeds the code is syntactically valid. You do NOT need to re-run \`compile\` for that. If correctness of the logic matters (branches, loops, arithmetic, I/O, anything the user cares about behaviorally), also \`run_to_completion\` or \`step\` and verify the resulting registers / stdout / memory match the expected result.
-- **Preserve user work.** Before editing existing code, call \`get_code\` to read it. Never wholesale-replace the editor contents unless the user explicitly asks for a rewrite.
-- **Ground claims in tool output.** Never say "the editor now shows X", "this compiles", or "this fixes the bug" unless a tool call just confirmed it. A markdown code block in chat does NOT update the editor.
-- **Breakpoints are inspection points.** Add them with \`update_breakpoints\` when you need to pause at a specific line.
-
-# Workflows
-Pick the workflow that matches the user's request. These are playbooks, not rigid scripts — skip steps that are clearly unnecessary for the situation. Additional context-specific workflows may appear at the end of this section; they take precedence over the generic ones when they apply.
-
-## Debug broken code
+    const defaultWorkflowDefinitions = {
+        debug_broken_code: {
+            name: 'Debug broken code',
+            description: `
 When the user says something isn't working, produces the wrong result, crashes, or behaves unexpectedly.
 1. \`get_code\` to read what's actually in the editor right now.
 2. \`compile\` (or inspect errors from \`get_emulator_state\`). If there are compile errors, fix them first via \`set_code\` and stop here if that resolves the issue.
@@ -518,41 +550,116 @@ When the user says something isn't working, produces the wrong result, crashes, 
 7. \`step\` through the region, re-reading state after each step (or every few steps). Use \`latestSteps\` from the return value to see what mutated.
 8. If you overshoot an interesting point, \`undo\` and re-observe.
 9. Report the bug grounded in the **observed** values, not speculation. Then apply a fix via \`set_code\` and re-verify as in *Write new code from scratch* from step 3 onward.
-
-## Write new code from scratch
+`
+        },
+        write_new_code_from_scratch: {
+            name: 'Write new code from scratch',
+            description: `
 When the user asks for a new program or snippet and the editor is empty or the user explicitly wants a fresh program.
 1. Confirm or pick the assembly language. Start from the template in \`<templates>\` below.
 2. \`set_code\` with the full program. Fix any compile errors it returns.
 3. If the program is non-trivial (has branches, loops, arithmetic, I/O, or a specific expected output), \`run_to_completion\` and check stdout / registers against the expected result.
 4. If the result is wrong, switch to the *Debug broken code* workflow.
-
-## Modify or extend existing code
+`
+        },
+        modify_or_extend_existing_code: {
+            name: 'Modify or extend existing code',
+            description: `
 When the user asks to add, change, or refactor something in the current editor.
 1. \`get_code\` first — always.
 2. Produce the minimal change: keep the user's structure, labels, comments, and unrelated code intact. Call \`set_code\` with the full updated program.
 3. If behavior (not just syntax) changed, verify as in *Write new code from scratch* step 3.
-
-## Diagnose runtime errors or interrupts
+`
+        },
+        diagnose_runtime_errors_or_interrupts: {
+            name: 'Diagnose runtime errors or interrupts',
+            description: `
 When execution has errored, terminated unexpectedly, or is paused on an interrupt.
 1. \`get_emulator_state\` to see \`errors\`, \`terminated\`, \`currentInterrupt\`, \`callStack\`, \`latestSteps\`.
 2. If \`currentInterrupt\` is set, explain what the emulator is waiting for (usually I/O) and how to resolve it.
 3. If the program terminated or errored unexpectedly, use \`latestSteps\` and \`callStack\` to locate the cause. Use \`get_line_from_address\` to map \`pc\` or stack frame addresses back to source lines.
 4. Once you have a concrete suspect, fall back to the *Debug broken code* workflow from step 3.
-${extraWorkflows ? '\n' + extraWorkflows + '\n' : ''}
+`
+        }
+    } satisfies Record<DefaultCodingAgentWorkflowName, AgentWorkflow>
 
-# Tool-selection tips
-- \`step\` and \`run_to_completion\` already return registers, pc, sp, status registers, stdout, and \`latestSteps\` — **do not** immediately follow them with \`get_emulator_state\` unless you specifically need \`callStack\`, \`breakpoints\`, \`canUndo\`, or \`currentInterrupt\`.
-- Use \`read_memory\` only when registers alone don't explain the state (inspecting the stack, arrays, or data sections).
-- \`run_to_completion\` respects breakpoints, so combine it with \`update_breakpoints\` to fast-forward to an interesting point instead of stepping one-by-one.
-- \`undo\` + \`step 1\` is the right pattern to re-observe a single mutation you missed.
-- \`get_line_from_address\` is for mapping \`pc\` values or \`callStack\` frame addresses back to the source line.
-- If \`canExecute\` is false, you likely need to \`compile\` (or fix compile errors from \`set_code\`) before stepping or running.
+    const enabledWorkflows = $derived.by(() => [
+        ...DEFAULT_CODING_AGENT_WORKFLOW_NAMES.filter((name) =>
+            allowListAllows(allowWorkflowList, name)
+        ).map((name) => defaultWorkflowDefinitions[name]),
+        ...workflows
+    ])
 
-# Guidelines
+    const workflowInstructions = $derived(
+        enabledWorkflows.length === 0
+            ? 'No built-in workflow is active for this context. Use the available tools and context-specific instructions.'
+            : enabledWorkflows.map((w) => `## ${w.name}\n${w.description.trim()}`).join('\n\n')
+    )
+
+    const setCodeCoreInstructions = $derived(
+        hasSetCodeTool
+            ? `- **Syntactic vs semantic verification.** \`set_code\` already reports compile errors, so after it succeeds the code is syntactically valid. You do NOT need to re-run \`compile\` for that. If correctness of the logic matters (branches, loops, arithmetic, I/O, anything the user cares about behaviorally), also \`run_to_completion\` or \`step\` and verify the resulting registers / stdout / memory match the expected result.
+- **Preserve user work.** Before editing existing code, call \`get_code\` to read it. Never wholesale-replace the editor contents unless the user explicitly asks for a rewrite.`
+            : `- **Read-only code context.** You cannot edit the editor in this context. Analyze the current code and give suggested changes in chat only.`
+    )
+
+    const breakpointCoreInstructions = $derived(
+        hasUpdateBreakpointsTool
+            ? `- **Breakpoints are inspection points.** Add them with \`update_breakpoints\` when you need to pause at a specific line.`
+            : ''
+    )
+
+    const toolSelectionTips = $derived.by(() =>
+        [
+            hasStepTool && hasRunTool
+                ? '- `step` and `run_to_completion` already return registers, pc, sp, status registers, stdout, and `latestSteps` — **do not** immediately follow them with `get_emulator_state` unless you specifically need `callStack`, `breakpoints`, `canUndo`, or `currentInterrupt`.'
+                : '',
+            hasReadMemoryTool
+                ? '- Use `read_memory` only when registers alone don\'t explain the state (inspecting the stack, arrays, or data sections).'
+                : '',
+            hasRunTool && hasUpdateBreakpointsTool
+                ? '- `run_to_completion` respects breakpoints, so combine it with `update_breakpoints` to fast-forward to an interesting point instead of stepping one-by-one.'
+                : '',
+            hasStepTool && enabledDefaultToolNames.includes('undo')
+                ? '- `undo` + `step 1` is the right pattern to re-observe a single mutation you missed.'
+                : '',
+            hasGetLineFromAddressTool
+                ? '- `get_line_from_address` is for mapping `pc` values or `callStack` frame addresses back to the source line.'
+                : '',
+            hasCompileTool
+                ? `- If \`canExecute\` is false, you likely need to \`compile\`${hasSetCodeTool ? ' (or fix compile errors from `set_code`)' : ''} before stepping or running.`
+                : ''
+        ]
+            .filter(Boolean)
+            .join('\n')
+    )
+
+    const templateInstructions = $derived(
+        hasSetCodeTool
+            ? `# Guidelines
 When starting new code, use those templates as a base for each language (except the initial example instruction):
 <templates>
 ${initialCodes}
-</templates>
+</templates>`
+            : ''
+    )
+
+    let avatarInstructions = $derived(`You are an assembly language assistant with access to an interactive code editor and emulator.
+
+# Core principles
+These apply to every conversation. Follow them unless the user explicitly overrides them.
+
+- **Observe, don't guess.** When diagnosing behavior, run the code and inspect the actual emulator state (\`step\`, \`get_emulator_state\`, \`read_memory\`) instead of reasoning only from the source. If you don't know what a value is, read it; do not assume.
+${setCodeCoreInstructions}
+- **Ground claims in tool output.** Never say "the editor now shows X", "this compiles", or "this fixes the bug" unless a tool call just confirmed it. A markdown code block in chat does NOT update the editor.
+${breakpointCoreInstructions}
+
+# Workflows
+Pick the workflow that matches the user's request. These are playbooks, not rigid scripts — skip steps that are clearly unnecessary for the situation. Additional context-specific workflows may appear at the end of this section; they take precedence over the generic ones when they apply.
+
+${workflowInstructions}
+${toolSelectionTips ? `\n# Tool-selection tips\n${toolSelectionTips}\n` : ''}
+${templateInstructions ? `\n${templateInstructions}\n` : ''}
 
 # Emulators information
 The editor supports different assembly languages, each with its own emulator and specific features. Here are some important details about each supported language and emulator. You MUST take them in consideration when writing code, answering questions, or giving instructions related to the editor and emulators.

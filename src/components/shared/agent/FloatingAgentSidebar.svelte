@@ -1,6 +1,11 @@
 <script lang="ts">
     import DefaultCodingAgent from './DefaultCodingAgent.svelte'
-    import type { SupportedLanguage, AgentWorkflow } from './DefaultCodingAgent.svelte'
+    import type {
+        SupportedLanguage,
+        AgentWorkflow,
+        AgentToolAllowList,
+        AgentWorkflowAllowList
+    } from './DefaultCodingAgent.svelte'
     import type { Emulator } from '$lib/languages/Emulator'
     import type { RegisteredTool } from '@discerns/sdk'
 
@@ -15,6 +20,8 @@
         additionalInstructions?: string
         tools?: RegisteredTool[]
         workflows?: AgentWorkflow[]
+        allowToolList?: AgentToolAllowList
+        allowWorkflowList?: AgentWorkflowAllowList
     }
 
     let {
@@ -27,7 +34,9 @@
         canUpdateLanguage,
         additionalInstructions,
         tools,
-        workflows
+        workflows,
+        allowToolList,
+        allowWorkflowList
     }: Props = $props()
 
     let hasBeenOpened = $state(false)
@@ -69,6 +78,8 @@
             {additionalInstructions}
             {tools}
             {workflows}
+            {allowToolList}
+            {allowWorkflowList}
             style="border-radius: 0; border: none; box-shadow: none; opacity: 0.82;"
         />
     </div>

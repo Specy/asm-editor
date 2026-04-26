@@ -40,6 +40,8 @@
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import FloatingLanguageDocumentation from '$cmp/specific/project/FloatingLanguageDocumentation.svelte'
     import FaBook from 'svelte-icons/fa/FaBook.svelte'
+    import ExamReviewAgentSidebar from '$cmp/specific/exam/ExamReviewAgentSidebar.svelte'
+    import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
 
     let exam = $state<ExamPayload | null>(null)
     let sections = $state([] as ExamSection[])
@@ -51,6 +53,7 @@
     let unlockPasswordInput = $state('')
     let submissionUrl = $state('')
     let documentationVisible = $state(false)
+    let teacherAgentOpen = $state(false)
 
     let openAnswers = $state<Record<string, string>>({})
     let multipleChoiceAnswers = $state<Record<string, string[]>>({})
@@ -69,6 +72,9 @@
     let timeoutSubmissionTriggered = $state(false)
 
     const activeSection = $derived(sections.find((section) => section.id === activeSectionId))
+    const activeVisibleAnswer = $derived(
+        activeSection ? collectAnswerForSection(activeSection) : null
+    )
     const activeSectionIndex = $derived(getSectionIndex(activeSectionId))
     const isReviewMode = $derived(!!exam?.submission)
     const hasInstructions = $derived(!!exam?.instructions.trim() && !isReviewMode)
@@ -169,31 +175,36 @@
         cAnswers = c
     }
 
+    function collectAnswerForSection(section: ExamSection): ExamSectionAnswer {
+        if (section.type === ExamSectionType.OpenQuestion) {
+            return {
+                type: 'open-question',
+                answer: openAnswers[section.id] ?? ''
+            } satisfies OpenQuestionAnswer
+        }
+        if (section.type === ExamSectionType.MultipleChoice) {
+            const selected = multipleChoiceAnswers[section.id] ?? []
+            return {
+                type: 'multiple-choice',
+                selectedOptionIds: section.allowMultiple ? [...selected] : selected.slice(0, 1)
+            } satisfies MultipleChoiceAnswer
+        }
+        if (section.type === ExamSectionType.AssemblyCoding) {
+            return {
+                type: 'assembly-coding',
+                code: assemblyAnswers[section.id] ?? section.starterCode
+            } satisfies AssemblyCodingAnswer
+        }
+        return {
+            type: 'c-coding',
+            code: cAnswers[section.id] ?? section.starterCode
+        } satisfies CCodingAnswer
+    }
+
     function collectAnswers(): Record<string, ExamSectionAnswer> {
         const answers: Record<string, ExamSectionAnswer> = {}
         for (const section of sections) {
-            if (section.type === ExamSectionType.OpenQuestion) {
-                answers[section.id] = {
-                    type: 'open-question',
-                    answer: openAnswers[section.id] ?? ''
-                } satisfies OpenQuestionAnswer
-            } else if (section.type === ExamSectionType.MultipleChoice) {
-                const selected = multipleChoiceAnswers[section.id] ?? []
-                answers[section.id] = {
-                    type: 'multiple-choice',
-                    selectedOptionIds: section.allowMultiple ? [...selected] : selected.slice(0, 1)
-                } satisfies MultipleChoiceAnswer
-            } else if (section.type === ExamSectionType.AssemblyCoding) {
-                answers[section.id] = {
-                    type: 'assembly-coding',
-                    code: assemblyAnswers[section.id] ?? section.starterCode
-                } satisfies AssemblyCodingAnswer
-            } else if (section.type === ExamSectionType.CCoding) {
-                answers[section.id] = {
-                    type: 'c-coding',
-                    code: cAnswers[section.id] ?? section.starterCode
-                } satisfies CCodingAnswer
-            }
+            answers[section.id] = collectAnswerForSection(section)
         }
         return answers
     }
@@ -562,6 +573,19 @@
                     </div>
 
                     <div class="header-controls">
+                        {#if isReviewMode}
+                            <Button
+                                cssVar="accent"
+                                hasIcon
+                                onClick={() => (teacherAgentOpen = !teacherAgentOpen)}
+                                title="Ask AI to review this result"
+                                style="padding:0.4rem; width:2.4rem; height:2.4rem; margin-right: 0.4rem; border-radius: 1.5rem; border-bottom-right-radius: 0.4rem;"
+                            >
+                                <Icon>
+                                    <SparklesIcon />
+                                </Icon>
+                            </Button>
+                        {/if}
                         {#if activeSection?.type === ExamSectionType.AssemblyCoding}
                             {@const assemblySection = activeSection as AssemblyCodingSection}
                             <Button
@@ -648,6 +672,17 @@
                                     >
                                         <MarkdownRenderer source={assemblySection.prompt} />
                                     </ProjectEditor>
+                                    {#if isReviewMode}
+                                        <ExamReviewAgentSidebar
+                                            bind:open={teacherAgentOpen}
+                                            {exam}
+                                            {sections}
+                                            submission={examSubmission}
+                                            activeSectionId={activeSection.id}
+                                            visibleAnswer={activeVisibleAnswer}
+                                            emulatorInstance={emulator}
+                                        />
+                                    {/if}
                                 {/snippet}
                                 {#snippet loading()}
                                     <Header>Loading emulator...</Header>
@@ -716,6 +751,17 @@
                                 {/if}
                             </div>
                         </div>
+                        {#if isReviewMode}
+                            <ExamReviewAgentSidebar
+                                bind:open={teacherAgentOpen}
+                                {exam}
+                                {sections}
+                                submission={examSubmission}
+                                activeSectionId={activeSection.id}
+                                visibleAnswer={activeVisibleAnswer}
+                                emulatorInstance={null}
+                            />
+                        {/if}
                     {/if}
                 </Column>
             {/if}
