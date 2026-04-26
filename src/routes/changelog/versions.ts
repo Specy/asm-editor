@@ -11,7 +11,8 @@ export const versions: Version[] = [
         title: 'New X86 emulator',
         date: new Date('2026-04-26'),
         changes: [
-            'Changed the X86 emulator to Blink, which now supports the proper debugging tools and features'
+            'Changed the X86 emulator to Blink, which now supports the proper debugging tools and features',
+            'Added AI assistant for exam review mode, to help professors grade exams faster.'
         ]
     },
     {
