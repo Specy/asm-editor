@@ -41,7 +41,9 @@
         emulatorInstance = null
     }: Props = $props()
 
-    const activeSection = $derived(sections.find((section) => section.id === activeSectionId) ?? null)
+    const activeSection = $derived(
+        sections.find((section) => section.id === activeSectionId) ?? null
+    )
     const submittedAnswer = $derived(
         activeSection ? (submission.answers[activeSection.id] ?? null) : null
     )
@@ -51,7 +53,9 @@
             ? (activeSection as AssemblyCodingSection)
             : null
     )
-    const editorLanguage = $derived((activeAssemblySection?.language ?? null) as SupportedLanguage | null)
+    const editorLanguage = $derived(
+        (activeAssemblySection?.language ?? null) as SupportedLanguage | null
+    )
     const editorCode = $derived(getCurrentAssemblyCode())
 
     function formatNumeric(value: bigint | number) {
@@ -201,7 +205,7 @@
     const reviewTools: RegisteredTool[] = [
         tool({
             name: 'get_current_exam_result',
-            description: `Returns the exam result currently visible to the professor: exam metadata, student submission metadata, current exercise prompt/configuration, the student's answer, and whether assembly debugging tools are useful for the visible exercise. Call this before evaluating, grading, debugging, or giving feedback on a result.`,
+            description: `Intent triggers: grade, review, feedback, score, evaluate answer, current exercise, student submission, what did they miss. Returns the exam result currently visible to the professor: exam metadata, student submission metadata, current exercise prompt/configuration, the student's answer, and whether assembly debugging tools are useful for the visible exercise. Call this before evaluating, grading, debugging, running test cases, or giving feedback on a result. Its reviewCapabilities field decides whether emulator tools and run_exam_testcases are valid for the current exercise.`,
             schema: z.object({}),
             execute: async () => {
                 if (!activeSection) {
@@ -209,9 +213,11 @@
                 }
 
                 const answer = getAnswerForSection(activeSection)
-                const sectionIndex = sections.findIndex((section) => section.id === activeSection.id)
+                const sectionIndex = sections.findIndex(
+                    (section) => section.id === activeSection.id
+                )
                 const isAssemblyCoding = activeSection.type === ExamSectionType.AssemblyCoding
-                return toSerializable({
+                return $state.snapshot(toSerializable({
                     success: true,
                     exam: {
                         title: exam.title,
@@ -237,7 +243,9 @@
                     reviewCapabilities: {
                         canUseAssemblyDebugTools: isAssemblyCoding && !!emulatorInstance,
                         canRunExamTestcases:
-                            !!activeAssemblySection && !!emulatorInstance && activeAssemblySection.testcases.length > 0,
+                            !!activeAssemblySection &&
+                            !!emulatorInstance &&
+                            activeAssemblySection.testcases.length > 0,
                         guidance: isAssemblyCoding
                             ? 'Use assembly debug tools only if canUseAssemblyDebugTools is true. Use run_exam_testcases when canRunExamTestcases is true, otherwise compile/run/step manually if needed.'
                             : 'This visible exercise is not assembly coding. Do not use assembly emulator tools; review the prompt and submitted answer directly.'
@@ -254,12 +262,12 @@
                             answerPreview: getAnswerPreview(section, sectionAnswer)
                         }
                     })
-                })
+                }))
             }
         }),
         tool({
             name: 'run_exam_testcases',
-            description: `Runs the exam test cases attached to the current assembly exercise against the student's current answer. Always call get_current_exam_result first and only use this when the current visible exercise is assembly coding and test cases are available.`,
+            description: `Intent triggers: run tests, test cases, check submitted assembly, does it pass, grading evidence, failing cases. Runs the exam test cases attached to the current assembly exercise against the student's current answer. Always call get_current_exam_result first, and only use this when reviewCapabilities.canRunExamTestcases is true. Do not use this for non-assembly exercises or when the visible assembly exercise has no configured test cases.`,
             schema: z.object({
                 instructionLimit: z
                     .number()
@@ -301,7 +309,7 @@
                     100
                 )
                 const failed = results.filter((result) => !result.passed)
-                return toSerializable({
+                return $state.snapshot(toSerializable({
                     success: failed.length === 0 && emulator.errors.length === 0,
                     passed: results.length - failed.length,
                     failed: failed.length,
@@ -315,7 +323,7 @@
                         errors: result.errors,
                         testcase: result.testcase
                     }))
-                })
+                }))
             }
         })
     ]
@@ -323,6 +331,20 @@
     const reviewWorkflows: AgentWorkflow[] = [
         {
             name: 'Review current exam result',
+            intentTriggers: [
+                'grade this',
+                'review this answer',
+                'give feedback',
+                'score this submission',
+                'evaluate the result',
+                'what did the student miss',
+                'identify mistakes',
+                'is this answer correct',
+                'rubric help'
+            ],
+            requiredTools: ['get_current_exam_result'],
+            verification:
+                'Every grading claim must be tied to the current exercise prompt, submitted answer, and observed result data; do not provide fixes or hints.',
             description: `
 When the professor asks for grading help, feedback, or interpretation of the current result.
 1. Call get_current_exam_result before making claims about the current exercise.
@@ -333,14 +355,37 @@ When the professor asks for grading help, feedback, or interpretation of the cur
         },
         {
             name: 'Debug submitted assembly for grading',
+            intentTriggers: [
+                'does this assembly work',
+                'why does the submitted code fail',
+                'run the student code',
+                'test the submission',
+                'failing test cases',
+                'incorrect output',
+                'runtime behavior',
+                'debug for grading',
+                'assembly grading evidence'
+            ],
+            requiredTools: [
+                'get_current_exam_result',
+                'get_code',
+                'run_exam_testcases',
+                'compile',
+                'run_to_completion',
+                'step',
+                'get_emulator_state'
+            ],
+            verification:
+                'Ground conclusions in test results or emulator observations, and stop at grading evidence without giving corrected code or repair steps.',
             description: `
 When the professor asks whether the submitted assembly works, why it fails, or how to grade it.
 1. Call get_current_exam_result, then get_code to inspect the submitted source with line numbers.
 2. Continue only if get_current_exam_result says the current visible exercise is assembly coding and canUseAssemblyDebugTools is true. If not, do not use emulator tools.
 3. If canRunExamTestcases is true, call run_exam_testcases first and summarize pass/fail evidence.
-4. Use compile, run_to_completion, update_breakpoints, step, get_emulator_state, read_memory, and get_line_from_address to observe actual behavior.
-5. Ground conclusions in observed stdout, registers, flags, memory, and source lines.
-6. Do not call set_code; it is not available in review mode. Do not provide fixes, corrected code, implementation hints, or recommendations.
+4. Compile first before any run_to_completion or step call.
+5. Use compile, run_to_completion, update_breakpoints, step, get_emulator_state, read_memory, and get_line_from_address to observe actual behavior.
+6. Ground conclusions in observed stdout, registers, flags, memory, and source lines.
+7. Do not call set_code; it is not available in review mode. Do not provide fixes, corrected code, implementation hints, or recommendations.
 `
         }
     ]
@@ -350,8 +395,8 @@ When the professor asks whether the submitted assembly works, why it fails, or h
     bind:open
     {openSize}
     {verticalOffset}
-    editorLanguage={editorLanguage}
-    editorCode={editorCode}
+    {editorLanguage}
+    {editorCode}
     emulatorInstance={activeAssemblySection ? emulatorInstance : null}
     canUpdateLanguage={false}
     tools={reviewTools}
@@ -381,6 +426,7 @@ You are helping review a submitted exam result. The person using this agent migh
 - If the current editor answer differs from the original submitted code, mention that execution/debugging is using the currently visible editor code.
 - The assembly debug tools are always registered for prompt/cache stability, but they are only useful when get_current_exam_result reports canUseAssemblyDebugTools: true.
 - Use run_exam_testcases only after get_current_exam_result and only when canRunExamTestcases is true. If it is unavailable, review the answer directly or use compile/run/step only for assembly coding.
+- For any assembly workflow that uses run_to_completion or step, compile first before executing.
 
 The current exam, student, visible exercise, answer, and available review capabilities are provided by get_current_exam_result.
 `}

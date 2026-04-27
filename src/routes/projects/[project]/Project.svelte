@@ -353,7 +353,22 @@
         `}
         workflows={[
             {
-                name: 'Explain a concept (project-safe)',
+                name: 'Explain a concept',
+                intentTriggers: [
+                    'how does this work',
+                    'what does this mean',
+                    'explain',
+                    'concept',
+                    'show me an example',
+                    'what is',
+                    'instruction behavior',
+                    'register question',
+                    'memory question',
+                    'do not change my code'
+                ],
+                requiredTools: ['get_code'],
+                verification:
+                    'Keep examples in chat unless the user explicitly confirms replacing or applying changes to the project code.',
                 description: `
 When the user asks a conceptual question ("how does X work", "show me Y") while working on their project. The editor already holds the user's code, so you must NOT overwrite it with an unrelated example.
 1. Answer the conceptual question in chat.

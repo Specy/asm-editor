@@ -41,16 +41,14 @@
         }}
     >
         {#snippet children(emulator)}
-            <InteractiveEditor 
-                bind:code 
-                {language} 
-                {emulator} 
+            <InteractiveEditor
+                bind:code
+                {language}
+                {emulator}
                 {showFlags}
                 {showPc}
                 {showConsole}
-
-                forceMemoryRight 
-                
+                forceMemoryRight
             />
             <FloatingAgentSidebar
                 bind:open={agentOpen}
@@ -72,12 +70,35 @@
                 workflows={[
                     {
                         name: 'Explain an instruction (interactive docs)',
+                        intentTriggers: [
+                            `what does ${instructionKey} do`,
+                            `how does ${instructionKey} work`,
+                            `${instructionKey} operands`,
+                            `${instructionKey} flags`,
+                            `${instructionKey} side effects`,
+                            'show the instruction running',
+                            'step through this instruction',
+                            'addressing mode example',
+                            'interaction with another instruction'
+                        ],
+                        requiredTools: [
+                            'get_code',
+                            'compile',
+                            'update_breakpoints',
+                            'run_to_completion',
+                            'step',
+                            'get_emulator_state',
+                            'set_code'
+                        ],
+                        verification:
+                            'Compile the focused example and explain syntax/structure; do not execute unless the user explicitly asks to run/step it.',
                         description: `
 When the user asks how a specific instruction behaves, how its operands work, or how it interacts with other instructions.
 1. set_code with a short, focused program that exercises the instruction. It is fine — and often necessary — to include more than one instruction: set up operands, provide a branch/jump target, demonstrate side effects on flags/other registers, or call and return from a subroutine.
 2. Keep the example as small as possible while still being runnable end-to-end.
-3. step 1-few instructions at a time through the example and describe the concrete mutations (registers, flags, memory) from the step's return value.
-4. If a follow-up question needs a variation, modify the example via set_code and step again rather than speculating.
+3. Compile the example and report whether it is valid.
+4. Do not call run_to_completion or step unless the user explicitly asks to execute/debug the example.
+5. If a follow-up question needs a variation, modify the example via set_code and compile again rather than speculating.
 `
                     }
                 ]}

@@ -185,12 +185,34 @@
     workflows={[
         {
             name: 'Teach with a runnable example (course lecture)',
+            intentTriggers: [
+                'explain the lecture',
+                'lecture topic',
+                'demonstrate this concept',
+                'show me an example',
+                'walk me through it',
+                'practice example',
+                'how does this concept work',
+                'what does this instruction do here',
+                'run an example from the lesson'
+            ],
+            requiredTools: [
+                'get_code',
+                'compile',
+                'update_breakpoints',
+                'run_to_completion',
+                'step',
+                'get_emulator_state',
+                'set_code'
+            ],
+            verification:
+                'Tie each explanation to lecture content and compile results; do not execute examples unless the user explicitly asks for execution.',
             description: `
 When the user asks a question about the lecture topic or for a demonstration of the concept being taught.
 1. Put a small focused example in the editor via set_code so the user can see it next to the lecture content. A markdown code block in chat is not enough — the editor lets them run and modify it.
-2. step through the example and describe the concrete register/memory/stdout changes from the step's return value, tying each change back to the lecture's concept.
-3. If the lecture introduces an instruction or construct, show it running before claiming what it does.
-4. If the user asks a follow-up, modify the example in-place via set_code and step again, rather than starting over.
+2. Compile the example and report whether it is valid.
+3. Do not call run_to_completion or step unless the user explicitly asks to execute/debug the example.
+4. If the user asks a follow-up, modify the example in-place via set_code and compile again.
 `
         }
     ]}
