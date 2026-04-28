@@ -221,6 +221,9 @@
         extensions: [ext, customPlaygroundPlugin, code({ theme, langs: ['mips', 'riscv', 'asm'] })],
         rehypeOptions: {
             allowDangerousHtml: true
+        },
+        shikiOptions: {
+            themes: [theme]
         }
     }))
     const cartaWithExternalLins = $derived(new Carta({
@@ -234,6 +237,9 @@
         ],
         rehypeOptions: {
             allowDangerousHtml: true
+        },
+        shikiOptions: {
+            themes: [theme]
         }
     }))
     const cartaWithoutLinks = $derived(new Carta({
@@ -247,6 +253,9 @@
         ],
         rehypeOptions: {
             allowDangerousHtml: true
+        },        
+        shikiOptions: {
+            themes: [theme]
         }
     }))
 </script>

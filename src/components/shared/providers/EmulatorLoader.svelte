@@ -1,7 +1,7 @@
 <script lang="ts" generics="T">
     import type { AvailableLanguages } from '$lib/Project.svelte'
     import { type Emulator, GenericEmulator } from '$lib/languages/Emulator'
-    import type { Snippet } from 'svelte'
+    import { onDestroy, untrack, type Snippet } from 'svelte'
     import Header from '$cmp/shared/layout/Header.svelte'
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
     import type { EmulatorSettings } from '$lib/languages/commonLanguageFeatures.svelte'
@@ -17,11 +17,34 @@
         emulator?: Emulator | null
     }
 
-    let { language, code = $bindable(), children, loading, settings, emulator = $bindable(null) }: Props = $props()
+    let {
+        language,
+        code = $bindable(),
+        children,
+        loading,
+        settings,
+        emulator = $bindable(null)
+    }: Props = $props()
 
-    const emulatorPromise = GenericEmulator(language, code, { ...settings, language })
-    emulatorPromise.then((e) => {
-        emulator = e
+    let destroyed = false
+
+    const emulatorPromise = untrack(() =>
+        GenericEmulator(language, code, { ...settings, language })
+    )
+    emulatorPromise.then((emulatorInstance) => {
+        if (destroyed) {
+            emulatorInstance.dispose()
+            return
+        }
+
+        emulator = emulatorInstance
+    })
+
+    onDestroy(() => {
+        destroyed = true
+        if (emulator) {
+            emulator.dispose()
+        }
     })
 </script>
 

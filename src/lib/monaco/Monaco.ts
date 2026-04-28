@@ -16,8 +16,6 @@ class MonacoLoader {
     }
 
     dispose = () => {
-        this.registeredLanguages = []
-        this.toDispose.forEach((d) => d.dispose())
     }
 
     async load(): Promise<MonacoType> {
@@ -44,7 +42,6 @@ class MonacoLoader {
         if(lang === 'c') return 
         if (this.registeredLanguages.includes(lang as AvailableLanguages)) return
         this.registeredLanguages.push(lang as AvailableLanguages)
-        console.log('loading language', lang)
         monaco.languages.register({ id: lang.toLowerCase() })
         if (lang === 'M68K') {
             const [grammar, language] = await Promise.all([
@@ -158,7 +155,8 @@ class MonacoLoader {
             this.registerLanguage('M68K'),
             this.registerLanguage('MIPS'),
             this.registerLanguage('RISC-V'),
-            this.registerLanguage('X86')
+            this.registerLanguage('RISC-V-64'),
+            this.registerLanguage('X86'),
         ])
     }
 

@@ -1,5 +1,12 @@
 <script lang="ts">
-    import { type Component, createEventDispatcher, mount, onDestroy, onMount } from 'svelte'
+    import {
+        type Component,
+        createEventDispatcher,
+        mount,
+        onDestroy,
+        onMount,
+        unmount
+    } from 'svelte'
     import type monaco from 'monaco-editor'
     import type {
         AvailableLanguages,
@@ -42,7 +49,8 @@
     let mockEditor: HTMLDivElement | null = $state()
     let monacoInstance: MonacoType | null = $state.raw()
     let hoveredGliphen: number | null = $state()
-    const toDispose = []
+    let destroyed = false
+    const toDispose: (monaco.IDisposable | (() => void))[] = []
     const dispatcher = createEventDispatcher<{
         change: string
         breakpointPress: number
@@ -57,8 +65,10 @@
 
     onMount(async () => {
         monacoInstance = await Monaco.get()
+        if (destroyed) return
         if (!el) return console.log('Wrapper element not valid', el)
         await Monaco.registerLanguage(language)
+        if (destroyed) return
         editor = monacoInstance.editor.create(el, {
             value: code,
             language: language.toLowerCase(),
@@ -88,7 +98,9 @@
                 height: bounds.height
             })
         })
-        observer.observe(mockEditor)
+        if (mockEditor) {
+            observer.observe(mockEditor)
+        }
 
         toDispose.push(
             editor.onMouseDown((e) => {
@@ -108,17 +120,20 @@
             })
         )
         toDispose.push(() => observer.disconnect())
-        toDispose.push(
-            editor.getModel().onDidChangeContent(() => {
-                if (disabled) return
-                code = editor.getValue()
-                dispatcher('change', code)
-            })
-        )
+        if (model) {
+            toDispose.push(
+                model.onDidChangeContent(() => {
+                    if (disabled) return
+                    code = editor.getValue()
+                    dispatcher('change', code)
+                })
+            )
+        }
     })
 
     function setEditorValue(value: string) {
         const model = editor.getModel()
+        if (!model) return
         const fullRange = model.getFullModelRange()
         editor.executeEdits('external', [
             {
@@ -138,12 +153,16 @@
         }
     })
     onDestroy(() => {
-        toDispose.forEach((d) => {
-            if (typeof d === 'function') return d()
-            d.dispose()
+        destroyed = true
+        const model = editor?.getModel()
+
+        toDispose.forEach((disposable) => {
+            if (typeof disposable === 'function') return disposable()
+            disposable?.dispose()
         })
-        Monaco?.dispose()
+        decorations?.clear()
         editor?.dispose()
+        model?.dispose()
     })
 
     let decorations = $state.raw(editor?.createDecorationsCollection())
@@ -154,19 +173,21 @@
 
     $effect(() => {
         if (editor && viewZones.length > 0) {
+            const viewZoneEditor = editor
             let currentViewZones = [] as {
                 id: string
                 domNode: HTMLElement
                 observer: ResizeObserver
+                component: Record<string, unknown>
             }[]
             currentViewZones = []
-            editor.changeViewZones(function (changeAccessor) {
+            viewZoneEditor.changeViewZones(function (changeAccessor) {
                 viewZones.forEach((zone) => {
                     const domNode = document.createElement('div')
                     const wrapper = document.createElement('div')
                     const Component = zone.content
                     const props = zone.props
-                    mount(Component, {
+                    const component = mount(Component, {
                         target: wrapper,
                         props
                     })
@@ -182,20 +203,22 @@
                     const observer = new ResizeObserver(() => {
                         const height = wrapper.getBoundingClientRect().height
                         if (!height) return
-                        editor?.changeViewZones((accessor) => {
+                        viewZoneEditor.changeViewZones((accessor) => {
                             accessor.layoutZone(id)
                         })
                     })
                     observer.observe(wrapper)
-                    currentViewZones.push({ id, domNode, observer })
+                    currentViewZones.push({ id, domNode, observer, component })
                 })
             })
             return () => {
                 currentViewZones.forEach((zone) => {
-                    zone.domNode.remove()
                     zone.observer.disconnect()
+                    void unmount(zone.component)
+                    zone.domNode.remove()
                 })
-                editor.changeViewZones((changeAccessor) => {
+                if (destroyed) return
+                viewZoneEditor.changeViewZones((changeAccessor) => {
                     currentViewZones.forEach((zone) => {
                         changeAccessor.removeZone(zone.id)
                     })
@@ -251,8 +274,11 @@
     })
     $effect(() => {
         if (editor && monacoInstance) {
+            const model = editor.getModel()
+            if (!model) return
+
             monacoInstance.editor.setModelMarkers(
-                editor.getModel(),
+                model,
                 language,
                 errors.map((e) => {
                     const position = e.column
