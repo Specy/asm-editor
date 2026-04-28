@@ -14,7 +14,7 @@ const instances = {
     MIPS: null as Promise<typeof MIPSEmulator> | null,
     X86: null as Promise<typeof X86Emulator> | null, //X86Emulator2['create']
     'RISC-V': null as Promise<typeof RISCVEmulator> | null,
-    'RISC-V-64': null as Promise<typeof RISCVEmulator> | null,
+    'RISC-V-64': null as Promise<typeof RISCVEmulator> | null
 }
 
 function loadEmulator(type: AvailableLanguages) {
@@ -24,7 +24,9 @@ function loadEmulator(type: AvailableLanguages) {
         } else if (type === 'MIPS') {
             instances[type] = import('./MIPS/MIPSEmulator.svelte').then((i) => i.MIPSEmulator)
         } else if (type === 'RISC-V' || type === 'RISC-V-64') {
-            instances['RISC-V'] = import('./RISC-V/RISC-VEmulator.svelte').then((i) => i.RISCVEmulator)
+            instances['RISC-V'] = import('./RISC-V/RISC-VEmulator.svelte').then(
+                (i) => i.RISCVEmulator
+            )
             instances['RISC-V-64'] = instances['RISC-V']
         } else if (type === 'X86') {
             instances[type] = import('./X86/X86Emulator.svelte').then((i) => i.X86Emulator)
@@ -44,4 +46,13 @@ export async function GenericEmulator<T extends AvailableLanguages>(
 ): Promise<Emulator> {
     const emulator = await loadEmulator(type)
     return emulator!(baseCode, options)
+}
+
+export function preloadAllEmulators() {
+    return Promise.all([
+        loadEmulator('M68K'),
+        loadEmulator('MIPS'),
+        loadEmulator('RISC-V'),
+        loadEmulator('X86')
+    ])
 }

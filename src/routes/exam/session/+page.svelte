@@ -31,7 +31,7 @@
         type OpenQuestionAnswer,
         type OpenQuestionSection
     } from '$lib/exam'
-    import { makeHash } from '$lib/utils'
+    import { makeHash, textDownloader } from '$lib/utils'
     import { toast } from '$stores/toastStore'
     import { Prompt } from '$stores/promptStore.svelte'
     import { onMount } from 'svelte'
@@ -42,6 +42,7 @@
     import FaBook from 'svelte-icons/fa/FaBook.svelte'
     import ExamReviewAgentSidebar from '$cmp/specific/exam/ExamReviewAgentSidebar.svelte'
     import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
+    import { preloadAllEmulators } from '$lib/languages/Emulator'
 
     let exam = $state<ExamPayload | null>(null)
     let sections = $state([] as ExamSection[])
@@ -470,6 +471,7 @@
 
     onMount(() => {
         loadExam()
+        preloadAllEmulators()
 
         const intervalId = setInterval(() => {
             now = Date.now()
@@ -518,6 +520,7 @@
                 <p>The exam was paused because you left fullscreen or changed tab.</p>
                 <Row gap="1rem">
                     <Input
+                        autoComplete="one-time-code"
                         type="password"
                         placeholder="Unlock password"
                         bind:value={unlockPasswordInput}
@@ -532,10 +535,11 @@
 
         {#if examDisabled && submissionUrl}
             <div class="overlay">
-                <h1 class="loading">Exam submitted</h1>
-                <p>The submission link is in your clipboard.</p>
+                <h1 class="loading">Exam Finished</h1>
+                <p>The submission link is in your clipboard. You can now share the submission link. You can also copy it again if needed.</p>
                 <Row gap="1rem">
                     <Input
+                        autoComplete="one-time-code"
                         type="password"
                         placeholder="Unlock password"
                         bind:value={unlockPasswordInput}
@@ -549,6 +553,13 @@
                     }}
                 >
                     Copy submission link again
+                </Button>
+                    <Button
+                    onClick={async () => {
+                        textDownloader(submissionUrl, `${examSubmission.name}-${examSubmission.hash}-submission-link.txt`)
+                    }}
+                >
+                    Download submission
                 </Button>
                 <Card padding="1rem 2rem" background="tertiary">
                     <Header type="h2">{examSubmission.name} ({examSubmission.hash})</Header>

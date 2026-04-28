@@ -6,6 +6,7 @@
     import FaCheckCircle from 'svelte-icons/fa/FaCheckCircle.svelte'
     import FaRegCircle from 'svelte-icons/fa/FaRegCircle.svelte'
     import { onMount } from 'svelte'
+    import type { FullAutoFill } from 'svelte/elements'
     type statusType = '' | 'correct' | 'wrong'
 
     interface Props {
@@ -19,6 +20,7 @@
         focus?: boolean
         hideStatus?: boolean
         el?: HTMLInputElement
+        autoComplete?: FullAutoFill
     }
 
     let {
@@ -30,6 +32,7 @@
         placeholder = '',
         focus = false,
         hideStatus = true,
+        autoComplete,
         wrapperStyle,
         el = $bindable()
     }: Props = $props()
@@ -51,6 +54,7 @@
     <div class="input-row" {style}>
         <input
             spellcheck="false"
+            autocomplete={autoComplete}
             bind:value
             class="form-input"
             use:setType
