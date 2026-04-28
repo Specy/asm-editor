@@ -603,7 +603,7 @@
                 }
                 examSubmission.hash = (
                     await makeHash(`${examSubmission.name}${examSubmission.startedAt}`)
-                ).slice(0, 6)
+                ).slice(0, 4)
 
                 const unlockedSections = await resolveSectionsWithAccessPassword(parsedPayload)
                 if (!unlockedSections) {
@@ -670,6 +670,11 @@
     {#if status === 'loading'}
         <div class="overlay">
             <h1 class="loading">Loading exam...</h1>
+            {#if examSubmission.hash}
+                <p class="student-code">{examSubmission.hash}</p>
+                {:else}
+                <p style="height: 28.8px"> </p>
+            {/if}
         </div>
     {/if}
 
