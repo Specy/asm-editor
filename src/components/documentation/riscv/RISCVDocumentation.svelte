@@ -23,6 +23,7 @@
         defaultOpen?: boolean
         openLinksInNewTab?: boolean
         showRedirect?: boolean
+        disableLinks?: boolean
     }
 
     let {
@@ -31,7 +32,8 @@
         searchValue = $bindable(),
         defaultOpen = false,
         openLinksInNewTab = true,
-        showRedirect = false
+        showRedirect = false,
+        disableLinks = false
     }: Props = $props()
     function includesText(nodes: NodeListOf<Element>, text: string) {
         const texts = Array.from(nodes).map((node) => node.textContent)
@@ -64,7 +66,7 @@
         {#snippet title()}
             <h4>Directives</h4>
         {/snippet}
-        <RiscVDirectiveDocumentation />
+        <RiscVDirectiveDocumentation {disableLinks} />
     </DocsSection>
     <DocsSection open={defaultOpen}>
         {#snippet title()}
@@ -107,12 +109,14 @@
                             <MarkdownRenderer
                                 source={instruction[0].description}
                                 linksInNewTab={openLinksInNewTab}
+                                {disableLinks}
                             />
                         </span>
                     {/if}
                     {#if instruction.length > 1}
                         <MarkdownRenderer
                             style="background-color: rgba(var(--RGB-secondary), 0.7); border-radius: 0.5rem; padding: 0.5rem;"
+                            {disableLinks}
                             source={instruction
                                 .slice(1)
                                 .map((i) => `- ${i.description}: **${i.example}**`)

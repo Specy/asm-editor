@@ -1,6 +1,12 @@
 <script lang="ts">
     import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
     import RiscVSyscall from './RISCVSyscall.svelte'
+
+    interface Props {
+        disableLinks?: boolean
+    }
+
+    let { disableLinks = false }: Props = $props()
 </script>
 
 <p>
@@ -16,6 +22,7 @@
     As an example:
 </p>
 <MarkdownRenderer
+    {disableLinks}
     source={`
 \`\`\`riscv
 # Load the integer 42 into register a0, which is

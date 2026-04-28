@@ -6,12 +6,13 @@
     import type { RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
 
     interface Props {
+        type: 'starting' | 'expected'
         memoryValues: MemoryValue[]
         editable?: boolean
         systemSize: RegisterSize
     }
 
-    let { systemSize, memoryValues = $bindable(), editable = true }: Props = $props()
+    let { systemSize, memoryValues = $bindable(), editable = true, type }: Props = $props()
 </script>
 
 <Column gap="0.5rem">
@@ -24,6 +25,7 @@
                         bind:value={memoryValues[i]}
                         canRemove={editable}
                         editable={false}
+                        type={type} 
                         on:remove={() =>
                             (memoryValues = memoryValues.filter((mv) => mv !== memoryValue))}
                     />

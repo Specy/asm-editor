@@ -3,13 +3,19 @@
     import Column from '$cmp/shared/layout/Column.svelte'
     import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
     import { mipsRegisters } from '$lib/languages/MIPS/MIPS-documentation'
+
+    interface Props {
+        disableLinks?: boolean
+    }
+
+    let { disableLinks = false }: Props = $props()
 </script>
 
 <Column gap="1rem" style="width: 100%;">
     {#each Object.values(mipsRegisters) as register}
         <Card gap="1rem" padding="1rem" background="secondary" style="width: 100%;">
             <h2>{register.name} ({register.number})</h2>
-            <MarkdownRenderer source={register.description} />
+            <MarkdownRenderer source={register.description} {disableLinks} />
         </Card>
     {/each}
 </Column>

@@ -26,6 +26,7 @@
         defaultOpen?: boolean
         openLinksInNewTab?: boolean
         showRedirect?: boolean
+        disableLinks?: boolean
     }
 
     let {
@@ -34,7 +35,8 @@
         searchValue = $bindable(),
         defaultOpen = false,
         openLinksInNewTab = true,
-        showRedirect = false
+        showRedirect = false,
+        disableLinks = false
     }: Props = $props()
     function includesText(nodes: NodeListOf<Element>, text: string) {
         const texts = Array.from(nodes).map((node) => node.textContent)
@@ -114,6 +116,7 @@
                             <MarkdownRenderer
                                 source={ins.description}
                                 linksInNewTab={openLinksInNewTab}
+                                {disableLinks}
                             />
                         </span>
                     {/if}
@@ -155,7 +158,7 @@
         {#snippet title()}
             <h4>Directives</h4>
         {/snippet}
-        <M68KDirectives {openLinksInNewTab} />
+        <M68KDirectives {openLinksInNewTab} {disableLinks} />
     </DocsSection>
     <DocsSection>
         {#snippet title()}

@@ -62,9 +62,19 @@
         </Row>
 
         <Header type="h3">Starting memory values</Header>
-        <MemoryTestcaseEditor {systemSize} bind:memoryValues={testcase.startingMemory} editable />
+        <MemoryTestcaseEditor
+            type="starting"
+            {systemSize}
+            bind:memoryValues={testcase.startingMemory}
+            editable
+        />
         <Header type="h3">Expected memory values</Header>
-        <MemoryTestcaseEditor {systemSize} bind:memoryValues={testcase.expectedMemory} editable />
+        <MemoryTestcaseEditor
+            type="expected"
+            {systemSize}
+            bind:memoryValues={testcase.expectedMemory}
+            editable
+        />
 
         <Header type="h3">Inputs</Header>
         <Row gap="0.3rem" style="flex-wrap: wrap">
@@ -131,6 +141,7 @@
         {#if testcase.startingMemory.length !== 0}
             <Header type="h3">Starting memory values</Header>
             <MemoryTestcaseEditor
+                type="starting"
                 {systemSize}
                 bind:memoryValues={testcase.startingMemory}
                 editable={false}
@@ -140,6 +151,7 @@
             <Header type="h3">Expected memory values</Header>
 
             <MemoryTestcaseEditor
+                type="expected"
                 {systemSize}
                 bind:memoryValues={testcase.expectedMemory}
                 editable={false}
@@ -195,7 +207,7 @@
         display: flex;
         align-items: center;
         gap: 0.5rem;
-            background-color: var(--accent2);
+        background-color: var(--accent2);
         color: var(--accent2-text);
         padding: 0.2rem 0.5rem;
     }

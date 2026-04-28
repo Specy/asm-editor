@@ -312,9 +312,9 @@ const desc = {
     ori: 'Performs a logical OR between the first immediate value and second operand, stores the result in the second operand',
     eor: 'Performs a logical XOR between the first and second operand, stores the result in the second operand',
     eori: 'Performs a logical XOR between the first immediate value and second operand, stores the result in the second operand',
-    lsd: 'Shifts the bits of the second operand to the {direction} as many times as the value of the first operand, depending on the specified size. The new bits are filled with 0s. Defaults to word',
-    asd: 'Shifts the bits of the second operand to the {direction} as many times as the value of the first operand, depending on the specified size. The new bits are filled with the sign bit. Defaults to word. Note: ASL sets the overflow flag if the MSB changes during the shift, while ASR always clears it',
-    rod: 'Rotates the bits of the second operand to the {direction} as many times as the value of the first operand, depending on the specified size. Defaults to word',
+    lsd: 'Shifts the bits of the destination operand to the {direction}. Two forms: (1) `ls<d> Dx/Im, Dn` shifts Dn by the count in Dx or immediate (1–8), any size. New bits are filled with 0s. Defaults to word. (2) `ls<d> (An)` shifts a memory word by 1, no size suffix allowed.',
+    asd: 'Shifts the bits of the destination operand to the {direction}. Two forms: (1) `as<d> Dx/Im, Dn` shifts Dn by the count in Dx or immediate (1–8), any size. New bits are filled with the sign bit. Defaults to word. Note: ASL sets the overflow flag if the MSB changes during the shift, while ASR always clears it. (2) `as<d> (An)` shifts a memory word by 1, no size suffix allowed.',
+    rod: 'Rotates the bits of the destination operand to the {direction}. Two forms: (1) `ro<d> Dx/Im, Dn` rotates Dn by the count in Dx or immediate (1–8), any size. Defaults to word. (2) `ro<d> (An)` rotates a memory word by 1, no size suffix allowed.',
     btst: 'Tests the bit of the second operand at the position of the value of the first operand, it changes the Z (zero) flag, the destination operand is not modified',
     bclr: 'Clears the bit of the second operand at the position of the value of the first operand',
     bset: 'Sets to 1 the bit of the second operand at the position of the value of the first operand',
@@ -1337,7 +1337,7 @@ trap #15 ; print character (space)
             ANY_SIZE,
             FLAGS_MATH,
             desc.asd,
-            '`as<d> d0, d3` Where d is either (l)eft or (r)ight',
+            '`as<d> d0, d3` or `as<d> (a0)` Where d is either (l)eft or (r)ight',
             Size.Word,
             `
 * --- ASR: arithmetic shift right (preserves sign) ---
@@ -1354,6 +1354,11 @@ asl.w #4, d2 ; d2 = $0010
 ; ASL sets V if the MSB changes during the shift
 move.w #$7000, d3
 asl.w #1, d3 ; V flag set! MSB changed from 0 to 1
+
+* --- Memory form: shifts word at (a0) left by 1 ---
+lea $1000, a0
+move.w #$0001, (a0)
+asl (a0) ; (a0) = $0002
     `
         ),
         compundNames: ['asl', 'asr']
@@ -1365,7 +1370,7 @@ asl.w #1, d3 ; V flag set! MSB changed from 0 to 1
             ANY_SIZE,
             FLAGS_LSd,
             desc.lsd,
-            '`ls<d> #3, d7` Where d is either (l)eft or (r)ight',
+            '`ls<d> #3, d7` or `ls<d> (a0)` Where d is either (l)eft or (r)ight',
             Size.Word,
             `
 * --- LSR: logical shift right (fills with 0) ---
@@ -1381,6 +1386,11 @@ move.w #$FF00, d2
 asr.w #4, d2 ; d2 = $FFF0 (sign extended)
 move.w #$FF00, d3
 lsr.w #4, d3 ; d3 = $0FF0 (zero filled)
+
+* --- Memory form: shifts word at (a0) right by 1 ---
+lea $1000, a0
+move.w #$0010, (a0)
+lsr (a0) ; (a0) = $0008
     `
         ),
         compundNames: ['lsr', 'lsl']
@@ -1392,7 +1402,7 @@ lsr.w #4, d3 ; d3 = $0FF0 (zero filled)
             ANY_SIZE,
             FLAGS_ROd,
             desc.rod,
-            '`ro<d> d2, d5` Where d is either (l)eft or (r)ight',
+            '`ro<d> d2, d5` or `ro<d> (a0)` Where d is either (l)eft or (r)ight',
             Size.Word,
             `
 * --- ROL: rotate left (bits wrap around) ---
@@ -1406,6 +1416,11 @@ ror.w #8, d1 ; d1 = $3412
 * --- Single bit rotate ---
 move.w #%10000000_00000001, d2
 rol.w #1, d2 ; d2 = %00000000_00000011
+
+* --- Memory form: rotates word at (a0) left by 1 ---
+lea $1000, a0
+move.w #%10000000_00000001, (a0)
+rol (a0) ; (a0) = %00000000_00000011
 `
         ),
         compundNames: ['rol', 'ror']

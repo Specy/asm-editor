@@ -6,9 +6,10 @@
     } from '$lib/languages/M68K/M68K-documentation'
     interface Props {
         openLinksInNewTab?: boolean
+        disableLinks?: boolean
     }
 
-    let { openLinksInNewTab = true }: Props = $props()
+    let { openLinksInNewTab = true, disableLinks = false }: Props = $props()
 </script>
 
 <div class="column sub-section">
@@ -26,7 +27,11 @@
             </div>
             {#if dir.description}
                 <span class="sub-description">
-                    <MarkdownRenderer source={dir.description} linksInNewTab={openLinksInNewTab} />
+                    <MarkdownRenderer
+                        source={dir.description}
+                        linksInNewTab={openLinksInNewTab}
+                        {disableLinks}
+                    />
                 </span>
             {/if}
             {#if dir.example}

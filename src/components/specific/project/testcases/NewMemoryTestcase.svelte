@@ -70,7 +70,12 @@
         </select>
     </Row>
     <Column padding="0.5rem 1rem">
-        <MemoryTestcaseValue {systemSize} bind:value={memoryValue} canRemove={false} />
+        <MemoryTestcaseValue 
+        {systemSize} 
+        bind:value={memoryValue} 
+        canRemove={false} 
+        type={'expected'}
+        />
     </Column>
     <Row justify="end" padding="0.5rem">
         <Button

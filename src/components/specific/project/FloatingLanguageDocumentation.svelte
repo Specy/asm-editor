@@ -8,9 +8,10 @@
     interface Props {
         visible: boolean
         language: AvailableLanguages
+        disableLinks?: boolean
     }
 
-    let { visible = $bindable(), language }: Props = $props()
+    let { visible = $bindable(), language, disableLinks = false }: Props = $props()
     let searchValue = $state('')
 </script>
 
@@ -31,6 +32,7 @@
                 bind:visible
                 defaultOpen={false}
                 showRedirect={false}
+                {disableLinks}
             />
         {/if}
         {#if language === 'MIPS'}
@@ -39,6 +41,7 @@
                 bind:visible
                 showRedirect={false}
                 defaultOpen={false}
+                {disableLinks}
             />
         {/if}
         {#if language === 'RISC-V' || language === 'RISC-V-64'}
@@ -47,6 +50,7 @@
                 bind:visible
                 showRedirect={false}
                 defaultOpen={false}
+                {disableLinks}
             />
         {/if}
     </div>

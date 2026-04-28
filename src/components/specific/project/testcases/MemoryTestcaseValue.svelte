@@ -6,7 +6,7 @@
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import FaTimes from 'svelte-icons/fa/FaTimes.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
-    import { RegisterSize, toHexString } from '$lib/languages/commonLanguageFeatures.svelte'
+    import { type RegisterSize, toHexString } from '$lib/languages/commonLanguageFeatures.svelte'
 
     const dispatcher = createEventDispatcher<{
         remove: void
@@ -17,6 +17,7 @@
         editable?: boolean
         canRemove?: boolean
         systemSize: RegisterSize
+        type: 'starting' | 'expected'
     }
 
     function parseNumber(value: string): bigint {
@@ -24,7 +25,15 @@
         return BigInt(value)
     }
 
-    let { value = $bindable(), editable = true, canRemove = true, systemSize }: Props = $props()
+    function formatNumber(value: bigint | number, size: bigint | number) {
+        return `0x${toHexString(value, size)} (${BigInt(value).toString()})`
+    }
+
+    function formatNumberList(values: (bigint | number)[], size: bigint | number) {
+        return `[${values.map((v) => formatNumber(v, size)).join(', ')}]`
+    }
+
+    let { value = $bindable(), editable = true, canRemove = true, systemSize, type }: Props = $props()
 </script>
 
 <div class="memory-testcase">
@@ -120,27 +129,22 @@
     {:else}
         {#if value.type === 'number'}
             <div style="word-break: break-all;">
-                At address <b>${toHexString(value.address, systemSize)}</b>, expect
-                <b>${toHexString(value.expected, value.bytes)}</b>
-                (of <b>{value.bytes}</b> bytes)
+                Memory at address <b>{formatNumber(value.address, systemSize)}</b> {type === 'starting' ? 'will be set to' : 'should equal'}
+                <b>{formatNumber(value.expected, value.bytes)}</b> (<b>{value.bytes}</b> bytes)
             </div>
         {/if}
         {#if value.type === 'string-chunk'}
             <div style="word-break: break-all;">
-                At address <b>${toHexString(value.address, systemSize)}</b>, expect "<b
+                Memory at address <b>{formatNumber(value.address, systemSize)}</b> {type === 'starting' ? 'will be set to the string' : 'should contain string'} "<b
                     >{value.expected}</b
                 >"
             </div>
         {/if}
         {#if value.type === 'number-chunk'}
             <div style="word-break: break-all;">
-                At address <b>${toHexString(value.address, systemSize)}</b>, expect
-                <b
-                    >[{value.expected
-                        .map((v) => `0x${toHexString(v, RegisterSize.Byte)}`)
-                        .join(', ')}]</b
-                >
-                each of <b>{value.bytes}</b> bytes
+                Memory at address <b>{formatNumber(value.address, systemSize)}</b> {type === 'starting' ? 'will be set to' : 'should equal'}
+                <b>{formatNumberList(value.expected, value.bytes)}</b>, each of
+                <b>{value.bytes}</b> bytes
             </div>
         {/if}
     {/if}

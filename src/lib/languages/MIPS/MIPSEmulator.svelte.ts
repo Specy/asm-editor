@@ -753,18 +753,19 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
             const t = structuredClone($state.snapshot(testcase))
             if (!mips) throw new Error('Interpreter not initialized')
             for (const [register, value] of Object.entries(t.startingRegisters)) {
-                mips.setRegisterValue(register as RegisterName, value)
+                mips.setRegisterValue(register as RegisterName, Number(value))
             }
             for (const value of t.startingMemory) {
                 if (value.type === 'number') {
                     const slice = numberToByteSlice(value.expected, value.bytes, 'little')
-                    mips.setMemoryBytes(value.address, slice)
+                
+                    mips.setMemoryBytes(Number(value.address), slice)
                 } else if (value.type === 'number-chunk') {
                     const expected = numbersOfSizeToSlice(value.expected, value.bytes, 'little')
-                    mips.setMemoryBytes(value.address, expected)
+                    mips.setMemoryBytes(Number(value.address), expected)
                 } else if (value.type === 'string-chunk') {
                     const encoded = new TextEncoder().encode(value.expected)
-                    mips.setMemoryBytes(value.address, Array.from(encoded))
+                    mips.setMemoryBytes(Number(value.address), Array.from(encoded))
                 }
             }
             registerHandlers(mips, {

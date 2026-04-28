@@ -56,6 +56,7 @@
         embedded?: boolean
         children?: Snippet
         readonly?: boolean
+        canEditTestcases?: boolean
     }
 
     let {
@@ -66,8 +67,11 @@
         emulator = $bindable(),
         embedded = false,
         children,
-        readonly = false
+        readonly = false,
+        canEditTestcases = true
     }: Props = $props()
+
+    const testcasesEditable = $derived(canEditTestcases && !readonly)
 
     $effect(() => {
         emulator.setCode(code)
@@ -381,7 +385,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
     />
 {/if}
 <TestcasesEditor
-    editable={true}
+    editable={testcasesEditable}
     systemSize={emulator.systemSize}
     registerNames={emulator.registers.map((r) => r.name)}
     hiddenRegistersNames={emulator.hiddenRegisters}
@@ -490,7 +494,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
             hasErrorsInTests={testcasesResult.some((r) => !r.passed)}
             hasNoErrorsInTests={testcasesResult.every((r) => r.passed) &&
                 testcasesResult.length > 0}
-            canEditTests={!readonly}
+            canEditTests={testcasesEditable}
             executionDisabled={readonly || emulator.terminated || emulator.interrupt !== undefined}
             buildDisabled={readonly || emulator.compilerErrors.length > 0}
             hasCompiled={emulator.canExecute || !!emulator.compiledCode}

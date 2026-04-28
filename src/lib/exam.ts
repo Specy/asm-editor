@@ -84,6 +84,7 @@ export type ExamSubmission = {
     submissionTimestamp: number
     startedAt: number
     hash: string
+    fullscreenExitCount?: number
     answers: Record<string, ExamSectionAnswer>
 }
 

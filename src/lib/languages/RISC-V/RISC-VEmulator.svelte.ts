@@ -1,6 +1,7 @@
 import { PAGE_ELEMENTS_PER_ROW, PAGE_SIZE } from '$lib/Config'
 import {
     BackStepAction,
+    bigintToHighLow,
     ConfirmResult,
     type HandlerMapFns,
     type JsBackStep,
@@ -289,7 +290,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
     }
 
     function updateRegisters() {
-        if (state.registers.length === 0) return
+        if (state.registers.length === 0 || !riscv) return
         getRegistersValue().forEach((reg, i) => {
             state.registers[i].setValue(reg)
         })
@@ -308,7 +309,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
             state.memory.global.data.prevState = temp
             state.memory.tabs.forEach((tab) => {
                 const temp = tab.data.current
-                const memory = riscv.readMemoryBytes(Number(tab.address), tab.pageSize)
+                const memory = riscv!.readMemoryBytes(Number(tab.address), tab.pageSize)
                 tab.data.current = new Uint8Array(memory)
                 tab.data.prevState = temp
             })
@@ -333,9 +334,9 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
                 destination: BigInt(v.pc),
                 sp: BigInt(v.sp),
                 name:
-                    riscv.getLabelAtAddress(address) ??
+                    riscv?.getLabelAtAddress(address) ??
                     `0x${address.toString(16).padStart(8, '0')}`,
-                line: (riscv.getStatementAtAddress(address)?.sourceLine ?? 0) - 1,
+                line: (riscv?.getStatementAtAddress(address)?.sourceLine ?? 0) - 1,
                 color: makeLabelColor(i, v.sp)
             }
         })
@@ -343,8 +344,8 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
             .map((step) => {
                 let line = -1
                 try {
-                    const ins = riscv.getStatementAtAddress(step.pc)
-                    line = ins.sourceLine - 1
+                    const ins = riscv?.getStatementAtAddress(step.pc)
+                    line = ins?.sourceLine ?? -1
                 } catch (e) {
                 }
                 const mutations = backstepToMutation(step)
@@ -430,7 +431,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
     function hasTerminated() {
         try {
             //TODO improve this
-            riscv.getNextStatement()
+            riscv?.getNextStatement()
             return false
         } catch (e) {
             return true
@@ -490,7 +491,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
     function calculateBreakpoints(breakpoints: number[]) {
         const b = breakpoints
             .map((line) => {
-                const ins = riscv.getStatementAtSourceLine(line + 1)
+                const ins = riscv?.getStatementAtSourceLine(line + 1)
                 if (!ins) return -1
                 return ins.address
             })
@@ -504,22 +505,22 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
         const breakpoints = state.breakpoints
         try {
             const terminated =
-                riscv.simulateWithBreakpointsAndLimit(
+                riscv?.simulateWithBreakpointsAndLimit(
                     calculateBreakpoints(breakpoints),
                     haltLimit
                 ) === StopReason.CLIFF_TERMINATION
             try {
-                const ins = riscv.getNextStatement()
+                const ins = riscv?.getNextStatement()
                 //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
                 if (!terminated) {
-                    state.line = ins.sourceLine - 1
+                    state.line = ins?.sourceLine ?? -1
                 } else {
                     state.line = -1
                 }
             } catch (e) {
                 state.line = -1
             }
-            state.canUndo = riscv.canUndo
+            state.canUndo = riscv?.canUndo ?? false
             updateRegisters()
             updateMemory()
             updateData()
@@ -533,7 +534,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
             console.error(e)
             let line = -1
             try {
-                line = riscv.getCurrentStatementIndex()
+                line = riscv?.getCurrentStatementIndex() ?? -1
             } catch (e) {
                 console.error(e)
             }
@@ -669,7 +670,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
             },
             askString: (props: string) => {
                 throwIfExamMode()
-                return prompt(props)
+                return prompt(props) ?? ''
             },
             printChar: (char: string) => {
                 state.stdOut += char
@@ -699,7 +700,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
 
             readChar: () => {
                 throwIfExamMode()
-                const str = prompt('Enter a character')
+                const str = prompt('Enter a character') ?? ''
                 if (str.length !== 1) throw new Error('Invalid character')
                 return str[0]
             },
@@ -717,7 +718,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
             },
             readString: () => {
                 throwIfExamMode()
-                return prompt('Enter a string')
+                return prompt('Enter a string') ?? ''
             },
 
             log: (message: string) => {
@@ -729,7 +730,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
 
             confirm: (message: string) =>
                 Number(confirm(`${message}; 1 = yes, 0 = no, -1 = cancel`)) as ConfirmResult,
-            inputDialog: (message: string) => prompt(message),
+            inputDialog: (message: string) => prompt(message) ?? '',
             outputDialog: (message: string) => alert(message),
 
             sleep: unimplementedHandler('sleep')
@@ -743,18 +744,18 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
             const t = structuredClone($state.snapshot(testcase))
             if (!riscv) throw new Error('Interpreter not initialized')
             for (const [register, value] of Object.entries(t.startingRegisters)) {
-                riscv.setRegisterValue(register as RegisterName, value)
+                riscv.setRegisterValue(register as RegisterName, ...bigintToHighLow(value))
             }
             for (const value of t.startingMemory) {
                 if (value.type === 'number') {
                     const slice = numberToByteSlice(value.expected, value.bytes, 'little')
-                    riscv.setMemoryBytes(value.address, slice)
+                    riscv.setMemoryBytes(Number(value.address), slice)
                 } else if (value.type === 'number-chunk') {
                     const expected = numbersOfSizeToSlice(value.expected, value.bytes, 'little')
-                    riscv.setMemoryBytes(value.address, expected)
+                    riscv.setMemoryBytes(Number(value.address), expected)
                 } else if (value.type === 'string-chunk') {
                     const encoded = new TextEncoder().encode(value.expected)
-                    riscv.setMemoryBytes(value.address, Array.from(encoded))
+                    riscv.setMemoryBytes(Number(value.address), Array.from(encoded))
                 }
             }
             registerHandlers(riscv, {
@@ -763,30 +764,30 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
                     if (t.input.length === 0)
                         throw new Error('Input does not have any characters left')
                     if (t.input[0].length !== 1) throw new Error('Invalid character')
-                    return t.input.shift()[0]
+                    return t.input.shift()![0]
                 },
                 readDouble: () => {
                     if (t.input.length === 0)
                         throw new Error('Input does not have any numbers left')
                     if (Number.isNaN(Number(t.input[0]))) throw new Error('Invalid number')
-                    return Number(t.input.shift())
+                    return Number(t.input.shift()!)
                 },
                 readFloat: () => {
                     if (t.input.length === 0)
                         throw new Error('Input does not have any numbers left')
                     if (Number.isNaN(Number(t.input[0]))) throw new Error('Invalid number')
-                    return Number(t.input.shift())
+                    return Number(t.input.shift()!)
                 },
                 readInt: () => {
                     if (t.input.length === 0)
                         throw new Error('Input does not have any numbers left')
                     if (Number.isNaN(Number(t.input[0]))) throw new Error('Invalid number')
-                    return Number(t.input.shift())
+                    return Number(t.input.shift()!)
                 },
                 readString: () => {
                     if (t.input.length === 0)
                         throw new Error('Input does not have any strings left')
-                    return t.input.shift()
+                    return t.input.shift()!
                 },
                 printChar: (char: string) => {
                     state.stdOut += char
@@ -842,7 +843,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
             console.error(e)
             let line = -1
             try {
-                line = riscv.getCurrentStatementIndex()
+                line = riscv?.getCurrentStatementIndex() ?? -1
             } catch (e) {
                 console.error(e)
             }

@@ -157,6 +157,20 @@
         ]
     }
 
+    const rehypeDisableLinksTransformer = () => (tree: Root) => {
+        visit(tree, 'element', (node: Element, index?: number, parent?: Parent) => {
+            if (node.tagName !== 'a' || typeof index !== 'number' || !parent) return
+            parent.children.splice(index, 1, ...node.children)
+        })
+    }
+
+    function sanitizeMarkdownHtml(html: string, disableLinks = false) {
+        return DOMPurify.sanitize(html, {
+            ADD_TAGS: ['iframe'],
+            ...(disableLinks ? { FORBID_TAGS: ['a'] } : {})
+        })
+    }
+
     const ext: Plugin = {
         transformers: [
             {
@@ -189,22 +203,29 @@
             }
         ]
     }
-    const cartaNormal = new Carta({
+    const extWithoutLinks: Plugin = {
+        transformers: [
+            {
+                execution: 'sync',
+                type: 'rehype',
+                transform({ processor }) {
+                    processor.use(remarkGfm).use(rehypeRaw).use(rehypeDisableLinksTransformer)
+                }
+            }
+        ]
+    }
+    const cartaNormal = $derived(new Carta({
         sanitizer: (html) => {
-            return DOMPurify.sanitize(html, {
-                ADD_TAGS: ['iframe']
-            })
+            return sanitizeMarkdownHtml(html)
         },
         extensions: [ext, customPlaygroundPlugin, code({ theme, langs: ['mips', 'riscv', 'asm'] })],
         rehypeOptions: {
             allowDangerousHtml: true
         }
-    })
-    const cartaWithExternalLins = new Carta({
+    }))
+    const cartaWithExternalLins = $derived(new Carta({
         sanitizer: (html) => {
-            return DOMPurify.sanitize(html, {
-                ADD_TAGS: ['iframe']
-            })
+            return sanitizeMarkdownHtml(html)
         },
         extensions: [
             extWithExternalLins,
@@ -214,7 +235,20 @@
         rehypeOptions: {
             allowDangerousHtml: true
         }
-    })
+    }))
+    const cartaWithoutLinks = $derived(new Carta({
+        sanitizer: (html) => {
+            return sanitizeMarkdownHtml(html, true)
+        },
+        extensions: [
+            extWithoutLinks,
+            customPlaygroundPlugin,
+            code({ theme, langs: ['mips', 'riscv', 'asm', 'c'] })
+        ],
+        rehypeOptions: {
+            allowDangerousHtml: true
+        }
+    }))
 </script>
 
 <script lang="ts">
@@ -226,15 +260,18 @@
         style?: string
         spacing?: string
         simpleCode?: boolean
+        disableLinks?: boolean
     }
 
-    let { source, linksInNewTab, style, spacing, simpleCode }: Props = $props()
+    let { source, linksInNewTab, style, spacing, simpleCode, disableLinks }: Props = $props()
 
-    const carta = linksInNewTab ? cartaWithExternalLins : cartaNormal
+    const carta = $derived(
+        disableLinks ? cartaWithoutLinks : linksInNewTab ? cartaWithExternalLins : cartaNormal
+    )
 </script>
 
 <div class="_markdown" class:simple-code={simpleCode} {style} style:--gap={spacing}>
-    {#key source + theme}
+    {#key source + theme + disableLinks}
         <Markdown value={source} {carta} />
     {/key}
 </div>

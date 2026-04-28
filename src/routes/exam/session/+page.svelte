@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { browser } from '$app/environment'
     import { page } from '$app/stores'
     import { goto } from '$app/navigation'
     import Page from '$cmp/shared/layout/Page.svelte'
@@ -31,10 +32,11 @@
         type OpenQuestionAnswer,
         type OpenQuestionSection
     } from '$lib/exam'
-    import { makeHash, textDownloader } from '$lib/utils'
+    import { createDebouncer, makeHash, textDownloader } from '$lib/utils'
+    import { serializer } from '$lib/json'
     import { toast } from '$stores/toastStore'
     import { Prompt } from '$stores/promptStore.svelte'
-    import { onMount } from 'svelte'
+    import { onMount, tick } from 'svelte'
     import FaArrowLeft from 'svelte-icons/fa/FaArrowLeft.svelte'
     import FaArrowRight from 'svelte-icons/fa/FaArrowRight.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
@@ -43,6 +45,16 @@
     import ExamReviewAgentSidebar from '$cmp/specific/exam/ExamReviewAgentSidebar.svelte'
     import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
     import { preloadAllEmulators } from '$lib/languages/Emulator'
+
+    const EXAM_SESSION_SNAPSHOT_VERSION = 1
+    const EXAM_SESSION_SNAPSHOT_PREFIX = 'asm-editor_exam_session_snapshot:'
+
+    type StoredExamSessionSnapshot = {
+        version: number
+        sourceHash: string
+        savedAt: number
+        answers: Record<string, ExamSectionAnswer>
+    }
 
     let exam = $state<ExamPayload | null>(null)
     let sections = $state([] as ExamSection[])
@@ -55,6 +67,8 @@
     let submissionUrl = $state('')
     let documentationVisible = $state(false)
     let teacherAgentOpen = $state(false)
+    let snapshotStorageKey = ''
+    let snapshotSourceHash = ''
 
     let openAnswers = $state<Record<string, string>>({})
     let multipleChoiceAnswers = $state<Record<string, string[]>>({})
@@ -66,11 +80,13 @@
         submissionTimestamp: 0,
         startedAt: 0,
         hash: '',
+        fullscreenExitCount: 0,
         answers: {}
     })
 
     let now = $state(Date.now())
     let timeoutSubmissionTriggered = $state(false)
+    const [debouncedSaveSnapshot, clearSnapshotDebounce] = createDebouncer(250)
 
     const activeSection = $derived(sections.find((section) => section.id === activeSectionId))
     const activeVisibleAnswer = $derived(
@@ -105,6 +121,9 @@
             : -1
     )
     const remainingTimeLabel = $derived(formatRemainingTime(remainingMs))
+    const exerciseProgressLabel = $derived(
+        activeSectionIndex >= 0 ? `${activeSectionIndex + 1}/${sections.length}` : ''
+    )
 
     function formatRemainingTime(milliseconds: number) {
         if (milliseconds < 0) return ''
@@ -210,6 +229,104 @@
         return answers
     }
 
+    function normalizeExamSubmission(submission: ExamSubmission): ExamSubmission {
+        return {
+            ...submission,
+            fullscreenExitCount: submission.fullscreenExitCount ?? 0,
+            answers: submission.answers ?? {}
+        }
+    }
+
+    async function initializeSnapshotStorage(encodedExam: string) {
+        snapshotSourceHash = (await makeHash(encodedExam)).slice(0, 32)
+        snapshotStorageKey = `${EXAM_SESSION_SNAPSHOT_PREFIX}${snapshotSourceHash}`
+    }
+
+    function readExamSnapshot(): StoredExamSessionSnapshot | null {
+        if (!browser || !snapshotStorageKey || !snapshotSourceHash) return null
+
+        try {
+            const stored = localStorage.getItem(snapshotStorageKey)
+            if (!stored) return null
+
+            const snapshot = serializer.parse<
+                StoredExamSessionSnapshot & {
+                    submission?: ExamSubmission
+                    exam?: ExamPayload
+                }
+            >(stored)
+            const answers = snapshot.answers ?? snapshot.submission?.answers
+            if (
+                snapshot.version !== EXAM_SESSION_SNAPSHOT_VERSION ||
+                snapshot.sourceHash !== snapshotSourceHash ||
+                !!snapshot.submission?.submissionTimestamp ||
+                !!snapshot.exam?.submission ||
+                !answers
+            ) {
+                return null
+            }
+
+            return {
+                version: snapshot.version,
+                sourceHash: snapshot.sourceHash,
+                savedAt: snapshot.savedAt,
+                answers
+            }
+        } catch (e) {
+            console.error(e)
+            localStorage.removeItem(snapshotStorageKey)
+            return null
+        }
+    }
+
+    function canPersistExamSnapshot() {
+        return (
+            browser &&
+            status === 'loaded' &&
+            !!exam &&
+            !!snapshotStorageKey &&
+            !!snapshotSourceHash &&
+            !isReviewMode &&
+            !isSubmitted &&
+            !submissionUrl
+        )
+    }
+
+    function buildExamSnapshot(): StoredExamSessionSnapshot | null {
+        if (!exam || !snapshotSourceHash) return null
+
+        return {
+            version: EXAM_SESSION_SNAPSHOT_VERSION,
+            sourceHash: snapshotSourceHash,
+            savedAt: Date.now(),
+            answers: collectAnswers()
+        }
+    }
+
+    function saveExamSnapshot() {
+        if (!canPersistExamSnapshot()) return
+
+        const snapshot = buildExamSnapshot()
+        if (!snapshot) return
+
+        try {
+            localStorage.setItem(snapshotStorageKey, serializer.stringify(snapshot))
+        } catch (e) {
+            console.error(e)
+        }
+    }
+
+    function scheduleExamSnapshotSave() {
+        if (!canPersistExamSnapshot()) return
+        debouncedSaveSnapshot(saveExamSnapshot)
+    }
+
+    function clearExamSnapshot() {
+        clearSnapshotDebounce()
+        if (!browser || !snapshotStorageKey) return
+        localStorage.removeItem(snapshotStorageKey)
+    }
+
     function selectOption(section: MultipleChoiceSection, optionId: string, checked: boolean) {
         const current = multipleChoiceAnswers[section.id] ?? []
         if (section.allowMultiple) {
@@ -225,6 +342,22 @@
         multipleChoiceAnswers[section.id] = [optionId]
     }
 
+    function handleOpenAnswerKeydown(event: KeyboardEvent, section: OpenQuestionSection) {
+        if (event.key !== 'Tab' || isReviewMode || examDisabled) return
+
+        event.preventDefault()
+        const textarea = event.currentTarget as HTMLTextAreaElement
+        const value = openAnswers[section.id] ?? ''
+        const start = textarea.selectionStart
+        const end = textarea.selectionEnd
+
+        openAnswers[section.id] = `${value.slice(0, start)}\t${value.slice(end)}`
+        void tick().then(() => {
+            textarea.focus()
+            textarea.selectionStart = textarea.selectionEnd = start + 1
+        })
+    }
+
     async function unlockExam() {
         if (!exam) return
         const hash = (await makeHash(unlockPasswordInput)).slice(0, 6)
@@ -236,6 +369,7 @@
         await requestExamFullscreen()
         examDisabled = false
         examSubmission.submissionTimestamp = 0
+        examSubmission.fullscreenExitCount = examSubmission.fullscreenExitCount ?? 0
         submissionUrl = ''
         exam.submission = undefined
         try {
@@ -254,6 +388,10 @@
 
     function listenFullscreenChange() {
         if (!document.fullscreenElement) {
+            if (!isSubmitted) {
+                examSubmission.fullscreenExitCount = (examSubmission.fullscreenExitCount ?? 0) + 1
+                saveExamSnapshot()
+            }
             examDisabled = true
         }
     }
@@ -268,6 +406,13 @@
     function preventDefaultKeyPresses(event: KeyboardEvent) {
         const isMac = navigator.platform.toUpperCase().includes('MAC')
         const modifierKeyPressed = isMac ? event.metaKey : event.ctrlKey
+
+        if (event.key === 'PrintScreen' || event.code === 'PrintScreen') {
+            event.preventDefault()
+            event.stopPropagation()
+            event.stopImmediatePropagation()
+            return
+        }
 
         if (modifierKeyPressed) {
             const key = event.key.toLowerCase()
@@ -284,11 +429,21 @@
     async function requestExamFullscreen() {
         try {
             await document.documentElement.requestFullscreen()
-            //@ts-ignore
-            navigator.keyboard?.lock(['Escape', 'F11', 'F12'])
         } catch (e) {
             console.error(e)
             toast.error('Unable to enter fullscreen mode')
+            return
+        }
+
+        try {
+            const keyboard = (
+                navigator as Navigator & {
+                    keyboard?: { lock?: (keyCodes: string[]) => Promise<void> }
+                }
+            ).keyboard
+            await keyboard?.lock?.(['Escape', 'F11', 'F12', 'PrintScreen'])
+        } catch (e) {
+            console.warn('Unable to lock exam keyboard shortcuts', e)
         }
     }
 
@@ -316,6 +471,7 @@
                 : Date.now()
 
         examSubmission.submissionTimestamp = autoSubmit ? timeLimitDeadline : Date.now()
+        examSubmission.fullscreenExitCount = examSubmission.fullscreenExitCount ?? 0
         examSubmission.answers = collectAnswers()
         examDisabled = true
         exam = {
@@ -331,6 +487,7 @@
 
         const link = createExamSessionLink(payloadToShare)
         submissionUrl = link
+        clearExamSnapshot()
         try {
             await navigator.clipboard.writeText(link)
             toast.logPill('Submission link copied to clipboard')
@@ -422,8 +579,10 @@
                     return
                 }
                 sections = unlockedSections
-                examSubmission = $state.snapshot(parsedPayload.submission)
+                examSubmission = normalizeExamSubmission($state.snapshot(parsedPayload.submission))
             } else {
+                await initializeSnapshotStorage(encodedExam)
+
                 const studentName = await Prompt.askText(
                     'Welcome to the exam! The app will go full screen soon.\n\nIF YOU EXIT FULL SCREEN OR CHANGE PAGE, YOUR EDITOR WILL BE DISABLED.\n\nPlease write your name to start the exam.',
                     false
@@ -439,6 +598,7 @@
                     submissionTimestamp: 0,
                     startedAt: Date.now(),
                     hash: '',
+                    fullscreenExitCount: 0,
                     answers: {}
                 }
                 examSubmission.hash = (
@@ -452,6 +612,7 @@
                     return
                 }
                 sections = unlockedSections
+                examSubmission.answers = readExamSnapshot()?.answers ?? {}
 
                 await startExam()
             }
@@ -479,8 +640,15 @@
 
         return () => {
             clearInterval(intervalId)
+            clearSnapshotDebounce()
             detachExamListeners()
         }
+    })
+
+    $effect(() => {
+        if (!canPersistExamSnapshot()) return
+        collectAnswers()
+        scheduleExamSnapshotSave()
     })
 
     $effect(() => {
@@ -536,7 +704,10 @@
         {#if examDisabled && submissionUrl}
             <div class="overlay">
                 <h1 class="loading">Exam Finished</h1>
-                <p>The submission link is in your clipboard. You can now share the submission link. You can also copy it again if needed.</p>
+                <p>
+                    The submission link is in your clipboard. You can now share the submission link.
+                    You can also copy it again if needed.
+                </p>
                 <Row gap="1rem">
                     <Input
                         autoComplete="one-time-code"
@@ -554,9 +725,12 @@
                 >
                     Copy submission link again
                 </Button>
-                    <Button
+                <Button
                     onClick={async () => {
-                        textDownloader(submissionUrl, `${examSubmission.name}-${examSubmission.hash}-submission-link.txt`)
+                        textDownloader(
+                            submissionUrl,
+                            `${examSubmission.name}-${examSubmission.hash}-submission-link.txt`
+                        )
                     }}
                 >
                     Download submission
@@ -613,7 +787,13 @@
                             <FloatingLanguageDocumentation
                                 bind:visible={documentationVisible}
                                 language={assemblySection.language}
+                                disableLinks
                             />
+                        {/if}
+                        {#if exerciseProgressLabel}
+                            <span style="font-size: 1.2rem; min-width: 3.2ch">
+                                {exerciseProgressLabel}
+                            </span>
                         {/if}
                         <Button
                             cssVar="secondary"
@@ -657,7 +837,7 @@
             {#if isOnInstructions && hasInstructions}
                 <Card padding="1rem" background="secondary" style="margin:0.5rem; flex:1;">
                     <Header type="h2">Instructions</Header>
-                    <MarkdownRenderer source={exam.instructions} />
+                    <MarkdownRenderer source={exam.instructions} disableLinks />
                     <Row style="justify-content:flex-end; margin-top: auto">
                         <Button onClick={goToNextSection}>Start first section</Button>
                     </Row>
@@ -680,8 +860,12 @@
                                         bind:code={assemblyAnswers[assemblySection.id]}
                                         testcases={assemblySection.testcases}
                                         embedded={true}
+                                        canEditTestcases={false}
                                     >
-                                        <MarkdownRenderer source={assemblySection.prompt} />
+                                        <MarkdownRenderer
+                                            source={assemblySection.prompt}
+                                            disableLinks
+                                        />
                                     </ProjectEditor>
                                     {#if isReviewMode}
                                         <ExamReviewAgentSidebar
@@ -703,7 +887,7 @@
                     {:else}
                         <div class="non-assembly-layout">
                             <div class="prompt-pane">
-                                <MarkdownRenderer source={activeSection.prompt} />
+                                <MarkdownRenderer source={activeSection.prompt} disableLinks />
                             </div>
 
                             <div class="answer-pane">
@@ -714,6 +898,7 @@
                                         placeholder={openSection.placeholder}
                                         bind:value={openAnswers[openSection.id]}
                                         readonly={isReviewMode || examDisabled}
+                                        onkeydown={(e) => handleOpenAnswerKeydown(e, openSection)}
                                     ></textarea>
                                 {:else if activeSection.type === ExamSectionType.MultipleChoice}
                                     {@const mcSection = activeSection as MultipleChoiceSection}

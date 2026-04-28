@@ -20,6 +20,14 @@
         hiddenRegistersNames,
         systemSize
     }: Props = $props()
+
+    function formatNumber(value: bigint | number, size: bigint | number) {
+        return `0x${toHexString(value, size)} (${BigInt(value).toString()})`
+    }
+
+    function formatNumberList(values: (bigint | number)[], size: bigint | number) {
+        return `[${values.map((v) => formatNumber(v, size)).join(', ')}]`
+    }
 </script>
 
 <Card border={testcaseResult.passed ? 'background' : 'red'}>
@@ -28,9 +36,9 @@
             {#if err.type === 'wrong-register'}
                 <div class="testcase-error">
                     Wrong register "{err.register}" value, expected
-                    <b>${toHexString(err.expected, systemSize)}</b>
+                    <b>{formatNumber(err.expected, systemSize)}</b>
                     but got
-                    <b>${toHexString(err.got, systemSize)}</b>
+                    <b>{formatNumber(err.got, systemSize)}</b>
                 </div>
             {:else if err.type === 'wrong-output'}
                 <div class="testcase-error">
@@ -38,30 +46,24 @@
                 </div>
             {:else if err.type === 'wrong-memory-string'}
                 <div class="testcase-error">
-                    Wrong string at address <b>${toHexString(err.address, systemSize)}</b>, expected
+                    Wrong string at address <b>{formatNumber(err.address, systemSize)}</b>, expected
                     "<b>{err.expected}</b>" but got
                     <b>{err.got}</b>
                 </div>
             {:else if err.type === 'wrong-memory-number'}
                 <div class="testcase-error">
-                    Wrong number at address <b>${toHexString(err.address, systemSize)}</b>, expected
-                    <b>${toHexString(err.expected, err.bytes)}</b>
+                    Wrong number at address <b>{formatNumber(err.address, systemSize)}</b>, expected
+                    <b>{formatNumber(err.expected, err.bytes)}</b>
                     ({err.bytes} bytes) but got
-                    <b>${toHexString(err.got, err.bytes)}</b>
+                    <b>{formatNumber(err.got, err.bytes)}</b>
                 </div>
             {:else if err.type === 'wrong-memory-chunk'}
                 <div class="testcase-error">
-                    Wrong memory chunk at address <b>${toHexString(err.address, systemSize)}</b>,
+                    Wrong memory chunk at address <b>{formatNumber(err.address, systemSize)}</b>,
                     expected
-                    <b
-                        >[{err.expected
-                            .map((v) => `0x${toHexString(v, RegisterSize.Byte)}`)
-                            .join(', ')}]
-                    </b>
+                    <b>{formatNumberList(err.expected, RegisterSize.Byte)}</b>
                     but got
-                    <b
-                        >[{err.got.map((v) => `0x${toHexString(v, RegisterSize.Byte)}`).join(', ')}]
-                    </b>
+                    <b>{formatNumberList(err.got, RegisterSize.Byte)}</b>
                 </div>
             {/if}
         {/each}

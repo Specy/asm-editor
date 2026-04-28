@@ -229,6 +229,7 @@
                         hash: submission.hash,
                         startedAt: formatDate(submission.startedAt),
                         submittedAt: formatDate(submission.submissionTimestamp),
+                        fullscreenExitCount: submission.fullscreenExitCount ?? 0,
                         durationMs: submission.submissionTimestamp - submission.startedAt,
                         durationLabel: formatDuration(
                             submission.submissionTimestamp - submission.startedAt

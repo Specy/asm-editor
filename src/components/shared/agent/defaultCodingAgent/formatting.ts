@@ -2,13 +2,17 @@ import type { Emulator } from '$lib/languages/Emulator'
 import {
     RegisterSize,
     type ExecutionStep,
-    type MonacoError
+    type MonacoError,
+    toHexString
 } from '$lib/languages/commonLanguageFeatures.svelte'
+import { unsignedBigIntToSigned } from '$lib/utils'
 
 export type FormattedNumber = {
     decimal: string
     hex: string
     display: string
+    signedDecimal?: string
+    unsignedDecimal?: string
 }
 
 const SIZE_NAMES = {
@@ -22,8 +26,35 @@ function normalizeNumber(value: bigint | number) {
     return typeof value === 'bigint' ? value : BigInt(value)
 }
 
-export function formatNumber(value: bigint | number): FormattedNumber {
+export function formatNumber(value: bigint | number, size?: RegisterSize): FormattedNumber {
     const numericValue = normalizeNumber(value)
+
+    if (size !== undefined) {
+        const unsignedValue = numericValue & ((1n << BigInt(size * 8)) - 1n)
+        const signedValue = unsignedBigIntToSigned(unsignedValue, size)
+        const decimal = numericValue.toString()
+        const unsignedDecimal = unsignedValue.toString()
+        const signedDecimal = signedValue.toString()
+        const hex = `0x${toHexString(unsignedValue, size)}`
+
+        if (signedValue < 0n || numericValue < 0n) {
+            return {
+                decimal,
+                hex,
+                signedDecimal,
+                unsignedDecimal,
+                display: `signed decimal: ${signedDecimal} unsigned decimal: ${unsignedDecimal} hex: ${hex}`
+            }
+        }
+
+        return {
+            decimal,
+            hex,
+            unsignedDecimal,
+            display: `decimal: ${decimal} hex: ${hex}`
+        }
+    }
+
     const sign = numericValue < 0n ? '-' : ''
     const magnitude = numericValue < 0n ? -numericValue : numericValue
     const hex = `${sign}0x${magnitude.toString(16)}`
@@ -76,14 +107,14 @@ export function formatLatestSteps(editorCode: string, steps: ExecutionStep[], ma
                     return {
                         type: mutation.type,
                         register: mutation.value.register,
-                        old: formatNumber(mutation.value.old),
+                        old: formatNumber(mutation.value.old, mutation.value.size),
                         size: formatSize(mutation.value.size)
                     }
                 case 'WriteMemory':
                     return {
                         type: mutation.type,
                         address: formatNumber(mutation.value.address),
-                        old: formatNumber(mutation.value.old),
+                        old: formatNumber(mutation.value.old, mutation.value.size),
                         size: formatSize(mutation.value.size)
                     }
                 case 'WriteMemoryBytes':
@@ -109,7 +140,7 @@ export function formatLatestSteps(editorCode: string, steps: ExecutionStep[], ma
 export function formatRegisters(emulator: Emulator) {
     return emulator.registers.map((register) => ({
         name: register.name,
-        value: formatNumber(register.value)
+        value: formatNumber(register.value, emulator.systemSize)
     }))
 }
 
