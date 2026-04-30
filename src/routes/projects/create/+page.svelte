@@ -78,9 +78,9 @@
         </div>
         {#if language === 'X86'}
             <p
-                style="margin-top: 2rem; background: rgba(var(--RGB-red), 0.3); padding: 1rem; border-radius: 0.5rem;"
+                style="margin-top: 2rem; background: rgba(var(--RGB-red), 0.1); padding: 1rem; border-radius: 0.5rem;"
             >
-                X86 is in experimental stage. It has less features compared to M68K and MIPS and
+                X86 is experimental. We are deciding between FASM and NASM syntax, it
                 might have bugs. Please report any issues you find.
             </p>
         {/if}

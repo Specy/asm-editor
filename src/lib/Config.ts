@@ -51,9 +51,8 @@ END: * Jump here to end the program
 global _start
 section .text
 _start:
-  mov rax, 60
-  xor rdi, rdi
-  syscall
+    ; Write here your code
+    mov rax, 42
 `.trim(),
     'RISC-V': `
 .data

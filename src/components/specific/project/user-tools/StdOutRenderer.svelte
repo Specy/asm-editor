@@ -64,6 +64,7 @@
     }
     .std-out {
         min-height: 4rem;
+        max-height: 8rem;
         position: relative;
         border-radius: 0.5rem;
         overflow-y: auto;
