@@ -3,8 +3,7 @@
         type SupportedLanguage
     } from '$cmp/shared/agent/DefaultCodingAgent.svelte'
     import FaTimes from 'svelte-icons/fa/FaTimes.svelte'
-    import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
-    import Page from '$cmp/shared/layout/Page.svelte'
+    import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
     import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
     import InteractiveInstructionEditor from '$cmp/shared/InteractiveInstructionEditor.svelte'
     import type { AvailableLanguages } from '$lib/Project.svelte'
@@ -13,12 +12,17 @@
     let editorLanguage: SupportedLanguage | null = $state(null)
     let editorCode = $state('')
     let emulatorInstance: Emulator | null = $state(null)
-    let editorSidebarOpen = $state(false)
+    let agentOpen = $state(true)
     let latestExampleSignature = $state<string | null>(null)
+    let agentStyle = $derived(
+        editorLanguage
+            ? 'border-radius: 0; border: none; box-shadow: none; opacity: 0.82;'
+            : 'min-height: 100%;'
+    )
 
     $effect(() => {
         if (!editorLanguage) {
-            editorSidebarOpen = false
+            agentOpen = true
             latestExampleSignature = null
             return
         }
@@ -26,7 +30,7 @@
         const nextSignature = `${editorLanguage}::${editorCode}`
         if (nextSignature !== latestExampleSignature) {
             latestExampleSignature = nextSignature
-            editorSidebarOpen = true
+            agentOpen = true
         }
     })
 </script>
@@ -36,166 +40,169 @@
     <meta name="description" content="Chat with the AI assistant" />
 </svelte:head>
 
-<DefaultNavbar />
-<Page hasNavbar>
-    <div class="chat-layout" class:editor-open={editorLanguage && editorSidebarOpen}>
-        <div class="agent-wrapper">
-            <DefaultCodingAgent bind:editorLanguage bind:editorCode {emulatorInstance} />
+<div class="chat-page">
+    {#if editorLanguage}
+        <div class="emulator-stage">
+            {#key editorLanguage}
+                <EmulatorLoader
+                    language={editorLanguage}
+                    code={editorCode}
+                    bind:emulator={emulatorInstance}
+                    settings={{
+                        globalPageElementsPerRow: 4,
+                        globalPageSize: 4 * 8
+                    }}
+                >
+                    {#snippet children(emulator)}
+                        <InteractiveInstructionEditor
+                            bind:code={editorCode}
+                            language={editorLanguage as AvailableLanguages}
+                            {emulator}
+                            embedded={true}
+                            showConsole={true}
+                            showRegisters={true}
+                            showMemory={true}
+                            showFlags={true}
+                            forceMemoryRight={true}
+                        />
+                    {/snippet}
+                </EmulatorLoader>
+            {/key}
         </div>
+    {/if}
 
-        {#if editorLanguage && editorSidebarOpen}
-            <aside class="editor-panel" aria-label="Example code sidebar">
-                <div class="editor-panel-header">
-                    <h2>Example code</h2>
-                    <button
-                        type="button"
-                        class="close-editor-button"
-                        aria-label="Close example code sidebar"
-                        onclick={() => (editorSidebarOpen = false)}
-                    >
-                        <FaTimes />
-                    </button>
-                </div>
-                <div class="editor-content">
-                    {#key editorLanguage}
-                        <EmulatorLoader
-                            language={editorLanguage}
-                            code={editorCode}
-                            bind:emulator={emulatorInstance}
-                            settings={{
-                                globalPageElementsPerRow: 4,
-                                globalPageSize: 4 * 8
-                            }}
-                        >
-                            {#snippet children(emulator)}
-                                <InteractiveInstructionEditor
-                                    bind:code={editorCode}
-                                    language={editorLanguage as AvailableLanguages}
-                                    {emulator}
-                                    embedded={true}
-                                    showConsole={true}
-                                    showRegisters={true}
-                                    showMemory={true}
-                                    showFlags={true}
-                                    forceMemoryRight={true}
-                                />
-                            {/snippet}
-                        </EmulatorLoader>
-                    {/key}
-                </div>
-            </aside>
-        {/if}
+    <div
+        class="agent-shell"
+        class:floating={editorLanguage}
+        class:open={!editorLanguage || agentOpen}
+        aria-hidden={editorLanguage && !agentOpen}
+    >
+        <DefaultCodingAgent
+            bind:editorLanguage
+            bind:editorCode
+            {emulatorInstance}
+            style={agentStyle}
+        />
     </div>
-    {#if editorLanguage && !editorSidebarOpen}
+
+    {#if editorLanguage}
         <button
             type="button"
-            class="open-editor-button"
-            aria-label="Open example code sidebar"
-            onclick={() => (editorSidebarOpen = true)}
+            class="agent-toggle"
+            class:agent-open={agentOpen}
+            onclick={() => (agentOpen = !agentOpen)}
         >
-            Show example code
+            {#if agentOpen}
+                <span class="toggle-icon">
+                    <FaTimes />
+                </span>
+                Close
+            {:else}
+                <SparklesIcon style={'font-size: 1rem;'} /> Ask AI
+            {/if}
         </button>
     {/if}
-</Page>
+</div>
 
 <style lang="scss">
-    .chat-layout {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr);
-        max-height: 100dvh;
-        width: 100%;
-        flex: 1;
+    .chat-page {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100dvh;
+        background: var(--background);
         overflow: hidden;
-        gap: 0.5rem;
+        z-index: 20;
+        padding: 0.5rem;
+        display: flex;
     }
 
-    .agent-wrapper {
+    .emulator-stage {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        overflow: hidden;
         padding: 0.5rem;
-        min-height: calc(var(--screen-height) * 0.65);
+    }
+
+    .agent-shell {
+        position: relative;
+        flex: 1;
         min-width: 0;
         height: 100%;
+        transition:
+            transform 0.3s ease,
+            box-shadow 0.3s ease;
     }
 
-    .editor-open {
-        grid-template-columns: minmax(0, 1fr) minmax(30rem, min(48vw, 46rem));
-    }
-
-    .editor-panel {
-        min-width: 0;
-        overflow: hidden;
-        background: color-mix(in srgb, var(--secondary) 80%, var(--background));
+    .agent-shell.floating {
+        position: fixed;
+        top: 0;
+        right: 0;
+        width: min(36rem, 100vw);
+        height: 100dvh;
+        z-index: 100;
+        background-color: color-mix(in srgb, var(--tertiary) 20%, transparent);
+        backdrop-filter: blur(0.7rem);
         border: solid 0.1rem var(--tertiary);
-        border-radius: 0.8rem;
-        padding: 0.5rem;
+        border-right: none;
+        border-top-left-radius: 1rem;
+        border-bottom-left-radius: 1rem;
+        overflow: hidden;
         display: flex;
         flex-direction: column;
-        gap: 0.5rem;
+        padding: 0;
+        transform: translateX(100%);
     }
 
-    .editor-panel-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.5rem;
+    .agent-shell.floating.open {
+        transform: translateX(0);
+        box-shadow: -4px 0 3rem 2rem rgba(0, 0, 0, 0.3);
     }
 
-    .editor-panel-header h2 {
-        margin: 0;
-        font-size: 1rem;
-        font-weight: 700;
-        color: var(--text);
-    }
-
-    .editor-content {
-        flex: 1;
-        display: flex;
-        overflow: hidden;
-    }
-
-    .close-editor-button,
-    .open-editor-button {
-        border: none;
-        cursor: pointer;
-        font-family: Rubik, sans-serif;
-        font-weight: 700;
-        background: var(--accent);
-        color: var(--accent-text);
-        transition: background 0.2s ease;
-    }
-
-    .close-editor-button {
-        width: 2.2rem;
-        height: 2.2rem;
-        border-radius: 0.6rem;
-        display: grid;
-        place-items: center;
-        flex-shrink: 0;
-    }
-
-    .open-editor-button {
+    .agent-toggle {
         position: fixed;
         top: 3.8rem;
         right: 0.5rem;
         padding: 0.65rem 1rem;
         z-index: 101;
+        font-family: Rubik, sans-serif;
         border-radius: 1.5rem;
         border-bottom-right-radius: 0.4rem;
+        font-weight: bold;
+        border: none;
+        gap: 0.5rem;
+        min-width: 7rem;
+        background-color: var(--accent);
+        color: var(--accent-text);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     }
 
-    .close-editor-button:hover,
-    .open-editor-button:hover {
-        background: color-mix(in srgb, var(--accent) 80%, var(--background));
+    .agent-toggle.agent-open {
+        right: min(36rem, 100vw);
+        transform: translateX(calc(100% + 0.5rem));
+        border-radius: 1.5rem;
+        border-bottom-left-radius: 0.4rem;
+    }
+
+    .toggle-icon {
+        width: 1.2em;
+        height: 1.2em;
+        display: flex;
     }
 
     @media (max-width: 900px) {
-        .chat-layout {
-            min-height: 100%;
-            max-height: unset;
+        .agent-shell.floating {
+            width: 100vw;
         }
-        .editor-open {
-            grid-template-columns: minmax(0, 1fr);
-            grid-template-rows: minmax(0, 1fr) minmax(24rem, 75dvh);
+
+        .agent-toggle.agent-open {
+            right: 0.5rem;
+            transform: none;
         }
     }
 </style>
