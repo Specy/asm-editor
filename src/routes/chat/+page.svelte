@@ -4,6 +4,7 @@
     } from '$cmp/shared/agent/DefaultCodingAgent.svelte'
     import FaTimes from 'svelte-icons/fa/FaTimes.svelte'
     import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
+    import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
     import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
     import InteractiveInstructionEditor from '$cmp/shared/InteractiveInstructionEditor.svelte'
     import type { AvailableLanguages } from '$lib/Project.svelte'
@@ -41,6 +42,26 @@
 </svelte:head>
 
 <div class="chat-page">
+    <DefaultNavbar>
+        {#if editorLanguage}
+            <button
+                type="button"
+                class="nav-agent-toggle"
+                class:agent-open={agentOpen}
+                onclick={() => (agentOpen = !agentOpen)}
+            >
+                {#if agentOpen}
+                    <span class="toggle-icon">
+                        <FaTimes />
+                    </span>
+                    Close
+                {:else}
+                    <SparklesIcon style={'font-size: 1rem;'} /> Ask AI
+                {/if}
+            </button>
+        {/if}
+    </DefaultNavbar>
+
     {#if editorLanguage}
         <div class="emulator-stage">
             {#key editorLanguage}
@@ -84,28 +105,12 @@
             style={agentStyle}
         />
     </div>
-
-    {#if editorLanguage}
-        <button
-            type="button"
-            class="agent-toggle"
-            class:agent-open={agentOpen}
-            onclick={() => (agentOpen = !agentOpen)}
-        >
-            {#if agentOpen}
-                <span class="toggle-icon">
-                    <FaTimes />
-                </span>
-                Close
-            {:else}
-                <SparklesIcon style={'font-size: 1rem;'} /> Ask AI
-            {/if}
-        </button>
-    {/if}
 </div>
 
 <style lang="scss">
     .chat-page {
+        --nav-height: 3.2rem;
+        --agent-sidebar-width: 28rem;
         position: fixed;
         inset: 0;
         width: 100vw;
@@ -113,13 +118,16 @@
         background: var(--background);
         overflow: hidden;
         z-index: 20;
-        padding: 0.5rem;
+        padding: calc(var(--nav-height) + 0.5rem) 0.5rem 0.5rem;
         display: flex;
     }
 
     .emulator-stage {
         position: absolute;
-        inset: 0;
+        top: var(--nav-height);
+        right: 0;
+        bottom: 0;
+        left: 0;
         display: flex;
         overflow: hidden;
         padding: 0.5rem;
@@ -137,10 +145,10 @@
 
     .agent-shell.floating {
         position: fixed;
-        top: 0;
+        top: var(--nav-height);
         right: 0;
-        width: min(36rem, 100vw);
-        height: 100dvh;
+        width: min(var(--agent-sidebar-width), 100vw);
+        height: calc(100dvh - var(--nav-height));
         z-index: 100;
         background-color: color-mix(in srgb, var(--tertiary) 20%, transparent);
         backdrop-filter: blur(0.7rem);
@@ -160,33 +168,21 @@
         box-shadow: -4px 0 3rem 2rem rgba(0, 0, 0, 0.3);
     }
 
-    .agent-toggle {
-        position: fixed;
-        top: 3.8rem;
-        right: 0.5rem;
-        padding: 0.65rem 1rem;
-        z-index: 101;
+    .nav-agent-toggle {
+        height: 2.2rem;
+        padding: 0.3rem 0.8rem;
         font-family: Rubik, sans-serif;
         border-radius: 1.5rem;
         border-bottom-right-radius: 0.4rem;
         font-weight: bold;
         border: none;
         gap: 0.5rem;
-        min-width: 7rem;
         background-color: var(--accent);
         color: var(--accent-text);
         display: flex;
         align-items: center;
         justify-content: center;
         cursor: pointer;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-    }
-
-    .agent-toggle.agent-open {
-        right: min(36rem, 100vw);
-        transform: translateX(calc(100% + 0.5rem));
-        border-radius: 1.5rem;
-        border-bottom-left-radius: 0.4rem;
     }
 
     .toggle-icon {
@@ -198,11 +194,6 @@
     @media (max-width: 900px) {
         .agent-shell.floating {
             width: 100vw;
-        }
-
-        .agent-toggle.agent-open {
-            right: 0.5rem;
-            transform: none;
         }
     }
 </style>
