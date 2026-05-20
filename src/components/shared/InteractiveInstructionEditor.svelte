@@ -16,10 +16,6 @@
     import StdOutRenderer from '$cmp/specific/project/user-tools/StdOutRenderer.svelte'
     import TestcasesEditor from '$cmp/specific/project/testcases/TestcasesEditor.svelte'
     import type monaco from 'monaco-editor'
-    import ToggleableDraggable from '$cmp/shared/draggable/DraggableContainer.svelte'
-    import CallStack from '$cmp/specific/project/user-tools/CallStack.svelte'
-    import MutationsViewer from '$cmp/specific/project/user-tools/MutationsRenderer.svelte'
-    import MemoryTab from '$cmp/specific/project/memory/MemoryTab.svelte'
     import Card from '$cmp/shared/layout/Card.svelte'
     import {
         makeColorizedLabels,

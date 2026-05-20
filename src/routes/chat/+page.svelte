@@ -28,10 +28,6 @@
             : 'min-height: 100%; border-radius: 0'
     )
 
-        $effect(() => {
-            console.log(agentStyle)
-        })
-
     $effect(() => {
         if (!browser) return
 
