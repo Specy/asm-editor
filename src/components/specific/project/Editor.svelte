@@ -76,7 +76,7 @@
             minimap: { enabled: false },
             scrollbar: {
                 vertical: 'auto',
-                horizontal: 'auto'
+                horizontal: 'auto',
             },
             colorDecorators: false,
             glyphMargin: true,

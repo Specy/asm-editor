@@ -15,6 +15,12 @@
     import { type Emulator } from '$lib/languages/Emulator'
     import StdOutRenderer from '$cmp/specific/project/user-tools/StdOutRenderer.svelte'
     import TestcasesEditor from '$cmp/specific/project/testcases/TestcasesEditor.svelte'
+    import type monaco from 'monaco-editor'
+    import ToggleableDraggable from '$cmp/shared/draggable/DraggableContainer.svelte'
+    import CallStack from '$cmp/specific/project/user-tools/CallStack.svelte'
+    import MutationsViewer from '$cmp/specific/project/user-tools/MutationsRenderer.svelte'
+    import MemoryTab from '$cmp/specific/project/memory/MemoryTab.svelte'
+    import Card from '$cmp/shared/layout/Card.svelte'
     import {
         makeColorizedLabels,
         makeRegister,
@@ -23,6 +29,8 @@
 
     let running = $state(false)
     let building = $state(false)
+
+    type Layout = 'small' | 'fullscreen'
 
     interface Props {
         code: string
@@ -37,27 +45,38 @@
         language?: AvailableLanguages
         emulator: Emulator
         controls?: Snippet
+        children?: Snippet
         forceMemoryRight?: boolean
+        layout?: Layout
     }
 
     let {
         code = $bindable(),
-        language,
-        showMemory = true,
-        showFlags = true,
-        showRegisters = true,
-        showConsole = false,
-        showTestcases = false,
-        showPc = false,
+        language = 'M68K',
+        showMemory: showMemoryProp,
+        showFlags: showFlagsProp,
+        showRegisters: showRegistersProp,
+        showConsole: showConsoleProp,
+        showTestcases: showTestcasesProp,
+        showPc: showPcProp,
         testcases = $bindable([]),
-        embedded,
+        embedded = false,
         emulator = $bindable(),
         controls,
-        forceMemoryRight = false
+        children,
+        forceMemoryRight = false,
+        layout = 'small'
     }: Props = $props()
-    let groupSize = $state(2)
+    let showMemory = $derived(showMemoryProp ?? true)
+    let showFlags = $derived(showFlagsProp ?? true)
+    let showRegisters = $derived(showRegistersProp ?? true)
+    let showConsole = $derived(showConsoleProp ?? (layout === 'fullscreen'))
+    let showTestcases = $derived(showTestcasesProp ?? false)
+    let showPc = $derived(showPcProp ?? (layout === 'fullscreen'))
+    let groupSize = $state(RegisterSize.Word)
     let testcasesVisible = $state(false)
     let testcasesResult: TestcaseResult[] = $state([])
+    let editor: monaco.editor.IStandaloneCodeEditor | undefined = $state()
 
     $effect(() => {
         emulator.setCode(code)
@@ -101,7 +120,7 @@
             running = false
             building = true
             emulator.setCode(code)
-            await emulator.compile(settingsStore.values.maxHistorySize.value)
+            await emulator.compile(settingsStore.values.maxHistorySize.value, code)
         } catch (e) {
             console.error(e)
             toast.error('Error compiling code. ' + getM68kErrorMessage(e))
@@ -109,9 +128,134 @@
             building = false
         }
     }
+
+    function handleRegisterClick(value: bigint) {
+        const clampedSize = value - (value % BigInt(emulator.memory.global.pageSize))
+        emulator.setGlobalMemoryAddress(clampBigInt(clampedSize, 0n, MEMORY_SIZE[language]))
+    }
+
+    function handleEditorChange() {
+        if (emulator.canExecute && emulator.terminated && emulator.line >= 0) {
+            emulator.resetSelectedLine()
+        }
+    }
+
+    function goToEditorLine(line: number, column = 1) {
+        editor?.revealLineInCenter(line)
+        editor?.setPosition({ lineNumber: line, column })
+    }
 </script>
 
-{#snippet regsColumn()}
+{#snippet editorSurface()}
+    <div
+        class="editor-border"
+        class:gradientBorder={layout === 'fullscreen'
+            ? emulator.canExecute && !emulator.terminated
+            : emulator.canExecute}
+        class:redBorder={emulator.errors.length > 0}
+    >
+        <Editor
+            on:change={handleEditorChange}
+            on:breakpointPress={(d) => {
+                emulator.toggleBreakpoint(d.detail - 1)
+            }}
+            bind:editor
+            bind:code
+            codeOverride={emulator.compiledCode}
+            breakpoints={emulator.breakpoints}
+            errors={emulator.compilerErrors}
+            {language}
+            highlightedLine={emulator.line}
+            disabled={(emulator.canExecute && !emulator.terminated) || !!emulator.compiledCode}
+            hasError={emulator.errors.length > 0}
+        />
+    </div>
+{/snippet}
+
+{#snippet controlsPanel()}
+    <Controls
+        children={controls}
+        {running}
+        {building}
+        hasTests={layout === 'fullscreen'
+            ? testcases.length > 0
+            : testcases.length > 0 && !showTestcases}
+        canEditTests={showTestcases}
+        hasErrorsInTests={testcasesResult.some((r) => !r.passed)}
+        hasNoErrorsInTests={testcasesResult.every((r) => r.passed) && testcasesResult.length > 0}
+        executionDisabled={emulator.terminated || emulator.interrupt !== undefined}
+        buildDisabled={emulator.compilerErrors.length > 0}
+        hasCompiled={emulator.canExecute || !!emulator.compiledCode}
+        canUndo={emulator.canUndo}
+        on:edit-tests={() => {
+            testcasesVisible = !testcasesVisible
+        }}
+        on:test={async () => {
+            if (building || running) return
+            running = true
+            setTimeout(async () => {
+                try {
+                    testcasesResult = await emulator.test(
+                        $state.snapshot(code),
+                        $state.snapshot(testcases),
+                        settingsStore.values.instructionsLimit.value,
+                        settingsStore.values.maxHistorySize.value
+                    )
+                } catch (e) {
+                    console.error(e)
+                    toast.error('Error executing tests. ' + getM68kErrorMessage(e))
+                } finally {
+                    running = false
+                }
+            }, 50)
+        }}
+        on:run={async () => {
+            if (building || running) return
+            running = true
+            if (layout === 'fullscreen') {
+                testcasesResult = []
+            }
+            setTimeout(() => {
+                try {
+                    emulator.run(settingsStore.values.instructionsLimit.value)
+                    running = false
+                } catch (e) {
+                    console.error(e)
+                    running = false
+                    toast.error('Error executing code. ' + getM68kErrorMessage(e))
+                }
+            }, 50)
+        }}
+        on:build={async () => {
+            await buildCode()
+        }}
+        on:step={() => {
+            try {
+                emulator.step()
+            } catch (e) {
+                console.error(e)
+                toast.error('Error executing code. ' + getM68kErrorMessage(e))
+            }
+        }}
+        on:undo={() => {
+            try {
+                emulator.undo()
+            } catch (e) {
+                console.error(e)
+                toast.error('Error executing undo ' + getM68kErrorMessage(e))
+            }
+        }}
+        on:stop={() => {
+            emulator.clear()
+            running = false
+            if (layout === 'fullscreen') {
+                testcasesResult = []
+            }
+        }}
+    />
+{/snippet}
+
+{#snippet smallRegsColumn()}
     <div class="column data-registers-wrapper">
         {#if showPc}
             <RegistersVisualiser
@@ -146,23 +290,18 @@
                 style={`flex: unset; max-height: ${embedded ? `calc(var(--screen-height) - ${sizes})` : '15.85rem'}; min-height: 15.85rem;`}
                 registers={emulator.registers}
                 on:registerClick={async (e) => {
-                    const value = e.detail.value
-                    const clampedSize =
-                        value - (value % BigInt(emulator.memory.global.pageSize))
-                    emulator.setGlobalMemoryAddress(
-                        clampBigInt(clampedSize, 0n, MEMORY_SIZE['M68K'])
-                    )
+                    handleRegisterClick(e.detail.value)
                 }}
             />
         {/if}
     </div>
 {/snippet}
 
-{#snippet memoryPanel()}
+{#snippet smallMemoryPanel()}
     <div class="column code-data-memory-controls">
         <MemoryControls
             systemSize={emulator.systemSize}
-            bytesPerPage={4 * 8}
+            bytesPerPage={emulator.memory.global.pageSize}
             memorySize={MEMORY_SIZE[language]}
             currentAddress={emulator.memory.global.address}
             style="flex: unset"
@@ -176,8 +315,8 @@
             systemSize={emulator.systemSize}
             endianess={emulator.memory.global.endianess}
             defaultMemoryValue={DEFAULT_MEMORY_VALUE[language]}
-            bytesPerRow={4}
-            pageSize={4 * 8}
+            bytesPerRow={emulator.memory.global.rowSize}
+            pageSize={emulator.memory.global.pageSize}
             memory={emulator.memory.global.data}
             currentAddress={emulator.memory.global.address}
             sp={emulator.sp}
@@ -186,132 +325,74 @@
     </div>
 {/snippet}
 
-<div class="editor-wrapper">
-    <div class="top-row">
-        <div class="column editor">
-            <div
-                class="editor-border"
-                class:gradientBorder={emulator.canExecute}
-                class:redBorder={emulator.errors.length > 0}
-            >
-                <Editor
-                    on:breakpointPress={(d) => {
-                        emulator.toggleBreakpoint(d.detail - 1)
-                    }}
-                    bind:code
-                    codeOverride={emulator.compiledCode}
-                    breakpoints={emulator.breakpoints}
-                    errors={emulator.compilerErrors}
-                    {language}
-                    highlightedLine={emulator.line}
-                    disabled={(emulator.canExecute && !emulator.terminated) || !!emulator.compiledCode}
-                    hasError={emulator.errors.length > 0}
-                />
-            </div>
+{#snippet fullscreenRegsColumn()}
+    <div class="column fullscreen-registers-column" style="gap: 0.4rem">
+        {#if emulator.statusRegisters && emulator.statusRegisters.length > 0 && showFlags}
+            <StatusCodesVisualiser statusCodes={emulator.statusRegisters} />
+        {/if}
+        {#if showPc}
+            <RegistersVisualiser
+                systemSize={emulator.systemSize}
+                style="flex: unset; overflow: unset; padding: 0;"
+                gridStyle="padding: 0.2rem 0.7rem"
+                size={emulator.systemSize}
+                registers={[pc]}
+                withoutHeader
+                position="bottom"
+            />
+        {/if}
+        {#if showRegisters}
+            <RegistersVisualiser
+                systemSize={emulator.systemSize}
+                size={groupSize}
+                style="flex: 1; min-height: 0;"
+                hiddenRegistersNames={emulator.hiddenRegisters}
+                registers={emulator.registers}
+                on:registerClick={async (e) => {
+                    handleRegisterClick(e.detail.value)
+                }}
+            />
+        {/if}
+    </div>
+{/snippet}
 
-            <Controls
-                children={controls}
-                {running}
-                {building}
-                hasTests={testcases.length > 0 && !showTestcases}
-                canEditTests={showTestcases}
-                hasErrorsInTests={testcasesResult.some((r) => !r.passed)}
-                hasNoErrorsInTests={testcasesResult.every((r) => r.passed) &&
-                    testcasesResult.length > 0}
-                executionDisabled={emulator.terminated || emulator.interrupt !== undefined}
-                buildDisabled={emulator.compilerErrors.length > 0}
-                hasCompiled={emulator.canExecute || !!emulator.compiledCode}
-                canUndo={emulator.canUndo}
-                on:edit-tests={() => {
-                    testcasesVisible = !testcasesVisible
-                }}
-                on:test={async () => {
-                    if (building || running) return
-                    running = true
-                    setTimeout(async () => {
-                        try {
-                            testcasesResult = await emulator.test(
-                                $state.snapshot(code),
-                                $state.snapshot(testcases),
-                                settingsStore.values.instructionsLimit.value,
-                                settingsStore.values.maxHistorySize.value
-                            )
-                        } catch (e) {
-                            console.error(e)
-                            toast.error('Error executing tests. ' + getM68kErrorMessage(e))
-                        } finally {
-                            running = false
-                        }
-                    }, 50)
-                }}
-                on:run={async () => {
-                    if (building || running) return
-                    running = true
-                    setTimeout(() => {
-                        try {
-                            emulator.run(settingsStore.values.instructionsLimit.value)
-                            running = false
-                        } catch (e) {
-                            console.error(e)
-                            running = false
-                            toast.error('Error executing code. ' + getM68kErrorMessage(e))
-                        }
-                    }, 50)
-                }}
-                on:build={async () => {
-                    await buildCode()
-                }}
-                on:step={() => {
-                    try {
-                        emulator.step()
-                    } catch (e) {
-                        console.error(e)
-                        toast.error('Error executing code. ' + getM68kErrorMessage(e))
-                    }
-                }}
-                on:undo={() => {
-                    try {
-                        emulator.undo()
-                    } catch (e) {
-                        console.error(e)
-                        toast.error('Error executing undo ' + getM68kErrorMessage(e))
-                    }
-                }}
-                on:stop={() => {
-                    emulator.clear()
-                    running = false
+{#snippet fullscreenMemoryPanel()}
+    <div class="column" style="gap: 0.4rem">
+        <div class="row" style="gap: 0.4rem">
+            <MemoryControls
+                systemSize={emulator.systemSize}
+                bytesPerPage={emulator.memory.global.pageSize}
+                memorySize={MEMORY_SIZE[language]}
+                inputStyle="height: 100%"
+                currentAddress={emulator.memory.global.address}
+                onAddressChange={(e) => {
+                    emulator.setGlobalMemoryAddress(e)
                 }}
             />
         </div>
-
-        {#if showRegsColumn}
-            {@render regsColumn()}
-            {#if forceMemoryRight && showMemory}
-                {@render memoryPanel()}
-            {/if}
-        {:else if showMemory}
-            {@render memoryPanel()}
-        {/if}
-    </div>
-
-    {#if showRegsColumn && showMemory && !forceMemoryRight}
-        <div class="bottom-row">
-            {#if showConsole}
-                <StdOutRenderer
-                    {info}
-                    stdOut={errorStrings ? `${errorStrings}\n${emulator.stdOut}` : emulator.stdOut}
-                    compilerErrors={emulator.compilerErrors}
-                />
-            {/if}
-            {@render memoryPanel()}
-        </div>
-    {:else if showConsole}
-        <StdOutRenderer
-            {info}
-            stdOut={errorStrings ? `${errorStrings}\n${emulator.stdOut}` : emulator.stdOut}
-            compilerErrors={emulator.compilerErrors}
+        <MemoryVisualiser
+            systemSize={emulator.systemSize}
+            endianess={emulator.memory.global.endianess}
+            defaultMemoryValue={DEFAULT_MEMORY_VALUE[language]}
+            bytesPerRow={emulator.memory.global.rowSize}
+            pageSize={emulator.memory.global.pageSize}
+            memory={emulator.memory.global.data}
+            currentAddress={emulator.memory.global.address}
+            sp={emulator.sp}
+            callStackAddresses={makeColorizedLabels(emulator.callStack)}
         />
-    {/if}
+    </div>
+{/snippet}
+
+{#snippet consolePanel()}
+    <StdOutRenderer
+        {info}
+        stdOut={errorStrings ? `${errorStrings}\n${emulator.stdOut}` : emulator.stdOut}
+        compilerErrors={emulator.compilerErrors}
+    />
+{/snippet}
+
+{#snippet testcasesEditor()}
     {#if showTestcases}
         <TestcasesEditor
             systemSize={emulator.systemSize}
@@ -323,7 +404,72 @@
             bind:testcases
         />
     {/if}
-</div>
+{/snippet}
+
+{#if layout === 'fullscreen'}
+    {@render testcasesEditor()}
+
+    <div class="fullscreen-editor-memory-wrapper">
+        <div class="fullscreen-editor-wrapper">
+            {@render editorSurface()}
+            {@render controlsPanel()}
+        </div>
+        {#if showRegsColumn || showMemory || showConsole || children}
+            <div class="fullscreen-right-side">
+                {#if showRegsColumn || showMemory || children}
+                    <div class="fullscreen-memory-wrapper">
+                        {#if showRegsColumn}
+                            {@render fullscreenRegsColumn()}
+                        {/if}
+                        {#if showMemory && (!children || !(!running && !(emulator.canExecute || !!emulator.compiledCode)))}
+                            {@render fullscreenMemoryPanel()}
+                        {:else if !running && children}
+                            <Card
+                                background="secondary"
+                                style="padding: 1rem; overflow-y: auto; width: 31.3rem; height: 33.25rem;"
+                            >
+                                {@render children()}
+                            </Card>
+                        {/if}
+                    </div>
+                {/if}
+                {#if showConsole}
+                    {@render consolePanel()}
+                {/if}
+            </div>
+        {/if}
+    </div>
+{:else}
+    <div class="editor-wrapper">
+        <div class="top-row">
+            <div class="column editor">
+                {@render editorSurface()}
+                {@render controlsPanel()}
+            </div>
+
+            {#if showRegsColumn}
+                {@render smallRegsColumn()}
+                {#if forceMemoryRight && showMemory}
+                    {@render smallMemoryPanel()}
+                {/if}
+            {:else if showMemory}
+                {@render smallMemoryPanel()}
+            {/if}
+        </div>
+
+        {#if showRegsColumn && showMemory && !forceMemoryRight}
+            <div class="bottom-row">
+                {#if showConsole}
+                    {@render consolePanel()}
+                {/if}
+                {@render smallMemoryPanel()}
+            </div>
+        {:else if showConsole}
+            {@render consolePanel()}
+        {/if}
+        {@render testcasesEditor()}
+    </div>
+{/if}
 
 <style lang="scss">
     .editor-wrapper {
@@ -398,7 +544,87 @@
         flex: 1;
         padding: 0.2rem;
         border-radius: 0.5rem;
+    }
+
+    .editor-wrapper .editor-border {
         margin: -0.2rem;
+    }
+
+    .fullscreen-editor-memory-wrapper {
+        display: flex;
+        flex: 1;
+        max-width: 100%;
+
+        .fullscreen-editor-wrapper,
+        .fullscreen-memory-wrapper {
+            display: flex;
+        }
+
+        .fullscreen-editor-wrapper {
+            flex-direction: column;
+            flex: 1;
+            gap: 0.4rem;
+
+            @media screen and (max-width: 1000px) {
+                min-height: calc(var(--screen-height) * 0.7);
+            }
+
+            .editor-border {
+                margin-left: -0.2rem;
+            }
+        }
+
+        .fullscreen-memory-wrapper {
+            gap: 0.4rem;
+            align-items: flex-start;
+
+            @media screen and (max-width: 1000px) {
+                margin-top: 1rem;
+                padding-bottom: 1rem;
+                overflow-x: auto;
+                width: 100%;
+            }
+        }
+
+        @media screen and (max-width: 1000px) {
+            flex-direction: column;
+        }
+    }
+
+    .fullscreen-right-side {
+        margin-left: 0.5rem;
+        width: min-content;
+        gap: 0.4rem;
+        max-height: calc(var(--screen-height) - 4.2rem);
+        padding-top: 0.2rem;
+        display: flex;
+        overflow-y: auto;
+        flex-direction: column;
+    }
+
+    .fullscreen-registers-column {
+        min-height: 0;
+        height: 33.25rem;
+        min-width: fit-content;
+        overflow: hidden;
+    }
+
+    @media screen and (max-width: 1000px) {
+        .fullscreen-right-side {
+            margin: 0;
+            padding: 0.2rem;
+            margin-top: 1rem;
+            width: unset;
+            max-height: unset;
+            align-items: center;
+            flex-direction: column-reverse;
+        }
+
+        .fullscreen-registers-column {
+            height: unset !important;
+            max-height: unset !important;
+            overflow: visible !important;
+        }
     }
 
     .gradientBorder,

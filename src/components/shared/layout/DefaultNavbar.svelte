@@ -8,9 +8,10 @@
 
     interface Props {
         children?: import('svelte').Snippet
+        exclude?: 'ai-chat'[]
     }
 
-    let { children }: Props = $props()
+    let { children, exclude }: Props = $props()
 </script>
 
 <Navbar>
@@ -39,12 +40,14 @@
             </ButtonLink>
         </div>
         {@render children?.()}
-        <a class="icon ai" href="/chat" title="AI Chat">
-            <div class="hidden-very-small">
-                <SparklesIcon />
-            </div>
-            AI Chat
-        </a>
+        {#if !exclude?.includes('ai-chat')}
+            <a class="icon ai" href="/chat" title="AI Chat">
+                <div class="hidden-very-small">
+                    <SparklesIcon />
+                </div>
+                AI Chat
+            </a>
+        {/if}
     </Row>
 </Navbar>
 
