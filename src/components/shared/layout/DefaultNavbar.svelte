@@ -1,10 +1,16 @@
-<script>
+<script lang="ts">
     import Navbar from '$cmp/shared/layout/Navbar.svelte'
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
     import FaStar from 'svelte-icons/fa/FaStar.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import Row from './Row.svelte'
     import SparklesIcon from '../agent/SparklesIcon.svelte'
+
+    interface Props {
+        children?: import('svelte').Snippet
+    }
+
+    let { children }: Props = $props()
 </script>
 
 <Navbar>
@@ -32,6 +38,7 @@
                 Star on github
             </ButtonLink>
         </div>
+        {@render children?.()}
         <a class="icon ai" href="/chat" title="AI Chat">
             <div class="hidden-very-small">
                 <SparklesIcon />
