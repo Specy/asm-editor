@@ -16,6 +16,7 @@
     import { Monaco } from '$lib/monaco/Monaco'
     import { generateTheme } from '$lib/monaco/editorTheme'
     import type { MonacoError } from '$lib/languages/commonLanguageFeatures.svelte'
+    import type { VimAdapterInstance } from 'monaco-vim'
 
     interface Props {
         disabled?: boolean
@@ -27,6 +28,7 @@
         errors?: MonacoError[]
         breakpoints?: number[]
         editor?: monaco.editor.IStandaloneCodeEditor
+        vimMode?: boolean
         viewZones?: {
             afterLineNumber: number
             content: Component
@@ -44,12 +46,15 @@
         errors = [],
         breakpoints = [],
         editor = $bindable(),
+        vimMode = false,
         viewZones = []
     }: Props = $props()
     let mockEditor: HTMLDivElement | null = $state()
     let monacoInstance: MonacoType | null = $state.raw()
     let hoveredGliphen: number | null = $state()
     let destroyed = false
+    let vimStatusBarEl: HTMLDivElement | null = $state(null)
+    let vimAdapter: VimAdapterInstance | null = null
     const toDispose: (monaco.IDisposable | (() => void))[] = []
     const dispatcher = createEventDispatcher<{
         change: string
@@ -152,10 +157,31 @@
             setEditorValue(codeOverride)
         }
     })
+    $effect(() => {
+        if (!editor) return
+        if (vimMode && vimStatusBarEl) {
+            let disposed = false
+            import('monaco-vim').then(({ initVimMode }) => {
+                if (disposed || !vimStatusBarEl) return
+                vimAdapter = initVimMode(editor, vimStatusBarEl)
+            })
+            return () => {
+                disposed = true
+                vimAdapter?.dispose()
+                vimAdapter = null
+            }
+        } else if (!vimMode && vimAdapter) {
+            vimAdapter.dispose()
+            vimAdapter = null
+        }
+    })
+
     onDestroy(() => {
         destroyed = true
         const model = editor?.getModel()
 
+        vimAdapter?.dispose()
+        vimAdapter = null
         toDispose.forEach((disposable) => {
             if (typeof disposable === 'function') return disposable()
             disposable?.dispose()
@@ -304,6 +330,9 @@
     {#if !editor}
         <h1 class="loading">Loading editor...</h1>
     {/if}
+    {#if vimMode}
+        <div bind:this={vimStatusBarEl} class="vim-status-bar"></div>
+    {/if}
 </div>
 
 <div bind:this={el} class="editor"></div>
@@ -427,6 +456,23 @@
     .mock-editor {
         display: flex;
         flex: 1;
+        position: relative;
+    }
+
+    .vim-status-bar {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 10;
+        background-color: var(--secondary);
+        color: var(--secondary-text);
+        font-family: 'Fira Code', monospace;
+        font-size: 0.8rem;
+        padding: 0.4rem 0.8rem;
+        border-top: 1px solid var(--tertiary);
+        border-bottom-left-radius: 0.4rem;
+        border-bottom-right-radius: 0.4rem;
     }
 
     :global(.breakpoint-glyph),

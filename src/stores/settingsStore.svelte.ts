@@ -16,6 +16,7 @@ export type SettingValues = {
     maxHistorySize: SettingValue<number>
     maxVisibleHistoryModifications: SettingValue<number>
     showPseudoInstructions: SettingValue<boolean>
+    enableVimMode: SettingValue<boolean>
 }
 export type Settings = {
     meta: {
@@ -39,10 +40,11 @@ const baseValues = {
     showMemory: createValue('Show memory tab', true),
     instructionsLimit: createValue('Instruction execution limit, 0 to ignore', 2_000_000),
     maxHistorySize: createValue('Maximum undo steps, 0 to disable', 100),
-    maxVisibleHistoryModifications: createValue('Maximum visible history steps', 10)
+    maxVisibleHistoryModifications: createValue('Maximum visible history steps', 10),
+    enableVimMode: createValue('Enable Vim mode', false)
 } satisfies SettingValues
 
-const CURRENT_VERSION = '1.1.7'
+const CURRENT_VERSION = '1.1.8'
 function createSettingsStore() {
     let data = $state({
         meta: {

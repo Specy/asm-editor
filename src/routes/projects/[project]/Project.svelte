@@ -483,6 +483,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                         (emulator.canExecute && !emulator.terminated) ||
                         !!emulator.compiledCode}
                     hasError={emulator.errors.length > 0}
+                    vimMode={settingsStore.values.enableVimMode.value}
                 />
             {/key}
         </div>
