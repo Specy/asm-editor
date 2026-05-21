@@ -465,14 +465,14 @@
         left: 0;
         right: 0;
         z-index: 10;
-        background-color: var(--primary);
-        color: var(--primary-text);
+        background-color: var(--secondary);
+        color: var(--secondary-text);
         font-family: 'Fira Code', monospace;
         font-size: 0.8rem;
-        padding: 0.1rem 0.5rem;
+        padding: 0.4rem 0.8rem;
+        border-top: 1px solid var(--tertiary);
         border-bottom-left-radius: 0.4rem;
         border-bottom-right-radius: 0.4rem;
-        min-height: 1.4rem;
     }
 
     :global(.breakpoint-glyph),
