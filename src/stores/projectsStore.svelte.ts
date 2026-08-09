@@ -1,5 +1,6 @@
 import { browser } from '$app/environment'
 import { db } from '$lib/storage/db'
+import { requestPersistentStorage } from '$lib/storage/persist'
 import { makeProjectFromExternal, type Project } from '$lib/Project.svelte'
 
 export const SHARE_ID = '__share__'
@@ -23,6 +24,7 @@ function createProjectStore() {
     async function addProject(project: Project): Promise<Project> {
         project.updatedAt = new Date().getTime()
         const result = await db.addProject(project)
+        void requestPersistentStorage()
         await load()
         return result
     }

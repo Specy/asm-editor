@@ -19,10 +19,6 @@
     let metaTheme: HTMLMetaElement = $state(null)
 
     onMount(() => {
-        // Projects live in IndexedDB. Without this the origin uses best-effort
-        // storage, so the browser may evict saved work under disk pressure.
-        // Best-effort itself: unsupported or denied is fine, hence the optional call.
-        void navigator.storage?.persist?.()?.catch(() => {})
         // The service worker is registered automatically by SvelteKit from
         // src/service-worker.ts — no manual registration needed here.
         import('$lib/monaco/Monaco').then((i) => i.Monaco.registerLanguages())
