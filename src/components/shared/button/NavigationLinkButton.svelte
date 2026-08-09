@@ -1,5 +1,5 @@
 <script lang="ts">
-    import FaArrowRight from 'svelte-icons/fa/FaArrowRight.svelte'
+    import FaArrowRight from '~icons/fa-solid/arrow-right'
 
     interface Props {
         href: string

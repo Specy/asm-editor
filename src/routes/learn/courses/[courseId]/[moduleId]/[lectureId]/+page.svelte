@@ -5,14 +5,14 @@
     import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
-    import FaChevronLeft from 'svelte-icons/fa/FaChevronLeft.svelte'
-    import FaChevronRight from 'svelte-icons/fa/FaChevronRight.svelte'
+    import FaChevronLeft from '~icons/fa-solid/chevron-left'
+    import FaChevronRight from '~icons/fa-solid/chevron-right'
     import { page } from '$app/state'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import Card from '$cmp/shared/layout/Card.svelte'
     import FloatingAgentSidebar from '$cmp/shared/agent/FloatingAgentSidebar.svelte'
     import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
-    import FaTimes from 'svelte-icons/fa/FaTimes.svelte'
+    import FaTimes from '~icons/fa-solid/times'
     import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
     import InteractiveInstructionEditor from '$cmp/shared/InteractiveInstructionEditor.svelte'
     import type { SupportedLanguage } from '$cmp/shared/agent/DefaultCodingAgent.svelte'
@@ -219,12 +219,12 @@ When the user asks a question about the lecture topic or for a demonstration of 
 />
 <button class="agent-toggle" class:agent-open={agentOpen} onclick={() => (agentOpen = !agentOpen)}>
     {#if agentOpen}
-        <div style={'width: 1.2em; height: 1.2em;'}>
+        <div style="width: 1.2em; height: 1.2em;">
             <FaTimes />
         </div>
         Close
     {:else}
-        <SparklesIcon style={'font-size: 1rem;'} /> Ask AI
+        <SparklesIcon style="font-size: 1rem;" /> Ask AI
     {/if}
 </button>
 

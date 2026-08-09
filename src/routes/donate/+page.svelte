@@ -1,8 +1,8 @@
 <script lang="ts">
     import Button from '$cmp/shared/button/Button.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
-    import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
-    import FaPaypal from 'svelte-icons/fa/FaPaypal.svelte'
+    import FaAngleLeft from '~icons/fa-solid/angle-left'
+    import FaPaypal from '~icons/fa-brands/paypal'
     import Kofi from '$cmp/shared/misc/KoFi.svelte'
     import Title from '$cmp/shared/layout/Header.svelte'
     import { afterNavigate } from '$app/navigation'
@@ -11,7 +11,6 @@
     import Card from '$cmp/shared/layout/Card.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
     import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
-    //@ts-expect-error idk why this is not working
     import { PAST_DONATIONS } from '$src/routes/donate/pastDonations'
 
     let previousPage: string = $state('/projects')

@@ -6,9 +6,9 @@
     import Column from '$cmp/shared/layout/Column.svelte'
     import Button from '$cmp/shared/button/Button.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
-    import FaPlus from 'svelte-icons/fa/FaPlus.svelte'
+    import FaPlus from '~icons/fa-solid/plus'
     import Icon from '$cmp/shared/layout/Icon.svelte'
-    import FaTimes from 'svelte-icons/fa/FaTimes.svelte'
+    import FaTimes from '~icons/fa-solid/times'
     import { toast } from '$stores/toastStore'
     import TestcaseResultRenderer from '$cmp/specific/project/testcases/TestcaseResultRenderer.svelte'
     import ExpandableContainer from '$cmp/shared/layout/ExpandableContainer.svelte'
@@ -21,8 +21,8 @@
         registerNames: string[]
         hiddenRegistersNames?: string[]
         editable?: boolean
-        systemSize: RegisterSize,
-     }
+        systemSize: RegisterSize
+    }
 
     let {
         visible = $bindable(),
@@ -31,8 +31,7 @@
         registerNames,
         hiddenRegistersNames,
         editable = true,
-        systemSize,
-
+        systemSize
     }: Props = $props()
 
     function makeNewTestcase() {

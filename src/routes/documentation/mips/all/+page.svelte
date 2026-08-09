@@ -4,8 +4,8 @@
     import MIPSDirectiveDocumentation from '$cmp/documentation/mips/MIPSDirectiveDocumentation.svelte'
     import MIPSSyscallExplanation from '$cmp/documentation/mips/MIPSSyscallExplanation.svelte'
     import MIPSRegistersDocumentation from '$cmp/documentation/mips/MIPSRegistersDocumentation.svelte'
-    import Header from '$cmp/shared/layout/Header.svelte'	
-	
+    import Header from '$cmp/shared/layout/Header.svelte'
+
     import {
         mipsInstructionNames,
         mipsInstructionMap,
@@ -35,49 +35,46 @@
         <a href="#instructions">Instructions</a>
         <a href="#directives">Directives</a>
         <a href="#syscalls">Syscalls</a>
-	<a href="#registers">Registers</a>
+        <a href="#registers">Registers</a>
     </nav>
 
     <section id="instructions">
         <h2>Instructions</h2>
-            {#each mipsInstructionNames as ins}
-                {@const instruction = mipsInstructionMap.get(ins)}
-                {@const groups = groupVariantsByDescription(instruction)}
-                <div class="instruction">
-                    <div class="row align-center">
-                        <h3 class="sub-title" id={ins}>
-                            {ins}
-                            <span style="font-size: 1rem; font-weight: normal"
-                                >{formatAggregatedArgs(instruction)}</span
-                            >
-                        </h3>
-                    </div>
-
-                    {#each groups as group}
-                        {#if group.description}
-                            <span class="sub-description">
-                                <MarkdownRenderer
-                                    source={group.description}
-                                    linksInNewTab={false}
-                                />
-                            </span>
-                        {/if}
-                        {#if group.examples.some(Boolean)}
-                            <span class="example">
-                                {group.examples.filter(Boolean).join('\n')}
-                            </span>
-                        {/if}
-                    {/each}
+        {#each mipsInstructionNames as ins}
+            {@const instruction = mipsInstructionMap.get(ins)}
+            {@const groups = groupVariantsByDescription(instruction)}
+            <div class="instruction">
+                <div class="row align-center">
+                    <h3 class="sub-title" id={ins}>
+                        {ins}
+                        <span style="font-size: 1rem; font-weight: normal"
+                            >{formatAggregatedArgs(instruction)}</span
+                        >
+                    </h3>
                 </div>
-            {/each}
+
+                {#each groups as group}
+                    {#if group.description}
+                        <span class="sub-description">
+                            <MarkdownRenderer source={group.description} linksInNewTab={false} />
+                        </span>
+                    {/if}
+                    {#if group.examples.some(Boolean)}
+                        <span class="example">
+                            {group.examples.filter(Boolean).join('\n')}
+                        </span>
+                    {/if}
+                {/each}
+            </div>
+        {/each}
     </section>
 
     <section id="directives">
         <h2>Directives</h2>
         <p>
-            MIPS directives are used to define the structure of the program. They are not instructions
-            that are executed by the CPU, but rather instructions that are used by the assembler to
-            define the structure of the program.
+            MIPS directives are used to define the structure of the program. They are not
+            instructions that are executed by the CPU, but rather instructions that are used by the
+            assembler to define the structure of the program.
         </p>
         <MIPSDirectiveDocumentation />
     </section>
@@ -87,15 +84,11 @@
         <MIPSSyscallExplanation />
     </section>
 
-<section id="registers">
-	<Header type="h3">Registers</Header>
-        <p>
-            MIPS has 32 GPR registers each of 32 bits
-        </p>
+    <section id="registers">
+        <Header type="h3">Registers</Header>
+        <p>MIPS has 32 GPR registers each of 32 bits</p>
         <MIPSRegistersDocumentation />
     </section>
-
-
 </Page>
 
 <style lang="scss">

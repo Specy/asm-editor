@@ -6,12 +6,12 @@
 <svelte:head>
     <title>MIPS Syscalls</title>
     <meta
-      name="description"
-      content="Syscalls in MIPS are used to make requests to the operating system. Learn how to use them and the available syscalls."
+        name="description"
+        content="Syscalls in MIPS are used to make requests to the operating system. Learn how to use them and the available syscalls."
     />
     <meta
-      property="og:description"
-      content="Syscalls in MIPS are used to make requests to the operating system. Learn how to use them and the available syscalls."
+        property="og:description"
+        content="Syscalls in MIPS are used to make requests to the operating system. Learn how to use them and the available syscalls."
     />
 </svelte:head>
 

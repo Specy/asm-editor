@@ -21,7 +21,7 @@
         size?: RegisterSize
         style?: string
         gridStyle?: string
-        systemSize: RegisterSize,
+        systemSize: RegisterSize
     }
 
     let {
@@ -38,7 +38,6 @@
     let registers = $derived(_registers.filter((r) => !hiddenRegistersNames.includes(r.name)))
     let usesHex = $derived(!settingsStore.values.useDecimalAsDefault.value)
     let chunks: RegisterChunk[][] = $derived(registers.map((r) => r.toSizedGroups(size)))
-
 </script>
 
 <div class="registers-wrapper" class:withoutHeader {style}>
@@ -46,9 +45,9 @@
         <div class="registers-header">
             Registers
             <SizeSelector
-              maxSize={systemSize}
-              style="border-bottom-right-radius: 0.2rem;"
-              bind:selected={size}
+                maxSize={systemSize}
+                style="border-bottom-right-radius: 0.2rem;"
+                bind:selected={size}
             />
         </div>
     {/if}
@@ -75,7 +74,9 @@
                             ? 'bottom: var(--top); top: unset;'
                             : ''}"
                         style="padding: 0.1rem;"
-                        hoverValueElementStyle={chunk.groupSize > (RegisterSize.Long * 2) ? "font-size: 0.95rem" : ""}
+                        hoverValueElementStyle={chunk.groupSize > RegisterSize.Long * 2
+                            ? 'font-size: 0.95rem'
+                            : ''}
                         value={usesHex
                             ? chunk.hex
                             : `${chunk.value}`.padStart(Number(chunk.groupSize), '0')}

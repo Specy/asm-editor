@@ -71,12 +71,12 @@
     </div>
     {#if component}
         {@const SvelteComponent_1 = component}
-        <SvelteComponent_1 
-            bind:code 
-            instructionKey={ins.name} 
-            description={ins.description} 
-            arguments={[formatAggregatedArgs(data.props.instruction)]} 
-            language="MIPS" 
+        <SvelteComponent_1
+            bind:code
+            instructionKey={ins.name}
+            description={ins.description}
+            arguments={[formatAggregatedArgs(data.props.instruction)]}
+            language="MIPS"
             showPc={true}
         />
     {:else}

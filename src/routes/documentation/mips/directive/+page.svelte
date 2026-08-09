@@ -6,12 +6,12 @@
 <svelte:head>
     <title>MIPS Directives</title>
     <meta
-      name="description"
-      content="MIPS directives are used by the assembler to execute operations at assembly time. Learn how to use them and the available directives."
+        name="description"
+        content="MIPS directives are used by the assembler to execute operations at assembly time. Learn how to use them and the available directives."
     />
     <meta
-      property="og:description"
-      content="MIPS directives are used by the assembler to execute operations at assembly time. Learn how to use them and the available directives."
+        property="og:description"
+        content="MIPS directives are used by the assembler to execute operations at assembly time. Learn how to use them and the available directives."
     />
 </svelte:head>
 

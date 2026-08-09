@@ -35,7 +35,7 @@
         position: relative;
         background-color: var(--primary);
         color: var(--primary-text);
-        mask-image: linear-gradient(#0000,#000 3rem 100%,#0000);
+        mask-image: linear-gradient(#0000, #000 3rem 100%, #0000);
         z-index: 1;
         margin-top: -3rem;
         padding: 1.5rem 0;

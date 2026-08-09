@@ -2,7 +2,7 @@
     import type { Testcase } from '$lib/Project.svelte'
     import Header from '$cmp/shared/layout/Header.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
-    import FaPlus from 'svelte-icons/fa/FaPlus.svelte'
+    import FaPlus from '~icons/fa-solid/plus'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import RegistersTestcaseEditor from '$cmp/specific/project/testcases/RegistersTestcaseEditor.svelte'
     import Card from '$cmp/shared/layout/Card.svelte'
@@ -82,8 +82,7 @@
                 <textarea
                     bind:value={testcase.input[i]}
                     class="input-textarea"
-                    style="border-radius: 0.3rem"
-                ></textarea>
+                    style="border-radius: 0.3rem"></textarea>
             {/each}
             <div class="add-input">
                 <textarea bind:value={newInput} class="input-textarea"></textarea>

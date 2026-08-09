@@ -13,15 +13,16 @@ jobs:
         name: Deploy
         steps:
             - name: Checkout
-              uses: actions/checkout@v3
-            - uses: actions/setup-node@v3
+              uses: actions/checkout@v7
+            - uses: actions/setup-node@v7
               with:
                   node-version: 24.6.0
+                  cache: npm
             - name: Build
               run: npm i && npm run build
             - name: Publish
-              uses: cloudflare/wrangler-action@v3.14.1
+              uses: cloudflare/wrangler-action@v4
               with:
                   apiToken: ${{ secrets.CF_PAGES_TOKEN }}
                   accountId: ${{ secrets.CF_ACCOUNT_ID }}
-                  command: pages publish ./build/ --project-name=asm-editor
+                  command: pages deploy ./build/ --project-name=asm-editor

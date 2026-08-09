@@ -5,8 +5,8 @@
     import Button from '$cmp/shared/button/Button.svelte'
     import FloatingContainer from '$cmp/shared/layout/FloatingContainer.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
-    import FaCheck from 'svelte-icons/fa/FaCheck.svelte'
-    import FaUndo from 'svelte-icons/fa/FaUndo.svelte'
+    import FaCheck from '~icons/fa-solid/check'
+    import FaUndo from '~icons/fa-solid/undo'
     import { onMount } from 'svelte'
     interface Props {
         visible?: boolean

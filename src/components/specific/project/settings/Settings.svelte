@@ -2,7 +2,7 @@
     import Setting from './Setting.svelte'
     import { settingsStore } from '$stores/settingsStore.svelte'
     import FloatingContainer from '$cmp/shared/layout/FloatingContainer.svelte'
-    import FaPalette from 'svelte-icons/fa/FaPalette.svelte'
+    import FaPalette from '~icons/fa-solid/palette'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import Button from '$cmp/shared/button/Button.svelte'
     import type { AvailableLanguages } from '$lib/Project.svelte'

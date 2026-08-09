@@ -7,7 +7,6 @@
     import PromptProvider from '$cmp/shared/providers/PromptProvider.svelte'
     import Footer from '$cmp/shared/layout/Footer.svelte'
     import { onMount } from 'svelte'
-    import { registerServiceWorker } from '$lib/register-sw'
     import { ThemeStore } from '$stores/themeStore.svelte'
     import { beforeNavigate } from '$app/navigation'
     import { navigationStore } from '$stores/navigationStore'
@@ -20,7 +19,12 @@
     let metaTheme: HTMLMetaElement = $state(null)
 
     onMount(() => {
-        registerServiceWorker()
+        // Projects live in IndexedDB. Without this the origin uses best-effort
+        // storage, so the browser may evict saved work under disk pressure.
+        // Best-effort itself: unsupported or denied is fine, hence the optional call.
+        void navigator.storage?.persist?.()?.catch(() => {})
+        // The service worker is registered automatically by SvelteKit from
+        // src/service-worker.ts — no manual registration needed here.
         import('$lib/monaco/Monaco').then((i) => i.Monaco.registerLanguages())
         metaTheme = document.querySelector('meta[name="theme-color"]')
     })
@@ -34,8 +38,6 @@
         }
     })
 </script>
-
-
 
 <ThemeProvider>
     <ErrorLogger>

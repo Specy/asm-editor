@@ -5,7 +5,7 @@
     import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
     import FloatingAgentSidebar from '$cmp/shared/agent/FloatingAgentSidebar.svelte'
     import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
-    import FaTimes from 'svelte-icons/fa/FaTimes.svelte'
+    import FaTimes from '~icons/fa-solid/times'
 
     interface Props {
         code?: string
@@ -109,12 +109,12 @@ When the user asks how a specific instruction behaves, how its operands work, or
                 onclick={() => (agentOpen = !agentOpen)}
             >
                 {#if agentOpen}
-                    <div style={'width: 1.2em; height: 1.2em;'}>
+                    <div style="width: 1.2em; height: 1.2em;">
                         <FaTimes />
                     </div>
                     Close
                 {:else}
-                    <SparklesIcon style={'font-size: 1rem;'} /> Ask AI
+                    <SparklesIcon style="font-size: 1rem;" /> Ask AI
                 {/if}
             </button>
         {/snippet}

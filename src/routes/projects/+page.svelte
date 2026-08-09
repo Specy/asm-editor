@@ -4,14 +4,14 @@
     import { onMount } from 'svelte'
     import Button from '$cmp/shared/button/Button.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
-    import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
-    import FaPlus from 'svelte-icons/fa/FaPlus.svelte'
+    import FaAngleLeft from '~icons/fa-solid/angle-left'
+    import FaPlus from '~icons/fa-solid/plus'
     import Title from '$cmp/shared/layout/Header.svelte'
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
     import { scale } from 'svelte/transition'
     import FileImporter from '$cmp/shared/fileImporter/FileImporter.svelte'
     import { createShareLink, textDownloader } from '$lib/utils'
-    import FaUpload from 'svelte-icons/fa/FaUpload.svelte'
+    import FaUpload from '~icons/fa-solid/upload'
     import { toast } from '$stores/toastStore'
     import { makeProjectFromExternal } from '$lib/Project.svelte'
     import { Prompt } from '$stores/promptStore.svelte'
@@ -190,7 +190,7 @@
                             on:share={async (e) => {
                                 const link = createShareLink(e.detail)
                                 await navigator.clipboard.writeText(link)
-       												  toast.logPill('Copied to clipboard')
+                                toast.logPill('Copied to clipboard')
                             }}
                             on:download={(e) => {
                                 textDownloader(

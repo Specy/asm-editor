@@ -3,9 +3,9 @@
 
     import Button from '$cmp/shared/button/Button.svelte'
     import RawInput from '$cmp/shared/input/RawInput.svelte'
-    import FaSearch from 'svelte-icons/fa/FaSearch.svelte'
-    import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
-    import FaAngleRight from 'svelte-icons/fa/FaAngleRight.svelte'
+    import FaSearch from '~icons/fa-solid/search'
+    import FaAngleLeft from '~icons/fa-solid/angle-left'
+    import FaAngleRight from '~icons/fa-solid/angle-right'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import Form from '$cmp/shared/layout/Form.svelte'
     import { clampBigInt } from '$lib/utils'
@@ -45,10 +45,7 @@
 
     function updateAddress(value: bigint) {
         const clampedSize = value - (value % BigInt(bytesPerPage))
-        const minMaxAddress = clampBigInt(
-          clampedSize,
-          0n,
-          memorySize - BigInt(bytesPerPage - 1))
+        const minMaxAddress = clampBigInt(clampedSize, 0n, memorySize - BigInt(bytesPerPage - 1))
         onAddressChange(minMaxAddress)
     }
 
@@ -60,27 +57,22 @@
 <Form style="width:100%; {style}" on:submit={searchAddress}>
     <div class="address-search">
         <div
-          class="hex-address"
-          onclick={() => {
-              inputRef?.focus()
-          }}
+            class="hex-address"
+            onclick={() => {
+                inputRef?.focus()
+            }}
         >
             {#if !hideLabel}
-                <span>
-                    Address
-                </span>
+                <span> Address </span>
             {/if}
-            <span
-                class="hex-address-label"
-                class:hex-address-label-no-prefix={hideLabel}
-            >
+            <span class="hex-address-label" class:hex-address-label-no-prefix={hideLabel}>
                 0x
             </span>
             <input
-              bind:this={inputRef}
-              spellcheck="false"
-              bind:value={hexAddress}
-              class="hex-address-input"
+                bind:this={inputRef}
+                spellcheck="false"
+                bind:value={hexAddress}
+                class="hex-address-input"
             />
         </div>
         <Button
@@ -123,13 +115,13 @@
 </Form>
 
 <style lang="scss">
-    .hex-address-label{
+    .hex-address-label {
         margin-left: 0.5rem;
         padding: 0.3rem 0 0.3rem 0.5rem;
         opacity: 0.6;
         border-left: solid 1px var(--primary-text);
     }
-    .hex-address-label-no-prefix{
+    .hex-address-label-no-prefix {
         margin-left: 0;
         padding: 0.3rem 0;
         border-left: none;
@@ -140,8 +132,8 @@
         width: 100%;
     }
 
-    .hex-address{
-        flex:1;
+    .hex-address {
+        flex: 1;
         display: flex;
         border-radius: 0.4rem;
         padding: 0.4rem 0.8rem;
@@ -149,9 +141,8 @@
         font-size: 0.9rem;
         background-color: var(--secondary);
         color: var(--secondary-text);
-
     }
-    .hex-address-input{
+    .hex-address-input {
         width: 100%;
         padding: 0.3rem 0.8rem 0.3rem 0;
         font-size: 1rem;

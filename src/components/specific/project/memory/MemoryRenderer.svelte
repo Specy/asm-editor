@@ -2,8 +2,8 @@
     import Button from '$cmp/shared/button/Button.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import ValueDiff from '$cmp/specific/project/user-tools/ValueDiffer.svelte'
-    import MdTextFields from 'svelte-icons/md/MdTextFields.svelte'
-    import FaTimes from 'svelte-icons/fa/FaTimes.svelte'
+    import MdTextFields from '~icons/ic/baseline-text-fields'
+    import FaTimes from '~icons/fa-solid/times'
     import { onMount } from 'svelte'
     import {
         findElInTree,
@@ -271,7 +271,7 @@
                         type
                     )}
                     hasSoftDiff={word !== defaultMemoryValue}
-                    hoverElementStyle={`width: 100%; min-width: fit-content; left: 50%; transform: translateX(-50%);`}
+                    hoverElementStyle="width: 100%; min-width: fit-content; left: 50%; transform: translateX(-50%);"
                     style={`padding: 0.3rem; min-width: calc(0.6rem + 2ch); height: calc(2ch + 0.65rem);
                     ${
                         currentAddress + BigInt(i) === sp

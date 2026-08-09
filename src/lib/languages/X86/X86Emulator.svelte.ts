@@ -1,4 +1,8 @@
-import { EmulatorStatus, type CompileResult, type Instruction } from '$lib/languages/BaseEmulator.svelte'
+import {
+    EmulatorStatus,
+    type CompileResult,
+    type Instruction
+} from '$lib/languages/BaseEmulator.svelte'
 import {
     type EmulatorDecoration,
     type EmulatorSettings,
@@ -23,9 +27,8 @@ import {
     type X86CompilationDiagnostic,
     type X86CompileResult,
     type X86Emulator as CoreX86Emulator,
-    type X86RegisterName,
+    type X86RegisterName
 } from '@specy/x86'
-
 
 export const DEFAULT_X86_FLAGS = [
     { name: 'CF', value: 0 },
@@ -35,7 +38,7 @@ export const DEFAULT_X86_FLAGS = [
     { name: 'SF', value: 0 },
     { name: 'TF', value: 0 },
     { name: 'DF', value: 0 },
-    { name: 'OF', value: 0 },
+    { name: 'OF', value: 0 }
 ]
 
 export async function X86Emulator(code: string, options: EmulatorSettings = {}) {
@@ -68,8 +71,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             },
             {
                 language: 'X86',
-                stackAddress: 0x4FFFFFFFFFF0n,
-                baseAddress: 0x4FFFFFFFFFF0n,
+                stackAddress: 0x4ffffffffff0n,
+                baseAddress: 0x4ffffffffff0n,
                 initialMemoryValue: 0x0,
                 ...options
             }
@@ -88,7 +91,9 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     }
 
     async compile(historySize: number, codeOverride?: string): Promise<void> {
-        const currentCompile = this.compileQueue.then(() => super.compile(historySize, codeOverride))
+        const currentCompile = this.compileQueue.then(() =>
+            super.compile(historySize, codeOverride)
+        )
         this.compileQueue = currentCompile.catch(() => undefined)
         await currentCompile
     }
@@ -146,7 +151,9 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     }
 
     _getFlags(): { name: string; value: number; prev?: number }[] {
-        return this.core?.getFlags().map((flag) => ({ ...flag })) ?? structuredClone(DEFAULT_X86_FLAGS)
+        return (
+            this.core?.getFlags().map((flag) => ({ ...flag })) ?? structuredClone(DEFAULT_X86_FLAGS)
+        )
     }
 
     _getInstructionAt(address: bigint): Instruction | null {
@@ -161,8 +168,14 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return this.core?.getPc() ?? 0n
     }
 
-    _getRegisterValue(register: X86RegisterName, size: RegisterSize | undefined = RegisterSize.Double): bigint {
-        return this.requireCore().getRegisterValue(normalizeRegisterName(register), toCoreRegisterSize(size))
+    _getRegisterValue(
+        register: X86RegisterName,
+        size: RegisterSize | undefined = RegisterSize.Double
+    ): bigint {
+        return this.requireCore().getRegisterValue(
+            normalizeRegisterName(register),
+            toCoreRegisterSize(size)
+        )
     }
 
     _getRegisterValues(): bigint[] {
@@ -171,10 +184,9 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     _getRegisterValuesRecord(): Record<X86RegisterName, bigint> {
         if (!this.core) {
-            return Object.fromEntries(this._registerNames.map((register) => [register, 0n])) as Record<
-                X86RegisterName,
-                bigint
-            >
+            return Object.fromEntries(
+                this._registerNames.map((register) => [register, 0n])
+            ) as Record<X86RegisterName, bigint>
         }
         return this.core.getRegisterValuesRecord()
     }
@@ -197,16 +209,19 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     _readMemoryBytes(address: bigint, length: bigint): Uint8Array {
         try {
-        return this.requireCore().readMemoryBytes(address, length)
-        }catch(e){
-            if(String(e).includes('virtual address is not mapped')) {
+            return this.requireCore().readMemoryBytes(address, length)
+        } catch (e) {
+            if (String(e).includes('virtual address is not mapped')) {
                 return new Uint8Array(Number(length)).fill(0)
             }
             throw e
         }
     }
 
-    async _run(limit: number | undefined, breakpoints: number[] | undefined): Promise<EmulatorStatus> {
+    async _run(
+        limit: number | undefined,
+        breakpoints: number[] | undefined
+    ): Promise<EmulatorStatus> {
         const status = await this.runWithInput(limit, breakpoints ?? [])
         return toLocalStatus(status)
     }
@@ -222,8 +237,16 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         }
     }
 
-    _setRegisterValue(register: X86RegisterName, value: bigint, size: RegisterSize | undefined = RegisterSize.Double): void {
-        this.requireCore().setRegisterValue(normalizeRegisterName(register), value, toCoreRegisterSize(size))
+    _setRegisterValue(
+        register: X86RegisterName,
+        value: bigint,
+        size: RegisterSize | undefined = RegisterSize.Double
+    ): void {
+        this.requireCore().setRegisterValue(
+            normalizeRegisterName(register),
+            value,
+            toCoreRegisterSize(size)
+        )
     }
 
     async _step(): Promise<{ terminated: boolean }> {
@@ -248,7 +271,10 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         this.requireCore().writeMemoryBytes(address, data)
     }
 
-    private async runWithInput(limit: number | undefined, breakpoints: number[]): Promise<CoreEmulatorStatus> {
+    private async runWithInput(
+        limit: number | undefined,
+        breakpoints: number[]
+    ): Promise<CoreEmulatorStatus> {
         const core = this.requireCore()
         let status = await core.run(limit, breakpoints)
         while (status === CoreEmulatorStatus.WaitingForInput) {
@@ -260,7 +286,9 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     private async provideProgramInput(): Promise<void> {
         const core = this.requireCore()
-        const value = this.testcaseInput ? (this.testcaseInput.shift() ?? '') : await Prompt.askText('Program input', true)
+        const value = this.testcaseInput
+            ? (this.testcaseInput.shift() ?? '')
+            : await Prompt.askText('Program input', true)
         if (value == null) throw new Error('Input cancelled')
         core.provideInput(ensureLineInput(value))
     }
@@ -287,13 +315,16 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     private isProgramOutput(): boolean {
         const state = this.core?.state
-        return state !== undefined && state !== BlinkState.Assembling && state !== BlinkState.Linking
+        return (
+            state !== undefined && state !== BlinkState.Assembling && state !== BlinkState.Linking
+        )
     }
 }
 
 function normalizeRegisterName(register: string): X86RegisterName {
     const normalized = register.toLowerCase() as X86RegisterName
-    if (!X86_REGISTER_NAMES.includes(normalized)) throw new Error(`Unknown X86 register: ${register}`)
+    if (!X86_REGISTER_NAMES.includes(normalized))
+        throw new Error(`Unknown X86 register: ${register}`)
     return normalized
 }
 

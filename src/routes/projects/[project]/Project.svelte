@@ -2,12 +2,12 @@
     import Editor from '$cmp/specific/project/Editor.svelte'
     import Button from '$cmp/shared/button/Button.svelte'
     import MemoryVisualiser from '$cmp/specific/project/memory/MemoryRenderer.svelte'
-    import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
+    import FaAngleLeft from '~icons/fa-solid/angle-left'
     import { createEventDispatcher, onMount, type Snippet } from 'svelte'
-    import FaKeyboard from 'svelte-icons/fa/FaKeyboard.svelte'
+    import FaKeyboard from '~icons/fa-solid/keyboard'
     import type { AvailableLanguages, Testcase, TestcaseResult } from '$lib/Project.svelte'
-    import FaSave from 'svelte-icons/fa/FaSave.svelte'
-    import FaCog from 'svelte-icons/fa/FaCog.svelte'
+    import FaSave from '~icons/fa-solid/save'
+    import FaCog from '~icons/fa-solid/cog'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import { toast } from '$stores/toastStore'
     import Controls from '$cmp/specific/project/Controls.svelte'
@@ -16,13 +16,13 @@
     import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE } from '$lib/Config'
     import Settings from '$cmp/specific/project/settings/Settings.svelte'
     import FloatingLanguageDocumentation from '$cmp/specific/project/FloatingLanguageDocumentation.svelte'
-    import FaBook from 'svelte-icons/fa/FaBook.svelte'
+    import FaBook from '~icons/fa-solid/book'
     import { ShortcutAction, shortcutsStore } from '$stores/shortcutsStore'
     import RegistersVisualiser from '$cmp/specific/project/cpu/RegistersRenderer.svelte'
     import RegistersRenderer from '$cmp/specific/project/cpu/RegistersRenderer.svelte'
     import StatusCodesVisualiser from '$cmp/specific/project/cpu/StatusCodesRenderer.svelte'
     import MemoryControls from '$cmp/specific/project/memory/MemoryControls.svelte'
-    import FaShareAlt from 'svelte-icons/fa/FaShareAlt.svelte'
+    import FaShareAlt from '~icons/fa-solid/share-alt'
     import MemoryTab from '$cmp/specific/project/memory/MemoryTab.svelte'
     import ShortcutEditor from '$cmp/specific/project/settings/ShortcutEditor.svelte'
     import { settingsStore } from '$stores/settingsStore.svelte'
@@ -31,7 +31,7 @@
     import CallStack from '$cmp/specific/project/user-tools/CallStack.svelte'
     import MutationsViewer from '$cmp/specific/project/user-tools/MutationsRenderer.svelte'
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
-    import FaDonate from 'svelte-icons/fa/FaHeart.svelte'
+    import FaDonate from '~icons/fa-solid/heart'
     import { getM68kErrorMessage } from '$lib/languages/M68K/M68kUtils'
     import Row from '$cmp/shared/layout/Row.svelte'
     import TestcasesEditor from '$cmp/specific/project/testcases/TestcasesEditor.svelte'
@@ -100,7 +100,7 @@
         wantsToLeave: void
         share: void
     }>()
-    const pressedKeys = new Map<String, boolean>()
+    const pressedKeys = new Map<string, boolean>()
     const [debounced] = createDebouncer(3000)
 
     function handleKeyDown(e: KeyboardEvent) {
@@ -125,6 +125,7 @@
             }
             case ShortcutAction.ToggleSettings: {
                 settingsVisible = !settingsVisible
+                break
             }
             case ShortcutAction.BuildCode: {
                 void buildCode()

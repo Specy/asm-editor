@@ -3,7 +3,7 @@
     import DefaultCodingAgent, {
         type SupportedLanguage
     } from '$cmp/shared/agent/DefaultCodingAgent.svelte'
-    import FaTimes from 'svelte-icons/fa/FaTimes.svelte'
+    import FaTimes from '~icons/fa-solid/times'
     import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
     import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
     import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
@@ -82,7 +82,7 @@
                     </span>
                     Close
                 {:else}
-                    <SparklesIcon style={'font-size: 1rem;'} /> Ask AI
+                    <SparklesIcon style="font-size: 1rem;" /> Ask AI
                 {/if}
             </button>
         {/if}

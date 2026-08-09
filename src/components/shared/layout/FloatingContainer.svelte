@@ -1,7 +1,7 @@
 <script lang="ts">
     import Button from '$cmp/shared/button/Button.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
-    import FaTimes from 'svelte-icons/fa/FaTimes.svelte'
+    import FaTimes from '~icons/fa-solid/times'
     interface Props {
         visible: boolean
         title: string

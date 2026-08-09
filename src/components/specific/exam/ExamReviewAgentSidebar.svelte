@@ -217,53 +217,55 @@
                     (section) => section.id === activeSection.id
                 )
                 const isAssemblyCoding = activeSection.type === ExamSectionType.AssemblyCoding
-                return $state.snapshot(toSerializable({
-                    success: true,
-                    exam: {
-                        title: exam.title,
-                        timeLimitMs: exam.timeLimit,
-                        sectionCount: sections.length
-                    },
-                    studentSubmission: {
-                        name: submission.name,
-                        hash: submission.hash,
-                        startedAt: formatDate(submission.startedAt),
-                        submittedAt: formatDate(submission.submissionTimestamp),
-                        fullscreenExitCount: submission.fullscreenExitCount ?? 0,
-                        durationMs: submission.submissionTimestamp - submission.startedAt,
-                        durationLabel: formatDuration(
-                            submission.submissionTimestamp - submission.startedAt
-                        )
-                    },
-                    currentExercise: {
-                        index: sectionIndex + 1,
-                        total: sections.length,
-                        section: activeSection,
-                        answer: describeAnswer(activeSection, answer)
-                    },
-                    reviewCapabilities: {
-                        canUseAssemblyDebugTools: isAssemblyCoding && !!emulatorInstance,
-                        canRunExamTestcases:
-                            !!activeAssemblySection &&
-                            !!emulatorInstance &&
-                            activeAssemblySection.testcases.length > 0,
-                        guidance: isAssemblyCoding
-                            ? 'Use assembly debug tools only if canUseAssemblyDebugTools is true. Use run_exam_testcases when canRunExamTestcases is true, otherwise compile/run/step manually if needed.'
-                            : 'This visible exercise is not assembly coding. Do not use assembly emulator tools; review the prompt and submitted answer directly.'
-                    },
-                    sectionOverview: sections.map((section, index) => {
-                        const sectionAnswer = getAnswerForSection(section)
-                        return {
-                            index: index + 1,
-                            id: section.id,
-                            title: section.title,
-                            type: section.type,
-                            isCurrent: section.id === activeSection.id,
-                            answered: hasAnswerContent(section, sectionAnswer),
-                            answerPreview: getAnswerPreview(section, sectionAnswer)
-                        }
+                return $state.snapshot(
+                    toSerializable({
+                        success: true,
+                        exam: {
+                            title: exam.title,
+                            timeLimitMs: exam.timeLimit,
+                            sectionCount: sections.length
+                        },
+                        studentSubmission: {
+                            name: submission.name,
+                            hash: submission.hash,
+                            startedAt: formatDate(submission.startedAt),
+                            submittedAt: formatDate(submission.submissionTimestamp),
+                            fullscreenExitCount: submission.fullscreenExitCount ?? 0,
+                            durationMs: submission.submissionTimestamp - submission.startedAt,
+                            durationLabel: formatDuration(
+                                submission.submissionTimestamp - submission.startedAt
+                            )
+                        },
+                        currentExercise: {
+                            index: sectionIndex + 1,
+                            total: sections.length,
+                            section: activeSection,
+                            answer: describeAnswer(activeSection, answer)
+                        },
+                        reviewCapabilities: {
+                            canUseAssemblyDebugTools: isAssemblyCoding && !!emulatorInstance,
+                            canRunExamTestcases:
+                                !!activeAssemblySection &&
+                                !!emulatorInstance &&
+                                activeAssemblySection.testcases.length > 0,
+                            guidance: isAssemblyCoding
+                                ? 'Use assembly debug tools only if canUseAssemblyDebugTools is true. Use run_exam_testcases when canRunExamTestcases is true, otherwise compile/run/step manually if needed.'
+                                : 'This visible exercise is not assembly coding. Do not use assembly emulator tools; review the prompt and submitted answer directly.'
+                        },
+                        sectionOverview: sections.map((section, index) => {
+                            const sectionAnswer = getAnswerForSection(section)
+                            return {
+                                index: index + 1,
+                                id: section.id,
+                                title: section.title,
+                                type: section.type,
+                                isCurrent: section.id === activeSection.id,
+                                answered: hasAnswerContent(section, sectionAnswer),
+                                answerPreview: getAnswerPreview(section, sectionAnswer)
+                            }
+                        })
                     })
-                }))
+                )
             }
         }),
         tool({
@@ -310,21 +312,23 @@
                     100
                 )
                 const failed = results.filter((result) => !result.passed)
-                return $state.snapshot(toSerializable({
-                    success: failed.length === 0 && emulator.errors.length === 0,
-                    passed: results.length - failed.length,
-                    failed: failed.length,
-                    errors: [
-                        ...emulator.compilerErrors.map((error) => error.formatted),
-                        ...emulator.errors
-                    ],
-                    results: results.map((result, index) => ({
-                        index: index + 1,
-                        passed: result.passed,
-                        errors: result.errors,
-                        testcase: result.testcase
-                    }))
-                }))
+                return $state.snapshot(
+                    toSerializable({
+                        success: failed.length === 0 && emulator.errors.length === 0,
+                        passed: results.length - failed.length,
+                        failed: failed.length,
+                        errors: [
+                            ...emulator.compilerErrors.map((error) => error.formatted),
+                            ...emulator.errors
+                        ],
+                        results: results.map((result, index) => ({
+                            index: index + 1,
+                            passed: result.passed,
+                            errors: result.errors,
+                            testcase: result.testcase
+                        }))
+                    })
+                )
             }
         })
     ]

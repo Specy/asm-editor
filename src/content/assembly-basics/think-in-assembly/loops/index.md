@@ -2,7 +2,7 @@ Now that we saw how to implement `if` statements using `goto`, and then converti
 
 When we think of loops we imagine `while`, `do while` and `for` statements. Assembly does not have any of those, we need to manage the logic ourselves by using branching and control flow.
 
-Like we saw before, we test for a condition to decide if we want to jump to a specific point in code. The cool thing is that 
+Like we saw before, we test for a condition to decide if we want to jump to a specific point in code. The cool thing is that
 we can't only go _forward_ in code, we can also jump _backwards_ in code, as in, jump to an instruction that is before the current instruction.
 
 Imagine what loops do, specifically let's think of `while` loops.
@@ -13,16 +13,19 @@ it goes back to testing the condition, if it's still true, it executes again the
 Once the condition is false, the program skips the code inside the loop, and executes the code after the loop.
 
 What we'd like to do is to run this code:
-```c 
+
+```c
 while(condition) {
     /* doSomething */
 }
 /* restOfCode */
 ```
+
 As we saw in the previous lecture, we can only execute "flat" code, so let's first try to flatten it out using `goto` and labels.
 
-We can see the while loop as a "continue executing the code inside the loop as long as the condition is true", or also as 
+We can see the while loop as a "continue executing the code inside the loop as long as the condition is true", or also as
 "if the condition is not true, then skip the code inside the loop". Let's write it like the second one, it will be easier to understand.
+
 ```c
 while_start:
     if(!condition) goto while_end;
@@ -34,13 +37,16 @@ while_end:
 
 Let's now try a more concrete example, and also convert it to assembly.
 For loops can be converted to while loops, so let's take a simple for loop:
+
 ```c
 for(int i = 0; i < 10; i++) {
     /* doSomething */
 }
 ```
+
 We can convert it to a while loop like this:
-```c 
+
+```c
 int i = 0;
 while(i < 10) {
     i++;
@@ -49,6 +55,7 @@ while(i < 10) {
 ```
 
 We then flatten it out:
+
 ```c
 int i = 0;
 while_start:
@@ -60,6 +67,7 @@ while_end:
 ```
 
 Now let's convert it to M68K assembly:
+
 ```m68k|playground|allow-open
     move.l #0, d0   ; i = 0
 while_start:
@@ -70,7 +78,9 @@ while_start:
 while_end:
     ; other code
 ```
+
 And let's also try to convert it to RISC-V assembly:
+
 ```riscv|playground|allow-open
     li t0, 0         # i = 0
     li t6, 10        # t6 = 10
@@ -81,5 +91,3 @@ while_start:
 while_end:
     # other code
 ```
-
-

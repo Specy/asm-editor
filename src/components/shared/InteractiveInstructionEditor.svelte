@@ -66,9 +66,9 @@
     let showMemory = $derived(showMemoryProp ?? true)
     let showFlags = $derived(showFlagsProp ?? true)
     let showRegisters = $derived(showRegistersProp ?? true)
-    let showConsole = $derived(showConsoleProp ?? (layout === 'fullscreen'))
+    let showConsole = $derived(showConsoleProp ?? layout === 'fullscreen')
     let showTestcases = $derived(showTestcasesProp ?? false)
-    let showPc = $derived(showPcProp ?? (layout === 'fullscreen'))
+    let showPc = $derived(showPcProp ?? layout === 'fullscreen')
     let groupSize = $state(RegisterSize.Word)
     let testcasesVisible = $state(false)
     let testcasesResult: TestcaseResult[] = $state([])
@@ -266,10 +266,7 @@
         {/if}
         {#if emulator.statusRegisters?.length > 0 && showFlags}
             <div class="data-cpu-status-wrapper">
-                <StatusCodesVisualiser
-                    statusCodes={emulator.statusRegisters}
-                    style="flex:1"
-                />
+                <StatusCodesVisualiser statusCodes={emulator.statusRegisters} style="flex:1" />
             </div>
         {/if}
         {#if showRegisters}

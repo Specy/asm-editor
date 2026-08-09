@@ -1,16 +1,14 @@
 import { RISCV } from '@specy/risc-v'
 
-
 RISCV.setIs64Bit(true)
-const riscvIse = RISCV.getInstructionSet().map(i => ({
+const riscvIse = RISCV.getInstructionSet().map((i) => ({
     name: i.name,
-    description: `${i.description}${i.getIsRv64Only() ? ' (64bit)' : ''}` ,
+    description: `${i.description}${i.getIsRv64Only() ? ' (64bit)' : ''}`,
     tokens: i.tokens,
     example: i.example,
     isRv64Only: i.getIsRv64Only()
 }))
 RISCV.setIs64Bit(false)
-
 
 type RISCVAddressingMode = {
     type: string
@@ -78,8 +76,9 @@ export function aggregateArgs(ins: RISCVInstruction[]): RISCVAddressingMode[][] 
 
 export const riscvInstructionsVariants = [...riscvInstructionMap.values()]
 
-export const riscvInstructionNames = [...riscvInstructionMap.keys()].sort((a, b) => a.localeCompare(b))
-
+export const riscvInstructionNames = [...riscvInstructionMap.keys()].sort((a, b) =>
+    a.localeCompare(b)
+)
 
 export function formatAggregatedArgs(ins: RISCVInstruction[]): string {
     const isReg = (s: string) => s === 'reg' || s === 'freg' || s === 'regnum'
@@ -143,7 +142,9 @@ export function formatAggregatedArgs(ins: RISCVInstruction[]): string {
     return result.join(', ')
 }
 
-export function groupVariantsByDescription(variants: RISCVInstruction[]): { description: string; examples: string[] }[] {
+export function groupVariantsByDescription(
+    variants: RISCVInstruction[]
+): { description: string; examples: string[] }[] {
     const groups: { description: string; examples: string[] }[] = []
     const map = new Map<string, number>()
     for (const v of variants) {
@@ -419,7 +420,7 @@ export const riscvSyscall = {
             { name: 'a1', description: 'maximum number of characters to read' }
         ],
         result: {
-            other: 'Service 8 - Follows semantics of UNIX \'fgets\'. For specified length n, string can be no longer than n-1. If less than that, adds newline to end. In either case, then pads with null byte If n = 1, input is ignored and null byte placed at buffer address. If n < 1, input is ignored and nothing is written to the buffer.'
+            other: "Service 8 - Follows semantics of UNIX 'fgets'. For specified length n, string can be no longer than n-1. If less than that, adds newline to end. In either case, then pads with null byte If n = 1, input is ignored and null byte placed at buffer address. If n < 1, input is ignored and nothing is written to the buffer."
         }
     },
     [9]: {
@@ -580,7 +581,7 @@ export const riscvSyscall = {
                 {
                     name: 'a0',
                     description:
-                        'contains the next pseudorandom, uniformly distributed int value from this random number generator\'s sequence'
+                        "contains the next pseudorandom, uniformly distributed int value from this random number generator's sequence"
                 }
             ],
             other: 'Each stream (identified by a0 contents) is modeled by a different Random object. There are no default seed values, so use the Set Seed service (40) if replicated random sequences are desired.'
@@ -598,7 +599,7 @@ export const riscvSyscall = {
                 {
                     name: 'a0',
                     description:
-                        'contains pseudorandom, uniformly distributed int value in the range 0 <= [int] < [upper bound], drawn from this random number generator\'s sequence'
+                        "contains pseudorandom, uniformly distributed int value in the range 0 <= [int] < [upper bound], drawn from this random number generator's sequence"
                 }
             ],
             other: 'Each stream (identified by a0 contents) is modeled by a different Random object. There are no default seed values, so use the Set Seed service (40) if replicated random sequences are desired.'
@@ -613,7 +614,7 @@ export const riscvSyscall = {
                 {
                     name: 'f0',
                     description:
-                        'contains the next pseudorandom, uniformly distributed float value in the range 0.0 <= f < 1.0 from this random number generator\'s sequence'
+                        "contains the next pseudorandom, uniformly distributed float value in the range 0.0 <= f < 1.0 from this random number generator's sequence"
                 }
             ],
             other: 'Each stream (identified by a0 contents) is modeled by a different Random object. There are no default seed values, so use the Set Seed service (40) if replicated random sequences are desired.'
@@ -628,7 +629,7 @@ export const riscvSyscall = {
                 {
                     name: 'f0',
                     description:
-                        'contains the next pseudorandom, uniformly distributed double value in the range 0.0 <= f < 1.0 from this random number generator\'s sequence'
+                        "contains the next pseudorandom, uniformly distributed double value in the range 0.0 <= f < 1.0 from this random number generator's sequence"
                 }
             ],
             other: 'Each stream (identified by a0 contents) is modeled by a different Random object. There are no default seed values, so use the Set Seed service (40) if replicated random sequences are desired.'

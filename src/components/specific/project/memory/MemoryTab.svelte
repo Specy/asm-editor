@@ -41,7 +41,6 @@
             {memorySize}
             currentAddress={tab.address}
             inputStyle="width: 6rem;"
-            
             onAddressChange={async (e) => {
                 onAddressChange?.(e, tab)
             }}

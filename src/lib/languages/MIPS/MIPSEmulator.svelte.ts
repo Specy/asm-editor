@@ -143,7 +143,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
             ),
             tabs: [createMemoryTab(8 * 4, 'Stack', 0x7ffffffcn, 4, 0x0, 'little')]
         },
-        isExamMode: false,
+        isExamMode: false
     })
 
     let mips: JsMips | null = null
@@ -653,8 +653,8 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         return errors
     }
 
-    function throwIfExamMode(){
-        if(state.isExamMode){
+    function throwIfExamMode() {
+        if (state.isExamMode) {
             throw new Error('Operation not allowed in exam mode')
         }
     }
@@ -758,7 +758,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
             for (const value of t.startingMemory) {
                 if (value.type === 'number') {
                     const slice = numberToByteSlice(value.expected, value.bytes, 'little')
-                
+
                     mips.setMemoryBytes(Number(value.address), slice)
                 } else if (value.type === 'number-chunk') {
                     const expected = numbersOfSizeToSlice(value.expected, value.bytes, 'little')
@@ -972,10 +972,10 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
         get systemSize() {
             return state.systemSize
         },
-        get isExamMode(){
+        get isExamMode() {
             return state.isExamMode
         },
-        set isExamMode(value: boolean){
+        set isExamMode(value: boolean) {
             state.isExamMode = value
         },
         compile,

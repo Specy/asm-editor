@@ -57,7 +57,7 @@ The assembler will also allow you to use _macros_ and _directives_.
 
 Instructions in assembly languages are usually named after the operation they perform, which makes it easier to understand what the code does.
 
-For example, the `add` instruction is used to add two values, since the word "add" is pretty short. 
+For example, the `add` instruction is used to add two values, since the word "add" is pretty short.
 
 For more complex operations, the names are usually either shorthands of a word, or an acronym of the operation.
 

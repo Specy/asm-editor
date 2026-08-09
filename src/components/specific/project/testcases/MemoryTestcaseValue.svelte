@@ -4,7 +4,7 @@
     import { createEventDispatcher } from 'svelte'
     import Button from '$cmp/shared/button/Button.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
-    import FaTimes from 'svelte-icons/fa/FaTimes.svelte'
+    import FaTimes from '~icons/fa-solid/times'
     import Row from '$cmp/shared/layout/Row.svelte'
     import { type RegisterSize, toHexString } from '$lib/languages/commonLanguageFeatures.svelte'
 
@@ -33,7 +33,13 @@
         return `[${values.map((v) => formatNumber(v, size)).join(', ')}]`
     }
 
-    let { value = $bindable(), editable = true, canRemove = true, systemSize, type }: Props = $props()
+    let {
+        value = $bindable(),
+        editable = true,
+        canRemove = true,
+        systemSize,
+        type
+    }: Props = $props()
 </script>
 
 <div class="memory-testcase">
@@ -129,20 +135,23 @@
     {:else}
         {#if value.type === 'number'}
             <div style="word-break: break-all;">
-                Memory at address <b>{formatNumber(value.address, systemSize)}</b> {type === 'starting' ? 'will be set to' : 'should equal'}
+                Memory at address <b>{formatNumber(value.address, systemSize)}</b>
+                {type === 'starting' ? 'will be set to' : 'should equal'}
                 <b>{formatNumber(value.expected, value.bytes)}</b> (<b>{value.bytes}</b> bytes)
             </div>
         {/if}
         {#if value.type === 'string-chunk'}
             <div style="word-break: break-all;">
-                Memory at address <b>{formatNumber(value.address, systemSize)}</b> {type === 'starting' ? 'will be set to the string' : 'should contain string'} "<b
+                Memory at address <b>{formatNumber(value.address, systemSize)}</b>
+                {type === 'starting' ? 'will be set to the string' : 'should contain string'} "<b
                     >{value.expected}</b
                 >"
             </div>
         {/if}
         {#if value.type === 'number-chunk'}
             <div style="word-break: break-all;">
-                Memory at address <b>{formatNumber(value.address, systemSize)}</b> {type === 'starting' ? 'will be set to' : 'should equal'}
+                Memory at address <b>{formatNumber(value.address, systemSize)}</b>
+                {type === 'starting' ? 'will be set to' : 'should equal'}
                 <b>{formatNumberList(value.expected, value.bytes)}</b>, each of
                 <b>{value.bytes}</b> bytes
             </div>

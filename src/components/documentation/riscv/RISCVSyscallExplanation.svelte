@@ -15,8 +15,8 @@
     requests to the operating system.
 </p>
 <p>
-    Each syscall has a unique code that is used to identify it. You must put the syscall code
-    inside the the a7 register before calling the ecall instruction.
+    Each syscall has a unique code that is used to identify it. You must put the syscall code inside
+    the the a7 register before calling the ecall instruction.
     <br />
     <br />
     As an example:

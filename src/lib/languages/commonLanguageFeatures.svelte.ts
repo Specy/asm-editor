@@ -81,7 +81,7 @@ export function makeGenericMonacoError(error: string): MonacoError {
         },
         message: error,
         formatted: error
-    } 
+    }
 }
 export function toHexString(_value: bigint | number, _size: bigint | number): string {
     const value = BigInt(_value)
@@ -96,7 +96,7 @@ export function makeRegister(name: string, v: bigint | number, _size: RegisterSi
     let value = $state(BigInt(v))
     let prev = $state(BigInt(v))
     let size = $state(BigInt(_size))
-    let bits = $derived(size * 8n)
+    const bits = $derived(size * 8n)
 
     function setValue(v: number | bigint) {
         prev = value
@@ -293,7 +293,7 @@ export type ColorizedLabel = {
 }
 
 export type EmulatorSettings = {
-    language?: AvailableLanguages,
+    language?: AvailableLanguages
     globalPageSize?: number
     globalPageElementsPerRow?: number
     baseAddress?: bigint

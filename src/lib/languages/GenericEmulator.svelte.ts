@@ -348,8 +348,9 @@ export abstract class GenericEmulator<T, R extends string>
                       this._emulatorOptions.initialMemoryValue
                   )
             this.state.memory.global.address = address
-            ;((this.state.memory.global.data.current = bytes),
-                (this.state.memory.global.data.prevState = this.state.memory.global.data.current))
+            this.state.memory.global.data.current = bytes
+            // Reset prevState as we don't know what the previous state was.
+            this.state.memory.global.data.prevState = this.state.memory.global.data.current
         } catch (e) {
             console.error(e)
             this.addError(this._stringifyError(e))
@@ -362,9 +363,7 @@ export abstract class GenericEmulator<T, R extends string>
             if (!tab) return
             const bytes = this.getInstance()
                 ? this._readMemoryBytes(address, BigInt(tab.pageSize))
-                : new Uint8Array(tab.pageSize).fill(
-                      this._emulatorOptions.initialMemoryValue
-                  )
+                : new Uint8Array(tab.pageSize).fill(this._emulatorOptions.initialMemoryValue)
             tab.address = address
             tab.data.current = bytes
             tab.data.prevState = tab.data.current

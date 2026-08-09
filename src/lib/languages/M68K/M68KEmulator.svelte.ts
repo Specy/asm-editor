@@ -114,7 +114,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
             tabs: [createMemoryTab(8 * 4, 'Stack', 0x2000n, 4, 0xff, 'big')]
         },
         interrupt: undefined,
-        isExamMode: false,
+        isExamMode: false
     })
     let s68k: S68k | null = null
     let interpreter: Interpreter | null = null
@@ -178,7 +178,6 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         state.line = -1
     }
 
-
     function semanticCheck() {
         try {
             const errors = S68k.semanticCheck(code).map((e) => {
@@ -193,7 +192,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
             })
             state.compilerErrors = errors
             state.errors = []
-            return errors;
+            return errors
         } catch (e) {
             console.error(e)
             const error = getM68kErrorMessage(e)
@@ -890,10 +889,10 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         get systemSize() {
             return state.systemSize
         },
-        get isExamMode(){
+        get isExamMode() {
             return state.isExamMode
         },
-        set isExamMode(value: boolean){
+        set isExamMode(value: boolean) {
             state.isExamMode = value
         },
         step,

@@ -2,7 +2,7 @@
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import { ccrToFlagsArray } from '@specy/s68k'
     import { createEventDispatcher } from 'svelte'
-    import FaUndo from 'svelte-icons/fa/FaUndo.svelte'
+    import FaUndo from '~icons/fa-solid/undo'
     import type { ExecutionStep } from '$lib/languages/commonLanguageFeatures.svelte'
 
     interface Props {
@@ -40,9 +40,7 @@
         <div class="row space-between">
             <span> PC </span>
             <span class="pc">
-                <span style="opacity: 0.6">
-                    0x
-                </span>{step.pc.toString().toUpperCase()}
+                <span style="opacity: 0.6"> 0x </span>{step.pc.toString().toUpperCase()}
                 <button
                     title="Go to line"
                     class="go-to-line"

@@ -22,11 +22,7 @@
 
 <div class="wrapper" style={wrapperStyle}>
     <div>{title}</div>
-    <select
-        onchange={onChange}
-        bind:value
-        style={style}
-    >
+    <select onchange={onChange} bind:value {style}>
         {#each options as option, i}
             <option value={option} disabled={disabled[i] !== undefined}>
                 {option}

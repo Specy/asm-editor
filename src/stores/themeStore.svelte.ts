@@ -319,8 +319,8 @@ function makeThemeStore<T extends string>(_theme: StoredTheme<T>) {
         extends: _theme.extends,
         editable: _theme.editable
     })
-    let theme = $state(_theme.theme)
-    let themeArray = $derived(Object.values(theme) as ThemeProp<T>[])
+    const theme = $state(_theme.theme)
+    const themeArray = $derived(Object.values(theme) as ThemeProp<T>[])
 
     function isDefault(key: string, color: string) {
         const extended = BUILTIN_THEMES.find((t) => t.id === meta.extends)
@@ -391,8 +391,7 @@ function makeThemeStore<T extends string>(_theme: StoredTheme<T>) {
         try {
             if (!browser) return
             const savedThemes = JSON.parse(localStorage.getItem('themes')) as
-                | StoredTheme<T>[]
-                | null
+                StoredTheme<T>[] | null
             if (!savedThemes) return
             themes = [...BUILTIN_THEMES, ...savedThemes]
             select(getChosenTheme())

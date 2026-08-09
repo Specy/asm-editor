@@ -1,5 +1,10 @@
 <script lang="ts">
-    import { connectToDiscernsChatbot, type RegisteredTool, type EnvironmentContext, type WebsiteProtocol } from '@discerns/sdk'
+    import {
+        connectToDiscernsChatbot,
+        type RegisteredTool,
+        type EnvironmentContext,
+        type WebsiteProtocol
+    } from '@discerns/sdk'
     import { DISCERNS_AVATAR_ID, DISCERNS_AVATAR_INSTANCE_ID } from '$lib/Config'
 
     interface Props {
@@ -21,7 +26,7 @@
         theme = 'dark',
         accent,
         onConnectionStatusChange,
-        onNewConversation,
+        onNewConversation
     }: Props = $props()
 
     const BASE_URL = 'https://app.discerns.ai'
@@ -140,7 +145,6 @@
     {style}
     title="AI Chat"
 ></iframe>
-
 
 <style lang="scss">
 </style>

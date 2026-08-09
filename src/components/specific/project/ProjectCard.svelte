@@ -2,16 +2,16 @@
     import type { Project } from '$lib/Project.svelte'
     import timeAgo from 's-ago'
     import { ProjectStore } from '$stores/projectsStore.svelte'
-    import FaTrashAlt from 'svelte-icons/fa/FaTrashAlt.svelte'
+    import FaTrashAlt from '~icons/fa-solid/trash-alt'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import { Prompt } from '$stores/promptStore.svelte'
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
     import Button from '$cmp/shared/button/Button.svelte'
-    import FaDownload from 'svelte-icons/fa/FaDownload.svelte'
+    import FaDownload from '~icons/fa-solid/download'
     import { createEventDispatcher } from 'svelte'
     import { BUILTIN_THEMES, ThemeStore } from '$stores/themeStore.svelte'
     import { LANGUAGE_THEMES } from '$lib/Config'
-    import FaShareAlt from 'svelte-icons/fa/FaShareAlt.svelte'
+    import FaShareAlt from '~icons/fa-solid/share-alt'
 
     interface Props {
         project: Project
@@ -20,7 +20,7 @@
     let { project = $bindable() }: Props = $props()
     let textContent = $state(project.name || 'Unnamed')
     let descriptionContent = $state(project.description || '')
-    const dispatcher = createEventDispatcher<{ download: Project, share: Project }>()
+    const dispatcher = createEventDispatcher<{ download: Project; share: Project }>()
 
     const colors = $derived(
         BUILTIN_THEMES.find((t) => t.id === LANGUAGE_THEMES[project.language]) ?? BUILTIN_THEMES[0]
@@ -68,10 +68,10 @@
         </div>
         <div style="display: flex; gap: 0.4rem">
             <Button
-              cssVar="secondary"
-              style="width: 2.2rem; height: 2.2rem;"
-              title="Share this project"
-              onClick={() => dispatcher('share', project)}
+                cssVar="secondary"
+                style="width: 2.2rem; height: 2.2rem;"
+                title="Share this project"
+                onClick={() => dispatcher('share', project)}
             >
                 <Icon>
                     <FaShareAlt />

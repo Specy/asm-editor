@@ -1,7 +1,7 @@
 <script lang="ts">
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import RegisterTestcaseValue from '$cmp/specific/project/testcases/RegisterTestcaseValue.svelte'
-    import FaPlus from 'svelte-icons/fa/FaPlus.svelte'
+    import FaPlus from '~icons/fa-solid/plus'
     import RegistersRenderer from '$cmp/specific/project/cpu/RegistersRenderer.svelte'
     import { makeRegister, RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'

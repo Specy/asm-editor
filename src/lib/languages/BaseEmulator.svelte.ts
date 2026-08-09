@@ -1,6 +1,7 @@
 import {
     type EmulatorDecoration,
-    type ExecutionStep, type MonacoError,
+    type ExecutionStep,
+    type MonacoError,
     type MutationOperation,
     RegisterSize,
     type StackFrame
@@ -8,7 +9,6 @@ import {
 import type { Testcase } from '$lib/Project.svelte'
 
 type MaybePromise<T> = T | PromiseLike<T>
-
 
 export type CompilationError = {
     type: 'raw'
@@ -19,7 +19,7 @@ export type CompileResult = { ok: true } | { ok: false; errors: MonacoError[]; r
 
 export enum EmulatorStatus {
     Terminated = 0,
-    Running = 0,
+    Running = 1
 }
 
 export type Instruction = {
@@ -36,70 +36,67 @@ export type EmulatorConfig<R extends string> = {
 }
 
 export abstract class BaseEmulator<T, R extends string> {
-
     protected _registerNames: R[]
     protected _systemSize: RegisterSize
     protected _endianness: 'little' | 'big'
 
     constructor(options: EmulatorConfig<R>) {
-        this._registerNames = options.registerNames;
-        this._systemSize = options.systemSize;
-        this._endianness = options.endianness ?? 'little';
+        this._registerNames = options.registerNames
+        this._systemSize = options.systemSize
+        this._endianness = options.endianness ?? 'little'
     }
 
     getSystemSize(): RegisterSize {
-        return this._systemSize;
+        return this._systemSize
     }
 
     getEndianness(): 'little' | 'big' {
-        return this._endianness;
+        return this._endianness
     }
-
-
 
     getRegisterNames(): R[] {
-        return this._registerNames;
+        return this._registerNames
     }
 
-    abstract _initialize(undoSize: number): void;
+    abstract _initialize(undoSize: number): void
 
-    abstract _getCompiledCode(): { decorations: EmulatorDecoration[], code: string }
+    abstract _getCompiledCode(): { decorations: EmulatorDecoration[]; code: string }
 
     abstract _runTestcase(testcase: Testcase, haltLimit: number): MaybePromise<void>
 
-    abstract _dispose(): void;
+    abstract _dispose(): void
 
-    abstract _stringifyError(error: unknown): string;
+    abstract _stringifyError(error: unknown): string
 
-    abstract _compile(code: string): MaybePromise<CompileResult>;
+    abstract _compile(code: string): MaybePromise<CompileResult>
 
-    abstract _checkCode(code: string): MaybePromise<MonacoError[]>;
+    abstract _checkCode(code: string): MaybePromise<MonacoError[]>
 
-    abstract _undo(): void;
+    abstract _undo(): void
 
-    abstract _canUndo(): boolean;
+    abstract _canUndo(): boolean
 
     abstract _step(): Promise<{ terminated: boolean }>
 
-    abstract _getStatus(): EmulatorStatus;
+    abstract _getStatus(): EmulatorStatus
 
-    abstract _writeMemoryBytes(address: bigint, data: Uint8Array): void;
+    abstract _writeMemoryBytes(address: bigint, data: Uint8Array): void
 
-    abstract _readMemoryBytes(address: bigint, length: bigint): Uint8Array;
+    abstract _readMemoryBytes(address: bigint, length: bigint): Uint8Array
 
-    abstract _getNextInstruction(): Instruction | null;
+    abstract _getNextInstruction(): Instruction | null
 
     abstract _getUndoHistory(max: number): ExecutionStep[]
 
-    abstract _getPc(): bigint;
+    abstract _getPc(): bigint
 
-    abstract _getSp(): bigint;
+    abstract _getSp(): bigint
 
-    abstract _getFlags(): {name: string, value: number, prev?: number}[];
+    abstract _getFlags(): { name: string; value: number; prev?: number }[]
 
-    abstract _getCallStack(): StackFrame[];
+    abstract _getCallStack(): StackFrame[]
 
-    abstract _getInstructionAt(address: bigint): Instruction | null;
+    abstract _getInstructionAt(address: bigint): Instruction | null
 
     abstract _getRegisterValues(): bigint[]
 
@@ -107,9 +104,9 @@ export abstract class BaseEmulator<T, R extends string> {
 
     abstract _getRegisterValue(register: R, size?: RegisterSize): bigint
 
-    abstract _setRegisterValue(register: R, value: bigint, size?: RegisterSize): void;
+    abstract _setRegisterValue(register: R, value: bigint, size?: RegisterSize): void
 
     abstract _hasTerminated(): boolean
 
-    abstract _run(limit?: number, breakpoints?: number[]): Promise<EmulatorStatus>;
+    abstract _run(limit?: number, breakpoints?: number[]): Promise<EmulatorStatus>
 }

@@ -48,7 +48,7 @@ export const DEFAULT_CODING_AGENT_WORKFLOW_DEFINITIONS = {
             'example',
             'snippet',
             'from scratch',
-            'show me code',
+            'show me code'
         ],
         requiredTools: ['set_code', 'compile', 'run_to_completion', 'step'],
         verification:
@@ -108,7 +108,13 @@ export const DEFAULT_CODING_AGENT_WORKFLOW_DEFINITIONS = {
             'pc is wrong',
             'crashes while running'
         ],
-        requiredTools: ['compile', 'get_emulator_state', 'get_line_from_address', 'step', 'read_memory'],
+        requiredTools: [
+            'compile',
+            'get_emulator_state',
+            'get_line_from_address',
+            'step',
+            'read_memory'
+        ],
         verification:
             'Ground the diagnosis in currentInterrupt, latestSteps, callStack, pc, stdout, and mapped source lines.',
         description: `When execution errors, terminates unexpectedly, waits for I/O, or pauses on an interrupt.

@@ -10,7 +10,7 @@
     import stringSimilarity from 'string-similarity'
     import DocsSection from '$cmp/shared/layout/TogglableSection.svelte'
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
-    import FaArrowRight from 'svelte-icons/fa/FaArrowRight.svelte'
+    import FaArrowRight from '~icons/fa-solid/arrow-right'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     let wrapper: HTMLDivElement = $state()
     import AddressingModes from './M68KAddressingModes.svelte'

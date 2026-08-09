@@ -2,7 +2,7 @@
     import { toast, ToastType } from '$stores/toastStore'
     import { fly } from 'svelte/transition'
     import Icon from '$cmp/shared/layout/Icon.svelte'
-    import FaTimes from 'svelte-icons/fa/FaTimes.svelte'
+    import FaTimes from '~icons/fa-solid/times'
     interface Props {
         children?: import('svelte').Snippet
     }
@@ -137,7 +137,8 @@
     }
 
     @media print {
-        .toast-wrapper, .pill {
+        .toast-wrapper,
+        .pill {
             display: none;
         }
     }

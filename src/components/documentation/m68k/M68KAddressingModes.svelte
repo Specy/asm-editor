@@ -65,8 +65,8 @@
         <div class="sub-description">
             Represents a numerical value, it can be a number or a label. When the program is
             assembled, the labels will be converted to the address of the label. Immediate values
-            can be represented in many bases. (replace {`<num>`} with the actual number). Note, a string
-            will be represented as a list of bytes.
+            can be represented in many bases. (replace &lt;num&gt; with the actual number). Note, a
+            string will be represented as a list of bytes.
         </div>
         <div class="example">#1000, #$FF, #@14, #%10010, #'a', #'hey', #label</div>
         <div class="row gap-03 wrap">

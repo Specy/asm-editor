@@ -19,11 +19,16 @@
 
 <svelte:head>
     <title>Courses</title>
-    <meta name="description" content="Explore our courses to learn assembly programming from scratch." />
+    <meta
+        name="description"
+        content="Explore our courses to learn assembly programming from scratch."
+    />
     <meta property="og:title" content="Courses" />
-    <meta property="og:description" content="Explore our courses to learn assembly programming from scratch." />
+    <meta
+        property="og:description"
+        content="Explore our courses to learn assembly programming from scratch."
+    />
 </svelte:head>
-
 
 <Page hasNavbar cropped contentStyle="padding: 1rem;">
     <Header>Courses</Header>

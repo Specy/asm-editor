@@ -1,8 +1,8 @@
 <script lang="ts">
     import { run } from 'svelte/legacy'
 
-    import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
-    import FaAngleRight from 'svelte-icons/fa/FaAngleRight.svelte'
+    import FaAngleLeft from '~icons/fa-solid/angle-left'
+    import FaAngleRight from '~icons/fa-solid/angle-right'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     interface Props {
         errors?: string[]

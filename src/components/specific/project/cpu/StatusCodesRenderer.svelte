@@ -15,9 +15,7 @@
             <div style="opacity: 0.8;">
                 {el.name}
             </div>
-            <div 
-                style="text-align: center;"
-                class:edited={el.prev !== el.value}>
+            <div style="text-align: center;" class:edited={el.prev !== el.value}>
                 {el.value}
             </div>
         </div>

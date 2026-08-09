@@ -70,7 +70,7 @@ export function createRISCVCompletition(monaco: MonacoType, is64 = false) {
                 .filter((l) => l.endsWith(':'))
                 .map((l) => l.substring(0, l.length - 1))
             const args = parseArgs(data)
-            let suggestions = []
+            const suggestions = []
             const ins = getPossibleInstruction(args)
             const lastArg = args[args.length - 1]
             const someInstruction = RISCVRegisterNames.some((r) => r.startsWith(lastArg))
@@ -174,8 +174,10 @@ export function createRISCVCompletition(monaco: MonacoType, is64 = false) {
                     )
                     suggestions.push(...rest, ...onlyRegs)
                 } else {
-                    const prefixed = riscvInstructionsVariants.filter((i) =>
-                        i[0].name.startsWith(ins.instruction) && (is64 ? true : i.some(ins => !ins.isRv64Only))
+                    const prefixed = riscvInstructionsVariants.filter(
+                        (i) =>
+                            i[0].name.startsWith(ins.instruction) &&
+                            (is64 ? true : i.some((ins) => !ins.isRv64Only))
                     )
                     console.log(prefixed)
                     suggestions.push(
@@ -211,19 +213,20 @@ function formatInstructionHover(ins: RISCVInstruction[]) {
     const args = formatAggregatedArgs(ins)
     const groups = groupVariantsByDescription(ins)
     const header = `**${ins[0].name}** ${args}`
-    const body = groups.map((g) => {
-        const desc = g.description
-        const examples = g.examples.filter(Boolean)
-        if (examples.length > 0) {
-            return `${desc}\n\n\`${examples[0]}\``
-        }
-        return desc
-    }).join('\n\n---\n\n')
+    const body = groups
+        .map((g) => {
+            const desc = g.description
+            const examples = g.examples.filter(Boolean)
+            if (examples.length > 0) {
+                return `${desc}\n\n\`${examples[0]}\``
+            }
+            return desc
+        })
+        .join('\n\n---\n\n')
     return `${header}\n\n${body}`
 }
 
 export function createRISCVHoverProvider(monaco: MonacoType, is64 = false) {
-
     return {
         provideHover: (model, position) => {
             if (RISCV.is64Bit() === is64) {

@@ -37,11 +37,11 @@
     import { toast } from '$stores/toastStore'
     import { Prompt } from '$stores/promptStore.svelte'
     import { onMount, tick } from 'svelte'
-    import FaArrowLeft from 'svelte-icons/fa/FaArrowLeft.svelte'
-    import FaArrowRight from 'svelte-icons/fa/FaArrowRight.svelte'
+    import FaArrowLeft from '~icons/fa-solid/arrow-left'
+    import FaArrowRight from '~icons/fa-solid/arrow-right'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import FloatingLanguageDocumentation from '$cmp/specific/project/FloatingLanguageDocumentation.svelte'
-    import FaBook from 'svelte-icons/fa/FaBook.svelte'
+    import FaBook from '~icons/fa-solid/book'
     import ExamReviewAgentSidebar from '$cmp/specific/exam/ExamReviewAgentSidebar.svelte'
     import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
     import { preloadAllEmulators } from '$lib/languages/Emulator'
@@ -672,8 +672,8 @@
             <h1 class="loading">Loading exam...</h1>
             {#if examSubmission.hash}
                 <p class="student-code">{examSubmission.hash}</p>
-                {:else}
-                <p style="height: 28.8px"> </p>
+            {:else}
+                <p style="height: 28.8px"></p>
             {/if}
         </div>
     {/if}

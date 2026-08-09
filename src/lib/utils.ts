@@ -87,15 +87,12 @@ export function createShareLink(project: Project, mode: 'exam' | 'project' = 'pr
         return `${window.location.origin}/projects/exam?project=${code}`
     } else {
         return `${window.location.origin}/projects/share?project=${code}`
-
     }
 }
 
-
 export function getEnumKeys<T extends Record<string, string | number>>(enumObj: T): (keyof T)[] {
-    return Object.keys(enumObj).filter(key => isNaN(Number(key))) as (keyof T)[]
+    return Object.keys(enumObj).filter((key) => isNaN(Number(key))) as (keyof T)[]
 }
-
 
 function hexDigest(buffer) {
     let digest = ''
@@ -117,7 +114,6 @@ export async function makeHash(data: string) {
     const hash = await window.crypto.subtle.digest('SHA-256', password)
     return hexDigest(hash)
 }
-
 
 export async function encryptData(data: string, key: string): Promise<string> {
     const password = (await makeHash(key)).slice(0, 128 / 8)
@@ -145,11 +141,11 @@ export async function encryptData(data: string, key: string): Promise<string> {
 }
 
 export async function decryptData(encryptedData: string, key: string): Promise<string> {
-     const password = (await makeHash(key)).slice(0, 128 / 8)
+    const password = (await makeHash(key)).slice(0, 128 / 8)
     const encoder = new TextEncoder()
     const [ivBase64, encryptedBase64] = encryptedData.split(':')
-    const iv = Uint8Array.from(atob(ivBase64), c => c.charCodeAt(0))
-    const encryptedArray = Uint8Array.from(atob(encryptedBase64), c => c.charCodeAt(0))
+    const iv = Uint8Array.from(atob(ivBase64), (c) => c.charCodeAt(0))
+    const encryptedArray = Uint8Array.from(atob(encryptedBase64), (c) => c.charCodeAt(0))
     const keyBuffer = await window.crypto.subtle.importKey(
         'raw',
         encoder.encode(password),

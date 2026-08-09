@@ -12,11 +12,11 @@
     import Input from '$cmp/shared/input/Input.svelte'
     import { encryptData, makeHash } from '$lib/utils'
     import { toast } from '$stores/toastStore'
-    import FaDumbbell from 'svelte-icons/fa/FaDumbbell.svelte'
-    import FaPlus from 'svelte-icons/fa/FaPlus.svelte'
-    import FaTrash from 'svelte-icons/fa/FaTrash.svelte'
-    import FaArrowUp from 'svelte-icons/fa/FaArrowUp.svelte'
-    import FaArrowDown from 'svelte-icons/fa/FaArrowDown.svelte'
+    import FaDumbbell from '~icons/fa-solid/dumbbell'
+    import FaPlus from '~icons/fa-solid/plus'
+    import FaTrash from '~icons/fa-solid/trash'
+    import FaArrowUp from '~icons/fa-solid/arrow-up'
+    import FaArrowDown from '~icons/fa-solid/arrow-down'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import type { AvailableLanguages } from '$lib/Project.svelte'
     import {
@@ -197,10 +197,9 @@
 </svelte:head>
 
 <DefaultNavbar />
-<Page contentStyle={'padding-top: 3.5rem;'}>
+<Page contentStyle="padding-top: 3.5rem;">
     <div class="exam-builder">
         <section class="settings-card">
-
             <div class="settings-grid">
                 <Input type="text" title="Exam title" bind:value={settings.title} />
                 <Input
@@ -228,7 +227,13 @@
                 <MarkdownEditor bind:value={settings.instructions} />
             </div>
             <p>
-                When people open the exam, they will put their name and the exam access password, which will generate a random code that identifies them, which you can save. If they reload the page, or if they reset the website, a new code will be generated. Once ready to start, the page will go full screen and any attempt to leave the page will result with the editor being blocked. To unlock the page, the user will need to enter the unlock password. Letting you know that they might have either accidentally or intentionally left the exam.
+                When people open the exam, they will put their name and the exam access password,
+                which will generate a random code that identifies them, which you can save. If they
+                reload the page, or if they reset the website, a new code will be generated. Once
+                ready to start, the page will go full screen and any attempt to leave the page will
+                result with the editor being blocked. To unlock the page, the user will need to
+                enter the unlock password. Letting you know that they might have either accidentally
+                or intentionally left the exam.
             </p>
 
             <Button
@@ -456,11 +461,7 @@
                     }}
                     options={sectionTypeOptions}
                 />
-                <Button 
-                    onClick={addSection} 
-                    hasIcon 
-                    style="gap: 0.5rem; padding: 0.5rem;"
-                >
+                <Button onClick={addSection} hasIcon style="gap: 0.5rem; padding: 0.5rem;">
                     <Icon>
                         <FaPlus />
                     </Icon>
@@ -492,7 +493,7 @@
         padding: 0.9rem;
         gap: 0.5rem;
     }
-    .add-section-card{
+    .add-section-card {
         background-color: var(--tertiary);
         flex-direction: row;
         align-items: center;

@@ -62,7 +62,7 @@
     .content {
         width: 100%;
         display: flex;
-        flex:1;
+        flex: 1;
         max-width: calc(100vw - 16rem);
     }
 

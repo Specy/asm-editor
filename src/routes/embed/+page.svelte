@@ -20,7 +20,7 @@
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
     import { createShareLink } from '$lib/utils'
     import Button from '$cmp/shared/button/Button.svelte'
-    import FaExternal from 'svelte-icons/fa/FaExternalLinkAlt.svelte'
+    import FaExternal from '~icons/fa-solid/external-link-alt'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import { serializer } from '$lib/json'
 
@@ -152,7 +152,6 @@
     <meta property="og:description" content="Embed an assembly emulator in your website" />
 </svelte:head>
 
-
 {#if !inIframe}
     <DefaultNavbar />
 {/if}
@@ -166,7 +165,7 @@
         </Column>
     {/if}
 
-    <Column style={'padding: 0.5rem; flex:1'}>
+    <Column style="padding: 0.5rem; flex:1">
         {#key settings.language}
             <EmulatorLoader
                 bind:code

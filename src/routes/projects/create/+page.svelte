@@ -10,7 +10,7 @@
     import Form from '$cmp/shared/layout/Form.svelte'
     import { toast } from '$stores/toastStore'
     import { type AvailableLanguages, makeProject } from '$lib/Project.svelte'
-    import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
+    import FaAngleLeft from '~icons/fa-solid/angle-left'
     import { ProjectStore } from '$stores/projectsStore.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import Page from '$cmp/shared/layout/Page.svelte'
@@ -80,8 +80,8 @@
             <p
                 style="margin-top: 2rem; background: rgba(var(--RGB-red), 0.1); padding: 1rem; border-radius: 0.5rem;"
             >
-                X86 is experimental. We are deciding between FASM and NASM syntax, it
-                might have bugs. Please report any issues you find.
+                X86 is experimental. We are deciding between FASM and NASM syntax, it might have
+                bugs. Please report any issues you find.
             </p>
         {/if}
     </div>

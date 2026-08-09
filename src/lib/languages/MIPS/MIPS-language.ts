@@ -64,7 +64,7 @@ export function createMIPSCompletition(monaco: MonacoType) {
                 .filter((l) => l.endsWith(':'))
                 .map((l) => l.substring(0, l.length - 1))
             const args = parseArgs(data)
-            let suggestions = []
+            const suggestions = []
             const ins = getPossibleInstruction(args)
             const lastArg = args[args.length - 1]
             if (lastArg?.startsWith('$') && !CompletitionMap[lastArg]) {
@@ -203,14 +203,16 @@ function formatInstructionHover(ins: MIPSInstruction[]) {
     const args = formatAggregatedArgs(ins)
     const groups = groupVariantsByDescription(ins)
     const header = `**${ins[0].name}** ${args}`
-    const body = groups.map((g) => {
-        const desc = g.description
-        const examples = g.examples.filter(Boolean)
-        if (examples.length > 0) {
-            return `${desc}\n\n\`${examples[0]}\``
-        }
-        return desc
-    }).join('\n\n---\n\n')
+    const body = groups
+        .map((g) => {
+            const desc = g.description
+            const examples = g.examples.filter(Boolean)
+            if (examples.length > 0) {
+                return `${desc}\n\n\`${examples[0]}\``
+            }
+            return desc
+        })
+        .join('\n\n---\n\n')
     return `${header}\n\n${body}`
 }
 

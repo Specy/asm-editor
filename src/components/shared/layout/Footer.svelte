@@ -1,11 +1,11 @@
 <script lang="ts">
-    import FaGithub from 'svelte-icons/fa/FaGithub.svelte'
-    import FaRegCopyright from 'svelte-icons/fa/FaRegCopyright.svelte'
+    import FaGithub from '~icons/fa-brands/github'
+    import FaRegCopyright from '~icons/fa-regular/copyright'
     import Icon from './Icon.svelte'
     import { toast } from '$stores/toastStore'
     import { page } from '$app/state'
     import AnimatedRgbLine from '$cmp/shared/misc/AnimatedRgbLine.svelte'
-    import FaDonate from 'svelte-icons/fa/FaHeart.svelte'
+    import FaDonate from '~icons/fa-solid/heart'
     interface Props {
         pages?: RegExp[]
     }

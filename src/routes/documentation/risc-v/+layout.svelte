@@ -2,11 +2,11 @@
     import Navbar from '$cmp/shared/layout/Navbar.svelte'
     import TogglableSection from '$cmp/shared/layout/TogglableSection.svelte'
     import { page } from '$app/stores'
-    import FaBars from 'svelte-icons/fa/FaBars.svelte'
+    import FaBars from '~icons/fa-solid/bars'
 
     import FuzzySearch from 'fuzzy-search'
     import Icon from '$cmp/shared/layout/Icon.svelte'
-    import FaTimes from 'svelte-icons/fa/FaTimes.svelte'
+    import FaTimes from '~icons/fa-solid/times'
     import Row from '$cmp/shared/layout/Row.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
     import MenuLink from '../m68k/instruction/MenuLink.svelte'
@@ -15,7 +15,10 @@
     import { DEFAULT_THEME, ThemeStore, type ThemeKeys } from '$stores/themeStore.svelte'
     import { onDestroy, onMount, untrack } from 'svelte'
     import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
-    import { riscvInstructionNames, riscvInstructionMap} from '$lib/languages/RISC-V/RISC-V-documentation'
+    import {
+        riscvInstructionNames,
+        riscvInstructionMap
+    } from '$lib/languages/RISC-V/RISC-V-documentation'
     import Sidebar from '$cmp/shared/layout/Sidebar.svelte'
     interface Props {
         children?: import('svelte').Snippet
@@ -32,14 +35,16 @@
     let { children }: Props = $props()
 
     let instructionNames = Array.from(riscvInstructionNames).sort((a, b) => a.localeCompare(b))
-    let instructions = instructionNames.map(name => riscvInstructionMap.get(name)[0])
+    let instructions = instructionNames.map((name) => riscvInstructionMap.get(name)[0])
     let menuOpen = $state(false)
     let search = $state('')
     const searcher = new FuzzySearch(instructions, ['name', 'description'], {
         sort: true
     })
     let currentInstructionName = $derived($page.params.instructionName ?? '')
-    let filteredInstructions = $derived([...new Set(searcher.search(search.toLowerCase()).map(i => i.name))])
+    let filteredInstructions = $derived([
+        ...new Set(searcher.search(search.toLowerCase()).map((i) => i.name))
+    ])
 </script>
 
 <Navbar style="border-bottom-left-radius: 0;">

@@ -26,7 +26,7 @@
         <NavigationLinkButton href="/documentation/mips/syscall">
             <div>Syscalls</div>
         </NavigationLinkButton>
-	<NavigationLinkButton href="/documentation/mips/registers">
+        <NavigationLinkButton href="/documentation/mips/registers">
             <div>Registers</div>
         </NavigationLinkButton>
         <NavigationLinkButton href="/documentation/mips/all">

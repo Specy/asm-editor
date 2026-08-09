@@ -78,12 +78,11 @@ export type TestcaseValidationError =
           got: string
       }
 
-
 export type Exam = {
     track: string
-    passwordHash: string,
-    accessPasswordHash?: string,
-    timeLimit: number,
+    passwordHash: string
+    accessPasswordHash?: string
+    timeLimit: number
     submission?: {
         name: string
         submissionTimestamp: number
@@ -91,7 +90,6 @@ export type Exam = {
         startedAt: number
     }
 }
-
 
 export type TestcaseResult = {
     errors: TestcaseValidationError[]
@@ -165,7 +163,7 @@ export function makeProjectFromExternal(codeAndMeta: string) {
 
 export function makeProject(data?: Partial<ProjectData>) {
     const lang = data?.language ?? ('M68K' as AvailableLanguages)
-    let state = $state({
+    const state = $state({
         id: data?.id ?? '',
         code: data?.code ?? BASE_CODE[lang],
         createdAt: data?.createdAt ?? new Date().getTime(),
@@ -174,7 +172,7 @@ export function makeProject(data?: Partial<ProjectData>) {
         language: lang,
         description: data?.description ?? '',
         testcases: (data?.testcases ?? []) as Testcase[],
-        exam: data?.exam,
+        exam: data?.exam
     })
 
     function toObject(): ProjectData {

@@ -181,15 +181,23 @@ export function createM68kHoverProvider(monaco: MonacoType) {
                     ? fromSizeToString(documentation.defaultSize)
                     : ''
                 if (!documentation) return { range, contents: [] }
-                const flagSymbols = [M68KFlag.Extend, M68KFlag.Negative, M68KFlag.Zero, M68KFlag.Overflow, M68KFlag.Carry]
-                const flagHeaders = flagSymbols.map(f => f).join(' | ')
-                const flagValues = flagSymbols.map(f => {
-                    const kind = documentation.affectsFlags[f]
-                    if (kind === AffectedFlagKind.Edits) return '\u2731'
-                    if (kind === AffectedFlagKind.ToZero) return '0'
-                    if (kind === AffectedFlagKind.ToOne) return '1'
-                    return '\u2014'
-                }).join(' | ')
+                const flagSymbols = [
+                    M68KFlag.Extend,
+                    M68KFlag.Negative,
+                    M68KFlag.Zero,
+                    M68KFlag.Overflow,
+                    M68KFlag.Carry
+                ]
+                const flagHeaders = flagSymbols.map((f) => f).join(' | ')
+                const flagValues = flagSymbols
+                    .map((f) => {
+                        const kind = documentation.affectsFlags[f]
+                        if (kind === AffectedFlagKind.Edits) return '\u2731'
+                        if (kind === AffectedFlagKind.ToZero) return '0'
+                        if (kind === AffectedFlagKind.ToOne) return '1'
+                        return '\u2014'
+                    })
+                    .join(' | ')
                 const flagsTable = `| ${flagHeaders} |\n|${flagSymbols.map(() => ' :---: ').join('|')}|\n| ${flagValues} |`
                 const contents = [
                     {
@@ -200,7 +208,7 @@ export function createM68kHoverProvider(monaco: MonacoType) {
                     },
                     {
                         value: `**Sizes:** ${documentation.sizes?.length ? fromSizesToString(documentation.sizes) : 'Not sized'} ${defaultSize ? `\n\n**Default:**  ${defaultSize}` : ''}`
-                    },
+                    }
                 ]
                 if (documentation.description) {
                     contents.push({ value: documentation.description })

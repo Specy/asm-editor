@@ -3,7 +3,7 @@
 
     const bubble = createBubbler()
     import Icon from '$cmp/shared/layout/Icon.svelte'
-    import FaCircle from 'svelte-icons/fa/FaCircle.svelte'
+    import FaCircle from '~icons/fa-solid/circle'
     interface Props {
         href: string
         title: string

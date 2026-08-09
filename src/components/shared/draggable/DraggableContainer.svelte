@@ -1,10 +1,10 @@
 <script lang="ts">
     import Draggable from '$cmp/shared/draggable/Draggable.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
-    import FaGripHorizontal from 'svelte-icons/fa/FaGripHorizontal.svelte'
+    import FaGripHorizontal from '~icons/fa-solid/grip-horizontal'
     import Button from '$cmp/shared/button/Button.svelte'
-    import FaEye from 'svelte-icons/fa/FaEye.svelte'
-    import FaEyeSlash from 'svelte-icons/fa/FaEyeSlash.svelte'
+    import FaEye from '~icons/fa-solid/eye'
+    import FaEyeSlash from '~icons/fa-solid/eye-slash'
     import { fly } from 'svelte/transition'
     interface Props {
         hidden?: boolean
@@ -43,9 +43,9 @@
 
 <Draggable {hiddenOnMobile} {left} {top}>
     {#snippet header()}
-        <button 
-            class="tab-header row" 
-            class:hidden 
+        <button
+            class="tab-header row"
+            class:hidden
             onpointerdown={onHeaderPointerDown}
             onclick={onHeaderClick}
         >
@@ -58,7 +58,10 @@
             <Button
                 style="padding: 0.2rem 0.3rem; height: 1.4rem; border-radius: 0.3rem"
                 cssVar="secondary"
-                onClick={(e) => { e.stopPropagation(); hidden = !hidden }}
+                onClick={(e) => {
+                    e.stopPropagation()
+                    hidden = !hidden
+                }}
             >
                 <Icon size={1.1}>
                     {#if !hidden}

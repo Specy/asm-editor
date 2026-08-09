@@ -1,16 +1,16 @@
 <script lang="ts">
     import { createEventDispatcher, type Snippet } from 'svelte'
     import Button from '$cmp/shared/button/Button.svelte'
-    import FaPlay from 'svelte-icons/fa/FaPlay.svelte'
-    import FaWrench from 'svelte-icons/fa/FaWrench.svelte'
+    import FaPlay from '~icons/fa-solid/play'
+    import FaWrench from '~icons/fa-solid/wrench'
     import Icon from '$cmp/shared/layout/Icon.svelte'
-    import FaStepForward from 'svelte-icons/fa/FaStepForward.svelte'
-    import FaRegClock from 'svelte-icons/fa/FaRegClock.svelte'
-    import FaStop from 'svelte-icons/fa/FaStop.svelte'
-    import FaUndo from 'svelte-icons/fa/FaUndo.svelte'
-    import FaFlask from 'svelte-icons/fa/FaFlask.svelte'
-    import FaListOl from 'svelte-icons/fa/FaListOl.svelte'
-    import FaExclamationTriangle from 'svelte-icons/fa/FaExclamationTriangle.svelte'
+    import FaStepForward from '~icons/fa-solid/step-forward'
+    import FaRegClock from '~icons/fa-regular/clock'
+    import FaStop from '~icons/fa-solid/stop'
+    import FaUndo from '~icons/fa-solid/undo'
+    import FaFlask from '~icons/fa-solid/flask'
+    import FaListOl from '~icons/fa-solid/list-ol'
+    import FaExclamationTriangle from '~icons/fa-solid/exclamation-triangle'
 
     const dispatch = createEventDispatcher()
 

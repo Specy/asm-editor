@@ -6,13 +6,13 @@
     import Page from '$cmp/shared/layout/Page.svelte'
     import Title from '$cmp/shared/layout/Header.svelte'
     import { ThemeStore } from '$stores/themeStore.svelte'
-    import FaAngleLeft from 'svelte-icons/fa/FaAngleLeft.svelte'
+    import FaAngleLeft from '~icons/fa-solid/angle-left'
     import { scale } from 'svelte/transition'
     import Column from '$cmp/shared/layout/Column.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
-    import FaPlus from 'svelte-icons/fa/FaPlus.svelte'
+    import FaPlus from '~icons/fa-solid/plus'
     import { Prompt } from '$stores/promptStore.svelte'
-    import FaTrashAlt from 'svelte-icons/fa/FaTrashAlt.svelte'
+    import FaTrashAlt from '~icons/fa-solid/trash-alt'
 
     let theme = ThemeStore.themeList
     let previousPage: string = $state('/projects')
@@ -67,7 +67,7 @@
                     {/each}
                 </Row>
 
-                <Row justify="between" style={'width: 100%'}>
+                <Row justify="between" style="width: 100%">
                     <div style="text-align: center; padding: 1rem;">
                         {t.name}
                     </div>

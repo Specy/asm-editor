@@ -2,21 +2,20 @@
     import Navbar from '$cmp/shared/layout/Navbar.svelte'
     import Page from '$cmp/shared/layout/Page.svelte'
     import { versions } from './versions'
-    import FaCircle from 'svelte-icons/fa/FaCircle.svelte'
+    import FaCircle from '~icons/fa-solid/circle'
     import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
 </script>
 
-
 <svelte:head>
     <meta
-      name="description"
-      content="Write, learn and run M68K, MIPS, RISC-V, X86 assembly code in your browser. View registers and memory, step and undo the execution."
+        name="description"
+        content="Write, learn and run M68K, MIPS, RISC-V, X86 assembly code in your browser. View registers and memory, step and undo the execution."
     />
     <meta
-      property="og:description"
-      content="Write, learn and run M68K, MIPS, RISC-V, X86 assembly code in your browser. View registers and memory, step and undo the execution."
+        property="og:description"
+        content="Write, learn and run M68K, MIPS, RISC-V, X86 assembly code in your browser. View registers and memory, step and undo the execution."
     />
     <meta property="og:title" content="Asm Editor" />
 </svelte:head>

@@ -125,7 +125,7 @@
 
     @media print {
         .prompt-wrapper {
-            display: none;  
+            display: none;
         }
     }
 </style>

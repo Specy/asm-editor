@@ -2,7 +2,7 @@
     import Page from '$cmp/shared/layout/Page.svelte'
     import { mipsInstructionNames } from '$lib/languages/MIPS/MIPS-documentation'
     import { capitalize } from '$lib/utils'
-    import FaArrowRight from 'svelte-icons/fa/FaArrowRight.svelte'
+    import FaArrowRight from '~icons/fa-solid/arrow-right'
 
     type Group = {
         letter: string

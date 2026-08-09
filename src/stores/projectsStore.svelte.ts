@@ -7,7 +7,7 @@ export const SHARE_ID = '__share__'
 function createProjectStore() {
     let inited = $state(false)
     let projects = $state<Project[]>([])
-    let writableFiles = new Map<string, FileSystemFileHandle>()
+    const writableFiles = new Map<string, FileSystemFileHandle>()
     if (browser) {
         load()
     }

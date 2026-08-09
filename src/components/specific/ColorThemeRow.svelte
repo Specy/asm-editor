@@ -1,7 +1,7 @@
 <script lang="ts">
     import { ThemeStore, type ThemeKeys, type ThemeProp } from '$stores/themeStore.svelte'
     import { TinyColor } from '@ctrl/tinycolor'
-    import FaUndo from 'svelte-icons/fa/FaUndo.svelte'
+    import FaUndo from '~icons/fa-solid/undo'
     import Button from '$cmp/shared/button/Button.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import { browser } from '$app/environment'

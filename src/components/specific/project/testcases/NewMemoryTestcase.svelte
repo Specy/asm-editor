@@ -7,7 +7,7 @@
     import { createEventDispatcher } from 'svelte'
     import Card from '$cmp/shared/layout/Card.svelte'
     import Button from '$cmp/shared/button/Button.svelte'
-    import FaPlus from 'svelte-icons/fa/FaPlus.svelte'
+    import FaPlus from '~icons/fa-solid/plus'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
     import type { RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
@@ -70,11 +70,11 @@
         </select>
     </Row>
     <Column padding="0.5rem 1rem">
-        <MemoryTestcaseValue 
-        {systemSize} 
-        bind:value={memoryValue} 
-        canRemove={false} 
-        type={'expected'}
+        <MemoryTestcaseValue
+            {systemSize}
+            bind:value={memoryValue}
+            canRemove={false}
+            type="expected"
         />
     </Column>
     <Row justify="end" padding="0.5rem">

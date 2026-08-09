@@ -1,7 +1,9 @@
 import { browser } from '$app/environment'
 import { generateTheme } from '$lib/monaco/editorTheme'
 import type monaco from 'monaco-editor'
-import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
+
+import editorWorker from 'monaco-editor/editor/editor.worker?worker'
+
 import type { AvailableLanguages, AvailableProgrammingLanguages } from '$lib/Project.svelte'
 
 export type MonacoType = typeof monaco
@@ -15,8 +17,7 @@ class MonacoLoader {
         if (browser) this.load()
     }
 
-    dispose = () => {
-    }
+    dispose = () => {}
 
     async load(): Promise<MonacoType> {
         if (this.loading) return this.loading
@@ -26,7 +27,7 @@ class MonacoLoader {
         this.monaco = monaco
         // @ts-ignore add worker
         self.MonacoEnvironment = {
-            getWorker: function(_moduleId: any, label: string) {
+            getWorker: function (_moduleId: any, label: string) {
                 return new editorWorker()
             }
         }
@@ -39,7 +40,7 @@ class MonacoLoader {
         if (!this.monaco) await this.load()
         const { monaco } = this
         if (!monaco) return
-        if(lang === 'c') return 
+        if (lang === 'c') return
         if (this.registeredLanguages.includes(lang as AvailableLanguages)) return
         this.registeredLanguages.push(lang as AvailableLanguages)
         monaco.languages.register({ id: lang.toLowerCase() })
@@ -156,7 +157,7 @@ class MonacoLoader {
             this.registerLanguage('MIPS'),
             this.registerLanguage('RISC-V'),
             this.registerLanguage('RISC-V-64'),
-            this.registerLanguage('X86'),
+            this.registerLanguage('X86')
         ])
     }
 

@@ -19,6 +19,14 @@
     outline: none;
 }
 
+/*TODO remove this in the future, this is to match behaviour from svelte icons*/
+.unplugin-icon {
+    width: 100%;
+    height: auto;
+    max-height: 100%;
+    fill: currentColor;
+}
+
 .wrap {
     flex-wrap: wrap;
 }
@@ -45,7 +53,8 @@ html {
 }
 
 @media print {
-    body, html {
+    body,
+    html {
         height: auto;
         overflow: visible;
     }
@@ -70,7 +79,8 @@ input:disabled {
     cursor: not-allowed !important;
 }
 
-input[type="checkbox"], input[type="radio"] {
+input[type='checkbox'],
+input[type='radio'] {
     accent-color: var(--accent);
 }
 

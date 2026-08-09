@@ -1,12 +1,12 @@
 <script lang="ts">
     import Navbar from '$cmp/shared/layout/Navbar.svelte'
     import TogglableSection from '$cmp/shared/layout/TogglableSection.svelte'
-    import FaBars from 'svelte-icons/fa/FaBars.svelte'
-    import FaDonate from 'svelte-icons/fa/FaHeart.svelte'
-    import FaStar from 'svelte-icons/fa/FaStar.svelte'
+    import FaBars from '~icons/fa-solid/bars'
+    import FaDonate from '~icons/fa-solid/heart'
+    import FaStar from '~icons/fa-solid/star'
 
     import Icon from '$cmp/shared/layout/Icon.svelte'
-    import FaTimes from 'svelte-icons/fa/FaTimes.svelte'
+    import FaTimes from '~icons/fa-solid/times'
     import Row from '$cmp/shared/layout/Row.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
     import Sidebar from '$cmp/shared/layout/Sidebar.svelte'

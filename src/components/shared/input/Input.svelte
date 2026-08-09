@@ -2,9 +2,9 @@
     import { run, createBubbler } from 'svelte/legacy'
 
     const bubble = createBubbler()
-    import FaExclamationCircle from 'svelte-icons/fa/FaExclamationCircle.svelte'
-    import FaCheckCircle from 'svelte-icons/fa/FaCheckCircle.svelte'
-    import FaRegCircle from 'svelte-icons/fa/FaRegCircle.svelte'
+    import FaExclamationCircle from '~icons/fa-solid/exclamation-circle'
+    import FaCheckCircle from '~icons/fa-solid/check-circle'
+    import FaRegCircle from '~icons/fa-regular/circle'
     import { onMount } from 'svelte'
     import type { FullAutoFill } from 'svelte/elements'
     type statusType = '' | 'correct' | 'wrong'

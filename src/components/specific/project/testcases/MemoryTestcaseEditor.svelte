@@ -25,7 +25,7 @@
                         bind:value={memoryValues[i]}
                         canRemove={editable}
                         editable={false}
-                        type={type} 
+                        {type}
                         on:remove={() =>
                             (memoryValues = memoryValues.filter((mv) => mv !== memoryValue))}
                     />

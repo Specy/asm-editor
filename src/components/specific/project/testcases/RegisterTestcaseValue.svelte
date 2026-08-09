@@ -1,6 +1,6 @@
 <script lang="ts">
-    import FaTimes from 'svelte-icons/fa/FaTimes.svelte'
-    import FaEquals from 'svelte-icons/fa/FaEquals.svelte'
+    import FaTimes from '~icons/fa-solid/times'
+    import FaEquals from '~icons/fa-solid/equals'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import { createEventDispatcher } from 'svelte'
 

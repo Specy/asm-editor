@@ -70,13 +70,14 @@
     </div>
     {#if component}
         {@const SvelteComponent_1 = component}
-        <SvelteComponent_1 
-            bind:code instructionKey={ins.name} 
-            description={ins.description} 
-            arguments={[formatAggregatedArgs(data.props.instruction)]} 
-            language="RISC-V" 
+        <SvelteComponent_1
+            bind:code
+            instructionKey={ins.name}
+            description={ins.description}
+            arguments={[formatAggregatedArgs(data.props.instruction)]}
+            language="RISC-V"
             showPc={true}
-            />
+        />
     {:else}
         <div class="loading">Loading...</div>
     {/if}

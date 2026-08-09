@@ -1,0 +1,6 @@
+build/
+.svelte-kit/
+package/
+package-lock.json
+static/native-apps/
+examples/

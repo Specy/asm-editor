@@ -1,7 +1,6 @@
 import { mdsvex } from 'mdsvex'
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
 import adapter from '@sveltejs/adapter-static'
-import { resolve } from 'path'
 
 const config = {
     preprocess: [
@@ -13,7 +12,18 @@ const config = {
             }
         })
     ],
-    kit: { adapter: adapter({ fallback: '404.html' }) },
+    kit: {
+        adapter: adapter({ fallback: '404.html' }),
+        alias: {
+            $cmp: 'src/components',
+            $src: 'src',
+            $stores: 'src/stores',
+            $utils: 'src/utils',
+            $content: 'src/content',
+            $overrides: 'src/components/content/custom',
+            $embed: 'src/components/content/Embed.svelte'
+        }
+    },
     extensions: ['.svelte', '.svx']
 }
 

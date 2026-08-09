@@ -1,5 +1,5 @@
 <script lang="ts">
-    import FaChevronDown from 'svelte-icons/fa/FaChevronDown.svelte'
+    import FaChevronDown from '~icons/fa-solid/chevron-down'
     import Icon from '$cmp/shared/layout/Icon.svelte'
 
     interface Props {

@@ -1,5 +1,5 @@
 <script lang="ts">
-    import FaExclamationTriangle from 'svelte-icons/fa/FaExclamationTriangle.svelte'
+    import FaExclamationTriangle from '~icons/fa-solid/exclamation-triangle'
     import { fly } from 'svelte/transition'
     import Console from '$cmp/shared/Console.svelte'
     import type { MonacoError } from '$lib/languages/commonLanguageFeatures.svelte'

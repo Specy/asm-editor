@@ -2,14 +2,17 @@
     import Navbar from '$cmp/shared/layout/Navbar.svelte'
     import TogglableSection from '$cmp/shared/layout/TogglableSection.svelte'
     import { page } from '$app/stores'
-    import FaBars from 'svelte-icons/fa/FaBars.svelte'
+    import FaBars from '~icons/fa-solid/bars'
 
     import FuzzySearch from 'fuzzy-search'
     import Icon from '$cmp/shared/layout/Icon.svelte'
-    import FaTimes from 'svelte-icons/fa/FaTimes.svelte'
+    import FaTimes from '~icons/fa-solid/times'
     import Row from '$cmp/shared/layout/Row.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
-    import { mipsInstructionNames, mipsInstructionMap } from '$lib/languages/MIPS/MIPS-documentation'
+    import {
+        mipsInstructionNames,
+        mipsInstructionMap
+    } from '$lib/languages/MIPS/MIPS-documentation'
     import MenuLink from '../m68k/instruction/MenuLink.svelte'
     import InstructionsMenu from '../m68k/InstructionsMenu.svelte'
     import { LANGUAGE_THEMES } from '$lib/Config'
@@ -32,14 +35,16 @@
     let { children }: Props = $props()
 
     let instructionNames = Array.from(mipsInstructionNames).sort((a, b) => a.localeCompare(b))
-    let instructions = instructionNames.map(name => mipsInstructionMap.get(name)[0])
+    let instructions = instructionNames.map((name) => mipsInstructionMap.get(name)[0])
     let menuOpen = $state(false)
     let search = $state('')
     const searcher = new FuzzySearch(instructions, ['name', 'description'], {
         sort: true
     })
     let currentInstructionName = $derived($page.params.instructionName ?? '')
-    let filteredInstructions = $derived([...new Set(searcher.search(search.toLowerCase()).map(i => i.name))])
+    let filteredInstructions = $derived([
+        ...new Set(searcher.search(search.toLowerCase()).map((i) => i.name))
+    ])
 </script>
 
 <Navbar style="border-bottom-left-radius: 0;">
@@ -83,12 +88,11 @@
             onClick={() => (menuOpen = false)}
         />
 
-	<MenuLink
-    href="/documentation/mips/registers"
-    title="Registers"
-    onClick={() => (menuOpen = false)}
-/>
-
+        <MenuLink
+            href="/documentation/mips/registers"
+            title="Registers"
+            onClick={() => (menuOpen = false)}
+        />
     </Column>
     <TogglableSection
         open={true}
@@ -96,9 +100,7 @@
         style="padding: 0 0.5rem;"
     >
         {#snippet title()}
-            <h2 style="font-size: 1rem; font-weight: normal; margin-left: -0.1rem">
-                Instructions
-            </h2>
+            <h2 style="font-size: 1rem; font-weight: normal; margin-left: -0.1rem">Instructions</h2>
         {/snippet}
         <input bind:value={search} placeholder="Search" class="instruction-search" />
         <InstructionsMenu

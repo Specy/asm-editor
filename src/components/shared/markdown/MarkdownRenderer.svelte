@@ -88,7 +88,7 @@
                             if (actualLanguage === 'RISCV') {
                                 actualLanguage = 'RISC-V'
                             }
-                            if(actualLanguage === 'riscv64'){
+                            if (actualLanguage === 'riscv64') {
                                 actualLanguage = 'RISC-V-64'
                             }
 
@@ -214,50 +214,60 @@
             }
         ]
     }
-    const cartaNormal = $derived(new Carta({
-        sanitizer: (html) => {
-            return sanitizeMarkdownHtml(html)
-        },
-        extensions: [ext, customPlaygroundPlugin, code({ theme, langs: ['mips', 'riscv', 'asm'] })],
-        rehypeOptions: {
-            allowDangerousHtml: true
-        },
-        shikiOptions: {
-            themes: [theme]
-        }
-    }))
-    const cartaWithExternalLins = $derived(new Carta({
-        sanitizer: (html) => {
-            return sanitizeMarkdownHtml(html)
-        },
-        extensions: [
-            extWithExternalLins,
-            customPlaygroundPlugin,
-            code({ theme, langs: ['mips', 'riscv', 'asm'] })
-        ],
-        rehypeOptions: {
-            allowDangerousHtml: true
-        },
-        shikiOptions: {
-            themes: [theme]
-        }
-    }))
-    const cartaWithoutLinks = $derived(new Carta({
-        sanitizer: (html) => {
-            return sanitizeMarkdownHtml(html, true)
-        },
-        extensions: [
-            extWithoutLinks,
-            customPlaygroundPlugin,
-            code({ theme, langs: ['mips', 'riscv', 'asm', 'c'] })
-        ],
-        rehypeOptions: {
-            allowDangerousHtml: true
-        },        
-        shikiOptions: {
-            themes: [theme]
-        }
-    }))
+    const cartaNormal = $derived(
+        new Carta({
+            sanitizer: (html) => {
+                return sanitizeMarkdownHtml(html)
+            },
+            extensions: [
+                ext,
+                customPlaygroundPlugin,
+                code({ theme, langs: ['mips', 'riscv', 'asm'] })
+            ],
+            rehypeOptions: {
+                allowDangerousHtml: true
+            },
+            shikiOptions: {
+                themes: [theme]
+            }
+        })
+    )
+    const cartaWithExternalLins = $derived(
+        new Carta({
+            sanitizer: (html) => {
+                return sanitizeMarkdownHtml(html)
+            },
+            extensions: [
+                extWithExternalLins,
+                customPlaygroundPlugin,
+                code({ theme, langs: ['mips', 'riscv', 'asm'] })
+            ],
+            rehypeOptions: {
+                allowDangerousHtml: true
+            },
+            shikiOptions: {
+                themes: [theme]
+            }
+        })
+    )
+    const cartaWithoutLinks = $derived(
+        new Carta({
+            sanitizer: (html) => {
+                return sanitizeMarkdownHtml(html, true)
+            },
+            extensions: [
+                extWithoutLinks,
+                customPlaygroundPlugin,
+                code({ theme, langs: ['mips', 'riscv', 'asm', 'c'] })
+            ],
+            rehypeOptions: {
+                allowDangerousHtml: true
+            },
+            shikiOptions: {
+                themes: [theme]
+            }
+        })
+    )
 </script>
 
 <script lang="ts">
@@ -331,7 +341,7 @@
         overflow-x: auto;
         display: block;
         margin: 0.5rem auto;
-        font-family: "Fira Code", monospace;
+        font-family: 'Fira Code', monospace;
         border-radius: 0.5rem;
         border: solid 0.1rem var(--tertiary);
         width: fit-content;

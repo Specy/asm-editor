@@ -1,4 +1,4 @@
-We saw in previous lectures that instructions are executed sequentially, one after the other. 
+We saw in previous lectures that instructions are executed sequentially, one after the other.
 As a reminder, to determine which instruction to execute next, the CPU looks at the instruction in memory which that is located at the address written in the **Program couter** (PC).
 Once an instruction is executed, the PC is incremented to point to the next instruction in memory.
 
@@ -22,6 +22,7 @@ Let's also remember what labels are. Labels allow you to mark a specific point i
 and when you use a `goto` statement, you need to specify the label you want to jump to, which will change the flow of the program to that specific point in code.
 
 An `if` statement that has logic inside might look like this:
+
 ```c
 if(condition){
     /* doSomethingIfTrue */
@@ -30,16 +31,19 @@ if(condition){
 }
 /* restOfCode */
 ```
+
 Let's now flatten it out using goto statements:
+
 ```c
     if(condition) goto true_branch;
     /* doSomethingIfFalse */
     goto end;
 true_branch:
-    /* doSomethingIfTrue */   
+    /* doSomethingIfTrue */
 end:
     /* restOfCode */
 ```
+
 Notice how we had to flip the order of the two branches (first the false branch and then the true branch).
 
 If the condition is true, then the goto statement will cause the program to jump to the `true_branch` label.
@@ -51,6 +55,7 @@ Finally, we have the `end:` label which is where the program will continue execu
 To make it easier we can flip the condition, this is easier to understand, we can think of it like "if the condition is not true, then go to the false branch, else just execute the true branch".
 
 We can rewrite the code like this:
+
 ```c
     if(!condition) goto false_branch;
     /* doSomethingIfTrue */
@@ -64,8 +69,9 @@ end:
 ## Branching in Assembly
 
 Usually assembly languages use two different methods to implement branching, depending on the architecture and the instruction set:
+
 - **Compare then Jump**: In this method there is first an instruction that compares two values, and saves the result of the test internally in the CPU (usually in a flag register).
-Afterwards there is a conditional jump instruction, that checks the flags and decides whether to jump to an address or not. 
+  Afterwards there is a conditional jump instruction, that checks the flags and decides whether to jump to an address or not.
 - **Test and Jump**: This method uses a single instruction that tests a value and jumps to an address in the same instruction.
 
 Let's now explore those two methods by translating this C code into assembly:
@@ -80,6 +86,7 @@ if(x > 10){
 ```
 
 Let's first convert it to the flat `goto` version:
+
 ```c
     int x = 50;
     if(x <= 10) goto false_branch;
@@ -91,7 +98,9 @@ end:
 ```
 
 ## Compare then Jump
+
 Let's try to use M68K assembly to implement the above code using the `compare then jump` method.
+
 ```m68k|playground
     move #50, d0    ;x = 50
     cmpi #10, d0     ; compare x with 0
@@ -107,11 +116,12 @@ end:
 Try to change the `move #50, d0` to `move #0, d0` and see how the code is executed differently.
 
 ## Test and Jump
+
 Let's now try to implement the same code using the `test and jump` method, using the RISC-V assembly language:
 
 ```riscv|playground
     li t0, 50        # x = 50
-    li t4, 10        # t4 = 10 
+    li t4, 10        # t4 = 10
     ble t0, t4, false_branch # if x <= 10, jump to false_branch
     # here is where the false branch starts
     li t0, 100       # x = 100
@@ -120,4 +130,5 @@ false_branch:
     li t0, 200       # x = 200
 end:
 ```
+
 Try to change the `li t0, 50` to `li t0, 0` and see how the code is executed differently.

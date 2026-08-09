@@ -106,9 +106,8 @@ export enum AffectedFlagKind {
     ToZero = 'to-zero',
     ToOne = 'to-one',
     Edits = 'edits',
-    Unaffected = 'unaffected',
+    Unaffected = 'unaffected'
 }
-
 
 const U = AffectedFlagKind.Unaffected
 const E = AffectedFlagKind.Edits

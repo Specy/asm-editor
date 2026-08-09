@@ -1,7 +1,7 @@
 <script lang="ts">
     import Navbar from '$cmp/shared/layout/Navbar.svelte'
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
-    import FaStar from 'svelte-icons/fa/FaStar.svelte'
+    import FaStar from '~icons/fa-solid/star'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import Row from './Row.svelte'
     import SparklesIcon from '../agent/SparklesIcon.svelte'

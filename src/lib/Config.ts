@@ -5,9 +5,9 @@ export const PAGE_ELEMENTS_PER_ROW = Math.sqrt(PAGE_SIZE)
 export const MEMORY_SIZE = {
     M68K: 0xffffffn,
     MIPS: 0xffffffffn,
-    X86: 0x00007FFFFFFFFFFFn,
+    X86: 0x00007fffffffffffn,
     'RISC-V': 0xffffffffn,
-    'RISC-V-64': 0xffffffffn,
+    'RISC-V-64': 0xffffffffn
     //Z80: 0xffffn
 } satisfies Record<AvailableLanguages, bigint>
 
@@ -16,7 +16,7 @@ export const DEFAULT_MEMORY_VALUE = {
     MIPS: 0x00,
     X86: 0x00,
     'RISC-V': 0x00,
-    'RISC-V-64': 0x00,
+    'RISC-V-64': 0x00
     //Z80: 0x00
 } satisfies Record<AvailableLanguages, number>
 
@@ -25,7 +25,7 @@ export const COMMENT_CHARACTER = {
     MIPS: '#',
     X86: ';',
     'RISC-V': '#',
-    'RISC-V-64': '#',
+    'RISC-V-64': '#'
     //Z80: ';'
 } satisfies Record<AvailableLanguages, string>
 
@@ -71,8 +71,8 @@ main:
 main:
     # Write here your code
     li t0, 42
-    `.trim(),
-/*
+    `.trim()
+    /*
     Z80: `
     ; Write here your code
     ld a, 42
@@ -86,7 +86,7 @@ export const LANGUAGE_THEMES = {
     MIPS: 'default-mips',
     X86: 'default',
     'RISC-V': 'default-risc-v',
-    'RISC-V-64': 'default-risc-v',
+    'RISC-V-64': 'default-risc-v'
     //Z80: 'default'
 } satisfies Record<AvailableLanguages, string>
 
@@ -95,7 +95,7 @@ export const LANGUAGE_EXTENSIONS = {
     MIPS: 'mips',
     X86: 'asm',
     'RISC-V': 'riscv',
-    'RISC-V-64': 'riscv',
+    'RISC-V-64': 'riscv'
     //Z80: 'z80'
 } satisfies Record<AvailableLanguages, string>
 

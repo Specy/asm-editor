@@ -2,26 +2,26 @@
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import MainPageLinkPreview from '$cmp/specific/landing/HeroLink.svelte'
-    import FaGithub from 'svelte-icons/fa/FaGithub.svelte'
-    import FaBook from 'svelte-icons/fa/FaBook.svelte'
-    import FaSearch from 'svelte-icons/fa/FaSearch.svelte'
-    import FaTools from 'svelte-icons/fa/FaTools.svelte'
-    import FaCode from 'svelte-icons/fa/FaCode.svelte'
-    import FaArrowRight from 'svelte-icons/fa/FaArrowRight.svelte'
-    import FaGraduationCap from 'svelte-icons/fa/FaGraduationCap.svelte'
+    import FaGithub from '~icons/fa-brands/github'
+    import FaBook from '~icons/fa-solid/book'
+    import FaSearch from '~icons/fa-solid/search'
+    import FaTools from '~icons/fa-solid/tools'
+    import FaCode from '~icons/fa-solid/code'
+    import FaArrowRight from '~icons/fa-solid/arrow-right'
+    import FaGraduationCap from '~icons/fa-solid/graduation-cap'
     import MainPageSection from '$cmp/specific/landing/HeroSection.svelte'
     import AnimatedRgbLine from '$cmp/shared/misc/AnimatedRgbLine.svelte'
-    import GoLinkExternal from 'svelte-icons/go/GoLinkExternal.svelte'
+    import GoLinkExternal from '~icons/octicon/link-external-16'
     import { ThemeStore } from '$stores/themeStore.svelte'
     import { onMount } from 'svelte'
-    import FaDownload from 'svelte-icons/fa/FaDownload.svelte'
-    import FaDonate from 'svelte-icons/fa/FaHeart.svelte'
+    import FaDownload from '~icons/fa-solid/download'
+    import FaDonate from '~icons/fa-solid/heart'
     import Button from '$cmp/shared/button/Button.svelte'
     import Page from '$cmp/shared/layout/Page.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
     import { ProjectStore } from '$stores/projectsStore.svelte'
     import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
-    import FaDumbbell from 'svelte-icons/fa/FaDumbbell.svelte'
+    import FaDumbbell from '~icons/fa-solid/dumbbell'
     import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
     const textShadowPrimary = ThemeStore.getColor('primary').isDark()
     const textShadowSecondary = ThemeStore.getColor('secondary').isDark()
@@ -35,7 +35,9 @@
     })
     let shadow = $derived(textShadowPrimary && 'box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);')
 
-    let shouldGoToCurrentProjects = $derived(ProjectStore.projects.length > 0 || !ProjectStore.inited)
+    let shouldGoToCurrentProjects = $derived(
+        ProjectStore.projects.length > 0 || !ProjectStore.inited
+    )
 </script>
 
 <svelte:head>
@@ -58,7 +60,8 @@
             <div class="presentation">
                 <div class="welcome-title" class:textShadow={textShadowPrimary}>
                     The best web IDE for Assembly <span style="font-size: 1.5rem;"
-                        >M68K, MIPS, RISC-V, X86</span>
+                        >M68K, MIPS, RISC-V, X86</span
+                    >
                 </div>
                 <Row gap="0.6rem" wrap>
                     <ButtonLink
@@ -354,8 +357,8 @@
     .links-row {
         gap: 0.1rem;
         background-color: var(--background);
-         display: flex;
-            flex-wrap: wrap;
+        display: flex;
+        flex-wrap: wrap;
     }
 
     .main {

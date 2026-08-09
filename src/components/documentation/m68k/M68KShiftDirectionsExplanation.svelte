@@ -3,8 +3,8 @@
 </script>
 
 <div class="text">
-    The shift logical, shift arithmetical and rotate, instructions use the directions to specify
-    in which direction the bits are shifted.
+    The shift logical, shift arithmetical and rotate, instructions use the directions to specify in
+    which direction the bits are shifted.
 </div>
 <div class="column content">
     <M68KShiftDirections />
