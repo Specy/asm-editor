@@ -99,7 +99,7 @@
                     <h3>Operands</h3>
                     <Column gap="0.5rem" margin="0.8rem">
                         {#if ins.args.length}
-                            {#each ins.args as arg, i}
+                            {#each ins.args as arg, i (i)}
                                 <DocsOperand
                                     name={`Op ${i + 1}`}
                                     content={getAddressingModeNames(arg)}

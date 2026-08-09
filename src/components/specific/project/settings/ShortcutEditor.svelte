@@ -13,7 +13,7 @@
     let { visible = $bindable(false) }: Props = $props()
     let currentShortcut = $state('')
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- This imperative accumulator must not self-invalidate and clear the input.
-    let currentKeys = new Map()
+    let currentKeys = new Map<string, true>()
     let selectedId = $state(-1)
     let inputRef: HTMLInputElement = $state()
     function handleKeydown(event: KeyboardEvent) {
@@ -50,7 +50,7 @@
 <FloatingContainer {visible} title="Shortcuts" style="width: 45rem">
     <div class="shortcuts column">
         <input bind:this={inputRef} class="input-preview" />
-        {#each Array.from($shortcutsStore.entries()).sort((a, b) => a[1].id - b[1].id) as entry}
+        {#each Array.from($shortcutsStore.entries()).sort((a, b) => a[1].id - b[1].id) as entry (entry[1].id)}
             <div class="row input-row">
                 <div>
                     {entry[1].description}

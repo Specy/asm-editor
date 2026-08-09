@@ -16,7 +16,7 @@
     {#if steps.length === 0}
         <div class="row" style="justify-content: center; padding: 0.4rem">No mutations</div>
     {/if}
-    {#each steps as step, i}
+    {#each steps as step, i (i)}
         <MutationStep
             flags={statusRegisterNames}
             {step}

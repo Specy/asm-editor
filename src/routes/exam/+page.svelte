@@ -48,7 +48,15 @@
         examAccessPassword: '',
         timeLimitMinutes: ''
     })
-    const sectionTypeOptions = Object.values(ExamSectionType) as ExamSectionType[]
+    const sectionTypeOptions: Array<{ key: ExamSectionType; value: ExamSectionType }> =
+        Object.values(ExamSectionType).map((value) => ({ key: value, value }))
+    const assemblyLanguageOptions: Array<{
+        key: AvailableLanguages
+        value: AvailableLanguages
+    }> = (Object.keys(BASE_CODE) as AvailableLanguages[]).map((value) => ({
+        key: value,
+        value
+    }))
 
     let sections = $state([
         createDefaultExamSection(ExamSectionType.AssemblyCoding)
@@ -261,12 +269,7 @@
                             <div style="min-width: 12rem;">
                                 <Select
                                     value={section.type}
-                                    onChange={(e) => {
-                                        changeSectionType(
-                                            section.id,
-                                            (e.target as HTMLSelectElement).value as ExamSectionType
-                                        )
-                                    }}
+                                    onChange={(type) => changeSectionType(section.id, type)}
                                     options={sectionTypeOptions}
                                 />
                             </div>
@@ -391,14 +394,9 @@
                                     wrapperStyle="max-width: 14rem; gap: 0.3rem;"
                                     style="padding: 0.8rem"
                                     value={assemblySection.language}
-                                    onChange={(e) => {
-                                        onAssemblyLanguageChange(
-                                            assemblySection,
-                                            (e.target as HTMLSelectElement)
-                                                .value as AvailableLanguages
-                                        )
-                                    }}
-                                    options={Object.keys(BASE_CODE) as AvailableLanguages[]}
+                                    onChange={(language) =>
+                                        onAssemblyLanguageChange(assemblySection, language)}
+                                    options={assemblyLanguageOptions}
                                 />
 
                                 {#key `${assemblySection.id}-${assemblySection.language}`}
@@ -456,9 +454,7 @@
                 <Select
                     wrapperStyle="max-width: 16rem"
                     value={newSectionType}
-                    onChange={(e) => {
-                        newSectionType = (e.target as HTMLSelectElement).value as ExamSectionType
-                    }}
+                    onChange={(type) => (newSectionType = type)}
                     options={sectionTypeOptions}
                 />
                 <Button onClick={addSection} hasIcon style="gap: 0.5rem; padding: 0.5rem;">

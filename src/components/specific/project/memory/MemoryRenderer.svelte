@@ -168,7 +168,7 @@
 
 <div class="memory-grid" style={`--bytesPerRow: ${bytesPerRow}; ${style}`}>
     <div class="memory-offsets">
-        {#each new Array(bytesPerRow).keys() as offset}
+        {#each new Array(bytesPerRow).keys() as offset (offset)}
             <div>
                 {getTextFromValue(BigInt(offset), 2, DisplayType.Hex)}
             </div>

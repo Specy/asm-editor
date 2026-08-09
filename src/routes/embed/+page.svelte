@@ -34,6 +34,13 @@
         openButton: boolean
     }
 
+    const languageOptions: Array<{ key: AvailableLanguages; value: AvailableLanguages }> = [
+        { key: 'M68K', value: 'M68K' },
+        { key: 'MIPS', value: 'MIPS' },
+        { key: 'RISC-V', value: 'RISC-V' },
+        { key: 'X86', value: 'X86' }
+    ]
+
     let settings: Settings = $state({
         showMemory: true,
         language: 'M68K',
@@ -253,10 +260,10 @@
                 <div class="share-settings" style="justify-content: space-between;">
                     <span>Language</span>
                     <Select
-                        onChange={() => (code = BASE_CODE[settings.language])}
+                        onChange={(language) => (code = BASE_CODE[language])}
                         style="background-color: var(--tertiary); color: var(--secondary-text); text-align: center;"
                         wrapperStyle="max-width: 5rem;"
-                        options={['M68K', 'MIPS', 'RISC-V', 'X86']}
+                        options={languageOptions}
                         bind:value={settings.language}
                     />
                 </div>

@@ -1,31 +1,43 @@
-<script lang="ts">
+<script lang="ts" generics="T">
+    type SelectOption = {
+        key: string | number
+        value: T
+        disabled?: boolean
+    }
+
     interface Props {
-        options?: string[]
-        value?: string
+        options: SelectOption[]
+        value: T
         style?: string
         title?: string
-        disabled?: unknown[]
         wrapperStyle?: string
-        onChange?: (e: Event) => void
+        onChange?: (value: T) => void
     }
 
     let {
-        options = [],
-        value = $bindable(''),
+        options,
+        value = $bindable(),
         style = '',
         title = '',
         wrapperStyle = '',
-        disabled = [],
-        onChange = () => {}
+        onChange
     }: Props = $props()
+
+    function handleChange(event: Event) {
+        const select = event.currentTarget as HTMLSelectElement
+        const selected = options[select.selectedIndex]
+        if (!selected) return
+        value = selected.value
+        onChange?.(selected.value)
+    }
 </script>
 
 <div class="wrapper" style={wrapperStyle}>
     <div>{title}</div>
-    <select onchange={onChange} bind:value {style}>
-        {#each options as option, i}
-            <option value={option} disabled={disabled[i] !== undefined}>
-                {option}
+    <select onchange={handleChange} bind:value {style}>
+        {#each options as option (option.key)}
+            <option value={option.value} disabled={option.disabled}>
+                {option.key}
             </option>
         {/each}
     </select>

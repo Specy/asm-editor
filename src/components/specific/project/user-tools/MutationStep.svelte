@@ -70,7 +70,7 @@
 
     {#if step.mutations.length !== 0}
         <div class="column mutations">
-            {#each step.mutations as mutation}
+            {#each step.mutations as mutation, i (i)}
                 <div>
                     {#if mutation.type === 'WriteRegister'}
                         Wrote

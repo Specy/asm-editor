@@ -71,7 +71,7 @@
                     {failedTestcases.length === 0 ? '✅' : '❌'}
                     {passedTestcases.length} / {totalTestcases} testcases passed
                 </Header>
-                {#each failedTestcases.keys() as i}
+                {#each failedTestcases.keys() as i (i)}
                     <TestcaseResultRenderer
                         {systemSize}
                         bind:testcaseResult={failedTestcases[i]}
@@ -92,7 +92,7 @@
                             No testcases yet. Add new ones to test the correctness of your code.
                         </p>
                     {:else}
-                        {#each testcases as testcase, i}
+                        {#each testcases as testcase, i (i)}
                             <div class="testcase-wrapper">
                                 <TestcaseRenderer
                                     {systemSize}

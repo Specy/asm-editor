@@ -66,7 +66,7 @@
                 </button>
             </div>
             <div class="register-hex">
-                {#each chunks[i] as chunk}
+                {#each chunks[i] as chunk, chunkIndex (chunkIndex)}
                     <ValueDiff
                         monospaced
                         hoverElementStyle="left: 50%; transform: translateX(-50%);{position ===

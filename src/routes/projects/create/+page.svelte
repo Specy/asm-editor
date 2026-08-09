@@ -20,6 +20,13 @@
     let name = $state('')
     let description = $state('')
     let language: AvailableLanguages = $state('M68K')
+    const languageOptions: Array<{ key: AvailableLanguages; value: AvailableLanguages }> = [
+        { key: 'M68K', value: 'M68K' },
+        { key: 'MIPS', value: 'MIPS' },
+        { key: 'X86', value: 'X86' },
+        { key: 'RISC-V', value: 'RISC-V' },
+        { key: 'RISC-V-64', value: 'RISC-V-64' }
+    ]
 
     async function create() {
         const project = makeProject({
@@ -63,11 +70,7 @@
         <Form style="display: grid; gap: 1.2rem; margin:0.5rem 0" on:submit={create}>
             <Input title="Name" placeholder="Name" bind:value={name} />
             <Textarea title="Description" bind:value={description} />
-            <Select
-                title="Language"
-                options={['M68K', 'MIPS', 'X86', 'RISC-V', 'RISC-V-64']}
-                bind:value={language}
-            />
+            <Select title="Language" options={languageOptions} bind:value={language} />
         </Form>
         <div
             style="display:flex; justify-content: space-between; align-items:center; margin-top: 1rem;"

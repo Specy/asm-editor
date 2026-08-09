@@ -25,69 +25,156 @@ function createShortcut(
 ): Shortcut {
     return { type, description, defaultValue, id }
 }
+
+const shortcutDefinitions = [
+    createShortcut(ShortcutAction.SaveCode, 'ShiftLeft+KeyS', 'Save code', 1),
+    createShortcut(ShortcutAction.ToggleDocs, 'ShiftLeft+KeyD', 'Toggle docs', 2),
+    createShortcut(ShortcutAction.ToggleSettings, 'ShiftLeft+KeyP', 'Toggle settings', 3),
+    createShortcut(ShortcutAction.RunCode, 'ShiftLeft+KeyR', 'Run code', 4),
+    createShortcut(ShortcutAction.BuildCode, 'ShiftLeft+KeyB', 'Build code', 5),
+    createShortcut(ShortcutAction.ClearExecution, 'ShiftLeft+KeyC', 'Clear execution', 6),
+    createShortcut(ShortcutAction.Step, 'ShiftLeft+ArrowDown', 'Step', 7),
+    createShortcut(ShortcutAction.Undo, 'ShiftLeft+ArrowUp', 'Undo', 8)
+]
+
+const definitionsById = new Map(shortcutDefinitions.map((shortcut) => [shortcut.id, shortcut]))
+
 type StoredSettings = {
     meta: {
         version: string
     }
-    shortcuts: Array<[string, Shortcut]>
+    overrides: Array<[number, string]>
 }
-const shortcuts = new Map([
-    ['ShiftLeft+KeyS', createShortcut(ShortcutAction.SaveCode, 'ShiftLeft+KeyS', 'Save code', 1)],
-    [
-        'ShiftLeft+KeyD',
-        createShortcut(ShortcutAction.ToggleDocs, 'ShiftLeft+KeyD', 'Toggle docs', 2)
-    ],
-    [
-        'ShiftLeft+KeyP',
-        createShortcut(ShortcutAction.ToggleSettings, 'ShiftLeft+KeyP', 'Toggle settings', 3)
-    ],
-    ['ShiftLeft+KeyR', createShortcut(ShortcutAction.RunCode, 'ShiftLeft+KeyR', 'Run code', 4)],
-    ['ShiftLeft+KeyB', createShortcut(ShortcutAction.BuildCode, 'ShiftLeft+KeyB', 'Build code', 5)],
-    [
-        'ShiftLeft+KeyC',
-        createShortcut(ShortcutAction.ClearExecution, 'ShiftLeft+KeyC', 'Clear execution', 6)
-    ],
-    ['ShiftLeft+ArrowDown', createShortcut(ShortcutAction.Step, 'ShiftLeft+ArrowDown', 'Step', 7)],
-    ['ShiftLeft+ArrowUp', createShortcut(ShortcutAction.Undo, 'ShiftLeft+ArrowUp', 'Undo', 8)]
-])
-const CURRENT_VERSION = '1.0.2'
+
+const CURRENT_VERSION = '2.0.0'
+const LEGACY_VERSION = '1.0.2'
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null
+}
+
+function parseOverridePairs(value: unknown): Map<number, string> {
+    const overrides = new Map<number, string>()
+    if (!Array.isArray(value)) return overrides
+
+    for (const entry of value) {
+        if (!Array.isArray(entry) || entry.length !== 2) continue
+        const [id, assignedKey] = entry
+        if (!Number.isInteger(id) || typeof assignedKey !== 'string' || overrides.has(id)) continue
+        overrides.set(id, assignedKey)
+    }
+    return overrides
+}
+
+function parseStoredSettings(
+    value: unknown
+): { overrides: Map<number, string>; legacy: boolean } | null {
+    if (!isRecord(value) || !isRecord(value.meta)) return null
+    const version = value.meta.version
+
+    if (version === CURRENT_VERSION) {
+        return { overrides: parseOverridePairs(value.overrides), legacy: false }
+    }
+    if (version !== LEGACY_VERSION || !Array.isArray(value.shortcuts)) return null
+
+    const legacyOverrides: Array<[number, string]> = []
+    for (const entry of value.shortcuts) {
+        if (!Array.isArray(entry) || entry.length !== 2) continue
+        const [assignedKey, metadata] = entry
+        if (typeof assignedKey !== 'string' || !isRecord(metadata)) continue
+        const { id, defaultValue } = metadata
+        if (typeof id !== 'number' || !Number.isInteger(id) || typeof defaultValue !== 'string')
+            continue
+        if (assignedKey !== defaultValue) legacyOverrides.push([id, assignedKey])
+    }
+    return { overrides: parseOverridePairs(legacyOverrides), legacy: true }
+}
+
+function makeShortcutMap(storedOverrides = new Map<number, string>()): Map<string, Shortcut> {
+    const overrides = new Map<number, string>()
+    const assignedKeys = new Map<number, string>()
+
+    for (const shortcut of shortcutDefinitions) {
+        const assignedKey = storedOverrides.get(shortcut.id)
+        if (assignedKey !== undefined && assignedKey !== shortcut.defaultValue) {
+            overrides.set(shortcut.id, assignedKey)
+        }
+        assignedKeys.set(shortcut.id, assignedKey ?? shortcut.defaultValue)
+    }
+
+    while (true) {
+        const idsByKey = new Map<string, number[]>()
+        for (const [id, assignedKey] of assignedKeys) {
+            const ids = idsByKey.get(assignedKey) ?? []
+            ids.push(id)
+            idsByKey.set(assignedKey, ids)
+        }
+
+        let removedCollision = false
+        for (const ids of idsByKey.values()) {
+            if (ids.length < 2) continue
+            for (const id of ids) {
+                if (!overrides.delete(id)) continue
+                assignedKeys.set(id, definitionsById.get(id)!.defaultValue)
+                removedCollision = true
+            }
+        }
+        if (!removedCollision) break
+    }
+
+    return new Map(
+        shortcutDefinitions.map((shortcut) => [assignedKeys.get(shortcut.id)!, shortcut] as const)
+    )
+}
 
 function createShortcutStore() {
-    const { subscribe, update } = writable(shortcuts)
+    let shortcuts = makeShortcutMap()
+    const { subscribe, set, update } = writable(shortcuts)
 
     function get(key: string): Shortcut | undefined {
         return shortcuts.get(key)
     }
     function updateKey(prev: string, next: string) {
-        update((shortcuts) => {
-            const shortcut = shortcuts.get(prev)
-            if (shortcut && !shortcuts.has(next)) {
-                shortcuts.set(next, shortcut)
-                shortcuts.delete(prev)
+        update((current) => {
+            const shortcut = current.get(prev)
+            if (shortcut && !current.has(next)) {
+                current.set(next, shortcut)
+                current.delete(prev)
             }
-            return shortcuts
+            shortcuts = current
+            return current
         })
         saveStorage()
     }
     function saveStorage() {
+        if (!browser) return
         const storedSettings: StoredSettings = {
             meta: {
                 version: CURRENT_VERSION
             },
-            shortcuts: Array.from(shortcuts.entries())
+            overrides: Array.from(shortcuts.entries())
+                .filter(([assignedKey, shortcut]) => assignedKey !== shortcut.defaultValue)
+                .map(([assignedKey, shortcut]) => [shortcut.id, assignedKey] as [number, string])
+                .sort(([a], [b]) => a - b)
         }
-        localStorage.setItem('shortcuts', JSON.stringify(storedSettings))
+        try {
+            localStorage.setItem('shortcuts', JSON.stringify(storedSettings))
+        } catch (error) {
+            console.error(error)
+        }
     }
     function loadFromStorage() {
-        const storedShortcuts = localStorage.getItem('shortcuts')
-        if (storedShortcuts) {
-            const storedSettings: StoredSettings = JSON.parse(storedShortcuts)
-            if (storedSettings.meta.version === CURRENT_VERSION) {
-                shortcuts.clear()
-                storedSettings.shortcuts.forEach(([key, shortcut]) => {
-                    shortcuts.set(key, shortcut)
-                })
-            }
+        try {
+            const storedShortcuts = localStorage.getItem('shortcuts')
+            if (!storedShortcuts) return
+            const storedSettings = parseStoredSettings(JSON.parse(storedShortcuts))
+            if (!storedSettings) return
+
+            shortcuts = makeShortcutMap(storedSettings.overrides)
+            set(shortcuts)
+            if (storedSettings.legacy) saveStorage()
+        } catch (error) {
+            console.error(error)
         }
     }
     if (browser) loadFromStorage()
