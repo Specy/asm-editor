@@ -57,7 +57,7 @@
                 `}
             >
                 <Row style="height: 2rem; width: 100%">
-                    {#each Object.keys(t.theme) as key}
+                    {#each Object.keys(t.theme) as key (key)}
                         {#if !t.theme[key].readonly}
                             <div
                                 style="background-color: {t.theme[key]

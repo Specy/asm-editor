@@ -1,6 +1,4 @@
 <script lang="ts">
-    import { run } from 'svelte/legacy'
-
     import { clamp, createDebouncer } from '$lib/utils'
 
     let ref: HTMLElement = $state()

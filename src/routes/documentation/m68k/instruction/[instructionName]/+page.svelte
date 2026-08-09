@@ -1,6 +1,4 @@
 <script lang="ts">
-    import { run } from 'svelte/legacy'
-
     import type { PageData } from './$types'
     import Page from '$cmp/shared/layout/Page.svelte'
     import { onMount } from 'svelte'
@@ -22,20 +20,16 @@
     let { data }: Props = $props()
     let ins = $derived(data.props.instruction)
 
-    let component: any = $state.raw()
+    let component: typeof import('./ClientOnly.svelte').default | undefined = $state.raw()
     onMount(async () => {
         //HUGE HACK TO MAKE SVELTEKIT PRERENDER BECAUSE OF TOP LEVEL AWAIT
         const imp = await import('./ClientOnly.svelte')
-        //@ts-ignore
+        // @ts-ignore -- the dynamic import type omits the generated top-level-await promise
         await imp?.__tla
-        //@ts-ignore
+        // @ts-ignore -- the prerender import shim obscures the component's default export
         component = imp?.default
     })
-    let code = $state(ins.interactiveExample?.code ?? '; no interactive instruction available')
-
-    $effect(() => {
-        code = ins.interactiveExample?.code ?? '; no interactive instruction available'
-    })
+    let code = $derived(ins.interactiveExample?.code ?? '; no interactive instruction available')
 </script>
 
 <svelte:head>
@@ -76,11 +70,10 @@
                 <div class="column">
                     <h3>Affected Flags</h3>
                     <div class="flags-table" style="margin: 0.8rem;">
-                        {#each [M68KFlag.Extend, M68KFlag.Negative, M68KFlag.Zero, M68KFlag.Overflow, M68KFlag.Carry] as flag}
-                            {@const kind = ins.affectsFlags[flag]}
+                        {#each [M68KFlag.Extend, M68KFlag.Negative, M68KFlag.Zero, M68KFlag.Overflow, M68KFlag.Carry] as flag (flag)}
                             <div class="flag-header">{flag}</div>
                         {/each}
-                        {#each [M68KFlag.Extend, M68KFlag.Negative, M68KFlag.Zero, M68KFlag.Overflow, M68KFlag.Carry] as flag}
+                        {#each [M68KFlag.Extend, M68KFlag.Negative, M68KFlag.Zero, M68KFlag.Overflow, M68KFlag.Carry] as flag (flag)}
                             {@const kind = ins.affectsFlags[flag]}
                             <div
                                 class="flag-cell"
@@ -90,7 +83,7 @@
                                 class:flag-unaffected={kind === AffectedFlagKind.Unaffected}
                             >
                                 {#if kind === AffectedFlagKind.Edits}
-                                    {'\u2731'}
+                                    ✱
                                 {:else if kind === AffectedFlagKind.ToZero}
                                     0
                                 {:else if kind === AffectedFlagKind.ToOne}

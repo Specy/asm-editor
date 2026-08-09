@@ -57,7 +57,7 @@
                 <span> CCR </span>
                 <span>
                     <div class="row flags">
-                        {#each flags as flag, i}
+                        {#each flags as flag, i (flag)}
                             <div class="flag" class:flag-active={ccr[i]}>
                                 {flag}
                             </div>

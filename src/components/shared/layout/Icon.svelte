@@ -1,7 +1,4 @@
 <script>
-    import { createBubbler } from 'svelte/legacy'
-
-    const bubble = createBubbler()
     /** @type {{size?: number, style?: string, onClick?:  (e: MouseEvent) => void, children?: import('svelte').Snippet}} */
     let { size = 1.2, style = '', children, onClick } = $props()
 </script>

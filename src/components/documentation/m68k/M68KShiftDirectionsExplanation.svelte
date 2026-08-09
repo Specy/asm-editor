@@ -1,5 +1,6 @@
 <script lang="ts">
     import M68KShiftDirections from './M68KShiftDirections.svelte'
+    import { resolve } from '$app/paths'
 </script>
 
 <div class="text">
@@ -11,12 +12,12 @@
 </div>
 <div>
     Those instructions are:
-    <a href="/documentation/m68k/instruction/lsl">lsl</a>
-    <a href="/documentation/m68k/instruction/lsr">lsr</a>
-    <a href="/documentation/m68k/instruction/rol">rol</a>
-    <a href="/documentation/m68k/instruction/ror">ror</a>
-    <a href="/documentation/m68k/instruction/asl">asl</a>
-    <a href="/documentation/m68k/instruction/asr">asr</a>
+    <a href={resolve('/documentation/m68k/instruction/lsl', {})}>lsl</a>
+    <a href={resolve('/documentation/m68k/instruction/lsr', {})}>lsr</a>
+    <a href={resolve('/documentation/m68k/instruction/rol', {})}>rol</a>
+    <a href={resolve('/documentation/m68k/instruction/ror', {})}>ror</a>
+    <a href={resolve('/documentation/m68k/instruction/asl', {})}>asl</a>
+    <a href={resolve('/documentation/m68k/instruction/asr', {})}>asr</a>
 </div>
 
 <style>

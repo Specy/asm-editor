@@ -135,11 +135,6 @@
             emulator.resetSelectedLine()
         }
     }
-
-    function goToEditorLine(line: number, column = 1) {
-        editor?.revealLineInCenter(line)
-        editor?.setPosition({ lineNumber: line, column })
-    }
 </script>
 
 {#snippet editorSurface()}

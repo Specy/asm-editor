@@ -3,6 +3,7 @@
     import { capitalize } from '$lib/utils'
     import FaArrowRight from '~icons/fa-solid/arrow-right'
     import { riscvInstructionNames } from '$lib/languages/RISC-V/RISC-V-documentation'
+    import { resolve } from '$app/paths'
 
     type Group = {
         letter: string
@@ -33,7 +34,7 @@
 
 <Page contentStyle="padding-top: 4rem; gap: 1rem; padding: 1rem">
     <h1>RISC-V Instructions</h1>
-    {#each groups as group}
+    {#each groups as group (group.letter)}
         {#if group.instructions.length}
             <a href="#{group.letter}" style="width: min-content; margin-top: 2rem;">
                 <h2 class="letter-group" id={group.letter}>
@@ -43,8 +44,13 @@
                 </h2>
             </a>
             <div class="instructions">
-                {#each group.instructions as ins}
-                    <a class="instruction" href="/documentation/risc-v/instruction/{ins}">
+                {#each group.instructions as ins (ins)}
+                    <a
+                        class="instruction"
+                        href={resolve('/documentation/risc-v/instruction/[instructionName]', {
+                            instructionName: ins
+                        })}
+                    >
                         <div>
                             {capitalize(ins)}
                         </div>

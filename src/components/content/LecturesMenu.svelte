@@ -13,7 +13,7 @@
 </script>
 
 <Column>
-    {#each lectures as lecture}
+    {#each lectures as lecture (lecture.slug)}
         <a
             href="{hrefBase}/{lecture.slug}"
             class="lecture-link"

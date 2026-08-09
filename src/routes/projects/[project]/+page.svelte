@@ -8,6 +8,7 @@
     import { Monaco } from '$lib/monaco/Monaco'
     import { Prompt } from '$stores/promptStore.svelte'
     import { goto } from '$app/navigation'
+    import { resolve } from '$app/paths'
     import Page from '$cmp/shared/layout/Page.svelte'
     import lzstring from 'lz-string'
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
@@ -98,7 +99,7 @@
             project.set({ id: undefined })
             const newProject = await ProjectStore.addProject(project)
             project.set({ id: newProject.id })
-            goto(`/projects/${project.id}`)
+            goto(resolve('/projects/[project]', { project: project.id }))
         } else {
             await ProjectStore.save(project)
         }

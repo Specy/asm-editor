@@ -13,7 +13,7 @@
 </script>
 
 <div class="column sub-section">
-    {#each M68KDirectiveDocumentationList as dir}
+    {#each M68KDirectiveDocumentationList as dir (dir.name)}
         <div class="instruction">
             <div class="row align-center">
                 <div class="sub-title">

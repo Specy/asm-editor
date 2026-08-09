@@ -13,8 +13,8 @@
     import Row from '$cmp/shared/layout/Row.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
     import Sidebar from '$cmp/shared/layout/Sidebar.svelte'
-    import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
     import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
+    import { resolve } from '$app/paths'
 
     interface Props {
         children?: import('svelte').Snippet
@@ -36,14 +36,14 @@
 
 <Navbar style="border-bottom-left-radius: 0;">
     <Row gap="0.6rem" align="center" flex1>
-        <a class="icon" href="/" title="Go to the home">
+        <a class="icon" href={resolve('/', {})} title="Go to the home">
             <img src="/favicon.png" alt="logo" />
         </a>
-        <a class="icon" href="/projects" title="Go to your projects"> Projects </a>
-        <a href="/documentation"> Docs </a>
-        <a href="/learn/courses"> Learn </a>
+        <a class="icon" href={resolve('/projects', {})} title="Go to your projects"> Projects </a>
+        <a href={resolve('/documentation', {})}> Docs </a>
+        <a href={resolve('/learn/courses', {})}> Learn </a>
 
-        <a class="icon ai" href="/chat" title="AI Chat">
+        <a class="icon ai" href={resolve('/chat', {})} title="AI Chat">
             <div class="hidden-very-small">
                 <SparklesIcon />
             </div>

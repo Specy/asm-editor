@@ -3,7 +3,7 @@ import { type DiffedMemory, RegisterSize } from '$lib/languages/commonLanguageFe
 export function findElInTree(e: HTMLElement, baseId: string) {
     let el = e
     while (el.parentElement) {
-        // @ts-ignore
+        // @ts-ignore -- HTMLCollection is iterable in supported browsers
         for (const child of el.children) {
             if (child.id.startsWith(baseId)) {
                 return child

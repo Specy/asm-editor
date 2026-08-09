@@ -1,6 +1,4 @@
 <script lang="ts">
-    import { run } from 'svelte/legacy'
-
     import { shortcutsStore } from '$stores/shortcutsStore'
     import Button from '$cmp/shared/button/Button.svelte'
     import FloatingContainer from '$cmp/shared/layout/FloatingContainer.svelte'
@@ -14,6 +12,7 @@
 
     let { visible = $bindable(false) }: Props = $props()
     let currentShortcut = $state('')
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- This imperative accumulator must not self-invalidate and clear the input.
     let currentKeys = new Map()
     let selectedId = $state(-1)
     let inputRef: HTMLInputElement = $state()

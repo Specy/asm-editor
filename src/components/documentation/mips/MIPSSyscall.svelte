@@ -7,7 +7,7 @@
 </script>
 
 <Column gap="1rem">
-    {#each Object.values(mipsSyscall) as syscall}
+    {#each Object.values(mipsSyscall) as syscall (syscall.code)}
         <Card padding="1rem" gap="1rem" background="secondary">
             <h2 style="border-bottom: solid 0.1rem var(--tertiary); padding-bottom: 0.8rem">
                 {syscall.code} - {capitalize(syscall.name)}
@@ -21,7 +21,7 @@
             {#if syscall.result.arguments?.length > 0}
                 <h3>Result</h3>
                 <Column>
-                    {#each syscall.result.arguments as result}
+                    {#each syscall.result.arguments as result (result.name)}
                         <DocsOperand
                             name={result.name}
                             content={result.description}
@@ -33,7 +33,7 @@
             {#if syscall.arguments.length > 0}
                 <h3>Arguments</h3>
                 <Column gap="1rem">
-                    {#each syscall.arguments as arg}
+                    {#each syscall.arguments as arg (arg.name)}
                         <DocsOperand
                             name={arg.name}
                             content={arg.description}

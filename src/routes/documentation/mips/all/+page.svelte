@@ -40,7 +40,7 @@
 
     <section id="instructions">
         <h2>Instructions</h2>
-        {#each mipsInstructionNames as ins}
+        {#each mipsInstructionNames as ins (ins)}
             {@const instruction = mipsInstructionMap.get(ins)}
             {@const groups = groupVariantsByDescription(instruction)}
             <div class="instruction">
@@ -53,7 +53,7 @@
                     </h3>
                 </div>
 
-                {#each groups as group}
+                {#each groups as group (group.description)}
                     {#if group.description}
                         <span class="sub-description">
                             <MarkdownRenderer source={group.description} linksInNewTab={false} />

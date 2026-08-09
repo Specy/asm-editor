@@ -12,20 +12,18 @@
     let { data }: Props = $props()
     let ins = $derived(data.props.instruction[0])
 
-    let code = $state(ins.interactiveExample?.code ?? '; no interactive instruction available')
+    let code = $derived(ins.interactiveExample?.code ?? '; no interactive instruction available')
 
-    let component: any = $state.raw()
+    let component:
+        | typeof import('../../../m68k/instruction/[instructionName]/ClientOnly.svelte').default
+        | undefined = $state.raw()
     onMount(async () => {
         //HUGE HACK TO MAKE SVELTEKIT PRERENDER BECAUSE OF TOP LEVEL AWAIT
         const imp = await import('../../../m68k/instruction/[instructionName]/ClientOnly.svelte')
-        //@ts-ignore
+        // @ts-ignore -- the dynamic import type omits the generated top-level-await promise
         await imp?.__tla
-        //@ts-ignore
+        // @ts-ignore -- the prerender import shim obscures the component's default export
         component = imp?.default
-    })
-
-    $effect(() => {
-        code = ins.interactiveExample?.code ?? '; no interactive instruction available'
     })
 </script>
 

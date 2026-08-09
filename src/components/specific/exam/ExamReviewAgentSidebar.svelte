@@ -2,7 +2,6 @@
     import FloatingAgentSidebar from '$cmp/shared/agent/FloatingAgentSidebar.svelte'
     import type {
         AgentWorkflow,
-        DefaultCodingAgentToolName,
         SupportedLanguage
     } from '$cmp/shared/agent/DefaultCodingAgent.svelte'
     import type { Emulator } from '$lib/languages/Emulator'

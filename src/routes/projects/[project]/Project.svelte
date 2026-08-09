@@ -46,6 +46,7 @@
     import Header from '$cmp/shared/layout/Header.svelte'
     import FloatingAgentSidebar from '$cmp/shared/agent/FloatingAgentSidebar.svelte'
     import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
+    import { resolve } from '$app/paths'
 
     interface Props {
         name?: string
@@ -100,6 +101,7 @@
         wantsToLeave: void
         share: void
     }>()
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Imperative window callbacks consume this accumulator; it has no tracked consumer.
     const pressedKeys = new Map<string, boolean>()
     const [debounced] = createDebouncer(3000)
 
@@ -237,7 +239,7 @@
 {#if !embedded}
     <header class="project-header">
         <a
-            href="/projects"
+            href={resolve('/projects', {})}
             title="Go back to your projects"
             onclick={(e) => {
                 e.preventDefault()
@@ -425,7 +427,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
         steps={emulator.latestSteps}
     />
 </ToggleableDraggable>
-{#each emulator.memory.tabs as tab, i}
+{#each emulator.memory.tabs as tab, i (tab.id)}
     <MemoryTab
         endianess={tab.endianess}
         {tab}
@@ -458,7 +460,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                               }
                           })
                         : []}
-                    on:change={(d) => {
+                    on:change={(_d) => {
                         if (emulator.canExecute && emulator.terminated && emulator.line >= 0) {
                             emulator.resetSelectedLine()
                         }

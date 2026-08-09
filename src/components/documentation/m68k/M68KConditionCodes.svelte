@@ -7,7 +7,7 @@
 </script>
 
 <div class="cc-grid">
-    {#each branchConditions as bc}
+    {#each branchConditions as bc (bc)}
         <DocsOperand name={bc} content={branchConditionsDescriptions.get(bc)} />
     {/each}
 </div>

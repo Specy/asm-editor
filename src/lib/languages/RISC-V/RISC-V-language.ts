@@ -5,7 +5,6 @@ import {
     type RISCVInstruction,
     riscvInstructionMap,
     riscvInstructionsVariants,
-    riscvInstructionsWithDuplicates,
     formatAggregatedArgs,
     groupVariantsByDescription
 } from './RISC-V-documentation'
@@ -64,7 +63,6 @@ export function createRISCVCompletition(monaco: MonacoType, is64 = false) {
                 endColumn: position.column
             })
             const lines = model.getValue().split('\n')
-            const lastCharacter = data.substring(data.length - 1, data.length)
             const labels = lines
                 .map((l) => l.trim())
                 .filter((l) => l.endsWith(':'))
@@ -194,7 +192,6 @@ export function createRISCVCompletition(monaco: MonacoType, is64 = false) {
                     )
                 }
             }
-            const trimmed = data.trim()
             return {
                 suggestions
             }
@@ -277,11 +274,6 @@ export function createRISCVHoverProvider(monaco: MonacoType, is64 = false) {
         }
     }
 }
-
-const possibleArgs = riscvInstructionsWithDuplicates.flatMap((i) =>
-    i.args.flatMap((a) => a.map((b) => b.type))
-)
-const possibleArgsSet = new Set(possibleArgs)
 
 const RISCVRegistersMap = Object.fromEntries(
     RISCVRegisterNames.map((r) => {

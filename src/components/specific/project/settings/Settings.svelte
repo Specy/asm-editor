@@ -6,6 +6,7 @@
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import Button from '$cmp/shared/button/Button.svelte'
     import type { AvailableLanguages } from '$lib/Project.svelte'
+    import { resolve } from '$app/paths'
     interface Props {
         visible: boolean
         language: AvailableLanguages
@@ -21,7 +22,7 @@
                 <Setting
                     entry={entry[1]}
                     on:changeValue={(e) => {
-                        //@ts-expect-error
+                        // @ts-expect-error -- Object.entries erases the settings key/value correlation
                         settingsStore.setValue(entry[0], e.detail)
                     }}
                 />
@@ -32,7 +33,7 @@
             style="align-items: center; justify-content: space-between; padding: 0.4rem"
         >
             <div style="padding-left: 0.5rem">Change theme</div>
-            <a href="/themes" title="Edit the theme">
+            <a href={resolve('/themes', {})} title="Edit the theme">
                 <Button cssVar="accent2">
                     <Icon>
                         <FaPalette />

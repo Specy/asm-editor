@@ -34,9 +34,9 @@
         terminal.loadAddon(fitAddon)
     }
 
-    function onData(data: string) {}
+    function onData(_data: string) {}
 
-    function onKey(data: { key: string; domEvent: KeyboardEvent }) {}
+    function onKey(_data: { key: string; domEvent: KeyboardEvent }) {}
 
     $effect(() => {
         terminal?.reset()

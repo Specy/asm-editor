@@ -214,75 +214,6 @@ export const DEFAULT_RISCV_THEME = {
     }
 } as const
 
-const DEFAULT_WHITE_THEME = {
-    version: 1,
-    id: 'default-white',
-    extends: 'default-white',
-    name: 'Default white',
-    editable: false,
-    theme: {
-        background: {
-            color: '#dfe2e5',
-            name: 'background',
-            prop: 'background'
-        },
-        primary: {
-            color: '#f2f2f2',
-            name: 'primary',
-            prop: 'primary'
-        },
-        secondary: {
-            color: '#f8f8f8',
-            name: 'secondary',
-            prop: 'secondary'
-        },
-        tertiary: {
-            color: '#f8f8f8',
-            name: 'tertiary',
-            prop: 'tertiary'
-        },
-        accent: {
-            color: '#a89dd8',
-            name: 'accent',
-            prop: 'accent'
-        },
-        accent2: {
-            color: '#b1bdc4',
-            name: 'accent2',
-            prop: 'accent2'
-        },
-        hint: {
-            color: '#939393',
-            name: 'hint',
-            prop: 'hint',
-            readonly: true
-        },
-        textDarker: {
-            color: '#c1c1c1',
-            name: 'text-layered',
-            prop: 'textDarker',
-            readonly: true
-        },
-        scrollbar: {
-            color: '#a497d3',
-            name: 'scrollbar',
-            prop: 'scrollbar'
-        },
-        red: {
-            color: '#ed4f4f',
-            name: 'red',
-            prop: 'red',
-            readonly: true
-        },
-        green: {
-            color: '#356a59',
-            name: 'green',
-            prop: 'green',
-            readonly: true
-        }
-    }
-}
-
 export type ThemeKeys = keyof (typeof DEFAULT_THEME)['theme']
 export type ThemeProp<T = ThemeKeys> = {
     name: string
@@ -300,12 +231,7 @@ type StoredTheme<T extends string = string> = {
     theme: Record<T, ThemeProp<T>>
 }
 
-export const BUILTIN_THEMES = [
-    DEFAULT_THEME,
-    DEFAULT_MIPS_THEME,
-    DEFAULT_RISCV_THEME
-    //DEFAULT_WHITE_THEME
-]
+export const BUILTIN_THEMES = [DEFAULT_THEME, DEFAULT_MIPS_THEME, DEFAULT_RISCV_THEME]
 
 function makeThemeStore<T extends string>(_theme: StoredTheme<T>) {
     const [debouncer] = createDebouncer(100)
@@ -336,7 +262,7 @@ function makeThemeStore<T extends string>(_theme: StoredTheme<T>) {
     function reset(key: T) {
         const extended = BUILTIN_THEMES.find((t) => t.id === meta.extends)
         if (extended) {
-            // @ts-ignore
+            // @ts-ignore -- Built-in themes contain the store's runtime key.
             set(key, extended.theme[key].color)
         }
     }
@@ -464,7 +390,7 @@ function makeThemeStore<T extends string>(_theme: StoredTheme<T>) {
         if (!theme || !theme.editable) return
         themes = themes.filter((t) => t.id !== themeId)
         if (meta.id === themeId) {
-            // @ts-ignore
+            // @ts-ignore -- The default theme has the same runtime shape.
             setTheme(BUILTIN_THEMES[0])
         }
         save()
@@ -502,5 +428,5 @@ function makeThemeStore<T extends string>(_theme: StoredTheme<T>) {
     }
 }
 
-// @ts-ignore
+// @ts-ignore -- The store accepts the readonly built-in theme shape at runtime.
 export const ThemeStore = makeThemeStore(BUILTIN_THEMES[0])

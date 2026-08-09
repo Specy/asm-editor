@@ -33,7 +33,7 @@
         return Object.entries(registers).sort((a, b) => a[0].localeCompare(b[0]))
     }
 
-    function getAvailableRegisterName(usedNames: Record<string, any>) {
+    function getAvailableRegisterName(usedNames: Record<string, unknown>) {
         return registerNames.filter(
             (name) => usedNames[name] === undefined && !hiddenRegistersNames.includes(name)
         )

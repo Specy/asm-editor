@@ -6,6 +6,7 @@
     import { page } from '$app/state'
     import AnimatedRgbLine from '$cmp/shared/misc/AnimatedRgbLine.svelte'
     import FaDonate from '~icons/fa-solid/heart'
+    import { resolve } from '$app/paths'
     interface Props {
         pages?: RegExp[]
     }
@@ -24,9 +25,9 @@
                         <div>Specy</div>
                     </div>
                 </a>
-                <a href="/changelog"> Changelog </a>
+                <a href={resolve('/changelog', {})}> Changelog </a>
                 <div class="icon-wrapper">
-                    <a class="icon" href="/donate" title="Donate and support me">
+                    <a class="icon" href={resolve('/donate', {})} title="Donate and support me">
                         <Icon size={1.6}>
                             <FaDonate />
                         </Icon>

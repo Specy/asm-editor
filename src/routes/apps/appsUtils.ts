@@ -4,10 +4,10 @@ export async function isClipboardReadSupported() {
     }
 
     try {
-        //@ts-ignore
+        // @ts-ignore -- clipboard-read is absent from some PermissionName definitions
         const result = await navigator.permissions.query({ name: 'clipboard-read' })
         return result.state === 'granted' || result.state === 'prompt'
-    } catch (e) {
+    } catch {
         // `clipboard-read` permission not recognized
         return false
     }

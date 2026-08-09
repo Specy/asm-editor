@@ -1,7 +1,4 @@
 <script lang="ts">
-    import { createBubbler } from 'svelte/legacy'
-
-    const bubble = createBubbler()
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import FaCircle from '~icons/fa-solid/circle'
     interface Props {

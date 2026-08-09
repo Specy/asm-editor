@@ -45,24 +45,26 @@ export default ts.config(
     },
     {
         rules: {
-            //TODO slowly try to switch these to errors and fix them
             '@typescript-eslint/ban-ts-comment': [
-                'warn',
+                'error',
                 { 'ts-ignore': 'allow-with-description' }
             ],
-            '@typescript-eslint/no-explicit-any': 'warn',
-            '@typescript-eslint/no-unused-vars': 'warn',
+            '@typescript-eslint/no-explicit-any': 'error',
+            '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+
+            // Generic/external URLs need API changes, and resolve changes prerendered hrefs.
             'svelte/no-navigation-without-resolve': 'warn',
-            'svelte/no-useless-mustaches': 'warn',
-            'svelte/prefer-svelte-reactivity': 'warn',
-            'svelte/prefer-writable-derived': 'warn',
+            // Keys change reconciliation, and several lists have no stable unique ID.
             'svelte/require-each-key': 'warn',
 
+            'svelte/no-useless-mustaches': 'error',
+            'svelte/prefer-svelte-reactivity': 'error',
+            'svelte/prefer-writable-derived': 'error',
             'no-empty': ['error', { allowEmptyCatch: true }],
-            '@typescript-eslint/no-unused-expressions': 'warn',
+            '@typescript-eslint/no-unused-expressions': 'error',
 
-            '@typescript-eslint/no-wrapper-object-types': 'warn',
-            'no-prototype-builtins': 'warn'
+            '@typescript-eslint/no-wrapper-object-types': 'error',
+            'no-prototype-builtins': 'error'
         }
     },
     {

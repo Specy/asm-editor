@@ -4,7 +4,7 @@ export async function getAllCourses() {
     const content = await import.meta.glob('$content/*/meta.json', { eager: true })
     return Object.entries(content)
         .map(([path, course]) => {
-            const c = course as any
+            const c = course as Omit<Course, 'slug'>
             return {
                 id: c.id as string,
                 name: c.name as string,
@@ -64,7 +64,7 @@ export async function getCourse(slug: string) {
             return path.startsWith('/src/content/' + course.slug)
         })
         .map(([path, lecture]) => {
-            const l = lecture as any
+            const l = lecture as Omit<Lecture, 'slug'>
             return [
                 path,
                 {
@@ -83,7 +83,7 @@ export async function getCourse(slug: string) {
             return path.startsWith('/src/content/' + course.slug)
         })
         .map(([path, lecture]) => {
-            const l = lecture as any
+            const l = lecture as Omit<Module, 'slug' | 'lectures'>
             return [
                 path,
                 {
@@ -105,7 +105,7 @@ export async function getCourse(slug: string) {
                     .filter(([p]) => {
                         return p.startsWith(modulePath)
                     })
-                    .map(([_, lecture]) => lecture)
+                    .map(([, lecture]) => lecture)
                     .sort((a, b) => {
                         return a.order - b.order
                     })

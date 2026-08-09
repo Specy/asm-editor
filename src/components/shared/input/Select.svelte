@@ -1,10 +1,10 @@
 <script lang="ts">
     interface Props {
-        options?: any
+        options?: string[]
         value?: string
         style?: string
         title?: string
-        disabled?: any
+        disabled?: unknown[]
         wrapperStyle?: string
         onChange?: (e: Event) => void
     }

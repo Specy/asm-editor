@@ -1,6 +1,4 @@
 <script lang="ts">
-    import { run } from 'svelte/legacy'
-
     import FaAngleLeft from '~icons/fa-solid/angle-left'
     import FaAngleRight from '~icons/fa-solid/angle-right'
     import Icon from '$cmp/shared/layout/Icon.svelte'

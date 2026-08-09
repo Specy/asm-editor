@@ -10,6 +10,5 @@ export async function requestPersistentStorage(): Promise<void> {
         if (localStorage.getItem(REQUESTED_KEY)) return
         localStorage.setItem(REQUESTED_KEY, '1')
         await navigator.storage.persist()
-    } catch {
-    }
+    } catch {}
 }

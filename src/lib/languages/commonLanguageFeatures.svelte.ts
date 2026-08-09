@@ -96,7 +96,6 @@ export function makeRegister(name: string, v: bigint | number, _size: RegisterSi
     let value = $state(BigInt(v))
     let prev = $state(BigInt(v))
     let size = $state(BigInt(_size))
-    const bits = $derived(size * 8n)
 
     function setValue(v: number | bigint) {
         prev = value
@@ -273,13 +272,13 @@ export function createMemoryTab(
     }
 }
 
-export function makeLabelColor(index: number, address: number) {
+export function makeLabelColor(index: number, _address: number) {
     return `hsl(${(index * 137) % 360}, 40%, 60%)`
 }
 
 export function makeColorizedLabels(labels: StackFrame[]): ColorizedLabel[] {
     //same address and index should always be the same color
-    return labels.map((address, i) => ({
+    return labels.map((address) => ({
         address: address.address,
         sp: address.sp,
         color: address.color

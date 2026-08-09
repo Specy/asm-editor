@@ -17,7 +17,6 @@
     import { BASE_CODE } from '$lib/Config'
     import Header from '$cmp/shared/layout/Header.svelte'
     import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
-    import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
     import { createShareLink } from '$lib/utils'
     import Button from '$cmp/shared/button/Button.svelte'
     import FaExternal from '~icons/fa-solid/external-link-alt'
@@ -49,7 +48,7 @@
     let code = $state(BASE_CODE[settings.language])
     let testcases = $state([] as Testcase[])
     let generatedCode = $state('')
-    let timeoutId = 0 as any
+    let timeoutId = 0 as ReturnType<typeof setTimeout>
     onMount(() => {
         inIframe = window.self !== window.top
         settings = getSettings()

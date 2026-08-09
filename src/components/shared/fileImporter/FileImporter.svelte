@@ -15,9 +15,9 @@
     }
     const dispatch = createEventDispatcher<{ import: FileResult }>()
     let input: HTMLInputElement | null = $state(null)
-    function onChange(event: any) {
-        if (event.target.files.length === 0) return
-        const file = event.target.files[0]
+    function onChange(event: Event) {
+        const file = (event.currentTarget as HTMLInputElement).files?.[0]
+        if (!file) return
         const fileReader = new FileReader()
         fileReader.onloadend = () => {
             const result = {

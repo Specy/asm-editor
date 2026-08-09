@@ -43,7 +43,7 @@ export function createX86CompletitionProvider(
         ): monaco.languages.ProviderResult<monaco.languages.CompletionList> => {
             const wordInfo = model.getWordUntilPosition(position)
             const word = wordInfo.word.toLowerCase()
-            const currentLine = model
+            void model
                 .getValueInRange({
                     startLineNumber: position.lineNumber,
                     startColumn: 1,

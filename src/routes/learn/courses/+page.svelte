@@ -4,9 +4,8 @@
     import Header from '$cmp/shared/layout/Header.svelte'
     import Page from '$cmp/shared/layout/Page.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
-    import Navbar from '$cmp/shared/layout/Navbar.svelte'
     import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
-    import Footer from '$cmp/shared/layout/Footer.svelte'
+    import { resolve } from '$app/paths'
 
     interface Props {
         data: PageData
@@ -34,8 +33,8 @@
     <Header>Courses</Header>
     <p></p>
     <Row gap="1rem" wrap>
-        {#each data.courses as course}
-            <a href="/learn/courses/{course.slug}">
+        {#each data.courses as course (course.slug)}
+            <a href={resolve('/learn/courses/[courseId]', { courseId: course.slug })}>
                 <Card
                     background="secondary"
                     gap="1rem"

@@ -12,7 +12,7 @@
 </script>
 
 <Column gap="1rem" style="width: 100%;">
-    {#each Object.values(mipsRegisters) as register}
+    {#each Object.values(mipsRegisters) as register (register.name)}
         <Card gap="1rem" padding="1rem" background="secondary" style="width: 100%;">
             <h2>{register.name} ({register.number})</h2>
             <MarkdownRenderer source={register.description} {disableLinks} />

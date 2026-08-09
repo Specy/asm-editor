@@ -5,6 +5,7 @@
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import Row from './Row.svelte'
     import SparklesIcon from '../agent/SparklesIcon.svelte'
+    import { resolve } from '$app/paths'
 
     interface Props {
         children?: import('svelte').Snippet
@@ -16,13 +17,20 @@
 
 <Navbar>
     <Row style="gap: 0.6rem; align-items:center; flex: 1">
-        <a class="icon" style="width: 2.2rem; height: 2.2rem;" href="/" title="Go to the home">
+        <a
+            class="icon"
+            style="width: 2.2rem; height: 2.2rem;"
+            href={resolve('/', {})}
+            title="Go to the home"
+        >
             <img src="/favicon.png" alt="logo" />
         </a>
-        <a class="icon" href="/projects" title="Go to your projects"> Projects </a>
-        <a class="icon" href="/documentation/" title="Go to the docs"> Docs </a>
-        <a class="icon" href="/learn/courses" title="Learn assembly"> Learn </a>
-        <a class="icon hidden-on-mobile" href="/embed" title="Embed the website"> Embed </a>
+        <a class="icon" href={resolve('/projects', {})} title="Go to your projects"> Projects </a>
+        <a class="icon" href={resolve('/documentation', {})} title="Go to the docs"> Docs </a>
+        <a class="icon" href={resolve('/learn/courses', {})} title="Learn assembly"> Learn </a>
+        <a class="icon hidden-on-mobile" href={resolve('/embed', {})} title="Embed the website">
+            Embed
+        </a>
     </Row>
     <Row gap="0.5rem" align="center">
         <div class="hidden-on-mobile">
@@ -41,7 +49,7 @@
         </div>
         {@render children?.()}
         {#if !exclude?.includes('ai-chat')}
-            <a class="icon ai" href="/chat" title="AI Chat">
+            <a class="icon ai" href={resolve('/chat', {})} title="AI Chat">
                 <div class="hidden-very-small">
                     <SparklesIcon />
                 </div>

@@ -4,7 +4,6 @@ import {
     mipsDirectivesMap,
     mipsInstructionMap,
     mipsInstructionsVariants,
-    mipsInstructionsWithDuplicates,
     formatAggregatedArgs,
     groupVariantsByDescription,
     type MIPSInstruction
@@ -58,7 +57,6 @@ export function createMIPSCompletition(monaco: MonacoType) {
                 endColumn: position.column
             })
             const lines = model.getValue().split('\n')
-            const lastCharacter = data.substring(data.length - 1, data.length)
             const labels = lines
                 .map((l) => l.trim())
                 .filter((l) => l.endsWith(':'))
@@ -184,7 +182,6 @@ export function createMIPSCompletition(monaco: MonacoType) {
                     )
                 }
             }
-            const trimmed = data.trim()
             return {
                 suggestions
             }
@@ -264,11 +261,6 @@ export function createMIPSHoverProvider(monaco: MonacoType) {
         }
     }
 }
-
-const possibleArgs = mipsInstructionsWithDuplicates.flatMap((i) =>
-    i.args.flatMap((a) => a.map((b) => b.type))
-)
-const possibleArgsSet = new Set(possibleArgs)
 
 const MIPSRegistersMap = Object.fromEntries(
     MIPSRegisterNames.map((r) => {

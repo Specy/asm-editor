@@ -2,6 +2,7 @@
     import { browser } from '$app/environment'
     import { page } from '$app/stores'
     import { goto } from '$app/navigation'
+    import { resolve } from '$app/paths'
     import Page from '$cmp/shared/layout/Page.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
@@ -682,7 +683,7 @@
         <div class="overlay">
             <h1 class="error">Failed to load exam</h1>
             <p>{errorMessage}</p>
-            <Button onClick={() => goto('/exam')}>Back to exam builder</Button>
+            <Button onClick={() => goto(resolve('/exam', {}))}>Back to exam builder</Button>
         </div>
     {/if}
 

@@ -36,7 +36,7 @@
 
     <section id="instructions">
         <h2>Instructions</h2>
-        {#each riscvInstructionNames as ins}
+        {#each riscvInstructionNames as ins (ins)}
             {@const instruction = riscvInstructionMap.get(ins)}
             {@const groups = groupVariantsByDescription(instruction)}
             <div class="instruction">
@@ -49,7 +49,7 @@
                     </h3>
                 </div>
 
-                {#each groups as group}
+                {#each groups as group (group.description)}
                     {#if group.description}
                         <span class="sub-description">
                             <MarkdownRenderer source={group.description} linksInNewTab={false} />

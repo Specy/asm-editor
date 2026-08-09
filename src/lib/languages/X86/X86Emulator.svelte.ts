@@ -25,7 +25,6 @@ import {
     type MonacoError as CoreMonacoError,
     type MutationOperation as CoreMutationOperation,
     type X86CompilationDiagnostic,
-    type X86CompileResult,
     type X86Emulator as CoreX86Emulator,
     type X86RegisterName
 } from '@specy/x86'

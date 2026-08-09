@@ -36,7 +36,7 @@
                 new: e.target.value
             })}
     >
-        {#each registersNames as registerName}
+        {#each registersNames as registerName (registerName)}
             <option value={registerName}>{registerName}</option>
         {/each}
     </select>

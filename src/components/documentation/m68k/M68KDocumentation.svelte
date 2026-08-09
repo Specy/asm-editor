@@ -76,7 +76,7 @@
             <h4>Instructions</h4>
         {/snippet}
         <div class="column sub-section">
-            {#each instructionsDocumentationList as ins}
+            {#each instructionsDocumentationList as ins (ins.name)}
                 <div class="instruction">
                     <div class="row align-center">
                         <h1 class="sub-title" id={ins.name}>

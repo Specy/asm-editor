@@ -95,7 +95,7 @@
                             const getAllText = (
                                 n: import('hast').Node | import('hast').Parent
                             ): string => {
-                                //@ts-ignore
+                                // @ts-ignore -- hast's base Node type omits text-node values
                                 if (n.type === 'text') return n.value as string
                                 if ('children' in n && Array.isArray(n.children)) {
                                     return (

@@ -4,7 +4,7 @@
 </script>
 
 <div class="cc-grid">
-    {#each directions as dr}
+    {#each directions as dr (dr)}
         <DocsOperand name={dr} content={directionsDescriptions.get(dr)} />
     {/each}
 </div>

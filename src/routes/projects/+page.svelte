@@ -4,7 +4,6 @@
     import { onMount } from 'svelte'
     import Button from '$cmp/shared/button/Button.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
-    import FaAngleLeft from '~icons/fa-solid/angle-left'
     import FaPlus from '~icons/fa-solid/plus'
     import Title from '$cmp/shared/layout/Header.svelte'
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
@@ -20,6 +19,7 @@
     import Row from '$cmp/shared/layout/Row.svelte'
     import { LANGUAGE_EXTENSIONS } from '$lib/Config'
     import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
+    import { resolve } from '$app/paths'
 
     let hasFileHandleSupport = false
 
@@ -57,7 +57,7 @@
     async function importFromFileHandle(fileHandles: FileSystemFileHandle[]) {
         for (const fileHandle of fileHandles) {
             const blob = await fileHandle.getFile()
-            // @ts-ignore
+            // @ts-ignore -- File omits the nonstandard handle retained by the importer
             blob.handle = fileHandle
             const text = await blob.text()
             const project = makeProjectFromExternal(text)
@@ -93,7 +93,7 @@
                         }
                         const project = await ProjectStore.getProject(lastId)
                         if (project && launchParams.files.length === 1) {
-                            goto(`/projects/${project.id}`)
+                            goto(resolve('/projects/[project]', { project: project.id }))
                         }
                     })
                 } else {

@@ -1,11 +1,12 @@
 <script>
+    import { resolve } from '$app/paths'
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
 </script>
 
 <main class="page">
     <div class="center-wrapper">
         <div class="floating-middle">
-            <a href="/" title="Go back to the main page">
+            <a href={resolve('/', {})} title="Go back to the main page">
                 <div class="go-back">
                     <div class="go-back-404">404</div>
                     <ButtonLink href="/" cssVar="accent2">Click to go back</ButtonLink>

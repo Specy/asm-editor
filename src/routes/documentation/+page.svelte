@@ -23,7 +23,7 @@
 <Page cropped hasNavbar contentStyle="padding: 1rem">
     <Header>Languages</Header>
     <div class="langs">
-        {#each langs as lang}
+        {#each langs as lang (lang)}
             <NavigationLinkButton href="/documentation/{lang.toLowerCase()}">
                 <div>
                     {lang}

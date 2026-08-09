@@ -33,7 +33,7 @@
         <MarkdownRenderer source={data.content} />
     </Column>
     <Column gap="1rem">
-        {#each data.course.modules as module}
+        {#each data.course.modules as module (module.slug)}
             <TogglableSection
                 open={true}
                 sectionStyle="margin-left: 0.6rem; padding-left: 0.6rem;"

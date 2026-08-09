@@ -2,7 +2,6 @@ import {
     type EmulatorDecoration,
     type ExecutionStep,
     type MonacoError,
-    type MutationOperation,
     RegisterSize,
     type StackFrame
 } from '$lib/languages/commonLanguageFeatures.svelte'
@@ -35,7 +34,7 @@ export type EmulatorConfig<R extends string> = {
     hiddenRegisters?: R[]
 }
 
-export abstract class BaseEmulator<T, R extends string> {
+export abstract class BaseEmulator<R extends string> {
     protected _registerNames: R[]
     protected _systemSize: RegisterSize
     protected _endianness: 'little' | 'big'

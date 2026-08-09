@@ -17,6 +17,7 @@
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
     import { ProjectStore } from '$stores/projectsStore.svelte'
     import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
+    import { resolve } from '$app/paths'
 
     interface Props {
         children?: import('svelte').Snippet
@@ -32,13 +33,15 @@
 
 <Navbar style="border-bottom-left-radius: 0;">
     <Row gap="0.6rem" align="center">
-        <a class="icon" href="/" title="Go to the home">
+        <a class="icon" href={resolve('/', {})} title="Go to the home">
             <img src="/favicon.png" alt="logo" />
         </a>
-        <a class="icon" href="/projects" title="Go to your projects"> Projects </a>
-        <a class="icon" href="/documentation/" title="Go to the docs"> Docs </a>
-        <a class="icon" href="/learn/courses" title="Learn assembly"> Learn </a>
-        <a class="icon desktop-only" href="/embed" title="Embed the website"> Embed </a>
+        <a class="icon" href={resolve('/projects', {})} title="Go to your projects"> Projects </a>
+        <a class="icon" href={resolve('/documentation', {})} title="Go to the docs"> Docs </a>
+        <a class="icon" href={resolve('/learn/courses', {})} title="Learn assembly"> Learn </a>
+        <a class="icon desktop-only" href={resolve('/embed', {})} title="Embed the website">
+            Embed
+        </a>
     </Row>
     <Row gap="0.5rem" align="center" flex1>
         <div class="star-on-github desktop-only">
@@ -55,7 +58,7 @@
                 Star on github
             </ButtonLink>
         </div>
-        <a class="icon ai" href="/chat" title="AI Chat">
+        <a class="icon ai" href={resolve('/chat', {})} title="AI Chat">
             <div class="hidden-very-small">
                 <SparklesIcon />
             </div>
@@ -75,14 +78,17 @@
 
 <Sidebar bind:menuOpen menuStyle="gap: 0;">
     <Column padding="1rem" gap="1rem" style="padding-top: 0;">
-        <a onclick={() => (menuOpen = false)} href={`/learn/courses/${data.course.slug}`}>
+        <a
+            onclick={() => (menuOpen = false)}
+            href={resolve('/learn/courses/[courseId]', { courseId: data.course.slug })}
+        >
             <Header noMargin>
                 {data.course.name}
             </Header>
         </a>
     </Column>
     <Column style="overflow-y: auto">
-        {#each data.course.modules as module}
+        {#each data.course.modules as module (module.slug)}
             <TogglableSection
                 open={true}
                 sectionStyle="margin-left: 0; padding-left: 0.4rem;"

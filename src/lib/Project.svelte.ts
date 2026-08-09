@@ -125,8 +125,8 @@ export function makeProjectFromExternal(codeAndMeta: string) {
             language,
             name: '',
             description: '',
-            createdAt: new Date().getTime(),
-            updatedAt: new Date().getTime(),
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
             testcases: [],
             id: ''
         })
@@ -142,8 +142,8 @@ export function makeProjectFromExternal(codeAndMeta: string) {
         description: '',
         language: 'M68K',
         version: metaVersion,
-        createdAt: new Date().getTime(),
-        updatedAt: new Date().getTime(),
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
         testcases: [],
         id: ''
     }
@@ -166,8 +166,8 @@ export function makeProject(data?: Partial<ProjectData>) {
     const state = $state({
         id: data?.id ?? '',
         code: data?.code ?? BASE_CODE[lang],
-        createdAt: data?.createdAt ?? new Date().getTime(),
-        updatedAt: data?.updatedAt ?? new Date().getTime(),
+        createdAt: data?.createdAt ?? Date.now(),
+        updatedAt: data?.updatedAt ?? Date.now(),
         name: data?.name ?? 'Untitled',
         language: lang,
         description: data?.description ?? '',

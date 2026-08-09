@@ -1,8 +1,5 @@
 <script lang="ts">
-    import { run } from 'svelte/legacy'
-
     import Button from '$cmp/shared/button/Button.svelte'
-    import RawInput from '$cmp/shared/input/RawInput.svelte'
     import FaSearch from '~icons/fa-solid/search'
     import FaAngleLeft from '~icons/fa-solid/angle-left'
     import FaAngleRight from '~icons/fa-solid/angle-right'
@@ -11,7 +8,6 @@
     import { clampBigInt } from '$lib/utils'
     import { type RegisterSize, toHexString } from '$lib/languages/commonLanguageFeatures.svelte'
 
-    let hexAddress = $state('00000000')
     interface Props {
         currentAddress: bigint
         bytesPerPage: number
@@ -28,12 +24,12 @@
         bytesPerPage,
         memorySize,
         hideLabel = false,
-        inputStyle = '',
         style = '',
         systemSize,
         onAddressChange
     }: Props = $props()
 
+    let hexAddress = $derived(currentAddress.toString(16))
     let inputRef = $state<HTMLInputElement>(null)
 
     function searchAddress() {
@@ -48,10 +44,6 @@
         const minMaxAddress = clampBigInt(clampedSize, 0n, memorySize - BigInt(bytesPerPage - 1))
         onAddressChange(minMaxAddress)
     }
-
-    $effect(() => {
-        hexAddress = currentAddress.toString(16)
-    })
 </script>
 
 <Form style="width:100%; {style}" on:submit={searchAddress}>

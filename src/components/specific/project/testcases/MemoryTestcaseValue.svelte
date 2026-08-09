@@ -62,7 +62,7 @@
                 <Row align="center" gap="0.5rem">
                     <div>Of bytes</div>
                     <select bind:value={value.bytes} class="select">
-                        {#each [1, 2, 4, 8, 16].filter((v) => v <= systemSize) as size}
+                        {#each [1, 2, 4, 8, 16].filter((v) => v <= systemSize) as size (size)}
                             <option value={size}>{size}</option>
                         {/each}
                     </select>

@@ -1,6 +1,5 @@
 <script lang="ts">
     import Icon from '$cmp/shared/layout/Icon.svelte'
-    import { createEventDispatcher } from 'svelte'
     import FaCircle from '~icons/fa-solid/circle'
     import FaLongArrowAltUp from '~icons/fa-solid/long-arrow-alt-up'
     import type { StackFrame } from '$lib/languages/commonLanguageFeatures.svelte'

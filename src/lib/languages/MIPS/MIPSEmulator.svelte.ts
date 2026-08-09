@@ -157,6 +157,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
     function addDecorations() {
         if (!mips) return
         const statements = mips.getCompiledStatements()
+        // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Scratch map is populated and read locally with no tracked consumer.
         const joined = new Map<number, JsProgramStatement[]>()
         for (const statement of statements) {
             const arr = joined.get(statement.sourceLine)
@@ -367,7 +368,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
             try {
                 const ins = mips.getStatementAtAddress(step.pc)
                 line = ins.sourceLine - 1
-            } catch (e) {}
+            } catch {}
             return {
                 pc: step.pc,
                 old_ccr: {
@@ -444,7 +445,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
             //TODO improve this
             mips.getNextStatement()
             return false
-        } catch (e) {
+        } catch {
             return true
         }
     }
@@ -458,7 +459,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
             try {
                 const ins = mips.getNextStatement()
                 state.line = ins.sourceLine - 1
-            } catch (e) {}
+            } catch {}
 
             state.canUndo = mips.canUndo
         } catch (e) {
@@ -524,7 +525,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 } else {
                     state.line = -1
                 }
-            } catch (e) {
+            } catch {
                 state.line = -1
             }
             state.canUndo = mips.canUndo
@@ -838,7 +839,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 const ins = mips.getNextStatement()
                 //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
                 state.line = ins.sourceLine - 1
-            } catch (e) {}
+            } catch {}
 
             state.canUndo = mips.canUndo
 
@@ -862,7 +863,7 @@ export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 updateMemory()
                 updateData()
                 scrollStackTab()
-            } catch (e) {}
+            } catch {}
             state.terminated = true
             state.line = line
         }

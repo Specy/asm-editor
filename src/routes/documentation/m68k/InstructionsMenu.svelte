@@ -1,6 +1,4 @@
 <script lang="ts">
-    import { createBubbler } from 'svelte/legacy'
-
     import Column from '$cmp/shared/layout/Column.svelte'
     interface Props {
         currentInstructionName?: string
@@ -13,7 +11,7 @@
 </script>
 
 <Column>
-    {#each instructions as ins}
+    {#each instructions as ins (ins)}
         <a
             href="{hrefBase}/{ins}"
             class="instruction-link"

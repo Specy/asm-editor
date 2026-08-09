@@ -1,10 +1,11 @@
-export function viewStore(obj: any) {
-    for (const key in obj) {
-        if (obj.hasOwnProperty(key)) {
-            if (typeof obj[key] === 'object') {
-                viewStore(obj[key])
+export function viewStore(obj: object) {
+    const record = obj as Record<string, unknown>
+    for (const key in record) {
+        if (Object.prototype.hasOwnProperty.call(record, key)) {
+            if (typeof record[key] === 'object') {
+                viewStore(record[key] as object)
             } else {
-                obj[key]
+                void record[key]
             }
         }
     }

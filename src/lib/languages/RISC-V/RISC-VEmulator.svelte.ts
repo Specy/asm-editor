@@ -127,6 +127,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
     function addDecorations() {
         if (!riscv) return
         const statements = riscv.getCompiledStatements()
+        // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Scratch map is populated and read locally with no tracked consumer.
         const joined = new Map<number, JsProgramStatement[]>()
         for (const statement of statements) {
             const arr = joined.get(statement.sourceLine)
@@ -357,7 +358,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
                 try {
                     const ins = riscv?.getStatementAtAddress(step.pc)
                     line = ins?.sourceLine ?? -1
-                } catch (e) {}
+                } catch {}
                 const mutations = backstepToMutation(step)
                 if (!mutations) return null
                 return {
@@ -443,7 +444,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
             //TODO improve this
             riscv?.getNextStatement()
             return false
-        } catch (e) {
+        } catch {
             return true
         }
     }
@@ -457,7 +458,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
             try {
                 const ins = riscv.getNextStatement()
                 state.line = ins.sourceLine - 1
-            } catch (e) {}
+            } catch {}
 
             state.canUndo = riscv.canUndo
             //if it managed to step, it means it does not have valid errors
@@ -526,7 +527,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
                 } else {
                     state.line = -1
                 }
-            } catch (e) {
+            } catch {
                 state.line = -1
             }
             state.canUndo = riscv?.canUndo ?? false
@@ -840,7 +841,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
                 const ins = riscv.getNextStatement()
                 //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
                 state.line = ins.sourceLine - 1
-            } catch (e) {}
+            } catch {}
 
             state.canUndo = riscv.canUndo
 
@@ -864,7 +865,7 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
                 updateMemory()
                 updateData()
                 scrollStackTab()
-            } catch (e) {}
+            } catch {}
             state.terminated = true
             state.line = line
         }

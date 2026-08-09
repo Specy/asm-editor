@@ -7,7 +7,6 @@ import {
     InterpreterStatus,
     makeGenericMonacoError,
     makeRegister,
-    type MonacoError,
     numbersOfSizeToSlice
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import type { Testcase, TestcaseResult, TestcaseValidationError } from '$lib/Project.svelte'
@@ -22,7 +21,7 @@ import {
 import type { Interrupt } from '@specy/s68k'
 
 export abstract class GenericEmulator<T, R extends string>
-    extends BaseEmulator<T, R>
+    extends BaseEmulator<R>
     implements BaseEmulatorActions, BaseEmulatorState
 {
     protected state: Omit<BaseEmulatorState, 'code'>
@@ -283,7 +282,7 @@ export abstract class GenericEmulator<T, R extends string>
     updateStatusRegisters() {
         const flags = this._getFlags()
 
-        this.state.statusRegisters = flags.map((s, i) => ({
+        this.state.statusRegisters = flags.map((s) => ({
             name: s.name,
             value: s.value ? 1 : 0,
             prev: (s.prev ?? s.value) ? 1 : 0
@@ -294,7 +293,7 @@ export abstract class GenericEmulator<T, R extends string>
         if (haltLimit <= 0) haltLimit = Number.MAX_SAFE_INTEGER
         const start = performance.now()
         try {
-            const status = await this._run(haltLimit, this.state.breakpoints)
+            await this._run(haltLimit, this.state.breakpoints)
             const terminated = this._hasTerminated()
             try {
                 const ins = this._getNextInstruction()
@@ -304,7 +303,7 @@ export abstract class GenericEmulator<T, R extends string>
                 } else {
                     this.state.line = -1
                 }
-            } catch (e) {
+            } catch {
                 this.state.line = -1
             }
             this.state.canUndo = this._canUndo()
@@ -457,7 +456,7 @@ export abstract class GenericEmulator<T, R extends string>
             try {
                 const ins = this._getNextInstruction()
                 this.state.line = ins?.lineNumber ?? -1
-            } catch (e) {}
+            } catch {}
 
             this.state.canUndo = this._canUndo()
             //if it managed to step, it means it does not have valid errors

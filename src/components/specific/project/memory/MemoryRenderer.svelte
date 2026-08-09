@@ -168,7 +168,7 @@
 
 <div class="memory-grid" style={`--bytesPerRow: ${bytesPerRow}; ${style}`}>
     <div class="memory-offsets">
-        {#each new Array(bytesPerRow).fill(0) as _, offset}
+        {#each new Array(bytesPerRow).keys() as offset}
             <div>
                 {getTextFromValue(BigInt(offset), 2, DisplayType.Hex)}
             </div>
@@ -222,7 +222,7 @@
         ondragstart={(e) => e.preventDefault()}
         onpointermove={selectingAddresses ? handlePointerMove : undefined}
     >
-        {#each memory.current as word, i}
+        {#each memory.current as word, i (currentAddress + BigInt(i))}
             {@const signed = unsignedBigIntToSigned(BigInt(word), 1)}
             {@const selectionValue = getNumberInRange(
                 memory,

@@ -3,6 +3,7 @@
     import M68KConditionCodes from './M68KConditionCodes.svelte'
     import { branchConditionsFlags } from '$lib/languages/M68K/M68K-documentation'
     import Column from '$cmp/shared/layout/Column.svelte'
+    import { resolve } from '$app/paths'
     const flags = Array.from(branchConditionsFlags.entries())
 </script>
 
@@ -10,8 +11,8 @@
     When performing operations, the CPU will set condition codes in the status register after the
     instruction is executed.
     <br />
-    For example the <a href="/documentation/m68k/instruction/tst">tst</a>,
-    <a href="/documentation/m68k/instruction/cmp">cmp</a>
+    For example the <a href={resolve('/documentation/m68k/instruction/tst', {})}>tst</a>,
+    <a href={resolve('/documentation/m68k/instruction/cmp', {})}>cmp</a>
     instructions will set the condition codes that represent the result of the comparison of the operands.
     <br />
     The following are all the condition codes available:
@@ -21,9 +22,9 @@
 </div>
 <div class="text">
     The instructions that use the condition codes are:
-    <a href="/documentation/m68k/instruction/bcc">bcc</a>
-    <a href="/documentation/m68k/instruction/dbcc">dbcc</a>
-    <a href="/documentation/m68k/instruction/scc">scc</a>
+    <a href={resolve('/documentation/m68k/instruction/bcc', {})}>bcc</a>
+    <a href={resolve('/documentation/m68k/instruction/dbcc', {})}>dbcc</a>
+    <a href={resolve('/documentation/m68k/instruction/scc', {})}>scc</a>
 </div>
 <h2 style="margin-top: 2rem;">Condition codes flags</h2>
 <div class="text">
@@ -40,7 +41,7 @@
     set to the value of the carry.
 </div>
 <Column gap="0.4rem" style="margin-left: 1rem">
-    {#each flags as cc}
+    {#each flags as cc (cc[0])}
         <DocsOperand name={cc[0]} content={cc[1]} style="width: fit-content" />
     {/each}
 </Column>

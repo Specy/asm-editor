@@ -23,14 +23,20 @@
     import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
     import FaDumbbell from '~icons/fa-solid/dumbbell'
     import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
+    import { resolve } from '$app/paths'
+
+    interface BeforeInstallPromptEvent extends Event {
+        prompt(): Promise<void>
+    }
+
     const textShadowPrimary = ThemeStore.getColor('primary').isDark()
     const textShadowSecondary = ThemeStore.getColor('secondary').isDark()
-    let installEvent: any = $state(null)
+    let installEvent: BeforeInstallPromptEvent | null = $state(null)
     onMount(() => {
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault()
             console.log('beforeinstallprompt', e)
-            installEvent = e
+            installEvent = e as BeforeInstallPromptEvent
         })
     })
     let shadow = $derived(textShadowPrimary && 'box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);')
@@ -209,7 +215,11 @@
                 The editor comes with built-in documentation for the M68K, MIPS and RISC-V
                 instruction sets including the valid addressing modes, description and examples for
                 each instruction, directive and syscall.
-                <a href="/documentation" title="View documentation" class="external-link">
+                <a
+                    href={resolve('/documentation', {})}
+                    title="View documentation"
+                    class="external-link"
+                >
                     Visit the documentation
                     <div style="width: 1rem; height: 1rem; margin-top: 0.2rem; margin-left: 0.3rem">
                         <GoLinkExternal />
@@ -244,7 +254,7 @@
             {/snippet}
             <div class="description" class:textShadow={textShadowPrimary}>
                 Create exams for students with the <a
-                    href="/exam"
+                    href={resolve('/exam', {})}
                     title="Exam tool"
                     class="external-link"
                 >
@@ -262,7 +272,11 @@
             {/snippet}
             <div class="description" class:textShadow={textShadowSecondary}>
                 Chat with an AI assistant that can write, run and debug assembly code directly in
-                the browser. Use the <a href="/chat" title="AI Chat" class="external-link">
+                the browser. Use the <a
+                    href={resolve('/chat', {})}
+                    title="AI Chat"
+                    class="external-link"
+                >
                     AI Chat
                     <div style="width: 1rem; height: 1rem; margin-top: 0.2rem; margin-left: 0.3rem">
                         <GoLinkExternal />
@@ -277,7 +291,7 @@
             {/snippet}
             <div class="description" class:textShadow={textShadowPrimary}>
                 Embed the editor in your website to show and teach how assembly works using the <a
-                    href="/embed"
+                    href={resolve('/embed', {})}
                     title="Embedder tool"
                     class="external-link"
                 >

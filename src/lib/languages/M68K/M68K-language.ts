@@ -31,7 +31,7 @@ function parseArgs(data): [Arg[], string[]] {
     })
     return [args, boundaries]
 }
-export function createM68kFormatter(monaco: MonacoType) {
+export function createM68kFormatter(_monaco: MonacoType) {
     return {
         provideDocumentFormattingEdits: (model) => {
             //this just formats arguments and labels

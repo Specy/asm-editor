@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { ThemeStore, type ThemeKeys, type ThemeProp } from '$stores/themeStore.svelte'
+    import { ThemeStore, type ThemeProp } from '$stores/themeStore.svelte'
     import { TinyColor } from '@ctrl/tinycolor'
     import FaUndo from '~icons/fa-solid/undo'
     import Button from '$cmp/shared/button/Button.svelte'

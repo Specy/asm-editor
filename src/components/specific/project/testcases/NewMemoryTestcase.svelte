@@ -1,6 +1,4 @@
 <script lang="ts">
-    import { run } from 'svelte/legacy'
-
     import MemoryTestcaseValue from '$cmp/specific/project/testcases/MemoryTestcaseValue.svelte'
     import type { MemoryValue } from '$lib/Project.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'

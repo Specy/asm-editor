@@ -68,7 +68,7 @@
 
     <section id="instructions">
         <h2>Instructions</h2>
-        {#each instructionsDocumentationList as ins}
+        {#each instructionsDocumentationList as ins (ins.name)}
             <div class="instruction">
                 <div class="row align-center">
                     <h3 class="sub-title" id={ins.name}>

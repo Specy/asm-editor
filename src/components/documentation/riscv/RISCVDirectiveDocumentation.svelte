@@ -12,7 +12,7 @@
 </script>
 
 <Column gap="1rem" style="width: 100%;">
-    {#each Object.values(riscvDirectivesMap) as directive}
+    {#each Object.values(riscvDirectivesMap) as directive (directive.name)}
         <Card gap="1rem" padding="1rem" background="secondary" style="width: 100%;">
             <h2>.{directive.name}</h2>
             <MarkdownRenderer source={directive.description} {disableLinks} />

@@ -1,5 +1,4 @@
 <script lang="ts">
-    import DocsOperand from '$cmp/documentation/DocsOperand.svelte'
     import stringSimilarity from 'string-similarity'
     import DocsSection from '$cmp/shared/layout/TogglableSection.svelte'
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
@@ -8,10 +7,7 @@
     let wrapper: HTMLDivElement = $state()
     import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
     import {
-        aggregateArgs,
         formatAggregatedArgs,
-        MIPSAddressingModes,
-        mipsDirectivesMap,
         mipsInstructionMap,
         mipsInstructionNames
     } from '$lib/languages/MIPS/MIPS-documentation'
@@ -90,7 +86,7 @@
             <h4>Instructions</h4>
         {/snippet}
         <div class="column sub-section">
-            {#each mipsInstructionNames as ins}
+            {#each mipsInstructionNames as ins (ins)}
                 {@const instruction = mipsInstructionMap.get(ins)}
                 <div class="instruction">
                     <div class="row align-center">

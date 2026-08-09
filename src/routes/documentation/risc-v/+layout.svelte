@@ -12,14 +12,15 @@
     import MenuLink from '../m68k/instruction/MenuLink.svelte'
     import InstructionsMenu from '../m68k/InstructionsMenu.svelte'
     import { LANGUAGE_THEMES } from '$lib/Config'
-    import { DEFAULT_THEME, ThemeStore, type ThemeKeys } from '$stores/themeStore.svelte'
-    import { onDestroy, onMount, untrack } from 'svelte'
+    import { DEFAULT_THEME, ThemeStore } from '$stores/themeStore.svelte'
+    import { onMount } from 'svelte'
     import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
     import {
         riscvInstructionNames,
         riscvInstructionMap
     } from '$lib/languages/RISC-V/RISC-V-documentation'
     import Sidebar from '$cmp/shared/layout/Sidebar.svelte'
+    import { resolve } from '$app/paths'
     interface Props {
         children?: import('svelte').Snippet
     }
@@ -49,14 +50,14 @@
 
 <Navbar style="border-bottom-left-radius: 0;">
     <Row gap="0.6rem" align="center" flex1>
-        <a class="icon" href="/" title="Go to the home">
+        <a class="icon" href={resolve('/', {})} title="Go to the home">
             <img src="/favicon.png" alt="logo" />
         </a>
-        <a class="icon" href="/projects" title="Go to your projects"> Projects </a>
+        <a class="icon" href={resolve('/projects', {})} title="Go to your projects"> Projects </a>
 
-        <a href="/documentation"> Docs </a>
-        <a href="/learn/courses"> Learn </a>
-        <a class="icon ai" href="/chat" title="AI Chat">
+        <a href={resolve('/documentation', {})}> Docs </a>
+        <a href={resolve('/learn/courses', {})}> Learn </a>
+        <a class="icon ai" href={resolve('/chat', {})} title="AI Chat">
             <div class="hidden-very-small">
                 <SparklesIcon />
             </div>

@@ -6,6 +6,7 @@
     } from '$lib/languages/M68K/M68K-documentation'
     import { capitalize } from '$lib/utils'
     import FaArrowRight from '~icons/fa-solid/arrow-right'
+    import { resolve } from '$app/paths'
 
     type Group = {
         letter: string
@@ -35,7 +36,7 @@
 </svelte:head>
 <Page contentStyle="padding-top: 4rem; gap: 1rem; padding: 1rem">
     <h1>M68K Instructions</h1>
-    {#each groups as group}
+    {#each groups as group (group.letter)}
         {#if group.instructions.length}
             <a href="#{group.letter}" style="width: min-content; margin-top: 2rem;">
                 <h2 class="letter-group" id={group.letter}>
@@ -45,8 +46,13 @@
                 </h2>
             </a>
             <div class="instructions">
-                {#each group.instructions as ins}
-                    <a class="instruction" href="/documentation/m68k/instruction/{ins.name}">
+                {#each group.instructions as ins (ins.name)}
+                    <a
+                        class="instruction"
+                        href={resolve('/documentation/m68k/instruction/[instructionName]', {
+                            instructionName: ins.name
+                        })}
+                    >
                         <div>
                             {capitalize(ins.name)}
                         </div>

@@ -1,5 +1,4 @@
 <script lang="ts">
-    import DocsOperand from '$cmp/documentation/DocsOperand.svelte'
     import stringSimilarity from 'string-similarity'
     import DocsSection from '$cmp/shared/layout/TogglableSection.svelte'
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
@@ -8,9 +7,7 @@
     let wrapper: HTMLDivElement = $state()
     import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
     import {
-        aggregateArgs,
         formatAggregatedArgs,
-        riscvDirectivesMap,
         riscvInstructionMap,
         riscvInstructionNames
     } from '$lib/languages/RISC-V/RISC-V-documentation'
@@ -79,7 +76,7 @@
             <h4>Instructions</h4>
         {/snippet}
         <div class="column sub-section">
-            {#each riscvInstructionNames as ins}
+            {#each riscvInstructionNames as ins (ins)}
                 {@const instruction = riscvInstructionMap.get(ins)}
                 <div class="instruction">
                     <div class="row align-center">

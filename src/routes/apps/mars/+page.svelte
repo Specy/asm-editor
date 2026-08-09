@@ -4,6 +4,18 @@
     import Page from '$cmp/shared/layout/Page.svelte'
     import { isClipboardReadSupported } from '../appsUtils'
 
+    type CheerpJWindow = Window &
+        typeof globalThis & {
+            cheerpjInit(options: {
+                version: number
+                clipboardMode: 'permission' | 'system'
+            }): Promise<void>
+        }
+    type LoadedCheerpJWindow = CheerpJWindow & {
+        cheerpjRunJar(jarUrl: string): void
+        cheerpjCreateDisplay(width?: number, height?: number, container?: HTMLElement): void
+    }
+
     let CHEERP = $state<null | {
         cheerpjRunJar: (jarUrl: string) => void
         cheerpjCreateDisplay: (width?: number, height?: number, container?: HTMLElement) => void
@@ -11,15 +23,17 @@
     onMount(() => {
         async function onload() {
             const clipboardSupported = await isClipboardReadSupported()
-            if (!('cheerpjRunJar' in window)) {
-                await (window as any).cheerpjInit({
+            const cheerpJWindow = window as CheerpJWindow
+            if (!('cheerpjRunJar' in cheerpJWindow)) {
+                await cheerpJWindow.cheerpjInit({
                     version: 11,
                     clipboardMode: clipboardSupported ? 'permission' : 'system'
                 })
             }
+            const loadedCheerpJWindow = cheerpJWindow as LoadedCheerpJWindow
             CHEERP = {
-                cheerpjRunJar: (window as any).cheerpjRunJar,
-                cheerpjCreateDisplay: (window as any).cheerpjCreateDisplay
+                cheerpjRunJar: loadedCheerpJWindow.cheerpjRunJar,
+                cheerpjCreateDisplay: loadedCheerpJWindow.cheerpjCreateDisplay
             }
         }
 

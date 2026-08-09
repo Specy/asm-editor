@@ -8,6 +8,7 @@ export const SHARE_ID = '__share__'
 function createProjectStore() {
     let inited = $state(false)
     let projects = $state<Project[]>([])
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Imperative async/event workflows use this registry; it has no tracked consumer.
     const writableFiles = new Map<string, FileSystemFileHandle>()
     if (browser) {
         load()

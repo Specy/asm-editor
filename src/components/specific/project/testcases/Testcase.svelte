@@ -78,7 +78,7 @@
 
         <Header type="h3">Inputs</Header>
         <Row gap="0.3rem" style="flex-wrap: wrap">
-            {#each testcase.input as line, i}
+            {#each testcase.input.keys() as i}
                 <textarea
                     bind:value={testcase.input[i]}
                     class="input-textarea"

@@ -28,7 +28,7 @@
         }
     }
 
-    beforeNavigate((n) => {
+    beforeNavigate((_navigation) => {
         handleProgress('started')
     })
     afterNavigate(() => {

@@ -32,6 +32,7 @@
     const BASE_URL = 'https://app.discerns.ai'
 
     let iframeSrc = $derived.by(() => {
+        // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Temporary params only build this derived URL.
         const params = new URLSearchParams()
         if (DISCERNS_AVATAR_INSTANCE_ID) {
             params.set('avatarInstanceId', String(DISCERNS_AVATAR_INSTANCE_ID))
@@ -56,7 +57,9 @@
         let disposeProtocol: (() => void) | undefined
 
         // Reset tracked state on recreation
+        // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Reactive mutation would self-invalidate and repeat tool side effects.
         registeredToolNames = new Set()
+        // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Reactive mutation would self-invalidate and repeat context side effects.
         registeredContextKeys = new Set()
         protocol = undefined
 

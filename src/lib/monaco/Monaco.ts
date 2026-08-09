@@ -27,7 +27,7 @@ class MonacoLoader {
         this.monaco = monaco
         // @ts-ignore add worker
         self.MonacoEnvironment = {
-            getWorker: function (_moduleId: any, label: string) {
+            getWorker: function (_moduleId: unknown, _label: string) {
                 return new editorWorker()
             }
         }

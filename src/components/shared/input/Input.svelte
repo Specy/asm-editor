@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { run, createBubbler } from 'svelte/legacy'
+    import { createBubbler } from 'svelte/legacy'
 
     const bubble = createBubbler()
     import FaExclamationCircle from '~icons/fa-solid/exclamation-circle'
@@ -11,7 +11,7 @@
 
     interface Props {
         title?: string
-        value: any
+        value: string
         status?: statusType
         style?: string
         wrapperStyle?: string

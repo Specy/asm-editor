@@ -7,7 +7,7 @@ function removeRoot(url: string) {
 }
 
 function createNavigationStore() {
-    const { subscribe, set, update } = writable({
+    const { subscribe, set } = writable({
         current: '',
         direction: 'forward' as NavigationDiretion
     })

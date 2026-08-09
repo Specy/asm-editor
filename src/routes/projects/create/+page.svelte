@@ -1,5 +1,6 @@
 <script lang="ts">
     import { goto } from '$app/navigation'
+    import { resolve } from '$app/paths'
 
     import Button from '$cmp/shared/button/Button.svelte'
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
@@ -31,7 +32,7 @@
         try {
             await ProjectStore.addProject(project)
             toast.logPill('Project created')
-            goto(`/projects/${project.id}`)
+            goto(resolve('/projects/[project]', { project: project.id }))
         } catch (e) {
             console.error(e)
             toast.error('Error creating project')
@@ -50,7 +51,7 @@
 <Page cropped="40rem" style="padding-top: 3rem">
     <div class="create-project">
         <div class="row top-title">
-            <a href="/projects" class="go-back" title="Go to the projects page">
+            <a href={resolve('/projects', {})} class="go-back" title="Go to the projects page">
                 <Button hasIcon cssVar="primary" style="padding: 0.4rem">
                     <Icon size={2}>
                         <FaAngleLeft />

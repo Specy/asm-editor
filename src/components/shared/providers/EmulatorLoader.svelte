@@ -1,4 +1,4 @@
-<script lang="ts" generics="T">
+<script lang="ts">
     import type { AvailableLanguages } from '$lib/Project.svelte'
     import { type Emulator, GenericEmulator } from '$lib/languages/Emulator'
     import { onDestroy, untrack, type Snippet } from 'svelte'

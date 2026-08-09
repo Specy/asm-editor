@@ -23,7 +23,7 @@
 </script>
 
 <div class="size-selector-2" {style}>
-    {#each sizes as size}
+    {#each sizes as size (size)}
         <button
             onclick={() => {
                 selected = size

@@ -1,5 +1,4 @@
 <script lang="ts">
-    import Navbar from '$cmp/shared/layout/Navbar.svelte'
     import Page from '$cmp/shared/layout/Page.svelte'
     import { versions } from './versions'
     import FaCircle from '~icons/fa-solid/circle'
@@ -25,7 +24,7 @@
 <Page cropped contentStyle="padding: 1rem; padding-top: 4rem">
     <h1 style="margin-top: 1rem; margin-bottom: 2rem;">Changelog</h1>
     <Column gap="0.6rem">
-        {#each versions as version}
+        {#each versions as version (version.version)}
             <Column gap="0.6rem">
                 <Row gap="1rem" align="center">
                     <h2 class="version-title">
@@ -43,7 +42,7 @@
                         </h2>
                     {/if}
                     <ul>
-                        {#each version.changes as change}
+                        {#each version.changes as change (change)}
                             <li>
                                 {change}
                             </li>

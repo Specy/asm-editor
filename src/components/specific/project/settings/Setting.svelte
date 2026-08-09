@@ -1,6 +1,4 @@
 <script lang="ts">
-    import { run } from 'svelte/legacy'
-
     import type { SettingValue } from '$stores/settingsStore.svelte'
     import { createEventDispatcher } from 'svelte'
 
@@ -9,14 +7,7 @@
     }
 
     let { entry }: Props = $props()
-    let prev = $state(entry.value)
-    $effect(() => {
-        prev = entry.value
-    })
-    let value = $state(entry.value)
-    $effect(() => {
-        value = prev
-    })
+    let value = $derived(entry.value)
     const dispatcher = createEventDispatcher<{
         changeValue: unknown
     }>()
