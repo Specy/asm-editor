@@ -4,8 +4,6 @@ import { id } from '$lib/storage/db'
 import { createDebouncer } from '$lib/utils'
 import { TinyColor } from '@ctrl/tinycolor'
 
-import cloneDeep from 'clone-deep'
-
 //TODO redo this with a single writable object, it doesnt need to be this complicated
 export const DEFAULT_THEME = {
     version: 1,
@@ -231,11 +229,15 @@ type StoredTheme<T extends string = string> = {
     theme: Record<T, ThemeProp<T>>
 }
 
-export const BUILTIN_THEMES = [DEFAULT_THEME, DEFAULT_MIPS_THEME, DEFAULT_RISCV_THEME]
+export const BUILTIN_THEMES: StoredTheme<ThemeKeys>[] = [
+    DEFAULT_THEME,
+    DEFAULT_MIPS_THEME,
+    DEFAULT_RISCV_THEME
+]
 
-function makeThemeStore<T extends string>(_theme: StoredTheme<T>) {
+function makeThemeStore(_theme: StoredTheme<ThemeKeys>) {
     const [debouncer] = createDebouncer(100)
-    let themes = $state(cloneDeep(BUILTIN_THEMES))
+    let themes: StoredTheme<ThemeKeys>[] = $state(structuredClone(BUILTIN_THEMES))
     let meta = $state({
         name: _theme.name,
         textForDark: '#dbdbdb',
@@ -245,10 +247,10 @@ function makeThemeStore<T extends string>(_theme: StoredTheme<T>) {
         extends: _theme.extends,
         editable: _theme.editable
     })
-    const theme = $state(_theme.theme)
-    const themeArray = $derived(Object.values(theme) as ThemeProp<T>[])
+    const theme: Record<ThemeKeys, ThemeProp<ThemeKeys>> = $state(_theme.theme)
+    const themeArray = $derived(Object.values(theme))
 
-    function isDefault(key: string, color: string) {
+    function isDefault(key: ThemeKeys, color: string) {
         const extended = BUILTIN_THEMES.find((t) => t.id === meta.extends)
         if (extended) {
             return (
@@ -259,20 +261,19 @@ function makeThemeStore<T extends string>(_theme: StoredTheme<T>) {
         }
     }
 
-    function reset(key: T) {
+    function reset(key: ThemeKeys) {
         const extended = BUILTIN_THEMES.find((t) => t.id === meta.extends)
         if (extended) {
-            // @ts-ignore -- Built-in themes contain the store's runtime key.
             set(key, extended.theme[key].color)
         }
     }
 
-    function set(key: T, color: string) {
+    function set(key: ThemeKeys, color: string) {
         theme[key].color = color
         save()
     }
 
-    function get(key: T) {
+    function get(key: ThemeKeys) {
         return theme[key]
     }
 
@@ -281,18 +282,18 @@ function makeThemeStore<T extends string>(_theme: StoredTheme<T>) {
         return localStorage.getItem('selected_theme') || BUILTIN_THEMES[0].id
     }
 
-    function getText(key: string) {
+    function getText(key: ThemeKeys) {
         const color = getColor(key)
         return color?.isDark() ? meta.textForDark : meta.textForLight
     }
 
-    function layer(key: string, layer: number) {
+    function layer(key: ThemeKeys, layer: number) {
         const color = getColor(key)
         const isDark = color.isDark()
         return isDark ? color.lighten(layer) : color.darken(layer)
     }
 
-    function getColor(key: string) {
+    function getColor(key: ThemeKeys) {
         return new TinyColor(theme[key].color)
     }
 
@@ -300,7 +301,7 @@ function makeThemeStore<T extends string>(_theme: StoredTheme<T>) {
         if (!browser) return
         themes = themes.map((t) => {
             if (t.id === meta.id) {
-                t.theme = cloneDeep(theme)
+                t.theme = structuredClone($state.snapshot(theme))
             }
             return t
         })
@@ -316,8 +317,9 @@ function makeThemeStore<T extends string>(_theme: StoredTheme<T>) {
     function load() {
         try {
             if (!browser) return
-            const savedThemes = JSON.parse(localStorage.getItem('themes')) as
-                StoredTheme<T>[] | null
+            const savedThemesJson = localStorage.getItem('themes')
+            if (savedThemesJson === null) return
+            const savedThemes: StoredTheme<ThemeKeys>[] | null = JSON.parse(savedThemesJson)
             if (!savedThemes) return
             themes = [...BUILTIN_THEMES, ...savedThemes]
             select(getChosenTheme())
@@ -326,12 +328,13 @@ function makeThemeStore<T extends string>(_theme: StoredTheme<T>) {
         }
     }
 
-    function setTheme(selected: StoredTheme<T>, dontSave = false) {
-        for (const key in selected.theme) {
+    function setTheme(selected: StoredTheme<ThemeKeys>, dontSave = false) {
+        for (const selectedProp of Object.values(selected.theme)) {
+            const key = selectedProp.prop
             if (!theme[key]) {
-                theme[key] = selected.theme[key]
+                theme[key] = selectedProp
             } else {
-                theme[key].color = selected.theme[key].color
+                theme[key].color = selectedProp.color
             }
         }
         meta = {
@@ -366,10 +369,10 @@ function makeThemeStore<T extends string>(_theme: StoredTheme<T>) {
             editable: true,
             name,
             extends: meta.extends,
-            theme: cloneDeep(theme)
-        } satisfies StoredTheme<T>
-        for (const key in newTheme.theme) {
-            set(key as T, newTheme.theme[key].color)
+            theme: structuredClone($state.snapshot(theme))
+        } satisfies StoredTheme<ThemeKeys>
+        for (const themeProp of Object.values(newTheme.theme)) {
+            set(themeProp.prop, themeProp.color)
         }
         meta = {
             textForDark: '#dbdbdb',
@@ -390,7 +393,6 @@ function makeThemeStore<T extends string>(_theme: StoredTheme<T>) {
         if (!theme || !theme.editable) return
         themes = themes.filter((t) => t.id !== themeId)
         if (meta.id === themeId) {
-            // @ts-ignore -- The default theme has the same runtime shape.
             setTheme(BUILTIN_THEMES[0])
         }
         save()
@@ -428,5 +430,4 @@ function makeThemeStore<T extends string>(_theme: StoredTheme<T>) {
     }
 }
 
-// @ts-ignore -- The store accepts the readonly built-in theme shape at runtime.
 export const ThemeStore = makeThemeStore(BUILTIN_THEMES[0])

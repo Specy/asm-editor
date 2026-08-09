@@ -78,7 +78,7 @@
         emulator.setCode(code)
     })
 
-    let editor: monaco.editor.IStandaloneCodeEditor = $state()
+    let editor: monaco.editor.IStandaloneCodeEditor | undefined = $state()
     let testcasesResult: TestcaseResult[] = $state([])
     let running = $state(false)
     let building = $state(false)
@@ -104,6 +104,13 @@
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Imperative window callbacks consume this accumulator; it has no tracked consumer.
     const pressedKeys = new Map<string, boolean>()
     const [debounced] = createDebouncer(3000)
+
+    function revealEditorLine(lineNumber: number, column: number) {
+        const currentEditor = editor
+        if (!currentEditor) return
+        currentEditor.revealLineInCenter(lineNumber)
+        currentEditor.setPosition({ lineNumber, column })
+    }
 
     function handleKeyDown(e: KeyboardEvent) {
         pressedKeys.set(e.code, true)
@@ -136,7 +143,7 @@
             case ShortcutAction.RunCode: {
                 if (emulator.terminated || emulator.interrupt !== undefined || !emulator.canExecute)
                     break
-                emulator.run(settingsStore.values.instructionsLimit.value)
+                void runCode()
                 break
             }
             case ShortcutAction.SaveCode: {
@@ -152,7 +159,7 @@
             case ShortcutAction.Step: {
                 if (emulator.terminated || emulator.interrupt !== undefined || !emulator.canExecute)
                     break
-                emulator.step()
+                void stepCode()
                 break
             }
             case ShortcutAction.Undo: {
@@ -232,6 +239,24 @@
             toast.error('Error compiling code. ' + getM68kErrorMessage(e))
         } finally {
             building = false
+        }
+    }
+
+    async function runCode() {
+        try {
+            await emulator.run(settingsStore.values.instructionsLimit.value)
+        } catch (e) {
+            console.error(e)
+            toast.error('Error executing code. ' + getM68kErrorMessage(e))
+        }
+    }
+
+    async function stepCode() {
+        try {
+            await emulator.step()
+        } catch (e) {
+            console.error(e)
+            toast.error('Error executing code. ' + getM68kErrorMessage(e))
         }
     }
 </script>
@@ -391,6 +416,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
     editable={testcasesEditable}
     systemSize={emulator.systemSize}
     registerNames={emulator.registers.map((r) => r.name)}
+    startingRegisterNames={emulator.startingRegisterNames}
     hiddenRegistersNames={emulator.hiddenRegisters}
     bind:visible={testcasesVisible}
     {testcasesResult}
@@ -402,12 +428,10 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
         onGoToInstruction={(address) => {
             const line = emulator.getLineFromAddress(address)
             if (line < 0) return
-            editor.revealLineInCenter(line + 1)
-            editor.setPosition({ lineNumber: line + 1, column: 1 })
+            revealEditorLine(line + 1, 1)
         }}
         onGoToLabel={(label) => {
-            editor.revealLineInCenter(label.line + 1)
-            editor.setPosition({ lineNumber: label.line + 1, column: 1 })
+            revealEditorLine(label.line + 1, 1)
         }}
     />
 </ToggleableDraggable>
@@ -421,8 +445,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
         }}
         on:highlight={(e) => {
             const line = e.detail
-            editor.revealLineInCenter(line + 1)
-            editor.setPosition({ lineNumber: line + 1, column: 0 })
+            revealEditorLine(line + 1, 0)
         }}
         steps={emulator.latestSteps}
     />
@@ -456,7 +479,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                               return {
                                   afterLineNumber: v.belowLine,
                                   content: BelowLineContent,
-                                  props: { md: v.md, note: v.note }
+                                  props: { md: v.md, note: v.note ?? '' }
                               }
                           })
                         : []}
@@ -528,27 +551,19 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                 if (building || running) return
                 running = true
                 testcasesResult = []
-                setTimeout(() => {
+                setTimeout(async () => {
                     try {
-                        emulator.run(settingsStore.values.instructionsLimit.value)
+                        await runCode()
+                    } finally {
                         running = false
-                    } catch (e) {
-                        console.error(e)
-                        running = false
-                        toast.error('Error executing code. ' + getM68kErrorMessage(e))
                     }
                 }, 50)
             }}
             on:build={async () => {
                 await buildCode()
             }}
-            on:step={() => {
-                try {
-                    emulator.step()
-                } catch (e) {
-                    console.error(e)
-                    toast.error('Error executing code. ' + getM68kErrorMessage(e))
-                }
+            on:step={async () => {
+                await stepCode()
             }}
             on:undo={() => {
                 try {

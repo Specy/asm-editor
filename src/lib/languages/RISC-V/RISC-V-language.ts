@@ -1,4 +1,5 @@
 import type { MonacoType } from '$lib/monaco/Monaco'
+import type monaco from 'monaco-editor'
 import {
     RISCVAddressingModes,
     riscvDirectivesMap,
@@ -12,6 +13,21 @@ import { ALTERNATIVE_RISCVRegister_NAMES } from './RISC-VEmulator.svelte'
 import { RISCV, RISCV_REGISTERS } from '@specy/risc-v'
 
 const RISCVRegisterNames = [...RISCV_REGISTERS, ...ALTERNATIVE_RISCVRegister_NAMES]
+
+type CompletionMetadata = {
+    detail?: string
+    documentation?: string
+    insertText?: string
+    label?: string
+    priority?: number
+}
+type RegisterMetadata = Required<
+    Pick<CompletionMetadata, 'detail' | 'documentation' | 'insertText' | 'label'>
+>
+
+function hasOwnKey<T extends object>(value: T, key: PropertyKey): key is keyof T {
+    return Object.prototype.hasOwnProperty.call(value, key)
+}
 
 function splitAtChars(text: string, chars: string[]) {
     const result = []
@@ -49,7 +65,10 @@ function getPossibleInstruction(args: string[]): { instruction: string; other: s
     return { instruction: clone[0], other: clone.slice(1) }
 }
 
-export function createRISCVCompletition(monaco: MonacoType, is64 = false) {
+export function createRISCVCompletition(
+    monaco: MonacoType,
+    is64 = false
+): monaco.languages.CompletionItemProvider {
     return {
         triggerCharacters: ['.', ',', ' ', 'deleteLeft', 'tab'],
         provideCompletionItems: (model, position) => {
@@ -68,11 +87,20 @@ export function createRISCVCompletition(monaco: MonacoType, is64 = false) {
                 .filter((l) => l.endsWith(':'))
                 .map((l) => l.substring(0, l.length - 1))
             const args = parseArgs(data)
-            const suggestions = []
+            const word = model.getWordUntilPosition(position)
+            const range = new monaco.Range(
+                position.lineNumber,
+                word.startColumn,
+                position.lineNumber,
+                word.endColumn
+            )
+            const suggestions: monaco.languages.CompletionItem[] = []
             const ins = getPossibleInstruction(args)
             const lastArg = args[args.length - 1]
-            const someInstruction = RISCVRegisterNames.some((r) => r.startsWith(lastArg))
-            if (someInstruction && !CompletitionMap[lastArg]) {
+            const someInstruction = lastArg
+                ? RISCVRegisterNames.some((r) => r.startsWith(lastArg))
+                : false
+            if (someInstruction && !hasOwnKey(CompletitionMap, lastArg)) {
                 suggestions.push(
                     ...RISCVRegisterNames.map((r) => {
                         return {
@@ -80,7 +108,8 @@ export function createRISCVCompletition(monaco: MonacoType, is64 = false) {
                             kind: monaco.languages.CompletionItemKind.Variable,
                             insertText: r.substring(1),
                             documentation: `Register ${r}`,
-                            detail: r
+                            detail: r,
+                            range
                         }
                     })
                 )
@@ -94,7 +123,8 @@ export function createRISCVCompletition(monaco: MonacoType, is64 = false) {
                             kind: monaco.languages.CompletionItemKind.Keyword,
                             insertText: key,
                             documentation: value.description,
-                            detail: value.description
+                            detail: value.description,
+                            range
                         }
                     })
                 )
@@ -109,7 +139,8 @@ export function createRISCVCompletition(monaco: MonacoType, is64 = false) {
                             insertText: l,
                             documentation: `Label ${l}`,
                             detail: 'Label',
-                            sortText: `${1000 - 5}`
+                            sortText: `${1000 - 5}`,
+                            range
                         }
                     })
 
@@ -127,7 +158,8 @@ export function createRISCVCompletition(monaco: MonacoType, is64 = false) {
                                     insertText: i[0].name,
                                     documentation:
                                         i[0].example + ' ' + i.map((i) => i.description).join('\n'),
-                                    detail: i.map((i) => i.description).join('\n')
+                                    detail: i.map((i) => i.description).join('\n'),
+                                    range
                                 }
                             })
                         )
@@ -137,18 +169,18 @@ export function createRISCVCompletition(monaco: MonacoType, is64 = false) {
                         const suggestedArg = m.args[ins.other.length]
                         if (suggestedArg) {
                             return suggestedArg.map((suggestedArg) => {
+                                const metadata = hasOwnKey(CompletitionMap, suggestedArg.type)
+                                    ? CompletitionMap[suggestedArg.type]
+                                    : undefined
                                 return {
-                                    label:
-                                        CompletitionMap[suggestedArg.type]?.label ??
-                                        suggestedArg.value,
+                                    label: metadata?.label ?? suggestedArg.value,
                                     kind: monaco.languages.CompletionItemKind.Variable,
                                     internal_type: suggestedArg.type,
-                                    insertText:
-                                        CompletitionMap[suggestedArg.type]?.insertText ??
-                                        suggestedArg.value,
+                                    insertText: metadata?.insertText ?? suggestedArg.value,
                                     documentation: suggestedArg.value,
                                     detail: suggestedArg.type,
-                                    sortText: `${1000 - (CompletitionMap[suggestedArg.type]?.priority ?? 0)}`
+                                    sortText: `${1000 - (metadata?.priority ?? 0)}`,
+                                    range
                                 }
                             })
                         }
@@ -186,7 +218,8 @@ export function createRISCVCompletition(monaco: MonacoType, is64 = false) {
                                 insertText: i[0].name,
                                 documentation:
                                     i[0].example + ' ' + i.map((i) => i.description).join('\n'),
-                                detail: i.map((i) => i.description).join('\n')
+                                detail: i.map((i) => i.description).join('\n'),
+                                range
                             }
                         })
                     )
@@ -197,8 +230,10 @@ export function createRISCVCompletition(monaco: MonacoType, is64 = false) {
             }
         },
         resolveCompletionItem(item) {
+            const label = typeof item.label === 'string' ? item.label : item.label.label
+            const metadata = hasOwnKey(CompletitionMap, label) ? CompletitionMap[label] : undefined
             return {
-                ...CompletitionMap[item.label],
+                ...metadata,
                 ...item,
                 preselect: true
             }
@@ -223,7 +258,10 @@ function formatInstructionHover(ins: RISCVInstruction[]) {
     return `${header}\n\n${body}`
 }
 
-export function createRISCVHoverProvider(monaco: MonacoType, is64 = false) {
+export function createRISCVHoverProvider(
+    monaco: MonacoType,
+    is64 = false
+): monaco.languages.HoverProvider {
     return {
         provideHover: (model, position) => {
             if (RISCV.is64Bit() === is64) {
@@ -231,7 +269,7 @@ export function createRISCVHoverProvider(monaco: MonacoType, is64 = false) {
             }
             const range = new monaco.Range(position.lineNumber, 1, position.lineNumber, 1000)
             const line = model.getValueInRange(range).trim()
-            const contents = []
+            const contents: monaco.IMarkdownString[] = []
             const text = model.getValue()
             const labels = text
                 .split('\n')
@@ -240,28 +278,29 @@ export function createRISCVHoverProvider(monaco: MonacoType, is64 = false) {
                 .map((l) => l.substring(0, l.length - 1))
 
             const word = model.getWordAtPosition(position)?.word
-            if (line?.startsWith(word) && line.includes(':')) {
+            if (word && line.startsWith(word) && line.includes(':')) {
                 contents.push({
                     value: `Label **${word}**`
                 })
             }
-            if (labels.includes(word) && !line.startsWith(word)) {
+            if (word && labels.includes(word) && !line.startsWith(word)) {
                 contents.push({
                     value: `Label **${word}**`
                 })
             }
-            const ins = riscvInstructionMap.get(word)
+            const ins = word ? riscvInstructionMap.get(word) : undefined
             if (ins) {
                 contents.push({
                     value: formatInstructionHover(ins)
                 })
             }
-            if (RISCVRegistersMap[word]) {
+            const register = word ? RISCVRegistersMap[word] : undefined
+            if (register) {
                 contents.push({
-                    value: RISCVRegistersMap[word].documentation
+                    value: register.documentation
                 })
             }
-            if (riscvDirectivesMap[word]) {
+            if (word && hasOwnKey(riscvDirectivesMap, word)) {
                 contents.push({
                     value: riscvDirectivesMap[word].description
                 })
@@ -275,7 +314,7 @@ export function createRISCVHoverProvider(monaco: MonacoType, is64 = false) {
     }
 }
 
-const RISCVRegistersMap = Object.fromEntries(
+const RISCVRegistersMap: Partial<Record<string, RegisterMetadata>> = Object.fromEntries(
     RISCVRegisterNames.map((r) => {
         return [
             r,
@@ -289,7 +328,7 @@ const RISCVRegistersMap = Object.fromEntries(
     })
 )
 
-const CompletitionMap = {
+const CompletitionMap: Partial<Record<string, CompletionMetadata>> = {
     ...RISCVRegistersMap,
     ...RISCVAddressingModes
 }

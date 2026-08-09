@@ -9,10 +9,7 @@
     import FaTimes from '~icons/fa-solid/times'
     import Row from '$cmp/shared/layout/Row.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
-    import {
-        mipsInstructionNames,
-        mipsInstructionMap
-    } from '$lib/languages/MIPS/MIPS-documentation'
+    import { mipsInstructionEntries } from '$lib/languages/MIPS/MIPS-documentation'
     import MenuLink from '../m68k/instruction/MenuLink.svelte'
     import InstructionsMenu from '../m68k/InstructionsMenu.svelte'
     import { LANGUAGE_THEMES } from '$lib/Config'
@@ -35,8 +32,7 @@
 
     let { children }: Props = $props()
 
-    let instructionNames = Array.from(mipsInstructionNames).sort((a, b) => a.localeCompare(b))
-    let instructions = instructionNames.map((name) => mipsInstructionMap.get(name)[0])
+    let instructions = mipsInstructionEntries.map(([, variants]) => variants[0])
     let menuOpen = $state(false)
     let search = $state('')
     const searcher = new FuzzySearch(instructions, ['name', 'description'], {

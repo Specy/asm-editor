@@ -1,14 +1,24 @@
 //if it includes bigints, then it needs superjson
 import _superjson from 'superjson'
+import type { SuperJSONResult } from 'superjson'
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null
+}
+
+function isSuperJsonResult(value: unknown): value is SuperJSONResult {
+    return isRecord(value) && 'json' in value
+}
 
 function needsSuperJson(obj: unknown): boolean {
-    if (typeof obj === 'object' && obj !== null) {
+    if (isRecord(obj)) {
         for (const key in obj) {
-            if (obj[key] instanceof BigInt || typeof obj[key] === 'bigint') {
+            const value = obj[key]
+            if (value instanceof BigInt || typeof value === 'bigint') {
                 return true
             }
-            if (typeof obj[key] === 'object') {
-                if (needsSuperJson(obj[key])) {
+            if (typeof value === 'object') {
+                if (needsSuperJson(value)) {
                     return true
                 }
             }
@@ -25,7 +35,7 @@ export const serializer = {
         }
     },
     parse: <T>(str: string): T => {
-        const result = JSON.parse(str)
-        return 'json' in result ? _superjson.deserialize(result) : result
+        const result: T | SuperJSONResult = JSON.parse(str)
+        return isSuperJsonResult(result) ? _superjson.deserialize<T>(result) : result
     }
 }

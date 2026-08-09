@@ -3,14 +3,16 @@ export enum PromptType {
     Confirm
 }
 type Prompt = {
-    promise: Promise<string | boolean> | null
+    promise: Promise<PromptResult> | null
     id: number
     question: string
     placeholder: string
     type: PromptType
-    resolve: ((value: string | boolean) => void) | null
+    resolve: ((value: PromptResult) => void) | null
     cancellable: boolean
 }
+type PromptResult = string | boolean | null
+
 function createPromptStore() {
     const prompt = $state<Prompt>({
         promise: null,
@@ -26,35 +28,56 @@ function createPromptStore() {
         type: PromptType,
         cancellable = true,
         placeholder = ''
-    ): Promise<string | boolean> {
-        prompt.resolve?.(null)
-        const promise = new Promise<string | boolean>((resolve) => {
-            prompt.promise = null
-            prompt.question = question
-            prompt.placeholder = placeholder
-            prompt.type = type
+    ): Promise<PromptResult> {
+        settle(null)
+        prompt.question = question
+        prompt.placeholder = placeholder
+        prompt.type = type
+        prompt.cancellable = cancellable
+        prompt.id = prompt.id + 1
+        const promise = new Promise<PromptResult>((resolve) => {
             prompt.resolve = resolve
-            prompt.cancellable = cancellable
-            prompt.id = prompt.id + 1
         })
         prompt.promise = promise
         return promise
     }
-    function confirm(question: string, cancellable = true): Promise<boolean> {
-        return ask(question, PromptType.Confirm, cancellable) as Promise<boolean>
+
+    async function confirm(question: string, cancellable = true): Promise<boolean | null> {
+        const result = await ask(question, PromptType.Confirm, cancellable)
+        return typeof result === 'boolean' ? result : null
     }
-    function askText(question: string, cancellable = true, placeholder = '') {
-        return ask(question, PromptType.Text, cancellable, placeholder) as Promise<string>
+
+    async function askText(
+        question: string,
+        cancellable = true,
+        placeholder = ''
+    ): Promise<string | null> {
+        const result = await ask(question, PromptType.Text, cancellable, placeholder)
+        return typeof result === 'string' ? result : null
     }
-    function answer(value: string | boolean) {
-        prompt.resolve?.(value)
-        cancel()
+
+    function answerText(value: string) {
+        if (prompt.type !== PromptType.Text) return
+        settle(value)
     }
+
+    function answerConfirm(value: boolean) {
+        if (prompt.type !== PromptType.Confirm) return
+        settle(value)
+    }
+
     function cancel() {
+        settle(null)
+    }
+
+    function settle(value: PromptResult) {
+        const resolve = prompt.resolve
         prompt.promise = null
         prompt.resolve = null
         reset()
+        resolve?.(value)
     }
+
     function reset() {
         prompt.question = ''
         prompt.placeholder = ''
@@ -81,10 +104,9 @@ function createPromptStore() {
         },
         confirm,
         askText,
-        ask,
-        answer,
-        cancel,
-        reset
+        answerText,
+        answerConfirm,
+        cancel
     }
 }
 

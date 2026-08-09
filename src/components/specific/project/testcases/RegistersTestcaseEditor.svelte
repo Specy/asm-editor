@@ -19,7 +19,7 @@
         registers = $bindable(),
         editable,
         registerNames,
-        hiddenRegistersNames
+        hiddenRegistersNames = []
     }: Props = $props()
 
     function makeNewRegister(defaultName?: string) {

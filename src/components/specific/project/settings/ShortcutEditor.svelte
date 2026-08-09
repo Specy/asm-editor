@@ -15,7 +15,7 @@
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- This imperative accumulator must not self-invalidate and clear the input.
     let currentKeys = new Map<string, true>()
     let selectedId = $state(-1)
-    let inputRef: HTMLInputElement = $state()
+    let inputRef: HTMLInputElement | undefined = $state()
     function handleKeydown(event: KeyboardEvent) {
         if (event.repeat) return
         if (event.code === 'Escape') return (selectedId = -1)
@@ -34,7 +34,7 @@
     })
     $effect(() => {
         if (selectedId !== -1) {
-            inputRef.focus()
+            inputRef?.focus()
         }
         currentKeys.clear()
         setCurrentShortcut()

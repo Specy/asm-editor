@@ -8,7 +8,10 @@
 
 <div class="cc-grid">
     {#each branchConditions as bc (bc)}
-        <DocsOperand name={bc} content={branchConditionsDescriptions.get(bc)} />
+        {@const description = branchConditionsDescriptions.get(bc)}
+        {#if description !== undefined}
+            <DocsOperand name={bc} content={description} />
+        {/if}
     {/each}
 </div>
 

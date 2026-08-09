@@ -1,4 +1,4 @@
-<script lang="ts">
+<script lang="ts" generics="ViewZoneProps extends Record<string, unknown> = Record<string, never>">
     import {
         type Component,
         createEventDispatcher,
@@ -29,8 +29,8 @@
         editor?: monaco.editor.IStandaloneCodeEditor
         viewZones?: {
             afterLineNumber: number
-            content: Component
-            props: unknown
+            content: Component<ViewZoneProps>
+            props: ViewZoneProps
         }[]
     }
 
@@ -46,16 +46,16 @@
         editor = $bindable(),
         viewZones = []
     }: Props = $props()
-    let mockEditor: HTMLDivElement | null = $state()
-    let monacoInstance: MonacoType | null = $state.raw()
-    let hoveredGliphen: number | null = $state()
+    let mockEditor: HTMLDivElement | null = $state(null)
+    let monacoInstance: MonacoType | null = $state.raw(null)
+    let hoveredGliphen: number | null = $state(null)
     let destroyed = false
     const toDispose: (monaco.IDisposable | (() => void))[] = []
     const dispatcher = createEventDispatcher<{
         change: string
         breakpointPress: number
     }>()
-    let el: HTMLDivElement = $state()
+    let el: HTMLDivElement | null = $state(null)
 
     $effect(() => {
         if (editor) {
@@ -64,14 +64,17 @@
     })
 
     onMount(async () => {
-        monacoInstance = await Monaco.get()
+        const loadedMonaco = await Monaco.get()
         if (destroyed) return
-        if (!el) return console.log('Wrapper element not valid', el)
-        await Monaco.registerLanguage(language)
+        monacoInstance = loadedMonaco
+        const editorElement = el
+        if (!editorElement) return console.log('Wrapper element not valid', editorElement)
+        const editorLanguage = language
+        await Monaco.registerLanguage(editorLanguage)
         if (destroyed) return
-        editor = monacoInstance.editor.create(el, {
+        const mountedEditor = loadedMonaco.editor.create(editorElement, {
             value: code,
-            language: language.toLowerCase(),
+            language: editorLanguage.toLowerCase(),
             theme: 'custom-theme',
             minimap: { enabled: false },
             scrollbar: {
@@ -86,14 +89,15 @@
             smoothScrolling: true,
             cursorSmoothCaretAnimation: 'on'
         })
-        const model = editor.getModel()
+        editor = mountedEditor
+        const model = mountedEditor.getModel()
         if (model) {
             model.setEOL(0)
         }
         const observer = new ResizeObserver(() => {
             if (!mockEditor) return
             const bounds = mockEditor.getBoundingClientRect()
-            editor.layout({
+            mountedEditor.layout({
                 width: bounds.width,
                 height: bounds.height
             })
@@ -103,16 +107,16 @@
         }
 
         toDispose.push(
-            editor.onMouseDown((e) => {
-                if (e.target.type === monacoInstance.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
+            mountedEditor.onMouseDown((e) => {
+                if (e.target.type === loadedMonaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
                     dispatcher('breakpointPress', e.target.position.lineNumber)
                 }
             }),
-            editor.onMouseLeave(() => {
+            mountedEditor.onMouseLeave(() => {
                 hoveredGliphen = null
             }),
-            editor.onMouseMove((e) => {
-                if (e.target.type === monacoInstance.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
+            mountedEditor.onMouseMove((e) => {
+                if (e.target.type === loadedMonaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
                     hoveredGliphen = e.target.position.lineNumber
                 } else {
                     hoveredGliphen = null
@@ -124,7 +128,7 @@
             toDispose.push(
                 model.onDidChangeContent(() => {
                     if (disabled) return
-                    code = editor.getValue()
+                    code = mountedEditor.getValue()
                     dispatcher('change', code)
                 })
             )
@@ -132,10 +136,12 @@
     })
 
     function setEditorValue(value: string) {
-        const model = editor.getModel()
+        const currentEditor = editor
+        if (!currentEditor) return
+        const model = currentEditor.getModel()
         if (!model) return
         const fullRange = model.getFullModelRange()
-        editor.executeEdits('external', [
+        currentEditor.executeEdits('external', [
             {
                 range: fullRange,
                 text: value
@@ -165,7 +171,7 @@
         model?.dispose()
     })
 
-    let decorations = $state.raw(editor?.createDecorationsCollection())
+    let decorations: monaco.editor.IEditorDecorationsCollection | undefined = $state.raw()
 
     $effect(() => {
         decorations = editor?.createDecorationsCollection()
@@ -228,12 +234,13 @@
     })
 
     $effect(() => {
-        if (editor && decorations) {
+        const currentMonaco = monacoInstance
+        if (editor && decorations && currentMonaco) {
             decorations.set([
                 ...(highlightedLine >= 0
                     ? [
                           {
-                              range: new monacoInstance.Range(
+                              range: new currentMonaco.Range(
                                   highlightedLine + 1,
                                   0,
                                   highlightedLine + 1,
@@ -248,7 +255,7 @@
                       ]
                     : []),
                 ...breakpoints.map((e) => ({
-                    range: new monacoInstance.Range(e + 1, 0, e + 1, 0),
+                    range: new currentMonaco.Range(e + 1, 0, e + 1, 0),
                     options: {
                         glyphMarginClassName: 'breakpoint-glyph'
                     }
@@ -256,7 +263,7 @@
                 ...(hoveredGliphen && !breakpoints.includes(hoveredGliphen - 1)
                     ? [
                           {
-                              range: new monacoInstance.Range(hoveredGliphen, 0, hoveredGliphen, 0),
+                              range: new currentMonaco.Range(hoveredGliphen, 0, hoveredGliphen, 0),
                               options: {
                                   glyphMarginClassName: 'hovered-glyph'
                               }
@@ -273,17 +280,18 @@
         }
     })
     $effect(() => {
-        if (editor && monacoInstance) {
+        const currentMonaco = monacoInstance
+        if (editor && currentMonaco) {
             const model = editor.getModel()
             if (!model) return
 
-            monacoInstance.editor.setModelMarkers(
+            currentMonaco.editor.setModelMarkers(
                 model,
                 language,
                 errors.map((e) => {
                     const position = e.column
                     return {
-                        severity: monacoInstance.MarkerSeverity.Error,
+                        severity: currentMonaco.MarkerSeverity.Error,
                         message: e.message,
                         startLineNumber: e.lineIndex + 1,
                         startColumn: position,

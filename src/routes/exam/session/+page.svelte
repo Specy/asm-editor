@@ -463,6 +463,7 @@
             const wantsToFinish = await Prompt.confirm(
                 'Do you want to finish the exam? You will not be able to edit the answers anymore.'
             )
+            if (wantsToFinish === null) return
             if (!wantsToFinish) return
         }
 
@@ -525,10 +526,7 @@
                     : 'Enter the exam access password to start the exam.',
                 false
             )
-            if (typeof accessPassword !== 'string') {
-                toast.error('A valid access password is required.')
-                continue
-            }
+            if (accessPassword === null) return null
             const hash = (await makeHash(accessPassword)).slice(0, 6)
             if (hash !== payload.accessPasswordHash) {
                 toast.error('Wrong access password')
@@ -588,7 +586,12 @@
                     'Welcome to the exam! The app will go full screen soon.\n\nIF YOU EXIT FULL SCREEN OR CHANGE PAGE, YOUR EDITOR WILL BE DISABLED.\n\nPlease write your name to start the exam.',
                     false
                 )
-                if (typeof studentName !== 'string' || !studentName.trim()) {
+                if (studentName === null) {
+                    status = 'error'
+                    errorMessage = 'Exam start cancelled.'
+                    return
+                }
+                if (!studentName.trim()) {
                     status = 'error'
                     errorMessage = 'A student name is required to start the exam.'
                     return
@@ -688,6 +691,7 @@
     {/if}
 
     {#if status === 'loaded' && exam}
+        {@const loadedExam = exam}
         {#if examDisabled && !submissionUrl}
             <div class="overlay">
                 <h1 class="loading">Exam disabled</h1>
@@ -751,7 +755,7 @@
             <Card padding="0.6rem" background="secondary">
                 <div class="session-header">
                     <div class="header-left">
-                        <Header type="h2">{exam.title}</Header>
+                        <Header type="h2">{loadedExam.title}</Header>
                         <p class="student-code">{examSubmission.hash}</p>
                         <p class="meta-line">
                             {examSubmission.name}
@@ -843,7 +847,7 @@
             {#if isOnInstructions && hasInstructions}
                 <Card padding="1rem" background="secondary" style="margin:0.5rem; flex:1;">
                     <Header type="h2">Instructions</Header>
-                    <MarkdownRenderer source={exam.instructions} disableLinks />
+                    <MarkdownRenderer source={loadedExam.instructions} disableLinks />
                     <Row style="justify-content:flex-end; margin-top: auto">
                         <Button onClick={goToNextSection}>Start first section</Button>
                     </Row>
@@ -876,7 +880,7 @@
                                     {#if isReviewMode}
                                         <ExamReviewAgentSidebar
                                             bind:open={teacherAgentOpen}
-                                            {exam}
+                                            exam={loadedExam}
                                             {sections}
                                             submission={examSubmission}
                                             activeSectionId={activeSection.id}
@@ -956,7 +960,7 @@
                         {#if isReviewMode}
                             <ExamReviewAgentSidebar
                                 bind:open={teacherAgentOpen}
-                                {exam}
+                                exam={loadedExam}
                                 {sections}
                                 submission={examSubmission}
                                 activeSectionId={activeSection.id}

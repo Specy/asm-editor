@@ -1,9 +1,11 @@
 import {
     ccrToFlagsArray,
+    type ExecutionStep,
     Interpreter,
     type Interrupt,
     type RegisterOperand,
-    S68k
+    S68k,
+    Size
 } from '@specy/s68k'
 import { PAGE_ELEMENTS_PER_ROW, PAGE_SIZE } from '$lib/Config'
 import { Prompt } from '$stores/promptStore.svelte'
@@ -30,24 +32,90 @@ import {
     RegisterSize
 } from '../commonLanguageFeatures.svelte'
 import { createDebouncer, delay } from '$lib/utils'
+import { ExecutionController, type ExecutionGeneration } from '$lib/languages/ExecutionController'
 
 export type M68KEmulatorState = BaseEmulatorState & {
     interrupt?: Interrupt
 }
 
+async function askTextOrThrow(question: string): Promise<string> {
+    const answer = await Prompt.askText(question)
+    if (answer === null) throw new Error('Input cancelled')
+    return answer
+}
+
 const defaultInterruptHandlers = {
     GetTime: async () => Math.round(Date.now() / 1000),
-    ReadKeyboardString: async () => Prompt.askText('Enter a string') as Promise<string>,
-    ReadNumber: async () => {
-        return Prompt.askText('Enter a number') as Promise<string | number>
-    },
+    ReadKeyboardString: async () => askTextOrThrow('Enter a string'),
+    ReadNumber: async () => askTextOrThrow('Enter a number'),
     ReadChar: async () => {
-        return ((await Prompt.askText('Enter a character')) as string)[0]
+        const char = (await askTextOrThrow('Enter a character'))[0]
+        if (!char) throw new Error(`Expected a character, got "${char}"`)
+        return char
     },
     Delay: async (ms: number) => {
         await delay(ms)
     }
 } as const
+
+const sizeMap = {
+    [Size.Byte]: RegisterSize.Byte,
+    [Size.Word]: RegisterSize.Word,
+    [Size.Long]: RegisterSize.Long
+} satisfies Record<Size, RegisterSize>
+
+function convertMutation(mutation: ExecutionStep['mutations'][number]): MutationOperation {
+    switch (mutation.type) {
+        case 'WriteRegister':
+            return {
+                type: 'WriteRegister',
+                value: {
+                    old: BigInt(mutation.value.old),
+                    size: sizeMap[mutation.value.size],
+                    register: registerOperandToString(mutation.value.register)
+                }
+            }
+        case 'WriteMemoryBytes':
+            return {
+                type: 'WriteMemoryBytes',
+                value: {
+                    address: BigInt(mutation.value.address),
+                    old: mutation.value.old
+                }
+            }
+        case 'WriteMemory':
+            return {
+                type: 'WriteMemory',
+                value: {
+                    address: BigInt(mutation.value.address),
+                    old: BigInt(mutation.value.old),
+                    size: sizeMap[mutation.value.size]
+                }
+            }
+        case 'PushCall':
+            return {
+                type: 'PushCallStack',
+                value: {
+                    to: BigInt(mutation.value.to),
+                    from: BigInt(mutation.value.from)
+                }
+            }
+        case 'PopCall':
+            return {
+                type: 'PopCallStack',
+                value: {
+                    to: BigInt(mutation.value.to),
+                    from: BigInt(mutation.value.from)
+                }
+            }
+        default:
+            return unsupportedMutation(mutation)
+    }
+}
+
+function unsupportedMutation(mutation: never): never {
+    throw new Error(`Unsupported mutation: ${JSON.stringify(mutation)}`)
+}
 
 function registerNameToType(name: string) {
     return {
@@ -76,16 +144,14 @@ export const registerName = [
 ]
 
 export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
-    options = {
-        globalPageSize: PAGE_SIZE,
-        globalPageElementsPerRow: PAGE_ELEMENTS_PER_ROW,
-        ...options
-    }
+    const globalPageSize = options.globalPageSize ?? PAGE_SIZE
+    const globalPageElementsPerRow = options.globalPageElementsPerRow ?? PAGE_ELEMENTS_PER_ROW
 
     let code = $state(baseCode)
     let state = $state<Omit<M68KEmulatorState, 'code'>>({
         systemSize: RegisterSize.Long,
         registers: [],
+        startingRegisterNames: [...registerName],
         hiddenRegisters: [],
         decorations: [],
         terminated: false,
@@ -104,10 +170,10 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         breakpoints: [],
         memory: {
             global: createMemoryTab(
-                options.globalPageSize,
+                globalPageSize,
                 'Global',
                 0x1000n,
-                options.globalPageElementsPerRow,
+                globalPageElementsPerRow,
                 0xff,
                 'big'
             ),
@@ -119,6 +185,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
     let s68k: S68k | null = null
     let interpreter: Interpreter | null = null
     const [debouncer, clearDebouncer] = createDebouncer(500)
+    const executionController = new ExecutionController(() => Prompt.cancel())
 
     function setCode(c: string) {
         code = c
@@ -138,13 +205,13 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
                         lineIndex: e.getLineIndex(),
                         message: e.getError(),
                         formatted: e.getMessage()
-                    } as MonacoError
+                    } satisfies MonacoError
                 })
                 if (errors.length > 0) {
                     s68k = null
                     interpreter = null
                     state.compilerErrors = errors
-                    return
+                    return rej(new Error(errors.map((error) => error.formatted).join('\n')))
                 }
                 interpreter = s68k.createInterpreter({
                     history_size: historySize,
@@ -188,7 +255,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
                     lineIndex: e.getLineIndex(),
                     message: e.getError(),
                     formatted: e.getMessage()
-                } as MonacoError
+                } satisfies MonacoError
             })
             state.compilerErrors = errors
             state.errors = []
@@ -202,11 +269,10 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
     }
 
     function clear() {
-        const current = state
+        executionController.invalidate()
 
         setRegisters(new Array(registerName.length).fill(0))
         updateStatusRegisters(new Array(5).fill(0))
-        if (current.interrupt) Prompt.cancel()
         state = {
             ...state,
             terminated: false,
@@ -224,10 +290,10 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
             compilerErrors: [],
             memory: {
                 global: createMemoryTab(
-                    options.globalPageSize,
+                    globalPageSize,
                     'Global',
                     0x1000n,
-                    options.globalPageElementsPerRow,
+                    globalPageElementsPerRow,
                     0xff,
                     'big'
                 ),
@@ -305,9 +371,10 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
     }
 
     function updateMemory() {
-        if (!interpreter) return
+        const currentInterpreter = interpreter
+        if (!currentInterpreter) return
         const temp = state.memory.global.data.current
-        const memory = interpreter.readMemoryBytes(
+        const memory = currentInterpreter.readMemoryBytes(
             Number(state.memory.global.address),
             state.memory.global.pageSize
         )
@@ -315,17 +382,19 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         state.memory.global.data.prevState = temp
         state.memory.tabs.forEach((tab) => {
             const temp = tab.data.current
-            const memory = interpreter.readMemoryBytes(Number(tab.address), tab.pageSize)
+            const memory = currentInterpreter.readMemoryBytes(Number(tab.address), tab.pageSize)
             tab.data.current = memory
             tab.data.prevState = temp
         })
     }
 
     function updateData() {
+        const currentInterpreter = interpreter
+        if (!currentInterpreter) return
         const settings = settingsStore
-        state.terminated = interpreter.hasReachedBottom()
-        state.pc = BigInt(interpreter.getPc())
-        state.callStack = interpreter.getCallStack().map((v, i) => {
+        state.terminated = currentInterpreter.hasReachedBottom()
+        state.pc = BigInt(currentInterpreter.getPc())
+        state.callStack = currentInterpreter.getCallStack().map((v, i) => {
             return {
                 address: BigInt(v.address),
                 name: v.label_name,
@@ -335,62 +404,13 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 color: makeLabelColor(i, v.address)
             }
         })
-        const steps = interpreter.getUndoHistory(
+        const steps = currentInterpreter.getUndoHistory(
             settings.values.maxVisibleHistoryModifications.value
         )
-        const sizeMap = {
-            Long: RegisterSize.Long,
-            Word: RegisterSize.Word,
-            Byte: RegisterSize.Byte
-        }
         state.latestSteps = steps.map((s) => {
             return {
                 ...s,
-                mutations: s.mutations.map((m) => {
-                    if (m.type === 'WriteRegister') {
-                        return {
-                            type: 'WriteRegister',
-                            value: {
-                                old: BigInt(m.value.old),
-                                size: sizeMap[m.value.size] as RegisterSize,
-                                register: registerOperandToString(m.value.register)
-                            }
-                        } satisfies MutationOperation
-                    } else if (m.type === 'WriteMemoryBytes') {
-                        return {
-                            type: 'WriteMemoryBytes',
-                            value: {
-                                address: BigInt(m.value.address),
-                                old: m.value.old
-                            }
-                        } satisfies MutationOperation
-                    } else if (m.type === 'WriteMemory') {
-                        return {
-                            type: 'WriteMemory',
-                            value: {
-                                address: BigInt(m.value.address),
-                                old: BigInt(m.value.old),
-                                size: sizeMap[m.value.size] as RegisterSize
-                            }
-                        } satisfies MutationOperation
-                    } else if (m.type === 'PushCall') {
-                        return {
-                            type: 'PushCallStack',
-                            value: {
-                                to: BigInt(m.value.to),
-                                from: BigInt(m.value.from)
-                            }
-                        }
-                    } else if (m.type === 'PopCall') {
-                        return {
-                            type: 'PopCallStack',
-                            value: {
-                                to: BigInt(m.value.to),
-                                from: BigInt(m.value.from)
-                            }
-                        }
-                    }
-                })
+                mutations: s.mutations.map(convertMutation)
             }
         })
     }
@@ -408,22 +428,27 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
 
     async function step() {
         let lastLine = -1
+        const execution = executionController.capture()
         try {
-            if (!interpreter) throw new Error('Interpreter not initialized')
-            lastLine = interpreter.getCurrentLineIndex()
-            interpreter.step()
-            const ins = interpreter.getNextInstruction()
-            switch (interpreter.getStatus()) {
+            const currentInterpreter = interpreter
+            if (!currentInterpreter) throw new Error('Interpreter not initialized')
+            lastLine = currentInterpreter.getCurrentLineIndex()
+            currentInterpreter.step()
+            const ins = currentInterpreter.getNextInstruction()
+            switch (currentInterpreter.getStatus()) {
                 case InterpreterStatus.Interrupt: {
-                    const interrupt = interpreter.getCurrentInterrupt()
+                    const interrupt = currentInterpreter.getCurrentInterrupt()
+                    if (!interrupt) throw new Error('Expected interrupt')
                     state.interrupt = interrupt
-                    await handleInterrupt(interrupt)
+                    await handleInterrupt(interrupt, currentInterpreter, execution)
                     break
                 }
             }
+            executionController.ensureCurrent(execution)
             state.line = ins?.parsed_line?.line_index ?? lastLine
-            state.canUndo = interpreter?.canUndo() ?? false
+            state.canUndo = currentInterpreter.canUndo()
         } catch (e) {
+            if (!executionController.isCurrent(execution)) return false
             console.error(e)
             addError(getM68kErrorMessage(e, lastLine + 1))
             state.terminated = true
@@ -435,7 +460,8 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         updateMemory()
         updateData()
         scrollStackTab()
-        return interpreter.getStatus() != InterpreterStatus.Running
+        const currentInterpreter = interpreter
+        return currentInterpreter?.getStatus() !== InterpreterStatus.Running
     }
 
     function undo(amount = 1) {
@@ -461,9 +487,12 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
 
     async function handleInterrupt(
         interrupt: Interrupt | null,
+        currentInterpreter: Interpreter,
+        execution: ExecutionGeneration,
         inputHandlers: Partial<typeof defaultInterruptHandlers> = {}
     ) {
-        if (!interrupt || !interpreter) throw new Error('Expected interrupt')
+        if (!interrupt) throw new Error('Expected interrupt')
+        executionController.ensureCurrent(execution)
         const handlers = {
             ...defaultInterruptHandlers,
             ...inputHandlers
@@ -473,56 +502,74 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         switch (type) {
             case 'DisplayStringWithCRLF': {
                 state.stdOut += `${interrupt.value}\n`
-                interpreter.answerInterrupt({ type })
+                currentInterpreter.answerInterrupt({ type })
                 break
             }
             case 'DisplayStringWithoutCRLF':
             case 'DisplayChar':
             case 'DisplayNumber': {
                 state.stdOut += interrupt.value
-                interpreter.answerInterrupt({ type })
+                currentInterpreter.answerInterrupt({ type })
                 break
             }
             case 'DisplayNumberInBase': {
                 const { value, base } = interrupt.value
                 const str = value.toString(base)
                 state.stdOut += str
-                interpreter.answerInterrupt({ type })
+                currentInterpreter.answerInterrupt({ type })
                 break
             }
             case 'ReadChar': {
-                const char = await handlers.ReadChar()
+                const char = await waitForInterruptInput(
+                    execution,
+                    handlers.ReadChar,
+                    inputHandlers.ReadChar === undefined
+                )
                 if (!char) throw new Error(`Expected a character, got "${char}"`)
-                interpreter.answerInterrupt({ type, value: char })
+                executionController.ensureCurrent(execution)
+                currentInterpreter.answerInterrupt({ type, value: char })
                 break
             }
             case 'ReadNumber': {
-                const answer = await handlers.ReadNumber()
+                const answer = await waitForInterruptInput(
+                    execution,
+                    handlers.ReadNumber,
+                    inputHandlers.ReadNumber === undefined
+                )
                 const number = Number(answer)
                 if (Number.isNaN(number) || answer === '')
                     throw new Error(`Expected a number, got "${answer === '' ? '' : number}"`)
-                interpreter.answerInterrupt({ type, value: number })
+                executionController.ensureCurrent(execution)
+                currentInterpreter.answerInterrupt({ type, value: number })
                 break
             }
             case 'ReadKeyboardString': {
-                const string = await handlers.ReadKeyboardString()
-                interpreter.answerInterrupt({ type, value: string })
+                const string = await waitForInterruptInput(
+                    execution,
+                    handlers.ReadKeyboardString,
+                    inputHandlers.ReadKeyboardString === undefined
+                )
+                executionController.ensureCurrent(execution)
+                currentInterpreter.answerInterrupt({ type, value: string })
                 break
             }
             case 'GetTime': {
-                interpreter.answerInterrupt({
+                const time = await executionController.waitFor(execution, handlers.GetTime)
+                executionController.ensureCurrent(execution)
+                currentInterpreter.answerInterrupt({
                     type,
-                    value: await handlers.GetTime()
+                    value: time
                 }) //unix seconds
                 break
             }
             case 'Terminate': {
-                interpreter.answerInterrupt({ type })
+                currentInterpreter.answerInterrupt({ type })
                 break
             }
             case 'Delay': {
-                await handlers.Delay(interrupt.value)
-                interpreter.answerInterrupt({ type })
+                await executionController.waitFor(execution, () => handlers.Delay(interrupt.value))
+                executionController.ensureCurrent(execution)
+                currentInterpreter.answerInterrupt({ type })
                 break
             }
             default:
@@ -531,32 +578,45 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
         state.interrupt = undefined
     }
 
+    function waitForInterruptInput<T>(
+        execution: ExecutionGeneration,
+        operation: () => PromiseLike<T>,
+        usesPrompt: boolean
+    ): Promise<T> {
+        return usesPrompt
+            ? executionController.waitForPrompt(execution, operation)
+            : executionController.waitFor(execution, operation)
+    }
+
     async function run(haltLimit: number) {
         if (haltLimit <= 0) haltLimit = Number.MAX_SAFE_INTEGER
         const start = performance.now()
         const breakpoints = new Uint32Array(state.breakpoints)
         const hasBreakpoints = breakpoints.length > 0
+        const execution = executionController.capture()
         try {
-            if (!interpreter) throw new Error('Interpreter not initialized')
-            let status = interpreter.getStatus()
-            while (!interpreter.hasTerminated()) {
+            const currentInterpreter = interpreter
+            if (!currentInterpreter) throw new Error('Interpreter not initialized')
+            let status = currentInterpreter.getStatus()
+            while (!currentInterpreter.hasTerminated()) {
                 if (!hasBreakpoints) {
-                    interpreter.runWithLimit(haltLimit)
-                    status = interpreter.getStatus()
+                    currentInterpreter.runWithLimit(haltLimit)
+                    status = currentInterpreter.getStatus()
                 } else {
-                    interpreter.runWithBreakpoints(breakpoints, haltLimit)
-                    status = interpreter.getStatus()
+                    currentInterpreter.runWithBreakpoints(breakpoints, haltLimit)
+                    status = currentInterpreter.getStatus()
                     //here we might have reached a breakpoint. It is paused if the status is running
                     if (status === InterpreterStatus.Running) break
                 }
-                await handleInterpreterInterruption(interpreter)
+                await handleInterpreterInterruption(currentInterpreter, execution)
             }
-            const ins = interpreter.getNextInstruction()
-            const last = interpreter.getLastInstruction()
+            executionController.ensureCurrent(execution)
+            const ins = currentInterpreter.getNextInstruction()
+            const last = currentInterpreter.getLastInstruction()
             //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
             const line = ins?.parsed_line?.line_index ?? last?.parsed_line?.line_index
             state.line = line ?? -1
-            state.canUndo = interpreter?.canUndo() ?? false
+            state.canUndo = currentInterpreter.canUndo()
 
             updateRegisters()
             updateStatusRegisters()
@@ -564,8 +624,9 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
             updateData()
             scrollStackTab()
             state.executionTime = performance.now() - start
-            return interpreter.getStatus()
+            return currentInterpreter.getStatus()
         } catch (e) {
+            if (!executionController.isCurrent(execution)) return InterpreterStatus.Terminated
             console.error(e)
             let line = -1
             try {
@@ -588,7 +649,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 new Uint8Array(state.memory.global.pageSize).fill(0xff)
             state.memory.global.data.prevState = state.memory.global.data.current
         } catch (e) {
-            addError(getM68kErrorMessage(e, e.message))
+            addError(getM68kErrorMessage(e))
         }
     }
 
@@ -602,12 +663,13 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 new Uint8Array(tab.pageSize).fill(0xff)
             tab.data.prevState = tab.data.current
         } catch (e) {
-            addError(getM68kErrorMessage(e, e.message))
+            addError(getM68kErrorMessage(e))
         }
     }
 
     async function handleInterpreterInterruption(
         int: Interpreter,
+        execution: ExecutionGeneration,
         inputHandlers: Partial<typeof defaultInterruptHandlers> = {}
     ) {
         const status = int.getStatus()
@@ -636,14 +698,14 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
                 updateMemory()
                 updateData()
                 scrollStackTab()
-                await handleInterrupt(int.getCurrentInterrupt(), inputHandlers)
+                await handleInterrupt(int.getCurrentInterrupt(), int, execution, inputHandlers)
                 break
             }
         }
     }
 
     async function validateTestcase(testcase: Testcase) {
-        const errors = [] as TestcaseValidationError[]
+        const errors: TestcaseValidationError[] = []
         if (!interpreter) throw new Error('Interpreter not initialized')
         const cpu = interpreter.getCpuSnapshot()
         const registers = cpu.getRegistersValues()
@@ -720,6 +782,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
     async function runTestcase(testcase: Testcase, haltLimit: number) {
         if (haltLimit <= 0) haltLimit = Number.MAX_SAFE_INTEGER
         const start = performance.now()
+        const execution = executionController.capture()
         try {
             if (!interpreter) throw new Error('Interpreter not initialized')
             for (const [register, value] of Object.entries(testcase.startingRegisters)) {
@@ -739,21 +802,22 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
             }
             while (!interpreter.hasTerminated()) {
                 interpreter.runWithLimit(haltLimit)
-                await handleInterpreterInterruption(interpreter, {
+                await handleInterpreterInterruption(interpreter, execution, {
                     ReadChar: async () => {
-                        if (testcase.input.length === 0)
+                        const input = testcase.input.shift()
+                        if (input === undefined)
                             throw new Error('Input does not have any characters')
-                        return testcase.input.shift()
+                        return input
                     },
                     ReadNumber: async () => {
-                        if (testcase.input.length === 0)
-                            throw new Error('Input does not have any numbers')
-                        return testcase.input.shift()
+                        const input = testcase.input.shift()
+                        if (input === undefined) throw new Error('Input does not have any numbers')
+                        return input
                     },
                     ReadKeyboardString: async () => {
-                        if (testcase.input.length === 0)
-                            throw new Error('Input does not have any strings')
-                        return testcase.input.shift()
+                        const input = testcase.input.shift()
+                        if (input === undefined) throw new Error('Input does not have any strings')
+                        return input
                     }
                 })
             }
@@ -772,6 +836,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
             state.executionTime = performance.now() - start
             return interpreter.getStatus()
         } catch (e) {
+            if (!executionController.isCurrent(execution)) return InterpreterStatus.Terminated
             console.error(e)
             let line = -1
             try {
@@ -788,7 +853,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
 
     async function test(code: string, testcases: Testcase[], haltLimit: number, historySize = 0) {
         testcases = structuredClone(testcases)
-        const results = [] as TestcaseResult[]
+        const results: TestcaseResult[] = []
         for (const testcase of testcases) {
             try {
                 await compile(historySize, code)
@@ -827,6 +892,9 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
     return {
         get registers() {
             return state.registers
+        },
+        get startingRegisterNames() {
+            return state.startingRegisterNames
         },
         get hiddenRegisters() {
             return state.hiddenRegisters

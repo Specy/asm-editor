@@ -26,6 +26,12 @@ export type RISCVInstruction = {
     isRv64Only: boolean
 }
 
+type RISCVInstructionVariants = [RISCVInstruction, ...RISCVInstruction[]]
+
+function hasOwnKey<T extends object>(value: T, key: PropertyKey): key is keyof T {
+    return Object.prototype.hasOwnProperty.call(value, key)
+}
+
 export const riscvInstructionsWithDuplicates = riscvIse.map((ins) => {
     return {
         name: ins.name,
@@ -46,10 +52,11 @@ export const riscvInstructionsWithDuplicates = riscvIse.map((ins) => {
     } satisfies RISCVInstruction
 })
 
-export const riscvInstructionMap = new Map<string, RISCVInstruction[]>()
+export const riscvInstructionMap = new Map<string, RISCVInstructionVariants>()
 for (const ins of riscvInstructionsWithDuplicates) {
-    if (riscvInstructionMap.has(ins.name)) {
-        riscvInstructionMap.get(ins.name).push(ins)
+    const variants = riscvInstructionMap.get(ins.name)
+    if (variants) {
+        variants.push(ins)
     } else {
         riscvInstructionMap.set(ins.name, [ins])
     }
@@ -76,16 +83,18 @@ export function aggregateArgs(ins: RISCVInstruction[]): RISCVAddressingMode[][] 
 
 export const riscvInstructionsVariants = [...riscvInstructionMap.values()]
 
-export const riscvInstructionNames = [...riscvInstructionMap.keys()].sort((a, b) =>
+export const riscvInstructionEntries = [...riscvInstructionMap.entries()].sort(([a], [b]) =>
     a.localeCompare(b)
 )
+
+export const riscvInstructionNames = riscvInstructionEntries.map(([name]) => name)
 
 export function formatAggregatedArgs(ins: RISCVInstruction[]): string {
     const isReg = (s: string) => s === 'reg' || s === 'freg' || s === 'regnum'
 
     function getLabel(type: string): string {
         if (type.startsWith('INTEGER')) return 'imm'
-        return RISCVAddressingModes[type]?.label ?? type
+        return hasOwnKey(RISCVAddressingModes, type) ? RISCVAddressingModes[type].label : type
     }
 
     function parseOperands(variant: RISCVInstruction): string[] {

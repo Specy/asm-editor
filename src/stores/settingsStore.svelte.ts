@@ -58,7 +58,9 @@ function createSettingsStore() {
 
     function fetch() {
         try {
-            const stored = JSON.parse(localStorage.getItem('asm-editor_settings'))
+            const storedJson = localStorage.getItem('asm-editor_settings')
+            if (storedJson === null) return store()
+            const stored = JSON.parse(storedJson)
             if (!stored) return store()
             if (stored.meta.version !== CURRENT_VERSION) return store()
             data = stored

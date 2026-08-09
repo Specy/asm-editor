@@ -19,6 +19,8 @@ import {
     numberToByteSlice
 } from '$cmp/specific/project/memory/memoryTabUtils'
 import type { Interrupt } from '@specy/s68k'
+import { ExecutionController } from '$lib/languages/ExecutionController'
+import { Prompt } from '$stores/promptStore.svelte'
 
 export abstract class GenericEmulator<T, R extends string>
     extends BaseEmulator<R>
@@ -30,23 +32,25 @@ export abstract class GenericEmulator<T, R extends string>
     interrupt?: Interrupt | undefined
     isExamMode: boolean = false
     private semanticCheckId = 0
+    protected readonly executionController = new ExecutionController(() => Prompt.cancel())
 
     constructor(code: string, options: EmulatorConfig<R>, emulatorOptions: EmulatorSettings = {}) {
         super(options)
         this._emulatorOptions = {
-            globalPageSize: PAGE_SIZE,
-            globalPageElementsPerRow: PAGE_ELEMENTS_PER_ROW,
-            baseAddress: 0x1000n,
-            stackAddress: 0x7ffffffcn,
-            initialMemoryValue: 0x0,
-            language: 'M68K',
-            ...emulatorOptions
+            globalPageSize: emulatorOptions.globalPageSize ?? PAGE_SIZE,
+            globalPageElementsPerRow:
+                emulatorOptions.globalPageElementsPerRow ?? PAGE_ELEMENTS_PER_ROW,
+            baseAddress: emulatorOptions.baseAddress ?? 0x1000n,
+            stackAddress: emulatorOptions.stackAddress ?? 0x7ffffffcn,
+            initialMemoryValue: emulatorOptions.initialMemoryValue ?? 0x0,
+            language: emulatorOptions.language ?? 'M68K'
         }
         this._code = $state(code)
 
         this.state = $state({
             systemSize: options.systemSize,
             registers: [],
+            startingRegisterNames: [...options.registerNames],
             hiddenRegisters: options.hiddenRegisters ?? [], //TODO should this be state?
             pc: 0n,
             terminated: false,
@@ -191,6 +195,7 @@ export abstract class GenericEmulator<T, R extends string>
 
     // ----- public api ----- //
     clear(): void {
+        this.executionController.invalidate()
         this.state = {
             ...this.state,
             terminated: false,
@@ -233,9 +238,11 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     async compile(historySize: number, codeOverride: string | undefined): Promise<void> {
+        this.clear()
+        const execution = this.executionController.capture()
         try {
-            this.clear()
             const result = await this._compile(codeOverride ?? this._code)
+            this.executionController.ensureCurrent(execution)
             if ('errors' in result) {
                 this.state.compilerErrors = result.errors
                 this.state.canExecute = false
@@ -256,6 +263,7 @@ export abstract class GenericEmulator<T, R extends string>
             this.updateData()
             this.updateStatusRegisters()
         } catch (e) {
+            if (!this.executionController.isCurrent(execution)) return
             this.addError(this._stringifyError(e))
             this.debouncer[1]()
             throw e
@@ -292,8 +300,10 @@ export abstract class GenericEmulator<T, R extends string>
     async run(haltLimit: number): Promise<InterpreterStatus> {
         if (haltLimit <= 0) haltLimit = Number.MAX_SAFE_INTEGER
         const start = performance.now()
+        const execution = this.executionController.capture()
         try {
             await this._run(haltLimit, this.state.breakpoints)
+            this.executionController.ensureCurrent(execution)
             const terminated = this._hasTerminated()
             try {
                 const ins = this._getNextInstruction()
@@ -318,6 +328,9 @@ export abstract class GenericEmulator<T, R extends string>
             this.state.errors = []
             return terminated ? InterpreterStatus.Terminated : InterpreterStatus.Running
         } catch (e) {
+            if (!this.executionController.isCurrent(execution)) {
+                return InterpreterStatus.Terminated
+            }
             console.error(e)
             let line = -1
             try {
@@ -373,7 +386,7 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     async validateTestcase(testcase: Testcase) {
-        const errors = [] as TestcaseValidationError[]
+        const errors: TestcaseValidationError[] = []
         if (!this.getInstance()) throw new Error('Interpreter not initialized')
         const registers = this._getRegisterValues()
         for (const [register, value] of Object.entries(testcase.expectedRegisters)) {
@@ -449,10 +462,13 @@ export abstract class GenericEmulator<T, R extends string>
 
     async step(): Promise<boolean> {
         let lastLine = -1
+        const execution = this.executionController.capture()
         try {
             if (!this.getInstance()) throw new Error('Interpreter not initialized')
             lastLine = this._getNextInstruction()?.lineNumber ?? -1
-            this.state.terminated = (await this._step()).terminated
+            const result = await this._step()
+            this.executionController.ensureCurrent(execution)
+            this.state.terminated = result.terminated
             try {
                 const ins = this._getNextInstruction()
                 this.state.line = ins?.lineNumber ?? -1
@@ -462,6 +478,7 @@ export abstract class GenericEmulator<T, R extends string>
             //if it managed to step, it means it does not have valid errors
             this.state.errors = []
         } catch (e) {
+            if (!this.executionController.isCurrent(execution)) return false
             console.error(e)
             this.addError(this._stringifyError(e))
             this.state.terminated = true
@@ -481,7 +498,11 @@ export abstract class GenericEmulator<T, R extends string>
         try {
             if (!this.getInstance()) throw new Error('Interpreter not initialized')
             for (const [register, value] of Object.entries(testcase.startingRegisters)) {
-                this._setRegisterValue(register as R, value)
+                const registerName = this._registerNames.find(
+                    (candidate) => candidate.toUpperCase() === register.toUpperCase()
+                )
+                if (!registerName) throw new Error(`Register ${register} not found`)
+                this._setRegisterValue(registerName, value)
             }
             for (const value of testcase.startingMemory) {
                 if (value.type === 'number') {
@@ -523,7 +544,7 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     async test(code: string, testcases: Testcase[], haltLimit: number, historySize = 0) {
-        const results = [] as TestcaseResult[]
+        const results: TestcaseResult[] = []
         for (const testcase of testcases) {
             try {
                 await this.compile(historySize, code)
@@ -656,6 +677,10 @@ export abstract class GenericEmulator<T, R extends string>
 
     get registers() {
         return this.state.registers
+    }
+
+    get startingRegisterNames() {
+        return this.state.startingRegisterNames
     }
 
     get sp() {

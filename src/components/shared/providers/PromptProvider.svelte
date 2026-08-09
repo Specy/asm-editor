@@ -10,7 +10,6 @@
 
     let { children }: Props = $props()
 
-    let input: HTMLInputElement = $state()
     let value = $state('')
     let currentId = $state(0)
     $effect(() => {
@@ -28,7 +27,7 @@
         out:fade|global={{ duration: 150 }}
         onsubmit={(e) => {
             e.preventDefault()
-            Prompt.answer(value)
+            if (Prompt.type === PromptType.Text) Prompt.answerText(value)
         }}
     >
         <div class="prompt-text">
@@ -36,7 +35,6 @@
         </div>
         {#if Prompt.type === PromptType.Text}
             <Input
-                bind:el={input}
                 focus
                 bind:value
                 hideStatus
@@ -48,23 +46,23 @@
             {#if Prompt.type === PromptType.Text}
                 {#if Prompt.cancellable}
                     <Button
-                        onClick={() => Prompt.answer(false)}
+                        onClick={() => Prompt.cancel()}
                         cssVar="secondary"
                         style="padding: 0.5rem 1.5rem">Cancel</Button
                     >
                 {/if}
                 <Button
-                    onClick={() => Prompt.answer(value)}
+                    onClick={() => Prompt.answerText(value)}
                     style="padding: 0.5rem 1.5rem; margin-left:auto">Ok</Button
                 >
             {:else}
                 <Button
-                    onClick={() => Prompt.answer(false)}
+                    onClick={() => Prompt.answerConfirm(false)}
                     cssVar="secondary"
                     style="padding: 0.5rem 1.5rem">No</Button
                 >
                 <Button
-                    onClick={() => Prompt.answer(true)}
+                    onClick={() => Prompt.answerConfirm(true)}
                     cssVar="accent2"
                     style="padding: 0.5rem 1.5rem">Yes</Button
                 >

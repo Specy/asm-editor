@@ -4,12 +4,11 @@
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
     import FaArrowRight from '~icons/fa-solid/arrow-right'
     import Icon from '$cmp/shared/layout/Icon.svelte'
-    let wrapper: HTMLDivElement = $state()
+    let wrapper: HTMLDivElement | undefined = $state()
     import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
     import {
         formatAggregatedArgs,
-        mipsInstructionMap,
-        mipsInstructionNames
+        mipsInstructionEntries
     } from '$lib/languages/MIPS/MIPS-documentation'
     import MipsDirectiveDocumentation from './MIPSDirectiveDocumentation.svelte'
     import MipsSyscall from './MIPSSyscall.svelte'
@@ -86,8 +85,7 @@
             <h4>Instructions</h4>
         {/snippet}
         <div class="column sub-section">
-            {#each mipsInstructionNames as ins (ins)}
-                {@const instruction = mipsInstructionMap.get(ins)}
+            {#each mipsInstructionEntries as [ins, instruction] (ins)}
                 <div class="instruction">
                     <div class="row align-center">
                         <h1 class="sub-title" id={ins}>

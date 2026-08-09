@@ -55,7 +55,7 @@
     let code = $state(BASE_CODE[settings.language])
     let testcases = $state([] as Testcase[])
     let generatedCode = $state('')
-    let timeoutId = 0 as ReturnType<typeof setTimeout>
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
     onMount(() => {
         inIframe = window.self !== window.top
         settings = getSettings()

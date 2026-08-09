@@ -3,7 +3,7 @@
     import { ccrToFlagsArray } from '@specy/s68k'
     import { createEventDispatcher } from 'svelte'
     import FaUndo from '~icons/fa-solid/undo'
-    import type { ExecutionStep } from '$lib/languages/commonLanguageFeatures.svelte'
+    import { RegisterSize, type ExecutionStep } from '$lib/languages/commonLanguageFeatures.svelte'
 
     interface Props {
         step: ExecutionStep
@@ -14,10 +14,11 @@
     let ccr = $derived(ccrToFlagsArray(step.new_ccr.bits).reverse())
 
     const sizeMap = {
-        1: 'Byte',
-        2: 'Word',
-        4: 'Long'
-    }
+        [RegisterSize.Byte]: 'Byte',
+        [RegisterSize.Word]: 'Word',
+        [RegisterSize.Long]: 'Long',
+        [RegisterSize.Double]: 'Double'
+    } satisfies Record<RegisterSize, string>
     const dispatcher = createEventDispatcher<{
         undo: void
         highlight: number

@@ -1,9 +1,14 @@
-<script>
+<script lang="ts">
     import { createEventDispatcher } from 'svelte'
-    /** @type {{style?: string, children?: import('svelte').Snippet}} */
-    let { style = '', children } = $props()
+
+    interface Props {
+        style?: string
+        children?: import('svelte').Snippet
+    }
+
+    let { style = '', children }: Props = $props()
     const dispatch = createEventDispatcher()
-    function submit(e) {
+    function submit(e: SubmitEvent) {
         e.preventDefault()
         dispatch('submit', e)
     }

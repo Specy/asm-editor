@@ -4,12 +4,11 @@
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
     import FaArrowRight from '~icons/fa-solid/arrow-right'
     import Icon from '$cmp/shared/layout/Icon.svelte'
-    let wrapper: HTMLDivElement = $state()
+    let wrapper: HTMLDivElement | undefined = $state()
     import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
     import {
         formatAggregatedArgs,
-        riscvInstructionMap,
-        riscvInstructionNames
+        riscvInstructionEntries
     } from '$lib/languages/RISC-V/RISC-V-documentation'
     import RiscVDirectiveDocumentation from './RISCVDirectiveDocumentation.svelte'
     import RiscVSyscall from './RISCVSyscall.svelte'
@@ -76,8 +75,7 @@
             <h4>Instructions</h4>
         {/snippet}
         <div class="column sub-section">
-            {#each riscvInstructionNames as ins (ins)}
-                {@const instruction = riscvInstructionMap.get(ins)}
+            {#each riscvInstructionEntries as [ins, instruction] (ins)}
                 <div class="instruction">
                     <div class="row align-center">
                         <h1 class="sub-title" id={ins}>

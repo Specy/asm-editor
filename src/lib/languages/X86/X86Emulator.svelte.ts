@@ -13,6 +13,7 @@ import {
     type StackFrame
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import { GenericEmulator } from '$lib/languages/GenericEmulator.svelte'
+import type { ExecutionGeneration } from '$lib/languages/ExecutionController'
 import type { Testcase } from '$lib/Project.svelte'
 import { Prompt } from '$stores/promptStore.svelte'
 import {
@@ -69,11 +70,11 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
                 endianness: 'little'
             },
             {
-                language: 'X86',
-                stackAddress: 0x4ffffffffff0n,
-                baseAddress: 0x4ffffffffff0n,
-                initialMemoryValue: 0x0,
-                ...options
+                ...options,
+                language: options.language ?? 'X86',
+                stackAddress: options.stackAddress ?? 0x4ffffffffff0n,
+                baseAddress: options.baseAddress ?? 0x4ffffffffff0n,
+                initialMemoryValue: options.initialMemoryValue ?? 0x0
             }
         )
         this.core = core
@@ -129,7 +130,6 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     }
 
     _dispose(): void {
-        Prompt.cancel()
         this.core?.dispose()
         this.diagnosticCore?.dispose()
         this.core = null
@@ -250,10 +250,12 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     async _step(): Promise<{ terminated: boolean }> {
         const core = this.requireCore()
-        const result = await core.step()
+        const execution = this.executionController.capture()
+        const result = await this.executionController.waitFor(execution, () => core.step())
         if (core.getStatus() === CoreEmulatorStatus.WaitingForInput) {
-            await this.provideProgramInput()
+            await this.provideProgramInput(execution)
         }
+        this.executionController.ensureCurrent(execution)
         return { terminated: result.terminated || core.hasTerminated() }
     }
 
@@ -275,20 +277,28 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         breakpoints: number[]
     ): Promise<CoreEmulatorStatus> {
         const core = this.requireCore()
-        let status = await core.run(limit, breakpoints)
+        const execution = this.executionController.capture()
+        let status = await this.executionController.waitFor(execution, () =>
+            core.run(limit, breakpoints)
+        )
         while (status === CoreEmulatorStatus.WaitingForInput) {
-            await this.provideProgramInput()
-            status = await core.run(limit, breakpoints)
+            await this.provideProgramInput(execution)
+            status = await this.executionController.waitFor(execution, () =>
+                core.run(limit, breakpoints)
+            )
         }
         return status
     }
 
-    private async provideProgramInput(): Promise<void> {
+    private async provideProgramInput(execution: ExecutionGeneration): Promise<void> {
         const core = this.requireCore()
         const value = this.testcaseInput
             ? (this.testcaseInput.shift() ?? '')
-            : await Prompt.askText('Program input', true)
+            : await this.executionController.waitForPrompt(execution, () =>
+                  Prompt.askText('Program input', true)
+              )
         if (value == null) throw new Error('Input cancelled')
+        this.executionController.ensureCurrent(execution)
         core.provideInput(ensureLineInput(value))
     }
 
@@ -321,10 +331,13 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 }
 
 function normalizeRegisterName(register: string): X86RegisterName {
-    const normalized = register.toLowerCase() as X86RegisterName
-    if (!X86_REGISTER_NAMES.includes(normalized))
-        throw new Error(`Unknown X86 register: ${register}`)
+    const normalized = register.toLowerCase()
+    if (!isX86RegisterName(normalized)) throw new Error(`Unknown X86 register: ${register}`)
     return normalized
+}
+
+function isX86RegisterName(register: string): register is X86RegisterName {
+    return X86_REGISTER_NAMES.some((candidate) => candidate === register)
 }
 
 function toCoreRegisterSize(size: RegisterSize | undefined): CoreRegisterSize {

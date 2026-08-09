@@ -11,6 +11,11 @@
     let theme = ThemeStore.themeList
     let scrollbar = $derived(ThemeStore.theme.scrollbar)
     let background = $derived(ThemeStore.theme.background)
+
+    function toRgbChannels(color: string) {
+        const { r, g, b } = new TinyColor(color).toRgb()
+        return `${r}, ${g}, ${b}`
+    }
 </script>
 
 <Body
@@ -32,12 +37,8 @@
             return `
     --${name}: ${color};
     --${name}-text: ${text};
-    --RGB-${name}: ${
-        new TinyColor(color).toRgbString().match(/(\s*\d+\s*),(\s*\d+\s*),(\s*\d+\s*)/)[0]
-    };
-	--RGB-${name}-text : ${
-        new TinyColor(text).toRgbString().match(/(\s*\d+\s*),(\s*\d+\s*),(\s*\d+\s*)/)[0]
-    };
+    --RGB-${name}: ${toRgbChannels(color)};
+	--RGB-${name}-text : ${toRgbChannels(text)};
     `
         })
         .join('\n')}

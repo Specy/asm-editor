@@ -4,8 +4,7 @@
     import RISCVDirectiveDocumentation from '$cmp/documentation/riscv/RISCVDirectiveDocumentation.svelte'
     import RISCVSyscallExplanation from '$cmp/documentation/riscv/RISCVSyscallExplanation.svelte'
     import {
-        riscvInstructionNames,
-        riscvInstructionMap,
+        riscvInstructionEntries,
         formatAggregatedArgs,
         groupVariantsByDescription
     } from '$lib/languages/RISC-V/RISC-V-documentation'
@@ -36,8 +35,7 @@
 
     <section id="instructions">
         <h2>Instructions</h2>
-        {#each riscvInstructionNames as ins (ins)}
-            {@const instruction = riscvInstructionMap.get(ins)}
+        {#each riscvInstructionEntries as [ins, instruction] (ins)}
             {@const groups = groupVariantsByDescription(instruction)}
             <div class="instruction">
                 <div class="row align-center">

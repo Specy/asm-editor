@@ -15,16 +15,16 @@ function createCompletionItem(
     label: string,
     kind: monaco.languages.CompletionItemKind,
     detail: string,
-    insertText?: string,
-    range?: monaco.IRange
+    insertText: string,
+    range: monaco.IRange
 ): monaco.languages.CompletionItem {
     return {
-        label: label,
-        kind: kind,
-        detail: detail,
+        label,
+        kind,
+        detail,
         documentation: detail, // Keep it simple for now
-        insertText: insertText ?? label,
-        range: range // Important for replacing the correct text part
+        insertText,
+        range // Important for replacing the correct text part
     }
 }
 

@@ -17,6 +17,12 @@ export type MIPSInstruction = {
     }
 }
 
+type MIPSInstructionVariants = [MIPSInstruction, ...MIPSInstruction[]]
+
+function hasOwnKey<T extends object>(value: T, key: PropertyKey): key is keyof T {
+    return Object.prototype.hasOwnProperty.call(value, key)
+}
+
 export const mipsInstructionsWithDuplicates = mipsIse.map((ins) => {
     return {
         name: ins.name,
@@ -36,10 +42,11 @@ export const mipsInstructionsWithDuplicates = mipsIse.map((ins) => {
     } satisfies MIPSInstruction
 })
 
-export const mipsInstructionMap = new Map<string, MIPSInstruction[]>()
+export const mipsInstructionMap = new Map<string, MIPSInstructionVariants>()
 for (const ins of mipsInstructionsWithDuplicates) {
-    if (mipsInstructionMap.has(ins.name)) {
-        mipsInstructionMap.get(ins.name).push(ins)
+    const variants = mipsInstructionMap.get(ins.name)
+    if (variants) {
+        variants.push(ins)
     } else {
         mipsInstructionMap.set(ins.name, [ins])
     }
@@ -66,16 +73,18 @@ export function aggregateArgs(ins: MIPSInstruction[]): MIPSAddressingMode[][] {
 
 export const mipsInstructionsVariants = [...mipsInstructionMap.values()]
 
-export const mipsInstructionNames = [...mipsInstructionMap.keys()].sort((a, b) =>
+export const mipsInstructionEntries = [...mipsInstructionMap.entries()].sort(([a], [b]) =>
     a.localeCompare(b)
 )
+
+export const mipsInstructionNames = mipsInstructionEntries.map(([name]) => name)
 
 export function formatAggregatedArgs(ins: MIPSInstruction[]): string {
     const isReg = (s: string) => s === '$reg' || s === '$freg' || s === 'regnum'
 
     function getLabel(type: string): string {
         if (type.startsWith('INTEGER')) return 'imm'
-        return MIPSAddressingModes[type]?.label ?? type
+        return hasOwnKey(MIPSAddressingModes, type) ? MIPSAddressingModes[type].label : type
     }
 
     function parseOperands(variant: MIPSInstruction): string[] {

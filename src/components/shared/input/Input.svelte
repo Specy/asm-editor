@@ -39,6 +39,7 @@
     onMount(() => {
         if (focus) el?.focus()
     })
+    // @ts-expect-error Legacy action node
     const setType = (node) => {
         node.type = type
     }

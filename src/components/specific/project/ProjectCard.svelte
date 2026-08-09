@@ -32,6 +32,7 @@
     }
     async function deleteProject() {
         const result = await Prompt.confirm(`Are you sure you want to delete "${project.name}"?`)
+        if (result === null) return
         if (!result) return
         ProjectStore.deleteProject(project)
     }

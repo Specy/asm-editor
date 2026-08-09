@@ -1,4 +1,5 @@
 import type { MonacoType } from '$lib/monaco/Monaco'
+import type monaco from 'monaco-editor'
 import {
     MIPSAddressingModes,
     mipsDirectivesMap,
@@ -9,6 +10,21 @@ import {
     type MIPSInstruction
 } from './MIPS-documentation'
 import { MIPSRegisterNames } from './MIPSEmulator.svelte'
+
+type CompletionMetadata = {
+    detail?: string
+    documentation?: string
+    insertText?: string
+    label?: string
+    priority?: number
+}
+type RegisterMetadata = Required<
+    Pick<CompletionMetadata, 'detail' | 'documentation' | 'insertText' | 'label'>
+>
+
+function hasOwnKey<T extends object>(value: T, key: PropertyKey): key is keyof T {
+    return Object.prototype.hasOwnProperty.call(value, key)
+}
 
 function splitAtChars(text: string, chars: string[]) {
     const result = []
@@ -46,7 +62,9 @@ function getPossibleInstruction(args: string[]): { instruction: string; other: s
     return { instruction: clone[0], other: clone.slice(1) }
 }
 
-export function createMIPSCompletition(monaco: MonacoType) {
+export function createMIPSCompletition(
+    monaco: MonacoType
+): monaco.languages.CompletionItemProvider {
     return {
         triggerCharacters: ['.', ',', ' ', 'deleteLeft', 'tab', '$'],
         provideCompletionItems: (model, position) => {
@@ -62,10 +80,17 @@ export function createMIPSCompletition(monaco: MonacoType) {
                 .filter((l) => l.endsWith(':'))
                 .map((l) => l.substring(0, l.length - 1))
             const args = parseArgs(data)
-            const suggestions = []
+            const word = model.getWordUntilPosition(position)
+            const range = new monaco.Range(
+                position.lineNumber,
+                word.startColumn,
+                position.lineNumber,
+                word.endColumn
+            )
+            const suggestions: monaco.languages.CompletionItem[] = []
             const ins = getPossibleInstruction(args)
             const lastArg = args[args.length - 1]
-            if (lastArg?.startsWith('$') && !CompletitionMap[lastArg]) {
+            if (lastArg?.startsWith('$') && !hasOwnKey(CompletitionMap, lastArg)) {
                 suggestions.push(
                     ...MIPSRegisterNames.map((r) => {
                         return {
@@ -73,7 +98,8 @@ export function createMIPSCompletition(monaco: MonacoType) {
                             kind: monaco.languages.CompletionItemKind.Variable,
                             insertText: r.substring(1),
                             documentation: `Register ${r}`,
-                            detail: r
+                            detail: r,
+                            range
                         }
                     })
                 )
@@ -87,7 +113,8 @@ export function createMIPSCompletition(monaco: MonacoType) {
                             kind: monaco.languages.CompletionItemKind.Keyword,
                             insertText: key,
                             documentation: value.description,
-                            detail: value.description
+                            detail: value.description,
+                            range
                         }
                     })
                 )
@@ -102,7 +129,8 @@ export function createMIPSCompletition(monaco: MonacoType) {
                             insertText: l,
                             documentation: `Label ${l}`,
                             detail: 'Label',
-                            sortText: `${1000 - 5}`
+                            sortText: `${1000 - 5}`,
+                            range
                         }
                     })
 
@@ -120,7 +148,8 @@ export function createMIPSCompletition(monaco: MonacoType) {
                                     insertText: i[0].name,
                                     documentation:
                                         i[0].example + ' ' + i.map((i) => i.description).join('\n'),
-                                    detail: i.map((i) => i.description).join('\n')
+                                    detail: i.map((i) => i.description).join('\n'),
+                                    range
                                 }
                             })
                         )
@@ -130,18 +159,18 @@ export function createMIPSCompletition(monaco: MonacoType) {
                         const suggestedArg = m.args[ins.other.length]
                         if (suggestedArg) {
                             return suggestedArg.map((suggestedArg) => {
+                                const metadata = hasOwnKey(CompletitionMap, suggestedArg.type)
+                                    ? CompletitionMap[suggestedArg.type]
+                                    : undefined
                                 return {
-                                    label:
-                                        CompletitionMap[suggestedArg.type]?.label ??
-                                        suggestedArg.value,
+                                    label: metadata?.label ?? suggestedArg.value,
                                     kind: monaco.languages.CompletionItemKind.Variable,
                                     internal_type: suggestedArg.type,
-                                    insertText:
-                                        CompletitionMap[suggestedArg.type]?.insertText ??
-                                        suggestedArg.value,
+                                    insertText: metadata?.insertText ?? suggestedArg.value,
                                     documentation: suggestedArg.value,
                                     detail: suggestedArg.type,
-                                    sortText: `${1000 - (CompletitionMap[suggestedArg.type]?.priority ?? 0)}`
+                                    sortText: `${1000 - (metadata?.priority ?? 0)}`,
+                                    range
                                 }
                             })
                         }
@@ -176,7 +205,8 @@ export function createMIPSCompletition(monaco: MonacoType) {
                                 insertText: i[0].name,
                                 documentation:
                                     i[0].example + ' ' + i.map((i) => i.description).join('\n'),
-                                detail: i.map((i) => i.description).join('\n')
+                                detail: i.map((i) => i.description).join('\n'),
+                                range
                             }
                         })
                     )
@@ -187,8 +217,10 @@ export function createMIPSCompletition(monaco: MonacoType) {
             }
         },
         resolveCompletionItem(item) {
+            const label = typeof item.label === 'string' ? item.label : item.label.label
+            const metadata = hasOwnKey(CompletitionMap, label) ? CompletitionMap[label] : undefined
             return {
-                ...CompletitionMap[item.label],
+                ...metadata,
                 ...item,
                 preselect: true
             }
@@ -213,12 +245,12 @@ function formatInstructionHover(ins: MIPSInstruction[]) {
     return `${header}\n\n${body}`
 }
 
-export function createMIPSHoverProvider(monaco: MonacoType) {
+export function createMIPSHoverProvider(monaco: MonacoType): monaco.languages.HoverProvider {
     return {
         provideHover: (model, position) => {
             const range = new monaco.Range(position.lineNumber, 1, position.lineNumber, 1000)
             const line = model.getValueInRange(range).trim()
-            const contents = []
+            const contents: monaco.IMarkdownString[] = []
             const text = model.getValue()
             const labels = text
                 .split('\n')
@@ -227,28 +259,29 @@ export function createMIPSHoverProvider(monaco: MonacoType) {
                 .map((l) => l.substring(0, l.length - 1))
 
             const word = model.getWordAtPosition(position)?.word
-            if (line?.startsWith(word) && line.includes(':')) {
+            if (word && line.startsWith(word) && line.includes(':')) {
                 contents.push({
                     value: `Label **${word}**`
                 })
             }
-            if (labels.includes(word) && !line.startsWith(word)) {
+            if (word && labels.includes(word) && !line.startsWith(word)) {
                 contents.push({
                     value: `Label **${word}**`
                 })
             }
-            const ins = mipsInstructionMap.get(word)
+            const ins = word ? mipsInstructionMap.get(word) : undefined
             if (ins) {
                 contents.push({
                     value: formatInstructionHover(ins)
                 })
             }
-            if (MIPSRegistersMap['$' + word]) {
+            const register = word ? MIPSRegistersMap[`$${word}`] : undefined
+            if (register) {
                 contents.push({
-                    value: MIPSRegistersMap['$' + word].documentation
+                    value: register.documentation
                 })
             }
-            if (mipsDirectivesMap[word]) {
+            if (word && hasOwnKey(mipsDirectivesMap, word)) {
                 contents.push({
                     value: mipsDirectivesMap[word].description
                 })
@@ -262,7 +295,7 @@ export function createMIPSHoverProvider(monaco: MonacoType) {
     }
 }
 
-const MIPSRegistersMap = Object.fromEntries(
+const MIPSRegistersMap: Partial<Record<string, RegisterMetadata>> = Object.fromEntries(
     MIPSRegisterNames.map((r) => {
         return [
             r,
@@ -276,7 +309,7 @@ const MIPSRegistersMap = Object.fromEntries(
     })
 )
 
-const CompletitionMap = {
+const CompletitionMap: Partial<Record<string, CompletionMetadata>> = {
     ...MIPSRegistersMap,
     ...MIPSAddressingModes
 }

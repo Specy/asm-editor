@@ -7,8 +7,7 @@
     import Header from '$cmp/shared/layout/Header.svelte'
 
     import {
-        mipsInstructionNames,
-        mipsInstructionMap,
+        mipsInstructionEntries,
         formatAggregatedArgs,
         groupVariantsByDescription
     } from '$lib/languages/MIPS/MIPS-documentation'
@@ -40,8 +39,7 @@
 
     <section id="instructions">
         <h2>Instructions</h2>
-        {#each mipsInstructionNames as ins (ins)}
-            {@const instruction = mipsInstructionMap.get(ins)}
+        {#each mipsInstructionEntries as [ins, instruction] (ins)}
             {@const groups = groupVariantsByDescription(instruction)}
             <div class="instruction">
                 <div class="row align-center">

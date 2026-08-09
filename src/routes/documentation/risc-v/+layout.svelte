@@ -15,10 +15,7 @@
     import { DEFAULT_THEME, ThemeStore } from '$stores/themeStore.svelte'
     import { onMount } from 'svelte'
     import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
-    import {
-        riscvInstructionNames,
-        riscvInstructionMap
-    } from '$lib/languages/RISC-V/RISC-V-documentation'
+    import { riscvInstructionEntries } from '$lib/languages/RISC-V/RISC-V-documentation'
     import Sidebar from '$cmp/shared/layout/Sidebar.svelte'
     import { resolve } from '$app/paths'
     interface Props {
@@ -35,8 +32,7 @@
 
     let { children }: Props = $props()
 
-    let instructionNames = Array.from(riscvInstructionNames).sort((a, b) => a.localeCompare(b))
-    let instructions = instructionNames.map((name) => riscvInstructionMap.get(name)[0])
+    let instructions = riscvInstructionEntries.map(([, variants]) => variants[0])
     let menuOpen = $state(false)
     let search = $state('')
     const searcher = new FuzzySearch(instructions, ['name', 'description'], {

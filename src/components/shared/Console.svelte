@@ -48,7 +48,7 @@
         }
     })
 
-    let wrapper = $state<HTMLDivElement>(null)
+    let wrapper = $state<HTMLDivElement | undefined>()
     $effect(() => {
         if (wrapper && fitAddon) {
             const observer = new ResizeObserver(() => {

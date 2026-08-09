@@ -16,15 +16,16 @@
     }
 
     let { children }: Props = $props()
-    let metaTheme: HTMLMetaElement = $state(null)
+    let metaTheme: HTMLMetaElement | null = $state(null)
 
     onMount(() => {
         // The service worker is registered automatically by SvelteKit from
         // src/service-worker.ts — no manual registration needed here.
         import('$lib/monaco/Monaco').then((i) => i.Monaco.registerLanguages())
-        metaTheme = document.querySelector('meta[name="theme-color"]')
+        metaTheme = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
     })
     beforeNavigate((p) => {
+        if (!p.to || !p.from) return
         navigationStore.navigatingTo(p.to.url.pathname, p.from.url.pathname, p.to.url.searchParams)
     })
     const color = ThemeStore.theme.secondary

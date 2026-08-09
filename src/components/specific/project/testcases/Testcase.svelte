@@ -18,6 +18,7 @@
         editable?: boolean
         children?: import('svelte').Snippet
         registerNames: string[]
+        startingRegisterNames?: string[]
         hiddenRegistersNames?: string[]
         systemSize: RegisterSize
     }
@@ -28,9 +29,12 @@
         editable = false,
         children,
         registerNames,
+        startingRegisterNames,
         hiddenRegistersNames,
         systemSize
     }: Props = $props()
+
+    let allowedStartingRegisterNames = $derived(startingRegisterNames ?? registerNames)
 </script>
 
 <Card padding="0.8rem" gap="1rem" {style} radius="0.8rem">
@@ -45,7 +49,7 @@
                     {systemSize}
                     bind:registers={testcase.startingRegisters}
                     {hiddenRegistersNames}
-                    {registerNames}
+                    registerNames={allowedStartingRegisterNames}
                     editable
                 />
             </Column>

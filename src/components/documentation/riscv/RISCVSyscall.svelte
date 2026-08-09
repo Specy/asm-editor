@@ -8,6 +8,7 @@
 
 <Column gap="1rem">
     {#each Object.values(riscvSyscall) as syscall (syscall.code)}
+        {@const results = syscall.result.arguments ?? []}
         <Card padding="1rem" gap="1rem" background="secondary">
             <h2 style="border-bottom: solid 0.1rem var(--tertiary); padding-bottom: 0.8rem">
                 {syscall.code} - {capitalize(syscall.name)}
@@ -18,10 +19,10 @@
                 </p>
             {/if}
 
-            {#if syscall.result.arguments?.length > 0}
+            {#if results.length > 0}
                 <h3>Result</h3>
                 <Column>
-                    {#each syscall.result.arguments as result (result.name)}
+                    {#each results as result (result.name)}
                         <DocsOperand
                             name={result.name}
                             content={result.description}

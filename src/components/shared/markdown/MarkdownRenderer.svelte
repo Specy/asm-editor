@@ -56,6 +56,25 @@
         return `/embed?${lang}${props}${tests}code=${compressed}`
     }
 
+    function parsePlaygroundLanguage(language: string | undefined): AvailableLanguages | undefined {
+        const normalized = language?.trim().toLowerCase().replace(/[-_]/g, '')
+        switch (normalized) {
+            case 'm68k':
+                return 'M68K'
+            case 'mips':
+                return 'MIPS'
+            case 'x86':
+                return 'X86'
+            case 'riscv':
+            case 'riscv32':
+                return 'RISC-V'
+            case 'riscv64':
+                return 'RISC-V-64'
+            default:
+                return undefined
+        }
+    }
+
     const rehypePlaygroundTransformer = () => (tree: Root) => {
         visit(tree, 'element', (node: Element, index?: number, parent?: Parent) => {
             if (node.tagName === 'pre') {
@@ -84,13 +103,8 @@
                         const tall = entries.includes('tall')
                         const openButton = entries.includes('allow-open')
                         if (isPlayground) {
-                            let actualLanguage = entries[0].toUpperCase()
-                            if (actualLanguage === 'RISCV') {
-                                actualLanguage = 'RISC-V'
-                            }
-                            if (actualLanguage === 'riscv64') {
-                                actualLanguage = 'RISC-V-64'
-                            }
+                            const actualLanguage = parsePlaygroundLanguage(entries[0])
+                            if (!actualLanguage) return
 
                             const getAllText = (
                                 n: import('hast').Node | import('hast').Parent
@@ -118,7 +132,7 @@
                                         	${!large ? 'max-width: 70ch; margin: 1.5rem auto;' : ''}
                                         	${tall ? 'height: 80dvh;' : ''}
                                         `,
-                                        className: 'code-playground',
+                                        className: ['code-playground'],
                                         src: createCodeUrl(
                                             getAllText(codeNode).trimEnd(),
                                             {
@@ -128,7 +142,7 @@
                                                 showPc,
                                                 showRegisters: showRegisters,
                                                 showFlags,
-                                                language: actualLanguage as AvailableLanguages,
+                                                language: actualLanguage,
                                                 openButton
                                             },
                                             []
@@ -178,6 +192,7 @@
                 type: 'rehype',
                 async transform({ carta }) {
                     const highlighter = await carta.highlighter()
+                    if (!highlighter) return
                     await highlighter.shikiHighlighter().loadTheme(theme)
                 }
             },

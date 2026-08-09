@@ -12,7 +12,7 @@
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
     import FaArrowRight from '~icons/fa-solid/arrow-right'
     import Icon from '$cmp/shared/layout/Icon.svelte'
-    let wrapper: HTMLDivElement = $state()
+    let wrapper: HTMLDivElement | undefined = $state()
     import AddressingModes from './M68KAddressingModes.svelte'
     import M68KConditionCodes from './M68KConditionCodes.svelte'
     import M68KShiftRotations from './M68KShiftDirections.svelte'

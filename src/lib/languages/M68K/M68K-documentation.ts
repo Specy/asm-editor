@@ -1,5 +1,3 @@
-import cloneDeep from 'clone-deep'
-
 export enum AddressingMode {
     DataRegister = 1,
     AddressRegister = 2,
@@ -98,7 +96,7 @@ const ONLY_Im = [Im]
 const ONLY_In_OR_Id_OR_Ea = [In, Id, Ea]
 const ONLY_Ipi = [Ipi]
 
-const NO_SIZE = []
+const NO_SIZE: Size[] = []
 const ANY_SIZE = [Size.Byte, Size.Word, Size.Long]
 const ONLY_LONG_OR_WORD = [Size.Long, Size.Word]
 
@@ -1517,10 +1515,13 @@ export function getInstructionDocumentation(
 ): InstructionDocumentation | undefined {
     if (!instructionName) return undefined
     const ins = M68KUncompoundedInstructions.get(instructionName)
-    const directive = M68KDirectiveDocumentation[instructionName]
     if (ins) return ins
-    if (directive) return directive
-    return undefined
+    if (!hasOwnKey(M68KDirectiveDocumentation, instructionName)) return undefined
+    return M68KDirectiveDocumentation[instructionName]
+}
+
+function hasOwnKey<T extends object>(value: T, key: PropertyKey): key is keyof T {
+    return Object.prototype.hasOwnProperty.call(value, key)
 }
 
 export function uncompoundInstructions(
@@ -1556,7 +1557,7 @@ export function uncompoundInstructions(
                         `"**${setConditionsDescriptions.get(code)}**"`
                     )
                 }
-                const entry = cloneDeep(i)
+                const entry = structuredClone(i)
                 entry.name = n
                 entry.description = description
                 map.set(n, entry)
@@ -1576,7 +1577,7 @@ function makeIns(
     args: AddressingMode[][],
     sizes: Size[],
     affectedFlags: Record<M68KFlag, AffectedFlagKind>,
-    description?: string,
+    description: string,
     example?: string,
     defaultSize?: Size,
     interactiveExample?: string
@@ -1602,22 +1603,26 @@ function makeIns(
 
 type DirectiveDocumentation = {
     name: string
-    description?: string
+    args: AddressingMode[][]
+    description: string
     example?: string
     sizes: Size[]
+    affectsFlags: Record<M68KFlag, AffectedFlagKind>
 }
 
 function makeDirective(
     name: string,
     sizes: Size[],
-    description?: string,
+    description: string,
     example?: string
 ): DirectiveDocumentation {
     return {
         name,
+        args: [],
         description,
         example,
-        sizes
+        sizes,
+        affectsFlags: UNAFFECTED
     }
 }
 

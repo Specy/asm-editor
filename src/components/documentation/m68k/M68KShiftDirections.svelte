@@ -5,7 +5,10 @@
 
 <div class="cc-grid">
     {#each directions as dr (dr)}
-        <DocsOperand name={dr} content={directionsDescriptions.get(dr)} />
+        {@const description = directionsDescriptions.get(dr)}
+        {#if description !== undefined}
+            <DocsOperand name={dr} content={description} />
+        {/if}
     {/each}
 </div>
 

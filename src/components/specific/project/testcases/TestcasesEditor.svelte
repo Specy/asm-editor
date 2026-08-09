@@ -19,6 +19,7 @@
         testcases: Testcase[]
         testcasesResult: TestcaseResult[]
         registerNames: string[]
+        startingRegisterNames: string[]
         hiddenRegistersNames?: string[]
         editable?: boolean
         systemSize: RegisterSize
@@ -29,6 +30,7 @@
         testcases = $bindable(),
         testcasesResult,
         registerNames,
+        startingRegisterNames,
         hiddenRegistersNames,
         editable = true,
         systemSize
@@ -100,6 +102,7 @@
                                     bind:testcase={testcases[i]}
                                     editable={false}
                                     {registerNames}
+                                    {startingRegisterNames}
                                     {hiddenRegistersNames}
                                 >
                                     {#if editable}
@@ -132,6 +135,7 @@
                     <TestcaseRenderer
                         {systemSize}
                         {registerNames}
+                        {startingRegisterNames}
                         {hiddenRegistersNames}
                         style="border: solid 0.1rem var(--accent)"
                         editable

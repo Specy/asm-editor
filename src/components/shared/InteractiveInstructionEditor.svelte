@@ -386,6 +386,7 @@
             systemSize={emulator.systemSize}
             editable={!embedded}
             registerNames={emulator.registers.map((r) => r.name)}
+            startingRegisterNames={emulator.startingRegisterNames}
             hiddenRegistersNames={emulator.hiddenRegisters}
             bind:visible={testcasesVisible}
             {testcasesResult}

@@ -30,7 +30,7 @@
     }: Props = $props()
 
     let hexAddress = $derived(currentAddress.toString(16))
-    let inputRef = $state<HTMLInputElement>(null)
+    let inputRef = $state<HTMLInputElement | undefined>()
 
     function searchAddress() {
         const cleaned = hexAddress.replace('0x', '')

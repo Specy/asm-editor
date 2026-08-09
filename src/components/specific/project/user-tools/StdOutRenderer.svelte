@@ -11,7 +11,7 @@
 
     let { stdOut, compilerErrors = [], info = '' }: Props = $props()
     let areCompilerErrorsShown = $state(false)
-    let el: HTMLDivElement = $state(null)
+    let el: HTMLDivElement | undefined = $state()
 
     let separator = $derived(compilerErrors.length ? '\n\n' : '')
     $effect(() => {

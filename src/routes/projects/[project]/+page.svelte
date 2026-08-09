@@ -59,6 +59,11 @@
 
         if (id === 'share') {
             const code = $page.url.searchParams.get('project')
+            if (!code) {
+                toast.error('Invalid shared project link', 10000)
+                status = 'error'
+                return
+            }
             const parsedCode = lzstring.decompressFromEncodedURIComponent(code)
             if (!parsedCode) {
                 toast.error('Invalid shared project link', 10000)
@@ -92,10 +97,11 @@
     async function save(project: Project): Promise<boolean> {
         if (status !== 'loaded') return false
         if (project.id === SHARE_ID) {
-            if (
-                !(await Prompt.confirm('Do you want to save this shared project in your projects?'))
+            const confirmed = await Prompt.confirm(
+                'Do you want to save this shared project in your projects?'
             )
-                return false
+            if (confirmed === null) return false
+            if (!confirmed) return false
             project.set({ id: undefined })
             const newProject = await ProjectStore.addProject(project)
             project.set({ id: newProject.id })
@@ -120,6 +126,7 @@
                 const save = await Prompt.confirm(
                     'This project has not been saved. Would you like to create and save it?'
                 )
+                if (save === null) return
                 if (save) {
                     await ProjectStore.addProject(project)
                     toast.logPill('Project created')
@@ -130,6 +137,7 @@
             const wantsToSave = await Prompt.confirm(
                 'You have unsaved changes. Do you want to save them?'
             )
+            if (wantsToSave === null) return
             if (wantsToSave) {
                 await ProjectStore.save(project)
                 toast.logPill('Project saved')
@@ -162,7 +170,7 @@
     }}
 />
 
-{#snippet loadingScreen(errored)}
+{#snippet loadingScreen(errored: boolean)}
     <div class="overlay" class:overlay-hidden={!(status === 'loading' || status === 'error')}>
         {#if !errored}
             <h1 class="loading">Loading...</h1>

@@ -1,7 +1,7 @@
 <script lang="ts">
     import { clamp, createDebouncer } from '$lib/utils'
 
-    let ref: HTMLElement = $state()
+    let ref: HTMLElement | undefined = $state()
 
     interface Props {
         left?: number

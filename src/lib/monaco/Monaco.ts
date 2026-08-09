@@ -9,8 +9,8 @@ import type { AvailableLanguages, AvailableProgrammingLanguages } from '$lib/Pro
 export type MonacoType = typeof monaco
 
 class MonacoLoader {
-    private monaco: MonacoType
-    loading: Promise<MonacoType>
+    private monaco: MonacoType | null = null
+    loading: Promise<MonacoType> | null = null
     toDispose: monaco.IDisposable[] = []
 
     constructor() {
@@ -21,8 +21,9 @@ class MonacoLoader {
 
     async load(): Promise<MonacoType> {
         if (this.loading) return this.loading
-        this.loading = import('monaco-editor')
-        const monaco: MonacoType = await this.loading
+        const loading = import('monaco-editor')
+        this.loading = loading
+        const monaco = await loading
         monaco.editor.defineTheme('custom-theme', generateTheme())
         this.monaco = monaco
         // @ts-ignore add worker
@@ -37,12 +38,10 @@ class MonacoLoader {
     private registeredLanguages: AvailableLanguages[] = []
 
     async registerLanguage(lang: AvailableLanguages | AvailableProgrammingLanguages) {
-        if (!this.monaco) await this.load()
-        const { monaco } = this
-        if (!monaco) return
+        const monaco = this.monaco ?? (await this.load())
         if (lang === 'c') return
-        if (this.registeredLanguages.includes(lang as AvailableLanguages)) return
-        this.registeredLanguages.push(lang as AvailableLanguages)
+        if (this.registeredLanguages.includes(lang)) return
+        this.registeredLanguages.push(lang)
         monaco.languages.register({ id: lang.toLowerCase() })
         if (lang === 'M68K') {
             const [grammar, language] = await Promise.all([
@@ -145,9 +144,11 @@ class MonacoLoader {
     }
 
     setTheme = (theme: string) => {
+        if (!this.monaco) return
         this.monaco.editor.setTheme(theme)
     }
     setCustomTheme = (theme: monaco.editor.IStandaloneThemeData) => {
+        if (!this.monaco) return
         this.monaco.editor.defineTheme('custom-theme', theme)
         this.monaco.editor.setTheme('custom-theme')
     }
@@ -161,10 +162,8 @@ class MonacoLoader {
         ])
     }
 
-    async get() {
-        if (this.monaco) return this.monaco
-        await this.load()
-        return this.monaco
+    async get(): Promise<MonacoType> {
+        return this.monaco ?? (await this.load())
     }
 }
 

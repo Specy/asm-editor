@@ -217,6 +217,7 @@ export type BaseEmulatorState = {
     systemSize: RegisterSize
     compiledCode?: string
     registers: Register[]
+    startingRegisterNames: string[]
     hiddenRegisters: string[]
     decorations: EmulatorDecoration[]
     statusRegisters: StatusRegister[]

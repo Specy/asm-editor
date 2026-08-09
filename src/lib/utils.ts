@@ -35,7 +35,7 @@ export function bigIntOfSize(number: bigint, bytes: RegisterSize) {
     return number & mask
 }
 
-export type Timer = NodeJS.Timeout | number
+export type Timer = ReturnType<typeof setTimeout>
 
 export function createDebouncer(delay: number): [(callback: () => void) => void, () => void] {
     let timeoutId: Timer
@@ -94,7 +94,7 @@ export function getEnumKeys<T extends Record<string, string | number>>(enumObj: 
     return Object.keys(enumObj).filter((key) => isNaN(Number(key))) as (keyof T)[]
 }
 
-function hexDigest(buffer) {
+function hexDigest(buffer: ArrayBuffer) {
     let digest = ''
     const view = new DataView(buffer)
     for (let i = 0; i < view.byteLength; i += 4) {

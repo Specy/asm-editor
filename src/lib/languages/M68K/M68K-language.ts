@@ -1,5 +1,6 @@
 import type { MonacoType } from '$lib/monaco/Monaco'
 import { S68k } from '@specy/s68k'
+import type monaco from 'monaco-editor'
 import {
     AddressingMode,
     AffectedFlagKind,
@@ -17,9 +18,14 @@ const formattableTokensMap = new Map(formattableTokens.map((e) => [e, true]))
 
 type Arg = {
     value: string
-    boundary: string
+    boundary: string | undefined
 }
-function parseArgs(data): [Arg[], string[]] {
+
+function hasOwnKey<T extends object>(value: T, key: PropertyKey): key is keyof T {
+    return Object.prototype.hasOwnProperty.call(value, key)
+}
+
+function parseArgs(data: string): [Arg[], string[]] {
     const trimmed = data.trim()
     const boundaries = data.trimEnd().match(/[\s,]+/g) || []
     const args = trimmed.split(/[\s,]+/g).map((value, i) => {
@@ -31,11 +37,13 @@ function parseArgs(data): [Arg[], string[]] {
     })
     return [args, boundaries]
 }
-export function createM68kFormatter(_monaco: MonacoType) {
+export function createM68kFormatter(
+    _monaco: MonacoType
+): monaco.languages.DocumentFormattingEditProvider {
     return {
         provideDocumentFormattingEdits: (model) => {
             //this just formats arguments and labels
-            const text = model.getValue() as string
+            const text = model.getValue()
             const lines = text.split(/\r?\n/g)
 
             const formatted = lines.map((line) => {
@@ -67,7 +75,9 @@ export function createM68kFormatter(_monaco: MonacoType) {
     }
 }
 
-export function createM68KCompletition(monaco: MonacoType) {
+export function createM68KCompletition(
+    monaco: MonacoType
+): monaco.languages.CompletionItemProvider {
     return {
         triggerCharacters: ['.', ',', ' ', 'deleteLeft', 'tab', '$', '#'],
         provideCompletionItems: (model, position) => {
@@ -78,7 +88,14 @@ export function createM68KCompletition(monaco: MonacoType) {
                 endColumn: position.column
             })
             const lastCharacter = data.substring(data.length - 1, data.length)
-            let suggestions = []
+            const word = model.getWordUntilPosition(position)
+            const range = new monaco.Range(
+                position.lineNumber,
+                word.startColumn,
+                position.lineNumber,
+                word.endColumn
+            )
+            let suggestions: monaco.languages.CompletionItem[] = []
             const trimmed = data.trim()
             const [args] = parseArgs(data)
 
@@ -90,7 +107,8 @@ export function createM68KCompletition(monaco: MonacoType) {
                         return {
                             kind: monaco.languages.CompletionItemKind.Unit,
                             label: numerical,
-                            insertText: numerical === '#' && lastCharacter === '#' ? '' : numerical
+                            insertText: numerical === '#' && lastCharacter === '#' ? '' : numerical,
+                            range
                         }
                     })
                 )
@@ -105,18 +123,18 @@ export function createM68KCompletition(monaco: MonacoType) {
             //Add instruction descriptions completition if the first word is an instruction
             if (lastCharacter !== ' ' && args.length === 1) {
                 if (firstArgDoc && firstArgDoc.sizes.length) {
-                    const descriptorSuggestions = firstArgDoc.sizes
-                        .map((size) => {
-                            const name = fromSizeToString(size)
-                            const doc = DescriptionsMap[fromSizeToString(size)]
-                            if (!doc) return
-                            return {
-                                ...doc,
+                    const descriptorSuggestions = firstArgDoc.sizes.flatMap((size) => {
+                        const name = fromSizeToString(size)
+                        if (!hasOwnKey(DescriptionsMap, name)) return []
+                        return [
+                            {
+                                ...DescriptionsMap[name],
                                 kind: monaco.languages.CompletionItemKind.Enum,
-                                label: name
+                                label: name,
+                                range
                             }
-                        })
-                        .filter(Boolean)
+                        ]
+                    })
                     suggestions = suggestions.concat(...descriptorSuggestions)
                 }
             }
@@ -128,7 +146,8 @@ export function createM68KCompletition(monaco: MonacoType) {
                         return {
                             kind: monaco.languages.CompletionItemKind.Function,
                             label: keyword,
-                            insertText: ''
+                            insertText: '',
+                            range
                         }
                     })
                 )
@@ -136,7 +155,11 @@ export function createM68KCompletition(monaco: MonacoType) {
             //if it wrote a instruction, suggest the registers and numbers
             if (firstArgDoc && (lastCharacter === ' ' || lastCharacter === ',')) {
                 const position = args.filter((e) => e.value).length - 1
-                const addressingModes = getAddressingModes(firstArgDoc.args[position], monaco)
+                const addressingModes = getAddressingModes(
+                    firstArgDoc.args[position],
+                    monaco,
+                    range
+                )
                 suggestions.push(...addressingModes)
             }
             //keyword suggestion
@@ -148,7 +171,8 @@ export function createM68KCompletition(monaco: MonacoType) {
                             return {
                                 kind: monaco.languages.CompletionItemKind.Function,
                                 label: keyword,
-                                insertText: keyword
+                                insertText: keyword,
+                                range
                             }
                         })
                 )
@@ -158,8 +182,10 @@ export function createM68KCompletition(monaco: MonacoType) {
             }
         },
         resolveCompletionItem(item) {
+            const label = typeof item.label === 'string' ? item.label : item.label.label
+            const details = hasOwnKey(CompletitionMap, label) ? CompletitionMap[label] : undefined
             return {
-                ...CompletitionMap[item.label],
+                ...details,
                 ...item,
                 preselect: true
             }
@@ -167,7 +193,7 @@ export function createM68KCompletition(monaco: MonacoType) {
     }
 }
 
-export function createM68kHoverProvider(monaco: MonacoType) {
+export function createM68kHoverProvider(monaco: MonacoType): monaco.languages.HoverProvider {
     return {
         provideHover: (model, position) => {
             const range = new monaco.Range(position.lineNumber, 1, position.lineNumber, 1000)
@@ -176,7 +202,9 @@ export function createM68kHoverProvider(monaco: MonacoType) {
             const parsed = S68k.lexOne(line).parsed
             const word = model.getWordAtPosition(position)?.word
             if (parsed.type === 'Instruction' || parsed.type === 'Directive') {
-                const documentation = getInstructionDocumentation(word?.toLowerCase())
+                const documentation = word
+                    ? getInstructionDocumentation(word.toLowerCase())
+                    : undefined
                 const defaultSize = documentation?.defaultSize
                     ? fromSizeToString(documentation.defaultSize)
                     : ''
@@ -243,66 +271,78 @@ const DescriptionsMap = {
         documentation: 'Select first 8 bits of the register',
         insertText: 'b '
     }
-}
+} satisfies Record<string, Pick<monaco.languages.CompletionItem, 'documentation' | 'insertText'>>
 
-function getAddressingModes(am: AddressingMode[], monaco: MonacoType) {
+function getAddressingModes(
+    am: AddressingMode[] | undefined,
+    monaco: MonacoType,
+    range: monaco.IRange
+): monaco.languages.CompletionItem[] {
     if (!am) return []
     const amMap = new Map(am.map((e) => [e, true]))
-    const res = []
+    const res: monaco.languages.CompletionItem[] = []
     if (amMap.has(AddressingMode.AddressRegister)) {
         res.push({
             kind: monaco.languages.CompletionItemKind.Variable,
             label: 'An',
-            insertText: 'a'
+            insertText: 'a',
+            range
         })
     }
     if (amMap.has(AddressingMode.DataRegister)) {
         res.push({
             kind: monaco.languages.CompletionItemKind.Variable,
             label: 'Dn',
-            insertText: 'd'
+            insertText: 'd',
+            range
         })
     }
     if (amMap.has(AddressingMode.Immediate)) {
         res.push({
             kind: monaco.languages.CompletionItemKind.Value,
             label: '#',
-            insertText: '#'
+            insertText: '#',
+            range
         })
     }
     if (amMap.has(AddressingMode.Absolute)) {
         res.push({
             kind: monaco.languages.CompletionItemKind.Value,
             label: 'EA',
-            insertText: ''
+            insertText: '',
+            range
         })
     }
     if (amMap.has(AddressingMode.Indirect)) {
         res.push({
             kind: monaco.languages.CompletionItemKind.Value,
             label: '(An)',
-            insertText: '()'
+            insertText: '()',
+            range
         })
     }
     if (amMap.has(AddressingMode.PreIndirect)) {
         res.push({
             kind: monaco.languages.CompletionItemKind.Value,
             label: '-(An)',
-            insertText: '-()'
+            insertText: '-()',
+            range
         })
     }
     if (amMap.has(AddressingMode.PostIndirect)) {
         res.push({
             kind: monaco.languages.CompletionItemKind.Value,
             label: '(An)+',
-            insertText: '()+'
+            insertText: '()+',
+            range
         })
     }
     if (amMap.has(AddressingMode.IndirectWithDisplacement)) {
         res.push({
             kind: monaco.languages.CompletionItemKind.Value,
             label: '(An, Dn/An)',
-            insertText: '(,)'
+            insertText: '(,)',
+            range
         })
     }
     return res
@@ -356,4 +396,11 @@ const CompletitionMap = {
         detail: '%<num> | binary number',
         documentation: 'Binary immediate number'
     }
-}
+} satisfies Record<
+    string,
+    | Pick<monaco.languages.CompletionItem, 'detail'>
+    | {
+          detail: string
+          documentation: string
+      }
+>

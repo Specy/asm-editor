@@ -31,6 +31,10 @@
                 const override = await Prompt.confirm(
                     'An existing project with this id already exists, do you want to override it?'
                 )
+                if (override === null) {
+                    toast.success('Cancelled import')
+                    return undefined
+                }
                 if (!override) {
                     toast.success('Cancelled import')
                     return undefined
@@ -60,10 +64,12 @@
             // @ts-ignore -- File omits the nonstandard handle retained by the importer
             blob.handle = fileHandle
             const text = await blob.text()
-            const project = makeProjectFromExternal(text)
-            const id = (await importFromText(text))?.id ?? project.id
+            const importedProject = await importFromText(text)
+            if (!importedProject) continue
+            const id = importedProject.id
             ProjectStore.setFileHandle(id, fileHandle)
             const proj = await ProjectStore.getProject(id)
+            if (!proj) continue
             ProjectStore.save(proj) //saves the new metadata to the file
         }
     }
@@ -81,10 +87,12 @@
                                 const blob = await file.getFile()
                                 blob.handle = file
                                 const text = await blob.text()
-                                const project = makeProjectFromExternal(text)
-                                lastId = (await importFromText(text))?.id ?? project.id
+                                const importedProject = await importFromText(text)
+                                if (!importedProject) continue
+                                lastId = importedProject.id
                                 ProjectStore.setFileHandle(lastId, file)
                                 const proj = await ProjectStore.getProject(lastId)
+                                if (!proj) continue
                                 ProjectStore.save(proj) //saves the new metadata to the file
                             } catch (e) {
                                 console.error(e)

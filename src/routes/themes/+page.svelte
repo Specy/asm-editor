@@ -57,11 +57,10 @@
                 `}
             >
                 <Row style="height: 2rem; width: 100%">
-                    {#each Object.keys(t.theme) as key (key)}
-                        {#if !t.theme[key].readonly}
+                    {#each Object.values(t.theme) as themeProp (themeProp.prop)}
+                        {#if !themeProp.readonly}
                             <div
-                                style="background-color: {t.theme[key]
-                                    .color}; flex:1; display: flex;"
+                                style="background-color: {themeProp.color}; flex:1; display: flex;"
                             ></div>
                         {/if}
                     {/each}
@@ -74,12 +73,11 @@
                     {#if t.editable}
                         <Button
                             onClick={async () => {
-                                if (
-                                    !(await Prompt.confirm(
-                                        'Are you sure you want to delete this theme?'
-                                    ))
+                                const confirmed = await Prompt.confirm(
+                                    'Are you sure you want to delete this theme?'
                                 )
-                                    return
+                                if (confirmed === null) return
+                                if (!confirmed) return
                                 ThemeStore.delete(t.id)
                             }}
                             hasIcon
@@ -99,6 +97,7 @@
             color="var(--secondary-text)"
             onClick={async () => {
                 const name = await Prompt.askText('Write the name of the theme')
+                if (name === null) return
                 if (!name) return
                 ThemeStore.createNewAndSet(name)
             }}
