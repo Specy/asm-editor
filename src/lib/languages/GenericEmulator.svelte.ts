@@ -1,14 +1,19 @@
-import { BaseEmulator, type EmulatorConfig } from '$lib/languages/BaseEmulator.svelte'
+import {
+    BaseEmulator,
+    CompilationFailedError,
+    type EmulatorConfig
+} from '$lib/languages/BaseEmulator.svelte'
 import {
     type BaseEmulatorActions,
     type BaseEmulatorState,
     createMemoryTab,
     type EmulatorSettings,
     InterpreterStatus,
-    makeGenericMonacoError,
+    makeGenericDiagnostic,
     makeRegister,
     numbersOfSizeToSlice
 } from '$lib/languages/commonLanguageFeatures.svelte'
+import { Terminal } from '$lib/languages/peripherals/Terminal.svelte'
 import type { Testcase, TestcaseResult, TestcaseValidationError } from '$lib/Project.svelte'
 import { PAGE_ELEMENTS_PER_ROW, PAGE_SIZE } from '$lib/Config'
 import { createDebouncer } from '$lib/utils'
@@ -18,20 +23,21 @@ import {
     isMemoryChunkEqual,
     numberToByteSlice
 } from '$cmp/specific/project/memory/memoryTabUtils'
-import type { Interrupt } from '@specy/s68k'
-import { ExecutionController } from '$lib/languages/ExecutionController'
+import { ExecutionController, type ExecutionGeneration } from '$lib/languages/ExecutionController'
 import { Prompt } from '$stores/promptStore.svelte'
 
 export abstract class GenericEmulator<T, R extends string>
     extends BaseEmulator<R>
     implements BaseEmulatorActions, BaseEmulatorState
 {
-    protected state: Omit<BaseEmulatorState, 'code'>
+    protected state: Omit<BaseEmulatorState, 'code' | 'stdOut'>
     protected _code: string
     protected _emulatorOptions: Required<EmulatorSettings>
-    interrupt?: Interrupt | undefined
-    isExamMode: boolean = false
+    protected readonly _peripherals: { terminal: Terminal }
     private semanticCheckId = 0
+    /** Number of core operations currently in flight, see `duringCoreOperation`. */
+    private coreOperations = 0
+    private coreIdleWaiters: (() => void)[] = []
     protected readonly executionController = new ExecutionController(() => Prompt.cancel())
 
     constructor(code: string, options: EmulatorConfig<R>, emulatorOptions: EmulatorSettings = {}) {
@@ -46,6 +52,9 @@ export abstract class GenericEmulator<T, R extends string>
             language: emulatorOptions.language ?? 'M68K'
         }
         this._code = $state(code)
+        this._peripherals = {
+            terminal: new Terminal({ executionController: this.executionController })
+        }
 
         this.state = $state({
             systemSize: options.systemSize,
@@ -57,17 +66,16 @@ export abstract class GenericEmulator<T, R extends string>
             line: -1,
             decorations: [],
             statusRegisters: [],
-            compilerErrors: [],
+            compilerDiagnostics: [],
             callStack: [],
             errors: [],
             sp: 0n,
             latestSteps: [],
-            stdOut: '',
             executionTime: -1,
             canUndo: false,
             canExecute: false,
             breakpoints: [],
-            isExamMode: false,
+            interrupt: undefined,
             memory: {
                 global: createMemoryTab(
                     this._emulatorOptions.globalPageSize,
@@ -122,18 +130,72 @@ export abstract class GenericEmulator<T, R extends string>
         }
     }
 
+    /**
+     * Places the Stack memory tab right after a successful compile.
+     * The default points it one page below SP and then lets `scrollStackTab()` snap it to the
+     * page containing SP. Languages whose legacy emulator did not auto-scroll on compile
+     * (M68K) override this to keep the "page below SP" position.
+     */
+    protected positionStackTabOnCompile() {
+        const stackTab = this.state.memory.tabs.find((e) => e.name === 'Stack')
+        if (stackTab) {
+            stackTab.address = this._getSp() - BigInt(stackTab.pageSize)
+        }
+        this.scrollStackTab()
+    }
+
+    /**
+     * Serializes everything that touches the core against `_checkCode`'s throwaway assembly.
+     *
+     * The MARS/RARS derived cores (MIPS, RISC-V) keep the assembled program and the register file in
+     * *module global* state, so assembling a second instance while one of them is executing hijacks
+     * the run: the in flight `simulate*` carries on stepping the throwaway's program and then
+     * reports a perfectly normal termination with the wrong registers and memory, no error raised.
+     * Their `step`/`simulate*` yield to the event loop, so the debounced semantic check that
+     * `setCode` arms on every keystroke can land inside a running program (a long run, or one
+     * suspended on an input prompt) instead of safely between two of them.
+     *
+     * The whole public operation is held, not just the awaited core call: the epilogue that reads
+     * registers and memory back out of the core must not be interleaved with a check either.
+     */
+    private async duringCoreOperation<T>(operation: () => Promise<T>): Promise<T> {
+        this.coreOperations += 1
+        try {
+            return await operation()
+        } finally {
+            this.coreOperations -= 1
+            if (this.coreOperations === 0) {
+                const waiters = this.coreIdleWaiters
+                this.coreIdleWaiters = []
+                for (const resolve of waiters) resolve()
+            }
+        }
+    }
+
+    private waitForIdleCore(): Promise<void> {
+        if (this.coreOperations === 0) return Promise.resolve()
+        return new Promise<void>((resolve) => this.coreIdleWaiters.push(resolve))
+    }
+
     protected async semanticCheck() {
         const checkId = ++this.semanticCheckId
         try {
-            const errors = await this._checkCode(this._code)
-            if (checkId !== this.semanticCheckId) return errors
-            this.state.compilerErrors = errors
-            this.state.errors = []
-            return errors
-        } catch (e) {
+            //`_checkCode` assembles a throwaway core, which for the MARS/RARS derived cores would
+            //hijack a run that is still in flight (see `duringCoreOperation`), so wait it out. A
+            //check that a newer one superseded in the meantime is dropped instead of assembling.
+            await this.waitForIdleCore()
             if (checkId !== this.semanticCheckId) return []
-            this.addError(this._stringifyError(e))
-            return [makeGenericMonacoError(this._stringifyError(e))]
+            const diagnostics = await this._checkCode(this._code)
+            if (checkId !== this.semanticCheckId) return diagnostics
+            this.state.compilerDiagnostics = diagnostics
+            this.state.errors = []
+            return diagnostics
+        } catch (e) {
+            console.error(e)
+            if (checkId !== this.semanticCheckId) return []
+            const error = this._stringifyError(e)
+            this.addError(error)
+            return [makeGenericDiagnostic(error)]
         }
     }
 
@@ -182,6 +244,27 @@ export abstract class GenericEmulator<T, R extends string>
         }
     }
 
+    protected async requestInput(question: string, execution: ExecutionGeneration) {
+        this.state.interrupt = { type: 'ReadInput', message: question }
+        try {
+            return await this._peripherals.terminal.readAsync(question, execution)
+        } finally {
+            this.state.interrupt = undefined
+        }
+    }
+
+    protected getLastExecutedLine(fallback = -1): number {
+        try {
+            const instruction = this._getLastInstruction?.()
+            if (instruction) return instruction.lineNumber
+            const [step] = this._getUndoHistory(1)
+            return step?.line ?? fallback
+        } catch (e) {
+            console.error(e)
+            return fallback
+        }
+    }
+
     protected updateData() {
         const settings = settingsStore
         if (!this.getInstance()) return
@@ -196,6 +279,8 @@ export abstract class GenericEmulator<T, R extends string>
     // ----- public api ----- //
     clear(): void {
         this.executionController.invalidate()
+        this._peripherals.terminal.clear()
+        this._peripherals.terminal.useInteractiveInput()
         this.state = {
             ...this.state,
             terminated: false,
@@ -204,14 +289,15 @@ export abstract class GenericEmulator<T, R extends string>
             sp: 0n,
             decorations: [],
             line: -1,
-            stdOut: '',
+            interrupt: undefined,
             errors: [],
             canUndo: false,
             executionTime: -1,
             canExecute: false,
             latestSteps: [],
             callStack: [],
-            compilerErrors: [],
+            //diagnostics describe the source, not the run — they survive a stop/clear and are
+            //replaced by the next compile or semantic check
             memory: {
                 global: createMemoryTab(
                     this._emulatorOptions.globalPageSize,
@@ -238,32 +324,41 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     async compile(historySize: number, codeOverride: string | undefined): Promise<void> {
+        return this.duringCoreOperation(() => this.compileInternal(historySize, codeOverride))
+    }
+
+    private async compileInternal(
+        historySize: number,
+        codeOverride: string | undefined
+    ): Promise<void> {
         this.clear()
         const execution = this.executionController.capture()
         try {
-            const result = await this._compile(codeOverride ?? this._code)
+            const result = await this._compile(codeOverride ?? this._code, historySize)
             this.executionController.ensureCurrent(execution)
-            if ('errors' in result) {
-                this.state.compilerErrors = result.errors
+            if (!result.ok) {
+                this.state.compilerDiagnostics = result.diagnostics
                 this.state.canExecute = false
-                throw new Error(result.report)
+                throw new CompilationFailedError(result.report, result.diagnostics)
             }
+            //a successful build replaces the semantic check's list so stale squiggles drop and the
+            //warnings the assembler emitted while succeeding are shown
+            this.state.compilerDiagnostics = result.diagnostics ?? []
             this._initialize(historySize)
             this.addDecorations()
-            const stackTab = this.state.memory.tabs.find((e) => e.name === 'Stack')
-            if (stackTab) {
-                stackTab.address = BigInt(this._getSp() - BigInt(stackTab.pageSize))
-            }
             this.state.canExecute = true
             this.state.canUndo = false
             this.state.line = this._getNextInstruction()?.lineNumber ?? -1
             this.updateRegisters()
-            this.scrollStackTab()
+            this.positionStackTabOnCompile()
             this.updateMemory()
             this.updateData()
             this.updateStatusRegisters()
         } catch (e) {
             if (!this.executionController.isCurrent(execution)) return
+            //assembler errors already live in state.compilerDiagnostics and are rendered from there,
+            //pushing them into state.errors too would render the whole list twice
+            if (e instanceof CompilationFailedError) throw e
             this.addError(this._stringifyError(e))
             this.debouncer[1]()
             throw e
@@ -298,6 +393,10 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     async run(haltLimit: number): Promise<InterpreterStatus> {
+        return this.duringCoreOperation(() => this.runInternal(haltLimit))
+    }
+
+    private async runInternal(haltLimit: number): Promise<InterpreterStatus> {
         if (haltLimit <= 0) haltLimit = Number.MAX_SAFE_INTEGER
         const start = performance.now()
         const execution = this.executionController.capture()
@@ -311,10 +410,10 @@ export abstract class GenericEmulator<T, R extends string>
                 if (!terminated) {
                     this.state.line = ins?.lineNumber ?? -1
                 } else {
-                    this.state.line = -1
+                    this.state.line = this.getLastExecutedLine()
                 }
             } catch {
-                this.state.line = -1
+                this.state.line = terminated ? this.getLastExecutedLine() : -1
             }
             this.state.canUndo = this._canUndo()
             this.updateRegisters()
@@ -334,11 +433,15 @@ export abstract class GenericEmulator<T, R extends string>
             console.error(e)
             let line = -1
             try {
-                line = this._getNextInstruction()?.lineNumber ?? -1
+                //the failing instruction is the last one that was attempted, not the one after it
+                line =
+                    this._getLastInstruction?.()?.lineNumber ??
+                    this._getNextInstruction()?.lineNumber ??
+                    -1
             } catch (e) {
                 console.error(e)
             }
-            this.addError(this._stringifyError(e))
+            this.addError(this._stringifyError(e, line >= 0 ? line + 1 : undefined))
             this.state.terminated = true
             this.state.line = line
         }
@@ -407,12 +510,12 @@ export abstract class GenericEmulator<T, R extends string>
                 })
             }
         }
-        const current = this.state
-        if (current.stdOut !== testcase.expectedOutput) {
+        const stdOut = this.stdOut
+        if (stdOut !== testcase.expectedOutput) {
             errors.push({
                 type: 'wrong-output',
                 expected: testcase.expectedOutput,
-                got: current.stdOut
+                got: stdOut
             })
         }
         for (const value of testcase.expectedMemory) {
@@ -420,7 +523,7 @@ export abstract class GenericEmulator<T, R extends string>
                 const bytes = new Uint8Array(
                     this._readMemoryBytes(value.address, BigInt(value.bytes))
                 )
-                const num = byteSliceToNum(bytes, 'little')
+                const num = byteSliceToNum(bytes, this._endianness)
                 if (num !== value.expected) {
                     errors.push({
                         type: 'wrong-memory-number',
@@ -435,7 +538,7 @@ export abstract class GenericEmulator<T, R extends string>
                     value.address,
                     BigInt(value.expected.length * value.bytes)
                 )
-                const expected = numbersOfSizeToSlice(value.expected, value.bytes, 'little')
+                const expected = numbersOfSizeToSlice(value.expected, value.bytes, this._endianness)
                 if (!isMemoryChunkEqual(bytes, expected)) {
                     errors.push({
                         type: 'wrong-memory-chunk',
@@ -461,6 +564,10 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     async step(): Promise<boolean> {
+        return this.duringCoreOperation(() => this.stepInternal())
+    }
+
+    private async stepInternal(): Promise<boolean> {
         let lastLine = -1
         const execution = this.executionController.capture()
         try {
@@ -469,10 +576,14 @@ export abstract class GenericEmulator<T, R extends string>
             const result = await this._step()
             this.executionController.ensureCurrent(execution)
             this.state.terminated = result.terminated
-            try {
-                const ins = this._getNextInstruction()
-                this.state.line = ins?.lineNumber ?? -1
-            } catch {}
+            if (result.terminated) {
+                this.state.line = this.getLastExecutedLine(lastLine)
+            } else {
+                try {
+                    const ins = this._getNextInstruction()
+                    this.state.line = ins?.lineNumber ?? -1
+                } catch {}
+            }
 
             this.state.canUndo = this._canUndo()
             //if it managed to step, it means it does not have valid errors
@@ -480,7 +591,7 @@ export abstract class GenericEmulator<T, R extends string>
         } catch (e) {
             if (!this.executionController.isCurrent(execution)) return false
             console.error(e)
-            this.addError(this._stringifyError(e))
+            this.addError(this._stringifyError(e, lastLine >= 0 ? lastLine + 1 : undefined))
             this.state.terminated = true
             this.state.line = lastLine
             throw e
@@ -494,7 +605,12 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     async runTestcase(testcase: Testcase, haltLimit: number) {
+        return this.duringCoreOperation(() => this.runTestcaseInternal(testcase, haltLimit))
+    }
+
+    private async runTestcaseInternal(testcase: Testcase, haltLimit: number) {
         const start = performance.now()
+        const execution = this.executionController.capture()
         try {
             if (!this.getInstance()) throw new Error('Interpreter not initialized')
             for (const [register, value] of Object.entries(testcase.startingRegisters)) {
@@ -506,20 +622,31 @@ export abstract class GenericEmulator<T, R extends string>
             }
             for (const value of testcase.startingMemory) {
                 if (value.type === 'number') {
-                    const slice = new Uint8Array(numberToByteSlice(value.expected, value.bytes))
+                    const slice = new Uint8Array(
+                        numberToByteSlice(value.expected, value.bytes, this._endianness)
+                    )
                     this._writeMemoryBytes(value.address, slice)
                 } else if (value.type === 'number-chunk') {
-                    const expected = numbersOfSizeToSlice(value.expected, value.bytes)
+                    const expected = numbersOfSizeToSlice(
+                        value.expected,
+                        value.bytes,
+                        this._endianness
+                    )
                     this._writeMemoryBytes(value.address, new Uint8Array(expected))
                 } else if (value.type === 'string-chunk') {
                     const encoded = new TextEncoder().encode(value.expected)
                     this._writeMemoryBytes(value.address, encoded)
                 }
             }
-            await this._runTestcase(testcase, haltLimit)
+            this._peripherals.terminal.useScriptedInput(testcase.input)
+            try {
+                await this._runTestcase(testcase, haltLimit)
+            } finally {
+                this._peripherals.terminal.useInteractiveInput()
+            }
             const ins = this._getNextInstruction()
             //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
-            this.state.line = ins?.lineNumber ?? -1
+            this.state.line = ins?.lineNumber ?? this.getLastExecutedLine()
             this.state.canUndo = false
 
             this.updateRegisters()
@@ -529,14 +656,23 @@ export abstract class GenericEmulator<T, R extends string>
             this.updateData()
             this.state.executionTime = performance.now() - start
         } catch (e) {
+            //the run was superseded (clear/dispose/stop while an interrupt was pending), the state
+            //has already been rebuilt by clear() and must not be written back over
+            if (!this.executionController.isCurrent(execution)) {
+                return InterpreterStatus.Terminated
+            }
             console.error(e)
             let line = -1
             try {
-                line = this._getNextInstruction()?.lineNumber ?? -1
+                //the failing instruction is the last one that was attempted, not the one after it
+                line =
+                    this._getLastInstruction?.()?.lineNumber ??
+                    this._getNextInstruction()?.lineNumber ??
+                    -1
             } catch (e) {
                 console.error(e)
             }
-            this.addError(this._stringifyError(e))
+            this.addError(this._stringifyError(e, line >= 0 ? line + 1 : undefined))
             this.state.terminated = true
             this.state.line = line
         }
@@ -544,8 +680,23 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     async test(code: string, testcases: Testcase[], haltLimit: number, historySize = 0) {
+        //held across the whole loop: `validateTestcase` reads registers and memory back out of the
+        //core between two runs, which a semantic check must not be able to slip into either
+        return this.duringCoreOperation(() =>
+            this.testInternal(code, testcases, haltLimit, historySize)
+        )
+    }
+
+    private async testInternal(
+        code: string,
+        testcases: Testcase[],
+        haltLimit: number,
+        historySize = 0
+    ) {
+        const terminal = this._peripherals.terminal
         const results: TestcaseResult[] = []
-        for (const testcase of testcases) {
+        for (const original of testcases) {
+            const testcase = structuredClone($state.snapshot(original)) as Testcase
             try {
                 await this.compile(historySize, code)
                 await this.runTestcase(testcase, haltLimit)
@@ -561,15 +712,17 @@ export abstract class GenericEmulator<T, R extends string>
             }
         }
         const passedTests = results.filter((r) => r.passed)
-        this.state.stdOut = '⏳ Running tests...\n\n' + this.state.stdOut
+        terminal.prepend('⏳ Running tests...\n\n')
         if (passedTests.length !== results.length) {
-            this.state.stdOut += `\n❌ ${results.length - results.filter((r) => r.passed).length} testcases not passed\n`
+            terminal.write(
+                `\n❌ ${results.length - results.filter((r) => r.passed).length} testcases not passed\n`
+            )
         }
         if (passedTests.length > 0) {
-            if (!this.state.stdOut.endsWith('testcases not passed')) {
-                this.state.stdOut += '\n'
+            if (!terminal.output.endsWith('testcases not passed')) {
+                terminal.write('\n')
             }
-            this.state.stdOut += `\n✅ ${passedTests.length} testcases passed \n`
+            terminal.write(`\n✅ ${passedTests.length} testcases passed \n`)
         }
         return results
     }
@@ -609,18 +762,10 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     async check() {
-        try {
-            if (!this.getInstance()) return []
-            const errors = await this._checkCode(this._code)
-            this.state.compilerErrors = errors
-            this.state.errors = []
-            return errors
-        } catch (e) {
-            console.error(e)
-            const error = this._stringifyError(e)
-            this.addError(error)
-            return [makeGenericMonacoError(error)]
-        }
+        //no `getInstance()` guard here: assembler checking must work before the first compile.
+        //`_checkCode` is responsible for bailing out when its language needs a live instance
+        //(X86 returns [] without a core, M68K's is a pure static call).
+        return this.semanticCheck()
     }
 
     get breakpoints() {
@@ -639,8 +784,12 @@ export abstract class GenericEmulator<T, R extends string>
         return this.state.canUndo
     }
 
+    get compilerDiagnostics() {
+        return this.state.compilerDiagnostics
+    }
+
     get compilerErrors() {
-        return this.state.compilerErrors
+        return this.state.compilerDiagnostics.filter((d) => d.severity === 'error')
     }
 
     get decorations() {
@@ -692,7 +841,15 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     get stdOut() {
-        return this.state.stdOut
+        return this._peripherals.terminal.output
+    }
+
+    get peripherals(): { terminal: Terminal } {
+        return this._peripherals
+    }
+
+    get interrupt() {
+        return this.state.interrupt
     }
 
     get terminated() {

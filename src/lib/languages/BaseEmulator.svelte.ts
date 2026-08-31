@@ -1,7 +1,7 @@
 import {
+    type Diagnostic,
     type EmulatorDecoration,
     type ExecutionStep,
-    type MonacoError,
     RegisterSize,
     type StackFrame
 } from '$lib/languages/commonLanguageFeatures.svelte'
@@ -14,7 +14,29 @@ export type CompilationError = {
     message: string
 }
 
-export type CompileResult = { ok: true } | { ok: false; errors: MonacoError[]; report: string }
+/**
+ * A successful assembly may still carry warnings/suggestions, a failed one carries the whole list
+ * (errors *and* warnings) so nothing the assembler said is lost.
+ */
+export type CompileResult =
+    | { ok: true; diagnostics?: Diagnostic[] }
+    | { ok: false; diagnostics: Diagnostic[]; report: string }
+
+/**
+ * Thrown by `compile()` when the assembler reported error-severity diagnostics (as opposed to the
+ * emulator itself blowing up). These already live in `state.compilerDiagnostics` and are rendered
+ * from there, so they must NOT also be pushed into `state.errors` — the legacy emulators rejected
+ * the compile promise without ever touching `state.errors`.
+ */
+export class CompilationFailedError extends Error {
+    readonly diagnostics: Diagnostic[]
+
+    constructor(report: string, diagnostics: Diagnostic[]) {
+        super(report)
+        this.name = 'CompilationFailedError'
+        this.diagnostics = diagnostics
+    }
+}
 
 export enum EmulatorStatus {
     Terminated = 0,
@@ -65,11 +87,17 @@ export abstract class BaseEmulator<R extends string> {
 
     abstract _dispose(): void
 
-    abstract _stringifyError(error: unknown): string
+    abstract _stringifyError(error: unknown, line?: number): string
 
-    abstract _compile(code: string): MaybePromise<CompileResult>
+    /**
+     * `undoSize` is the requested undo-history depth for the program being assembled. It is passed
+     * here (and not only to `_initialize`) because some cores allocate their backstep buffer during
+     * assembly and therefore have to be told the depth *before* the code is assembled (MIPS).
+     * Languages whose core does not care can ignore the parameter.
+     */
+    abstract _compile(code: string, undoSize: number): MaybePromise<CompileResult>
 
-    abstract _checkCode(code: string): MaybePromise<MonacoError[]>
+    abstract _checkCode(code: string): MaybePromise<Diagnostic[]>
 
     abstract _undo(): void
 
@@ -84,6 +112,8 @@ export abstract class BaseEmulator<R extends string> {
     abstract _readMemoryBytes(address: bigint, length: bigint): Uint8Array
 
     abstract _getNextInstruction(): Instruction | null
+
+    _getLastInstruction?(): Instruction | null
 
     abstract _getUndoHistory(max: number): ExecutionStep[]
 

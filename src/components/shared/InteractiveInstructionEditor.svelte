@@ -154,7 +154,7 @@
             bind:code
             codeOverride={emulator.compiledCode}
             breakpoints={emulator.breakpoints}
-            errors={emulator.compilerErrors}
+            diagnostics={emulator.compilerDiagnostics}
             {language}
             highlightedLine={emulator.line}
             disabled={(emulator.canExecute && !emulator.terminated) || !!emulator.compiledCode}
@@ -376,7 +376,7 @@
     <StdOutRenderer
         {info}
         stdOut={errorStrings ? `${errorStrings}\n${emulator.stdOut}` : emulator.stdOut}
-        compilerErrors={emulator.compilerErrors}
+        diagnostics={emulator.compilerDiagnostics}
     />
 {/snippet}
 

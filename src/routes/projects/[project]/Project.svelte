@@ -502,7 +502,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                     bind:code
                     codeOverride={emulator.compiledCode}
                     breakpoints={emulator.breakpoints.map(Number)}
-                    errors={emulator.compilerErrors}
+                    diagnostics={emulator.compilerDiagnostics}
                     {language}
                     highlightedLine={emulator.line}
                     disabled={readonly ||
@@ -664,7 +664,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
         <StdOut
             {info}
             stdOut={errorStrings ? `${errorStrings}\n${emulator.stdOut}` : emulator.stdOut}
-            compilerErrors={emulator.compilerErrors}
+            diagnostics={emulator.compilerDiagnostics}
         />
     </div>
 </div>

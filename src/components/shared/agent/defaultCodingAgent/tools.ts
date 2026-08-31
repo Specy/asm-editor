@@ -9,6 +9,7 @@ import {
     type SupportedLanguage
 } from './types'
 import {
+    collectEmulatorDiagnostics,
     collectEmulatorErrors,
     formatEmulatorState,
     formatSourceLine,
@@ -114,6 +115,7 @@ function executionBlocker(emulator: Emulator, action: 'execute' | 'undo'): Execu
 function executionDetails(editorCode: string, emulator: Emulator) {
     return {
         errors: collectEmulatorErrors(emulator),
+        diagnostics: collectEmulatorDiagnostics(emulator),
         state: formatEmulatorState(editorCode, emulator)
     }
 }
@@ -122,7 +124,8 @@ function createSetCodeTool(context: DefaultCodingAgentToolContext) {
     const sharedDescription = `Creates or updates the code editor. Use this whenever the user asks you to write, fix, modify, or demonstrate runnable assembly code.
 - This is the only way to update the editor; markdown code blocks do not change it.
 - For existing user code, call get_code first and preserve unrelated labels, comments, and structure.
-- The result reports whether assembler checks passed. If it returns compile_error, fix the reported errors before claiming success.`
+- The result reports whether assembler checks passed. If it returns compile_error, fix the reported errors before claiming success.
+- "diagnostics" also lists non-blocking findings prefixed with "Warning:" or "Suggestion:". Those never fail the build, so do not chase them unless the user asks.`
 
     if (context.canUpdateLanguage) {
         return tool({
@@ -167,8 +170,9 @@ function createSetCodeTool(context: DefaultCodingAgentToolContext) {
 
                     emulator.clear()
                     emulator.setCode(code)
-                    const checkErrors = await emulator.check()
-                    const errors = collectEmulatorErrors(emulator, checkErrors)
+                    const checkDiagnostics = await emulator.check()
+                    const diagnostics = collectEmulatorDiagnostics(emulator, checkDiagnostics)
+                    const errors = collectEmulatorErrors(emulator, checkDiagnostics)
                     if (errors.length > 0) {
                         return toolRun.failure(
                             'compile_error',
@@ -186,7 +190,8 @@ function createSetCodeTool(context: DefaultCodingAgentToolContext) {
                                     editorChanged: previousCode !== code || languageChanged,
                                     emulatorSynchronized: waitResult.loaded,
                                     emulatorWaitMs: waitResult.waitMs,
-                                    errors
+                                    errors,
+                                    diagnostics
                                 }
                             }
                         )
@@ -202,7 +207,8 @@ function createSetCodeTool(context: DefaultCodingAgentToolContext) {
                         emulatorSynchronized: waitResult.loaded,
                         emulatorWaitMs: waitResult.waitMs,
                         canExecute: emulator.canExecute,
-                        errors: []
+                        errors: [],
+                        diagnostics
                     })
                 })
         })
@@ -235,8 +241,9 @@ function createSetCodeTool(context: DefaultCodingAgentToolContext) {
 
                 emulator.clear()
                 emulator.setCode(code)
-                const checkErrors = await emulator.check()
-                const errors = collectEmulatorErrors(emulator, checkErrors)
+                const checkDiagnostics = await emulator.check()
+                const diagnostics = collectEmulatorDiagnostics(emulator, checkDiagnostics)
+                const errors = collectEmulatorErrors(emulator, checkDiagnostics)
                 if (errors.length > 0) {
                     return toolRun.failure(
                         'compile_error',
@@ -250,7 +257,8 @@ function createSetCodeTool(context: DefaultCodingAgentToolContext) {
                                 codeLength: code.length,
                                 lineCount: getLineCount(code),
                                 editorChanged: previousCode !== code,
-                                errors
+                                errors,
+                                diagnostics
                             }
                         }
                     )
@@ -263,7 +271,8 @@ function createSetCodeTool(context: DefaultCodingAgentToolContext) {
                     editorChanged: previousCode !== code,
                     emulatorSynchronized: true,
                     canExecute: emulator.canExecute,
-                    errors: []
+                    errors: [],
+                    diagnostics
                 })
             })
     })
@@ -312,9 +321,10 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                         })
                     }
 
-                    const checkErrors = await emulator.check()
+                    const checkDiagnostics = await emulator.check()
                     return toolRun.success({
-                        errors: collectEmulatorErrors(emulator, checkErrors),
+                        errors: collectEmulatorErrors(emulator, checkDiagnostics),
+                        diagnostics: collectEmulatorDiagnostics(emulator, checkDiagnostics),
                         ...formatEmulatorState(context.getEditorCode(), emulator)
                     })
                 })
@@ -398,6 +408,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
 
                     const status = await emulator.run(1000000)
                     const errors = collectEmulatorErrors(emulator)
+                    const diagnostics = collectEmulatorDiagnostics(emulator)
                     if (status === InterpreterStatus.TerminatedWithException || errors.length > 0) {
                         return toolRun.failure(
                             'runtime_error',
@@ -409,6 +420,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                                 details: {
                                     status: statusName(status),
                                     errors,
+                                    diagnostics,
                                     ...formatEmulatorState(context.getEditorCode(), emulator)
                                 }
                             }
@@ -417,6 +429,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
 
                     return toolRun.success({
                         status: statusName(status),
+                        diagnostics,
                         ...formatEmulatorState(context.getEditorCode(), emulator)
                     })
                 })
@@ -577,8 +590,8 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
         compile: tool({
             name: 'compile',
             description: context.canUseSetCode
-                ? 'Compiles the current editor code and resets execution state. Use this before stepping/running when canExecute is false, or after a set_code result that did not synchronize with the emulator. Returns assembler errors and whether execution can start.'
-                : 'Compiles the current editor code and resets execution state. Use this to check assembler errors before running. Returns assembler errors and whether execution can start.',
+                ? 'Compiles the current editor code and resets execution state. Use this before stepping/running when canExecute is false, or after a set_code result that did not synchronize with the emulator. Returns assembler errors, non-blocking diagnostics, and whether execution can start.'
+                : 'Compiles the current editor code and resets execution state. Use this to check assembler errors before running. Returns assembler errors, non-blocking diagnostics, and whether execution can start.',
             schema: z.object({}),
             execute: async () =>
                 runAgentTool(async (toolRun) => {
@@ -598,6 +611,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                     }
 
                     const errors = collectEmulatorErrors(emulator)
+                    const diagnostics = collectEmulatorDiagnostics(emulator)
                     if (errors.length > 0) {
                         return toolRun.failure('compile_error', errors[0], {
                             retryable: false,
@@ -606,6 +620,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                                 : 'Report the assembler errors. Editing is not available in this context.',
                             details: {
                                 errors,
+                                diagnostics,
                                 canExecute: emulator.canExecute,
                                 currentLine: formatSourceLine(
                                     context.getEditorCode(),
@@ -632,6 +647,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
 
                     return toolRun.success({
                         errors: [],
+                        diagnostics,
                         canExecute: emulator.canExecute,
                         currentLine: formatSourceLine(context.getEditorCode(), emulator.line).line,
                         programCounter: formatNumber(emulator.pc),

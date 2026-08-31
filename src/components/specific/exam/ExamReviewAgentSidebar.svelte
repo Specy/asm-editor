@@ -5,6 +5,7 @@
         SupportedLanguage
     } from '$cmp/shared/agent/DefaultCodingAgent.svelte'
     import type { Emulator } from '$lib/languages/Emulator'
+    import { formatDiagnostic } from '$lib/languages/commonLanguageFeatures.svelte'
     import {
         ExamSectionType,
         type AssemblyCodingSection,
@@ -317,7 +318,7 @@
                         passed: results.length - failed.length,
                         failed: failed.length,
                         errors: [
-                            ...emulator.compilerErrors.map((error) => error.formatted),
+                            ...emulator.compilerDiagnostics.map(formatDiagnostic),
                             ...emulator.errors
                         ],
                         results: results.map((result, index) => ({

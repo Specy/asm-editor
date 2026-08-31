@@ -4,10 +4,10 @@ import {
     type Instruction
 } from '$lib/languages/BaseEmulator.svelte'
 import {
+    type Diagnostic,
     type EmulatorDecoration,
     type EmulatorSettings,
     type ExecutionStep,
-    type MonacoError,
     type MutationOperation,
     RegisterSize,
     type StackFrame
@@ -15,7 +15,6 @@ import {
 import { GenericEmulator } from '$lib/languages/GenericEmulator.svelte'
 import type { ExecutionGeneration } from '$lib/languages/ExecutionController'
 import type { Testcase } from '$lib/Project.svelte'
-import { Prompt } from '$stores/promptStore.svelte'
 import {
     BlinkState,
     createX86Emulator,
@@ -57,7 +56,6 @@ export async function X86Emulator(code: string, options: EmulatorSettings = {}) 
 class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterName> {
     private core: CoreX86Emulator | null = null
     private diagnosticCore: CoreX86Emulator | null = null
-    private testcaseInput: string[] | null = null
     private compileQueue: Promise<void> = Promise.resolve()
     private checkCodeQueue: Promise<void> = Promise.resolve()
 
@@ -83,7 +81,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     appendOutput(charCode: number): void {
         if (!this.isProgramOutput()) return
-        this.state.stdOut += String.fromCharCode(charCode)
+        this._peripherals.terminal.write(String.fromCharCode(charCode))
     }
 
     protected getInstance(): CoreX86Emulator | null {
@@ -102,12 +100,12 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return this.core?.canUndo() ?? false
     }
 
-    async _checkCode(code: string): Promise<MonacoError[]> {
+    async _checkCode(code: string): Promise<Diagnostic[]> {
         if (!this.core && !this.diagnosticCore) return []
         const currentCheck = this.checkCodeQueue.then(async () => {
             const checker = await this.getDiagnosticCore()
             const errors = await checker.checkCode(code)
-            return errors.map(mapMonacoError)
+            return errors.map(mapCoreDiagnostic)
         })
         this.checkCodeQueue = currentCheck.catch(() => undefined).then(() => undefined)
         return currentCheck
@@ -118,7 +116,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         if (!('errors' in result)) return { ok: true }
         return {
             ok: false,
-            errors: result.errors.map((error) => diagnosticToMonacoError(code, error)),
+            diagnostics: result.errors.map((error) => coreDiagnosticToDiagnostic(code, error)),
             report: result.report
         }
     }
@@ -225,15 +223,9 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return toLocalStatus(status)
     }
 
-    async _runTestcase(testcase: Testcase, haltLimit: number): Promise<void> {
-        const previousInput = this.testcaseInput
-        this.testcaseInput = [...testcase.input]
+    async _runTestcase(_testcase: Testcase, haltLimit: number): Promise<void> {
         const limit = haltLimit <= 0 ? Number.MAX_SAFE_INTEGER : haltLimit
-        try {
-            await this.runWithInput(limit, [])
-        } finally {
-            this.testcaseInput = previousInput
-        }
+        await this.runWithInput(limit, [])
     }
 
     _setRegisterValue(
@@ -259,7 +251,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return { terminated: result.terminated || core.hasTerminated() }
     }
 
-    _stringifyError(error: unknown): string {
+    _stringifyError(error: unknown, _line?: number): string {
         if (error instanceof Error) return error.message
         return String(error)
     }
@@ -292,12 +284,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     private async provideProgramInput(execution: ExecutionGeneration): Promise<void> {
         const core = this.requireCore()
-        const value = this.testcaseInput
-            ? (this.testcaseInput.shift() ?? '')
-            : await this.executionController.waitForPrompt(execution, () =>
-                  Prompt.askText('Program input', true)
-              )
-        if (value == null) throw new Error('Input cancelled')
+        const value = await this.requestInput('Program input', execution)
         this.executionController.ensureCurrent(execution)
         core.provideInput(ensureLineInput(value))
     }
@@ -373,8 +360,11 @@ function toLocalStatus(status: CoreEmulatorStatus): EmulatorStatus {
     return EmulatorStatus.Running
 }
 
-function mapMonacoError(error: CoreMonacoError): MonacoError {
+//the core only parses its assembler logs when the assembler exits non-zero, and its NASM parser
+//discards the "error:"/"warning:" marker it matched on, so nothing here can identify a warning
+function mapCoreDiagnostic(error: CoreMonacoError): Diagnostic {
     return {
+        severity: 'error',
         lineIndex: error.lineIndex,
         column: error.column,
         line: { ...error.line },
@@ -383,11 +373,15 @@ function mapMonacoError(error: CoreMonacoError): MonacoError {
     }
 }
 
-function diagnosticToMonacoError(code: string, diagnostic: X86CompilationDiagnostic): MonacoError {
+function coreDiagnosticToDiagnostic(
+    code: string,
+    diagnostic: X86CompilationDiagnostic
+): Diagnostic {
     const lines = code.split('\n')
     const lineIndex = Math.max(0, diagnostic.line - 1)
     const line = lines[lineIndex] ?? ''
     return {
+        severity: 'error',
         lineIndex,
         column: 0,
         line: {

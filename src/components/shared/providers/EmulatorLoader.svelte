@@ -1,6 +1,6 @@
 <script lang="ts">
     import type { AvailableLanguages } from '$lib/Project.svelte'
-    import { type Emulator, GenericEmulator } from '$lib/languages/Emulator'
+    import { createEmulator, type Emulator } from '$lib/languages/Emulator'
     import { onDestroy, untrack, type Snippet } from 'svelte'
     import Header from '$cmp/shared/layout/Header.svelte'
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
@@ -28,9 +28,7 @@
 
     let destroyed = false
 
-    const emulatorPromise = untrack(() =>
-        GenericEmulator(language, code, { ...settings, language })
-    )
+    const emulatorPromise = untrack(() => createEmulator(language, code, { ...settings, language }))
     emulatorPromise.then((emulatorInstance) => {
         if (destroyed) {
             emulatorInstance.dispose()

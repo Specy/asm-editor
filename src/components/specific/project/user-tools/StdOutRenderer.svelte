@@ -2,39 +2,43 @@
     import FaExclamationTriangle from '~icons/fa-solid/exclamation-triangle'
     import { fly } from 'svelte/transition'
     import Console from '$cmp/shared/Console.svelte'
-    import type { MonacoError } from '$lib/languages/commonLanguageFeatures.svelte'
+    import {
+        type Diagnostic,
+        formatDiagnostic
+    } from '$lib/languages/commonLanguageFeatures.svelte'
     interface Props {
         stdOut: string
-        compilerErrors?: MonacoError[]
+        diagnostics?: Diagnostic[]
         info?: string
     }
 
-    let { stdOut, compilerErrors = [], info = '' }: Props = $props()
-    let areCompilerErrorsShown = $state(false)
+    let { stdOut, diagnostics = [], info = '' }: Props = $props()
+    let areDiagnosticsShown = $state(false)
     let el: HTMLDivElement | undefined = $state()
 
-    let separator = $derived(compilerErrors.length ? '\n\n' : '')
+    let separator = $derived(diagnostics.length ? '\n\n' : '')
+    let hasErrors = $derived(diagnostics.some((d) => d.severity === 'error'))
     $effect(() => {
         if (el && stdOut) el.scrollTop = el.scrollHeight
     })
 </script>
 
 <div class="std-out" bind:this={el}>
-    {#if compilerErrors.length}
+    {#if diagnostics.length}
         <button
             class="floating-std-icon"
             in:fly|global={{ duration: 300 }}
             out:fly|global={{ duration: 200 }}
-            class:compilerErrorsShown={areCompilerErrorsShown}
-            onclick={() => (areCompilerErrorsShown = !areCompilerErrorsShown)}
+            class:warningOnly={!hasErrors}
+            class:diagnosticsShown={areDiagnosticsShown}
+            title={hasErrors ? 'Show compiler errors' : 'Show compiler warnings'}
+            onclick={() => (areDiagnosticsShown = !areDiagnosticsShown)}
         >
             <FaExclamationTriangle />
         </button>
     {/if}
     <div>
-        <Console
-            value={`${compilerErrors.map((e) => e.formatted).join('\n')}${separator}${stdOut}`}
-        />
+        <Console value={`${diagnostics.map(formatDiagnostic).join('\n')}${separator}${stdOut}`} />
     </div>
     <div class="info">
         {info}
@@ -58,7 +62,12 @@
             filter: brightness(1.2);
         }
     }
-    .compilerErrorsShown {
+    /* single-class selectors so source order decides: .diagnosticsShown must still win while open */
+    .warningOnly {
+        background-color: #d19a3f;
+        color: #181818;
+    }
+    .diagnosticsShown {
         background-color: var(--accent2);
         color: var(--accent2-text);
     }

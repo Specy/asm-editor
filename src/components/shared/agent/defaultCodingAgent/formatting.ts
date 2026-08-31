@@ -1,8 +1,9 @@
 import type { Emulator } from '$lib/languages/Emulator'
 import {
     RegisterSize,
+    type Diagnostic,
     type ExecutionStep,
-    type MonacoError,
+    formatDiagnostic,
     toHexString
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import { unsignedBigIntToSigned } from '$lib/utils'
@@ -81,16 +82,39 @@ export function formatSourceLine(editorCode: string, lineIndex: number) {
     return { lineNumber, lineText, line: `${lineNumber} | ${lineText ?? ''}` }
 }
 
-export function formatCompilerErrors(errors: MonacoError[]) {
-    return errors.map((error) => error.formatted)
+export function formatDiagnostics(diagnostics: Diagnostic[]) {
+    return diagnostics.map(formatDiagnostic)
 }
 
-export function collectEmulatorErrors(emulator: Emulator, checkErrors: MonacoError[] = []) {
+/**
+ * Everything worth reporting to the model: diagnostics of every severity plus runtime errors.
+ * Reporting only, never a pass/fail check.
+ */
+export function collectEmulatorDiagnostics(
+    emulator: Emulator,
+    checkDiagnostics: Diagnostic[] = []
+) {
     return Array.from(
         new Set(
             [
-                ...formatCompilerErrors(checkErrors),
-                ...formatCompilerErrors(emulator.compilerErrors),
+                ...formatDiagnostics(checkDiagnostics),
+                ...formatDiagnostics(emulator.compilerDiagnostics),
+                ...emulator.errors
+            ].filter(Boolean)
+        )
+    )
+}
+
+/**
+ * The subset that means "this did not work": error-severity diagnostics plus runtime errors.
+ * Warnings and suggestions must never turn a successful compile or run into a tool failure.
+ */
+export function collectEmulatorErrors(emulator: Emulator, checkDiagnostics: Diagnostic[] = []) {
+    return Array.from(
+        new Set(
+            [
+                ...formatDiagnostics(checkDiagnostics.filter((d) => d.severity === 'error')),
+                ...formatDiagnostics(emulator.compilerErrors),
                 ...emulator.errors
             ].filter(Boolean)
         )

@@ -1,6 +1,5 @@
 import { numberToByteSlice } from '$cmp/specific/project/memory/memoryTabUtils'
 import type { AvailableLanguages, Testcase, TestcaseResult } from '$lib/Project.svelte'
-import type { Interrupt } from '@specy/s68k'
 import { unsignedBigIntToSigned } from '$lib/utils'
 
 export type StatusRegister = {
@@ -8,7 +7,9 @@ export type StatusRegister = {
     value: number
     prev: number
 }
-export type MonacoError = {
+export type DiagnosticSeverity = 'error' | 'warning' | 'suggestion'
+
+type DiagnosticBase = {
     lineIndex: number
     column: number
     line: {
@@ -18,6 +19,15 @@ export type MonacoError = {
     message: string
     formatted: string
 }
+
+/**
+ * A compile/check-time finding. Only `error` severity blocks compilation, the other severities are
+ * reported but let the program build and run.
+ */
+export type Diagnostic =
+    | (DiagnosticBase & { severity: 'error' })
+    | (DiagnosticBase & { severity: 'warning' })
+    | (DiagnosticBase & { severity: 'suggestion' })
 
 export type StackFrame = {
     name: string
@@ -71,8 +81,9 @@ export function numbersOfSizeToSlice(
     return numbers.flatMap((v) => numberToByteSlice(v, bytes, endianess))
 }
 
-export function makeGenericMonacoError(error: string): MonacoError {
+export function makeGenericDiagnostic(error: string): Diagnostic {
     return {
+        severity: 'error',
         lineIndex: 0,
         column: 0,
         line: {
@@ -83,6 +94,25 @@ export function makeGenericMonacoError(error: string): MonacoError {
         formatted: error
     }
 }
+const DIAGNOSTIC_PREFIXES = {
+    error: '',
+    warning: 'Warning: ',
+    suggestion: 'Suggestion: '
+} satisfies Record<DiagnosticSeverity, string>
+
+/**
+ * Renders a diagnostic as a line of text. Errors stay bare, which is what the panels have always
+ * shown, the other severities are announced unless the core already spelled the severity out.
+ */
+export function formatDiagnostic(diagnostic: Diagnostic): string {
+    const prefix = DIAGNOSTIC_PREFIXES[diagnostic.severity]
+    if (!prefix) return diagnostic.formatted
+    if (diagnostic.formatted.toLowerCase().startsWith(diagnostic.severity)) {
+        return diagnostic.formatted
+    }
+    return `${prefix}${diagnostic.formatted}`
+}
+
 export function toHexString(_value: bigint | number, _size: bigint | number): string {
     const value = BigInt(_value)
     const size = BigInt(_size)
@@ -212,6 +242,11 @@ export type EmulatorDecoration = {
     md: string
 }
 
+export type EmulatorInterrupt = {
+    type: string
+    message?: string
+}
+
 export type BaseEmulatorState = {
     code: string
     systemSize: RegisterSize
@@ -222,7 +257,7 @@ export type BaseEmulatorState = {
     decorations: EmulatorDecoration[]
     statusRegisters: StatusRegister[]
     errors: string[]
-    compilerErrors: MonacoError[]
+    compilerDiagnostics: Diagnostic[]
     terminated: boolean
     latestSteps: ExecutionStep[]
     callStack: StackFrame[]
@@ -234,12 +269,20 @@ export type BaseEmulatorState = {
     canExecute: boolean
     canUndo: boolean
     breakpoints: number[]
-    interrupt?: Interrupt
+    interrupt?: EmulatorInterrupt
     memory: {
         global: MemoryTab
         tabs: MemoryTab[]
     }
-    isExamMode: boolean
+}
+
+/**
+ * Values `GenericEmulator` derives from `BaseEmulatorState` instead of storing: `compilerErrors` is
+ * the error-severity subset of `compilerDiagnostics`, so anything gating on "the code does not
+ * compile" stays correct without having to filter by severity itself.
+ */
+export type BaseEmulatorDerivedState = {
+    readonly compilerErrors: Diagnostic[]
 }
 
 export enum InterpreterStatus {
@@ -307,7 +350,7 @@ export type BaseEmulatorActions = {
     run: (haltLimit: number) => Promise<InterpreterStatus>
     setGlobalMemoryAddress: (address: bigint) => void
     setCode: (code: string) => void
-    check: () => Promise<MonacoError[]>
+    check: () => Promise<Diagnostic[]>
     clear: () => void
     setTabMemoryAddress: (address: bigint, tabId: number) => void
     toggleBreakpoint: (line: number) => void

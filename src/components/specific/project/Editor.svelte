@@ -15,7 +15,7 @@
     import type { MonacoType } from '$lib/monaco/Monaco'
     import { Monaco } from '$lib/monaco/Monaco'
     import { generateTheme } from '$lib/monaco/editorTheme'
-    import type { MonacoError } from '$lib/languages/commonLanguageFeatures.svelte'
+    import type { Diagnostic } from '$lib/languages/commonLanguageFeatures.svelte'
 
     interface Props {
         disabled?: boolean
@@ -24,7 +24,7 @@
         highlightedLine?: number
         hasError?: boolean
         language: AvailableLanguages | AvailableProgrammingLanguages
-        errors?: MonacoError[]
+        diagnostics?: Diagnostic[]
         breakpoints?: number[]
         editor?: monaco.editor.IStandaloneCodeEditor
         viewZones?: {
@@ -41,7 +41,7 @@
         highlightedLine = -1,
         hasError = false,
         language,
-        errors = [],
+        diagnostics = [],
         breakpoints = [],
         editor = $bindable(),
         viewZones = []
@@ -285,17 +285,22 @@
             const model = editor.getModel()
             if (!model) return
 
+            const markerSeverities = {
+                error: currentMonaco.MarkerSeverity.Error,
+                warning: currentMonaco.MarkerSeverity.Warning,
+                suggestion: currentMonaco.MarkerSeverity.Info
+            }
             currentMonaco.editor.setModelMarkers(
                 model,
                 language,
-                errors.map((e) => {
+                diagnostics.map((e) => {
                     const position = e.column
                     return {
-                        severity: currentMonaco.MarkerSeverity.Error,
+                        severity: markerSeverities[e.severity],
                         message: e.message,
                         startLineNumber: e.lineIndex + 1,
                         startColumn: position,
-                        endLineNumber: e.lineIndex,
+                        endLineNumber: e.lineIndex + 1,
                         endColumn: 100
                     }
                 })

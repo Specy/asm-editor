@@ -5,7 +5,7 @@ import { EmulatorStatus, type CompilationError, type Instruction } from '../Base
 import {
     type EmulatorDecoration,
     type EmulatorSettings,
-    type MonacoError, type ExecutionStep, type StackFrame, RegisterSize
+    type Diagnostic, type ExecutionStep, type StackFrame, RegisterSize
 } from '../commonLanguageFeatures.svelte'
 import { Trs80 } from 'trs80-emulator'
 import { hi, lo, toHexByte } from 'z80-base'
@@ -57,10 +57,10 @@ export class Z80Emulator extends GenericEmulator<Trs80, Z80RegisterName> {
     _stringifyError(error: unknown): string {
         throw new Error('Method not implemented.')
     }
-    _compile(code: string): { ok: true } | { ok: false; errors: CompilationError[]; report: string } {
+    _compile(code: string): { ok: true } | { ok: false; diagnostics: Diagnostic[]; report: string } {
         throw new Error('Method not implemented.')
     }
-    _checkCode(code: string): MonacoError[] {
+    _checkCode(code: string): Diagnostic[] {
         throw new Error('Method not implemented.')
     }
     _undo(): void {

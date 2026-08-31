@@ -1,6 +1,7 @@
 import type { AvailableLanguages } from '$lib/Project.svelte'
 import type {
     BaseEmulatorActions,
+    BaseEmulatorDerivedState,
     BaseEmulatorState,
     EmulatorSettings
 } from './commonLanguageFeatures.svelte'
@@ -37,9 +38,9 @@ function loadEmulator(type: AvailableLanguages) {
     return instances[type]
 }
 
-export type Emulator = BaseEmulatorActions & BaseEmulatorState
+export type Emulator = BaseEmulatorActions & BaseEmulatorState & BaseEmulatorDerivedState
 
-export async function GenericEmulator<T extends AvailableLanguages>(
+export async function createEmulator<T extends AvailableLanguages>(
     type: T,
     baseCode: string,
     options?: EmulatorSettings
