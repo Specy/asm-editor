@@ -28,6 +28,7 @@ import {
     type X86Emulator as CoreX86Emulator,
     type X86RegisterName
 } from '@specy/x86'
+import structuredClone from '@ungap/structured-clone'
 
 export const DEFAULT_X86_FLAGS = [
     { name: 'CF', value: 0 },

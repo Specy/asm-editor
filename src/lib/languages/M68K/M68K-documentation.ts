@@ -1,3 +1,5 @@
+import structuredClone from '@ungap/structured-clone'
+
 export enum AddressingMode {
     DataRegister = 1,
     AddressRegister = 2,

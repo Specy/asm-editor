@@ -25,6 +25,7 @@ import {
 } from '$cmp/specific/project/memory/memoryTabUtils'
 import { ExecutionController, type ExecutionGeneration } from '$lib/languages/ExecutionController'
 import { Prompt } from '$stores/promptStore.svelte'
+import structuredClone from '@ungap/structured-clone'
 
 export abstract class GenericEmulator<T, R extends string>
     extends BaseEmulator<R>

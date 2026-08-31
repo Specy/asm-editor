@@ -3,6 +3,7 @@ import { LANGUAGE_THEMES } from '$lib/Config'
 import { id } from '$lib/storage/db'
 import { createDebouncer } from '$lib/utils'
 import { TinyColor } from '@ctrl/tinycolor'
+import structuredClone from '@ungap/structured-clone'
 
 //TODO redo this with a single writable object, it doesnt need to be this complicated
 export const DEFAULT_THEME = {
