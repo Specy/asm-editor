@@ -9,6 +9,7 @@
         "dev": "vite dev",
         "build": "cross-env NODE_OPTIONS=--max_old_space_size=6000 vite build",
         "preview": "vite preview",
+        "fix": "eslint --fix . && prettier --write .",
         "format": "prettier --write .",
         "format:check": "prettier --check .",
         "check": "svelte-kit sync && svelte-check --threshold error --tsconfig ./tsconfig.json",

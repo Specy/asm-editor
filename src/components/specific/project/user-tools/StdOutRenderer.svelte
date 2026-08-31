@@ -2,10 +2,7 @@
     import FaExclamationTriangle from '~icons/fa-solid/exclamation-triangle'
     import { fly } from 'svelte/transition'
     import Console from '$cmp/shared/Console.svelte'
-    import {
-        type Diagnostic,
-        formatDiagnostic
-    } from '$lib/languages/commonLanguageFeatures.svelte'
+    import { type Diagnostic, formatDiagnostic } from '$lib/languages/commonLanguageFeatures.svelte'
     interface Props {
         stdOut: string
         diagnostics?: Diagnostic[]
