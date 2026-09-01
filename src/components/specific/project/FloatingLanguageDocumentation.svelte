@@ -5,6 +5,7 @@
     import type { AvailableLanguages } from '$lib/Project.svelte'
     import MipsDocumentation from '$cmp/documentation/mips/MIPSDocumentation.svelte'
     import RISCVDocumentation from '$cmp/documentation/riscv/RISCVDocumentation.svelte'
+    import Z80Documentation from '$cmp/documentation/z80/Z80Documentation.svelte'
     interface Props {
         visible: boolean
         language: AvailableLanguages
@@ -46,6 +47,15 @@
         {/if}
         {#if language === 'RISC-V' || language === 'RISC-V-64'}
             <RISCVDocumentation
+                bind:searchValue
+                bind:visible
+                showRedirect={false}
+                defaultOpen={false}
+                {disableLinks}
+            />
+        {/if}
+        {#if language === 'Z80'}
+            <Z80Documentation
                 bind:searchValue
                 bind:visible
                 showRedirect={false}

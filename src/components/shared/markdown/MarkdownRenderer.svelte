@@ -70,6 +70,8 @@
                 return 'RISC-V'
             case 'riscv64':
                 return 'RISC-V-64'
+            case 'z80':
+                return 'Z80'
             default:
                 return undefined
         }

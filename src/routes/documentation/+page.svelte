@@ -3,7 +3,7 @@
     import NavigationLinkButton from '$cmp/shared/button/NavigationLinkButton.svelte'
     import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
     import Header from '$cmp/shared/layout/Header.svelte'
-    const langs = ['M68K', 'MIPS', 'RISC-V']
+    const langs = ['M68K', 'MIPS', 'RISC-V', 'Z80']
 </script>
 
 <DefaultNavbar />

@@ -9,13 +9,15 @@ import type { M68KEmulator } from './M68K/M68KEmulator.svelte'
 import type { MIPSEmulator } from './MIPS/MIPSEmulator.svelte'
 import type { X86Emulator } from './X86/X86Emulator.svelte'
 import type { RISCVEmulator } from './RISC-V/RISC-VEmulator.svelte'
+import type { Z80Emulator } from './Z80/Z80Emulator.svelte'
 
 const instances = {
     M68K: null as Promise<typeof M68KEmulator> | null,
     MIPS: null as Promise<typeof MIPSEmulator> | null,
     X86: null as Promise<typeof X86Emulator> | null, //X86Emulator2['create']
     'RISC-V': null as Promise<typeof RISCVEmulator> | null,
-    'RISC-V-64': null as Promise<typeof RISCVEmulator> | null
+    'RISC-V-64': null as Promise<typeof RISCVEmulator> | null,
+    Z80: null as Promise<typeof Z80Emulator> | null
 }
 
 function loadEmulator(type: AvailableLanguages) {
@@ -31,6 +33,8 @@ function loadEmulator(type: AvailableLanguages) {
             instances['RISC-V-64'] = instances['RISC-V']
         } else if (type === 'X86') {
             instances[type] = import('./X86/X86Emulator.svelte').then((i) => i.X86Emulator)
+        } else if (type === 'Z80') {
+            instances[type] = import('./Z80/Z80Emulator.svelte').then((i) => i.Z80Emulator)
         } else {
             throw new Error(`Unknown language ${type}`)
         }
@@ -54,6 +58,7 @@ export function preloadAllEmulators() {
         loadEmulator('M68K'),
         loadEmulator('MIPS'),
         loadEmulator('RISC-V'),
-        loadEmulator('X86')
+        loadEmulator('X86'),
+        loadEmulator('Z80')
     ])
 }

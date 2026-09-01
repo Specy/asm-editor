@@ -124,6 +124,23 @@ class MonacoLoader {
                     language.createRISCVHoverProvider(monaco, true)
                 )
             )
+        } else if (lang === 'Z80') {
+            const [grammar, language] = await Promise.all([
+                import('$lib/languages/Z80/Z80-grammar'),
+                import('$lib/languages/Z80/Z80-language')
+            ])
+            this.toDispose.push(
+                monaco.languages.setMonarchTokensProvider('z80', grammar.Z80Language),
+                monaco.languages.setLanguageConfiguration('z80', grammar.Z80LanguageConfiguration),
+                monaco.languages.registerCompletionItemProvider(
+                    'z80',
+                    language.createZ80Completion(monaco)
+                ),
+                monaco.languages.registerHoverProvider(
+                    'z80',
+                    language.createZ80HoverProvider(monaco)
+                )
+            )
         } else if (lang === 'X86') {
             const [grammar, language] = await Promise.all([
                 import('$lib/languages/X86/X86-grammar'),
@@ -158,7 +175,8 @@ class MonacoLoader {
             this.registerLanguage('MIPS'),
             this.registerLanguage('RISC-V'),
             this.registerLanguage('RISC-V-64'),
-            this.registerLanguage('X86')
+            this.registerLanguage('X86'),
+            this.registerLanguage('Z80')
         ])
     }
 

@@ -3,10 +3,12 @@ import { M68kInstructions } from './M68K/M68K-documentation'
 import { mipsInstructionNames } from './MIPS/MIPS-documentation'
 import { riscvInstructionMap } from './RISC-V/RISC-V-documentation'
 import { X86Instructions } from './X86/X86-grammar'
+import { z80InstructionNames } from './Z80/Z80-documentation'
 
 const m68kSet = new Set(M68kInstructions.map((i) => i.toLowerCase()))
 const mipsSet = new Set(mipsInstructionNames.map((i) => i.toLowerCase()))
 const x86Set = new Set(X86Instructions.map((i) => i.toLowerCase()))
+const z80Set = new Set(z80InstructionNames.map((i) => i.toLowerCase()))
 
 // Build RISC-V sets: one for all instructions, one for 64-bit only
 const riscvSet = new Set<string>()
@@ -77,6 +79,7 @@ export function detectAssemblyLanguage(code: string): AvailableLanguages {
     let x86Score = 0
     let riscvScore = 0
     let riscv64Score = 0
+    let z80Score = 0
 
     for (const mnemonic of mnemonics) {
         // For M68K, also try stripping size suffix (.b, .w, .l)
@@ -84,14 +87,25 @@ export function detectAssemblyLanguage(code: string): AvailableLanguages {
         if (m68kSet.has(m68kMnemonic)) m68kScore++
         if (mipsSet.has(mnemonic)) mipsScore++
         if (x86Set.has(mnemonic)) x86Score++
+        // The Z80's everyday mnemonics are all shared: `ld` and `jr` are MIPS and RISC-V
+        // instructions too, and `add`, `push`, `call`, `ret`, `inc` are X86 ones, so Z80 code often
+        // ties with another language instead of outscoring it. The order of `scores` below decides
+        // those ties.
+        if (z80Set.has(mnemonic)) z80Score++
         if (riscvSet.has(mnemonic)) {
             riscvScore++
             if (riscv64OnlySet.has(mnemonic)) riscv64Score++
         }
     }
 
+    // The sort below is stable, so this order breaks ties. Z80 sits right after M68K because a Z80
+    // program made only of shared mnemonics (`ld`, `jr`, `or`, `add`) is common, while MIPS,
+    // RISC-V and X86 code almost always contains something no other language has (`li`, `lw`,
+    // `ecall`, `mov`) and wins on score rather than on position. Inserting it there, instead of
+    // anywhere lower, keeps every tie the other languages already resolved between themselves.
     const scores: { language: AvailableLanguages; score: number }[] = [
         { language: 'M68K', score: m68kScore },
+        { language: 'Z80', score: z80Score },
         { language: 'MIPS', score: mipsScore },
         { language: 'X86', score: x86Score },
         // If most RISC-V matches are 64-bit only, pick RISC-V-64

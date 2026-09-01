@@ -38,7 +38,8 @@
         { key: 'M68K', value: 'M68K' },
         { key: 'MIPS', value: 'MIPS' },
         { key: 'RISC-V', value: 'RISC-V' },
-        { key: 'X86', value: 'X86' }
+        { key: 'X86', value: 'X86' },
+        { key: 'Z80', value: 'Z80' }
     ]
 
     let settings: Settings = $state({

@@ -213,6 +213,75 @@ export const DEFAULT_RISCV_THEME = {
     }
 } as const
 
+export const DEFAULT_Z80_THEME = {
+    version: 1,
+    id: LANGUAGE_THEMES.Z80,
+    extends: LANGUAGE_THEMES.Z80,
+    name: 'Default z80',
+    editable: false,
+    theme: {
+        background: {
+            color: '#0b1210',
+            name: 'background',
+            prop: 'background'
+        },
+        primary: {
+            color: '#0b1210',
+            name: 'primary',
+            prop: 'primary'
+        },
+        secondary: {
+            color: '#131d1a',
+            name: 'secondary',
+            prop: 'secondary'
+        },
+        tertiary: {
+            color: '#1b2a26',
+            name: 'tertiary',
+            prop: 'tertiary'
+        },
+        accent: {
+            color: '#4fd1a5',
+            name: 'accent',
+            prop: 'accent'
+        },
+        accent2: {
+            color: '#23403a',
+            name: 'accent2',
+            prop: 'accent2'
+        },
+        hint: {
+            color: '#939393',
+            name: 'hint',
+            prop: 'hint',
+            readonly: true
+        },
+        textDarker: {
+            color: '#c1c1c1',
+            name: 'text-layered',
+            prop: 'textDarker',
+            readonly: true
+        },
+        scrollbar: {
+            color: '#2f4a43',
+            name: 'scrollbar',
+            prop: 'scrollbar'
+        },
+        red: {
+            color: '#ed4f4f',
+            name: 'red', //TODO rename to warn
+            prop: 'red',
+            readonly: true
+        },
+        green: {
+            color: '#356a59', //TODO rename to success
+            name: 'green',
+            prop: 'green',
+            readonly: true
+        }
+    }
+} as const
+
 export type ThemeKeys = keyof (typeof DEFAULT_THEME)['theme']
 export type ThemeProp<T = ThemeKeys> = {
     name: string
@@ -233,7 +302,8 @@ type StoredTheme<T extends string = string> = {
 export const BUILTIN_THEMES: StoredTheme<ThemeKeys>[] = [
     DEFAULT_THEME,
     DEFAULT_MIPS_THEME,
-    DEFAULT_RISCV_THEME
+    DEFAULT_RISCV_THEME,
+    DEFAULT_Z80_THEME
 ]
 
 function makeThemeStore(_theme: StoredTheme<ThemeKeys>) {

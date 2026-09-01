@@ -25,7 +25,8 @@
         { key: 'MIPS', value: 'MIPS' },
         { key: 'X86', value: 'X86' },
         { key: 'RISC-V', value: 'RISC-V' },
-        { key: 'RISC-V-64', value: 'RISC-V-64' }
+        { key: 'RISC-V-64', value: 'RISC-V-64' },
+        { key: 'Z80', value: 'Z80' }
     ]
 
     async function create() {

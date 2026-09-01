@@ -50,11 +50,11 @@
     <title>Welcome to Asm Editor</title>
     <meta
         name="description"
-        content="Write, learn and run M68K, MIPS, RISC-V and X86 assembly code in your browser. View registers and memory, step and undo the execution."
+        content="Write, learn and run M68K, MIPS, RISC-V, X86 and Z80 assembly code in your browser. View registers and memory, step and undo the execution."
     />
     <meta
         property="og:description"
-        content="Write, learn and run M68K, MIPS, RISC-V and X86 assembly code in your browser. View registers and memory, step and undo the execution."
+        content="Write, learn and run M68K, MIPS, RISC-V, X86 and Z80 assembly code in your browser. View registers and memory, step and undo the execution."
     />
     <meta property="og:title" content="Asm Editor" />
 </svelte:head>
@@ -66,7 +66,7 @@
             <div class="presentation">
                 <div class="welcome-title" class:textShadow={textShadowPrimary}>
                     The best web IDE for Assembly <span style="font-size: 1.5rem;"
-                        >M68K, MIPS, RISC-V, X86</span
+                        >M68K, MIPS, RISC-V, X86, Z80</span
                     >
                 </div>
                 <Row gap="0.6rem" wrap>
@@ -212,7 +212,7 @@
                 <div>Documentation</div>
             {/snippet}
             <div class="description" class:textShadow={textShadowPrimary}>
-                The editor comes with built-in documentation for the M68K, MIPS and RISC-V
+                The editor comes with built-in documentation for the M68K, MIPS, RISC-V and Z80
                 instruction sets including the valid addressing modes, description and examples for
                 each instruction, directive and syscall.
                 <a
@@ -282,7 +282,7 @@
                         <GoLinkExternal />
                     </div>
                 </a>
-                to get help with M68K, MIPS, RISC-V and X86 assembly.
+                to get help with M68K, MIPS, RISC-V, X86 and Z80 assembly.
             </div>
         </MainPageSection>
         <MainPageSection id="embed" reverse>

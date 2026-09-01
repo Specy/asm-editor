@@ -1,4 +1,5 @@
 import { BASE_CODE } from '$lib/Config'
+import { Z80_PORT_DOCS } from '$lib/languages/Z80/Z80-model'
 import type {
     AgentWorkflow,
     DefaultCodingAgentToolName,
@@ -223,6 +224,14 @@ function renderToolSelectionTips(enabledToolNames: DefaultCodingAgentToolName[])
     return tips.length ? `# Tool Selection\n${tips.join('\n')}` : ''
 }
 
+/**
+ * Generated from the port map itself so the prompt cannot drift from what the console device
+ * actually does (see `Z80-model.ts`).
+ */
+const Z80_PORT_INFORMATION = Z80_PORT_DOCS.map(
+    (port) => `- Port ${port.port} (${port.title}): out -> ${port.write} in -> ${port.read}`
+).join('\n')
+
 const EMULATOR_INFORMATION = `# Emulator Information
 The editor supports one editable assembly file and an output-only console. There are no graphics, screens, imported ROMs, or produced binaries.
 
@@ -243,7 +252,14 @@ The editor supports one editable assembly file and an output-only console. There
 - .data starts at 0x10010000. sp starts at 0x7ffffffc and grows downward.
 
 ## X86
-- The X86 emulator is experimental and incomplete. It uses the NASM syntax and assembler. Uses Blink as the emulator.`
+- The X86 emulator is experimental and incomplete. It uses the NASM syntax and assembler. Uses Blink as the emulator.
+
+## Z80
+- Uses the z80-asm syntax: ";" comments, labels ending with ":", directives like .org, .byte, .asciz and equ. Memory is 64 KB and little-endian.
+- The default program is assembled at 0x8000. SP starts at 0xFFFF and grows downward, the stack is empty at that address.
+- Execution stops on "halt", on a top-level "ret", or when the program counter runs past the end of the assembled code.
+- There are no syscalls or TRAPs: the console is a set of IO ports, written with "out (port), a" and read with "in a, (port)". An "in" pauses the program until a line of input is available, which is taken from the testcase input when running tests.
+${Z80_PORT_INFORMATION}`
 
 export function buildDefaultCodingAgentPrompt({
     enabledToolNames,

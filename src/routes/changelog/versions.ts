@@ -7,6 +7,15 @@ type Version = {
 }
 export const versions: Version[] = [
     {
+        version: '9.0.0',
+        title: 'Z80 language',
+        date: new Date('2026-09-01'),
+        changes: [
+            'Added Z80 assembler/emulator with a port based console',
+            'Added Z80 documentation with editor hover and completion'
+        ]
+    },
+    {
         version: '8.0.0',
         title: 'New X86 emulator',
         date: new Date('2026-04-26'),

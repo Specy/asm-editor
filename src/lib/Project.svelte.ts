@@ -2,7 +2,7 @@ import { BASE_CODE, COMMENT_CHARACTER } from './Config'
 import { serializer } from '$lib/json'
 import { detectAssemblyLanguage } from './languages/languageDetector'
 
-export type AvailableLanguages = 'M68K' | 'MIPS' | 'X86' | 'RISC-V' | 'RISC-V-64' //| 'Z80'
+export type AvailableLanguages = 'M68K' | 'MIPS' | 'X86' | 'RISC-V' | 'RISC-V-64' | 'Z80'
 
 export type AvailableProgrammingLanguages = 'c'
 
