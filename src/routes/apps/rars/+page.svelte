@@ -60,9 +60,15 @@
 
 <svelte:head>
     <title>RARS — RISC-V simulator in your browser</title>
-    <meta name="description" content="Run the RARS RISC-V assembler and runtime simulator directly in the browser, with no download or Java install." />
+    <meta
+        name="description"
+        content="Run the RARS RISC-V assembler and runtime simulator directly in the browser, with no download or Java install."
+    />
     <meta property="og:title" content="RARS — RISC-V simulator in your browser" />
-    <meta property="og:description" content="Run the RARS RISC-V assembler and runtime simulator directly in the browser, with no download or Java install." />
+    <meta
+        property="og:description"
+        content="Run the RARS RISC-V assembler and runtime simulator directly in the browser, with no download or Java install."
+    />
 </svelte:head>
 
 <DefaultNavbar />

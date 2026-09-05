@@ -43,6 +43,18 @@ export function serializeJsonLd(value: unknown) {
         .replace(/&/g, '\\u0026')
 }
 
+/**
+ * The complete <script type="application/ld+json"> element for a schema.org payload.
+ *
+ * Assembled here rather than in the component because a literal closing script tag inside
+ * a Svelte template ends the component's own script block as far as the parser is
+ * concerned - it builds, but eslint's svelte parser rejects the file. serializeJsonLd has
+ * already escaped < > and &, so nothing in `value` can close the tag either.
+ */
+export function jsonLdScriptTag(value: unknown) {
+    return `<script type="application/ld+json">${serializeJsonLd(value)}</` + `script>`
+}
+
 export function softwareApplicationLd() {
     return {
         '@context': 'https://schema.org',

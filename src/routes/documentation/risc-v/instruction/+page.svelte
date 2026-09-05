@@ -19,7 +19,6 @@
     })
 </script>
 
-
 <svelte:head>
     <title>RISC-V Instructions</title>
     <meta

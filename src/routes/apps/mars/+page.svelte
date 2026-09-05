@@ -60,9 +60,15 @@
 
 <svelte:head>
     <title>MARS — MIPS simulator in your browser</title>
-    <meta name="description" content="Run the MARS MIPS assembler and simulator directly in the browser, with no download or Java install." />
+    <meta
+        name="description"
+        content="Run the MARS MIPS assembler and simulator directly in the browser, with no download or Java install."
+    />
     <meta property="og:title" content="MARS — MIPS simulator in your browser" />
-    <meta property="og:description" content="Run the MARS MIPS assembler and simulator directly in the browser, with no download or Java install." />
+    <meta
+        property="og:description"
+        content="Run the MARS MIPS assembler and simulator directly in the browser, with no download or Java install."
+    />
 </svelte:head>
 
 <DefaultNavbar />

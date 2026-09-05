@@ -1,7 +1,7 @@
 <script lang="ts">
     import type { PageData } from './$types'
     import { page } from '$app/state'
-    import { toMetaDescription, serializeJsonLd, instructionLd } from '$lib/seo'
+    import { toMetaDescription, jsonLdScriptTag, instructionLd } from '$lib/seo'
     import Page from '$cmp/shared/layout/Page.svelte'
     import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
@@ -52,7 +52,13 @@
     <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={metaDescription} />
     <meta property="og:type" content="article" />
-    {@html `<script type="application/ld+json">${serializeJsonLd(structuredData)}</script>`}
+    <!-- The page's schema.org description. {@html} is the only way to emit a <script>
+         from a component: <svelte:element this="script"> renders nothing in Svelte, and a
+         literal script tag here is taken as the component's own instance script. Safe
+         because the payload is machine generated and serializeJsonLd escapes < > and &,
+         so nothing interpolated can close the tag. -->
+    <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+    {@html jsonLdScriptTag(structuredData)}
 </svelte:head>
 
 <Page contentStyle="padding: 1rem; gap: 1rem;">

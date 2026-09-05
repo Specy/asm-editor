@@ -24,7 +24,7 @@
     import FaDumbbell from '~icons/fa-solid/dumbbell'
     import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
     import { resolve } from '$app/paths'
-    import { serializeJsonLd, softwareApplicationLd } from '$lib/seo'
+    import { jsonLdScriptTag, softwareApplicationLd } from '$lib/seo'
 
     interface BeforeInstallPromptEvent extends Event {
         prompt(): Promise<void>
@@ -58,7 +58,13 @@
         content="Write, learn and run M68K, MIPS, RISC-V, X86 and Z80 assembly code in your browser. View registers and memory, step and undo the execution."
     />
     <meta property="og:title" content="Asm Editor" />
-    {@html `<script type="application/ld+json">${serializeJsonLd(softwareApplicationLd())}</script>`}
+    <!-- The page's schema.org description. {@html} is the only way to emit a <script>
+         from a component: <svelte:element this="script"> renders nothing in Svelte, and a
+         literal script tag here is taken as the component's own instance script. Safe
+         because the payload is machine generated and serializeJsonLd escapes < > and &,
+         so nothing interpolated can close the tag. -->
+    <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+    {@html jsonLdScriptTag(softwareApplicationLd())}
 </svelte:head>
 <DefaultNavbar />
 <Page>
