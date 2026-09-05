@@ -1,0 +1,886 @@
+import { glyphRows, SCREEN_CELL_8X16, type ScreenCellSize } from './bitmapFont'
+import { BLACK, WHITE, type ScreenColor } from './color'
+import {
+    DEFAULT_SCREEN_HISTORY_BYTES,
+    ScreenHistory,
+    type ScreenPixelRecord,
+    type ScreenRecord,
+    type ScreenState
+} from './ScreenHistory'
+
+/**
+ * The Screen peripheral: the image a program draws on, plus the text cursor its console output
+ * lands on, since EASy68K and the Z80 have one output window where text and graphics share the
+ * image ([ADR 0003](../../../../../docs/adr/0003-preserve-simulator-graphics-conventions.md)).
+ * Every environment's graphics interface is translated into these operations by its adapter; the
+ * Screen itself knows no tasks, syscalls or ports.
+ *
+ * Plain TypeScript with no Svelte runes, like the other peripherals: a Core calls into it from
+ * inside its synchronous execution, and it has to run under node in tests. The GUI does not observe
+ * it reactively either — it paints the visible image with `putImageData` on an animation frame when
+ * `dirty` is set, the pattern the upstream TRS-80 web screen uses, so the machine never waits for a
+ * frame ([ADR 0006](../../../../../docs/adr/0006-screen-double-buffering.md)).
+ *
+ * Conventions worth knowing before reading the operations:
+ *
+ * - Colors are 24-bit RGB; the images are RGBA bytes because `putImageData` takes those.
+ * - The origin is the top left, coordinates are logical pixels, and anything outside the Screen is
+ *   clipped instead of being an error: a program drawing off the edge is normal.
+ * - Rectangles and ellipses exclude their right and bottom edges, because EASy68K draws through
+ *   Windows GDI, whose `Rectangle` and `Ellipse` do; see `drawRectangle`.
+ * - With double buffering on, drawing changes an off-screen image that only `present` copies to the
+ *   visible one; with it off the two are the same array, which is what direct drawing means.
+ */
+
+export type ScreenSize = {
+    width: number
+    height: number
+}
+
+export type ScreenOptions = {
+    width: number
+    height: number
+    /** What a clear, a resize and a scrolled text row fill with; also the initial image. */
+    backgroundColor?: ScreenColor
+    penColor?: ScreenColor
+    fillColor?: ScreenColor
+    /** 8 by 8 for the Z80, 8 by 16 for EASy68K's 640 by 480 window. */
+    cell?: ScreenCellSize
+    historyByteBudget?: number
+}
+
+type Rect = {
+    x: number
+    y: number
+    width: number
+    height: number
+}
+
+const CARRIAGE_RETURN = 0x0d
+const LINE_FEED = 0x0a
+
+const BYTES_PER_PIXEL = 4
+
+export class Screen {
+    readonly history: ScreenHistory
+    private readonly options: ScreenOptions
+
+    private _width: number
+    private _height: number
+    /** The image drawing operations write to. The same array as `visible` unless double buffering. */
+    private drawing: Uint8ClampedArray
+    /** The image the renderer paints. */
+    private visible: Uint8ClampedArray
+
+    private _backgroundColor: ScreenColor
+    private _penColor: ScreenColor
+    private _fillColor: ScreenColor
+    private _penWidth = 1
+    private _penX = 0
+    private _penY = 0
+    private _cursorColumn = 0
+    private _cursorRow = 0
+    private _cell: ScreenCellSize
+    private _doubleBuffering = false
+    private _framebuffer: ScreenSize | null = null
+
+    private _version = 0
+    private _dirty = true
+
+    constructor(options: ScreenOptions) {
+        this.options = options
+        this.history = new ScreenHistory(options.historyByteBudget ?? DEFAULT_SCREEN_HISTORY_BYTES)
+        this._width = Math.max(1, Math.trunc(options.width))
+        this._height = Math.max(1, Math.trunc(options.height))
+        this._backgroundColor = options.backgroundColor ?? BLACK
+        this._penColor = options.penColor ?? WHITE
+        this._fillColor = options.fillColor ?? WHITE
+        this._cell = options.cell ?? SCREEN_CELL_8X16
+        this.drawing = this.newImage(this._width, this._height, this._backgroundColor)
+        this.visible = this.drawing
+    }
+
+    // ---------------------------------------------------------------- state
+
+    get width(): number {
+        return this._width
+    }
+
+    get height(): number {
+        return this._height
+    }
+
+    /** EASy68K's task 33 get-size request and the Z80's size reads answer with this. */
+    getSize(): ScreenSize {
+        return { width: this._width, height: this._height }
+    }
+
+    get penColor(): ScreenColor {
+        return this._penColor
+    }
+
+    get fillColor(): ScreenColor {
+        return this._fillColor
+    }
+
+    get backgroundColor(): ScreenColor {
+        return this._backgroundColor
+    }
+
+    get penWidth(): number {
+        return this._penWidth
+    }
+
+    /** The drawing position `lineTo` draws from, moved by every line and `moveTo`. */
+    get penX(): number {
+        return this._penX
+    }
+
+    get penY(): number {
+        return this._penY
+    }
+
+    get cursorColumn(): number {
+        return this._cursorColumn
+    }
+
+    get cursorRow(): number {
+        return this._cursorRow
+    }
+
+    get cell(): ScreenCellSize {
+        return this._cell
+    }
+
+    get columns(): number {
+        return Math.max(1, Math.floor(this._width / this._cell.width))
+    }
+
+    get rows(): number {
+        return Math.max(1, Math.floor(this._height / this._cell.height))
+    }
+
+    get doubleBuffering(): boolean {
+        return this._doubleBuffering
+    }
+
+    /** The framebuffer this Screen mirrors, or null when programs draw with the operations below. */
+    get framebuffer(): ScreenSize | null {
+        return this._framebuffer
+    }
+
+    /** The pixels the renderer paints, RGBA, `width * height * 4` bytes. */
+    get visiblePixels(): Uint8ClampedArray {
+        return this.visible
+    }
+
+    /** The pixels drawing operations write to; the same array as `visiblePixels` unless buffered. */
+    get drawingPixels(): Uint8ClampedArray {
+        return this.drawing
+    }
+
+    /** Set whenever the visible image changed; the renderer clears it after painting. */
+    get dirty(): boolean {
+        return this._dirty
+    }
+
+    /** Bumped with every visible change, so a renderer can tell two frames apart without diffing. */
+    get version(): number {
+        return this._version
+    }
+
+    markPainted(): void {
+        this._dirty = false
+    }
+
+    setPenColor(color: ScreenColor): void {
+        this.journal({ kind: 'none' })
+        this._penColor = color & 0xffffff
+    }
+
+    setFillColor(color: ScreenColor): void {
+        this.journal({ kind: 'none' })
+        this._fillColor = color & 0xffffff
+    }
+
+    setBackgroundColor(color: ScreenColor): void {
+        this.journal({ kind: 'none' })
+        this._backgroundColor = color & 0xffffff
+    }
+
+    setPenWidth(width: number): void {
+        this.journal({ kind: 'none' })
+        this._penWidth = Math.max(1, Math.trunc(width))
+    }
+
+    setCell(cell: ScreenCellSize): void {
+        this.journal({ kind: 'none' })
+        this._cell = cell
+        this.clampCursor()
+    }
+
+    /** EASy68K's task 11 set-cursor, in character cells, clamped to the Screen. */
+    setCursor(column: number, row: number): void {
+        this.journal({ kind: 'none' })
+        this._cursorColumn = clamp(Math.trunc(column), 0, this.columns - 1)
+        this._cursorRow = clamp(Math.trunc(row), 0, this.rows - 1)
+    }
+
+    /**
+     * Double buffering on gives drawing its own image, started as a copy of what is on screen, so a
+     * program can compose a frame and show it with `present`. Turning it off drops the off-screen
+     * image without showing it: presenting is the explicit operation, and EASy68K's mode 16 does not
+     * repaint either.
+     */
+    setDoubleBuffering(enabled: boolean): void {
+        if (enabled === this._doubleBuffering) {
+            this.journal({ kind: 'none' })
+            return
+        }
+        this.journalImages()
+        this._doubleBuffering = enabled
+        this.drawing = enabled ? new Uint8ClampedArray(this.visible) : this.visible
+    }
+
+    // ----------------------------------------------------------- operations
+
+    /** One pixel in the pen color. The pen width does not apply, as it does not to GDI's SetPixel. */
+    drawPixel(x: number, y: number): void {
+        const point = { x: Math.trunc(x), y: Math.trunc(y) }
+        this.journalPatch('drawing', { ...point, width: 1, height: 1 })
+        this.paint(this.drawing, point.x, point.y, this._penColor)
+        this.markDrawn()
+    }
+
+    /** The color at a point of the image being drawn on; outside the Screen it is the background. */
+    getPixel(x: number, y: number): ScreenColor {
+        const px = Math.trunc(x)
+        const py = Math.trunc(y)
+        if (px < 0 || py < 0 || px >= this._width || py >= this._height)
+            return this._backgroundColor
+        const offset = (py * this._width + px) * BYTES_PER_PIXEL
+        return (
+            (this.drawing[offset] << 16) |
+            (this.drawing[offset + 1] << 8) |
+            this.drawing[offset + 2]
+        )
+    }
+
+    /** Moves the drawing position without drawing, EASy68K's task 92 mode 2 and the Z80's move-to. */
+    moveTo(x: number, y: number): void {
+        this.journal({ kind: 'none' })
+        this._penX = Math.trunc(x)
+        this._penY = Math.trunc(y)
+    }
+
+    drawLine(x1: number, y1: number, x2: number, y2: number): void {
+        const from = { x: Math.trunc(x1), y: Math.trunc(y1) }
+        const to = { x: Math.trunc(x2), y: Math.trunc(y2) }
+        this.journalPatch('drawing', this.penBounds(boundsOf([from, to])))
+        this.strokeLine(from.x, from.y, to.x, to.y)
+        this._penX = to.x
+        this._penY = to.y
+        this.markDrawn()
+    }
+
+    /** Draws from the drawing position to a point and leaves the position there, like GDI's LineTo. */
+    lineTo(x: number, y: number): void {
+        this.drawLine(this._penX, this._penY, x, y)
+    }
+
+    /**
+     * A rectangle whose right and bottom edges are exclusive: `drawRectangle(10, 10, 20, 20)` covers
+     * the columns 10 to 19 and the rows 10 to 19, and a rectangle with equal edges draws nothing.
+     * EASy68K draws through the Windows GDI `Rectangle` function, which excludes them
+     * (https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-rectangle: "the
+     * rectangle ... extends up to, but does not include, the right and bottom coordinates"), so
+     * preserving its examples pixel for pixel means excluding them here
+     * ([ADR 0003](../../../../../docs/adr/0003-preserve-simulator-graphics-conventions.md)).
+     * The interior is the fill color and the border the pen, as GDI's brush and pen are.
+     */
+    drawRectangle(x1: number, y1: number, x2: number, y2: number): void {
+        this.rectangle(x1, y1, x2, y2, true)
+    }
+
+    /** The same rectangle as `drawRectangle`, border only. */
+    drawUnfilledRectangle(x1: number, y1: number, x2: number, y2: number): void {
+        this.rectangle(x1, y1, x2, y2, false)
+    }
+
+    /** The ellipse inscribed in `drawRectangle`'s rectangle, with the same excluded edges. */
+    drawEllipse(x1: number, y1: number, x2: number, y2: number): void {
+        this.ellipse(x1, y1, x2, y2, true)
+    }
+
+    drawUnfilledEllipse(x1: number, y1: number, x2: number, y2: number): void {
+        this.ellipse(x1, y1, x2, y2, false)
+    }
+
+    /**
+     * Replaces the connected area of the color at the starting point with the fill color, four way,
+     * the way EASy68K's flood fill spreads until it meets a different color. The area is only known
+     * once it has been walked, so this journals the whole image.
+     */
+    floodFill(x: number, y: number): void {
+        const startX = Math.trunc(x)
+        const startY = Math.trunc(y)
+        if (startX < 0 || startY < 0 || startX >= this._width || startY >= this._height) {
+            this.journal({ kind: 'none' })
+            return
+        }
+        const target = this.getPixel(startX, startY)
+        if (target === (this._fillColor & 0xffffff)) {
+            //nothing to spread into, and journaling a whole image for a no-op would eat the budget
+            this.journal({ kind: 'none' })
+            return
+        }
+        this.journalPatch('drawing', this.fullRect())
+        const pending = [startX + startY * this._width]
+        while (pending.length > 0) {
+            const offset = pending.pop() as number
+            const px = offset % this._width
+            const py = (offset - px) / this._width
+            if (this.getPixel(px, py) !== target) continue
+            this.paint(this.drawing, px, py, this._fillColor)
+            if (px > 0) pending.push(offset - 1)
+            if (px < this._width - 1) pending.push(offset + 1)
+            if (py > 0) pending.push(offset - this._width)
+            if (py < this._height - 1) pending.push(offset + this._width)
+        }
+        this.markDrawn()
+    }
+
+    /** Wipes text and graphics together and homes the text cursor, as EASy68K's task 11 $FF00 does. */
+    clear(color: ScreenColor = this._backgroundColor): void {
+        this.journalPatch('drawing', this.fullRect())
+        fillImage(this.drawing, color)
+        this._cursorColumn = 0
+        this._cursorRow = 0
+        this.markDrawn()
+    }
+
+    /**
+     * Resizes the Screen the way a program asks for a window size, clearing both images: the pixels
+     * of a differently shaped image cannot be carried over meaningfully, and the programs that
+     * resize do it before they draw.
+     */
+    resize(width: number, height: number): void {
+        const newWidth = Math.max(1, Math.trunc(width))
+        const newHeight = Math.max(1, Math.trunc(height))
+        if (newWidth === this._width && newHeight === this._height) {
+            this.journal({ kind: 'none' })
+            return
+        }
+        this.journalImages()
+        this._width = newWidth
+        this._height = newHeight
+        this.drawing = this.newImage(newWidth, newHeight, this._backgroundColor)
+        this.visible = this._doubleBuffering
+            ? this.newImage(newWidth, newHeight, this._backgroundColor)
+            : this.drawing
+        this._penX = 0
+        this._penY = 0
+        this.clampCursor()
+        this.markVisible()
+    }
+
+    /**
+     * Shows what has been drawn: EASy68K's task 94 repaint. With double buffering off there is one
+     * image and nothing to copy, so this only asks the renderer for a frame.
+     */
+    present(): void {
+        if (!this._doubleBuffering) {
+            this.journal({ kind: 'none' })
+            this.markVisible()
+            return
+        }
+        this.journalPatch('visible', this.fullRect())
+        this.visible.set(this.drawing)
+        this.markVisible()
+    }
+
+    /**
+     * Text at a pixel position, in the pen color and over whatever is already there, EASy68K's way
+     * of putting a label on a drawing. It never wraps: what falls off the edge is clipped.
+     */
+    drawText(x: number, y: number, text: string): void {
+        const left = Math.trunc(x)
+        const top = Math.trunc(y)
+        const width = this._cell.width * [...text].length
+        this.journalPatch('drawing', { x: left, y: top, width, height: this._cell.height })
+        let cellX = left
+        for (const character of text) {
+            this.paintGlyph(cellX, top, character.codePointAt(0) ?? 0, false)
+            cellX += this._cell.width
+        }
+        this.markDrawn()
+    }
+
+    /**
+     * Text at the text cursor, the path console output and input echo take on a Screen. The cursor
+     * advances by one cell, wraps at the right edge and scrolls the whole image up one cell row at
+     * the bottom — text and graphics move together, because they are one image. A carriage return
+     * returns to the first column and a line feed starts a new line, the pairing a terminal shows
+     * (and the one the Terminal transcript records), so both views of the same output agree.
+     */
+    writeText(text: string): void {
+        const plan = this.runText(text, false)
+        this.journalPatch('drawing', plan.scrolled ? this.fullRect() : plan.rect)
+        this.runText(text, true)
+        this.markDrawn()
+    }
+
+    // ---------------------------------------------------------- framebuffer
+
+    /**
+     * Switches to the memory-backed image of the MARS and RARS bitmap display: one word of Core
+     * memory is one logical pixel, and the adapter re-reads the mapped range into the Screen instead
+     * of the Screen journaling pixels, because the Core's own rollback already restores them
+     * ([ADR 0005](../../../../../docs/adr/0005-restore-screen-state-on-undo.md)).
+     */
+    useFramebuffer(width: number, height: number): void {
+        this.history.clear()
+        this._framebuffer = null
+        this.resize(width, height)
+        this.history.clear()
+        this._framebuffer = { width: this._width, height: this._height }
+    }
+
+    /** Leaves framebuffer mode; the image stays as it is until something draws on it. */
+    useDrawing(): void {
+        this._framebuffer = null
+        this.history.clear()
+    }
+
+    /**
+     * Copies framebuffer words into the image, all of them or the range `[from, to)` that a memory
+     * observer reported dirty. Only the low 24 bits of a word are the color, as in MARS.
+     */
+    syncFramebuffer(words: ArrayLike<number>, from = 0, to = words.length): void {
+        const last = Math.min(to, words.length, this._width * this._height)
+        for (let index = Math.max(0, from); index < last; index++) {
+            const offset = index * BYTES_PER_PIXEL
+            const color = words[index]
+            this.drawing[offset] = (color >> 16) & 0xff
+            this.drawing[offset + 1] = (color >> 8) & 0xff
+            this.drawing[offset + 2] = color & 0xff
+            this.drawing[offset + 3] = 0xff
+        }
+        this.markDrawn()
+    }
+
+    // ----------------------------------------------------------------- undo
+
+    canUndo(): boolean {
+        return this.history.canUndo()
+    }
+
+    /** Rolls back one operation. Returns false when the history is empty or the budget ate it. */
+    undo(): boolean {
+        const record = this.history.pop()
+        if (record === undefined) return false
+        this.apply(record)
+        return true
+    }
+
+    /**
+     * Rolls back to a point noted earlier from `history.sequence`. Returns false when the budget had
+     * already dropped some of those records, which is how the Undo depth ends up being the smaller
+     * of the Core's history and the Screen's.
+     */
+    undoToSequence(sequence: number): boolean {
+        while (this.history.sequence > sequence) {
+            if (!this.undo()) return false
+        }
+        return true
+    }
+
+    /** Back to the state a fresh Screen has, on the same path as the Terminal's clear. */
+    reset(): void {
+        this.history.clear()
+        this._framebuffer = null
+        this._width = Math.max(1, Math.trunc(this.options.width))
+        this._height = Math.max(1, Math.trunc(this.options.height))
+        this._backgroundColor = this.options.backgroundColor ?? BLACK
+        this._penColor = this.options.penColor ?? WHITE
+        this._fillColor = this.options.fillColor ?? WHITE
+        this._cell = this.options.cell ?? SCREEN_CELL_8X16
+        this._penWidth = 1
+        this._penX = 0
+        this._penY = 0
+        this._cursorColumn = 0
+        this._cursorRow = 0
+        this._doubleBuffering = false
+        this.drawing = this.newImage(this._width, this._height, this._backgroundColor)
+        this.visible = this.drawing
+        this.markVisible()
+    }
+
+    // -------------------------------------------------------------- drawing
+
+    private rectangle(x1: number, y1: number, x2: number, y2: number, filled: boolean): void {
+        const left = Math.min(Math.trunc(x1), Math.trunc(x2))
+        const right = Math.max(Math.trunc(x1), Math.trunc(x2))
+        const top = Math.min(Math.trunc(y1), Math.trunc(y2))
+        const bottom = Math.max(Math.trunc(y1), Math.trunc(y2))
+        this.journalPatch(
+            'drawing',
+            this.penBounds({ x: left, y: top, width: right - left, height: bottom - top })
+        )
+        if (right <= left || bottom <= top) return
+        if (filled) {
+            for (let y = top; y < bottom; y++) {
+                for (let x = left; x < right; x++) this.paint(this.drawing, x, y, this._fillColor)
+            }
+        }
+        this.strokeLine(left, top, right - 1, top)
+        this.strokeLine(right - 1, top, right - 1, bottom - 1)
+        this.strokeLine(right - 1, bottom - 1, left, bottom - 1)
+        this.strokeLine(left, bottom - 1, left, top)
+        this.markDrawn()
+    }
+
+    private ellipse(x1: number, y1: number, x2: number, y2: number, filled: boolean): void {
+        const left = Math.min(Math.trunc(x1), Math.trunc(x2))
+        const right = Math.max(Math.trunc(x1), Math.trunc(x2))
+        const top = Math.min(Math.trunc(y1), Math.trunc(y2))
+        const bottom = Math.max(Math.trunc(y1), Math.trunc(y2))
+        this.journalPatch(
+            'drawing',
+            this.penBounds({ x: left, y: top, width: right - left, height: bottom - top })
+        )
+        if (right <= left || bottom <= top) return
+        //the ellipse is the one inscribed in the rectangle, tested at pixel centers: a pixel is
+        //inside when its center is, and the border is the inside pixels touching an outside one
+        const centerX = (left + right) / 2
+        const centerY = (top + bottom) / 2
+        const radiusX = (right - left) / 2
+        const radiusY = (bottom - top) / 2
+        const inside = (x: number, y: number): boolean => {
+            if (x < left || x >= right || y < top || y >= bottom) return false
+            const dx = (x + 0.5 - centerX) / radiusX
+            const dy = (y + 0.5 - centerY) / radiusY
+            return dx * dx + dy * dy <= 1
+        }
+        for (let y = top; y < bottom; y++) {
+            for (let x = left; x < right; x++) {
+                if (!inside(x, y)) continue
+                if (filled) this.paint(this.drawing, x, y, this._fillColor)
+                const border =
+                    !inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || !inside(x, y + 1)
+                if (border) this.stampPen(x, y)
+            }
+        }
+        this.markDrawn()
+    }
+
+    private strokeLine(x1: number, y1: number, x2: number, y2: number): void {
+        //Bresenham, stamping the pen at every point of the path
+        let x = x1
+        let y = y1
+        const stepX = x1 < x2 ? 1 : -1
+        const stepY = y1 < y2 ? 1 : -1
+        const deltaX = Math.abs(x2 - x1)
+        const deltaY = -Math.abs(y2 - y1)
+        let error = deltaX + deltaY
+        for (;;) {
+            this.stampPen(x, y)
+            if (x === x2 && y === y2) return
+            const doubled = 2 * error
+            if (doubled >= deltaY) {
+                error += deltaY
+                x += stepX
+            }
+            if (doubled <= deltaX) {
+                error += deltaX
+                y += stepY
+            }
+        }
+    }
+
+    /** A square pen centered on the path, as a GDI pen of that width is. */
+    private stampPen(x: number, y: number): void {
+        if (this._penWidth === 1) {
+            this.paint(this.drawing, x, y, this._penColor)
+            return
+        }
+        const before = Math.floor((this._penWidth - 1) / 2)
+        for (let offsetY = 0; offsetY < this._penWidth; offsetY++) {
+            for (let offsetX = 0; offsetX < this._penWidth; offsetX++) {
+                this.paint(this.drawing, x - before + offsetX, y - before + offsetY, this._penColor)
+            }
+        }
+    }
+
+    private paint(image: Uint8ClampedArray, x: number, y: number, color: ScreenColor): void {
+        if (x < 0 || y < 0 || x >= this._width || y >= this._height) return
+        const offset = (y * this._width + x) * BYTES_PER_PIXEL
+        image[offset] = (color >> 16) & 0xff
+        image[offset + 1] = (color >> 8) & 0xff
+        image[offset + 2] = color & 0xff
+        image[offset + 3] = 0xff
+    }
+
+    // ----------------------------------------------------------------- text
+
+    /**
+     * Walks a string over the text cursor, drawing and scrolling only when committing. The dry walk
+     * gives `writeText` the rectangle to journal before anything is overwritten, and tells it when a
+     * scroll makes that rectangle the whole image.
+     */
+    private runText(text: string, commit: boolean): { rect: Rect | null; scrolled: boolean } {
+        const columns = this.columns
+        const rows = this.rows
+        let column = this._cursorColumn
+        let row = this._cursorRow
+        let scrolled = false
+        let minColumn = Number.POSITIVE_INFINITY
+        let minRow = Number.POSITIVE_INFINITY
+        let maxColumn = Number.NEGATIVE_INFINITY
+        let maxRow = Number.NEGATIVE_INFINITY
+        const newLine = () => {
+            column = 0
+            row += 1
+            if (row < rows) return
+            row = rows - 1
+            scrolled = true
+            if (commit) this.scrollUp()
+        }
+        for (const character of text) {
+            const code = character.codePointAt(0) ?? 0
+            if (code === CARRIAGE_RETURN) {
+                column = 0
+                continue
+            }
+            if (code === LINE_FEED) {
+                newLine()
+                continue
+            }
+            if (commit) {
+                this.paintGlyph(column * this._cell.width, row * this._cell.height, code, true)
+            }
+            minColumn = Math.min(minColumn, column)
+            maxColumn = Math.max(maxColumn, column)
+            minRow = Math.min(minRow, row)
+            maxRow = Math.max(maxRow, row)
+            column += 1
+            if (column >= columns) newLine()
+        }
+        if (commit) {
+            this._cursorColumn = column
+            this._cursorRow = row
+        }
+        const drewNothing = maxColumn < minColumn
+        return {
+            scrolled,
+            rect: drewNothing
+                ? null
+                : {
+                      x: minColumn * this._cell.width,
+                      y: minRow * this._cell.height,
+                      width: (maxColumn - minColumn + 1) * this._cell.width,
+                      height: (maxRow - minRow + 1) * this._cell.height
+                  }
+        }
+    }
+
+    /**
+     * One glyph with its top left at a pixel position. Text at the cursor paints the cell
+     * background first, the way a terminal cell is opaque, so scrolled rows leave nothing behind;
+     * text at a pixel position draws only the glyph, so a label can sit on a drawing.
+     */
+    private paintGlyph(x: number, y: number, code: number, opaque: boolean): void {
+        const rows = glyphRows(code, this._cell.height)
+        for (let row = 0; row < rows.length; row++) {
+            for (let column = 0; column < this._cell.width; column++) {
+                const lit = (rows[row] & (1 << column)) !== 0
+                if (lit) this.paint(this.drawing, x + column, y + row, this._penColor)
+                else if (opaque) {
+                    this.paint(this.drawing, x + column, y + row, this._backgroundColor)
+                }
+            }
+        }
+    }
+
+    /** Moves the whole image, text and graphics alike, up one cell row. */
+    private scrollUp(): void {
+        const shift = this._cell.height * this._width * BYTES_PER_PIXEL
+        const total = this.drawing.length
+        if (shift < total) this.drawing.copyWithin(0, shift)
+        const from = Math.max(0, total - shift)
+        for (let offset = from; offset < total; offset += BYTES_PER_PIXEL) {
+            this.drawing[offset] = (this._backgroundColor >> 16) & 0xff
+            this.drawing[offset + 1] = (this._backgroundColor >> 8) & 0xff
+            this.drawing[offset + 2] = this._backgroundColor & 0xff
+            this.drawing[offset + 3] = 0xff
+        }
+    }
+
+    private clampCursor(): void {
+        this._cursorColumn = clamp(this._cursorColumn, 0, this.columns - 1)
+        this._cursorRow = clamp(this._cursorRow, 0, this.rows - 1)
+    }
+
+    // -------------------------------------------------------------- journal
+
+    private journal(pixels: ScreenPixelRecord): void {
+        //a memory-backed image is restored by re-reading Core memory after the Core's own rollback,
+        //so framebuffer mode journals nothing (ADR 0005)
+        if (this._framebuffer !== null) return
+        this.history.push({ state: this.captureState(), pixels })
+    }
+
+    private journalPatch(target: 'drawing' | 'visible', rect: Rect | null): void {
+        if (this._framebuffer !== null) return
+        const clipped = rect === null ? null : this.clip(rect)
+        if (clipped === null) {
+            this.journal({ kind: 'none' })
+            return
+        }
+        const image = target === 'visible' ? this.visible : this.drawing
+        this.journal({ kind: 'patch', target, ...clipped, pixels: this.copyRegion(image, clipped) })
+    }
+
+    private journalImages(): void {
+        if (this._framebuffer !== null) return
+        this.journal({
+            kind: 'images',
+            drawing: new Uint8ClampedArray(this.drawing),
+            //null records that the two were one array, which is what direct drawing is
+            visible: this._doubleBuffering ? new Uint8ClampedArray(this.visible) : null
+        })
+    }
+
+    private captureState(): ScreenState {
+        return {
+            width: this._width,
+            height: this._height,
+            penColor: this._penColor,
+            fillColor: this._fillColor,
+            backgroundColor: this._backgroundColor,
+            penWidth: this._penWidth,
+            penX: this._penX,
+            penY: this._penY,
+            cursorColumn: this._cursorColumn,
+            cursorRow: this._cursorRow,
+            cellWidth: this._cell.width,
+            cellHeight: this._cell.height,
+            doubleBuffering: this._doubleBuffering
+        }
+    }
+
+    private apply(record: ScreenRecord): void {
+        const state = record.state
+        this._width = state.width
+        this._height = state.height
+        this._penColor = state.penColor
+        this._fillColor = state.fillColor
+        this._backgroundColor = state.backgroundColor
+        this._penWidth = state.penWidth
+        this._penX = state.penX
+        this._penY = state.penY
+        this._cursorColumn = state.cursorColumn
+        this._cursorRow = state.cursorRow
+        this._cell = { width: state.cellWidth, height: state.cellHeight }
+        this._doubleBuffering = state.doubleBuffering
+        const pixels = record.pixels
+        if (pixels.kind === 'images') {
+            this.drawing = pixels.drawing
+            this.visible = pixels.visible ?? pixels.drawing
+        } else if (pixels.kind === 'patch') {
+            const image = pixels.target === 'visible' ? this.visible : this.drawing
+            this.pasteRegion(image, pixels)
+        }
+        this.markVisible()
+    }
+
+    // --------------------------------------------------------------- pixels
+
+    private newImage(width: number, height: number, color: ScreenColor): Uint8ClampedArray {
+        const image = new Uint8ClampedArray(width * height * BYTES_PER_PIXEL)
+        fillImage(image, color)
+        return image
+    }
+
+    private fullRect(): Rect {
+        return { x: 0, y: 0, width: this._width, height: this._height }
+    }
+
+    /** The rectangle a pen-stroked path dirties: the path plus the pen's overhang on every side. */
+    private penBounds(rect: Rect): Rect {
+        const before = Math.floor((this._penWidth - 1) / 2)
+        const after = this._penWidth - 1 - before
+        return {
+            x: rect.x - before,
+            y: rect.y - before,
+            //a line from x1 to x2 covers x2 as well, which the caller's width does not include
+            width: rect.width + 1 + before + after,
+            height: rect.height + 1 + before + after
+        }
+    }
+
+    private clip(rect: Rect): Rect | null {
+        const left = Math.max(0, rect.x)
+        const top = Math.max(0, rect.y)
+        const right = Math.min(this._width, rect.x + rect.width)
+        const bottom = Math.min(this._height, rect.y + rect.height)
+        if (right <= left || bottom <= top) return null
+        return { x: left, y: top, width: right - left, height: bottom - top }
+    }
+
+    private copyRegion(image: Uint8ClampedArray, rect: Rect): Uint8ClampedArray {
+        const pixels = new Uint8ClampedArray(rect.width * rect.height * BYTES_PER_PIXEL)
+        const rowBytes = rect.width * BYTES_PER_PIXEL
+        for (let row = 0; row < rect.height; row++) {
+            const start = ((rect.y + row) * this._width + rect.x) * BYTES_PER_PIXEL
+            pixels.set(image.subarray(start, start + rowBytes), row * rowBytes)
+        }
+        return pixels
+    }
+
+    private pasteRegion(
+        image: Uint8ClampedArray,
+        patch: Rect & { pixels: Uint8ClampedArray }
+    ): void {
+        const rowBytes = patch.width * BYTES_PER_PIXEL
+        for (let row = 0; row < patch.height; row++) {
+            const start = ((patch.y + row) * this._width + patch.x) * BYTES_PER_PIXEL
+            image.set(patch.pixels.subarray(row * rowBytes, (row + 1) * rowBytes), start)
+        }
+    }
+
+    private markDrawn(): void {
+        //with double buffering on, drawing changes the off-screen image and the renderer has
+        //nothing new to paint until `present` (ADR 0006)
+        if (!this._doubleBuffering) this.markVisible()
+    }
+
+    private markVisible(): void {
+        this._dirty = true
+        this._version += 1
+    }
+}
+
+function fillImage(image: Uint8ClampedArray, color: ScreenColor): void {
+    const red = (color >> 16) & 0xff
+    const green = (color >> 8) & 0xff
+    const blue = color & 0xff
+    for (let offset = 0; offset < image.length; offset += BYTES_PER_PIXEL) {
+        image[offset] = red
+        image[offset + 1] = green
+        image[offset + 2] = blue
+        image[offset + 3] = 0xff
+    }
+}
+
+function boundsOf(points: { x: number; y: number }[]): Rect {
+    const xs = points.map((point) => point.x)
+    const ys = points.map((point) => point.y)
+    const x = Math.min(...xs)
+    const y = Math.min(...ys)
+    return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y }
+}
+
+function clamp(value: number, low: number, high: number): number {
+    return Math.min(high, Math.max(low, value))
+}
