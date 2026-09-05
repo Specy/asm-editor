@@ -2,9 +2,9 @@ import { sveltekit } from '@sveltejs/kit/vite'
 //import { visualizer } from 'rollup-plugin-visualizer'
 import wasm from 'vite-plugin-wasm'
 import Icons from 'unplugin-icons/vite'
-import type { UserConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 //import devtoolsJson from 'vite-plugin-devtools-json';
-const config: UserConfig = {
+export default defineConfig({
     server: {
         port: 4173
     },
@@ -32,7 +32,13 @@ const config: UserConfig = {
             filename: 'stats.html'
         })
          */
-    ]
-}
-
-export default config
+    ],
+    // The tests run on the app's own Vite config so a test resolves `$lib`, `$cmp` and the other
+    // SvelteKit aliases exactly like the app does, and so the Svelte plugin compiles any `.svelte.ts`
+    // module a test reaches. Peripheral logic itself stays plain TypeScript, which is why the
+    // environment is node: nothing under test needs a DOM.
+    test: {
+        environment: 'node',
+        include: ['src/**/*.test.ts']
+    }
+})

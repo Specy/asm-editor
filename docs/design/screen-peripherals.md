@@ -33,14 +33,14 @@ x86 is outside this version: `@specy/x86` wraps Blink, a Linux x86-64 userland e
 
 `@specy/z80` descends from Lawrence Kesteloot's [trs80](https://github.com/lkesteloot/trs80) monorepo. Its `Trs80` machine was compared against this design on 2026-09-05 to check the fit; the design was kept and amended with program time (ADR 0010), the key hold interval and memory re-sync on Undo.
 
-| Concern | Upstream | This design |
-|---|---|---|
-| Devices | Screen, keyboard, cassette and sound player are injected into the machine constructor; the machine routes memory and port accesses to them | Same shape one level up: peripherals are injected into the Emulator and the adapter connects the Core through its hooks (ADR 0004) |
-| Screen | A memory-mapped 1 KB character buffer, mirrored to RAM and forwarded to the screen object on every write; the web screen sets a dirty flag and repaints from its own animation-frame loop; hi-res cards are not emulated | Pixel Screen with a dirty-flag renderer; the machine never waits for a frame (ADRs 0006, 0007); the Z80 draws through ports, not memory (ADR 0011) |
-| Keyboard | Memory-mapped matrix; DOM events are queued and released one per 50,000 t-states at read time; keys are intercepted only while running and the editor is unfocused; Ctrl and Meta combinations are left to the browser | Polling with explicit Screen focus and a minimum hold interval (ADR 0008) |
-| Mouse | None on the machine; the web screen reports graphics-pixel coordinates for the IDE's screen editor and infers a release outside the canvas from the next move's button state | Logical pixels, drags continue outside the Screen, release on window blur (ADR 0008) |
-| Time | Real-time pacing: each animation frame runs the t-states the emulated clock would have produced, capped at 100 ms of catch-up, with a speed multiplier; a timer interrupt; the IDE disables interrupts for user programs | Throughput-first scheduling with no emulated clock; waits and time reads instead of pacing (ADRs 0007, 0010) |
-| State | Whole-machine save and restore; the screen is rebuilt by replaying screen RAM | Per-instruction Undo, added in the fork; memory-backed images re-synced from memory (ADR 0005) |
+| Concern  | Upstream                                                                                                                                                                                                                 | This design                                                                                                                                        |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Devices  | Screen, keyboard, cassette and sound player are injected into the machine constructor; the machine routes memory and port accesses to them                                                                               | Same shape one level up: peripherals are injected into the Emulator and the adapter connects the Core through its hooks (ADR 0004)                 |
+| Screen   | A memory-mapped 1 KB character buffer, mirrored to RAM and forwarded to the screen object on every write; the web screen sets a dirty flag and repaints from its own animation-frame loop; hi-res cards are not emulated | Pixel Screen with a dirty-flag renderer; the machine never waits for a frame (ADRs 0006, 0007); the Z80 draws through ports, not memory (ADR 0011) |
+| Keyboard | Memory-mapped matrix; DOM events are queued and released one per 50,000 t-states at read time; keys are intercepted only while running and the editor is unfocused; Ctrl and Meta combinations are left to the browser   | Polling with explicit Screen focus and a minimum hold interval (ADR 0008)                                                                          |
+| Mouse    | None on the machine; the web screen reports graphics-pixel coordinates for the IDE's screen editor and infers a release outside the canvas from the next move's button state                                             | Logical pixels, drags continue outside the Screen, release on window blur (ADR 0008)                                                               |
+| Time     | Real-time pacing: each animation frame runs the t-states the emulated clock would have produced, capped at 100 ms of catch-up, with a speed multiplier; a timer interrupt; the IDE disables interrupts for user programs | Throughput-first scheduling with no emulated clock; waits and time reads instead of pacing (ADRs 0007, 0010)                                       |
+| State    | Whole-machine save and restore; the screen is rebuilt by replaying screen RAM                                                                                                                                            | Per-instruction Undo, added in the fork; memory-backed images re-synced from memory (ADR 0005)                                                     |
 
 Sources: [Trs80.ts](https://github.com/lkesteloot/trs80/blob/master/packages/trs80-emulator/src/Trs80.ts), [Keyboard.ts](https://github.com/lkesteloot/trs80/blob/master/packages/trs80-emulator/src/Keyboard.ts), [CanvasScreen.ts](https://github.com/lkesteloot/trs80/blob/master/packages/trs80-emulator-web/src/CanvasScreen.ts), [trs80-ide Emulator.ts](https://github.com/lkesteloot/trs80/blob/master/packages/trs80-ide/src/Emulator.ts).
 
@@ -50,28 +50,28 @@ Sources: [Trs80.ts](https://github.com/lkesteloot/trs80/blob/master/packages/trs
 
 The s68k Core decodes trap #15 tasks into interrupts ([interpreter.rs](https://github.com/Specy/s68k/blob/main/src/interpreter.rs)); unknown tasks stop the program with an error. First-version coverage, decided on 2026-09-06:
 
-| Group | Tasks | Decision |
-|---|---|---|
-| Screen, already decoded | 11, 33, 80 to 91, 93, 95 | Wire to the Screen. Fix two decodings: task 33 packs width and height in D1 and uses 0, 1 and 2 as get-size, windowed and full-screen requests; task 11 clears only for $FF00 and otherwise sets or gets the text cursor |
-| Screen, missing in Core | 92 modes 2, 4, 16, 17; 94; 96 | Add to the Core: pen-only move, normal drawing, double buffering off and on, repaint, pen position |
-| Keyboard and Mouse, missing in Core | 7, 19 both forms, 61 modes 0 to 2, 24 | Add to the Core; 24 is a no-op under ADR 0008 |
-| Time | 8, 23 | 8 returns hundredths of a second (today Unix seconds); 23 moves to the wait path of ADR 0010 |
-| Text additions | 17, 18, 20 | Add while the Core is open; they compose existing tasks |
-| Rejected with an error naming the task | 10, 12, 16, 21, 22, 25, 30, 31, 32, 60, 62, and 92 modes 0, 1, 3, 5 to 15 | Printer, echo and prompt settings, fonts, text-screen reads and scrolling, cycle counter, hardware simulator, interrupt enables, bitwise raster modes |
+| Group                                  | Tasks                                                                     | Decision                                                                                                                                                                                                                 |
+| -------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Screen, already decoded                | 11, 33, 80 to 91, 93, 95                                                  | Wire to the Screen. Fix two decodings: task 33 packs width and height in D1 and uses 0, 1 and 2 as get-size, windowed and full-screen requests; task 11 clears only for $FF00 and otherwise sets or gets the text cursor |
+| Screen, missing in Core                | 92 modes 2, 4, 16, 17; 94; 96                                             | Add to the Core: pen-only move, normal drawing, double buffering off and on, repaint, pen position                                                                                                                       |
+| Keyboard and Mouse, missing in Core    | 7, 19 both forms, 61 modes 0 to 2, 24                                     | Add to the Core; 24 is a no-op under ADR 0008                                                                                                                                                                            |
+| Time                                   | 8, 23                                                                     | 8 returns hundredths of a second (today Unix seconds); 23 moves to the wait path of ADR 0010                                                                                                                             |
+| Text additions                         | 17, 18, 20                                                                | Add while the Core is open; they compose existing tasks                                                                                                                                                                  |
+| Rejected with an error naming the task | 10, 12, 16, 21, 22, 25, 30, 31, 32, 60, 62, and 92 modes 0, 1, 3, 5 to 15 | Printer, echo and prompt settings, fonts, text-screen reads and scrolling, cycle counter, hardware simulator, interrupt enables, bitwise raster modes                                                                    |
 
 ### MIPS and RISC-V
 
 MARS and RARS are identical here: the [bitmap display](https://raw.githubusercontent.com/dpetersanderson/MARS/main/mars/tools/BitmapDisplay.java) is a grid of words whose low 24 bits are the pixel color, configured by unit width and height (1 to 32), display width and height (64 to 1024, default 512 by 256) and a base address chosen among global data, the global pointer, static data (default, 0x10010000), heap and the memory map; the [keyboard and display simulator](https://raw.githubusercontent.com/dpetersanderson/MARS/main/mars/tools/KeyboardAndDisplaySimulator.java) uses receiver control and data at 0xFFFF0000 and 0xFFFF0004 and transmitter control and data at 0xFFFF0008 and 0xFFFF000C. First-version coverage, decided on 2026-09-06:
 
-| Concern | Decision |
-|---|---|
-| Bitmap display | The Screen's framebuffer mode, configured with the same five parameters, choice lists and defaults as the tool. One word is one logical pixel; the unit size becomes the initial zoom. Undo re-syncs from memory (ADR 0005) |
-| Keyboard registers | Backed by the typed-character queue: Ready means not empty, reading the data register dequeues one character, and Ready clears only when the queue is empty |
-| Display registers | Transmitter Ready is always set. A write appends the character to the Terminal transcript; form feed clears the Terminal output |
-| Interrupts | Setting an interrupt-enable bit stops the program with an error naming the feature |
-| Program time | Sleep (syscall 32) on the wait path; time (syscall 30) through a Core time hook (ADR 0010) |
-| Mouse | Nothing mapped; the simulators have no mouse |
-| Core changes | Both wrappers expose memory observers as handlers: writes over the bitmap range, reads and writes on the four register words, plus the time hook. The Java memory class already has range observers |
+| Concern            | Decision                                                                                                                                                                                                                    |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bitmap display     | The Screen's framebuffer mode, configured with the same five parameters, choice lists and defaults as the tool. One word is one logical pixel; the unit size becomes the initial zoom. Undo re-syncs from memory (ADR 0005) |
+| Keyboard registers | Backed by the typed-character queue: Ready means not empty, reading the data register dequeues one character, and Ready clears only when the queue is empty                                                                 |
+| Display registers  | Transmitter Ready is always set. A write appends the character to the Terminal transcript; form feed clears the Terminal output                                                                                             |
+| Interrupts         | Setting an interrupt-enable bit stops the program with an error naming the feature                                                                                                                                          |
+| Program time       | Sleep (syscall 32) on the wait path; time (syscall 30) through a Core time hook (ADR 0010)                                                                                                                                  |
+| Mouse              | Nothing mapped; the simulators have no mouse                                                                                                                                                                                |
+| Core changes       | Both wrappers expose memory observers as handlers: writes over the bitmap range, reads and writes on the four register words, plus the time hook. The Java memory class already has range observers                         |
 
 ### Z80
 
@@ -81,11 +81,11 @@ Everything goes through the port map of [ADR 0011](../adr/0011-z80-peripherals-t
 
 Decided on 2026-09-06.
 
-| Environment | Size | Configured by |
-|---|---|---|
-| M68K | Default 640 by 480, EASy68K's minimum window | The program, through task 33 |
-| Z80 | Default 256 by 192, up to 256 by 256 | The program, through the resize command |
-| MIPS, RISC-V | MARS's five parameters with its defaults | The user, from the Screen panel's header |
+| Environment  | Size                                         | Configured by                            |
+| ------------ | -------------------------------------------- | ---------------------------------------- |
+| M68K         | Default 640 by 480, EASy68K's minimum window | The program, through task 33             |
+| Z80          | Default 256 by 192, up to 256 by 256         | The program, through the resize command  |
+| MIPS, RISC-V | MARS's five parameters with its defaults     | The user, from the Screen panel's header |
 
 - The MIPS and RISC-V parameters are saved in the project data as a display field, because every example states them in its header comment and a project must reopen with them. Testcases run with the same configuration. Changing a parameter re-syncs the Screen from memory immediately, as MARS does.
 - Zoom is GUI only: the Screen fits its panel with integer scaling when that fits, the MARS unit size sets the initial zoom, and zoom is not persisted per project.
