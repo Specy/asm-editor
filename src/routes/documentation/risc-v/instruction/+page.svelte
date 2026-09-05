@@ -19,9 +19,9 @@
     })
 </script>
 
-<title> RISC-V Instructions </title>
 
 <svelte:head>
+    <title>RISC-V Instructions</title>
     <meta
         name="description"
         content="Read the RISC-V Instructions documentation, including all the instructions with addressing modes and the assembler features"

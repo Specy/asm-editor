@@ -82,7 +82,9 @@
             onclick={() => (menuOpen = false)}
             href={resolve('/learn/courses/[courseId]', { courseId: data.course.slug })}
         >
-            <Header noMargin>
+            <!-- Sidebar chrome, not the document's subject: each page under this layout
+                 titles itself with its own <Header>. Matches the module headings below. -->
+            <Header type="h2" noMargin>
                 {data.course.name}
             </Header>
         </a>

@@ -1,5 +1,7 @@
 <script lang="ts">
     import type { PageData } from './$types'
+    import { page } from '$app/state'
+    import { toMetaDescription, serializeJsonLd, instructionLd } from '$lib/seo'
     import Page from '$cmp/shared/layout/Page.svelte'
     import { onMount } from 'svelte'
     import {
@@ -30,25 +32,40 @@
         component = imp?.default
     })
     let code = $derived(ins.interactiveExample?.code ?? '; no interactive instruction available')
+
+    // "Docs - move" matched no query anyone types; "MOVE — M68K instruction reference"
+    // matches how these are actually searched for.
+    let pageTitle = $derived(`${String(ins.name).toUpperCase()} — M68K instruction reference`)
+    // The raw description is markdown, and was reaching search results with its link
+    // syntax and newlines intact.
+    let metaDescription = $derived(
+        toMetaDescription(`The ${ins.name} M68K instruction. ${ins.description}`)
+    )
+    let structuredData = $derived(
+        instructionLd({
+            name: String(ins.name),
+            architecture: 'M68K',
+            description: ins.description,
+            pathname: page.url.pathname
+        })
+    )
 </script>
 
 <svelte:head>
-    <meta name="description" content={`The ${ins.name} instruction.\n${ins.description}`} />
-    <meta property="og:description" content={`The ${ins.name} instruction.\n${ins.description}`} />
-    <meta name="keywords" content={ins.name} />
-    <meta name="author" content="specy" />
-    <title>
-        Docs - {ins.name}
-    </title>
-    <meta property="og:title" content="Docs - {ins.name}" />
+    <title>{pageTitle}</title>
+    <meta name="description" content={metaDescription} />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={metaDescription} />
+    <meta property="og:type" content="article" />
+    {@html `<script type="application/ld+json">${serializeJsonLd(structuredData)}</script>`}
 </svelte:head>
 
 <Page contentStyle="padding: 1rem; gap: 1rem;" style="flex: 1;">
     <article class="instruction-info" style="flex: 1;">
         <Column>
-            <div class="instruction-name">
+            <h1 class="instruction-name">
                 {ins.name}
-            </div>
+            </h1>
             <Column style="margin-left: 0.8rem;">
                 {#if ins.sizes.length}
                     <h3>Sizes</h3>
@@ -148,6 +165,8 @@
     }
     .instruction-name {
         font-size: 4rem;
+        margin-top: 0;
+        line-height: 1.1;
         margin-right: 2rem;
         min-width: 11.2rem;
         font-weight: 600;

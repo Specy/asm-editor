@@ -24,6 +24,7 @@
     import FaDumbbell from '~icons/fa-solid/dumbbell'
     import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
     import { resolve } from '$app/paths'
+    import { serializeJsonLd, softwareApplicationLd } from '$lib/seo'
 
     interface BeforeInstallPromptEvent extends Event {
         prompt(): Promise<void>
@@ -57,6 +58,7 @@
         content="Write, learn and run M68K, MIPS, RISC-V, X86 and Z80 assembly code in your browser. View registers and memory, step and undo the execution."
     />
     <meta property="og:title" content="Asm Editor" />
+    {@html `<script type="application/ld+json">${serializeJsonLd(softwareApplicationLd())}</script>`}
 </svelte:head>
 <DefaultNavbar />
 <Page>
@@ -64,11 +66,11 @@
         <div class="content row">
             <img src="/images/ASM-editor.webp" alt="ASM editor" class="preview-image" />
             <div class="presentation">
-                <div class="welcome-title" class:textShadow={textShadowPrimary}>
+                <h1 class="welcome-title" class:textShadow={textShadowPrimary}>
                     The best web IDE for Assembly <span style="font-size: 1.5rem;"
                         >M68K, MIPS, RISC-V, X86, Z80</span
                     >
-                </div>
+                </h1>
                 <Row gap="0.6rem" wrap>
                     <ButtonLink
                         style={`${shadow}; padding: 0.5rem 0.7rem`}
@@ -150,7 +152,7 @@
                         </div>
                     {/snippet}
                     {#snippet description()}
-                        <div>Documentation</div>
+                        Documentation
                     {/snippet}
                 </MainPageLinkPreview>
                 <MainPageLinkPreview href="#codeCompletion" title="Code completion section">
@@ -160,7 +162,7 @@
                         </div>
                     {/snippet}
                     {#snippet description()}
-                        <div>Code completion</div>
+                        Code completion
                     {/snippet}
                 </MainPageLinkPreview>
                 <MainPageLinkPreview href="#tools" title="Tools section">
@@ -180,7 +182,7 @@
                         </div>
                     {/snippet}
                     {#snippet description()}
-                        <div>Embed</div>
+                        Embed
                     {/snippet}
                 </MainPageLinkPreview>
                 <MainPageLinkPreview href="/exam" title="Create an exam for students">
@@ -190,7 +192,7 @@
                         </div>
                     {/snippet}
                     {#snippet description()}
-                        <div>Exam</div>
+                        Exam
                     {/snippet}
                 </MainPageLinkPreview>
                 <MainPageLinkPreview href="/chat" title="AI Chat">
@@ -200,7 +202,7 @@
                         </div>
                     {/snippet}
                     {#snippet description()}
-                        <div>AI Chat</div>
+                        AI Chat
                     {/snippet}
                 </MainPageLinkPreview>
             </div>
@@ -209,7 +211,7 @@
     <div class="column sections-wrapper">
         <MainPageSection id="documentation" imageUrl="/images/ASM-Documentation.webp">
             {#snippet title()}
-                <div>Documentation</div>
+                Documentation
             {/snippet}
             <div class="description" class:textShadow={textShadowPrimary}>
                 The editor comes with built-in documentation for the M68K, MIPS, RISC-V and Z80
@@ -229,7 +231,7 @@
         </MainPageSection>
         <MainPageSection id="codeCompletion" imageUrl="/images/ASM-CodeCompletion.webp" reverse>
             {#snippet title()}
-                <div>Code completion</div>
+                Code completion
             {/snippet}
             <div class="description" class:textShadow={textShadowSecondary}>
                 Write and learn faster with the code completion tools, suggesting you with the valid
@@ -239,7 +241,7 @@
         </MainPageSection>
         <MainPageSection id="tools" imageUrl="/images/ASM-Tools.webp">
             {#snippet title()}
-                <div>Tools & Customisation</div>
+                Tools & Customisation
             {/snippet}
             <div class="description" class:textShadow={textShadowPrimary}>
                 Feature rich tools to help you debug your code. Includes breakpoints, stepping,
@@ -250,7 +252,7 @@
         </MainPageSection>
         <MainPageSection id="exam" reverse>
             {#snippet title()}
-                <div>Exam</div>
+                Exam
             {/snippet}
             <div class="description" class:textShadow={textShadowPrimary}>
                 Create exams for students with the <a
@@ -268,7 +270,7 @@
         </MainPageSection>
         <MainPageSection id="chat" imageUrl="/images/ASM-AI-Chat.webp">
             {#snippet title()}
-                <div>AI Chat</div>
+                AI Chat
             {/snippet}
             <div class="description" class:textShadow={textShadowSecondary}>
                 Chat with an AI assistant that can write, run and debug assembly code directly in
@@ -287,7 +289,7 @@
         </MainPageSection>
         <MainPageSection id="embed" reverse>
             {#snippet title()}
-                <div>Embed</div>
+                Embed
             {/snippet}
             <div class="description" class:textShadow={textShadowPrimary}>
                 Embed the editor in your website to show and teach how assembly works using the <a
@@ -320,8 +322,11 @@
         padding: 1rem;
         max-width: 38rem;
         text-align: center;
+        margin-top: 0;
         margin-bottom: 1rem;
         color: var(--primary-text);
+        font-weight: bold;
+        line-height: 1.15;
     }
 
     .textShadow {

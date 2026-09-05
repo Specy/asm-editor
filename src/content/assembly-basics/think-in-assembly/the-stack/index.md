@@ -175,7 +175,7 @@ Pointer by 2 bytes:
 As you can see, the value `0x4444` is still in memory, but we are not supposed to use it anymore, as it is beyond the
 Stack Pointer.
 
-# Practical Example
+## Practical Example
 
 Let's now do the same thing but in M68K assembly language.
 Execute this code step by step and look at the memory to see how the stack is manipulated.

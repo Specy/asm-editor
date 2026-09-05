@@ -40,7 +40,7 @@
         </a>
         <Title noMargin>Theme</Title>
     </div>
-    <h1>Theme Presets</h1>
+    <h2>Theme Presets</h2>
     <Row wrap gap="1rem">
         {#each ThemeStore.themes as t}
             <button
