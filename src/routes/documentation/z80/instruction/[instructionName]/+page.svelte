@@ -102,7 +102,6 @@
             bind:code
             instructionKey={name}
             {description}
-            arguments={[data.props.summary]}
             language="Z80"
             showPc={true}
             showFlags={true}

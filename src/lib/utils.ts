@@ -79,10 +79,20 @@ export function capitalize(word: string) {
     return word[0].toUpperCase() + word.slice(1)
 }
 
-export function createShareLink(project: Project, mode: 'exam' | 'project' = 'project'): string {
+/**
+ * The compressed `?project=` payload a share link carries.
+ *
+ * Split out from createShareLink so in-app navigation can put it behind a resolve()d
+ * route instead of an absolute origin-prefixed URL, without duplicating the encoding.
+ */
+export function createSharePayload(project: Project): string {
     const p = project.toObject()
     p.id = SHARE_ID
-    const code = lzstring.compressToEncodedURIComponent(serializer.stringify(p))
+    return lzstring.compressToEncodedURIComponent(serializer.stringify(p))
+}
+
+export function createShareLink(project: Project, mode: 'exam' | 'project' = 'project'): string {
+    const code = createSharePayload(project)
     if (mode === 'exam') {
         return `${window.location.origin}/projects/exam?project=${code}`
     } else {
