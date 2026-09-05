@@ -6,7 +6,10 @@ A webapp made with [sveltekit](https://kit.svelte.dev/), [rust](https://www.rust
 Uses monaco-editor for the editor, my [WASM M68K interpreter](https://github.com/Specy/s68k) to run the code, a Java [MIPS Assembler (mars)](https://github.com/Specy/mars) compiled to javascript, a Java [RISC-V Assembler (rars)](https://github.com/Specy/rars) compiled to javascript and a TypeScript [Z80 assembler and machine (@specy/z80)](https://www.npmjs.com/package/@specy/z80).
 
 It is made to help people approaching assembly by providing the tools necessary to write and debug code more easily.
-![localImage](https://asm-editor.specy.app/images/ASM-editor.webp)
+
+> **Published research** — ASM Editor is described in [_ASM Editor: Understanding Language Abstractions Through Assembly Programming_](https://doi.org/10.1109/EDUCON67543.2026.11574463), presented at the 2026 IEEE Global Engineering Education Conference (EDUCON), Cairo.
+> If you use it in teaching or research, please [cite the paper](#citing-asm-editor).
+> ![localImage](https://asm-editor.specy.app/images/ASM-editor.webp)
 
 ## App features
 
@@ -51,6 +54,30 @@ Projects are stored locally on your browser, and with the app also working offli
 ## Embed the editor
 
 You can embed the editor [here](https://asm-editor.specy.app/embed), by using an iframe, you can set the initial code and additional settings by passing them as query parameters. Which can be built by visiting the link above.
+
+# Citing ASM Editor
+
+If ASM Editor supports your course or your research, please cite the paper:
+
+> E. Menichelli and L. Forlizzi, "ASM Editor: Understanding Language Abstractions Through
+> Assembly Programming," _2026 IEEE Global Engineering Education Conference (EDUCON)_,
+> Cairo, Egypt, 2026. doi: [10.1109/EDUCON67543.2026.11574463](https://doi.org/10.1109/EDUCON67543.2026.11574463)
+
+```bibtex
+@inproceedings{menichelli2026asmeditor,
+    author    = {Menichelli, Enrico and Forlizzi, Luca},
+    title     = {{ASM} {Editor}: {Understanding} {Language} {Abstractions} {Through} {Assembly} {Programming}},
+    booktitle = {2026 IEEE Global Engineering Education Conference (EDUCON)},
+    address   = {Cairo, Egypt},
+    publisher = {IEEE},
+    year      = {2026},
+    month     = apr,
+    doi       = {10.1109/EDUCON67543.2026.11574463}
+}
+```
+
+GitHub's own "Cite this repository" button reads [`CITATION.cff`](CITATION.cff), which
+carries the same reference.
 
 # Local setup
 

@@ -1,10 +1,37 @@
 export const SITE_URL = 'https://asm-editor.specy.app'
 
+/** The legal name is what a citation, an academic profile and a search engine can
+ *  reconcile; `alternateName` keeps the handle the repo and the apps are known by, so
+ *  the two identities resolve to one person instead of competing. */
 export const AUTHOR = {
     '@type': 'Person',
     name: 'Specy',
     url: 'https://specy.app',
     sameAs: ['https://github.com/Specy']
+} as const
+
+/** The peer-reviewed description of this app. Emitted as the SoftwareApplication's
+ *  `citation` so the tool and the paper are one connected entity to a crawler, rather
+ *  than two artefacts that happen to share a name. */
+export const PAPER = {
+    '@type': 'ScholarlyArticle',
+    name: 'ASM Editor: Understanding Language Abstractions Through Assembly Programming',
+    author: [
+        { '@type': 'Person', name: 'Enrico Menichelli' },
+        { '@type': 'Person', name: 'Luca Forlizzi' }
+    ],
+    publisher: { '@type': 'Organization', name: 'IEEE' },
+    datePublished: '2026-04-27',
+    doi: '10.1109/EDUCON67543.2026.11574463',
+    identifier: 'https://doi.org/10.1109/EDUCON67543.2026.11574463',
+    url: 'https://doi.org/10.1109/EDUCON67543.2026.11574463',
+    isPartOf: {
+        '@type': 'PublicationEvent',
+        name: '2026 IEEE Global Engineering Education Conference (EDUCON)',
+        location: 'Cairo, Egypt',
+        startDate: '2026-04-27',
+        endDate: '2026-04-30'
+    }
 } as const
 
 export function toAbsoluteUrl(pathname: string) {
@@ -77,7 +104,8 @@ export function softwareApplicationLd() {
             'Built-in instruction set documentation'
         ],
         author: AUTHOR,
-        sameAs: ['https://github.com/Specy/asm-editor']
+        citation: PAPER,
+        sameAs: ['https://github.com/Specy/asm-editor', PAPER.url]
     }
 }
 

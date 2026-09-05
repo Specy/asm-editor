@@ -312,6 +312,31 @@
                 </a>
             </div>
         </MainPageSection>
+        <MainPageSection id="citation">
+            {#snippet title()}
+                Published research
+            {/snippet}
+            <div class="description" class:textShadow={textShadowPrimary}>
+                ASM Editor is described in a peer-reviewed paper presented at the 2026 IEEE Global
+                Engineering Education Conference, together with the first-year course it was built
+                for.
+                <p class="reference">
+                    E. Menichelli and L. Forlizzi, &ldquo;ASM Editor: Understanding Language
+                    Abstractions Through Assembly Programming&rdquo;, 2026 IEEE Global Engineering
+                    Education Conference (EDUCON), Cairo, Egypt, 2026.
+                </p>
+                <a
+                    href="https://doi.org/10.1109/EDUCON67543.2026.11574463"
+                    title="Read the EDUCON 2026 paper"
+                    class="external-link"
+                >
+                    Read the paper
+                    <div style="width: 1rem; height: 1rem; margin-top: 0.2rem; margin-left: 0.3rem">
+                        <GoLinkExternal />
+                    </div>
+                </a>
+            </div>
+        </MainPageSection>
     </div>
 </Page>
 
@@ -339,6 +364,12 @@
 
     .textShadow {
         text-shadow: 2px 2px 12px rgb(36 36 36);
+    }
+
+    .reference {
+        font-size: 0.9rem;
+        opacity: 0.8;
+        margin: 1rem 0;
     }
 
     .sections-wrapper {

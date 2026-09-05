@@ -1,0 +1,41 @@
+cff-version: 1.2.0
+message: >-
+    If you use ASM Editor in teaching or research, please cite the
+    EDUCON 2026 paper below.
+title: ASM Editor
+abstract: >-
+    An educational IDE for assembly programming offering a unified
+    multi-ISA workspace (M68K, MIPS, RISC-V, x86 and Z80), integrated
+    debugging and visualization including backward execution, inline
+    instruction documentation, and support for BYOD exams.
+type: software
+url: https://asm-editor.specy.app
+repository-code: https://github.com/Specy/asm-editor
+license: AGPL-3.0
+authors:
+    - family-names: Menichelli
+      given-names: Enrico
+      alias: Specy
+preferred-citation:
+    type: conference-paper
+    title: >-
+        ASM Editor: Understanding Language Abstractions Through Assembly
+        Programming
+    authors:
+        - family-names: Menichelli
+          given-names: Enrico
+        - family-names: Forlizzi
+          given-names: Luca
+    collection-title: 2026 IEEE Global Engineering Education Conference (EDUCON)
+    conference:
+        name: 2026 IEEE Global Engineering Education Conference (EDUCON)
+        city: Cairo
+        country: EG
+        date-start: '2026-04-27'
+        date-end: '2026-04-30'
+    publisher:
+        name: IEEE
+    year: 2026
+    month: 4
+    doi: 10.1109/EDUCON67543.2026.11574463
+    url: https://ieeexplore.ieee.org/document/11574463
