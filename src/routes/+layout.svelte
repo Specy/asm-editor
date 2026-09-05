@@ -10,6 +10,7 @@
     import { ThemeStore } from '$stores/themeStore.svelte'
     import { beforeNavigate } from '$app/navigation'
     import { navigationStore } from '$stores/navigationStore'
+    import { toAbsoluteUrl } from '$lib/seo'
 
     interface Props {
         children?: import('svelte').Snippet
@@ -17,6 +18,10 @@
 
     let { children }: Props = $props()
     let metaTheme: HTMLMetaElement | null = $state(null)
+
+    // Emitted once here rather than in each of the ~40 pages that write their own
+    // head block: both values derive from the URL, so a page has nothing to add.
+    let canonicalUrl = $derived(toAbsoluteUrl(page.url.pathname))
 
     onMount(() => {
         // The service worker is registered automatically by SvelteKit from
@@ -35,6 +40,13 @@
         }
     })
 </script>
+
+<svelte:head>
+    <link rel="canonical" href={canonicalUrl} />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:site_name" content="Asm Editor" />
+    <meta name="twitter:card" content="summary_large_image" />
+</svelte:head>
 
 <ThemeProvider>
     <ErrorLogger>

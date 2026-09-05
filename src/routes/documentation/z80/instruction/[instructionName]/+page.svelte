@@ -1,5 +1,7 @@
 <script lang="ts">
     import type { PageData } from './$types'
+    import { page } from '$app/state'
+    import { toMetaDescription, jsonLdScriptTag, instructionLd } from '$lib/seo'
     import Page from '$cmp/shared/layout/Page.svelte'
     import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
@@ -33,13 +35,6 @@
         component = imp?.default
     })
 
-    // The `<meta>` tags are plain text, but the package's descriptions are markdown: the operand
-    // placeholders are code spans and a handful of them link to z80.info.
-    function toPlainText(markdown: string): string {
-        return markdown.replace(/\[(.*?)\]\(.*?\)/g, '$1').replace(/`/g, '')
-    }
-    let metaDescription = $derived(`The ${name} Z80 instruction.\n${toPlainText(description)}`)
-
     function formatCycles(cycles: { taken: number; notTaken: number }): string {
         // The two counts differ only for the conditional branches, where the package reports the
         // with-jump and without-jump timings separately.
@@ -47,24 +42,44 @@
             ? `${cycles.taken}`
             : `${cycles.taken}/${cycles.notTaken}`
     }
+
+    // "Docs - move" matched no query anyone types; "MOVE — M68K instruction reference"
+    // matches how these are actually searched for.
+    let pageTitle = $derived(`${String(name).toUpperCase()} — Z80 instruction reference`)
+    // The raw description is markdown, and was reaching search results with its link
+    // syntax and newlines intact.
+    let metaDescription = $derived(toMetaDescription(`The ${name} Z80 instruction. ${description}`))
+    let structuredData = $derived(
+        instructionLd({
+            name: String(name),
+            architecture: 'Z80',
+            description: description,
+            pathname: page.url.pathname
+        })
+    )
 </script>
 
 <svelte:head>
+    <title>{pageTitle}</title>
     <meta name="description" content={metaDescription} />
+    <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={metaDescription} />
-    <meta name="author" content="specy" />
-    <title>
-        Docs - {name}
-    </title>
-    <meta property="og:title" content="Docs - {name}" />
+    <meta property="og:type" content="article" />
+    <!-- The page's schema.org description. {@html} is the only way to emit a <script>
+         from a component: <svelte:element this="script"> renders nothing in Svelte, and a
+         literal script tag here is taken as the component's own instance script. Safe
+         because the payload is machine generated and serializeJsonLd escapes < > and &,
+         so nothing interpolated can close the tag. -->
+    <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+    {@html jsonLdScriptTag(structuredData)}
 </svelte:head>
 
 <Page contentStyle="padding: 1rem; gap: 1rem;">
     <div class="instruction-info" style="flex: 1;">
         <Column>
-            <div class="instruction-name">
+            <h1 class="instruction-name">
                 {name}
-            </div>
+            </h1>
         </Column>
 
         <Column gap="1rem" flex1>
@@ -162,6 +177,8 @@
     }
     .instruction-name {
         font-size: 4rem;
+        margin-top: 0;
+        line-height: 1.1;
         margin-right: 2rem;
         min-width: 11.2rem;
         font-weight: 600;

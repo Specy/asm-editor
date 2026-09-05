@@ -17,9 +17,9 @@
     </div>
     <div class="section-content">
         <div class="column content">
-            <div class="title">
+            <h2 class="title">
                 {@render title?.()}
-            </div>
+            </h2>
             <div class="section-text">
                 {@render children?.()}
             </div>
@@ -105,6 +105,8 @@
         font-size: 2.2rem;
         padding: 1rem;
         font-weight: bold;
+        margin: 0;
+        line-height: 1.2;
     }
     .content {
         padding: 3rem 2rem;

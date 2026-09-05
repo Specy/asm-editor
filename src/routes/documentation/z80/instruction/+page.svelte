@@ -18,9 +18,8 @@
     })
 </script>
 
-<title> Z80 Instructions </title>
-
 <svelte:head>
+    <title>Z80 Instructions</title>
     <meta
         name="description"
         content="Read the Z80 instructions documentation, every mnemonic with all of its operand forms, the flags it changes, its size in bytes and its clock cycles"

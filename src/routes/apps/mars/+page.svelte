@@ -58,9 +58,23 @@
     })
 </script>
 
+<svelte:head>
+    <title>MARS — MIPS simulator in your browser</title>
+    <meta
+        name="description"
+        content="Run the MARS MIPS assembler and simulator directly in the browser, with no download or Java install."
+    />
+    <meta property="og:title" content="MARS — MIPS simulator in your browser" />
+    <meta
+        property="og:description"
+        content="Run the MARS MIPS assembler and simulator directly in the browser, with no download or Java install."
+    />
+</svelte:head>
+
 <DefaultNavbar />
 
 <Page hasNavbar>
+    <h1 class="visually-hidden">MARS — MIPS simulator</h1>
     <div bind:this={wrapper} class="wrapper"></div>
 </Page>
 

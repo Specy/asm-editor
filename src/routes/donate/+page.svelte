@@ -66,7 +66,7 @@
             </Icon>
         </a>
     </div>
-    <h1 style="margin-top: 2rem">Past donations</h1>
+    <h2 style="margin-top: 2rem">Past donations</h2>
     <Column gap="0.5rem" style="margin-top: 2rem">
         {#each PAST_DONATIONS as donation, i (i)}
             <Card background="secondary" padding="1rem" gap="1rem">
