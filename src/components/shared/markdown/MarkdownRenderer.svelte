@@ -326,19 +326,20 @@
         padding: 1rem;
         border-radius: 0.5rem;
         overflow-x: auto;
+        max-width: fit-content;
+        padding: 0.5rem 1rem;
+        min-width: min(100%, 72ch);
+        margin: 1rem auto;
+        box-shadow: 0 0 2rem 10px rgb(3 4 5 / 15%);
     }
 
     :global(.shiki) {
         padding: 0.5rem;
         border-radius: 0.3rem;
         width: 100%;
-    }
-
-    :global(.shiki),
-    :global(pre:has(code)) {
         max-width: fit-content;
         padding: 0.5rem 1rem;
-        min-width: min(100%, 71ch);
+        min-width: min(100%, 72ch);
         margin: 1rem auto;
         box-shadow: 0 0 2rem 10px rgb(3 4 5 / 15%);
     }
@@ -376,6 +377,8 @@
         border: none;
         height: 2px;
         background-color: var(--secondary);
+        min-width: min(100%, 65ch);
+        margin: 1rem auto;
     }
 
     :global(._markdown table:last-child) {
