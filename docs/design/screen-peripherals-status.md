@@ -212,3 +212,76 @@ So a registered observer no longer taxes unrelated code, and the remaining 16% i
 
 - No blocker. The RARS counterpart (`/home/dev/code/rars`) and the editor part of phase 7 — the framebuffer wiring, the four registers, the documentation pages, the samples and the matrix rows — are untouched.
 - `@specy/mips` 2.1.0 is unpublished, so the editor consumes the tarball above. `marsjs/ts/package.json`'s `build:all` still runs a bare `mvn`; use `mise exec -- mvn clean install` from the repository root instead, as the toolchain comes from mise.
+
+## Phase 2: Keyboard, Mouse and program time — 2026-09-06
+
+Repository `/home/dev/code/asm-editor`, branch `feat/screen-peripherals`, commit `c32a41b` (this log follows it). Phases 3 and 4 are untouched: nothing constructs these peripherals yet, and no adapter reads them.
+
+### Done
+
+- `src/lib/languages/peripherals/`: `keyCodes.ts`, `Keyboard.ts`, `Mouse.ts`, `ProgramClock.ts` and the Keyboard-backed input source in `Terminal.svelte.ts`, with 78 tests in five files next to them. Plain TypeScript, no runes, no DOM types.
+- Verification at the commit: `npm run check` at the branch baseline (the same two pre-existing errors, 205 warnings), `npm run lint` 0 errors and 18 warnings, `npm test` 155 tests passing.
+- `docs/manual-verification.md` gained two measurement rows for phase 8, the key hold interval and the double-click interval, since both are placeholders the design asked to validate.
+
+### Where the modules live
+
+The plan says "same directory" and means `peripherals/screen/`; these went in `peripherals/` itself, one level up, as this phase's instructions asked. It also reads better: `Terminal.svelte.ts` is already there, the Keyboard answers Terminal reads with no Screen in sight, and `Mouse.ts` needs nothing from the Screen but the `ScreenSize` type.
+
+### API notes for the next phases
+
+`new Keyboard({ now?, holdIntervalMs? })` — `now` is a `ClockReader` (`() => number`, milliseconds), defaulting to `performance.now`; phase 3 can pass the host clock or leave it. `holdIntervalMs` defaults to `DEFAULT_KEY_HOLD_INTERVAL_MS`, 30.
+
+| Group       | Members                                                                                                                                     |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| GUI input   | `keyDown(event)`, `keyUp(event)`, `pressKey(code)`, `releaseKey(code)`, `typeText(text)`, `releaseAll()`                                    |
+| Typed queue | `hasTypedInput()`, `typedCount`, `peekCharacter()`, `readCharacter()`, `readCharacterCode()`, `clearTypedInput()`, `onTypedInput(listener)` |
+| Key state   | `isKeyDown(code)`, `areKeysDown(codes)`, `anyKeyDown()`, `lastKeys()`, `modifiers()`, `pendingTransitions`                                  |
+| Lifecycle   | `reset()`                                                                                                                                   |
+
+- `keyDown`/`keyUp` take a `KeyboardEventLike`, the `{ code, key, repeat?, ctrlKey?, altKey?, metaKey?, shiftKey? }` subset of a DOM event, so the phase 4 widget passes the event straight through and a test passes an object literal.
+- Every key-state read applies at most one queued transition, and only when the hold interval has passed since the last one. `modifiers()` applies none and reads the physically held keys, so a Mouse snapshot is not distorted by the interval and does not consume the transition budget.
+- `lastKeys()` answers `{ down, up }`, both 0 until the first press and release: that is task 19's D1.L = 0 form, `down` in the lower word and `up` in the upper.
+- `areKeysDown(codes)` is task 19's other form; hand it the four codes high byte first and answer with the booleans in that order.
+- `onTypedInput` returns its unsubscribe. It is how the Terminal resumes a suspended read; the phase 4 widget does not need it.
+- `reset()` clears the queue, the transitions, the key state and the last keys, and keeps the subscriptions.
+
+`new Mouse({ screen, keyboard?, now?, doubleClickIntervalMs? })` — `screen` is anything with `getSize()`, so pass the Screen; `keyboard` is anything with `modifiers()`, so pass the Keyboard. `moveTo(x, y)`, `buttonDown(button, x?, y?)`, `buttonUp(button, x?, y?)`, `releaseAll()`, `reset()`; the views are `state()`, `lastDown()` and `lastUp()`, plus `x`, `y`, `isButtonDown(button)` and `eventCount`.
+
+- A `MouseSnapshot` is `{ x, y, left, right, middle, shift, alt, ctrl, double, event }`. `double` is only ever set on `lastDown()`; `event` is the event counter at that moment and is 0 when the event has not happened yet, which is how an adapter tells "no click yet" from a click at the origin.
+- The M68K adapter packs the flags byte itself: `Ctrl, Alt, Shift, Double, Middle, Right, Left` from the high bit down, per the phase 6 Core notes.
+- Coordinates are logical Screen pixels, floored and clamped, and the size comes from `screen.getSize()` at every event.
+
+`new ProgramClock({ mode?, now?, frameIntervalMs? })`, `mode` `'host'` (default) or `'virtual'`. `start()`, `now()`, `nowHundredths()`, `wait(ms)`, `waitHundredths(h)`, `nextFrame()`, `cancel()`, `reset()`, plus `mode`, `isVirtual` and `pendingWaits`.
+
+- Phase 3 selects the mode with the Input Source: a Testcase run gets a virtual clock and the interactive run a host one. The mode is fixed for a clock's life, so a run configuration swaps the instance rather than the mode.
+- `cancel()` resolves pending waits instead of rejecting them, because Stop invalidates the execution generation first and the resumed run throws `ExecutionSupersededError` on its own. `reset()` is `cancel()` then `start()`, the clock's half of the clear path.
+- Under node there is no animation frame, so `nextFrame()` falls back to a `HOST_FRAME_FALLBACK_MS` timer; the browser path is the real `requestAnimationFrame`.
+
+`Terminal` (unchanged for every existing caller):
+
+- `useKeyboardInput(keyboard, echo?)` makes Screen input the interactive source and `usePromptInput()` takes it away. The choice survives `useScriptedInput` and `useInteractiveInput`, so a Testcase run comes back to the keyboard by itself; `interactiveSource` reports which it is.
+- `readAsync` is the line read: with a keyboard it waits for Enter and edits with backspace; `readCharAsync(question, execution)` is new and consumes one typed character. Without a keyboard both prompt exactly as before, `readCharAsync` keeping the line's first character, which is what `M68KEmulator` does inline today.
+- `hasPendingInput()` is the availability poll of ADR 0009 (EASy68K's task 7, MARS's receiver Ready bit): scripted values left, or characters in the typed queue. It consumes nothing, so the read after it sees the same input.
+- The `echo` callback receives the characters as typed, `\n` for the Enter that ended a line and `\b` for a backspace that erased one; the adapter forwards them to the Screen's text cursor. The transcript is echoed through `write` as before, and a backspace erases the character it echoed there.
+- `cancelPendingInput()` releases a program suspended on Screen input. `clear()` and `useScriptedInput()` already call it, and `GenericEmulator.clear()` is Stop's path and calls `terminal.clear()`, so phase 3 needs no extra call; anything that invalidates the generation without clearing the Terminal must call it.
+
+### Choices where the plan left a detail open
+
+- **Hold interval semantics**: at most one transition per key-state read _and_ never faster than the interval. The first half is the upstream TRS-80 rule and is what guarantees every state is observed at least once; the interval is what keeps a state alive long enough for a program that polls once a frame. Both are pinned in `Keyboard.test.ts`, including the millisecond tap the plan asked for.
+- **30 ms** for the hold interval and **500 ms** for the double click, both named constants with a comment saying they are placeholders, both now rows in the measurement matrix.
+- **Double click is time and button only**, no distance: positions are clamped logical pixels, one of which can be one GUI pixel or twenty depending on zoom, so a pixel threshold would mean something different on every Screen.
+- **The typed queue holds code points**, read as a string by `readCharacter()` or as a number by `readCharacterCode()`; a character outside an environment's byte stays the adapter's problem, as in `Z80Console`, which substitutes a question mark.
+- **Auto-repeat types again but presses once**, like a terminal: the key never came up, so the key-state view must not see a second press.
+- **Ctrl and Meta combinations type nothing** and are left to the host, as the upstream keyboard does; Alt does type, because AltGr is a text modifier on several layouts. They still produce key transitions, so a program can use them as keys.
+- **`typeText` normalizes `\r\n` and `\r` to `\n`**, so a paste and the Enter key look the same to a line read.
+- **A line read drops the control characters it cannot show** (escape, bell) and keeps tab; backspace edits and erases its own echo, never program output printed before the read.
+- **The event counter counts a move only when the clamped pixel changes**, so dragging further past an edge does not spin it.
+- **Mouse snapshots before their first event are all zeroes** with `event: 0` rather than null, so an adapter always has registers to fill.
+- **The virtual clock's waits resolve as microtasks.** They are "immediate", so a Testcase of ten thousand waits stays fast; keeping the GUI responsive during a scripted run remains phase 3's slice yields.
+- **`Keyboard` and `Mouse` are constructed with `now` injected** rather than taking a `ProgramClock`, because their intervals are host time even during a Testcase, where the ProgramClock is virtual and would freeze them.
+
+### Left and blockers
+
+- No blocker. Phase 3 injects these into `GenericEmulator` (peripheral set, reset path, the wait path of the slice contract, the virtual clock for Testcases) and phase 4 wires the widget's focus, key, pointer and blur events to `keyDown`/`keyUp`/`releaseAll` and `moveTo`/`buttonDown`/`buttonUp`/`releaseAll`.
+- No adapter calls `readCharAsync` yet: `M68KEmulator` still reads a line and keeps its first character, which is the same behavior. Phases 5 to 7 move their character reads onto it when they wire the Keyboard.
+- The Keyboard has no notion of focus, and the Mouse none of pointer capture or the context menu: those are the widget's, as ADR 0008 describes them.
