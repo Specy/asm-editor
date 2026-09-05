@@ -27,6 +27,11 @@ import {
     type StackFrame
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import { GenericEmulator } from '$lib/languages/GenericEmulator.svelte'
+import {
+    type ExecutionSlice,
+    type ExecutionSliceRequest,
+    sliceInstructionBudget
+} from '$lib/languages/ExecutionSlice'
 import type { ExecutionGeneration } from '$lib/languages/ExecutionController'
 import type { Testcase } from '$lib/Project.svelte'
 
@@ -74,6 +79,13 @@ const READ_DOUBLE_QUESTION = 'Enter a double'
 const READ_FLOAT_QUESTION = 'Enter a float'
 const READ_INT_QUESTION = 'Enter an integer'
 const READ_STRING_QUESTION = 'Enter a string'
+
+/**
+ * How many instructions the TeaVM compiled Core runs in a millisecond, used to turn a slice's time
+ * budget into a halt limit. Provisional: the phase 7 Core measurements put a framebuffer program at
+ * roughly a thousand instructions per millisecond under node. Measured properly in phase 8.
+ */
+const MIPS_INSTRUCTIONS_PER_MS = 1_000
 
 const INVALID_CHARACTER_ERROR = 'Invalid character'
 const INVALID_NUMBER_ERROR = 'Invalid number'
@@ -338,17 +350,28 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         this.requireMips().undo()
     }
 
-    async _run(
-        limit: number | undefined,
-        breakpoints: number[] | undefined
-    ): Promise<EmulatorStatus> {
+    /**
+     * The Core stops for input by leaving the pending `simulate*` promise unsettled, so an input
+     * wait is served inside the slice and only the budget, a breakpoint or the end of the program
+     * end one. It reports no instruction count, so a slice that came back still runnable ran its
+     * whole budget, which is exact for the compute-only case the budget exists for.
+     */
+    async _runSlice(request: ExecutionSliceRequest): Promise<ExecutionSlice> {
         const mips = this.requireMips()
+        const budget = sliceInstructionBudget(request, MIPS_INSTRUCTIONS_PER_MS)
         this.currentExecution = this.executionController.capture()
         const terminated = await mips.simulateWithBreakpointsAndLimit(
-            calculateBreakpoints(mips, breakpoints ?? []),
-            toHaltLimit(limit)
+            calculateBreakpoints(mips, request.breakpoints),
+            budget
         )
-        return terminated ? EmulatorStatus.Terminated : EmulatorStatus.Running
+        if (terminated || this._hasTerminated()) {
+            return { reason: 'terminated', instructions: budget }
+        }
+        //`simulate*` does not say whether the budget or a breakpoint stopped it; the line the
+        //program is about to execute does, because a run stopped on a breakpoint is parked on it
+        const line = this._getNextInstruction()?.lineNumber ?? -1
+        const onBreakpoint = line >= 0 && request.breakpoints.includes(line)
+        return { reason: onBreakpoint ? 'breakpoint' : 'budget', instructions: budget }
     }
 
     async _runTestcase(_testcase: Testcase, haltLimit: number): Promise<void> {

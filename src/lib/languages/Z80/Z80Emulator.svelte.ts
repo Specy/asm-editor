@@ -24,6 +24,11 @@ import {
     type StackFrame
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import { GenericEmulator } from '$lib/languages/GenericEmulator.svelte'
+import {
+    type ExecutionSlice,
+    type ExecutionSliceRequest,
+    sliceInstructionBudget
+} from '$lib/languages/ExecutionSlice'
 import type { ExecutionGeneration } from '$lib/languages/ExecutionController'
 import type { Testcase } from '$lib/Project.svelte'
 import { Z80Console } from '$lib/languages/Z80/Z80Console'
@@ -57,6 +62,12 @@ const CORE_REGISTER_BY_NAME = {
 } as const satisfies Record<Z80RegisterName, keyof RegisterSet>
 
 type CoreRegisterKey = (typeof CORE_REGISTER_BY_NAME)[Z80RegisterName]
+
+/**
+ * How many instructions the machine runs in a millisecond, used to turn a slice's time budget into
+ * an instruction budget. Provisional, measured in phase 8.
+ */
+const Z80_INSTRUCTIONS_PER_MS = 20_000
 
 const NOT_INITIALIZED_ERROR = 'Interpreter not initialized'
 
@@ -230,17 +241,36 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         return this.sourceMap?.addressToLocation(machine.z80.regs.pc) === undefined
     }
 
-    async _run(
-        limit: number | undefined,
-        breakpoints: number[] | undefined
-    ): Promise<EmulatorStatus> {
+    /**
+     * The machine reports its own instruction count, so this is the one adapter whose progress is
+     * exact. A stop for input is served inside the slice, as it was inside the old run loop: the
+     * program is suspended on the Terminal, not on the scheduler.
+     */
+    async _runSlice(request: ExecutionSliceRequest): Promise<ExecutionSlice> {
+        const machine = this.requireMachine()
+        const budget = sliceInstructionBudget(request, Z80_INSTRUCTIONS_PER_MS)
         const execution = this.executionController.capture()
-        await this.runWithInput(
-            execution,
-            toInstructionLimit(limit),
-            this.toBreakpointAddresses(breakpoints ?? [])
-        )
-        return this._hasTerminated() ? EmulatorStatus.Terminated : EmulatorStatus.Running
+        const stops = [...this.toBreakpointAddresses(request.breakpoints), ...this.cliffBreakpoints]
+        let instructions = 0
+        while (instructions < budget) {
+            const result = machine.run({
+                maxInstructions: budget - instructions,
+                breakpoints: stops
+            })
+            this.trackLastInstruction(result.instructions > 0, result.reason)
+            instructions += result.instructions
+            if (result.reason === StopReason.WAITING_FOR_INPUT) {
+                await this.provideInput(execution)
+                continue
+            }
+            if (this._hasTerminated()) return { reason: 'terminated', instructions }
+            //anything else the machine stopped for is a breakpoint: the user's, or a cliff one that
+            //`_hasTerminated` did not recognize as the end of the program
+            if (result.reason !== StopReason.INSTRUCTIONS_EXHAUSTED) {
+                return { reason: 'breakpoint', instructions }
+            }
+        }
+        return { reason: 'budget', instructions }
     }
 
     async _runTestcase(_testcase: Testcase, haltLimit: number): Promise<void> {

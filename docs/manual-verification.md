@@ -73,3 +73,11 @@ The numbers behind the tuning decisions, recorded here and summarized in [screen
 | Screen history bytes of the animation examples            |             |        |       |
 | Key hold interval, `DEFAULT_KEY_HOLD_INTERVAL_MS`         |             |        |       |
 | Double-click interval, `DEFAULT_DOUBLE_CLICK_INTERVAL_MS` |             |        |       |
+| Screen slice budget, `SCREEN_SLICE_MS`                    |             |        |       |
+| Compute slice budget, `COMPUTE_SLICE_MS`                  |             |        |       |
+| Instructions per millisecond, `M68K_INSTRUCTIONS_PER_MS`  | M68K        |        |       |
+| Instructions per millisecond, `Z80_INSTRUCTIONS_PER_MS`   | Z80         |        |       |
+| Instructions per millisecond, `MIPS_INSTRUCTIONS_PER_MS`  | MIPS        |        |       |
+| Instructions per millisecond, `RISCV_INSTRUCTIONS_PER_MS` | RISC-V      |        |       |
+| Instructions per millisecond, `X86_INSTRUCTIONS_PER_MS`   | x86         |        |       |
+| Screen history budget default, `screenHistoryBudgetMb`    |             |        |       |

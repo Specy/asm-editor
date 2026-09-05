@@ -30,6 +30,11 @@ import {
     type StackFrame
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import { GenericEmulator } from '$lib/languages/GenericEmulator.svelte'
+import {
+    type ExecutionSlice,
+    type ExecutionSliceRequest,
+    sliceInstructionBudget
+} from '$lib/languages/ExecutionSlice'
 import type { ExecutionGeneration } from '$lib/languages/ExecutionController'
 import type { Testcase } from '$lib/Project.svelte'
 
@@ -46,6 +51,13 @@ const READ_DOUBLE_QUESTION = 'Enter a double'
 const READ_FLOAT_QUESTION = 'Enter a float'
 const READ_INT_QUESTION = 'Enter an integer'
 const READ_STRING_QUESTION = 'Enter a string'
+
+/**
+ * How many instructions the TeaVM compiled Core runs in a millisecond, used to turn a slice's time
+ * budget into a halt limit. Provisional: the phase 7 Core measurements put a framebuffer program at
+ * roughly a thousand instructions per millisecond under node. Measured properly in phase 8.
+ */
+const RISCV_INSTRUCTIONS_PER_MS = 1_000
 
 const INVALID_CHARACTER_ERROR = 'Invalid character'
 const INVALID_NUMBER_ERROR = 'Invalid number'
@@ -360,19 +372,27 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         this.requireRiscV().undo()
     }
 
-    async _run(
-        limit: number | undefined,
-        breakpoints: number[] | undefined
-    ): Promise<EmulatorStatus> {
+    /**
+     * The Core stops for input by leaving the pending `simulate*` promise unsettled, so an input
+     * wait is served inside the slice and only the budget, a breakpoint or the end of the program
+     * end one. Unlike MIPS the Core names its stop reason, but it still reports no instruction
+     * count, so a slice that came back runnable ran its whole budget.
+     */
+    async _runSlice(request: ExecutionSliceRequest): Promise<ExecutionSlice> {
         const riscv = this.requireRiscV()
+        const budget = sliceInstructionBudget(request, RISCV_INSTRUCTIONS_PER_MS)
         this.currentExecution = this.executionController.capture()
         const stopReason = await riscv.simulateWithBreakpointsAndLimit(
-            calculateBreakpoints(riscv, breakpoints ?? []),
-            toHaltLimit(limit)
+            calculateBreakpoints(riscv, request.breakpoints),
+            budget
         )
-        return isTerminationStopReason(stopReason)
-            ? EmulatorStatus.Terminated
-            : EmulatorStatus.Running
+        if (isTerminationStopReason(stopReason) || this._hasTerminated()) {
+            return { reason: 'terminated', instructions: budget }
+        }
+        if (stopReason === StopReason.BREAKPOINT) {
+            return { reason: 'breakpoint', instructions: budget }
+        }
+        return { reason: 'budget', instructions: budget }
     }
 
     async _runTestcase(_testcase: Testcase, haltLimit: number): Promise<void> {

@@ -16,6 +16,11 @@ import {
     type Instruction
 } from '$lib/languages/BaseEmulator.svelte'
 import {
+    type ExecutionSlice,
+    type ExecutionSliceRequest,
+    sliceInstructionBudget
+} from '$lib/languages/ExecutionSlice'
+import {
     type Diagnostic,
     type EmulatorDecoration,
     type EmulatorSettings,
@@ -29,7 +34,6 @@ import { GenericEmulator } from '$lib/languages/GenericEmulator.svelte'
 import type { ExecutionGeneration } from '$lib/languages/ExecutionController'
 import { getM68kErrorMessage } from '$lib/languages/M68K/M68kUtils'
 import type { Testcase } from '$lib/Project.svelte'
-import { delay } from '$lib/utils'
 import { settingsStore } from '$stores/settingsStore.svelte'
 
 export const registerName = [
@@ -54,6 +58,12 @@ export const registerName = [
 export type M68KRegisterName = (typeof registerName)[number]
 
 const M68K_FLAG_NAMES = ['X', 'N', 'Z', 'V', 'C']
+
+/**
+ * How many instructions the s68k interpreter runs in a millisecond, used to turn a slice's time
+ * budget into a halt limit. Provisional, measured in phase 8.
+ */
+const M68K_INSTRUCTIONS_PER_MS = 20_000
 
 const READ_CHAR_QUESTION = 'Enter a character'
 const READ_NUMBER_QUESTION = 'Enter a number'
@@ -306,26 +316,43 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         this.requireInterpreter().undo()
     }
 
-    async _run(
-        limit: number | undefined,
-        breakpoints: number[] | undefined
-    ): Promise<EmulatorStatus> {
+    /**
+     * The Core has no instruction counter and reports an exhausted limit by throwing, so the budget
+     * is both the halt limit and the only exact progress report there is: a slice that came back
+     * with `ExecutionLimit` ran all of it. Only the last slice of a run carries the user's own
+     * instruction limit, and only that one lets the error through.
+     */
+    async _runSlice(request: ExecutionSliceRequest): Promise<ExecutionSlice> {
         const interpreter = this.requireInterpreter()
-        const haltLimit = toHaltLimit(limit)
-        const parsedBreakpoints = new Uint32Array(breakpoints ?? [])
+        const budget = sliceInstructionBudget(request, M68K_INSTRUCTIONS_PER_MS)
+        const isLastSlice = budget >= request.instructionBudget
+        const parsedBreakpoints = new Uint32Array(request.breakpoints)
         const hasBreakpoints = parsedBreakpoints.length > 0
         const execution = this.executionController.capture()
+        let instructions = 0
         while (!interpreter.hasTerminated()) {
-            if (!hasBreakpoints) {
-                interpreter.runWithLimit(haltLimit)
-            } else {
-                interpreter.runWithBreakpoints(parsedBreakpoints, haltLimit)
-                //here we might have reached a breakpoint. It is paused if the status is running
-                if (interpreter.getStatus() === CoreInterpreterStatus.Running) break
+            const remaining = budget - instructions
+            if (remaining <= 0) return { reason: 'budget', instructions }
+            try {
+                if (hasBreakpoints) {
+                    interpreter.runWithBreakpoints(parsedBreakpoints, remaining)
+                    //here we might have reached a breakpoint. It is paused if the status is running
+                    if (interpreter.getStatus() === CoreInterpreterStatus.Running) {
+                        return { reason: 'breakpoint', instructions }
+                    }
+                } else {
+                    interpreter.runWithLimit(remaining)
+                }
+            } catch (error) {
+                if (isLastSlice || !isExecutionLimitError(error)) throw error
+                return { reason: 'budget', instructions: budget }
             }
+            //an interrupt is one instruction of progress: without it a program that does nothing but
+            //trap would never reach the run's limit, which is what the old unaccounted loop did
+            instructions += 1
             await this.handleInterpreterInterruption(interpreter, execution)
         }
-        return interpreter.hasTerminated() ? EmulatorStatus.Terminated : EmulatorStatus.Running
+        return { reason: 'terminated', instructions }
     }
 
     async _runTestcase(_testcase: Testcase, haltLimit: number): Promise<void> {
@@ -442,7 +469,11 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                     break
                 }
                 case 'Delay': {
-                    await this.executionController.waitFor(execution, () => delay(interrupt.value))
+                    //program time, not host sleep: a Testcase's virtual clock completes it at once
+                    //and advances by the duration (ADR 0010)
+                    await this.executionController.waitFor(execution, () =>
+                        this._peripherals.clock.wait(interrupt.value)
+                    )
                     this.executionController.ensureCurrent(execution)
                     interpreter.answerInterrupt({ type })
                     break
@@ -459,6 +490,15 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         if (!this.interpreter) throw new Error('Interpreter not initialized')
         return this.interpreter
     }
+}
+
+/** The Core's way of saying "the limit I was given ran out": `{ type: 'ExecutionLimit', value }`. */
+function isExecutionLimitError(error: unknown): boolean {
+    return (
+        typeof error === 'object' &&
+        error !== null &&
+        (error as { type?: unknown }).type === 'ExecutionLimit'
+    )
 }
 
 function toHaltLimit(limit: number | undefined): number {

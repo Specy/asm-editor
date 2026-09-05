@@ -13,6 +13,8 @@ export type SettingValues = {
     instructionsLimit: SettingValue<number>
     autoSave: SettingValue<boolean>
     showMemory: SettingValue<boolean>
+    showScreen: SettingValue<boolean>
+    screenHistoryBudgetMb: SettingValue<number>
     maxHistorySize: SettingValue<number>
     maxVisibleHistoryModifications: SettingValue<number>
     showPseudoInstructions: SettingValue<boolean>
@@ -37,12 +39,16 @@ const baseValues = {
     autoSave: createValue('Auto save', true),
     showPseudoInstructions: createValue('Show pseudo instructions', true, 'MIPS'),
     showMemory: createValue('Show memory tab', true),
+    showScreen: createValue('Show screen', true),
+    //a clear, a present or a resize journals a whole image, so the Screen's Undo history has its
+    //own budget rather than a step count (ADR 0005). Provisional default, measured in phase 8
+    screenHistoryBudgetMb: createValue('Screen undo history budget (MB)', 64),
     instructionsLimit: createValue('Instruction execution limit, 0 to ignore', 2_000_000),
     maxHistorySize: createValue('Maximum undo steps, 0 to disable', 100),
     maxVisibleHistoryModifications: createValue('Maximum visible history steps', 10)
 } satisfies SettingValues
 
-const CURRENT_VERSION = '1.1.7'
+const CURRENT_VERSION = '1.1.8'
 function createSettingsStore() {
     let data = $state({
         meta: {

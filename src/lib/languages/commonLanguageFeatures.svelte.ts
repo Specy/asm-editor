@@ -1,4 +1,5 @@
 import { numberToByteSlice } from '$cmp/specific/project/memory/memoryTabUtils'
+import type { InjectedPeripheralOptions } from '$lib/languages/peripherals/peripheralSet'
 import type { AvailableLanguages, Testcase, TestcaseResult } from '$lib/Project.svelte'
 import { unsignedBigIntToSigned } from '$lib/utils'
 
@@ -342,6 +343,13 @@ export type EmulatorSettings = {
     baseAddress?: bigint
     stackAddress?: bigint
     initialMemoryValue?: number
+    /**
+     * The Screen, Keyboard, Mouse and clock the Emulator runs on
+     * ([ADR 0004](../../../docs/adr/0004-inject-screens-at-emulator-boundary.md)). The GUI creates
+     * them so it can bind its widgets to the very instances the Core uses; anything left out is
+     * built from the language defaults, which is what every caller that does not care gets.
+     */
+    peripherals?: InjectedPeripheralOptions
 }
 
 export type BaseEmulatorActions = {

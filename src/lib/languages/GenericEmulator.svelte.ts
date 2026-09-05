@@ -14,6 +14,17 @@ import {
     numbersOfSizeToSlice
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import { Terminal } from '$lib/languages/peripherals/Terminal.svelte'
+import {
+    createInjectedPeripherals,
+    type EmulatorPeripherals
+} from '$lib/languages/peripherals/peripheralSet'
+import { ProgramClock } from '$lib/languages/peripherals/ProgramClock'
+import {
+    COMPUTE_SLICE_MS,
+    type ExecutionSlice,
+    SCREEN_SLICE_MS,
+    yieldToHost
+} from '$lib/languages/ExecutionSlice'
 import type { Testcase, TestcaseResult, TestcaseValidationError } from '$lib/Project.svelte'
 import { PAGE_ELEMENTS_PER_ROW, PAGE_SIZE } from '$lib/Config'
 import { createDebouncer } from '$lib/utils'
@@ -33,8 +44,14 @@ export abstract class GenericEmulator<T, R extends string>
 {
     protected state: Omit<BaseEmulatorState, 'code' | 'stdOut'>
     protected _code: string
-    protected _emulatorOptions: Required<EmulatorSettings>
-    protected readonly _peripherals: { terminal: Terminal }
+    protected _emulatorOptions: Required<Omit<EmulatorSettings, 'peripherals'>>
+    protected readonly _peripherals: EmulatorPeripherals
+    /**
+     * The host-time clock of interactive runs, kept because a Testcase swaps in a virtual one and a
+     * clock's mode is fixed for its life. Adapters must therefore read `_peripherals.clock` when
+     * they need it instead of caching it.
+     */
+    private readonly interactiveClock: ProgramClock
     private semanticCheckId = 0
     /** Number of core operations currently in flight, see `duringCoreOperation`. */
     private coreOperations = 0
@@ -54,8 +71,13 @@ export abstract class GenericEmulator<T, R extends string>
         }
         this._code = $state(code)
         this._peripherals = {
+            ...createInjectedPeripherals(
+                this._emulatorOptions.language,
+                emulatorOptions.peripherals
+            ),
             terminal: new Terminal({ executionController: this.executionController })
         }
+        this.interactiveClock = this._peripherals.clock
 
         this.state = $state({
             systemSize: options.systemSize,
@@ -277,11 +299,79 @@ export abstract class GenericEmulator<T, R extends string>
         )
     }
 
+    /**
+     * Everything a program left behind on its peripherals, on the Terminal's clear path: Build,
+     * Stop, dispose and the start of each Testcase. The Screen keeps its last frame visible after a
+     * termination and only loses it here, which is what the design record asks for.
+     */
+    private resetPeripherals(): void {
+        const { terminal, screen, keyboard, mouse, clock } = this._peripherals
+        terminal.clear()
+        terminal.useInteractiveInput()
+        this.applyScreenHistoryBudget()
+        screen.reset()
+        keyboard.reset()
+        mouse.reset()
+        clock.reset()
+    }
+
+    /**
+     * The Screen history's byte budget is a user setting, because a clear, a present or a resize
+     * journals a whole image ([ADR 0005](../../../docs/adr/0005-restore-screen-state-on-undo.md)).
+     * Applied on every clear, so changing the setting takes effect on the next Build without the
+     * settings panel having to know about emulators.
+     */
+    private applyScreenHistoryBudget(): void {
+        const megabytes = settingsStore.values.screenHistoryBudgetMb.value
+        if (!Number.isFinite(megabytes) || megabytes < 0) return
+        this._peripherals.screen.history.byteBudget = megabytes * 1024 * 1024
+    }
+
+    /**
+     * The Undo depth is the smaller of the Core's instruction history and the Screen's history
+     * within its byte budget ([ADR 0005](../../../docs/adr/0005-restore-screen-state-on-undo.md)):
+     * both restore together or neither does, rather than the Core rolling back under an image it can
+     * no longer recover. A Screen that recorded nothing (no graphics in the program, or a
+     * memory-backed framebuffer, which journals nothing) never limits anything.
+     */
+    private canUndoStep(): boolean {
+        if (!this._canUndo()) return false
+        const history = this._peripherals.screen.history
+        return history.sequence === 0 || history.depth > 0
+    }
+
+    /**
+     * The run configuration of a Testcase: scripted answers and a virtual Time Source, chosen
+     * together ([ADR 0010](../../../docs/adr/0010-program-time-without-clock-pacing.md)). Waits
+     * complete immediately and advance a clock that starts at zero, so elapsed-time output is
+     * reproducible and a sleeping program cannot stall a test.
+     *
+     * The clock instance is swapped, not switched: a clock's mode is fixed for its life, and an
+     * adapter that captured the interactive one before the test would otherwise keep host time.
+     */
+    private useScriptedRun(input: string[]): void {
+        this._peripherals.terminal.useScriptedInput(input)
+        this._peripherals.clock.cancel()
+        this._peripherals.clock = new ProgramClock({ mode: 'virtual' })
+        this._peripherals.clock.start()
+    }
+
+    /**
+     * Back to the interactive sources after a Testcase, including after one that threw. The
+     * interactive clock is the instance the caller injected, so a GUI holding it keeps the one it
+     * bound to.
+     */
+    private useInteractiveRun(): void {
+        this._peripherals.terminal.useInteractiveInput()
+        this._peripherals.clock.cancel()
+        this._peripherals.clock = this.interactiveClock
+        this._peripherals.clock.reset()
+    }
+
     // ----- public api ----- //
     clear(): void {
         this.executionController.invalidate()
-        this._peripherals.terminal.clear()
-        this._peripherals.terminal.useInteractiveInput()
+        this.resetPeripherals()
         this.state = {
             ...this.state,
             terminated: false,
@@ -397,12 +487,64 @@ export abstract class GenericEmulator<T, R extends string>
         return this.duringCoreOperation(() => this.runInternal(haltLimit))
     }
 
+    /**
+     * The run scheduler ([ADR 0007](../../../docs/adr/0007-generic-emulator-run-scheduling.md)):
+     * the adapter never runs a whole program, it runs slices, and this loop decides how big each one
+     * is, hands the host a turn between them, keeps the run's overall instruction limit across all
+     * of them, and resumes a program that asked for time to pass.
+     *
+     * Every await goes through `execution`, so Stop answers during a slice boundary and during a
+     * program-requested wait instead of only when the Core felt like returning.
+     */
+    private async runSlices(haltLimit: number, execution: ExecutionGeneration): Promise<void> {
+        let remaining = haltLimit
+        while (remaining > 0) {
+            const slice: ExecutionSlice = await this._runSlice({
+                //the whole rest of the limit, so an adapter can cap it with its own throughput
+                //estimate of `timeBudgetMs` and never has to know how long the run has been going
+                instructionBudget: remaining,
+                timeBudgetMs: this.sliceTimeBudgetMs(),
+                breakpoints: this.state.breakpoints
+            })
+            this.executionController.ensureCurrent(execution)
+            const progress = Math.max(0, slice.instructions)
+            remaining -= progress
+            if (slice.reason === 'wait') {
+                //a wait is not execution: it costs no instructions and the run continues after it.
+                //`clear()` resets the clock, which resolves pending waits, and the generation check
+                //that follows turns the resumed run into a superseded one. A wait without a promise
+                //is a bare yield, so the loop can never spin without giving the host a turn
+                const wait = slice.wait ?? yieldToHost()
+                await this.executionController.waitFor(execution, () => wait)
+                continue
+            }
+            if (slice.reason !== 'budget') return
+            if (remaining <= 0) return
+            //an adapter asking for another slice without having run anything would spin this loop
+            //forever, so the run ends instead of hanging the host
+            if (progress <= 0) return
+            await this.executionController.waitFor(execution, () => yieldToHost())
+        }
+    }
+
+    /**
+     * How long the next slice should aim to run. A Screen with pixels the renderer has not painted
+     * yet means an animating program, which needs to reach its next frame and its next input poll
+     * soon; everything else is compute and yields only often enough to keep Stop answering.
+     * Provisional values, measured in phase 8.
+     */
+    private sliceTimeBudgetMs(): number {
+        const screen = this._peripherals.screen
+        if (settingsStore.values.showScreen.value && screen.dirty) return SCREEN_SLICE_MS
+        return COMPUTE_SLICE_MS
+    }
+
     private async runInternal(haltLimit: number): Promise<InterpreterStatus> {
         if (haltLimit <= 0) haltLimit = Number.MAX_SAFE_INTEGER
         const start = performance.now()
         const execution = this.executionController.capture()
         try {
-            await this._run(haltLimit, this.state.breakpoints)
+            await this.runSlices(haltLimit, execution)
             this.executionController.ensureCurrent(execution)
             const terminated = this._hasTerminated()
             try {
@@ -416,7 +558,7 @@ export abstract class GenericEmulator<T, R extends string>
             } catch {
                 this.state.line = terminated ? this.getLastExecutedLine() : -1
             }
-            this.state.canUndo = this._canUndo()
+            this.state.canUndo = this.canUndoStep()
             this.updateRegisters()
             this.scrollStackTab()
             this.updateMemory()
@@ -586,7 +728,7 @@ export abstract class GenericEmulator<T, R extends string>
                 } catch {}
             }
 
-            this.state.canUndo = this._canUndo()
+            this.state.canUndo = this.canUndoStep()
             //if it managed to step, it means it does not have valid errors
             this.state.errors = []
         } catch (e) {
@@ -639,11 +781,11 @@ export abstract class GenericEmulator<T, R extends string>
                     this._writeMemoryBytes(value.address, encoded)
                 }
             }
-            this._peripherals.terminal.useScriptedInput(testcase.input)
+            this.useScriptedRun(testcase.input)
             try {
                 await this._runTestcase(testcase, haltLimit)
             } finally {
-                this._peripherals.terminal.useInteractiveInput()
+                this.useInteractiveRun()
             }
             const ins = this._getNextInstruction()
             //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
@@ -738,12 +880,20 @@ export abstract class GenericEmulator<T, R extends string>
         try {
             if (!this.getInstance()) return
             const undoCount = Math.max(0, Math.floor(amount ?? 1))
-            for (let i = 0; i < undoCount && this._canUndo(); i++) {
+            let undone = 0
+            for (; undone < undoCount && this.canUndoStep(); undone++) {
+                //the Core owns the instruction boundary, so it rolls back first and the Screen
+                //follows it (ADR 0005)
                 this._undo()
+                this._peripherals.screen.undo()
             }
+            //an image that lives in Core memory was restored by the rollback itself, so the Screen
+            //re-reads it instead of having journaled it. Once for the whole rollback: the re-read is
+            //a whole region and only the state it ends in is shown
+            if (undone > 0) this._resyncScreenFromMemory?.()
             const instruction = this._getNextInstruction()
             this.state.line = instruction?.lineNumber ?? -1
-            this.state.canUndo = this._canUndo()
+            this.state.canUndo = this.canUndoStep()
             this.updateRegisters()
             this.scrollStackTab()
             this.updateMemory()
@@ -845,7 +995,7 @@ export abstract class GenericEmulator<T, R extends string>
         return this._peripherals.terminal.output
     }
 
-    get peripherals(): { terminal: Terminal } {
+    get peripherals(): EmulatorPeripherals {
         return this._peripherals
     }
 
