@@ -338,3 +338,58 @@ RARS is about three times slower per instruction than MARS here, so the same 410
 ### Left and blockers
 
 - No blocker. The editor part of phase 7 (adapters, documentation pages, examples, matrix rows) is untouched, and both `@specy/mips` 2.1.0 and `@specy/risc-v` 2.1.0 are unpublished, so the editor consumes the two tarballs in `/home/dev/code/local-packages/`.
+
+## Phase 3: GenericEmulator integration — 2026-09-06
+
+Repository `/home/dev/code/asm-editor`, branch `feat/screen-peripherals`, commit `995d353` (this log follows it). Phase 4 (the widget) and phases 5 to 7 (the adapters that draw) are untouched: the peripherals now exist on every Emulator, but only the clock is read by an adapter.
+
+### Done
+
+- **Injection** ([ADR 0004](../adr/0004-inject-screens-at-emulator-boundary.md)). New `src/lib/languages/peripherals/peripheralSet.ts`: `InjectedPeripherals` (Screen, Keyboard, Mouse, clock), `createInjectedPeripherals(language, overrides)` and `defaultScreenOptions(language)`. `EmulatorSettings` gained an optional `peripherals`; `EmulatorLoader.svelte` creates one set per emulator and passes it in; `GenericEmulator` builds whatever is missing, so every existing caller and test keeps working. The set reaches the GUI as `emulator.peripherals`, which is now part of the `Emulator` type next to `stdOut`.
+- **Scheduling** ([ADR 0007](../adr/0007-generic-emulator-run-scheduling.md)). New `src/lib/languages/ExecutionSlice.ts` holds the contract; `BaseEmulator._run(limit, breakpoints)` became `_runSlice(request)`. `GenericEmulator.runSlices` loops, yields between slices, keeps the overall limit across them and awaits program-requested waits through the execution generation. All five adapters moved over.
+- **Undo** ([ADR 0005](../adr/0005-restore-screen-state-on-undo.md)). The Core rolls back first and the Screen follows; `canUndo` refuses once the Screen can no longer restore; a framebuffer adapter re-reads its image through the new optional `_resyncScreenFromMemory` hook, called once per rollback.
+- **Reset.** `clear()` — Build, Stop, dispose — resets the Terminal, Screen, Keyboard, Mouse and clock together. A Testcase resets them per testcase (through `compile()`) and selects scripted input and a virtual clock together, restoring the interactive ones in a `finally`.
+- **Settings.** `showScreen` (default on) and `screenHistoryBudgetMb` (default 64), rendered automatically by the settings panel, which iterates `settingsStore.values`. The budget is applied to the Screen history on every clear. `CURRENT_VERSION` went to `1.1.8`, which resets stored settings, as it must for the new keys to exist.
+- **Project data.** Optional `display` (`unitWidth`, `unitHeight`, `width`, `height`, `baseAddress`) with `DEFAULT_PROJECT_DISPLAY` = MARS's 1 by 1 units, 512 by 256, `0x10010000`. Serialized in `toObject` and `toExternal`, cleaned by `cleanDisplay` on `makeProject` and `set`, like the testcases.
+- **Tests.** `src/lib/languages/GenericEmulator.test.ts`, 18 tests on a fake adapter: injection and defaults, the limit across slices, the stop reasons, the two time budgets, waits, Stop during a wait, the Undo rule, the re-sync hook, the reset path and the Testcase run configuration. `src/lib/languages/Z80/Z80Emulator.test.ts`, 3 tests driving the real Z80 Core under node: a program runs to its end across slices, an unbounded run answers Stop (measured at about 8 ms), and a run ends at its instruction limit.
+- Verification at the commit: `npm run check` at the branch baseline (the same two pre-existing errors, 205 warnings), `npm run lint` 0 errors and 18 warnings, `npm test` 176 tests passing.
+
+### API notes for the next phases
+
+The slice contract, in `src/lib/languages/ExecutionSlice.ts`:
+
+```ts
+type ExecutionSliceRequest = { instructionBudget: number; timeBudgetMs: number; breakpoints: number[] }
+type ExecutionSliceReason = 'budget' | 'breakpoint' | 'terminated' | 'limit' | 'wait'
+type ExecutionSlice = { reason: ExecutionSliceReason; instructions: number; wait?: Promise<void> }
+
+sliceInstructionBudget(request, instructionsPerMs): number
+yieldToHost(): Promise<void>
+```
+
+- `instructionBudget` is the **whole rest of the run's limit**, not a slice-sized number: the adapter caps it with `sliceInstructionBudget(request, ITS_OWN_INSTRUCTIONS_PER_MS)` and hands the result to its Core as the halt limit. `budget >= request.instructionBudget` therefore means "this is the last slice of the run", which the M68K adapter uses to decide whether an exhausted limit is the user's error or a slice boundary.
+- `instructions` is charged against the overall limit. Only the Z80 Core reports a real count; the others charge the budget when they came back having used all of it, which is exact for the compute-only case the budget exists for. A slice that returns `reason: 'budget'` with no progress ends the run rather than spinning the loop.
+- `wait` is for program-requested waits ([ADR 0010](../adr/0010-program-time-without-clock-pacing.md)): return the promise from `peripherals.clock.wait(ms)` or `nextFrame()`. The scheduler awaits it through the execution generation, so `clear()` (Stop) resolves it through `clock.cancel()` and the resumed run throws `ExecutionSupersededError` on its own. Waits cost no instructions. A wait an adapter serves _inside_ its slice (MIPS, RISC-V and x86 suspend their pending `simulate`/`run` call on an unsettled handler promise) needs none of this and keeps working as it did.
+- `timeBudgetMs` is 16 while `showScreen` is on and `screen.dirty` is set, 100 otherwise (`SCREEN_SLICE_MS`, `COMPUTE_SLICE_MS`). Both, and the five `*_INSTRUCTIONS_PER_MS` constants in the adapters, are provisional and now rows in the measurement matrix.
+- The Screen, Keyboard, Mouse and clock are `this._peripherals.screen` and friends inside an adapter, `emulator.peripherals.*` outside. **Read `_peripherals.clock` at the point of use, never cache it**: a Testcase swaps in a virtual clock and swaps the injected one back, because a `ProgramClock`'s mode is fixed for its life.
+- Phase 4's widget gets its Screen from `emulator.peripherals.screen` inside `EmulatorLoader`'s children snippet; the loader creates the set but does not export it, because a bindable prop assigned once is an eslint error here.
+
+### Choices where the plan left a detail open
+
+- **The Screen's Undo follows the Core one record per step**, and the depth rule is "the Screen limits the Core only once it has records it can no longer restore" (`history.sequence === 0 || history.depth > 0`, so a program that drew nothing is never limited). Instruction-exact alignment is **not** achievable with today's Core APIs: none of the five reports an instruction count at a Screen operation, and none exposes its undo depth, so there is no key both histories could share. The failure mode is bounded and safe in the direction that matters — with sparse drawing the image rewinds ahead of the code and never behind it, and it re-converges as soon as the Core reaches the drawing step. If phases 5 to 7 find it visible in practice, the fix is a Core-side instruction counter and marks keyed on it; that is a Core change, not an editor one.
+- **`_runTestcase` was left un-sliced.** The plan only asked for the Run path, a scripted run has no GUI to keep responsive, and slicing it would have changed five adapters a second time.
+- **The Terminal keeps prompts as its interactive source.** Wiring `useKeyboardInput` now would take every input prompt away from a Screen that has no DOM events until phase 4, so the choice of [ADR 0009](../adr/0009-share-screen-keyboard-input-with-terminal.md) belongs to phases 5 to 7, which have both the widget and an echo target.
+- **Every language gets a Screen, x86 included**, so the peripheral set has one shape and no adapter needs `screen?.`. Nothing ever draws on x86's; the panel of phase 4 decides who shows one, from the language.
+- **The default Screen comes from the language**, from the design record's display table: 640 by 480 with an 8 by 16 cell for the M68K, 256 by 192 with an 8 by 8 cell for the Z80, 512 by 256 for MIPS and RISC-V, and the M68K's for x86.
+- **M68K's `Delay` moved onto the clock** rather than `delay()`, which ADR 0010 asks for and which makes a Testcase with a delay finish at once instead of sleeping. Its `GetTime` still answers Unix seconds through `Date.now`: phase 6 moves it to the clock's hundredths together with the Core change.
+- **A slice that ends on a breakpoint is detected from the next line** on x86 and MIPS, whose Cores report only "still runnable". A budget boundary that happens to land on a breakpoint line stops the run, which is what a breakpoint means anyway.
+- **An M68K slice charges one instruction per interrupt** and the whole budget for an exhausted one. The old loop charged nothing at all, so a program that only ever trapped could not reach the instruction limit; it also re-ran `runWithLimit(haltLimit)` forever when the limit was reached without breakpoints, because `run_with_limit` reports an exhausted limit by throwing and the old loop treated the throw as the caller's problem only on the first pass. Both are now bounded.
+- **`settingsStore` is versioned to 1.1.8**, which resets everyone's stored settings once. There is no migration path in that store, and the two new keys have to exist.
+- `showScreen` reads "Show screen" and `screenHistoryBudgetMb` "Screen undo history budget (MB)"; the settings panel renders every key of `SettingValues`, so no panel change was needed.
+
+### Left and blockers
+
+- No blocker. Phase 4 (the widget and the panel), phase 5 (Z80), phase 6 (the M68K editor half) and phase 7 (the MIPS and RISC-V editor half) are untouched.
+- The five `*_INSTRUCTIONS_PER_MS` estimates are guesses except MIPS and RISC-V, which use the phase 7 Core measurement of roughly a thousand instructions per millisecond. M68K and Z80 are at 20 000 and x86 at 2 000. Phase 8 measures all of them, together with the two slice budgets and the Screen history budget default.
+- `emulator.peripherals.screen` is reset on every Build, so a widget must not hold the pixel arrays across one; `screen.visiblePixels` is a fresh array after `reset()`.
+- Nothing reads `project.display` yet: phase 4's configuration popover and phase 7's framebuffer wiring are its first users.
