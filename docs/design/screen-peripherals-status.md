@@ -133,3 +133,82 @@ Peripheral modules are plain TypeScript, but the vitest setup does compile rune 
 
 - No blocker. Phase 2 (Keyboard, Mouse, ProgramClock), phase 3 (GenericEmulator) and phase 4 (the widget, including the renderer loop this model is shaped for) are untouched, and no adapter uses the Screen yet.
 - The Screen has no notion of a GUI zoom, focus or events, by design: those belong to the phase 4 widget.
+
+## Phase 7 (MARS Core part): program time and memory observers — 2026-09-06
+
+Repository `/home/dev/code/mars`, branch `feat/screen-peripherals`, commits `db4ec5b` and `cea61e5`. The RARS counterpart and the editor part of phase 7 are untouched.
+
+### Done
+
+- **Program time.** `MIPSIO.time()` returns milliseconds as a `double`; `SyscallTime` (30) reads it through `SystemIO.time()` instead of `new java.util.Date()`, so a scripted run can answer with a virtual clock ([ADR 0010](../adr/0010-program-time-without-clock-pacing.md)). `JsMIPSIO` exposes it as the `time` handler.
+- **Sleep.** `MIPSIO.sleep` existed but no syscall reached it and `JsMIPSIO.sleep` was empty, so syscall 32 was an unknown-syscall error. Added `SyscallSleep` (32, `$a0` = milliseconds), registered in `SyscallLoader`, routed through `SystemIO.sleep` to the `sleep` handler; a handler returning a promise suspends the program without blocking the host.
+- **Memory observers** on `JsMips`, over `Memory.addObserver(observer, start, end)`: `addMemoryWriteObserver` for the framebuffer range, `addMemoryAccessObserver` for one memory-mapped word, `removeMemoryObserver`, `removeMemoryObservers` and `countMemoryObservers`. Handlers are synchronous JavaScript functions called with plain numbers; a returned promise is ignored, unlike an IO handler's.
+- **`readMemoryBytes` no longer notifies** (new `Memory.getByteNoNotify`): the memory viewer inspecting a register is not the program reading it, and must not make it consume its pending input.
+- **`setPeripheralWord(address, value)`** (new `Memory.setRawWordNoNotify`) writes one word without notifying observers and without recording an undo step, which is how the adapter refreshes a Ready bit or a pending character.
+- **`notifyAnyObservers` walks an array snapshot** instead of allocating an iterator per access. It runs on every instruction fetch and every data access, so the plan's "observer throughput" risk was real: see the measurements below.
+- The smoke test (`marsjs/ts/test/smoke.mjs`, `npm test`) keeps its original program and gains a peripheral program covering both observer shapes, byte and word stores, the read of a preloaded register, `setPeripheralWord` staying invisible, `readMemoryBytes` staying silent, undo notification, survival across `assemble()`/`initialize()`, the sleep and time handlers, and removal by handle.
+- Verification: `mise exec -- mvn clean install` from the repository root, then `npm run build` and `npm test` in `marsjs/ts`, all clean.
+
+### Artifacts
+
+- `/home/dev/code/local-packages/specy-mips-2.1.0.tgz`, from `npm pack` after a clean Maven and tsup build. `marsjs/ts/package.json` is at 2.1.0, not published; the editor should depend on the tarball as a `file:` reference until `@specy/mips` 2.1.0 ships.
+
+### API notes for the editor part of phase 7
+
+Two new handlers in `HandlerMap`. **Both are now required**: syscall 30 used to read the host clock inside the Core and now throws `No handler registered for time` without one, and syscall 32 used to be an unknown syscall.
+
+| Handler | Shape                                       | Meaning                                                                                     |
+| ------- | ------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `time`  | `{ in: [], out: number }`                   | Syscall 30. Milliseconds; the syscall splits it into `$a0` (low word) and `$a1` (high word) |
+| `sleep` | `{ in: [milliseconds: number], out: void }` | Syscall 32, `$a0` = milliseconds. Return a promise to suspend the program until it settles  |
+
+The memory API, all on `JsMips`:
+
+```ts
+type MemoryWriteObserver = (address: number, length: number, value: number) => void
+type MemoryAccessObserver = (address: number, value: number) => void
+type MemoryObserverHandle = number
+
+addMemoryWriteObserver(startAddress: number, endAddress: number, handler: MemoryWriteObserver): MemoryObserverHandle
+addMemoryAccessObserver(address: number, onRead: MemoryAccessObserver | null, onWrite: MemoryAccessObserver | null): MemoryObserverHandle
+removeMemoryObserver(handle: MemoryObserverHandle): void
+removeMemoryObservers(): void
+countMemoryObservers(): number
+setPeripheralWord(address: number, value: number): void
+```
+
+- **Lifetime.** Registrations live on the memory singleton, which assembling and initializing only clear the contents of, so they survive `assemble()` and `initialize()` and — exactly like a registered IO handler — are shared by every `JsMips` instance. Verified with a second `assemble()`/`initialize()`/run and with a second instance. A new build must therefore reuse or remove the previous registrations; `removeMemoryObservers()` is the reset. Notifications start once a program has been assembled (`notifyAnyObservers` ignores everything while `Globals.program` is null).
+- **Backstep does notify.** `undo()` restores memory through the same `setWord`/`setByte` calls, so an observed range reports each restored word as an ordinary write, newest first, with the restored value. Pinned in the smoke test. The framebuffer can therefore follow notifications alone across an undo; the re-read from memory that [ADR 0005](../adr/0005-restore-screen-state-on-undo.md) requires anyway stays the simpler option and is still correct.
+- **Ordering.** An observer is called _after_ the access, with the value the program read or stored. A register whose value is consumed by reading it must be reloaded for the next read from inside the read handler, with `setPeripheralWord`.
+- **Signedness.** Handlers get the guest's signed 32 bit integers: `0xffff000c` arrives as `-65524`, and a pixel word with its high bit set arrives negative. Use `>>> 0` for the unsigned form. Addresses _passed in_ accept either spelling — `0xffff0000` and `0xffff0000 | 0` name the same word.
+- **Ranges.** Both addresses word-aligned, `endAddress` inclusive and covering its whole word, no range crossing `0x80000000` (register two instead). A violation throws a TeaVM error whose `message` is MARS's own text, e.g. `address not aligned on word boundary 0x10010001`. A failed registration consumes no handle.
+- **Widths.** `length` is 4, 2 or 1, and `value` carries only the bytes the store touched: `sb` of `0x00ff0012` reports `(address, 1, 0x12)`. A framebuffer mirroring whole words should re-read the containing word rather than trust `value`.
+- **Reentrancy.** Handlers run inside the storing or loading instruction. Writing back into an observed range from a handler re-enters the notification; `setPeripheralWord` is the way out.
+- **`readMemoryBytes` returns an `Int32Array` at runtime** although it is typed `number[]` — pre-existing, unchanged, but it bites `assert.deepEqual` and anything expecting `Array.isArray`.
+- **`setMemoryBytes` is unchanged**: it writes the way the program does, notifying write observers and recording an undo step per byte while undo is enabled.
+
+### Measurements for phase 8
+
+A program filling 2048 framebuffer words 200 times (about 1.2 M instructions), under node, `simulateWithLimit`, undo disabled:
+
+| Case                                   | Before the snapshot change | After         |
+| -------------------------------------- | -------------------------- | ------------- |
+| No observer registered                 | 1.51 s                     | 1.22 s        |
+| One observer, never matching an access | 1.95 s (+29%)              | 1.21 s (+0%)  |
+| One observer over the written range    | 2.24 s (+48%)              | 1.45 s (+16%) |
+
+So a registered observer no longer taxes unrelated code, and the remaining 16% is the notification itself: about 410 000 handler calls across the run, roughly 0.5 µs each. Under the plan's five-percent budget this still argues for the dirty-range re-read over a per-word Screen update.
+
+### Choices where the plan left a detail open
+
+- **Syscall 32 was added**, though the task described `sleep` as already present: the handler existed on both sides but nothing in the Core called it, so the design's "Sleep (syscall 32) on the wait path" was not reachable. The number, name and `$a0` convention follow upstream MARS.
+- **`setPeripheralWord` and the silent `readMemoryBytes`** are not in the plan's list, but keeping the Ready bit in memory needs a write that neither re-enters its own observer nor consumes undo history, and a read observer is a trap if a memory viewer can fire it.
+- **Handles are plain numbers** from a counter shared by every instance, rather than returned removal closures, so the same value can cross a worker boundary later.
+- **Removal rebuilds the registration list.** `Memory.deleteObserver` leaves an empty observable behind for every removal and every access walks that list, so a rebuild-from-survivors keeps repeated builds from degrading throughput.
+- **The observer snapshot** in `Memory` is a performance change to shared Core code, justified by the table above; it also makes the no-observer baseline about 19% faster.
+- `time()` returns a `double` rather than a `long`: TeaVM emulates `long`, and the syscall's own split into two registers is the only place the value has to be integral.
+
+### Left and blockers
+
+- No blocker. The RARS counterpart (`/home/dev/code/rars`) and the editor part of phase 7 — the framebuffer wiring, the four registers, the documentation pages, the samples and the matrix rows — are untouched.
+- `@specy/mips` 2.1.0 is unpublished, so the editor consumes the tarball above. `marsjs/ts/package.json`'s `build:all` still runs a bare `mvn`; use `mise exec -- mvn clean install` from the repository root instead, as the toolchain comes from mise.
