@@ -1,0 +1,19 @@
+# Z80 peripherals through the port map
+
+The Z80 reaches the **Screen**, **Keyboard** and **Mouse** through a port-mapped device that extends the console ports of [ADR 0002](./0002-z80-console-ports.md) and already carries the timer and wait ports of [ADR 0010](./0010-program-time-without-clock-pacing.md), rather than through a memory-mapped framebuffer in the guest's 64 KB. A pixel Screen does not fit that address space at a useful size: one byte per pixel at 256 by 192 takes three quarters of RAM, and the TRS-80 emulator that `@specy/z80` descends from could afford memory mapping only because its screen is 1 KB of character cells. Ports cost no address space, encode the same drawing commands the Screen implements for EASy68K, make keyboard and mouse polling the Z80's own `in` idiom, and extend the existing port documentation for the reference page, the hover provider and the coding agent.
+
+## Consequences
+
+- No Core change is needed: `Z80Machine` already routes every port access through its port hooks, and a wait for input is the existing roll-back-and-resume mechanism.
+- The Core journals port writes but never undoes them, so Undo restores the Screen through Screen-side history, as [ADR 0005](./0005-restore-screen-state-on-undo.md) already requires for EASy68K's command drawing.
+- A 16-bit value rides on the high byte of the address bus, filled from B by `out (c),r` and `in r,(c)`, like the WORD console port, so a coordinate up to 65535 fits one instruction. A pixel still costs two or three `out` instructions instead of one store, and filled shapes are the way to draw large areas.
+- Coordinates and sizes are bytes: the Z80 Screen is at most 256 by 256 logical pixels, default 256 by 192, so every X, Y, width, height and mouse coordinate fits one `in` or `out`. A read's parameter travels in B through `in r,(c)`: the key code for the key-state port, the view for the mouse ports, the byte index for the time port. Colors are one byte in the 3-3-2 red, green, blue layout, expanded by the adapter to the Screen's 24-bit colors.
+- The map has four groups. Screen: pen color, fill color, pen width, X, Y, X2, Y2, a command port that runs one operation per write (pixel, line, line-to, move-to, filled and unfilled rectangle and ellipse, flood fill, clear, resize, double buffering on and off, present), a pixel-color read, and cursor column and row. Keyboard: typed input available, key state, last key down, last key up, next to the existing blocking character port, with EASy68K's key codes. Mouse: X, Y, buttons and an event count, with B selecting the current, last-down or last-up view. Time: wait in hundredths of a second on the wait path, a frame-sync read that suspends until the next animation frame, and a time read of hundredths since the run started.
+- Console port output and input echo also draw at the text cursor in 8 by 8 cells, 32 columns by 24 rows on the default Screen, the single-window model of [ADR 0003](./0003-preserve-simulator-graphics-conventions.md); clear wipes text and graphics together, and the Terminal transcript keeps everything for Testcases.
+- Exact port numbers live in the shared Z80 model module next to the console ports, decided on 2026-09-06.
+- A memory-mapped framebuffer is not excluded forever: it could be added later as a separate Screen mode through the Core's memory hooks without touching the port device.
+
+## Considered options
+
+- A memory-mapped framebuffer, as on real Z80 micros: fast fills with `ldir` and Undo for free through the Core's RAM rollback, but a tiny resolution or a bit-packed format, a device inside the address space that ADR 0002 deliberately kept empty, and a second pixel format for the Screen to support.
+- Both idioms in the first version: the framebuffer half adds a Screen mode and a display configuration without adding a capability the ports lack.
