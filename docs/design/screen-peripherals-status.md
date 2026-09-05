@@ -285,3 +285,56 @@ The plan says "same directory" and means `peripherals/screen/`; these went in `p
 - No blocker. Phase 3 injects these into `GenericEmulator` (peripheral set, reset path, the wait path of the slice contract, the virtual clock for Testcases) and phase 4 wires the widget's focus, key, pointer and blur events to `keyDown`/`keyUp`/`releaseAll` and `moveTo`/`buttonDown`/`buttonUp`/`releaseAll`.
 - No adapter calls `readCharAsync` yet: `M68KEmulator` still reads a line and keeps its first character, which is the same behavior. Phases 5 to 7 move their character reads onto it when they wire the Keyboard.
 - The Keyboard has no notion of focus, and the Mouse none of pointer capture or the context menu: those are the widget's, as ADR 0008 describes them.
+
+## Phase 7 (RARS Core part): program time and memory observers — 2026-09-06
+
+Repository `/home/dev/code/rars`, branch `feat/screen-peripherals`, commit `f72406e`. The MIPS half is the MARS section above; the editor part of phase 7 is untouched.
+
+### Done
+
+The same change as MARS, name for name, so the two packages expose one API.
+
+- **Program time.** `RISCVIO.time()` returns milliseconds as a `double`; `SyscallTime` (30) reads it through `SystemIO.time()` instead of `new java.util.Date()` ([ADR 0010](../adr/0010-program-time-without-clock-pacing.md)). `JsRISCVIO` exposes it as the `time` handler.
+- **Sleep.** `RISCVIO.sleep` existed but no syscall reached it and `JsRISCVIO.sleep` was empty, so syscall 32 was an unknown syscall. Added `SyscallSleep` (`a0` = milliseconds), registered in `SyscallLoader` and numbered 32 in `SyscallProperties` (RARS refuses to start when the syscall list and the number table disagree), routed through `SystemIO.sleep` to the `sleep` handler; a handler returning a promise suspends the program without blocking the host.
+- **Memory observers** on `JsRiscV`, over `Memory.addObserver(observer, start, end)`: `addMemoryWriteObserver`, `addMemoryAccessObserver`, `removeMemoryObserver`, `removeMemoryObservers` and `countMemoryObservers`, all with MARS's signatures and semantics.
+- **`readMemoryBytes` no longer notifies** (new `Memory.getByteNoNotify`), and **`setPeripheralWord(address, value)`** (new `Memory.setRawWordNoNotify`) writes one word without notifying observers and without recording an undo step.
+- **`notifyAnyObservers` walks an array snapshot** instead of allocating an iterator per access, as in MARS. Measured below.
+- The smoke test (`rarsjs/ts/test/smoke.mjs`, `npm test`) keeps its original program and both width modes, and gains the same peripheral program as MARS's: both observer shapes, byte and word stores, the read of a preloaded register, `setPeripheralWord` staying invisible, `readMemoryBytes` staying silent, undo notification, survival across `assemble()`/`initialize()`, the sleep and time handlers, and removal by handle.
+- Verification: `mise exec -- mvn clean install` from the repository root, then `npm run build` and `npm test` in `rarsjs/ts`, all clean.
+
+### Artifacts
+
+- `/home/dev/code/local-packages/specy-risc-v-2.1.0.tgz`, from `npm pack` after a clean Maven and tsup build. `rarsjs/ts/package.json` is at 2.1.0, not published; the editor should depend on the tarball as a `file:` reference until `@specy/risc-v` 2.1.0 ships.
+
+### API notes for the editor part of phase 7
+
+Everything in the MARS section's API notes holds for RARS with the names unchanged — `time` and `sleep` in `HandlerMap`, `MemoryWriteObserver`, `MemoryAccessObserver`, `MemoryObserverHandle`, the five observer methods and `setPeripheralWord` on `JsRiscV`, the same lifetime, ordering, signedness, range, width and reentrancy rules, and the same "`undo()` does notify" behaviour. The differences are these:
+
+- **Registers are RISC-V's**: syscall 30 splits program time into `a0` (low word) and `a1` (high word), syscall 32 takes its milliseconds in `a0`.
+- **Both handlers are now required**, as in MARS: syscall 30 used to read the host clock inside the Core and now throws `No handler registered for time` without one, and syscall 32 used to be an unknown syscall.
+- **The memory map only exists in 32 bit mode.** The peripheral smoke test calls `RISCV.setIs64Bit(false)` before touching `0xffff0000`; the editor already runs RV32 unless a project asks for RV64, and a memory-mapped register in RV64 mode is untested.
+- **`terminated` is not cleared by `initialize()`.** It reports `stopReason === CLIFF_TERMINATION`, and nothing resets `stopReason`, so after a program has run off the end of its code a second run on the same `JsRiscV` instance must be driven by `simulateWithLimit`/`step` and its stop reason, not by a `while (!terminated)` loop. Pre-existing, unrelated to this change, but it bit the smoke test and will bite the adapter's re-run path.
+- **The exit syscall stops with `NORMAL_TERMINATION`**, not `CLIFF_TERMINATION`; a `while (!terminated)` loop only ends because the following step runs off the end of the program.
+- `readMemoryBytes` returns an `Int32Array` at runtime although it is typed `number[]`, exactly as in MARS.
+
+### Measurements for phase 8
+
+The same program as the MARS measurement (2048 framebuffer words filled 200 times, about 1.2 M instructions), under node, `simulateWithLimit`, undo disabled, RV32. Two runs per case, the range shown:
+
+| Case                                   | Before the snapshot change | After                |
+| -------------------------------------- | -------------------------- | -------------------- |
+| No observer registered                 | 4.30 s                     | 4.15 s               |
+| One observer, never matching an access | 4.86 to 5.09 s (+13%)      | 4.04 to 4.30 s (+0%) |
+| One observer over the written range    | 5.07 to 5.25 s (+19%)      | 4.43 to 4.58 s (+8%) |
+
+RARS is about three times slower per instruction than MARS here, so the same 410 000 handler calls cost a smaller share of the run: about 0.8 µs each, 8% of it. As in MARS, a registered observer no longer taxes unrelated code, and the remaining cost still argues for the dirty-range re-read over a per-word Screen update.
+
+### Choices where the plan left a detail open
+
+- **`SyscallSleep` is numbered 32**, upstream RARS's number and MARS's, and its name and description are upstream's too, so a program written against either simulator works unchanged.
+- **The observer snapshot was ported even though RARS's loss is a tenth rather than a quarter**: both packages then have the same memory class shape, and the comment in `Memory.java` states RARS's own measurement.
+- The peripheral smoke test drives its second run with `simulateWithLimit` rather than the `terminated` loop, for the reason in the API notes.
+
+### Left and blockers
+
+- No blocker. The editor part of phase 7 (adapters, documentation pages, examples, matrix rows) is untouched, and both `@specy/mips` 2.1.0 and `@specy/risc-v` 2.1.0 are unpublished, so the editor consumes the two tarballs in `/home/dev/code/local-packages/`.
