@@ -73,9 +73,10 @@
             <img src="/images/ASM-editor.webp" alt="ASM editor" class="preview-image" />
             <div class="presentation">
                 <h1 class="welcome-title" class:textShadow={textShadowPrimary}>
-                    The best web IDE for Assembly <br /> <span style="font-size: 1.2rem; opacity: 0.8"
-                        >M68K, MIPS, RISC-V, X86, Z80</span
-                    >
+                    The best web IDE for Assembly <br />
+                    <span style="font-size: 1.2rem; opacity: 0.8">
+                        M68K, MIPS, RISC-V, X86, Z80
+                    </span>
                 </h1>
 
                 <Row gap="0.6rem" wrap>
