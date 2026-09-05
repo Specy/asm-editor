@@ -64,10 +64,12 @@ The Screen panel appears in the project page's right column and in the interacti
 
 The numbers behind the tuning decisions, recorded here and summarized in [screen-peripherals.md](./design/screen-peripherals.md). Targets from [ADR 0007](./adr/0007-generic-emulator-run-scheduling.md): yields cost under five percent of compute-only throughput on every Core, and Stop is answered within a tenth of a second.
 
-| Measurement                                    | Environment | Method | Value |
-| ---------------------------------------------- | ----------- | ------ | ----- |
-| Instructions per second, no yields             |             |        |       |
-| Instructions per second, with yields           |             |        |       |
-| Stop latency                                   |             |        |       |
-| Frame pacing of the animation examples         |             |        |       |
-| Screen history bytes of the animation examples |             |        |       |
+| Measurement                                               | Environment | Method | Value |
+| --------------------------------------------------------- | ----------- | ------ | ----- |
+| Instructions per second, no yields                        |             |        |       |
+| Instructions per second, with yields                      |             |        |       |
+| Stop latency                                              |             |        |       |
+| Frame pacing of the animation examples                    |             |        |       |
+| Screen history bytes of the animation examples            |             |        |       |
+| Key hold interval, `DEFAULT_KEY_HOLD_INTERVAL_MS`         |             |        |       |
+| Double-click interval, `DEFAULT_DOUBLE_CLICK_INTERVAL_MS` |             |        |       |
