@@ -1,0 +1,6 @@
+{
+    "name": "Using the editor",
+    "description": "Build, Run, Step, Undo and Stop, a breakpoint, and where the memory, call stack and testcases are. Everything you need to run the programs in the rest of this course.",
+    "order": 1,
+    "topic": "using-the-editor"
+}
