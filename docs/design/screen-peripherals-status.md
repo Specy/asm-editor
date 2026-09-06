@@ -1069,10 +1069,90 @@ The two candidates the research put first — dirty-rectangle `putImageData` and
 
 `npm run build`, `vite preview --port 4183`, and the Playwright-cached `chrome-headless-shell-1234` over the DevTools protocol (`LD_LIBRARY_PATH=~/.cache/ms-playwright/firefox-1538/firefox` for `libnspr4.so`, a unique `--user-data-dir`, a fresh `vite preview` after every build), on `/projects/share?project=…` with the project compressed into the URL. Before and after were built from the same commit with only the changed files stashed, so the comparison is not against an older HEAD.
 
-Pixel output is identical: `m68k/graphics-tour.x68`, `mips/bitmap-tour.asm`, `z80/mouse-paint.z80` and `m68k/keyboard-move.x68` hash to the same canvas before and after (`7bd0baa9`, `e8853fc5`, `e4ea9dc5`, `454ffea5`), read outside any timed run. Stepping `graphics-tour.x68` eighty instructions passed through eight distinct images and eighty Undos passed back through the same eight in exactly reverse order, hash for hash ([ADR 0005](../adr/0005-restore-screen-state-on-undo.md)). Pause froze the image, Resume moved it again, Stop cleared the Screen to a canvas with no non-zero byte.
+Pixel output is identical: `m68k/graphics-tour.x68`, `mips/bitmap-tour.asm`, `z80/mouse-paint.z80` and `m68k/keyboard-move.x68` hash to the same canvas before and after (`7bd0baa9`, `e8853fc5`, `e4ea9dc5`, `454ffea5`), read outside any timed run. A later review corrected this section's original claim that 80 M68K Undos retraced 80 stepped canvas images exactly: direct drawing retains the known coarse alignment from phase 3, while a differential Screen check and the MIPS memory-backed path establish that this change preserved both forms of Undo. Pause froze the image, Resume moved it again, Stop cleared the Screen to a canvas with no non-zero byte.
 
 Three traps for the next agent, all new:
 
 - **The binary is `chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell`**, not the `chrome-linux/headless_shell` path earlier sections imply.
 - **A page running a program without a guest wait used to starve every `Runtime.evaluate`** — over a minute with no answer — so the driver clicks Run and Stop with `Input.dispatchMouseEvent` and reads its counters after Stop, windowing them by the timestamps it recorded. That is no longer necessary after this change, but the rig still does it, and it is the only way to measure a build that has the old yield in it.
 - **`Tracing.start` with `disabled-by-default-devtools.timeline` on a saturated main thread never completes**, so the trace is opt-in and the attribution comes from `Profiler.start` at a 200 µs sampling interval instead. The production bundle is minified: `fillImage` is `J` in `DpfhWv1T.js` (checked against its body in the bundle), while `copyRegion`, `syncFramebuffer` and `readInto` keep their names.
+
+## Follow-up 7: review of the draggable window and rendering performance — 2026-09-06
+
+Repository `/home/dev/code/asm-editor`, branch `feat/screen-peripherals`. Reviewed commits
+`72c266c`, `2133746` and `73c545e` by reading their diffs, running the node checks and driving built
+before/after applications over the DevTools protocol. The before build was the same tree with only
+the four performance source files restored to `2133746`; no comparison crosses unrelated commits.
+
+### Findings and fixes
+
+- **No product-code regression was found in either change.** The window, focus, painting,
+  scheduling, bulk-pixel and panel-refresh changes all held under the checks below.
+- **The performance section overstated Undo.** Its final paragraph said 80 M68K Undos retraced 80
+  stepped canvases exactly. A 90-step node check disproved that: the direct-drawing Screen journal
+  rewinds at Screen operations, ahead of intervening non-drawing Core steps. This is the known,
+  bounded limitation already recorded in phase 3, not a regression in `73c545e`; exact alignment
+  needs a Core-side instruction/Undo key the current APIs do not expose. The research record now
+  says what was actually verified: the Screen before and after the bulk rewrite is byte-identical
+  through its operations and Undos, while the MIPS memory-backed path retraces Core steps exactly.
+- **The scheduler tests were genuinely timing-flaky.** Four correction tests and the paused-time
+  test burned real wall-clock milliseconds and asserted exact factors. Under load the full suite
+  produced corrections such as 3.20 and 12.81 instead of 4 and 16, despite the pure correction
+  function being correct. They now advance a mocked `performance.now()` explicitly. This keeps the
+  integration assertions exact, removes their busy loops, and makes host scheduling load irrelevant.
+- **A dragged window can cover the controls if the user deliberately puts it there.** Opening at
+  1600 × 900 places it at (664, 8), 928 × 823, above controls whose top is 857; resizes to
+  1280 × 800, 1920 × 1080 and 1024 × 700 also keep the opening/retained position clear. It
+  can then be dragged over any page content, as an ordinary floating window can. This was not
+  changed: the user's original requirement was that it not cover the execution controls **when it
+  opens**, and excluding a moving page rectangle from free dragging would be a new interaction.
+
+### Window, focus and input in the browser
+
+- Instrumenting `Screen.watch()` found one inactive Screen left by project setup and exactly one
+  watcher on the active Screen in-page, in the window, after closing, after six round trips and
+  after opening again. Every state had one `.screen-panel` and one canvas; no registration leaked.
+- The window opened at the geometry above, clamped at every viewport edge, followed viewport
+  shrinkage, and left the page underneath hit-testable. The zoom and display controls did not start
+  a drag. The close/restore button returned the same frame to the page; focus followed the new
+  canvas, and a key on it reached zero window keydown listeners.
+- Call stack, History and Stack pointer kept their eye/collapse behavior and their established
+  geometry: collapsed 144 × 24, expanded 192 × 69 and 256 × 359 in this build.
+- The focused canvas computed to a 2 px solid outline with a -2 px offset. Screenshot pixels on all
+  four canvas edges confirmed the complete ring for M68K, Z80 and MIPS, in the page and window, fit
+  and actual size. Fit mode kept zero scroll range and its existing canvas dimensions. An actual
+  640 × 480 canvas in the shorter page stage still scrolls by design; its inset ring scrolls with
+  the canvas rather than being clipped outside it.
+
+### Correctness and reproduced performance
+
+- Current and pre-performance `Screen.ts` produced the same terminating-example hashes:
+  `m68k/graphics-tour.x68` = `7bd0baa9` at 640 × 480 and `mips/bitmap-tour.asm` = `e8853fc5`
+  at 256 × 256. A differential script added clipped rectangles, lines, ellipses, flood fill,
+  scrolled and positioned text, double buffering and presentation, full and partial framebuffer
+  sync, resize, reset and all retained Undos. All 25 checkpoints matched at 64 × 64 and 37 × 21.
+- The independent browser rerun reproduced the performance conclusion. The no-wait M68K drawing
+  loop moved from 9.0 to 45.6 delivered frames/s and 9.0 to 45.4 browser frames/s, with long tasks
+  falling from 45 to zero. The paced M68K ball moved from 33.2 to 40.8 delivered frames/s and the
+  main-thread load index from 62% to 46%. The already display-limited MIPS ball stayed effectively
+  unchanged, 57.8 to 58.0 delivered frames/s. These absolute values differ from the original 38.0,
+  40.6 and 56.6, but reproduce both the starvation mechanism and the claimed direction.
+- Stop after the change answered in 44 to 55 ms in that run. Page-side instrumentation measured
+  Pause at 16.0 ms before and 17.5 ms after on the double-buffered M68K ball, and 184 ms before and
+  164 ms after on the MIPS ball. Both images froze while paused and changed after Resume. The longer
+  MIPS latency is pre-existing: its asynchronous Core serves guest sleeps inside a pending slice;
+  the rendering change did not regress it.
+
+### Verification
+
+- `GenericEmulator.test.ts`: 35 passing in five consecutive runs after replacing wall-clock burns.
+- `npm test`: 460 passing in 23 files, in three consecutive full runs.
+- `npm run check`: the same two baseline errors (the sitemap's `String#at` and the z80
+  instruction page's `description` prop) and 205 warnings.
+- `npm run lint`: 0 errors and 18 warnings; `npm run format:check` clean; `npm run build` clean.
+
+### Left and blockers
+
+- No blocker. The review leaves the measured sparse MIPS/RISC-V framebuffer optimization rejected
+  for the reasons in follow-up 6 and does not change the known Core API limitations around exact
+  direct-drawing Undo or MARS/RARS pause boundaries.

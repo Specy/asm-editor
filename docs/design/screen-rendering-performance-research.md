@@ -347,4 +347,16 @@ Every change above had to leave the image identical. The four programs that pain
 | `z80/mouse-paint.z80`    | 256 × 192 | `e4ea9dc5`             |
 | `m68k/keyboard-move.x68` | 640 × 480 | `454ffea5`             |
 
-Undo was checked against the same programs the other way round: stepping `graphics-tour.x68` eighty instructions passed through eight distinct images, and eighty Undos passed back through the same eight in exactly the reverse order, hash for hash — which is [ADR 0005](../adr/0005-restore-screen-state-on-undo.md) end to end. Pause froze the image and Resume moved it again; Stop cleared the Screen to a canvas with no non-zero byte in it.
+The bulk-write rewrite also preserved the Screen journal byte for byte: a differential script ran the
+Screen from before this work and the current Screen through 25 checkpoints at both 64 × 64 and a
+non-word-row-width 37 × 21, including clipped fills, scrolling, double buffering, framebuffer
+sync, resize and every retained Undo, with identical visible and drawing images throughout. The
+MIPS memory-backed path retraced 90 stepped images exactly after re-reading Core memory.
+
+`graphics-tour.x68` did **not** retrace one canvas image per Core instruction, contrary to the
+sentence this paragraph replaced. That is the known direct-drawing limitation recorded in phase 3:
+the Cores expose neither an instruction count at a Screen operation nor an Undo-depth key the two
+histories can share, so sparse Screen records rewind ahead of intervening non-drawing Core steps and
+re-converge at the next drawing step. The performance change did not alter that behavior. Pause
+froze the image and Resume moved it again; Stop cleared the Screen to a canvas with no non-zero byte
+in it.

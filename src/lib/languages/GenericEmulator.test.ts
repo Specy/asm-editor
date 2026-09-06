@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { GenericEmulator } from '$lib/languages/GenericEmulator.svelte'
 import {
     EmulatorStatus,
@@ -179,6 +179,7 @@ const budgetSetting = settingsStore.values.screenHistoryBudgetMb.value
 const showScreenSetting = settingsStore.values.showScreen.value
 
 afterEach(() => {
+    vi.restoreAllMocks()
     settingsStore.values.screenHistoryBudgetMb.value = budgetSetting
     settingsStore.values.showScreen.value = showScreenSetting
 })
@@ -335,12 +336,13 @@ describe('slice scheduling', () => {
     })
 
     it('grows the budget of a Core the estimate was too slow for', async () => {
+        const time = controlledPerformanceTime()
         const emulator = new FakeEmulator()
         emulator.peripherals.screen.markPainted()
         emulator.behavior = (_request, index) => {
             //five milliseconds of a fifty millisecond target: the adapter's estimate is ten times
             //too small, and one slice may move the correction by four
-            burnMilliseconds(5)
+            time.advance(5)
             if (index < 3) return { reason: 'budget', instructions: 1_000 }
             return { reason: 'terminated', instructions: 1 }
         }
@@ -352,11 +354,14 @@ describe('slice scheduling', () => {
     })
 
     it('does not mistake a program’s own wait for a slow Core', async () => {
+        const time = controlledPerformanceTime()
         const emulator = new FakeEmulator()
         emulator.peripherals.screen.markPainted()
         emulator.behavior = async (_request, index) => {
             //the MIPS, RISC-V and x86 adapters serve a program's sleep without leaving their slice
-            await emulator.peripherals.clock.wait(30)
+            const wait = emulator.peripherals.clock.wait(1)
+            time.advance(30)
+            await wait
             if (index < 2) return { reason: 'budget', instructions: 1_000 }
             return { reason: 'terminated', instructions: 1 }
         }
@@ -365,10 +370,11 @@ describe('slice scheduling', () => {
     })
 
     it('starts again from the adapters’ own estimates after a clear', async () => {
+        const time = controlledPerformanceTime()
         const emulator = new FakeEmulator()
         emulator.peripherals.screen.markPainted()
         emulator.behavior = (_request, index) => {
-            burnMilliseconds(5)
+            time.advance(5)
             if (index < 1) return { reason: 'budget', instructions: 1_000 }
             return { reason: 'terminated', instructions: 1 }
         }
@@ -455,11 +461,12 @@ describe('pause and resume', () => {
     })
 
     it('keeps the breakpoints and the speed correction across the pause', async () => {
+        const time = controlledPerformanceTime()
         const emulator = new FakeEmulator()
         emulator.peripherals.screen.markPainted()
         emulator.toggleBreakpoint(7)
         emulator.behavior = (_request, index) => {
-            burnMilliseconds(5)
+            time.advance(5)
             if (index === 0) emulator.pause()
             if (index < 2) return { reason: 'budget', instructions: 1_000 }
             return { reason: 'terminated', instructions: 1 }
@@ -569,6 +576,7 @@ describe('pause and resume', () => {
     })
 
     it('leaves the paused time out of the reported execution time', async () => {
+        const time = controlledPerformanceTime()
         const emulator = new FakeEmulator()
         emulator.behavior = (_request, index) => {
             if (index === 0) emulator.pause()
@@ -576,7 +584,7 @@ describe('pause and resume', () => {
         }
         const run = emulator.run(1000)
         await settle()
-        burnMilliseconds(30)
+        time.advance(30)
         emulator.resume()
         await run
         expect(emulator.executionTime).toBeLessThan(30)
@@ -749,10 +757,13 @@ async function settle(): Promise<void> {
     for (let i = 0; i < 10; i++) await new Promise((resolve) => setTimeout(resolve, 1))
 }
 
-/** Holds the host for a while, which is what a Core does inside a slice. */
-function burnMilliseconds(milliseconds: number): void {
-    const until = performance.now() + milliseconds
-    while (performance.now() < until) {
-        //a busy loop is the point: a slice is measured by the wall clock it holds
+/** A Core consumes wall time inside a slice; control it so host load cannot change the assertion. */
+function controlledPerformanceTime(): { advance(milliseconds: number): void } {
+    let now = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => now)
+    return {
+        advance(milliseconds: number): void {
+            now += milliseconds
+        }
     }
 }
