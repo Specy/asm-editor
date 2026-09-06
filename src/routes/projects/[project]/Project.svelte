@@ -689,6 +689,11 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                 {/if}
             </div>
         </div>
+        <StdOut
+            {info}
+            stdOut={errorStrings ? `${errorStrings}\n${emulator.stdOut}` : emulator.stdOut}
+            diagnostics={emulator.compilerDiagnostics}
+        />
         {#if showScreen}
             <ScreenRenderer
                 name={language}
@@ -696,7 +701,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                 keyboard={emulator.peripherals.keyboard}
                 mouse={emulator.peripherals.mouse}
                 actualSizeZoom={configurableDisplay ? currentDisplay.unitWidth : 1}
-                style="height: 20rem; flex: none;"
+                style="height: 26rem; flex: none;"
             >
                 {#snippet configuration()}
                     {#if configurableDisplay}
@@ -708,11 +713,6 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                 {/snippet}
             </ScreenRenderer>
         {/if}
-        <StdOut
-            {info}
-            stdOut={errorStrings ? `${errorStrings}\n${emulator.stdOut}` : emulator.stdOut}
-            diagnostics={emulator.compilerDiagnostics}
-        />
     </div>
 </div>
 

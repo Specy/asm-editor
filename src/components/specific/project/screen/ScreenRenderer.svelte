@@ -4,6 +4,9 @@
     import FaDesktop from '~icons/fa-solid/desktop'
     import FaExpand from '~icons/fa-solid/expand'
     import FaCompress from '~icons/fa-solid/compress'
+    import FaWindowMaximize from '~icons/fa-solid/window-maximize'
+    import FaWindowRestore from '~icons/fa-solid/window-restore'
+    import { screenZoom, screenZoomLabel } from './screenZoom'
     import type { Screen } from '$lib/languages/peripherals/screen/Screen'
     import type { Keyboard } from '$lib/languages/peripherals/Keyboard'
     import type { Mouse, MouseButton } from '$lib/languages/peripherals/Mouse'
@@ -58,25 +61,27 @@
     let logicalHeight = $state(untrack(() => screen.height))
     let fitToPanel = $state(true)
     let focused = $state(false)
+    //the floating window is a class on this same element, never a second panel: the component that
+    //calls `screen.watch()` has to stay mounted exactly once, or the scheduler counts two painters
+    let expanded = $state(false)
 
     let context: CanvasRenderingContext2D | null = null
     let image: ImageData | null = null
     //-1 rather than 0: a Screen that has never changed is still at version 0 and must be painted once
     let paintedVersion = -1
 
-    /**
-     * Integer scaling while the Screen fits the panel, so a logical pixel stays a square block of
-     * screen pixels; a fractional one only when the Screen is larger than the panel, where the
-     * alternative is showing part of the image.
-     */
-    let zoom = $derived.by(() => {
-        if (!fitToPanel) return Math.max(1, Math.floor(actualSizeZoom))
-        if (viewportWidth <= 0 || viewportHeight <= 0) return 1
-        const scale = Math.min(viewportWidth / logicalWidth, viewportHeight / logicalHeight)
-        return scale >= 1 ? Math.floor(scale) : scale
-    })
+    let zoom = $derived(
+        screenZoom({
+            fit: fitToPanel,
+            viewportWidth,
+            viewportHeight,
+            logicalWidth,
+            logicalHeight,
+            actualSizeZoom
+        })
+    )
 
-    let zoomLabel = $derived(zoom >= 1 ? `×${zoom}` : `${Math.round(zoom * 100)}%`)
+    let zoomLabel = $derived(screenZoomLabel(fitToPanel, zoom))
 
     function paint() {
         if (!canvas) return
@@ -224,6 +229,19 @@
         return screen.watch()
     })
 
+    $effect(() => {
+        if (!expanded) return
+        //Escape closes the floating window, but only once the Screen no longer holds the keyboard:
+        //the canvas stops its own Escape from propagating, so the first press releases the input
+        //(ADR 0008's way out of a focused Screen) and the next one reaches this listener
+        function closeOnEscape(event: KeyboardEvent) {
+            if (event.code !== 'Escape') return
+            expanded = false
+        }
+        window.addEventListener('keydown', closeOnEscape)
+        return () => window.removeEventListener('keydown', closeOnEscape)
+    })
+
     onMount(() => {
         let frame = requestAnimationFrame(function tick() {
             paint()
@@ -238,7 +256,7 @@
     })
 </script>
 
-<div class="screen-panel" {style}>
+<div class="screen-panel" class:expanded style={expanded ? undefined : style}>
     <div class="screen-header">
         <Icon size={0.9}>
             <FaDesktop />
@@ -248,7 +266,7 @@
         <div class="screen-actions">
             {@render configuration?.()}
             <button
-                class="screen-zoom"
+                class="screen-action"
                 title={fitToPanel ? 'Show at actual size' : 'Zoom to fit the panel'}
                 onclick={() => (fitToPanel = !fitToPanel)}
             >
@@ -261,34 +279,56 @@
                 </Icon>
                 {zoomLabel}
             </button>
+            <button
+                class="screen-action"
+                aria-pressed={expanded}
+                title={expanded
+                    ? 'Put the screen back in the page (Esc)'
+                    : 'Open the screen in a floating window'}
+                onclick={() => (expanded = !expanded)}
+            >
+                <Icon size={0.8}>
+                    {#if expanded}
+                        <FaWindowRestore />
+                    {:else}
+                        <FaWindowMaximize />
+                    {/if}
+                </Icon>
+            </button>
         </div>
     </div>
-    <div
-        class="screen-viewport"
-        bind:clientWidth={viewportWidth}
-        bind:clientHeight={viewportHeight}
-    >
-        <canvas
-            bind:this={canvas}
-            class:focused
-            width={logicalWidth}
-            height={logicalHeight}
-            style="width: {logicalWidth * zoom}px; height: {logicalHeight * zoom}px;"
-            tabindex="0"
-            aria-label="{name} screen, click to send keyboard and mouse input to the program"
-            title="Click to send keyboard and mouse input to the program, Esc to release it"
-            onfocus={() => (focused = true)}
-            onblur={handleBlur}
-            onkeydown={handleKeyDown}
-            onkeyup={handleKeyUp}
-            onpaste={handlePaste}
-            onpointerdown={handlePointerDown}
-            onpointermove={handlePointerMove}
-            onpointerup={handlePointerUp}
-            onpointercancel={handlePointerCancel}
-            oncontextmenu={(e) => e.preventDefault()}
-            onauxclick={(e) => e.preventDefault()}
-        ></canvas>
+    <!-- the padding is a frame around the stage rather than padding on it, because the stage is
+         what is measured: `clientWidth` counts padding, and fitting to a box that is larger than
+         the box the canvas actually has is what used to spill the image into a scrollbar -->
+    <div class="screen-viewport">
+        <div
+            class="screen-stage"
+            class:fitting={fitToPanel}
+            bind:clientWidth={viewportWidth}
+            bind:clientHeight={viewportHeight}
+        >
+            <canvas
+                bind:this={canvas}
+                class:focused
+                width={logicalWidth}
+                height={logicalHeight}
+                style="width: {logicalWidth * zoom}px; height: {logicalHeight * zoom}px;"
+                tabindex="0"
+                aria-label="{name} screen, click to send keyboard and mouse input to the program"
+                title="Click to send keyboard and mouse input to the program, Esc to release it"
+                onfocus={() => (focused = true)}
+                onblur={handleBlur}
+                onkeydown={handleKeyDown}
+                onkeyup={handleKeyUp}
+                onpaste={handlePaste}
+                onpointerdown={handlePointerDown}
+                onpointermove={handlePointerMove}
+                onpointerup={handlePointerUp}
+                onpointercancel={handlePointerCancel}
+                oncontextmenu={(e) => e.preventDefault()}
+                onauxclick={(e) => e.preventDefault()}
+            ></canvas>
+        </div>
     </div>
 </div>
 
@@ -332,7 +372,7 @@
         margin-left: auto;
     }
 
-    .screen-zoom {
+    .screen-action {
         display: flex;
         gap: 0.3rem;
         align-items: center;
@@ -350,15 +390,46 @@
         }
     }
 
-    /* a scroll container, so the canvas never widens the column it sits in and an actual-size
-       Screen larger than the panel can be reached by scrolling */
+    /* only the frame the stage sits in; the stage is the box the canvas is fitted to */
     .screen-viewport {
         display: flex;
         flex: 1;
         min-width: 0;
         min-height: 0;
         padding: 0.3rem;
+    }
+
+    /* a scroll container, so the canvas never widens the column it sits in and an actual-size
+       Screen larger than the panel can be reached by scrolling */
+    .screen-stage {
+        display: flex;
+        flex: 1;
+        min-width: 0;
+        min-height: 0;
         overflow: auto;
+    }
+
+    /* a fitted Screen is exactly as large as this box, so there is nothing to scroll to; hiding it
+       also keeps a sub-pixel rounding from putting a scrollbar on a panel that fits */
+    .screen-stage.fitting {
+        overflow: hidden;
+    }
+
+    /* The floating window the header's second button opens, anchored to the right of the viewport
+       and deliberately not the whole of it. The control bar of every surface that hosts this panel
+       is a row at the bottom of the editor column, and it is as wide as that column, so a window
+       wide enough to be worth opening always reaches over its right end: the bottom inset, not the
+       left edge, is what keeps Build, Run, Step and Testcases visible and clickable. It costs a
+       4 by 3 Screen nothing, because in a box this shape the width is what constrains the fit. */
+    .screen-panel.expanded {
+        position: fixed;
+        top: 0.5rem;
+        right: 0.5rem;
+        bottom: 4rem;
+        width: min(58vw, 68rem);
+        min-width: min(20rem, calc(100vw - 1rem));
+        z-index: 15;
+        box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.45);
     }
 
     canvas {

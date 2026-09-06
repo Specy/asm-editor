@@ -463,11 +463,11 @@
                         {/if}
                     </div>
                 {/if}
-                {#if showScreen}
-                    {@render screenPanel('20rem')}
-                {/if}
                 {#if showConsole}
                     {@render consolePanel()}
+                {/if}
+                {#if showScreen}
+                    {@render screenPanel('26rem')}
                 {/if}
             </div>
         {/if}
@@ -490,18 +490,6 @@
             {/if}
         </div>
 
-        {#if showScreen}
-            <button class="screen-toggle" onclick={() => (screenOpen = !screenOpen)}>
-                <Icon size={0.9}>
-                    <FaDesktop />
-                </Icon>
-                {screenOpen ? 'Hide screen' : 'Show screen'}
-            </button>
-            {#if screenOpen}
-                {@render screenPanel('16rem')}
-            {/if}
-        {/if}
-
         {#if showRegsColumn && showMemory && !forceMemoryRight}
             <div class="bottom-row">
                 {#if showConsole}
@@ -511,6 +499,18 @@
             </div>
         {:else if showConsole}
             {@render consolePanel()}
+        {/if}
+
+        {#if showScreen}
+            <button class="screen-toggle" onclick={() => (screenOpen = !screenOpen)}>
+                <Icon size={0.9}>
+                    <FaDesktop />
+                </Icon>
+                {screenOpen ? 'Hide screen' : 'Show screen'}
+            </button>
+            {#if screenOpen}
+                {@render screenPanel('20rem')}
+            {/if}
         {/if}
         {@render testcasesEditor()}
     </div>
