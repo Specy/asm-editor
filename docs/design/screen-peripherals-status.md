@@ -393,3 +393,46 @@ yieldToHost(): Promise<void>
 - The five `*_INSTRUCTIONS_PER_MS` estimates are guesses except MIPS and RISC-V, which use the phase 7 Core measurement of roughly a thousand instructions per millisecond. M68K and Z80 are at 20 000 and x86 at 2 000. Phase 8 measures all of them, together with the two slice budgets and the Screen history budget default.
 - `emulator.peripherals.screen` is reset on every Build, so a widget must not hold the pixel arrays across one; `screen.visiblePixels` is a fresh array after `reset()`.
 - Nothing reads `project.display` yet: phase 4's configuration popover and phase 7's framebuffer wiring are its first users.
+
+## Phase 4: the Screen panel — 2026-09-06
+
+Repository `/home/dev/code/asm-editor`, branch `feat/screen-peripherals`, commit `8ee9099` (this log follows it). Phases 5 to 7 (the adapters that draw) are untouched: the panel shows a blank Screen, and the only things that reach the peripherals are the GUI's own events.
+
+### Done
+
+- `src/components/specific/project/screen/ScreenRenderer.svelte`: the Screen panel. A canvas painted with `putImageData` from an animation frame that repaints only when `screen.version` moved, then calls `markPainted()` so the scheduler's dirty-Screen slice budget goes back to the long one ([ADR 0006](../adr/0006-screen-double-buffering.md), [ADR 0007](../adr/0007-generic-emulator-run-scheduling.md)). Integer zoom to fit the panel, fractional only when the Screen is larger than it, plus a header with the environment's name, the logical size, a zoom-to-fit toggle and the snippet slot phase 7 hangs its configuration popover on.
+- Keyboard: `tabindex` on the canvas, a focus ring on focus itself (not `:focus-visible`), every key routed to `keyboard.keyDown`/`keyUp` with `stopPropagation` so the editor's window-level shortcuts never fire while the Screen has focus, `preventDefault` for everything except Ctrl and Meta combinations, paste through `keyboard.typeText`, and a release of keys and buttons on blur ([ADR 0008](../adr/0008-poll-keyboard-and-mouse-input.md)).
+- Mouse: pointer events converted to logical pixels and handed to `moveTo`/`buttonDown`/`buttonUp`, pointer capture for the whole drag so it keeps reporting outside the Screen, `contextmenu` and middle-click defaults cancelled, and a window-blur listener that releases keys and buttons.
+- Hosting: `src/routes/projects/[project]/Project.svelte` renders it in the right column between the memory row and the transcript, behind `settingsStore.values.showScreen` and the new `languageHasScreen(language)`; `src/components/shared/InteractiveInstructionEditor.svelte` gained a `showScreen` prop with the same default, the panel in the fullscreen layout (between the memory column and the transcript) and a Show/Hide screen bar in the small layout, which covers the lecture, exam, embed, docs and chat surfaces.
+- `languageHasScreen` in `src/lib/languages/peripherals/peripheralSet.ts`: x86 is the only language without a panel.
+- `docs/manual-verification.md`: the hosting-surface section filled in, rows H1 to H12.
+- Verification at the commit: `npm run check` at the branch baseline (the same two pre-existing errors, 205 warnings), `npm run lint` 0 errors and 18 warnings, `npm test` 176 tests passing, `npm run build` clean including the prerendered embed route.
+
+### How the panel was checked
+
+The build was served with `npm run preview` and driven through the DevTools protocol in the Playwright-cached headless Chromium, so every row of H1 to H12 above is observed behavior, not inspection: focus after a click, Shift+C never reaching a `window` keydown listener, Escape releasing focus and the keys coming back, `hasPointerCapture` through a drag that left the canvas, cancelled context menu and middle click, the actual-size toggle scrolling inside the panel instead of widening the page, and drawing calls made from the console appearing on the canvas within a frame. The fullscreen layout was checked through a scratch route that was deleted before the commit, because the chat page only mounts its editor once the agent has produced code.
+
+### API notes for the next phases
+
+- The panel takes `screen`, `keyboard` and `mouse` separately rather than the whole peripheral set, plus `name` (the hosts pass the language), `style` (the hosts set the height: 20 rem in both right columns, 16 rem in the small layout) and `configuration`, a `Snippet` rendered in the header between the size and the zoom button. **Phase 7 renders its display-configuration popover into `configuration`** and re-syncs the Screen from memory when a parameter changes; nothing else in the panel needs to know about `project.display`.
+- The panel needs no notification when the Screen changes: it polls `version` every animation frame. An adapter that draws only has to draw; there is no repaint call to make and no event to fire.
+- `screen.markPainted()` is called by the panel and by nobody else. A surface that shows a Screen **without** this panel would leave `dirty` set forever and hold the scheduler at the 16 ms slice budget.
+- The zoom is GUI-only state inside the panel and is not persisted, as the design record asks; `fitToPanel` starts on. Phase 7's MARS unit size, which the design says sets the initial zoom, has to reach the panel as a prop when that phase lands — there is no hook for it yet.
+
+### Choices where the plan left a detail open
+
+- **Placement on the project page is the right column's own stack, under the memory row and above the transcript**, not a third column inside the memory row. The design says "right column next to memory" and "the transcript stays at the bottom"; a third column would have taken 20 rem or more from the editor on a 1280 px screen, while the stack keeps the editor exactly as wide as it was. The interactive editor's fullscreen layout follows the same order.
+- **The small layout's toggle starts closed.** "Behind a toggle" is what the design asks for, and a black 640 by 480 box appearing on every documentation instruction page and lecture would have changed pages that have nothing to do with graphics. The bar reads "Show screen" and turns into "Hide screen".
+- **Escape releases the panel and is not delivered to the program.** Every other key is taken, so a keyboard-only user would otherwise have no way out of the panel; Tab is delivered like any other key, which the EASy68K code table has an entry for. The canvas's tooltip says so. If a program ever needs Escape, the release gesture has to move to something else.
+- **Ctrl and Meta combinations keep their browser default** (copy, paste, devtools) while still being routed to the Keyboard as key transitions. That is the same split phase 2 chose for typed characters, and it is what the upstream TRS-80 keyboard does.
+- **Propagation is stopped for every key the panel takes**, which is what actually keeps the editor's shortcuts quiet: `preventDefault` alone does not stop the `window` listener in `Project.svelte`.
+- **The focus ring is drawn on `:focus`, not `:focus-visible`**, because clicking is how most users hand the keyboard to the program and they have to see that the editor's shortcuts are off.
+- **The zoom-to-fit toggle's off position is 1:1**, and the panel's viewport scrolls when the Screen does not fit. A free zoom control was not part of the design.
+- **The viewport is a scroll container (`overflow: auto`)**, which is also what keeps the canvas from widening the column it sits in: a scroll container's min-content contribution is zero, so a 640 px Screen never stretches the project page's right column.
+- **No automated tests.** The panel is DOM- and animation-frame-bound and vitest runs in a node environment here; the phase was verified in a real browser instead, as recorded above. The logic worth pinning (Screen version and dirty, Keyboard hold interval, Mouse clamping) already has tests from phases 1 and 2.
+
+### Left and blockers
+
+- No blocker. Phase 5 (Z80), phase 6 (the M68K editor half) and phase 7 (MIPS, RISC-V and the configuration popover) are untouched, and no adapter draws yet.
+- The panel is 20 rem tall wherever it is hosted, which leaves a small Screen (the Z80's 256 by 192) with margins and a large one (the M68K's 640 by 480) at about 60 percent. Phase 8 can revisit the height once real programs are on screen.
+- The chat page could not be walked end to end: it only mounts its editor once the agent has produced code. The fullscreen layout it uses was checked through a scratch route instead.
