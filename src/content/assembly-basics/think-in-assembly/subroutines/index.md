@@ -77,8 +77,9 @@ doubled:
 end:
 ```
 
-Here is where we see the stack being used. The instructions of that program are four bytes each and
-start at `0x1000`:
+Here is where we see the stack being used. In this simulator every instruction takes four bytes (a
+real 68000 packs them in two to ten, the idea is the same) and the program starts at `0x1000`, so
+the instructions sit at these addresses:
 
 |  address | instruction      |
 | -------: | ---------------- |
