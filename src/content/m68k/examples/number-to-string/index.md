@@ -9,7 +9,7 @@ used is the one that prints a string, and everything between the number and the 
 its tasks" lecture. What is new here is that the digits come out backwards, the last one first, so
 the buffer is filled from its end towards its front with `-(a1)`.
 
-```m68k|playground|console|no-flags
+```m68k|playground|console|no-flags|allow-open
     move.l #48879, d0       ; n = 48879
     move.l #16, d1          ; in hexadecimal
     bsr print_in_base

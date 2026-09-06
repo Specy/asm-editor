@@ -10,7 +10,7 @@ the ball must move at the same speed whatever the machine underneath is doing.
 mouse through traps" lecture. What is new here is double buffering, task 92 mode 17 sends every
 drawing to an off screen image and task 94 shows the whole of it at once.
 
-```m68k|playground|screen|no-registers|no-flags
+```m68k|playground|screen|no-registers|no-flags|allow-open
 SIZE    equ 40
 LIMITX  equ 640-40
 LIMITY  equ 480-40

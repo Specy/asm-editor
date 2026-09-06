@@ -10,7 +10,7 @@ likes.
 lecture. What is new here is `a6` as a frame pointer, it stays still in the middle of the frame while
 `sp` keeps moving, so `8(a6)` names the same argument from the first instruction to the last.
 
-```m68k|playground|memory|no-flags
+```m68k|playground|memory|no-flags|allow-open
     move.l #4, -(sp)        ; the second argument, b
     move.l #3, -(sp)        ; the first argument, a
     bsr sum_of_squares

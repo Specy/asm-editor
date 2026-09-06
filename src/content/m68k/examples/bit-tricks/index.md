@@ -9,7 +9,7 @@ same register as 32 bits side by side, which is the other way to read one and of
 a way out of a register, `lsr` drops the bit that falls off the bottom into `C` and a branch reads
 it.
 
-```m68k|playground|no-flags
+```m68k|playground|no-flags|allow-open
     move.l #182, d0     ; n = 182, which is %10110110
 
     btst #0, d0         ; is the lowest bit set?

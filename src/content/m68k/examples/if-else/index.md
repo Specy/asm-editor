@@ -9,7 +9,7 @@ where some instructions are skipped, and stepping through it is how you watch wh
 lecture. What is new here is that a branch chooses between two pieces of code, so the piece that runs
 first has to jump over the one that follows it.
 
-```m68k|playground|no-flags
+```m68k|playground|no-flags|allow-open
     move.l #37, d0      ; a = 37
     move.l #64, d1      ; b = 64
 

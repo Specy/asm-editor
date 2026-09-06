@@ -8,7 +8,7 @@ and finding it is the program's job.
 **You need to know:** the "Arrays, strings and `(a0)+`" lecture. What is new here is that the
 difference of two addresses is a number of bytes, so a length can be measured instead of counted.
 
-```m68k|playground|memory|no-flags
+```m68k|playground|memory|no-flags|allow-open
     lea text, a0        ; p = text
     move.l a0, d1       ; keep where the string starts
 scan:

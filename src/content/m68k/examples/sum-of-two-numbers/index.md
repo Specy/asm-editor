@@ -10,7 +10,7 @@ text you have to make sense of.
 new here is a task that answers, task 18 leaves the number that was typed in `d1.l`, so the register
 the program reads next is the one the environment wrote.
 
-```m68k|playground|console|no-flags
+```m68k|playground|console|no-flags|allow-open
     lea first, a1
     move.b #18, d0      ; task 18: print the prompt, then read a number
     trap #15

@@ -10,7 +10,7 @@ best one" program there is.
 What is new here is the best so far: a register that starts as the first element and is overwritten
 only when the loop meets something better.
 
-```m68k|playground|memory|no-flags
+```m68k|playground|memory|no-flags|allow-open
 count equ 8
 
     lea numbers, a0     ; a0 points at the first element

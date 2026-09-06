@@ -9,7 +9,7 @@ frame of its own at a fresh address and `8(a6)` means this call's argument.
 unlk" lecture. What is new here is a subroutine calling itself, which needs no mechanism the previous
 program did not already use.
 
-```m68k|playground|memory|no-flags
+```m68k|playground|memory|no-flags|allow-open
     move.l #8, -(sp)        ; n = 8
     bsr factorial
     add.l #4, sp

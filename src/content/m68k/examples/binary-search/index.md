@@ -10,7 +10,7 @@ million takes about twenty.
 is new here is a loop that jumps around its array instead of walking it, which is why the element is
 reached through an index rather than through a pointer that steps.
 
-```m68k|playground|memory|no-flags
+```m68k|playground|memory|no-flags|allow-open
 count equ 12
 
     lea numbers, a0     ; the array

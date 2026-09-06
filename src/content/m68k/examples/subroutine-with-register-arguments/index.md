@@ -11,7 +11,7 @@ work to.
 remainder" Example. What is new here is the call itself, `bsr` pushes the address of the instruction
 after it and jumps, and `rts` pops that address back and carries on there.
 
-```m68k|playground|no-flags
+```m68k|playground|no-flags|allow-open
     move.l #84, d0      ; a = 84
     move.l #36, d1      ; b = 36
     bsr gcd             ; a = gcd(a, b)

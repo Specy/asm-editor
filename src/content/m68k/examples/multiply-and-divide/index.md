@@ -9,7 +9,7 @@ and a word.
 **You need to know:** the "Arithmetic, logic and bits" lecture. What is new here is taking a packed
 answer apart, `swap` exchanges the two words of a register and an `and` keeps the one you want.
 
-```m68k|playground|no-flags
+```m68k|playground|no-flags|allow-open
     move.w #365, d0     ; days = 365
     move.w #24, d1
     mulu d1, d0         ; hours = days * 24

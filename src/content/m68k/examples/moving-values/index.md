@@ -10,7 +10,7 @@ moves: a number into a register, a register into another register, and an `add`.
 lecture. What is new here is the size on the last instruction, `.b` writes one byte of a register
 and leaves the three bytes above it exactly as they were.
 
-```m68k|playground|no-flags
+```m68k|playground|no-flags|allow-open
     move.l #30, d0      ; width = 30
     move.l #12, d1      ; height = 12
     move.l d0, d2       ; perimeter = width

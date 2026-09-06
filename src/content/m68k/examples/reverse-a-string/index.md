@@ -10,7 +10,7 @@ neither of them is a counter.
 new here is comparing two addresses, `cmp.l a0, a1` and a branch is what tells the loop that the two
 pointers have met.
 
-```m68k|playground|memory|no-flags
+```m68k|playground|memory|no-flags|allow-open
     lea text, a0        ; left = text
     move.l a0, a1       ; right = text
 find_end:

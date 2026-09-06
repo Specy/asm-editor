@@ -9,7 +9,7 @@ walks the array and an outer loop that says how often, and the two counters have
 10" Example. What is new here is nesting: the inner counter is set **inside** the outer loop, because
 it has to start again from the top on every pass.
 
-```m68k|playground|memory|no-flags
+```m68k|playground|memory|no-flags|allow-open
 count equ 8
 
     move.w #count-2, d0     ; the outer loop runs count-1 times

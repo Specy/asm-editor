@@ -9,7 +9,7 @@ Print a string asked the environment for a line of text. The screen is the same 
 string" Example. What is new here is that the screen has two colours of its own, a pen for lines,
 outlines and text and a fill for the insides of shapes, and each of them is set by a task of its own.
 
-```m68k|playground|screen|no-registers|no-flags
+```m68k|playground|screen|no-registers|no-flags|allow-open
 SKY     equ $00E0B070       ; a colour is $00BBGGRR: blue, green, then red
 GRASS   equ $003C9648
 SUN     equ $0000D2FF

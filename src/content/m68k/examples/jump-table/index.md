@@ -10,7 +10,7 @@ chain is compared against everything above it first. A table is looked up once w
 new here is a jump to an address the program worked out, `jmp (a1)` goes to whatever `a1` holds,
 which nothing in the source names.
 
-```m68k|playground|no-flags
+```m68k|playground|no-flags|allow-open
     move.l #6, d0           ; a = 6
     move.l #3, d1           ; b = 3
     move.l #2, d2           ; op = 2, the third entry of the table

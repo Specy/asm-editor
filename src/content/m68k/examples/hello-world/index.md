@@ -9,7 +9,7 @@ the environment and the M68K has one instruction for making requests. This is th
 request, the task number in `d0.b` says what you want, the other registers carry the arguments, and
 `trap #15` hands it over.
 
-```m68k|playground|console|no-registers|no-flags
+```m68k|playground|console|no-registers|no-flags|allow-open
     lea greeting, a1    ; the address of the string
     move.b #13, d0      ; task 13: print it and go to a new line
     trap #15

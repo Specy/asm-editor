@@ -10,7 +10,7 @@ put nothing in.
 here is that the destination of a `move` can be an address held in a register, `(a0)` writes the word
 where `a0` points and the `addq.l` under it moves `a0` on to the next element.
 
-```m68k|playground|memory|no-flags
+```m68k|playground|memory|no-flags|allow-open
 count equ 10
 
     lea numbers, a0     ; a0 points at the first element

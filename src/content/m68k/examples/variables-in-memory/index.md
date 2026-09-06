@@ -11,7 +11,7 @@ lecture. What is new here is the difference between a name that is a number and 
 address, `TAX` is replaced by 20 inside the instruction while `price` becomes `$2000` and the
 instruction goes to memory for what is there.
 
-```m68k|playground|memory|no-flags
+```m68k|playground|memory|no-flags|allow-open
 TAX equ 20
 
     move.l price, d0        ; total = price

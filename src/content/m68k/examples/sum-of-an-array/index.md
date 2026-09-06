@@ -9,7 +9,7 @@ keeps the address of the next element in an address register and increments it a
 What is new here is walking memory with a pointer, `(a0)` reads the memory `a0` points at and `(a0)+`
 reads it and then steps `a0` forward by the size of the read.
 
-```m68k|playground|memory|no-flags
+```m68k|playground|memory|no-flags|allow-open
     lea numbers, a0     ; a0 points at the first number
     move.w #count-1, d1 ; dbra runs the loop one more time than the counter
     clr.l d0            ; sum = 0

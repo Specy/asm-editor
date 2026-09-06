@@ -10,7 +10,7 @@ read.
 What is new here is the stride, the distance in bytes between one row and the next, which is what
 walking a column adds every pass.
 
-```m68k|playground|memory|no-flags
+```m68k|playground|memory|no-flags|allow-open
 ROWS equ 3
 COLS equ 4
 
