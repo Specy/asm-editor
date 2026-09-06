@@ -1,11 +1,10 @@
 [Assembly basics](/learn/courses/assembly-basics) went through registers, memory, branching and the
 stack once, using whichever language made each point clearest. From here on there is one language,
-and this is where it starts.
+the M68K.
 
 ## The machine
 
-**M68K** is short for the Motorola 68000, a family of CPUs. What matters for writing code is what it
-hands you:
+**M68K** is short for the Motorola 68000, a family of CPUs. It works with:
 
 - **Eight data registers**, `d0` to `d7`, 32 bits each. Numbers live here.
 - **Eight address registers**, `a0` to `a7`, also 32 bits. Addresses live here, and `a7` is the stack
@@ -15,16 +14,19 @@ hands you:
 - **Five flags**, `X`, `N`, `Z`, `V` and `C`, in a register of their own. Comparisons and most
   arithmetic write them, and the branch instructions read them.
 
+The registers panel next to every program on this page lists all sixteen. The two kinds are not
+interchangeable, some instructions take only one of them. For example `lea`, which loads an address,
+writes an address register and nothing else.
+
 The M68K is **big endian**: the most significant byte of a number sits at the lowest address, so a
 long you wrote as `$12345678` reads left to right in memory as `12 34 56 78`.
 
 ## The simulator
 
-There is no real 68000 in your browser, there is a simulator, and this one follows **EASy68K**. That
-matters in one place: everything a program does to the outside world (printing, reading a number,
-drawing, asking what time it is) goes through the instruction `trap #15`, with a task number in `d0`,
-and those task numbers are EASy68K's, task for task. The whole list is in
-[the traps documentation](/documentation/m68k/traps), and we will use two of them in a minute.
+There is no real 68000 in your browser, there is a simulator, and this one follows **EASy68K**.
+Printing, reading input and drawing go through the instruction `trap #15`, which is taught in the
+"Talking to the outside world" module of this course; until then, programs show what they did in the
+registers and the memory.
 
 ## How a program is written down
 
@@ -34,6 +36,9 @@ A line is a label, an instruction, a directive, a comment, or nothing.
   out the whole line, which is what you will see used for headings inside a program.
 - A **label** goes at the start of the line and ends with a colon: `start:`. It is just a name for
   the address of whatever comes next, code or data. The colon is required.
+- A **directive** is a line addressed to the assembler instead of the CPU. `org` says where in
+  memory the code goes, `dc` writes data there, `equ` gives a number a name. They get a lecture of
+  their own, "org, equ, dc and ds", later in this course.
 - Everything else is **indented**, one instruction per line. Four spaces is what these courses use.
 - **Case does not matter.** `MOVE.L D0, D1` and `move.l d0, d1` are the same instruction. We write
   lower case.
@@ -47,50 +52,42 @@ Numbers can be written in four bases, and a `#` in front means the number itself
 | `%1100100` | binary, still 100 |
 | `@144`     | octal, still 100  |
 
-The `#` is worth stopping on. `move.l #$2000, d0` puts the number `$2000` in `d0`. Drop the `#` and
-`move.l $2000, d0` reads the four bytes _at address_ `$2000` and puts those in `d0` instead. One
-character, two completely different instructions.
+`move.l #$2000, d0` puts the number `$2000` in `d0`. Drop the `#` and `move.l $2000, d0` reads the
+four bytes _at address_ `$2000` and puts those in `d0` instead. One character, two completely
+different instructions.
 
-Last piece: most instructions carry a **size**, which says how much of the register or of memory they
-touch. `.b` is one byte, `.w` is two (a word), `.l` is four (a long). Leave it off and you get a
-word, which is a good reason to always write it.
+Most instructions also carry a **size**, which says how much of the register or of memory they touch.
+`.b` is one byte, `.w` is two (a word), `.l` is four (a long). Leave it off and you get a word, which
+is a good reason to always write it.
 
 ## Your first program
 
-This one prints a line and stops. Press **Build**, then **Run**, and the text lands in the console
-panel.
+This one puts two numbers in registers and adds them. Press **Build**, then **Run**, and read the
+answer in `d0` in the registers panel.
 
-```m68k|playground|console|no-flags
-    ORG $1000
-start:
-    lea message, a1     ; a1 points at the text
-    move.b #13, d0      ; task 13, print a string and go to a new line
-    trap #15
-    move.b #9, d0       ; task 9, stop the program
-    trap #15
-
-message: dc.b 'Hello, 68000!', 0
+```m68k|playground|no-flags
+    move.l #10, d0      ; x = 10
+    move.l #32, d1      ; y = 32
+    add.l d1, d0        ; x = x + y
 ```
 
-Four new things, one line at a time. `ORG $1000` tells the assembler where in memory to put what
-follows, and `$1000` is where programs in this editor conventionally start. `dc.b` writes the bytes
-that follow it into memory, here the letters of the message and a `0` to mark the end of it, and
-`message` is the label for the address of the first of those bytes. `lea` (load effective address)
-puts that address into `a1`, which is where task 13 looks for the string. And `trap #15` hands
-control to the simulator, which reads `d0` to find out what you wanted: 13 to print, 9 to stop.
+`move.l #10, d0` writes the number 10 into all four bytes of `d0`, and the line under it does the
+same with 32 and `d1`. `add.l d1, d0` adds the two registers and leaves the answer in `d0`, because
+on the M68K the operand on the right is the destination, the one that gets written. So `d0` ends at
+42 and `d1` is still 32.
 
-The task number is a byte, which is why it goes in with `move.b`. The `9` at the end is not optional
-housekeeping, without it the program would carry on past the `trap` and start executing the letters
-of your message as if they were instructions.
+**Build** assembles what you wrote and points the simulator at the first instruction, **Run** runs
+the program to the end, and **Step**, which we use further down, runs one instruction at a time.
 
-Try changing task 13 to task 14, which prints the same string without the new line. Then try changing
-the message, and remember to leave the `0` at the end of the `dc.b`.
+Nothing in the program says "stop". The simulator ends a program when there is no next instruction to
+run, which here is the end of what you wrote.
+
+Try changing `add.l d1, d0` to `add.l d0, d1` and see the answer come out in `d1` instead.
 
 ## Sizes in the registers panel
 
-A size touches the low end of the register and leaves the rest of it alone. That is easiest to
-believe by watching it, so build this one and press **Step** four times, keeping an eye on `d0` in
-the registers panel.
+A size touches the low end of the register and leaves the rest of it alone. Build this one and press
+**Step** four times, keeping an eye on `d0` in the registers panel.
 
 ```m68k|playground|no-flags
     move.l #$AABBCCDD, d0   ; fill d0 so the sizes are easy to see
@@ -104,9 +101,8 @@ Try putting `move.b #$11, d0` back at the end and see that `$33333333` becomes `
 
 ## The flags panel
 
-The other panel worth watching on the M68K is the flags, just above the registers. `cmp` subtracts
-its first operand from its second, throws the answer away and keeps only what the answer did to the
-flags. `Z` goes to 1 when the two were equal, which is what `beq` and `bne` read.
+`cmp` subtracts its first operand from its second, throws the answer away and keeps only what the
+answer did to the flags. `Z` goes to 1 when the two were equal, which is what `beq` and `bne` read.
 
 ```m68k|playground
     move.l #5, d0       ; x = 5
