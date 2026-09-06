@@ -30,9 +30,12 @@ ADR 0012.
    the ladders; its URLs redirect.
 8. Slugs `m68k`, `mips`, `risc-v`, `z80`. Names "M68K assembly", "MIPS assembly", "RISC-V assembly",
    "Z80 assembly". Courses page order: Assembly basics, M68K, MIPS, RISC-V, Z80. Author Specy.
-9. Length targets: General lectures 500 to 900 words with one to three Playgrounds; Language lectures
-   800 to 1,500 words with three to five Playgrounds and one or two Exercises; Example pages 150 to 300
-   words of prose. Full scale: 175 pages, 92 verified programs.
+9. Length guides, not limits (Specy, 2026-09-06: "better prioritize proper explanation than word
+   count"): General lectures around 500 to 900 words with one to three Playgrounds; Language lectures
+   around 800 to 1,500 words with three to five Playgrounds and one or two Exercises; Example pages
+   around 150 to 300 words of prose. A lecture is as long as its explanation needs; the lower number
+   is the one that matters, and no explanation is ever cut to hit the upper one. Full scale: 175
+   pages, 96 verified programs.
 10. Playgrounds get a `screen` flag (off by default) so the Screen peripheral can be shown inline.
 11. Work happens in a git worktree at `/home/dev/code/asm-editor-courses` on branch `feat/courses`
     cut from `feat/screen-peripherals`; it becomes a pull request after PR #71 merges. Content under

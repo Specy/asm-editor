@@ -168,6 +168,13 @@ them.
 Same as today: overview depth, examples from more than one language, "try changing" prompts and no
 Exercises.
 
+## How long a page is
+
+As long as the explanation needs. The word counts in the plan say how deep a page goes, they are not
+limits: a lecture that needs two thousand words to explain the stack frame properly gets them, and
+nothing is cut to land under a number. What gets cut is a sentence that does not explain (see "Say
+it straight"), never an explanation.
+
 ## Before a page is done
 
 - It reads aloud like the reference lectures.
