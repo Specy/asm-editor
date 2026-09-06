@@ -64,6 +64,7 @@ export class ProgramClock {
     private origin: number
     /** Virtual mode: how far the program's own waits have moved the clock. */
     private elapsed = 0
+    private _waitedMs = 0
 
     constructor(options: ProgramClockOptions = {}) {
         this._mode = options.mode ?? 'host'
@@ -83,6 +84,17 @@ export class ProgramClock {
     /** How many waits are outstanding; the run loop and the tests use it to see a program suspended. */
     get pendingWaits(): number {
         return this.pending.size
+    }
+
+    /**
+     * Host milliseconds this clock has spent holding a program in a wait, since the clock was made.
+     * The scheduler subtracts it from a slice's wall time before judging how fast the Core is: an
+     * adapter that serves a `sleep` inside its slice (MIPS, RISC-V and x86 do) would otherwise look
+     * a hundred times slower than it is ([ADR 0007](../../../../docs/adr/0007-generic-emulator-run-scheduling.md)).
+     * A virtual clock never waits at all, so it never moves this.
+     */
+    get waitedMs(): number {
+        return this._waitedMs
     }
 
     /** Puts the clock back to zero for a new run. Does not touch waits an old run left behind. */
@@ -164,8 +176,10 @@ export class ProgramClock {
 
     private schedule(arm: (resume: () => void) => () => void): Promise<void> {
         return new Promise<void>((resolve) => {
+            const armedAt = this.hostTime()
             const wait: PendingWait = { disarm: () => {}, settle: () => {} }
             wait.settle = () => {
+                if (this.pending.has(wait)) this._waitedMs += this.hostTime() - armedAt
                 this.pending.delete(wait)
                 resolve()
             }

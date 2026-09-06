@@ -14,7 +14,12 @@ import {
     type ExecutionStep,
     type StackFrame
 } from '$lib/languages/commonLanguageFeatures.svelte'
-import type { ExecutionSlice, ExecutionSliceRequest } from '$lib/languages/ExecutionSlice'
+import {
+    COMPUTE_SLICE_MS,
+    SCREEN_SLICE_MS,
+    type ExecutionSlice,
+    type ExecutionSliceRequest
+} from '$lib/languages/ExecutionSlice'
 import { Screen } from '$lib/languages/peripherals/screen/Screen'
 import { RECORD_OVERHEAD_BYTES } from '$lib/languages/peripherals/screen/ScreenHistory'
 import type { Testcase } from '$lib/Project.svelte'
@@ -28,7 +33,10 @@ import { settingsStore } from '$stores/settingsStore.svelte'
 
 type FakeRegister = 'R0'
 
-type SliceBehavior = (request: ExecutionSliceRequest, slice: number) => ExecutionSlice
+type SliceBehavior = (
+    request: ExecutionSliceRequest,
+    slice: number
+) => ExecutionSlice | Promise<ExecutionSlice>
 
 class FakeEmulator extends GenericEmulator<object, FakeRegister> {
     /** Every request the scheduler made, in order. */
@@ -51,7 +59,7 @@ class FakeEmulator extends GenericEmulator<object, FakeRegister> {
 
     async _runSlice(request: ExecutionSliceRequest): Promise<ExecutionSlice> {
         this.requests.push(request)
-        const slice = this.behavior(request, this.requests.length - 1)
+        const slice = await this.behavior(request, this.requests.length - 1)
         this.coreSteps += slice.instructions
         return slice
     }
@@ -228,7 +236,11 @@ describe('slice scheduling', () => {
             return { reason: index < 2 ? 'budget' : 'terminated', instructions: 1 }
         }
         await emulator.run(1000)
-        expect(emulator.requests.map((r) => r.timeBudgetMs)).toEqual([100, 16, 16])
+        expect(emulator.requests.map((r) => r.timeBudgetMs)).toEqual([
+            COMPUTE_SLICE_MS,
+            SCREEN_SLICE_MS,
+            SCREEN_SLICE_MS
+        ])
     })
 
     it('runs a long budget when the Screen panel is hidden', async () => {
@@ -237,7 +249,53 @@ describe('slice scheduling', () => {
         emulator.peripherals.screen.drawPixel(1, 1)
         emulator.behavior = () => ({ reason: 'terminated', instructions: 1 })
         await emulator.run(1000)
-        expect(emulator.requests[0].timeBudgetMs).toBe(100)
+        expect(emulator.requests[0].timeBudgetMs).toBe(COMPUTE_SLICE_MS)
+    })
+
+    it('grows the budget of a Core the estimate was too slow for', async () => {
+        const emulator = new FakeEmulator()
+        emulator.peripherals.screen.markPainted()
+        emulator.behavior = (_request, index) => {
+            //five milliseconds of a fifty millisecond target: the adapter's estimate is ten times
+            //too small, and one slice may move the correction by four
+            burnMilliseconds(5)
+            if (index < 3) return { reason: 'budget', instructions: 1_000 }
+            return { reason: 'terminated', instructions: 1 }
+        }
+        await emulator.run(1_000_000)
+        expect(emulator.requests.map((r) => r.timeBudgetMs)).toEqual(
+            emulator.requests.map(() => COMPUTE_SLICE_MS)
+        )
+        expect(emulator.requests.map((r) => r.speedCorrection)).toEqual([1, 4, 16, 16])
+    })
+
+    it('does not mistake a program’s own wait for a slow Core', async () => {
+        const emulator = new FakeEmulator()
+        emulator.peripherals.screen.markPainted()
+        emulator.behavior = async (_request, index) => {
+            //the MIPS, RISC-V and x86 adapters serve a program's sleep without leaving their slice
+            await emulator.peripherals.clock.wait(30)
+            if (index < 2) return { reason: 'budget', instructions: 1_000 }
+            return { reason: 'terminated', instructions: 1 }
+        }
+        await emulator.run(1_000_000)
+        expect(emulator.requests.map((r) => r.speedCorrection)).toEqual([1, 1, 1])
+    })
+
+    it('starts again from the adapters’ own estimates after a clear', async () => {
+        const emulator = new FakeEmulator()
+        emulator.peripherals.screen.markPainted()
+        emulator.behavior = (_request, index) => {
+            burnMilliseconds(5)
+            if (index < 1) return { reason: 'budget', instructions: 1_000 }
+            return { reason: 'terminated', instructions: 1 }
+        }
+        await emulator.run(1_000_000)
+        expect(emulator.requests[1].speedCorrection).toBe(4)
+        emulator.clear()
+        emulator.behavior = () => ({ reason: 'terminated', instructions: 1 })
+        await emulator.run(1_000_000)
+        expect(emulator.requests[emulator.requests.length - 1].speedCorrection).toBe(1)
     })
 
     it('resumes after a program-requested wait without charging it', async () => {
@@ -395,3 +453,11 @@ describe('testcase run configuration', () => {
         expect(emulator.peripherals.clock.isVirtual).toBe(false)
     })
 })
+
+/** Holds the host for a while, which is what a Core does inside a slice. */
+function burnMilliseconds(milliseconds: number): void {
+    const until = performance.now() + milliseconds
+    while (performance.now() < until) {
+        //a busy loop is the point: a slice is measured by the wall clock it holds
+    }
+}

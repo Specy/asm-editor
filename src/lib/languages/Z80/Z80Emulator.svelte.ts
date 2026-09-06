@@ -27,6 +27,9 @@ import { GenericEmulator } from '$lib/languages/GenericEmulator.svelte'
 import {
     type ExecutionSlice,
     type ExecutionSliceRequest,
+    MIN_SLICE_CHUNK,
+    nextSliceChunk,
+    sliceDeadline,
     sliceInstructionBudget
 } from '$lib/languages/ExecutionSlice'
 import type { ExecutionGeneration } from '$lib/languages/ExecutionController'
@@ -65,9 +68,18 @@ type CoreRegisterKey = (typeof CORE_REGISTER_BY_NAME)[Z80RegisterName]
 
 /**
  * How many instructions the machine runs in a millisecond, used to turn a slice's time budget into
- * an instruction budget. Provisional, measured in phase 8.
+ * an instruction budget. Measured in phase 8 on a compute-only loop under node, which came to about
+ * eleven thousand; the estimate is rounded down because every other program is slower.
  */
-const Z80_INSTRUCTIONS_PER_MS = 20_000
+const Z80_INSTRUCTIONS_PER_MS = 10_000
+
+/**
+ * How much of a slice's time budget one `run` call aims at. A quarter means a compute-only run costs
+ * four calls per slice, which is nothing, and a run whose instructions turn out to be far more
+ * expensive than the estimate — a drawing loop, where one `out` clears the Screen — overshoots the
+ * budget by at most that quarter before the deadline stops it.
+ */
+const CHUNK_TARGET_FRACTION = 1 / 4
 
 const NOT_INITIALIZED_ERROR = 'Interpreter not initialized'
 
@@ -271,11 +283,21 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         const execution = this.executionController.capture()
         const stops = [...this.toBreakpointAddresses(request.breakpoints), ...this.cliffBreakpoints]
         let instructions = 0
+        //the budget is spent in chunks so the wall clock can be looked at between them: a Z80
+        //instruction is a fraction of a microsecond, but one `out` can clear the whole Screen and
+        //journal the image it overwrote, so instructions alone say nothing about how long the host
+        //will be held. The first chunk is small and the next ones are sized from what it cost
+        const deadline = sliceDeadline(request)
+        const chunkTargetMs = request.timeBudgetMs * CHUNK_TARGET_FRACTION
+        const chunkCap = Math.floor(budget * CHUNK_TARGET_FRACTION)
+        let chunk = MIN_SLICE_CHUNK
         while (instructions < budget) {
+            const startedAt = performance.now()
             const result = machine.run({
-                maxInstructions: budget - instructions,
+                maxInstructions: Math.min(chunk, budget - instructions),
                 breakpoints: stops
             })
+            const spentMs = performance.now() - startedAt
             this.trackLastInstruction(result.instructions > 0, result.reason)
             instructions += result.instructions
             if (result.reason === StopReason.WAITING_FOR_INPUT) {
@@ -294,6 +316,12 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
             if (result.reason !== StopReason.INSTRUCTIONS_EXHAUSTED) {
                 return { reason: 'breakpoint', instructions }
             }
+            //the slice ends on the clock as well as on the budget, but never without progress: a
+            //slice that ran nothing ends the whole run
+            if (instructions > 0 && performance.now() >= deadline) {
+                return { reason: 'budget', instructions }
+            }
+            chunk = nextSliceChunk(chunk, chunkTargetMs, spentMs, chunkCap)
         }
         return { reason: 'budget', instructions }
     }

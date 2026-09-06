@@ -63,8 +63,13 @@ export type ScreenRecord = {
  */
 export const RECORD_OVERHEAD_BYTES = 64
 
-/** Phase 8 measures the animation examples and sets the shipped default; this is a starting point. */
-export const DEFAULT_SCREEN_HISTORY_BYTES = 32 * 1024 * 1024
+/**
+ * The budget a Screen built without one gets. It matches the shipped `screenHistoryBudgetMb`
+ * setting, which every Emulator applies on its clear path: phase 8 measured the heaviest animation
+ * example, a 640 by 480 M68K program that journals a whole image twice a frame, needing 59 MB for
+ * the 100 undo steps the shipped Core history keeps.
+ */
+export const DEFAULT_SCREEN_HISTORY_BYTES = 64 * 1024 * 1024
 
 export function recordBytes(record: ScreenRecord): number {
     const pixels = record.pixels

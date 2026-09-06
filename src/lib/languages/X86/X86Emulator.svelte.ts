@@ -37,9 +37,11 @@ import structuredClone from '@ungap/structured-clone'
 
 /**
  * How many instructions Blink runs in a millisecond, used to turn a slice's time budget into a run
- * limit. Provisional, measured in phase 8.
+ * limit. Measured in phase 8 on a compute-only loop under node: about 11, two hundred times slower
+ * than the estimate this replaces, which held the host for nine tenths of a second per slice and
+ * answered Stop seventeen seconds after it was pressed.
  */
-const X86_INSTRUCTIONS_PER_MS = 2_000
+const X86_INSTRUCTIONS_PER_MS = 10
 
 export const DEFAULT_X86_FLAGS = [
     { name: 'CF', value: 0 },

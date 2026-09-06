@@ -429,6 +429,81 @@ describe('M68K Undo and testcases', () => {
     })
 })
 
+describe('M68K slices', () => {
+    /**
+     * Clears and repaints the whole 640 by 480 image as fast as it can. The Core charges one
+     * instruction per trap, so five instructions a frame: the case where the instruction budget says
+     * nothing about how long the host will be held (phase 8).
+     */
+    const DRAWING_LOOP = [
+        '    move.b  #92,d0',
+        '    move.l  #17,d1',
+        '    trap    #15',
+        'loop:',
+        '    move.b  #11,d0',
+        '    move.l  #$FF00,d1',
+        '    trap    #15',
+        '    move.b  #94,d0',
+        '    trap    #15',
+        '    bra     loop'
+    ].join('\n')
+
+    it('names the run’s own limit when the last slice exhausts it', async () => {
+        //a trap loop: the Core charges one instruction per trap and reports an exhausted limit by
+        //throwing an error naming the halt limit it was given, which is a slice's share of the run
+        const code =
+            ORG + '    move.b  #6,d0\n    move.l  #65,d1\nloop:\n    trap #15\n    bra loop\n'
+        const emulator = M68KEmulator(code)
+        await emulator.compile(0, code)
+        const runner = emulator as unknown as {
+            _runSlice: (request: {
+                instructionBudget: number
+                timeBudgetMs: number
+                breakpoints: number[]
+                runInstructionLimit: number
+                speedCorrection: number
+            }) => Promise<unknown>
+        }
+        await expect(
+            runner._runSlice({
+                instructionBudget: 5,
+                timeBudgetMs: 50,
+                breakpoints: [],
+                runInstructionLimit: 200,
+                speedCorrection: 1
+            })
+        ).rejects.toEqual({ type: 'ExecutionLimit', value: 200 })
+    })
+
+    it('ends a slice on its deadline when its instructions are screens of work', async () => {
+        const code = ORG + DRAWING_LOOP
+        const emulator = M68KEmulator(code)
+        await emulator.compile(0, code)
+        //the adapter's estimate would let fifteen thousand instructions into a 1 ms slice, and this
+        //program charges five of them per whole-image clear and repaint
+        const slice = await (
+            emulator as unknown as {
+                _runSlice: (request: {
+                    instructionBudget: number
+                    timeBudgetMs: number
+                    breakpoints: number[]
+                    runInstructionLimit: number
+                    speedCorrection: number
+                }) => Promise<{ reason: string; instructions: number }>
+            }
+        )._runSlice({
+            instructionBudget: 1_000_000,
+            timeBudgetMs: 1,
+            breakpoints: [],
+            runInstructionLimit: 1_000_000,
+            speedCorrection: 1
+        })
+        expect(slice.reason).toBe('budget')
+        expect(slice.instructions).toBeGreaterThan(0)
+        expect(slice.instructions).toBeLessThan(1_000)
+    })
+})
+
 describe('M68K trap documentation', () => {
     it('documents a task for every group', async () => {
         const groups = new Set(M68K_TRAP_DOCS.map((doc) => doc.group))

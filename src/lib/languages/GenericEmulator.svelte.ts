@@ -21,6 +21,7 @@ import {
 import { ProgramClock } from '$lib/languages/peripherals/ProgramClock'
 import {
     COMPUTE_SLICE_MS,
+    nextSpeedCorrection,
     type ExecutionSlice,
     SCREEN_SLICE_MS,
     yieldToHost
@@ -53,6 +54,12 @@ export abstract class GenericEmulator<T, R extends string>
      */
     private readonly interactiveClock: ProgramClock
     private semanticCheckId = 0
+    /**
+     * What the slices of the current run have taught about how fast this program runs, multiplied
+     * into the adapter's own throughput estimate. 1 until a slice says otherwise, and back to 1 on
+     * every clear (`learnSliceSpeed`, [ADR 0007](../../../docs/adr/0007-generic-emulator-run-scheduling.md)).
+     */
+    private speedCorrection = 1
     /** Number of core operations currently in flight, see `duringCoreOperation`. */
     private coreOperations = 0
     private coreIdleWaiters: (() => void)[] = []
@@ -385,6 +392,8 @@ export abstract class GenericEmulator<T, R extends string>
     // ----- public api ----- //
     clear(): void {
         this.executionController.invalidate()
+        //a new program is a new speed, and the estimates in the adapters are where it starts again
+        this.speedCorrection = 1
         this.resetPeripherals()
         this.state = {
             ...this.state,
@@ -513,13 +522,25 @@ export abstract class GenericEmulator<T, R extends string>
     private async runSlices(haltLimit: number, execution: ExecutionGeneration): Promise<void> {
         let remaining = haltLimit
         while (remaining > 0) {
+            const targetMs = this.sliceTimeBudgetMs()
+            const clock = this._peripherals.clock
+            const startedAt = performance.now()
+            const waitedAt = clock.waitedMs
             const slice: ExecutionSlice = await this._runSlice({
                 //the whole rest of the limit, so an adapter can cap it with its own throughput
                 //estimate of `timeBudgetMs` and never has to know how long the run has been going
                 instructionBudget: remaining,
-                timeBudgetMs: this.sliceTimeBudgetMs(),
-                breakpoints: this.state.breakpoints
+                timeBudgetMs: targetMs,
+                breakpoints: this.state.breakpoints,
+                runInstructionLimit: haltLimit,
+                speedCorrection: this.speedCorrection
             })
+            this.learnSliceSpeed(
+                slice,
+                targetMs,
+                performance.now() - startedAt,
+                clock.waitedMs - waitedAt
+            )
             this.executionController.ensureCurrent(execution)
             const progress = Math.max(0, slice.instructions)
             remaining -= progress
@@ -542,10 +563,29 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     /**
+     * What the last slice taught about how fast this program runs
+     * ([ADR 0007](../../../docs/adr/0007-generic-emulator-run-scheduling.md)). Only a slice that came
+     * back on its budget says anything — one cut short by a breakpoint, a wait or the end of the
+     * program says nothing — and only the part of it that was compute: an adapter that serves a
+     * program's `sleep` without leaving its slice would otherwise look like a Core a hundred times
+     * slower than it is.
+     */
+    private learnSliceSpeed(
+        slice: ExecutionSlice,
+        targetMs: number,
+        elapsedMs: number,
+        waitedMs: number
+    ): void {
+        if (slice.reason !== 'budget' || slice.instructions <= 0) return
+        const busyMs = Math.max(0, elapsedMs - Math.min(waitedMs, elapsedMs))
+        this.speedCorrection = nextSpeedCorrection(this.speedCorrection, targetMs, busyMs)
+    }
+
+    /**
      * How long the next slice should aim to run. A Screen with pixels the renderer has not painted
      * yet means an animating program, which needs to reach its next frame and its next input poll
-     * soon; everything else is compute and yields only often enough to keep Stop answering.
-     * Provisional values, measured in phase 8.
+     * soon; everything else is compute and yields only often enough to keep Stop answering. Measured
+     * in phase 8; `speedCorrection` is what turns the target into instructions for this program.
      */
     private sliceTimeBudgetMs(): number {
         const screen = this._peripherals.screen

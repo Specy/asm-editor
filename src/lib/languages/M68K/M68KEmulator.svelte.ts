@@ -18,6 +18,7 @@ import {
 import {
     type ExecutionSlice,
     type ExecutionSliceRequest,
+    sliceDeadline,
     sliceInstructionBudget
 } from '$lib/languages/ExecutionSlice'
 import {
@@ -73,9 +74,11 @@ const M68K_FLAG_NAMES = ['X', 'N', 'Z', 'V', 'C']
 
 /**
  * How many instructions the s68k interpreter runs in a millisecond, used to turn a slice's time
- * budget into a halt limit. Provisional, measured in phase 8.
+ * budget into a halt limit. Measured in phase 8 on a compute-only loop under node, which came to
+ * about eighteen thousand; the estimate is rounded down because every other program is slower, and
+ * a trap-heavy one is bounded by the slice's deadline instead (see `_runSlice`).
  */
-const M68K_INSTRUCTIONS_PER_MS = 20_000
+const M68K_INSTRUCTIONS_PER_MS = 15_000
 
 const READ_CHAR_QUESTION = 'Enter a character'
 const READ_NUMBER_QUESTION = 'Enter a number'
@@ -368,10 +371,19 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         const parsedBreakpoints = new Uint32Array(request.breakpoints)
         const hasBreakpoints = parsedBreakpoints.length > 0
         const execution = this.executionController.capture()
+        //a trap is one instruction of progress but can be a whole screen of work, so the budget says
+        //nothing about how long this slice will hold the host: a program that clears and repaints in
+        //a loop charged five instructions a frame and ran for minutes on the budget alone. The clock
+        //is looked at once per trap, which is this loop's own granularity (phase 8)
+        const deadline = sliceDeadline(request)
         let instructions = 0
         while (!interpreter.hasTerminated()) {
             const remaining = budget - instructions
             if (remaining <= 0) return { reason: 'budget', instructions }
+            //never without progress: a slice that ran nothing ends the whole run
+            if (instructions > 0 && performance.now() >= deadline) {
+                return { reason: 'budget', instructions }
+            }
             try {
                 if (hasBreakpoints) {
                     interpreter.runWithBreakpoints(parsedBreakpoints, remaining)
@@ -383,8 +395,11 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                     interpreter.runWithLimit(remaining)
                 }
             } catch (error) {
-                if (isLastSlice || !isExecutionLimitError(error)) throw error
-                return { reason: 'budget', instructions: budget }
+                if (!isExecutionLimitError(error)) throw error
+                if (!isLastSlice) return { reason: 'budget', instructions: budget }
+                //the Core names the halt limit it was given, which is this slice's share of the
+                //run; the user set the whole run's limit and that is the number they recognize
+                throw { type: 'ExecutionLimit', value: request.runInstructionLimit }
             }
             //an interrupt is one instruction of progress: without it a program that does nothing but
             //trap would never reach the run's limit, which is what the old unaccounted loop did

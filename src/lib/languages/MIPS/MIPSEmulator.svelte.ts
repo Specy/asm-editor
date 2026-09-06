@@ -84,8 +84,8 @@ const READ_STRING_QUESTION = 'Enter a string'
 
 /**
  * How many instructions the TeaVM compiled Core runs in a millisecond, used to turn a slice's time
- * budget into a halt limit. Provisional: the phase 7 Core measurements put a framebuffer program at
- * roughly a thousand instructions per millisecond under node. Measured properly in phase 8.
+ * budget into a halt limit. Measured in phase 8 on a compute-only loop under node, built with the
+ * shipped undo history: about 1 100 to 1 200, so the phase 7 estimate stands.
  */
 const MIPS_INSTRUCTIONS_PER_MS = 1_000
 

@@ -56,10 +56,13 @@ const READ_STRING_QUESTION = 'Enter a string'
 
 /**
  * How many instructions the TeaVM compiled Core runs in a millisecond, used to turn a slice's time
- * budget into a halt limit. Provisional: the phase 7 Core measurements put a framebuffer program at
- * roughly a thousand instructions per millisecond under node. Measured properly in phase 8.
+ * budget into a halt limit. Measured in phase 8 on a compute-only loop under node, built with the
+ * shipped undo history: about 27, forty times slower than the phase 7 estimate this replaces, which
+ * had a slice hold the host for three and a half seconds. RARS records a backstep entry per
+ * instruction and that is what costs — the same loop runs at 460 with undo turned off — so the
+ * estimate follows the shipped default, where undo is on.
  */
-const RISCV_INSTRUCTIONS_PER_MS = 1_000
+const RISCV_INSTRUCTIONS_PER_MS = 25
 
 const INVALID_CHARACTER_ERROR = 'Invalid character'
 const INVALID_NUMBER_ERROR = 'Invalid number'
