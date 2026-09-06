@@ -118,6 +118,46 @@ take:
         sw      t1, 12(s0)      # transmitter data: print it`
     )
 
+    const directiveExample = $derived(
+        variant === 'MIPS'
+            ? `# @screen unit=1 width=256 height=256 base=display
+
+        .data
+display:.space  262144          # 256 * 256 words
+
+        .text
+main:
+        la      $t0, display`
+            : `# @screen unit=1 width=256 height=256 base=display
+
+        .data
+display:.space  262144          # 256 * 256 words
+
+        .text
+main:
+        la      t0, display`
+    )
+
+    const directiveSettings = [
+        {
+            name: 'width',
+            description: `The display width in pixels, one of ${MARS_DISPLAY_SIZE_CHOICES.join(', ')}.`
+        },
+        {
+            name: 'height',
+            description: `The display height in pixels, one of ${MARS_DISPLAY_SIZE_CHOICES.join(', ')}.`
+        },
+        {
+            name: 'unit',
+            description: `How many pixels wide and high one word is drawn, one of ${MARS_UNIT_SIZE_CHOICES.join(', ')}. \`unitWidth\` and \`unitHeight\` set the two separately.`
+        },
+        {
+            name: 'base',
+            description:
+                'Where the grid starts: **a label the program defines**, which is the point of it — the program never has to know the address — or an address such as `0x10010000` or `268500992`. A label not on a word boundary is rounded down to one.'
+        }
+    ]
+
     function hex(address: number): string {
         return `0x${(address >>> 0).toString(16).padStart(8, '0')}`
     }
@@ -142,10 +182,9 @@ take:
         </p>
         <p class="note">
             The screen panel's <strong>Display</strong> button configures it, with {simulator}'s own
-            five parameters. There is no way for a program to set them: like the tool it comes from,
-            the display is something the user points at a region of memory. The parameters are saved
-            with the project, and testcases run with them too, which is why every example states
-            them in its header comment.
+            five parameters, and a program can ask for them itself with the
+            <a href="#screen-directive">@screen comment</a> below. The parameters are saved with the project,
+            and testcases run with them too.
         </p>
         <Card gap="0.6rem" padding="1rem" background="secondary" style="width: 100%;">
             <div class="row">
@@ -191,6 +230,52 @@ take:
             is writing over something else. Undo walks the picture back with the code, because the
             picture <em>is</em> the memory the emulator rolled back.
         </p>
+    </section>
+
+    <section class="group">
+        <h2 class="group-title" id="screen-directive">Configuring the screen from the program</h2>
+        <p class="note">
+            A comment line naming <code>@screen</code> sets those five parameters at every
+            <strong>Build</strong>, before the first instruction runs, so opening a program and
+            building it is all it takes. It is a comment, so the same file still assembles in
+            {simulator}, where you set the parameters in the tool's window as usual.
+        </p>
+        <MarkdownRenderer
+            source={`\`\`\`${fence}\n${directiveExample}\n\`\`\``}
+            {disableLinks}
+            simpleCode
+        />
+        <Card gap="0.6rem" padding="1rem" background="secondary" style="width: 100%;">
+            {#each directiveSettings as setting (setting.name)}
+                <div class="row">
+                    <span class="tag wide">{setting.name}</span>
+                    <span class="sub-description">
+                        <MarkdownRenderer source={setting.description} {disableLinks} simpleCode />
+                    </span>
+                </div>
+            {/each}
+        </Card>
+        <ul class="rules">
+            <li>
+                Order and spacing do not matter, commas are allowed between settings, and
+                <code>unitWidth</code>, <code>unit-width</code> and <code>unitwidth</code> are the same
+                name.
+            </li>
+            <li>
+                What the directive leaves out keeps the value it had, and a program with no
+                <code>@screen</code> line changes nothing at all: the configuration stays yours.
+            </li>
+            <li>
+                A value {simulator} has no entry for, an unknown setting or a label that does not exist
+                is a <em>warning</em> on the directive's line, never an error: a comment cannot stop a
+                program from assembling. A size off the list is replaced by the nearest one on it, and
+                anything else is left as it was.
+            </li>
+            <li>
+                Changing a parameter in the <strong>Display</strong> popover afterwards wins, until the
+                next Build reads the comment again.
+            </li>
+        </ul>
     </section>
 
     <section class="group">
@@ -260,8 +345,9 @@ take:
             </li>
             <li>There is no mouse: neither simulator's tools have one.</li>
             <li>
-                Programs live in <code>{examples}</code> in the repository, one per feature, each with
-                the display parameters it wants in its header comment.
+                Programs live in <code>{examples}</code> in the repository, one per feature, each
+                naming the display it wants in an <code>@screen</code> comment; {simulator} has no such
+                directive and ignores the line.
             </li>
         </ul>
     </section>

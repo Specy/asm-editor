@@ -24,7 +24,10 @@
     } from '$lib/languages/commonLanguageFeatures.svelte'
     import ScreenRenderer from '$cmp/specific/project/screen/ScreenRenderer.svelte'
     import ScreenDisplayConfiguration from '$cmp/specific/project/screen/ScreenDisplayConfiguration.svelte'
-    import { DEFAULT_PROJECT_DISPLAY } from '$lib/languages/mars/marsDisplay'
+    import {
+        DEFAULT_PROJECT_DISPLAY,
+        type MarsDisplayOrigin
+    } from '$lib/languages/mars/marsDisplay'
     import { languageHasScreen } from '$lib/languages/peripherals/peripheralSet'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import FaDesktop from '~icons/fa-solid/desktop'
@@ -84,7 +87,22 @@
     //no project to save it in here, so the lecture, exam, embed and chat surfaces get the popover
     //with the display living for as long as the page does. Only MIPS and RISC-V have one at all
     let display = $state(DEFAULT_PROJECT_DISPLAY)
+    /** Whether the display on screen came from the program's own `@screen` comment, see `syncDisplay`. */
+    let displayOrigin: MarsDisplayOrigin = $state('user')
+    let displayBaseLabel: string | undefined = $state(undefined)
     const configurableDisplay = $derived(emulator.setDisplay !== undefined)
+
+    /**
+     * A Build reads the program's `@screen` directive, so the emulator may have configured itself
+     * from the source; the popover follows it. A program without one changes nothing.
+     */
+    function syncDisplay() {
+        const configured = emulator.getDisplay?.()
+        if (!configured) return
+        displayOrigin = configured.origin
+        displayBaseLabel = configured.baseLabel
+        if (configured.origin === 'directive') display = configured.display
+    }
     //the small layout has no room to spare, so the Screen starts folded away behind its toggle
     let screenOpen = $state(false)
     let groupSize = $state(RegisterSize.Word)
@@ -140,6 +158,8 @@
             toast.error('Error compiling code. ' + getM68kErrorMessage(e))
         } finally {
             building = false
+            //also after a failed build: the directive is read before the program is assembled
+            syncDisplay()
         }
     }
 
@@ -418,8 +438,13 @@
             {#if configurableDisplay}
                 <ScreenDisplayConfiguration
                     {display}
+                    origin={displayOrigin}
+                    baseLabel={displayBaseLabel}
                     onChange={(next) => {
                         display = next
+                        //a hand edit wins until the next Build reads the directive again
+                        displayOrigin = 'user'
+                        displayBaseLabel = undefined
                         emulator.setDisplay?.(next)
                     }}
                 />

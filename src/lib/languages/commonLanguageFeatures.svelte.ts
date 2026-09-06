@@ -1,5 +1,5 @@
 import { numberToByteSlice } from '$cmp/specific/project/memory/memoryTabUtils'
-import type { ProjectDisplay } from '$lib/languages/mars/marsDisplay'
+import type { MarsDisplayConfiguration, ProjectDisplay } from '$lib/languages/mars/marsDisplay'
 import type { InjectedPeripheralOptions } from '$lib/languages/peripherals/peripheralSet'
 import type { AvailableLanguages, Testcase, TestcaseResult } from '$lib/Project.svelte'
 import { unsignedBigIntToSigned } from '$lib/utils'
@@ -400,4 +400,10 @@ export type BaseEmulatorActions = {
      * program's to configure.
      */
     setDisplay?: (display: ProjectDisplay) => void
+    /**
+     * MIPS and RISC-V only: the display the Screen is configured with right now, and whether the
+     * last Build read it out of the program's own `@screen` comment directive rather than from the
+     * user. The GUI pulls it after a Build so the popover shows what the source asked for.
+     */
+    getDisplay?: () => MarsDisplayConfiguration
 }

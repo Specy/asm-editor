@@ -47,6 +47,20 @@ export const MARS_BASE_ADDRESS_CHOICES: readonly { address: number; label: strin
     { address: 0xffff0000, label: 'memory map' }
 ]
 
+/**
+ * Where the Screen's current configuration came from: the user's own choice in the Screen panel, or
+ * a `@screen` comment directive the last Build read out of the program's source.
+ */
+export type MarsDisplayOrigin = 'user' | 'directive'
+
+/** A display together with where it came from, which is what the popover shows the user. */
+export type MarsDisplayConfiguration = {
+    display: ProjectDisplay
+    origin: MarsDisplayOrigin
+    /** The label a `base=` named, when it named one rather than an address. */
+    baseLabel?: string
+}
+
 /** MARS's and RARS's own defaults: one word per pixel, 512 by 256, in static data. */
 export const DEFAULT_PROJECT_DISPLAY: ProjectDisplay = {
     unitWidth: 1,
@@ -106,6 +120,17 @@ export function marsDisplayGeometry(display: ProjectDisplay): MarsDisplayGeometr
     }
 }
 
+/** Whether two displays configure the same grid, so the GUI can tell a real change from a rebuild. */
+export function marsDisplayEquals(a: ProjectDisplay, b: ProjectDisplay): boolean {
+    return (
+        a.unitWidth === b.unitWidth &&
+        a.unitHeight === b.unitHeight &&
+        a.width === b.width &&
+        a.height === b.height &&
+        a.baseAddress === b.baseAddress
+    )
+}
+
 /** The address of one word of the grid, unsigned. */
 export function marsWordAddress(baseAddress: number, index: number): number {
     return ((baseAddress >>> 0) + index * 4) >>> 0
@@ -131,9 +156,13 @@ function nearestChoice(value: number, choices: readonly number[]): number {
     return best
 }
 
+/**
+ * Any word address is legal, not only the five MARS lists: a `@screen base=<label>` directive
+ * resolves to wherever the assembler put that label, which is by construction not on the list. The
+ * five choices are the popover's menu, not a whitelist. Anything unusable falls back to the default.
+ */
 function nearestBaseAddress(value: number): number {
-    const wanted = value >>> 0
-    const match = MARS_BASE_ADDRESS_CHOICES.find((entry) => entry.address >>> 0 === wanted)
-    if (match) return match.address
-    return DEFAULT_PROJECT_DISPLAY.baseAddress
+    if (!Number.isFinite(value)) return DEFAULT_PROJECT_DISPLAY.baseAddress
+    //the Core's memory ranges want word aligned addresses, and a label on a `.byte` is not one
+    return (Math.trunc(value) & ~3) >>> 0
 }

@@ -843,3 +843,70 @@ The embed page (the small layout) behaves identically: Run to Pause to Resume, r
 - **Nothing pauses a Testcase run.** `_runTestcase` was never sliced (phase 3's choice), so there is no boundary to park at, and a scripted run has no GUI to keep responsive. `pause()` during one does nothing.
 - **A pause is answered at the next slice boundary, so how quickly it lands is how long a slice is**: 16 ms while a Screen is being painted, 50 ms otherwise, plus whatever a program's own wait or input prompt is doing. Phase 8 measured the same numbers for Stop.
 - The Emulator does not remember a pause across a Build: `clear()` releases it, which is what lets the Build through.
+
+## Follow-up 3: a program configures the Screen from its source — 2026-09-06
+
+Repository `/home/dev/code/asm-editor`, branch `feat/screen-peripherals`, one commit (this log is in it). The user's words: "is there some way to make the code in mips/risc set the settings for the screen so i dont have to remember to change it manually?"
+
+### The directive
+
+```asm
+# @screen unit=1 width=256 height=256 base=display
+```
+
+A comment, so the same file still assembles in real MARS and RARS, where the five values are still set in the tool's own window. It is read at compile time, so the Screen is configured before the first instruction runs and during a Testcase run rather than part way through.
+
+- `width`, `height`: MARS's display sizes, 64 to 1024.
+- `unit`: both unit sizes at once; `unitWidth` and `unitHeight` set them apart. `unit-width` and `unitwidth` are the same name — the name is lowercased and its dashes and underscores dropped.
+- `base`: an address (`0x10010000` or `268500992`) **or a label the program defines**, which is the point of the whole feature.
+- Order and spacing are free, commas are allowed between settings, `#` may be repeated, the keyword is case-insensitive, and the line may follow code (`nop # @screen unit=2`). The first directive wins; a second one is reported and ignored.
+
+### Done
+
+- `src/lib/languages/mars/screenDirective.ts`: the parser (`parseScreenDirective`), the layering (`applyScreenDirective`) and the label probe (`screenLabelProbeSource`, `readScreenLabelProbe`, `SCREEN_LABEL_PROBE_ADDRESS`). Plain TypeScript with no Core, so the 20 tests in `screenDirective.test.ts` cover every form without an assembler.
+- Both adapters read it in `_compile`, before the Core is built, and again in `_checkCode`, so the warning is on the line while it is being typed and does not vanish half a second after a Build (the semantic check is debounced 500 ms and replaces `state.compilerDiagnostics` wholesale). `getDisplay()` joins `setDisplay()` on the Emulator: it answers the display and whether the source asked for it.
+- `marsDisplay.ts` gained `MarsDisplayOrigin`, `MarsDisplayConfiguration` and `marsDisplayEquals`, and `normalizeMarsDisplay` no longer snaps a base address onto MARS's five: a resolved label is by construction not one of them.
+- The popover shows an `@` next to **Display**, a note saying where the values came from, and the resolved address as its own base entry (`0x10010028 (label grid)`). The project page saves a directive-derived display like any other, so a reopened project starts on it.
+- The six examples in `examples/mips` and `examples/risc-v` carry the directive and their prose now describes it; both READMEs, `MarsScreenDocumentation.svelte` (a new "Configuring the screen from the program" section, so both documentation pages and both complete-documentation pages) and the coding agent's prompt follow.
+- 36 tests added (20 parser, 2 `marsDisplay`, 7 per adapter against the real Cores). `npm test`: 388 tests in 20 files. The three example tests now pass **no** display at all, so the directive is what configures them.
+- Matrix rows P11, P12, V12 and V13 in `docs/manual-verification.md`.
+- Verification: `npm run check` at the branch baseline (the same two pre-existing errors, 205 warnings), `npm run lint` 0 errors and 18 warnings, `npm test` green, `npm run format:check` clean, `npm run build` clean.
+
+### How the label is resolved, and why it is not the symbol table
+
+The brief asked for "the Core's symbol table after assembly". **Neither Core has one to ask.** `JsMips` and `JsRiscV` expose `getLabelAtAddress(address)` — address to name, the direction the call stack needs — and nothing the other way; MARS's `getSymbolGivenIntAddress` is what it wraps, and a missing symbol makes it throw rather than answer null. Scanning for the name was measured and rejected: a miss costs about 18 µs because it is a thrown TeaVM exception (a hit costs 0.6 µs), so a label 64 KB into `.data` would cost a third of a second and an unaligned one far more.
+
+What the adapters do instead is ask the assembler, which is the component that actually knows: the program is assembled once more in a throwaway Core with two lines appended,
+
+```asm
+.data 0x10040000
+.word <label>
+```
+
+and that word is read back. `.data <address>` sets the location counter without moving the program's own data, `0x10040000` is MARS's and RARS's heap base and nothing is assembled there, and the throwaway Core never runs. `.eqv` names, forward references and text labels all resolve, in RV64 as well as RV32, because the assembler resolved them. A label that does not exist makes the appended line — and only it — fail, which is exactly the "no such label" answer wanted. The probe costs one extra assembly, only when `base=` names a label, and it runs **before** the real `assemble()` so the singletons both Cores keep (memory, the backstep buffer) end up in the real build's state; the real assemble also clears memory, so the probe word leaves no trace.
+
+### Choices where the brief left a detail open
+
+- **Every directive diagnostic is a `warning`, never an `error`** — the brief offered the choice for an out-of-list size and left the label failure as "a clear error". A size MARS has no entry for snaps to the nearest one it does offer and warns; an unknown setting, a value that is not a number, a base that is neither an address nor a label name, an address past the top of memory and a label that does not exist are all warnings that leave that one parameter as it was. The reason is uniform: the directive is a comment, the same file assembles in MARS and RARS, and a comment must not stop a program from building here. A blocking error would also have made a typo in a comment undo a whole Build.
+- **A hand edit wins until the next Build**, the rule the brief called the simplest coherent one. `setDisplay` marks the origin `user` and clears the badge; the next `_compile` reads the directive again and puts it back. Stop does not re-read it, because Stop is `clear()` and not a build.
+- **The directive layers onto the current configuration**: it changes only the parameters it names, and a program with no directive changes nothing at all.
+- **The base address is not validated against MARS's five**, though the two size lists are: a `base=<label>` resolves to wherever the assembler put the label, which is never one of the five. `normalizeMarsDisplay` now keeps any word address and only rounds one down onto a word boundary (with a warning naming `.align 2`), because the Core's memory ranges want an aligned start. The five choices are the popover's menu, not a whitelist.
+- **The GUI pulls, it is not pushed.** Both hosts call `emulator.getDisplay()` in the `finally` of their build, rather than the Emulator holding a reactive display field: the adapters are the only ones that have one, `BaseEmulatorState` is shared by five languages, and a Build is the only moment the value can change on its own. It is pulled after a _failed_ build too, since the directive is read before the program is assembled.
+- **`_checkCode` reports the directive as well**, label resolution included, which doubles the check's assembly only for a program that names a label in its `base=`. Without it the warning would appear at Build and disappear 500 ms later, which reads as a bug.
+- **The keyword must be the whole comment**: `# see @screen below` is prose, `# @screen …` is a directive. A `#` inside a string literal that happens to be followed by `@screen` would be read as one; no program in the corpus does that and the cost of a real tokenizer here is not worth it.
+
+### How it was checked in a browser
+
+Built, served with `vite preview`, and driven through the DevTools protocol in the Playwright-cached headless Chromium 151 on the embed page, as phase 7 did. Two notes for the next agent, both of which cost time here:
+
+- The cached `chromium-1234` build **cannot start on this machine**: `libnspr4.so` is missing from the system. It starts with `LD_LIBRARY_PATH=~/.cache/ms-playwright/firefox-1538/firefox`, which ships the NSS and NSPR libraries Chromium wants; `chromium_headless_shell-1234` works the same way and is lighter.
+- A `vite preview` server left running from **before** a rebuild serves an `index.html` whose hashed entry chunk no longer exists, so every page is blank with a 404 in the console and looks exactly like a broken change. Kill it and start a new one after every build. And pick the DevTools target by URL and close old tabs: `/json/list` is not ordered by age.
+
+Observed, on both `examples/mips/bitmap-tour.asm` and `examples/risc-v/bitmap-tour.s`: the panel is MARS's default 512 × 256 before the Build and 256 × 256 after it, with the `@` badge on the Display button and the popover's note; Run then paints the tour (`#0000ff` centre, `#c82800` ramp, white first and last rows). On a program whose `grid` label sits 40 bytes into `.data`, the popover's base entry reads `0x10010028 (label grid)`; a hand edit took the panel to 512 × 64 and cleared the badge, Stop kept it, and the next Build put 256 × 64 and the badge back. On `# @screen unit=1 width=300 height=64 base=grid depth=8` the panel came up 256 wide and the console listed both warnings — before any Build, from the semantic check, and again after it.
+
+### Left and blockers
+
+- No blocker. Nothing outside the MIPS and RISC-V adapters changed behaviour: the M68K, Z80 and x86 Emulators have no `getDisplay`, as they have no `setDisplay`.
+- **Monaco squiggles were not observed** for these warnings in the embed page, and neither were the assembler's own, so it is not this change: the markers are set from the same list, by the same `Editor.svelte` effect. Worth a look on the project page some time.
+- The directive is read from the whole source with a per-line regular expression, so a program that assembles a `#` into a string could in principle be misread; see the choice above.
+- The probe assembles the program a second time whenever `base=` names a label, on every Build and on every debounced semantic check. It was not measured against a large program; if it ever shows, the fix is a label lookup in the two Cores, which is where it belongs.

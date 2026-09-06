@@ -52,6 +52,8 @@
     import { languageHasScreen } from '$lib/languages/peripherals/peripheralSet'
     import {
         DEFAULT_PROJECT_DISPLAY,
+        type MarsDisplayOrigin,
+        marsDisplayEquals,
         normalizeMarsDisplay,
         type ProjectDisplay
     } from '$lib/languages/mars/marsDisplay'
@@ -93,12 +95,34 @@
     //program sizes its own screen, so there is nothing to configure
     const configurableDisplay = $derived(emulator.setDisplay !== undefined)
     const currentDisplay = $derived(normalizeMarsDisplay(display ?? DEFAULT_PROJECT_DISPLAY))
+    /** Whether the display on screen came from the program's own `@screen` comment, see `syncDisplay`. */
+    let displayOrigin: MarsDisplayOrigin = $state('user')
+    let displayBaseLabel: string | undefined = $state(undefined)
 
     function applyDisplay(next: ProjectDisplay) {
         display = next
+        //a hand edit wins until the next Build reads the directive again
+        displayOrigin = 'user'
+        displayBaseLabel = undefined
         //applied at once and with a re-sync from memory, as MARS does; the save keeps a reopened
         //project on the display its example's header comment asked for
         emulator.setDisplay?.(next)
+        dispatcher('save', { silent: true })
+    }
+
+    /**
+     * A Build reads the program's `@screen` directive, so the emulator may have configured itself
+     * from the source; the popover and the saved project follow it. A program without a directive
+     * leaves everything as the user set it.
+     */
+    function syncDisplay() {
+        const configured = emulator.getDisplay?.()
+        if (!configured) return
+        displayOrigin = configured.origin
+        displayBaseLabel = configured.baseLabel
+        if (configured.origin !== 'directive') return
+        if (marsDisplayEquals(currentDisplay, configured.display)) return
+        display = configured.display
         dispatcher('save', { silent: true })
     }
 
@@ -271,6 +295,8 @@
             toast.error('Error compiling code. ' + getM68kErrorMessage(e))
         } finally {
             building = false
+            //also after a failed build: the directive is read before the program is assembled
+            syncDisplay()
         }
     }
 
@@ -727,6 +753,8 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                     {#if configurableDisplay}
                         <ScreenDisplayConfiguration
                             display={currentDisplay}
+                            origin={displayOrigin}
+                            baseLabel={displayBaseLabel}
                             onChange={applyDisplay}
                         />
                     {/if}

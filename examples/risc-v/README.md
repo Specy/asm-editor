@@ -1,12 +1,12 @@
 # RISC-V bitmap display and keyboard examples
 
-Programs for the manual verification matrix in [`docs/manual-verification.md`](../../docs/manual-verification.md). Open one in a RISC-V project, set the display parameters its header comment names in the screen panel's **Display** popover, then Build and Run.
+Programs for the manual verification matrix in [`docs/manual-verification.md`](../../docs/manual-verification.md). Open one in a RISC-V project, then Build and Run: the `# @screen` comment in each header configures the screen panel's display, so there is nothing to set by hand. RARS reads that line as an ordinary comment, so the same file still assembles there, where you set the five values in its bitmap display window yourself.
 
-| File                  | What it exercises                                                                                     | Display                              |
-| --------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| `bitmap-tour.s`       | The bitmap display: one word per pixel, the low 24 bits as the color, over a whole 256 by 256 grid     | 1 × 1 units, 256 × 256, static data  |
-| `bouncing-ball.s`     | Animation paced by ecall 32 (sleep) and the elapsed program time of ecall 30                          | 4 × 4 units, 512 × 512, static data  |
-| `keyboard-display.s`  | The four memory-mapped registers at `0xffff0000`: the receiver's Ready bit and data, the transmitter   | 8 × 8 units, 512 × 256, static data  |
+| File                  | What it exercises                                                                                     | Its `@screen` directive                     |
+| --------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| `bitmap-tour.s`       | The bitmap display: one word per pixel, the low 24 bits as the color, over a whole 256 by 256 grid     | `unit=1 width=256 height=256 base=display` |
+| `bouncing-ball.s`     | Animation paced by ecall 32 (sleep) and the elapsed program time of ecall 30                          | `unit=4 width=512 height=512 base=display` |
+| `keyboard-display.s`  | The four memory-mapped registers at `0xffff0000`: the receiver's Ready bit and data, the transmitter   | `unit=8 width=512 height=256 base=display` |
 
 `bouncing-ball.s` and `keyboard-display.s` run until you Stop them, or until you type `q` in the second one.
 

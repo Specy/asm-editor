@@ -35,7 +35,18 @@ import {
 import type { ExecutionGeneration } from '$lib/languages/ExecutionController'
 import type { Testcase } from '$lib/Project.svelte'
 import { MarsDevices } from '$lib/languages/mars/MarsDevices'
-import { normalizeMarsDisplay, type ProjectDisplay } from '$lib/languages/mars/marsDisplay'
+import {
+    type MarsDisplayConfiguration,
+    type MarsDisplayOrigin,
+    normalizeMarsDisplay,
+    type ProjectDisplay
+} from '$lib/languages/mars/marsDisplay'
+import {
+    applyScreenDirective,
+    readScreenLabelProbe,
+    SCREEN_LABEL_PROBE_ADDRESS,
+    screenLabelProbeSource
+} from '$lib/languages/mars/screenDirective'
 
 export const MIPSNumericRegisterNames: readonly RegisterName[] = [
     '$zero',
@@ -106,6 +117,10 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
     private readonly devices: MarsDevices
     /** MARS's five display parameters, from the project and changed from the Screen panel. */
     private display: ProjectDisplay
+    /** Whether the last Build read them out of a `@screen` comment instead. */
+    private displayOrigin: MarsDisplayOrigin = 'user'
+    /** The label such a directive named for its base address, for the Screen panel to show. */
+    private displayBaseLabel: string | undefined
     /**
      * The generation the currently running `_run`/`_step`/`_runTestcase` belongs to. The IO handlers
      * are registered once (at `_initialize`) but every async read has to be tied to the execution
@@ -148,7 +163,19 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
      */
     setDisplay(display: ProjectDisplay): void {
         this.display = normalizeMarsDisplay(display)
+        //a hand edit wins until the next Build reads the directive again
+        this.displayOrigin = 'user'
+        this.displayBaseLabel = undefined
         this.devices.setDisplay(this.display)
+    }
+
+    /** What the Screen is configured with, and whether the program's source asked for it. */
+    getDisplay(): MarsDisplayConfiguration {
+        return {
+            display: this.display,
+            origin: this.displayOrigin,
+            baseLabel: this.displayBaseLabel
+        }
     }
 
     protected getInstance(): JsMips | null {
@@ -170,19 +197,33 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
     }
 
     _checkCode(code: string): Diagnostic[] {
+        //the same warnings the Build reports, so the squiggle on a `@screen` line is there while it
+        //is being typed and does not vanish half a second after a Build replaces this list
+        const directive = this.readScreenDirective(code).diagnostics
         const result = MIPS.makeMipsFromSource(code).assemble()
-        return result.errors.map(assembleErrorToDiagnostic)
+        return [...directive, ...result.errors.map(assembleErrorToDiagnostic)]
     }
 
     _compile(code: string, undoSize: number): CompileResult {
         this.mips = null
+        //before the Core is built, so the first instruction and a Testcase alike run on the display
+        //the source asked for; the label probe assembles a throwaway Core, which the real assembly
+        //below then supersedes on the singletons both of them share
+        const configured = this.readScreenDirective(code)
+        this.display = configured.display
+        this.displayOrigin = configured.origin
+        this.displayBaseLabel = configured.baseLabel
+        this.devices.setDisplay(this.display)
         const mips = MIPS.makeMipsFromSource(code)
         //`assemble()` allocates the backstep ring buffer from the size that `setUndoSize` stored, so
         //the size has to be set *before* assembling: setting it afterwards would only size the next
         //compile's buffer (legacy ordering was setUndoSize -> assemble -> setUndoEnabled)
         mips.setUndoSize(Math.max(1, normalizeUndoSize(undoSize)))
         const result = mips.assemble()
-        const diagnostics = result.errors.map(assembleErrorToDiagnostic)
+        const diagnostics = [
+            ...configured.diagnostics,
+            ...result.errors.map(assembleErrorToDiagnostic)
+        ]
         //`hasErrors` only means "the collection is non-empty", and warnings share that collection,
         //so a warnings-only program would be rejected despite having assembled fine
         if (diagnostics.some((d) => d.severity === 'error')) {
@@ -222,6 +263,36 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
     clear(): void {
         super.clear()
         this.devices?.resetScreen(this.display)
+    }
+
+    /**
+     * What the program's `@screen` comment asks for, on top of the display the Screen has now.
+     *
+     * `normalizeMarsDisplay` also covers the semantic check the base constructor starts before this
+     * subclass's fields exist, when there is no current display to layer onto yet.
+     */
+    private readScreenDirective(code: string) {
+        return applyScreenDirective(code, normalizeMarsDisplay(this.display), (label) =>
+            this.resolveLabelAddress(code, label)
+        )
+    }
+
+    /**
+     * The address a `@screen base=<label>` names. The Core has no lookup by name — `getLabelAtAddress`
+     * only goes the other way — so the program is assembled once more with one extra `.word <label>`
+     * at a fixed address and that word is read back: the assembler itself resolves the name, which is
+     * what makes `.eqv` names, forward references and text labels all work.
+     */
+    private resolveLabelAddress(code: string, label: string): number | null {
+        try {
+            const probe = MIPS.makeMipsFromSource(screenLabelProbeSource(code, label))
+            const result = probe.assemble()
+            //a program that does not assemble has no labels to resolve; its own errors are reported
+            if (result.errors.some((error) => !error.isWarning)) return null
+            return readScreenLabelProbe(probe.readMemoryBytes(SCREEN_LABEL_PROBE_ADDRESS, 4))
+        } catch {
+            return null
+        }
     }
 
     /** Framebuffer mode journals nothing, so Undo restores the image from the rolled-back memory. */

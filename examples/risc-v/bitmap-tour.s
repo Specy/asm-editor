@@ -1,8 +1,11 @@
 # Bitmap display tour: one word of memory is one pixel, its low 24 bits the color.
 #
-# Screen configuration (the Display button in the screen panel's header):
-#   unit width 1, unit height 1, display 256 by 256, base address 0x10010000 (static data),
-#   which is a 256 by 256 grid of words, 256 KB of static data.
+# @screen unit=1 width=256 height=256 base=display
+#
+# That comment configures the screen, and every Build reads it: one word drawn one pixel wide and
+# high, a 256 by 256 display area and the grid starting wherever the `display` label ends up, which
+# makes a 256 by 256 grid of words, 256 KB of static data. RARS reads the line as the ordinary
+# comment it is, and you set the same five values in its bitmap display window by hand.
 #
 # The program paints a red/green ramp over the whole grid, puts a blue square in the middle and
 # draws a white line along the top and bottom rows, then stops. Nothing is animated: it is the

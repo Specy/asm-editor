@@ -5,6 +5,7 @@ import {
     MARS_BASE_ADDRESS_CHOICES,
     MARS_DISPLAY_SIZE_CHOICES,
     MARS_UNIT_SIZE_CHOICES,
+    marsDisplayEquals,
     marsDisplayGeometry,
     marsWordAddress,
     normalizeMarsDisplay
@@ -50,8 +51,27 @@ describe('the MARS display parameters', () => {
             unitHeight: 32,
             width: 128,
             height: 1024,
-            baseAddress: 0x10010000
+            //not one of the five, and kept: a `@screen base=<label>` resolves to wherever the
+            //assembler put the label, which is never one of the tool's five menu entries
+            baseAddress: 0x12345678
         })
+    })
+
+    it('keeps a base address on a word boundary and falls back when it is unusable', () => {
+        const display = { ...DEFAULT_PROJECT_DISPLAY, baseAddress: 0x1001000e }
+        expect(normalizeMarsDisplay(display).baseAddress).toBe(0x1001000c)
+        expect(normalizeMarsDisplay({ ...display, baseAddress: Number.NaN }).baseAddress).toBe(
+            DEFAULT_PROJECT_DISPLAY.baseAddress
+        )
+    })
+
+    it('compares two displays by the grid they configure', () => {
+        expect(marsDisplayEquals(DEFAULT_PROJECT_DISPLAY, { ...DEFAULT_PROJECT_DISPLAY })).toBe(
+            true
+        )
+        expect(
+            marsDisplayEquals(DEFAULT_PROJECT_DISPLAY, { ...DEFAULT_PROJECT_DISPLAY, width: 256 })
+        ).toBe(false)
     })
 })
 

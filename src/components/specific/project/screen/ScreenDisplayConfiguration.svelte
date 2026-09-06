@@ -7,6 +7,7 @@
         MARS_DISPLAY_SIZE_CHOICES,
         MARS_UNIT_SIZE_CHOICES,
         marsDisplayGeometry,
+        type MarsDisplayOrigin,
         normalizeMarsDisplay,
         type ProjectDisplay
     } from '$lib/languages/mars/marsDisplay'
@@ -16,8 +17,8 @@
      * five parameters, with their choice lists and their defaults. It renders into the panel
      * header's configuration slot.
      *
-     * The user configures these, not the program, because the simulators' bitmap display is a tool
-     * with a settings window rather than something a program can ask for. Every change is applied at
+     * The user configures these, as in MARS's own settings window, unless the program says what it
+     * wants in a `# @screen` comment, which every Build reads. Either way a change is applied at
      * once and the Screen re-syncs from memory, as MARS does; the caller stores the value in the
      * project so it comes back with it, and testcases run with it too.
      */
@@ -25,17 +26,43 @@
     interface Props {
         display: ProjectDisplay
         onChange: (display: ProjectDisplay) => void
+        /**
+         * Where these five values came from. `directive` means the last Build read them out of the
+         * program's `@screen` comment, which the popover says so that nobody wonders why the
+         * numbers moved; a change made here wins until the next Build reads the comment again.
+         */
+        origin?: MarsDisplayOrigin
+        /** The label the directive's `base=` named, when it named one rather than an address. */
+        baseLabel?: string
         /** Disabled while a program owns the emulator, like the other execution-time controls. */
         disabled?: boolean
     }
 
-    let { display, onChange, disabled = false }: Props = $props()
+    let { display, onChange, origin = 'user', baseLabel, disabled = false }: Props = $props()
+
+    const fromDirective = $derived(origin === 'directive')
 
     let open = $state(false)
     let panel: HTMLDivElement | undefined = $state()
 
     const current = $derived(normalizeMarsDisplay(display))
     const geometry = $derived(marsDisplayGeometry(current))
+    const baseChoices = $derived(listBaseChoices(current.baseAddress, baseLabel))
+
+    /**
+     * A `base=<label>` resolves to wherever the assembler put that label, which is never one of the
+     * five MARS offers, so the menu grows an entry for it rather than dropping the value.
+     */
+    function listBaseChoices(baseAddress: number, label: string | undefined) {
+        const listed = MARS_BASE_ADDRESS_CHOICES.map((choice) => ({
+            address: choice.address,
+            text: formatMarsBaseAddress(choice.address)
+        }))
+        if (listed.some((choice) => choice.address >>> 0 === baseAddress >>> 0)) return listed
+        const origin = label ? `label ${label}` : 'from the program'
+        const hex = `0x${(baseAddress >>> 0).toString(16).padStart(8, '0')}`
+        return [{ address: baseAddress, text: `${hex} (${origin})` }, ...listed]
+    }
 
     function change(field: keyof ProjectDisplay, value: string) {
         onChange({ ...current, [field]: Number(value) })
@@ -67,10 +94,19 @@
             <FaSlidersH />
         </Icon>
         Display
+        {#if fromDirective}
+            <span class="from-source" title="Set by the program's @screen comment">@</span>
+        {/if}
     </button>
     {#if open}
         <div class="display-popover">
             <h3>Bitmap display</h3>
+            {#if fromDirective}
+                <p class="hint source-note">
+                    Set by this program's <code>@screen</code> comment. A change made here is used until
+                    the next Build reads the comment again.
+                </p>
+            {/if}
             <label>
                 <span>Unit width in pixels</span>
                 <select
@@ -121,10 +157,8 @@
                     value={String(current.baseAddress)}
                     onchange={(event) => change('baseAddress', event.currentTarget.value)}
                 >
-                    {#each MARS_BASE_ADDRESS_CHOICES as choice (choice.address)}
-                        <option value={String(choice.address)}>
-                            {formatMarsBaseAddress(choice.address)}
-                        </option>
+                    {#each baseChoices as choice (choice.address)}
+                        <option value={String(choice.address)}>{choice.text}</option>
                     {/each}
                 </select>
             </label>
@@ -141,6 +175,20 @@
     .display-configuration {
         position: relative;
         display: flex;
+    }
+
+    .from-source {
+        font-family: FiraCode;
+        font-weight: bold;
+        line-height: 1;
+        color: var(--accent);
+    }
+
+    .source-note {
+        code {
+            font-family: FiraCode;
+            color: var(--accent);
+        }
     }
 
     .display-button {

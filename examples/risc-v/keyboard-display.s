@@ -12,9 +12,12 @@
 # a wait costs no instructions, so the editor's execution limit never ends a program that is only
 # waiting for a key. RARS itself has no such limit and spins instead.
 #
-# Screen configuration (the Display button in the screen panel's header):
-#   unit width 8, unit height 8, display 512 by 256, base address 0x10010000 (static data),
-#   which is a 64 by 32 grid of words.
+# @screen unit=8 width=512 height=256 base=display
+#
+# That comment configures the screen, and every Build reads it: one word drawn eight pixels square,
+# a 512 by 256 display area and the grid starting wherever the `display` label ends up, which makes
+# a 64 by 32 grid of words. RARS reads the line as the ordinary comment it is, and you set the same
+# five values in its keyboard and display windows by hand.
 
         .eqv    MMIO, 0xffff0000
         .eqv    READY, 1

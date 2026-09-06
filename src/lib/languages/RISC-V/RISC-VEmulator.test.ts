@@ -9,7 +9,7 @@ import {
     MARS_TRANSMITTER_CONTROL,
     MARS_TRANSMITTER_DATA
 } from '$lib/languages/mars/MarsDevices'
-import { DEFAULT_PROJECT_DISPLAY, type ProjectDisplay } from '$lib/languages/mars/marsDisplay'
+import type { ProjectDisplay } from '$lib/languages/mars/marsDisplay'
 import { Keyboard } from '$lib/languages/peripherals/Keyboard'
 import { ProgramClock } from '$lib/languages/peripherals/ProgramClock'
 
@@ -287,14 +287,102 @@ describe('RISC-V program time', () => {
     })
 })
 
+describe('the RISC-V @screen directive', () => {
+    const PROGRAM = `# @screen width=128 height=64 unit=1 base=grid
+        .data
+pad:    .space  32
+grid:   .space  8192
+        .text
+main:
+        li      a7, 10
+        ecall
+`
+
+    it('configures the Screen from the source at Build, resolving the base label', async () => {
+        const emulator = await build(PROGRAM)
+        const configured = emulator.getDisplay?.()
+        expect(configured?.origin).toBe('directive')
+        expect(configured?.baseLabel).toBe('grid')
+        //`pad` is 32 bytes, so `grid` is not where `.data` starts: this is the assembler's answer
+        expect(configured?.display).toEqual({
+            unitWidth: 1,
+            unitHeight: 1,
+            width: 128,
+            height: 64,
+            baseAddress: 0x10010020
+        })
+        expect(emulator.peripherals.screen.width).toBe(128)
+        expect(emulator.peripherals.screen.height).toBe(64)
+        expect(emulator.compilerDiagnostics).toEqual([])
+    })
+
+    it('draws where the resolved label points', async () => {
+        const emulator = await run(
+            PROGRAM.replace(
+                '        li      a7, 10',
+                `        la      t0, grid
+        li      t1, 0x00123456
+        sw      t1, 0(t0)
+        li      a7, 10`
+            )
+        )
+        expect(emulator.errors).toEqual([])
+        expect(pixelAt(emulator, 0, 0)).toBe(0x123456)
+    })
+
+    it('leaves a program without a directive on the configuration it was given', async () => {
+        const emulator = await build(DATA + EXIT)
+        expect(emulator.getDisplay?.()).toMatchObject({ origin: 'user', display: SMALL })
+        expect(emulator.peripherals.screen.width).toBe(8)
+    })
+
+    it('snaps a size MARS does not offer and still builds', async () => {
+        const emulator = await build('# @screen width=300\n' + DATA + EXIT)
+        expect(emulator.getDisplay?.()?.display.width).toBe(256)
+        expect(emulator.canExecute).toBe(true)
+        expect(emulator.compilerDiagnostics.map((d) => d.severity)).toEqual(['warning'])
+        expect(emulator.compilerDiagnostics[0]?.lineIndex).toBe(0)
+    })
+
+    it('keeps the base address and warns when the label does not exist', async () => {
+        const emulator = await build('# @screen base=nowhere\n' + DATA + EXIT)
+        expect(emulator.getDisplay?.()?.display.baseAddress).toBe(SMALL.baseAddress)
+        expect(emulator.canExecute).toBe(true)
+        expect(emulator.compilerDiagnostics[0]?.message).toContain('No label named "nowhere"')
+    })
+
+    it('warns from the semantic check too, so the squiggle survives the check after a Build', async () => {
+        const emulator = await build('# @screen base=nowhere\n' + DATA + EXIT)
+        const diagnostics = await emulator.check()
+        expect(diagnostics[0]?.severity).toBe('warning')
+        expect(diagnostics[0]?.message).toContain('No label named "nowhere"')
+        expect(emulator.compilerDiagnostics[0]?.message).toContain('No label named "nowhere"')
+    })
+
+    it('takes a base address the directive spells out', async () => {
+        const emulator = await build('# @screen base=0x10008000\n' + DATA + EXIT)
+        expect(emulator.getDisplay?.()?.display.baseAddress).toBe(0x10008000)
+    })
+
+    it('lets a hand edit win until the next Build reads the directive again', async () => {
+        const emulator = await build(PROGRAM)
+        emulator.setDisplay?.({ ...SMALL, width: 512 })
+        expect(emulator.getDisplay?.()).toMatchObject({ origin: 'user' })
+        expect(emulator.peripherals.screen.width).toBe(64)
+        await emulator.compile(200, PROGRAM)
+        expect(emulator.getDisplay?.()).toMatchObject({ origin: 'directive' })
+        expect(emulator.peripherals.screen.width).toBe(128)
+    })
+})
+
 describe('the RISC-V examples', () => {
     it('draws the bitmap tour', async () => {
         const code = readFileSync('examples/risc-v/bitmap-tour.s', 'utf8')
-        const emulator = await run(code, {
-            display: { ...DEFAULT_PROJECT_DISPLAY, width: 256, height: 256 }
-        })
+        //no display is passed: the example's own `@screen` comment is what configures the Screen
+        const emulator = await run(code)
         expect(emulator.errors).toEqual([])
         expect(emulator.peripherals.screen.width).toBe(256)
+        expect(emulator.peripherals.screen.height).toBe(256)
         //the blue square, the ramp and the white border
         expect(pixelAt(emulator, 128, 128)).toBe(0x0000ff)
         expect(pixelAt(emulator, 200, 40)).toBe(0xc82800)
@@ -304,17 +392,7 @@ describe('the RISC-V examples', () => {
 
     it('animates the bouncing ball and lets program time pass', async () => {
         const code = readFileSync('examples/risc-v/bouncing-ball.s', 'utf8')
-        const emulator = await run(code, {
-            display: {
-                unitWidth: 4,
-                unitHeight: 4,
-                width: 512,
-                height: 512,
-                baseAddress: 0x10010000
-            },
-            virtualClock: true,
-            limit: 400_000
-        })
+        const emulator = await run(code, { virtualClock: true, limit: 400_000 })
         expect(emulator.peripherals.screen.width).toBe(128)
         //the ball is somewhere on the background it painted. The run is cut off at its instruction
         //limit, which can land in the middle of the six by six square, so only its presence is
@@ -333,16 +411,7 @@ describe('the RISC-V examples', () => {
 
     it('echoes typed characters through the keyboard and display example', async () => {
         const code = readFileSync('examples/risc-v/keyboard-display.s', 'utf8')
-        const emulator = await run(code, {
-            display: {
-                unitWidth: 8,
-                unitHeight: 8,
-                width: 512,
-                height: 256,
-                baseAddress: 0x10010000
-            },
-            typed: 'abq'
-        })
+        const emulator = await run(code, { typed: 'abq' })
         expect(emulator.errors).toEqual([])
         expect(emulator.stdOut.endsWith('abq')).toBe(true)
         expect(pixelAt(emulator, 0, 0)).not.toBe(0)

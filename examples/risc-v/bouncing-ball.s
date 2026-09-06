@@ -1,8 +1,11 @@
 # A ball bouncing on the bitmap display, paced by the sleep syscall.
 #
-# Screen configuration (the Display button in the screen panel's header):
-#   unit width 4, unit height 4, display 512 by 512, base address 0x10010000 (static data),
-#   which is a 128 by 128 grid of words, 64 KB of static data.
+# @screen unit=4 width=512 height=512 base=display
+#
+# That comment configures the screen, and every Build reads it: one word drawn four pixels square,
+# a 512 by 512 display area and the grid starting wherever the `display` label ends up, which makes
+# a 128 by 128 grid of words, 64 KB of static data. RARS reads the line as the ordinary comment it
+# is, and you set the same five values in its bitmap display window by hand.
 #
 # Every frame the program erases the ball, moves it, draws it again and sleeps for one frame
 # (ecall 32). It prints the elapsed program time (ecall 30) every 64 frames, which starts at zero
