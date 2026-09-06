@@ -39,12 +39,6 @@ export default defineConfig({
     // environment is node: nothing under test needs a DOM.
     test: {
         environment: 'node',
-        include: ['src/**/*.test.ts'],
-        server: {
-            // `@specy/s68k` imports its wasm glue as `./pkg/s68k`, without the extension, so node's
-            // own resolver cannot load it: the package has to go through Vite like it does in the
-            // app. Every other Core resolves under node on its own.
-            deps: { inline: ['@specy/s68k'] }
-        }
+        include: ['src/**/*.test.ts']
     }
 })

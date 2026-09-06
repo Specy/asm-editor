@@ -721,3 +721,22 @@ Verification at both commits: `npm run check` at the branch baseline (the same t
 - The two panel rows H13 and H14 need a browser, like the rest of the panel's behavior.
 - `GenericEmulator.test.ts`'s "grows the budget of a Core the estimate was too slow for" failed once during this phase, while the machine's `/tmp` was full, and passed on every run before and after (including eight runs of the file alone and three full suites). It burns five milliseconds a slice and asserts the correction that follows, so it is sensitive to a loaded machine; it was left as it is, but a CI failure there is a flake rather than a regression.
 - The known gap "a Screen with no renderer stays dirty", recorded at the end of phase 8, is closed by finding 5's fix.
+
+## Core packages published — 2026-09-06
+
+The three `file:` tarball dependencies are gone; `package.json` names registry versions again, with the caret ranges this repository uses.
+
+| Package         | Version | Where it came from                                                       |
+| --------------- | ------- | ------------------------------------------------------------------------ |
+| `@specy/mips`   | 2.1.0   | published from `Specy/mars`                                              |
+| `@specy/risc-v` | 2.1.0   | published from `Specy/rars`                                              |
+| `@specy/s68k`   | 1.4.0   | published from `Specy/s68k` by its new CD workflow, with SLSA provenance |
+
+`Specy/s68k` had no CI at all, so it gained `ci.yml` and `cd.yml` mirroring the MARS and RARS workflows: CI runs the Rust suite, the wasm-pack build, the TypeScript build and a smoke test; CD publishes on a `v*` tag through npm trusted publishing, guarded by an owner check, an ancestry check against the default branch, and a tag-versus-manifest version check.
+
+Publishing 1.4.0 needed two fixes to the package itself, both of which also affect this repository:
+
+- `ts-lib/src/index.ts` imported `./pkg/s68k` without an extension, so `tsc` emitted a specifier node's ESM resolver rejects and the package could only be loaded through a bundler. **The `deps.inline` workaround for `@specy/s68k` in `vite.config.ts` existed only for that, and has been removed**; all 334 tests pass without it.
+- `ts-lib/package.json` had no `files` field, so npm fell back to `.gitignore` and shipped `dist/` only because it refuses to exclude the directory holding `main`. An explicit allowlist now pins the tarball's contents.
+
+Of the pre-merge list at the end of phase 8, item 1 is done. What remains is the browser-only matrix rows and the note about the settings version bump.
