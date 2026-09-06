@@ -1,0 +1,6 @@
+{
+    "name": "Sum of an array",
+    "description": "Six numbers sitting in memory, added up with a pointer that walks through them, and the total printed. The first program here that reads memory instead of holding everything in registers.",
+    "order": 5,
+    "topic": "sum-of-an-array"
+}
