@@ -67,13 +67,15 @@
         if (!canvas) return
         if (canvas.width !== screen.width || canvas.height !== screen.height) {
             //the backing store is one texel per logical pixel; the zoom is CSS, so putImageData
-            //never scales and the panel's size never costs the emulator anything
-            canvas.width = screen.width
-            canvas.height = screen.height
+            //never scales and the panel's size never costs the emulator anything. It is set through
+            //the width and height attributes and nowhere else: writing `canvas.width` here as well
+            //would have Svelte write the attribute again after this frame painted, and a canvas
+            //resize clears what is on it, which is what a program's resize command used to do.
             logicalWidth = screen.width
             logicalHeight = screen.height
-            //resizing a canvas clears it, so whatever was painted has to be painted again
+            //painting is left to the frame that finds the new backing store, since resizing clears
             paintedVersion = -1
+            return
         }
         if (paintedVersion === screen.version) return
         context ??= canvas.getContext('2d')

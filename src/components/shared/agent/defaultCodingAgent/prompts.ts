@@ -1,5 +1,9 @@
 import { BASE_CODE } from '$lib/Config'
-import { Z80_PORT_DOCS } from '$lib/languages/Z80/Z80-model'
+import {
+    Z80_PORT_DOCS,
+    Z80_PORT_GROUP_DOCS,
+    Z80_SCREEN_COMMAND_DOCS
+} from '$lib/languages/Z80/Z80-model'
 import type {
     AgentWorkflow,
     DefaultCodingAgentToolName,
@@ -225,12 +229,30 @@ function renderToolSelectionTips(enabledToolNames: DefaultCodingAgentToolName[])
 }
 
 /**
- * Generated from the port map itself so the prompt cannot drift from what the console device
- * actually does (see `Z80-model.ts`).
+ * Generated from the port map itself so the prompt cannot drift from what the device actually does
+ * (see `Z80-model.ts`). Grouped like the documentation page, because the agent has to pick a
+ * peripheral before it picks a port.
  */
-const Z80_PORT_INFORMATION = Z80_PORT_DOCS.map(
-    (port) => `- Port ${port.port} (${port.title}): out -> ${port.write} in -> ${port.read}`
+const Z80_PORT_INFORMATION = Z80_PORT_GROUP_DOCS.map((group) =>
+    [
+        `### ${group.title} ports (${group.range})`,
+        group.description,
+        ...Z80_PORT_DOCS.filter((port) => port.group === group.group).map(
+            (port) =>
+                `- Port ${toPortNumber(port.port)} (${port.title}): out -> ${port.write} in -> ${port.read}`
+        )
+    ].join('\n')
+).join('\n\n')
+
+/** The commands the Screen's command port runs, the other half of the Screen interface. */
+const Z80_SCREEN_COMMAND_INFORMATION = Z80_SCREEN_COMMAND_DOCS.map(
+    (command) => `- ${command.command}: ${command.description}`
 ).join('\n')
+
+function toPortNumber(port: number): string {
+    //the ports are written in hexadecimal everywhere else, and a program writes `out (0x17), a`
+    return `0x${port.toString(16).padStart(2, '0').toUpperCase()}`
+}
 
 const EMULATOR_INFORMATION = `# Emulator Information
 The editor supports one editable assembly file and an output-only console. There are no graphics, screens, imported ROMs, or produced binaries.
@@ -258,8 +280,12 @@ The editor supports one editable assembly file and an output-only console. There
 - Uses the z80-asm syntax: ";" comments, labels ending with ":", directives like .org, .byte, .asciz and equ. Memory is 64 KB and little-endian.
 - The default program is assembled at 0x8000. SP starts at 0xFFFF and grows downward, the stack is empty at that address.
 - Execution stops on "halt", on a top-level "ret", or when the program counter runs past the end of the assembled code.
-- There are no syscalls or TRAPs: the console is a set of IO ports, written with "out (port), a" and read with "in a, (port)". An "in" pauses the program until a line of input is available, which is taken from the testcase input when running tests.
-${Z80_PORT_INFORMATION}`
+- There are no syscalls or TRAPs: every peripheral is a set of IO ports, written with "out (port), a" and read with "in a, (port)". The "(c)" forms take the port from C and put B on the high byte of the address bus, which is how a read carries a parameter. An "in" on an input port pauses the program until input is available, which is taken from the testcase input when running tests; an "in" on a wait port pauses it until the time has passed.
+- Ports outside the map are an empty bus: writes are dropped and reads answer 0xFF.
+${Z80_PORT_INFORMATION}
+
+### Screen commands, written to port 0x17
+${Z80_SCREEN_COMMAND_INFORMATION}`
 
 export function buildDefaultCodingAgentPrompt({
     enabledToolNames,

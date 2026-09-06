@@ -276,6 +276,20 @@ export abstract class GenericEmulator<T, R extends string>
         }
     }
 
+    /**
+     * One character rather than a line: with Screen keyboard input it is consumed as soon as it is
+     * typed ([ADR 0009](../../../docs/adr/0009-share-screen-keyboard-input-with-terminal.md)), and
+     * with a prompt it is the first character of the answered line, as the adapters read it before.
+     */
+    protected async requestCharacter(question: string, execution: ExecutionGeneration) {
+        this.state.interrupt = { type: 'ReadInput', message: question }
+        try {
+            return await this._peripherals.terminal.readCharAsync(question, execution)
+        } finally {
+            this.state.interrupt = undefined
+        }
+    }
+
     protected getLastExecutedLine(fallback = -1): number {
         try {
             const instruction = this._getLastInstruction?.()

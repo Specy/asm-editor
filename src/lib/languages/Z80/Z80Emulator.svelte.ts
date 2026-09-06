@@ -31,7 +31,7 @@ import {
 } from '$lib/languages/ExecutionSlice'
 import type { ExecutionGeneration } from '$lib/languages/ExecutionController'
 import type { Testcase } from '$lib/Project.svelte'
-import { Z80Console } from '$lib/languages/Z80/Z80Console'
+import { Z80Device } from '$lib/languages/Z80/Z80Device'
 import {
     Z80_DEFAULT_ORG,
     Z80_FLAGS,
@@ -79,7 +79,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
     private machine: Z80Machine | null = null
     private assembly: AssemblyResult | null = null
     private sourceMap: SourceMap | null = null
-    private consoleDevice: Z80Console | null = null
+    private device: Z80Device | null = null
     private sourceLines: string[] = []
     /**
      * One past the last byte of every assembled segment. The Z80 has no "end of program": running
@@ -121,10 +121,11 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
 
     clear(): void {
         super.clear()
-        //stopping a program while it was waiting on an `in` leaves a half consumed input line in the
-        //device; the next run must not read it. Optional chaining because `GenericEmulator`'s
-        //constructor calls `clear()` before this subclass' fields are initialized.
-        this.consoleDevice?.reset()
+        //stopping a program while it was waiting on an `in` leaves a half consumed input line, a
+        //granted wait or a staged coordinate in the device; the next run must not find them.
+        //Optional chaining because `GenericEmulator`'s constructor calls `clear()` before this
+        //subclass' fields are initialized.
+        this.device?.reset()
     }
 
     protected positionStackTabOnCompile(): void {
@@ -162,7 +163,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         this.machine = null
         this.assembly = null
         this.sourceMap = null
-        this.consoleDevice = null
+        this.device = null
         this.cliffBreakpoints = []
         this.sourceLines = code.split('\n')
         const result = assemble(code)
@@ -186,19 +187,37 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
     _initialize(undoSize: number): void {
         const assembly = this.assembly
         if (!assembly) throw new Error(NOT_INITIALIZED_ERROR)
-        const consoleDevice = new Z80Console((text) => this._peripherals.terminal.write(text))
+        const peripherals = this._peripherals
+        const device = new Z80Device({
+            write: (text) => peripherals.terminal.write(text),
+            hasInput: () => peripherals.terminal.hasPendingInput(),
+            //the clock is swapped for a virtual one during a testcase, so it is read per call
+            timeHundredths: () => this._peripherals.clock.nowHundredths(),
+            screen: peripherals.screen,
+            keyboard: peripherals.keyboard,
+            mouse: peripherals.mouse,
+            onGraphicalUse: () =>
+                peripherals.terminal.useKeyboardInput(peripherals.keyboard, (text) =>
+                    device.echo(text)
+                )
+        })
+        //a run starts with the prompt every Z80 program has always had; the device switches the
+        //Terminal over the first time the program touches the Screen, the Keyboard or the Mouse,
+        //which is what "in graphical use" means for a language whose console is just more ports
+        //([ADR 0009](../../../../docs/adr/0009-share-screen-keyboard-input-with-terminal.md))
+        peripherals.terminal.usePromptInput()
         const machine = new Z80Machine({
             historySize: normalizeUndoSize(undoSize),
             initialSp: Z80_STACK_TOP,
             //a program written as a routine ends with a top level `ret`, which the machine can only
             //recognize as an ending when it knows where the stack started
             exitOnReturn: true,
-            onPortRead: (address) => consoleDevice.readPort(address),
-            onPortWrite: (address, value) => consoleDevice.writePort(address, value)
+            onPortRead: (address) => device.readPort(address),
+            onPortWrite: (address, value) => device.writePort(address, value)
         })
         //throws only for an assembly with errors, which `_compile` already refused
         machine.loadAssembly(assembly)
-        this.consoleDevice = consoleDevice
+        this.device = device
         this.machine = machine
         this.lastInstructionAddress = null
     }
@@ -207,7 +226,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         this.machine = null
         this.assembly = null
         this.sourceMap = null
-        this.consoleDevice = null
+        this.device = null
         this.cliffBreakpoints = []
         this.lastInstructionAddress = null
     }
@@ -260,6 +279,12 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
             this.trackLastInstruction(result.instructions > 0, result.reason)
             instructions += result.instructions
             if (result.reason === StopReason.WAITING_FOR_INPUT) {
+                //a stop on a time port is a program-requested wait, which the scheduler owns: it
+                //awaits the clock through the execution generation so Stop still answers, and the
+                //re-executed `in` finds the wait granted (ADR 0007, ADR 0010). Console input is
+                //served here instead, because the program is suspended on the Terminal, not on time
+                const wait = this.pendingWait()
+                if (wait) return { reason: 'wait', instructions, wait }
                 await this.provideInput(execution)
                 continue
             }
@@ -285,8 +310,9 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         const execution = this.executionController.capture()
         let reason = machine.step()
         if (reason === StopReason.WAITING_FOR_INPUT) {
-            //the `in` was rolled back, so nothing has executed yet: feed the device and retry it
-            await this.provideInput(execution)
+            //the `in` was rolled back, so nothing has executed yet: feed the device (or let the
+            //wait it asked for elapse) and retry it
+            await this.serveInputStop(execution)
             reason = machine.step()
         }
         this.executionController.ensureCurrent(execution)
@@ -472,19 +498,67 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
             //times still gets the halt limit it was given, not ten times it
             remaining -= result.instructions
             if (result.reason !== StopReason.WAITING_FOR_INPUT) return
-            await this.provideInput(execution)
+            //a testcase runs unsliced, so a wait is awaited here; its clock is the virtual one, on
+            //which waits complete at once (ADR 0010)
+            await this.serveInputStop(execution)
         }
     }
 
     /**
-     * Asks for a line and hands it to the console device. The `in` that could not be served was
-     * rolled back by the machine, so resuming re-executes it and the device answers it then.
+     * Serves a stop on an `in` that could not be answered, whichever kind it is: a wait is awaited
+     * on the clock, an input request goes to the Terminal. The step and testcase paths use it; the
+     * sliced run path reports waits to the scheduler instead, which is what ADR 0007 asks for.
+     */
+    private async serveInputStop(execution: ExecutionGeneration): Promise<void> {
+        const wait = this.pendingWait()
+        if (wait) {
+            await this.executionController.waitFor(execution, () => wait)
+            return
+        }
+        await this.provideInput(execution)
+    }
+
+    /**
+     * The clock wait the pending `in` is asking for, or null when it is asking for input. Granting
+     * it also tells the device to answer the instruction when it re-executes, and only then: a wait
+     * that is cancelled (Stop resolves pending waits) leaves a run that is superseded anyway.
+     */
+    private pendingWait(): Promise<void> | null {
+        const port = this.requireMachine().pendingInputPort ?? 0
+        if (!Z80Device.isWaitPort(port)) return null
+        const device = this.requireDevice()
+        const clock = this._peripherals.clock
+        const wait =
+            Z80Device.portNameOf(port) === 'TIME_FRAME'
+                ? clock.nextFrame()
+                : clock.waitHundredths(Z80Device.waitHundredthsOf(port))
+        return wait.then(() => device.completeWait(port))
+    }
+
+    /**
+     * Asks the Terminal for input and hands it to the device. The `in` that could not be served was
+     * rolled back by the machine, so resuming re-executes it and the device answers it then. The
+     * character port takes one keystroke at a time once the Screen's Keyboard is the source
+     * (ADR 0009); every other case is the line the port has always read (ADR 0002), which is also
+     * what a testcase's scripted input is made of.
      */
     private async provideInput(execution: ExecutionGeneration): Promise<void> {
         const machine = this.requireMachine()
-        const device = this.requireConsole()
+        const device = this.requireDevice()
+        const terminal = this._peripherals.terminal
         const port = machine.pendingInputPort ?? 0
-        const value = await this.requestInput(device.inputQuestion(port), execution)
+        const question = device.inputQuestion(port)
+        if (
+            Z80Device.isCharacterPort(port) &&
+            terminal.inputSource === 'interactive' &&
+            terminal.interactiveSource === 'keyboard'
+        ) {
+            const character = await this.requestCharacter(question, execution)
+            this.executionController.ensureCurrent(execution)
+            device.provideCharacter(character)
+            return
+        }
+        const value = await this.requestInput(question, execution)
         this.executionController.ensureCurrent(execution)
         //throws for a line that does not parse as the number the port asked for, which stops the run
         device.provideInput(port, value)
@@ -555,9 +629,9 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         return this.machine
     }
 
-    private requireConsole(): Z80Console {
-        if (!this.consoleDevice) throw new Error(NOT_INITIALIZED_ERROR)
-        return this.consoleDevice
+    private requireDevice(): Z80Device {
+        if (!this.device) throw new Error(NOT_INITIALIZED_ERROR)
+        return this.device
     }
 }
 

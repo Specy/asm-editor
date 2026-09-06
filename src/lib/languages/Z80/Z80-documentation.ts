@@ -9,15 +9,28 @@
 
 import { getAsmDirectiveDocs, mnemonicMap, type OpcodeVariant } from '@specy/z80'
 import {
+    Z80_COLORS,
     Z80_FLAG_STRING_LEGEND,
     Z80_FLAG_STRING_ORDER,
     Z80_FLAGS,
-    Z80_PORT_DOCS
+    Z80_MOUSE_VIEWS,
+    Z80_PORT_DOCS,
+    Z80_PORT_GROUP_DOCS,
+    Z80_SCREEN_COMMAND_DOCS,
+    type Z80PortGroup
 } from './Z80-model'
 
 // The docs pages want the flag table and the port map next to the instruction data, and importing
 // them from here keeps the pages down to a single import.
-export { Z80_FLAGS, Z80_PORT_DOCS }
+export {
+    Z80_COLORS,
+    Z80_FLAGS,
+    Z80_MOUSE_VIEWS,
+    Z80_PORT_DOCS,
+    Z80_PORT_GROUP_DOCS,
+    Z80_SCREEN_COMMAND_DOCS,
+    type Z80PortGroup
+}
 
 /**
  * How one instruction touches one flag, expanded from the 6 character flag string of the
