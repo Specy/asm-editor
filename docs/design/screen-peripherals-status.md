@@ -436,3 +436,60 @@ The build was served with `npm run preview` and driven through the DevTools prot
 - No blocker. Phase 5 (Z80), phase 6 (the M68K editor half) and phase 7 (MIPS, RISC-V and the configuration popover) are untouched, and no adapter draws yet.
 - The panel is 20 rem tall wherever it is hosted, which leaves a small Screen (the Z80's 256 by 192) with margins and a large one (the M68K's 640 by 480) at about 60 percent. Phase 8 can revisit the height once real programs are on screen.
 - The chat page could not be walked end to end: it only mounts its editor once the agent has produced code. The fullscreen layout it uses was checked through a scratch route instead.
+
+## Phase 5: Z80 — 2026-09-06
+
+Repository `/home/dev/code/asm-editor`, branch `feat/screen-peripherals`, commit `c48f8e2` (this log follows it). Phase 6 (the M68K editor half) and phase 7 (the MIPS and RISC-V editor half) are untouched.
+
+### Done
+
+- **The port map** ([ADR 0011](../adr/0011-z80-peripherals-through-the-port-map.md)). `Z80_PORTS` in `src/lib/languages/Z80/Z80-model.ts` grew from the five console ports to 27, in the four groups the ADR asks for, with `Z80_PORT_GROUP_DOCS`, `Z80_SCREEN_COMMANDS`, `Z80_SCREEN_COMMAND_DOCS`, `Z80_MOUSE_VIEWS`, `Z80_MOUSE_FLAGS`, `Z80_COLORS` and a `Z80_PORT_DOCS` row per port next to them.
+- **The device.** `Z80Console.ts` became `Z80Device.ts` (`Z80Console` → `Z80Device`, imports and tests renamed): the whole port map, driving the Screen, Keyboard, Mouse and ProgramClock through one host object. Still plain TypeScript, still synchronous, so the machine can call it from inside `run()`.
+- **The adapter.** `Z80Emulator.svelte.ts` builds the device from `this._peripherals`, distinguishes a wait from an input request on `WAITING_FOR_INPUT`, reports waits to the scheduler as `{ reason: 'wait', wait }` ([ADR 0007](../adr/0007-generic-emulator-run-scheduling.md)) and serves them inline on the step and testcase paths, and reads the character port one keystroke at a time once the Screen's Keyboard is the Terminal's source.
+- **Documentation.** `Z80IoDocumentation.svelte` renders the five groups with headings and ranges, the command table, the color swatches and the mouse views, and each port's example with its input, its printed output and what it draws. The coding agent's prompt is generated from the same tables, grouped the same way, with the command list appended.
+- **Examples.** `examples/z80/bouncing-ball.z80` (double buffering and frame sync), `keyboard-move.z80` (key-state polling, with its title printed on the console port and so drawn on the Screen) and `mouse-paint.z80` (mouse polling, Shift for a second color, right button to clear).
+- **Tests.** `Z80Device.test.ts` (47 tests) covers every group against real `Screen`, `Keyboard` and `Mouse` instances; `Z80Examples.test.ts` (23) assembles and runs every documented example and the three programs against the real Core under node and looks at the pixels they leave. `npm test`: 228 tests in 12 files.
+- **A phase 4 defect fixed.** `ScreenRenderer.svelte` wrote `canvas.width` itself _and_ bound the same value as an attribute, so Svelte's own attribute write cleared the canvas right after the frame that resized it was painted, and `paintedVersion` then suppressed the repaint: a program's resize left a blank panel. The panel now only moves the `logicalWidth`/`logicalHeight` state and paints on the frame that finds the new backing store. Matrix row H12 rechecked.
+- Verification at the commit: `npm run check` at the branch baseline (the same two pre-existing errors, 205 warnings), `npm run lint` 0 errors and 18 warnings, `npm test` 228 passing, `npm run build` clean.
+
+### How it was checked in a browser
+
+Rows Z1 to Z6, Z9 and Z10 of `docs/manual-verification.md` are observed behavior, not inspection: the built app was served with `vite preview` and driven through the DevTools protocol in the Playwright-cached headless Chromium (which needs `LD_LIBRARY_PATH=~/.cache/ms-playwright/firefox-1538/firefox` on this machine for `libnspr4.so`), on the embed page with the example in its `code` parameter. The mouse rows use `Input.dispatchMouseEvent`, not synthetic DOM events: the panel takes pointer capture, and `setPointerCapture` throws for a pointer id the browser does not know, which silently kills a synthetic drag.
+
+### API notes for the next phases
+
+The port map, all in `Z80-model.ts`:
+
+| Group    | Ports       | Members                                                                                              |
+| -------- | ----------- | ---------------------------------------------------------------------------------------------------- |
+| Console  | 0x00 - 0x04 | character, unsigned, signed, hexadecimal, 16 bit (unchanged, ADR 0002)                               |
+| Screen   | 0x10 - 0x1A | pen color, fill color, pen width, X, Y, X2, Y2, command, pixel color, cursor column, cursor row      |
+| Keyboard | 0x20 - 0x23 | typed input available, key state (B = key code), last key down, last key up                          |
+| Mouse    | 0x30 - 0x33 | X, Y, buttons, event count, each with B selecting the view (0 current, 1 last release, 2 last press) |
+| Time     | 0x40 - 0x42 | wait (B = hundredths), frame sync, elapsed hundredths (B = byte index, 0 lowest)                     |
+
+- `new Z80Device(host)` where `host` is `{ write, hasInput, timeHundredths, screen, keyboard, mouse, onGraphicalUse? }`. `readPort`/`writePort` are the Core's hooks; `provideInput(port, line)` and `provideCharacter(character)` answer a suspended read; `completeWait(port)` lets a suspended wait finish; `echo(text)` draws the Terminal's echo at the text cursor, handling `\b` by blanking the cell to its left; `reset()` is the clear path. The statics `portNameOf`, `groupOf`, `isWaitPort`, `isCharacterPort` and `waitHundredthsOf` are what an adapter needs to route a pending stop.
+- `expandColor` and `packColor` are exported from `Z80Device.ts`: 3-3-2 to the Screen's 24 bit and back, by repeating each field, so every byte round-trips.
+- **`GenericEmulator` gained `requestCharacter(question, execution)`** next to `requestInput`: it wraps `terminal.readCharAsync` in the same `ReadInput` interrupt. Phase 6 should use it for EASy68K's task 5 instead of reading a line and keeping its first character.
+- **Wiring a Screen adapter is three things**: build the device with the peripherals, mirror console output to `screen.writeText` (the device does it in `print`), and hand the Terminal an echo callback when the Keyboard becomes its source.
+- The scheduler's `wait` reason is the only way to suspend a run without blocking the GUI; the promise must also be what re-arms the Core, which here is `clock.wait(...).then(() => device.completeWait(port))`.
+
+### Choices where the plan left a detail open
+
+- **The Terminal's interactive source is chosen by what the program does, once per run.** A Z80 program that only prints keeps the prompt it has always had; the first Screen, Keyboard or Mouse port access calls `onGraphicalUse`, which switches the Terminal to the Screen's Keyboard with an echo to the text cursor. That is [ADR 0009](../adr/0009-share-screen-keyboard-input-with-terminal.md)'s "in graphical use" evaluated instead of guessed, and it is what keeps the `in` instruction's own documentation example (`in a, (1)`, on a page whose Screen panel starts collapsed) working exactly as before. The switch happens at most once per run and never goes back, so the source is still fixed for a run in the sense the ADR cares about. Phase 6 has the same choice to make for EASy68K, where the graphical signal is the first graphics task.
+- **A wait carries an 8 bit duration in B, in hundredths of a second**, 0 to 255. ADR 0010 said "a 16-bit duration rides on the high byte of the address bus, like the WORD console port", but that shape only works for a write, and a write cannot suspend the machine: an `in` has B and the port number and nothing else. 2.55 seconds is the practical range for animation and polling, and a longer wait is a loop; the ADR left the units and width to be settled with the device.
+- **Clear takes the fill color and adopts it as the background**, so a scrolled text row and a later resize leave the same color behind as the clear did. The Z80 has no background color port, and a Screen whose text cells were painted with a different background than the image would look wrong the first time a program's output scrolled.
+- **X, Y, X2 and Y2 are staging registers, not the Screen's drawing position**: reading one answers the byte last written to it. They are device state, like the buffered input line, so they do not rewind on Undo; the Screen's own pen position, colors, cursor and pixels do.
+- **The command port answers with the last command number**, and an undecoded command is dropped rather than stopping the program, the same convention as a write to an undecoded port.
+- **The mouse view numbers are EASy68K's task 61 modes** (0 current, 1 last release, 2 last press) and the buttons byte is its flags layout, so the two environments describe a click the same way. An unknown view answers as the current state.
+- **The keyboard availability port goes through the Terminal**, not straight to the Keyboard, so that a poll and the character read after it refer to the same pending input, testcase input included — the compatibility ADR 0009 asks for.
+- **A size byte of 0 means 256** in a resize, the only size a byte cannot hold; every other coordinate is a plain byte and the Screen clips.
+- **Colors are named in the model** (`Z80_COLORS`, eleven of them). The two grays are the nearest the two blue bits allow and are not exactly neutral; that is 3-3-2, not a bug.
+- **Ports 0x10 and up used to be "not connected to anything"** in the generated `ini`/`inir`/`ind`/`indr` instruction examples, which is no longer true: they now read 0xF0, which is outside the map and is also the only kind of port whose answer does not change as B counts down.
+
+### Left and blockers
+
+- No blocker. Phase 6 (the M68K editor half) and phase 7 (the MIPS and RISC-V editor half) are untouched, and nothing outside the Z80 changed except `GenericEmulator.requestCharacter` and the `ScreenRenderer` resize fix.
+- Matrix rows Z7 (Build and project close reset) and Z8 (a testcase over a drawing program) are not run. Z3 was checked at zoom ×1 only.
+- The Screen history budget is untouched by this phase: `bouncing-ball.z80` journals a whole image per clear and per present, which is what phase 8 should measure the default against.
+- A program suspended on Screen keyboard input shows nothing in the GUI but disabled execution buttons: the interrupt state has no renderer. It is pre-existing (the prompt was the only visible sign), but it matters more now that a graphical program's reads are silent — worth a small indicator in phase 8.
