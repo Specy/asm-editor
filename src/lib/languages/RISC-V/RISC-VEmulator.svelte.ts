@@ -202,7 +202,10 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         this.display = configured.display
         this.displayOrigin = configured.origin
         this.displayBaseLabel = configured.baseLabel
-        this.devices.setDisplay(this.display)
+        //the build path, not `setDisplay`: the Core the devices still hold is the *previous* one, so
+        //a re-sync here would repaint the Screen `clear()` has just blanked with the last program's
+        //memory — and a build that then fails never reaches `_initialize` to put it right again
+        this.devices.resetScreen(this.display)
         //creation + assembly is synchronous, so pinning the module global here cannot be
         //interleaved with another instance's creation
         RISCV.setIs64Bit(this.is64Bit)

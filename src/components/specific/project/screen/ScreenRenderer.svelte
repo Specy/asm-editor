@@ -428,7 +428,12 @@
         bottom: 4rem;
         width: min(58vw, 68rem);
         min-width: min(20rem, calc(100vw - 1rem));
-        z-index: 15;
+        /* over the page it floats on — the editor is 2 and the sidebars are 3 — and deliberately
+           under everything the app puts *over* a page: the Settings, Documentation and Share
+           drawers at 5, the input prompt and the toasts at 20. This window has no backdrop and
+           leaves the page interactive on purpose, so a drawer the user just opened has to be able
+           to come out in front of it; at 15 it opened behind the window and could not be used */
+        z-index: 4;
         box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.45);
     }
 

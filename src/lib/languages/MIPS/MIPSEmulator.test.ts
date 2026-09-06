@@ -10,6 +10,7 @@ import {
     MARS_TRANSMITTER_DATA
 } from '$lib/languages/mars/MarsDevices'
 import type { ProjectDisplay } from '$lib/languages/mars/marsDisplay'
+import type { Testcase } from '$lib/Project.svelte'
 import { Keyboard } from '$lib/languages/peripherals/Keyboard'
 import { ProgramClock } from '$lib/languages/peripherals/ProgramClock'
 
@@ -85,6 +86,16 @@ function storePixel(index: number, value: string): string {
 }
 
 const DATA = '        .data\ndisplay:.space  16384\n        .text\nmain:\n'
+/** A Testcase with nothing to check: the run itself is the point, and it must draw on the same grid. */
+const SCREEN_TESTCASE: Testcase = {
+    input: [],
+    expectedOutput: '',
+    startingRegisters: {},
+    expectedRegisters: {},
+    startingMemory: [],
+    expectedMemory: []
+}
+
 const EXIT = '        li      $v0, 10\n        syscall\n'
 
 describe('MIPS bitmap display', () => {
@@ -372,6 +383,41 @@ main:
         await emulator.compile(200, PROGRAM)
         expect(emulator.getDisplay?.()).toMatchObject({ origin: 'directive' })
         expect(emulator.peripherals.screen.width).toBe(128)
+    })
+    it('builds with a base address that points at unmapped memory', async () => {
+        //the popover's five choices are a menu, not a whitelist, so any word address reaches the
+        //devices; one the Core will not read has to leave the Build standing all the same
+        const emulator = await build('# @screen base=0x00000000\n' + DATA + EXIT)
+        expect(emulator.canExecute).toBe(true)
+        expect(emulator.errors).toEqual([])
+    })
+
+    it('blanks the Screen when a Build fails instead of keeping the last picture', async () => {
+        const emulator = await run(DATA + storePixel(0, '0x00ffffff') + EXIT)
+        expect(pixelAt(emulator, 0, 0)).toBe(0xffffff)
+        //a base the directive spells out, so no label probe assembles first and clears memory on
+        //the way: reading the display back must not repaint the Screen the failed Build blanked
+        const broken = '# @screen base=0x10010000\n' + DATA + '        nosuchinstruction\n'
+        await emulator.compile(200, broken).catch(() => {})
+        expect(emulator.canExecute).toBe(false)
+        expect(pixelAt(emulator, 0, 0)).toBe(0)
+    })
+
+    it('runs a Testcase on the display the directive asked for', async () => {
+        const code = PROGRAM.replace(
+            '        li      $v0, 10',
+            `        la      $t0, grid
+        li      $t1, 0x00445566
+        sw      $t1, 0($t0)
+        li      $v0, 10`
+        )
+        const emulator = await build(code)
+        const results = await emulator.test(code, [SCREEN_TESTCASE], 1_000_000, 200)
+        expect(results.every((result) => result.passed)).toBe(true)
+        //128 by 64 at one word per pixel, from the directive, not the 8 by 8 the test asked for
+        expect(emulator.peripherals.screen.width).toBe(128)
+        expect(emulator.peripherals.screen.height).toBe(64)
+        expect(pixelAt(emulator, 0, 0)).toBe(0x445566)
     })
 })
 

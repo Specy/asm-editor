@@ -644,20 +644,25 @@ export abstract class GenericEmulator<T, R extends string>
      * resuming carries on rather than starting the program over.
      */
     private async pauseUntilResumed(execution: ExecutionGeneration): Promise<void> {
-        this.state.paused = true
-        //a pause is only worth taking if the panels show where the program actually got to: without
-        //this they would still hold whatever they showed when Run was pressed
-        this.refreshVisibleState(false)
         const pausedAt = performance.now()
-        const resumed = new Promise<void>((resolve) => {
-            this.resumePausedRun = resolve
-        })
+        //the request is spent the moment it is honored, not when the run is let go: a `pause()` that
+        //lands between `resume()` and this continuation is a new request and parks the next slice
+        this.pauseRequested = false
+        this.state.paused = true
+        //everything from here on is inside the finally, `refreshVisibleState` included: a Core that
+        //cannot be read for the panels ends the run through `runInternal`'s catch like any other
+        //failure, and must not leave `paused` set on an emulator with no run left to resume
         try {
+            //a pause is only worth taking if the panels show where the program actually got to:
+            //without this they would still hold whatever they showed when Run was pressed
+            this.refreshVisibleState(false)
+            const resumed = new Promise<void>((resolve) => {
+                this.resumePausedRun = resolve
+            })
             await this.executionController.waitFor(execution, () => resumed)
         } finally {
             this.pausedMs += performance.now() - pausedAt
             this.resumePausedRun = null
-            this.pauseRequested = false
             this.state.paused = false
         }
     }

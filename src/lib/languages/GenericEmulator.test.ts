@@ -521,6 +521,49 @@ describe('pause and resume', () => {
         await run
         expect(emulator.executionTime).toBeLessThan(30)
     })
+
+    it('is not left paused when reading the Core for the panels fails', async () => {
+        const emulator = new FakeEmulator()
+        emulator.behavior = (_request, index) => {
+            if (index === 0) {
+                emulator.pause()
+                //the panels are read at the pause: a Core that cannot answer must end the run the
+                //way any other failure does, never park it with `paused` set and nothing to resume
+                emulator._getPc = () => {
+                    throw new Error('core unreadable')
+                }
+            }
+            return { reason: 'budget', instructions: 1 }
+        }
+        expect(await emulator.run(1000)).toBe(InterpreterStatus.TerminatedWithException)
+        expect(emulator.paused).toBe(false)
+        //nothing is stranded: the next run starts, is not stopped before its first slice, and ends
+        emulator._getPc = () => 0n
+        emulator.behavior = () => ({ reason: 'terminated', instructions: 1 })
+        await emulator.run(1000)
+        expect(emulator.paused).toBe(false)
+        expect(emulator.requests).toHaveLength(2)
+    })
+
+    it('takes a pause asked for while the parked run is being let go', async () => {
+        const emulator = new FakeEmulator()
+        emulator.behavior = (_request, index) => {
+            if (index === 0) emulator.pause()
+            return { reason: 'budget', instructions: 1 }
+        }
+        const run = emulator.run(1000)
+        await settle()
+        expect(emulator.paused).toBe(true)
+        //Resume and Pause in the same tick: the second press is a new request, not the spent one
+        emulator.resume()
+        emulator.pause()
+        await settle()
+        expect(emulator.paused).toBe(true)
+        //one slice ran between the two pauses, and the run is parked again rather than running on
+        expect(emulator.requests).toHaveLength(2)
+        emulator.clear()
+        await run
+    })
 })
 
 describe('undo', () => {
