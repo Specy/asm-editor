@@ -26,7 +26,6 @@
         building?: boolean
         canUndo: boolean
         running: boolean
-        paused?: boolean
         children?: Snippet
     }
 
@@ -41,16 +40,14 @@
         building = false,
         canUndo,
         running,
-        paused = false,
         children
     }: Props = $props()
 
     /**
-     * The Run button is Pause while a program is running and Run once it is parked, so a long
-     * program can be stopped to look at without throwing it away (Stop, which is `clear()`, does
-     * that). `paused` only ever means anything while a run is in flight, so `running` decides first.
+     * Pause ends the current Run like a breakpoint. Once it returns, Run, Step and Undo become
+     * available together; Stop is the separate operation that clears the program.
      */
-    const runMode = $derived(!running ? 'run' : paused ? 'resume' : 'pause')
+    const runMode = $derived(running ? 'pause' : 'run')
     const runLabel = $derived(runMode === 'pause' ? 'Pause' : 'Run')
 </script>
 

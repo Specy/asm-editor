@@ -51,9 +51,8 @@ export type ScreenPixelRecord =
      * visible image means the two were the same array, which is how direct drawing is represented. */
     | { kind: 'images'; drawing: Uint8ClampedArray; visible: Uint8ClampedArray | null }
     /**
-     * The records of a compound operation, oldest first, undone newest first. Undo pops exactly one
-     * record per rolled back Core step, so an operation a program reaches with a single instruction
-     * has to cost the journal a single record however many Screen operations it is made of: the
+     * The records of a compound operation, oldest first, undone newest first. Grouping operations
+     * reached through one instruction makes their budget eviction atomic: the
      * Z80's clear, which adopts the fill color as the background before clearing, or the echo of a
      * whole typed line, drawn character by character while one trap is suspended. See
      * `Screen.beginCompoundOperation`.

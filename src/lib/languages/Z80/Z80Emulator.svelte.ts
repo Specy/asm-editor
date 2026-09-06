@@ -35,6 +35,7 @@ import {
 import type { ExecutionGeneration } from '$lib/languages/ExecutionController'
 import type { Testcase } from '$lib/Project.svelte'
 import { Z80Device } from '$lib/languages/Z80/Z80Device'
+import { ScreenInstructionHistory } from '$lib/languages/peripherals/screen/ScreenInstructionHistory'
 import {
     Z80_DEFAULT_ORG,
     Z80_FLAGS,
@@ -92,6 +93,9 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
     private assembly: AssemblyResult | null = null
     private sourceMap: SourceMap | null = null
     private device: Z80Device | null = null
+    private screenInstructions: ScreenInstructionHistory | null = null
+    /** Echo is drawn while an IN is suspended; commit it with that IN when it succeeds. */
+    private pendingEchoBefore: number | null = null
     private sourceLines: string[] = []
     /**
      * One past the last byte of every assembled segment. The Z80 has no "end of program": running
@@ -138,6 +142,8 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         //Optional chaining because `GenericEmulator`'s constructor calls `clear()` before this
         //subclass' fields are initialized.
         this.device?.reset()
+        this.screenInstructions?.clear()
+        this.pendingEchoBefore = null
     }
 
     protected positionStackTabOnCompile(): void {
@@ -218,19 +224,50 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         //which is what "in graphical use" means for a language whose console is just more ports
         //([ADR 0009](../../../../docs/adr/0009-share-screen-keyboard-input-with-terminal.md))
         peripherals.terminal.usePromptInput()
+        const screenInstructions = new ScreenInstructionHistory(
+            peripherals.screen,
+            normalizeUndoSize(undoSize)
+        )
         const machine = new Z80Machine({
             historySize: normalizeUndoSize(undoSize),
             initialSp: Z80_STACK_TOP,
             //a program written as a routine ends with a top level `ret`, which the machine can only
             //recognize as an ending when it knows where the stack started
             exitOnReturn: true,
-            onPortRead: (address) => device.readPort(address),
-            onPortWrite: (address, value) => device.writePort(address, value)
+            onPortRead: (address) => {
+                const before = this.pendingEchoBefore ?? peripherals.screen.history.sequence
+                const value = device.readPort(address)
+                if (value !== undefined) {
+                    screenInstructions.record(machine.tStateCount, before)
+                    this.pendingEchoBefore = null
+                }
+                return value
+            },
+            onPortWrite: (address, value) => {
+                const before = peripherals.screen.history.sequence
+                const state = device.drawingState()
+                device.writePort(address, value)
+                const after = device.drawingState()
+                const changed =
+                    state.x !== after.x ||
+                    state.y !== after.y ||
+                    state.x2 !== after.x2 ||
+                    state.y2 !== after.y2 ||
+                    state.lastCommand !== after.lastCommand
+                //Bus callbacks run after the instruction has spent clock cycles. The timestamp
+                //therefore lies after its history record's tStateCountBefore, including in loops.
+                screenInstructions.record(
+                    machine.tStateCount,
+                    before,
+                    changed ? () => device.restoreDrawingState(state) : undefined
+                )
+            }
         })
         //throws only for an assembly with errors, which `_compile` already refused
         machine.loadAssembly(assembly)
         this.device = device
         this.machine = machine
+        this.screenInstructions = screenInstructions
         this.lastInstructionAddress = null
     }
 
@@ -244,12 +281,15 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
     }
 
     _canUndo(): boolean {
-        return this.machine?.canUndo() ?? false
+        const record = this.machine?.getHistory(1)[0]
+        return !!record && (this.screenInstructions?.canUndoAfter(record.tStateCountBefore) ?? true)
     }
 
     _undo(): void {
         const machine = this.requireMachine()
+        const record = machine.getHistory(1)[0]
         machine.undo()
+        if (record) this.screenInstructions?.undoAfter(record.tStateCountBefore)
         //the core restores the registers but not `instructionAddress`, so without this the panel
         //would keep naming the instruction that was just undone. The newest surviving record is
         //the one that ran last, and there always is one while the machine could undo at all.
@@ -581,6 +621,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         const screen = this._peripherals.screen
         const port = machine.pendingInputPort ?? 0
         const question = device.inputQuestion(port)
+        this.pendingEchoBefore ??= screen.history.sequence
         screen.beginCompoundOperation()
         try {
             if (

@@ -82,17 +82,14 @@ export abstract class GenericEmulator<T, R extends string>
     private lastPanelRefresh = 0
     /**
      * The pause the Run button turns into while a program is running. `pauseRequested` is set by
-     * `pause()` and honored by `runSlices` at its next slice boundary; `resumePausedRun` settles the
-     * promise the parked run is waiting on, and `runInFlight` is what makes a pause with no run a
-     * no-op instead of a request the next run would trip over.
+     * `pause()` and honored by returning from `runSlices` at its next slice boundary, just as for
+     * a breakpoint. Step and Undo can then own the Core, and Run starts a new invocation at its PC.
      */
     private pauseRequested = false
-    private resumePausedRun: (() => void) | null = null
     private runInFlight = false
-    /** How long the current run has spent parked, taken out of the execution time it reports. */
-    private pausedMs = 0
     /** Number of core operations currently in flight, see `duringCoreOperation`. */
     private coreOperations = 0
+    private coreOperationTail: Promise<void> = Promise.resolve()
     private coreIdleWaiters: (() => void)[] = []
     protected readonly executionController = new ExecutionController(() => Prompt.cancel())
 
@@ -207,7 +204,7 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     /**
-     * Serializes everything that touches the core against `_checkCode`'s throwaway assembly.
+     * Serializes execution commands and holds off `_checkCode`'s throwaway assembly until idle.
      *
      * The MARS/RARS derived cores (MIPS, RISC-V) keep the assembled program and the register file in
      * *module global* state, so assembling a second instance while one of them is executing hijacks
@@ -222,9 +219,16 @@ export abstract class GenericEmulator<T, R extends string>
      */
     private async duringCoreOperation<T>(operation: () => Promise<T>): Promise<T> {
         this.coreOperations += 1
+        const previous = this.coreOperationTail
+        let release!: () => void
+        this.coreOperationTail = new Promise<void>((resolve) => {
+            release = resolve
+        })
+        await previous
         try {
             return await operation()
         } finally {
+            release()
             this.coreOperations -= 1
             if (this.coreOperations === 0) {
                 const waiters = this.coreIdleWaiters
@@ -381,16 +385,12 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     /**
-     * The Undo depth is the smaller of the Core's instruction history and the Screen's history
-     * within its byte budget ([ADR 0005](../../../docs/adr/0005-restore-screen-state-on-undo.md)):
-     * both restore together or neither does, rather than the Core rolling back under an image it can
-     * no longer recover. A Screen that recorded nothing (no graphics in the program, or a
-     * memory-backed framebuffer, which journals nothing) never limits anything.
+     * The adapter knows which peripheral effects belong to the next CPU undo record and preflights
+     * them against the Screen's byte budget. Unrelated CPU instructions remain undoable even if an
+     * older drawing has been evicted. Memory-backed framebuffers rely on the CPU history alone.
      */
     private canUndoStep(): boolean {
-        if (!this._canUndo()) return false
-        const history = this._peripherals.screen.history
-        return history.sequence === 0 || history.depth > 0
+        return this._canUndo()
     }
 
     /**
@@ -424,10 +424,7 @@ export abstract class GenericEmulator<T, R extends string>
     // ----- public api ----- //
     clear(): void {
         this.executionController.invalidate()
-        //a paused run is parked on a promise of its own: let it go so it wakes up on the generation
-        //this just invalidated and ends itself. Without this a Build or a Stop taken while paused
-        //would leave the run parked forever, holding `duringCoreOperation` with it
-        this.releasePause()
+        this.pauseRequested = false
         //a new program is a new speed, and the estimates in the adapters are where it starts again
         this.speedCorrection = 1
         this.resetPeripherals()
@@ -480,6 +477,8 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     async compile(historySize: number, codeOverride: string | undefined): Promise<void> {
+        //Build must cancel an active run/input wait before queuing for its Core lock.
+        if (this.coreOperations > 0) this.clear()
         return this.duringCoreOperation(() => this.compileInternal(historySize, codeOverride))
     }
 
@@ -549,13 +548,17 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     async run(haltLimit: number): Promise<InterpreterStatus> {
-        return this.duringCoreOperation(() => this.runInternal(haltLimit))
+        const execution = this.executionController.capture()
+        return this.duringCoreOperation(() =>
+            this.executionController.isCurrent(execution)
+                ? this.runInternal(haltLimit)
+                : Promise.resolve(InterpreterStatus.Terminated)
+        )
     }
 
     /**
-     * Asks the run in flight to park at its next slice boundary, where the program keeps its place,
-     * its remaining instruction limit and its breakpoints — which is the whole difference between
-     * this and Stop, which throws the program away.
+     * Ends the current Run at its next instruction boundary, preserving the program and history.
+     * A subsequent Run gets its own instruction limit, just as after a breakpoint.
      *
      * A pause with no run in flight does nothing: there is nothing to park, and remembering the
      * request would stop the *next* run before its first slice. A program suspended on input is not
@@ -565,11 +568,6 @@ export abstract class GenericEmulator<T, R extends string>
     pause(): void {
         if (!this.runInFlight) return
         this.pauseRequested = true
-    }
-
-    /** Lets a paused run carry on from exactly where it parked. Harmless when nothing is paused. */
-    resume(): void {
-        this.releasePause()
     }
 
     /**
@@ -584,12 +582,13 @@ export abstract class GenericEmulator<T, R extends string>
      */
     private async runSlices(haltLimit: number, execution: ExecutionGeneration): Promise<void> {
         this.runInFlight = true
+        this.state.paused = false
         try {
             await this.sliceLoop(haltLimit, execution)
         } finally {
             this.runInFlight = false
             //a pause asked for in the slice that ended the run is not inherited by the next one
-            this.releasePause()
+            this.pauseRequested = false
         }
     }
 
@@ -599,7 +598,10 @@ export abstract class GenericEmulator<T, R extends string>
         while (remaining > 0) {
             //the slice boundary is the only place a pause can be taken: a slice is the Core running,
             //and nothing here can interrupt it once it has started
-            if (this.pauseRequested) await this.pauseUntilResumed(execution)
+            if (this.pauseRequested) {
+                this.state.paused = true
+                return
+            }
             const targetMs = this.sliceTimeBudgetMs()
             const clock = this._peripherals.clock
             const startedAt = performance.now()
@@ -657,50 +659,6 @@ export abstract class GenericEmulator<T, R extends string>
         if (slice.reason !== 'budget' || slice.instructions <= 0) return
         const busyMs = Math.max(0, elapsedMs - Math.min(waitedMs, elapsedMs))
         this.speedCorrection = nextSpeedCorrection(this.speedCorrection, targetMs, busyMs)
-    }
-
-    /**
-     * Parks the run between two slices until `resume()`, or until `clear()` (Build, Stop, dispose)
-     * lets it go on an invalidated generation, which is how Stop tears a paused run down — the same
-     * path a program-requested wait takes.
-     *
-     * Nothing about the run is touched here: the remaining instruction limit, the breakpoints and
-     * the speed correction belong to the loop and are picked up again by the next slice, so
-     * resuming carries on rather than starting the program over.
-     */
-    private async pauseUntilResumed(execution: ExecutionGeneration): Promise<void> {
-        const pausedAt = performance.now()
-        //the request is spent the moment it is honored, not when the run is let go: a `pause()` that
-        //lands between `resume()` and this continuation is a new request and parks the next slice
-        this.pauseRequested = false
-        this.state.paused = true
-        //everything from here on is inside the finally, `refreshVisibleState` included: a Core that
-        //cannot be read for the panels ends the run through `runInternal`'s catch like any other
-        //failure, and must not leave `paused` set on an emulator with no run left to resume
-        try {
-            //a pause is only worth taking if the panels show where the program actually got to:
-            //without this they would still hold whatever they showed when Run was pressed
-            this.refreshVisibleState(false)
-            const resumed = new Promise<void>((resolve) => {
-                this.resumePausedRun = resolve
-            })
-            await this.executionController.waitFor(execution, () => resumed)
-        } finally {
-            this.pausedMs += performance.now() - pausedAt
-            this.resumePausedRun = null
-            this.state.paused = false
-        }
-    }
-
-    /**
-     * Settles the promise a parked run is waiting on and forgets the request. `resume()` calls it to
-     * carry on; `clear()` calls it so a paused run cannot survive a Build, a Stop or a dispose.
-     */
-    private releasePause(): void {
-        this.pauseRequested = false
-        const resume = this.resumePausedRun
-        this.resumePausedRun = null
-        resume?.()
     }
 
     /**
@@ -787,20 +745,19 @@ export abstract class GenericEmulator<T, R extends string>
     private async runInternal(haltLimit: number): Promise<InterpreterStatus> {
         if (haltLimit <= 0) haltLimit = Number.MAX_SAFE_INTEGER
         const start = performance.now()
-        this.pausedMs = 0
         const execution = this.executionController.capture()
         try {
             await this.runSlices(haltLimit, execution)
             this.executionController.ensureCurrent(execution)
             const terminated = this._hasTerminated()
             this.refreshVisibleState(terminated)
-            //the time the user held the program in a pause is not time the program ran
-            this.state.executionTime = performance.now() - start - this.pausedMs
+            this.state.executionTime = performance.now() - start
             this.state.terminated = terminated
             //if it managed to run, it means it does not have valid errors
             this.state.errors = []
             return terminated ? InterpreterStatus.Terminated : InterpreterStatus.Running
         } catch (e) {
+            this.state.paused = false
             if (!this.executionController.isCurrent(execution)) {
                 return InterpreterStatus.Terminated
             }
@@ -938,10 +895,16 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     async step(): Promise<boolean> {
-        return this.duringCoreOperation(() => this.stepInternal())
+        const execution = this.executionController.capture()
+        return this.duringCoreOperation(() =>
+            this.executionController.isCurrent(execution)
+                ? this.stepInternal()
+                : Promise.resolve(false)
+        )
     }
 
     private async stepInternal(): Promise<boolean> {
+        this.state.paused = false
         let lastLine = -1
         const execution = this.executionController.capture()
         try {
@@ -1068,8 +1031,9 @@ export abstract class GenericEmulator<T, R extends string>
         for (const original of testcases) {
             const testcase = structuredClone($state.snapshot(original)) as Testcase
             try {
-                await this.compile(historySize, code)
-                await this.runTestcase(testcase, haltLimit)
+                //The whole testcase loop already owns the Core operation lock.
+                await this.compileInternal(historySize, code)
+                await this.runTestcaseInternal(testcase, haltLimit)
                 const errors = await this.validateTestcase(testcase)
                 results.push({
                     errors,
@@ -1104,6 +1068,8 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     undo(amount: number | undefined): void {
+        //Undo is synchronous. An unfinished step/run/input handler still owns the Core.
+        if (this.coreOperations > 0) return
         try {
             if (!this.getInstance()) return
             const undoCount = Math.max(0, Math.floor(amount ?? 1))
@@ -1112,7 +1078,6 @@ export abstract class GenericEmulator<T, R extends string>
                 //the Core owns the instruction boundary, so it rolls back first and the Screen
                 //follows it (ADR 0005)
                 this._undo()
-                this._peripherals.screen.undo()
             }
             //an image that lives in Core memory was restored by the rollback itself, so the Screen
             //re-reads it instead of having journaled it. Once for the whole rollback: the re-read is
@@ -1121,6 +1086,7 @@ export abstract class GenericEmulator<T, R extends string>
             const instruction = this._getNextInstruction()
             this.state.line = instruction?.lineNumber ?? -1
             this.state.canUndo = this.canUndoStep()
+            this.state.terminated = this._hasTerminated()
             this.updateRegisters()
             this.scrollStackTab()
             this.updateMemory()

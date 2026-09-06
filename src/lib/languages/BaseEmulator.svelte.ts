@@ -100,8 +100,10 @@ export abstract class BaseEmulator<R extends string> {
 
     abstract _checkCode(code: string): MaybePromise<Diagnostic[]>
 
+    /** Restores one CPU instruction and its associated peripheral effects. */
     abstract _undo(): void
 
+    /** Preflights both the CPU record and every peripheral effect belonging to it. */
     abstract _canUndo(): boolean
 
     abstract _step(): Promise<{ terminated: boolean }>

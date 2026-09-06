@@ -530,10 +530,9 @@ export class Screen {
 
     /**
      * Opens a compound operation: everything journaled until the matching `endCompoundOperation`
-     * becomes one record, which undoes it all newest first. Undo pops one record per rolled back
-     * Core step ([ADR 0005](../../../../../docs/adr/0005-restore-screen-state-on-undo.md)), so an
-     * operation a program reaches with a single instruction must not journal twice — otherwise the
-     * journal drifts one operation ahead of the code and every later Undo restores the wrong image.
+     * becomes one record, which undoes it all newest first. An adapter associates the journal range
+     * with the CPU instruction that caused it (ADR 0005); grouping also keeps the byte budget from
+     * retaining only part of a compound operation.
      * The Z80's clear (adopt the fill color, then clear) and the echo of typed input (one glyph per
      * character while a single trap is suspended) are the two that need it. Nesting is counted, and
      * a compound that journaled nothing pushes nothing.
@@ -878,11 +877,12 @@ export class Screen {
         if (pixels.kind === 'images') {
             this.drawing = pixels.drawing
             this.visible = pixels.visible ?? pixels.drawing
+            this.markVisible()
         } else if (pixels.kind === 'patch') {
             const image = pixels.target === 'visible' ? this.visible : this.drawing
             this.pasteRegion(image, pixels)
+            if (image === this.visible) this.markVisible()
         }
-        this.markVisible()
     }
 
     // --------------------------------------------------------------- pixels

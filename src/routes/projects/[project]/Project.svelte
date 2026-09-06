@@ -195,10 +195,7 @@
             case ShortcutAction.RunCode: {
                 if (emulator.terminated || emulator.interrupt !== undefined || !emulator.canExecute)
                     break
-                //the same three-way the button offers, so the shortcut and the button never disagree
-                //about what is running
-                if (emulator.paused) emulator.resume()
-                else if (running) emulator.pause()
+                if (running) emulator.pause()
                 else void startRun()
                 break
             }
@@ -213,12 +210,14 @@
                 break
             }
             case ShortcutAction.Step: {
+                if (running || building) break
                 if (emulator.terminated || emulator.interrupt !== undefined || !emulator.canExecute)
                     break
                 void stepCode()
                 break
             }
             case ShortcutAction.Undo: {
+                if (running || building) break
                 if (
                     emulator.terminated ||
                     emulator.interrupt !== undefined ||
@@ -318,8 +317,6 @@
         if (building || running) return
         running = true
         testcasesResult = []
-        //the delay lets the button's own repaint land before a slow first slice
-        await new Promise((resolve) => setTimeout(resolve, 50))
         try {
             await runCode()
         } finally {
@@ -592,7 +589,6 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
         <Controls
             {running}
             {building}
-            paused={emulator.paused}
             hasTests={testcases.length > 0}
             hasErrorsInTests={testcasesResult.some((r) => !r.passed)}
             hasNoErrorsInTests={testcasesResult.every((r) => r.passed) &&
@@ -629,9 +625,6 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
             }}
             on:pause={() => {
                 emulator.pause()
-            }}
-            on:resume={() => {
-                emulator.resume()
             }}
             on:build={async () => {
                 await buildCode()

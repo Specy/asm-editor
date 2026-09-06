@@ -109,6 +109,15 @@ export class Z80Device {
         this.host = host
     }
 
+    /** Drawing parameters staged in IO ports participate in instruction undo too. */
+    drawingState() {
+        return { x: this.x, y: this.y, x2: this.x2, y2: this.y2, lastCommand: this.lastCommand }
+    }
+
+    restoreDrawingState(state: ReturnType<Z80Device['drawingState']>): void {
+        Object.assign(this, state)
+    }
+
     /** The port the CPU addressed, or undefined when nothing is attached there. */
     static portNameOf(busAddress: number): Z80PortName | undefined {
         return PORT_NAME_BY_NUMBER.get(busAddress & 0xff)

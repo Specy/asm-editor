@@ -10,3 +10,11 @@ GenericEmulator will own run scheduling, time-budget selection and yielding to t
 - Exact budgets and the host yielding mechanism remain implementation choices to validate; language adapters do not choose independent rendering or browser-yield policies.
 - Validation targets, decided on 2026-09-06: yields cost under five percent of compute-only throughput on every Core, and Stop is answered within a tenth of a second.
 - Program-requested waits, meaning EASy68K's delay task, MARS's sleep syscall and the Z80 wait and frame-sync ports of [ADR 0010](./0010-program-time-without-clock-pacing.md), are scheduling events like input waits: the adapter reports them, the scheduler resumes after the duration without blocking the GUI, and Stop stays available.
+
+## Pause
+
+Pause ends the current Run invocation at a slice boundary, preserving the program, peripheral
+state and undo history, just as reaching a breakpoint does. Once Run returns, Step and Undo are
+available and Run continues from the current PC with a new instruction limit. No suspended Run
+promise remains. Execution commands are serialized so a quick Step followed by Run cannot enter
+the Core concurrently. A pending program wait completes before Pause releases the Core.

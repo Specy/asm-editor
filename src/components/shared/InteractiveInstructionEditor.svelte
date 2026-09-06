@@ -173,8 +173,6 @@
         if (layout === 'fullscreen') {
             testcasesResult = []
         }
-        //the delay lets the button's own repaint land before a slow first slice
-        await new Promise((resolve) => setTimeout(resolve, 50))
         try {
             await emulator.run(settingsStore.values.instructionsLimit.value)
         } catch (e) {
@@ -230,7 +228,6 @@
         children={controls}
         {running}
         {building}
-        paused={emulator.paused}
         hasTests={layout === 'fullscreen' || embedded
             ? testcases.length > 0
             : testcases.length > 0 && !showTestcases}
@@ -269,15 +266,12 @@
         on:pause={() => {
             emulator.pause()
         }}
-        on:resume={() => {
-            emulator.resume()
-        }}
         on:build={async () => {
             await buildCode()
         }}
-        on:step={() => {
+        on:step={async () => {
             try {
-                emulator.step()
+                await emulator.step()
             } catch (e) {
                 console.error(e)
                 toast.error('Error executing code. ' + getM68kErrorMessage(e))

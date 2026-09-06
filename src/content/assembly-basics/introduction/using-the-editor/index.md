@@ -23,7 +23,7 @@ registers, holds `00001000`, the address of the first instruction.
 Once it has built, four buttons take Build's place:
 
 - **Step** runs exactly one instruction and stops. One press and `d0` goes from `00000000` to `00000001`, and PC from `00001000` to `00001004`, four bytes further on.
-- **Run** runs the program to the end, or to the next breakpoint. While a program is running that same button says **Pause**, and once a run is parked it says **Resume**.
+- **Run** runs the program to the end, or to the next breakpoint. While a program is running that same button says **Pause**. Pausing makes Run, Step and Undo available, just as at a breakpoint.
 - **Undo** takes the last instruction back, one press per instruction. The editor keeps the last 100 steps, which is a setting you can raise.
 - **Stop** throws the run away: the registers go back to zero and the only button left is **Build** again.
 

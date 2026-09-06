@@ -46,6 +46,7 @@ import {
 } from '$lib/languages/M68K/M68K-traps'
 import type { MouseSnapshot } from '$lib/languages/peripherals/Mouse'
 import { echoToScreen } from '$lib/languages/peripherals/screen/textEcho'
+import { ScreenInstructionHistory } from '$lib/languages/peripherals/screen/ScreenInstructionHistory'
 import type { Testcase } from '$lib/Project.svelte'
 import { settingsStore } from '$stores/settingsStore.svelte'
 
@@ -104,6 +105,7 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
 class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterName> {
     private s68k: S68k | null = null
     private interpreter: Interpreter | null = null
+    private screenInstructions: ScreenInstructionHistory | null = null
     /**
      * EASy68K's drawing mode 2, "move cursor but do not draw": the Windows GDI `R2_NOP` the
      * simulator sets, where a drawing operation leaves every pixel alone but still moves the drawing
@@ -141,6 +143,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
 
     clear(): void {
         super.clear()
+        this.screenInstructions?.clear()
         //the interpreter outlives clear(), so the flags have to be zeroed explicitly like the legacy emulator did
         this.state.statusRegisters = M68K_FLAG_NAMES.map((name) => ({
             name,
@@ -166,7 +169,11 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     }
 
     _canUndo(): boolean {
-        return this.interpreter?.canUndo() ?? false
+        const interpreter = this.interpreter
+        return (
+            !!interpreter?.canUndo() &&
+            (this.screenInstructions?.canUndoAfter(interpreter.getLastStepId() - 1) ?? true)
+        )
     }
 
     _checkCode(code: string): Diagnostic[] {
@@ -199,6 +206,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             history_size: undoSize,
             keep_history: undoSize > 0
         })
+        this.screenInstructions = new ScreenInstructionHistory(this._peripherals.screen, undoSize)
     }
 
     _dispose(): void {
@@ -355,7 +363,8 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     }
 
     _undo(): void {
-        this.requireInterpreter().undo()
+        const step = this.requireInterpreter().undo()
+        this.screenInstructions?.undoAfter(step.id - 1)
     }
 
     /**
@@ -473,9 +482,9 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
      * first and returns its wait, because the program is not blocked on the trap any more, only on
      * time passing.
      *
-     * The whole task is one journal record, whatever it draws: a `trap #15` is one Core step and
-     * Undo pops one Screen record per step, while a task like 18 prints a prompt and then echoes
-     * every character the user types ([ADR 0005](../../../../docs/adr/0005-restore-screen-state-on-undo.md)).
+     * The whole task is associated with this trap's execution ID, including tasks like 18 that
+     * print a prompt and then echo every character the user types. The compound journal makes
+     * eviction of those effects atomic (ADR 0005).
      */
     private async handleInterrupt(
         interrupt: Interrupt | null,
@@ -486,6 +495,8 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         this.executionController.ensureCurrent(execution)
         const terminal = this._peripherals.terminal
         const screen = this._peripherals.screen
+        const before = screen.history.sequence
+        const penOnlyBefore = this.penOnly
         const { type } = interrupt
         const question = INTERRUPT_INPUT_QUESTIONS[type]
         this.state.interrupt = question ? { type, message: question } : { type }
@@ -794,6 +805,17 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             }
         } finally {
             screen.endCompoundOperation()
+            if (this.executionController.isCurrent(execution)) {
+                this.screenInstructions?.record(
+                    interpreter.getLastStepId(),
+                    before,
+                    this.penOnly === penOnlyBefore
+                        ? undefined
+                        : () => {
+                              this.penOnly = penOnlyBefore
+                          }
+                )
+            }
             this.state.interrupt = undefined
         }
         return undefined
