@@ -2,7 +2,7 @@
     "id": "assembly-basics",
     "name": "Assembly basics",
     "authors": ["Specy"],
-    "description": "Learn the basics of all assembly language and how CPUs execute code.",
+    "description": "What every assembly language has in common: registers, memory, branching, the stack, and how a program asks the outside world for something. Start here if you have never written assembly, then pick the course of one language.",
     "image": "",
     "tags": ["assembly"],
     "date": "2025-05-18",
