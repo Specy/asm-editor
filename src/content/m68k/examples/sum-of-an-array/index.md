@@ -23,8 +23,8 @@ numbers: dc.w 4, 8, 15, 16, 23, 42
 
 The numbers are words, two bytes each, so `add.w (a0)+, d0` leaves `a0` two bytes further along every
 time round. They sit at `$1014`, right after the code, on the first page the memory panel shows.
-Step through the loop and you can watch `a0` walk across them, and when the program stops `d0` holds
-108.
+Step through the loop and you can watch `a0` grow by two at every `add.w`, and when the program stops
+`d0` holds 108.
 
 Try adding a seventh number to the `dc.w` line. `d0` still comes out at 108, because `count` is what
 the loop counts with and you did not touch it. Change `count equ 6` to `count equ 7` and it adds the

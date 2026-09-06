@@ -160,7 +160,7 @@ end:
 That is cheaper than a push, but there is a catch, there is only one `ra`. If `doubled` called a
 subroutine of its own, that `jal` would write a new return address into `ra` and the program would
 lose the address where to return to. So a subroutine that calls anything else pushes `ra` on the
-stack first and pops it back before `ret`. The stack turns up either way, RISC-V just does not make
+stack first and pops it back before `ret`. So the stack is used either way, RISC-V just does not make
 you use it when you don't have to.
 
 ## Passing values
@@ -178,7 +178,8 @@ return value comes back in `a0`.
 A convention also says which registers a subroutine may change. One that uses `d3` for scratch work
 destroys what the caller kept there, so either the subroutine pushes `d3` on entry and pops it before
 returning, or the caller saves it before making the call. Both are done in practice, and the
-convention is the list of which registers are whose problem.
+convention is the list of which registers a subroutine must leave as it found them and which it may
+change.
 
 ## Recursion
 
@@ -224,7 +225,7 @@ the deepest point comes when `d0` reaches 1:
 | `0xFFFFF8` |  00000005   |
 | `0xFFFFFC` |  00001008   |
 
-Five return addresses and four copies of `n`, one per call, and nobody picked an address for any of
-them.
+Five return addresses and four copies of `n`, one per call, and we never had to choose an address
+for any of them, the stack pointer did it.
 
 Try changing `move.l #5, d0` to `move.l #8, d0` and count how much further down `a7` gets.

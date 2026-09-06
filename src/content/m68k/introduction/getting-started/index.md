@@ -53,7 +53,7 @@ Numbers can be written in four bases, and a `#` in front means the number itself
 | `@144`     | octal, still 100  |
 
 `move.l #$2000, d0` puts the number `$2000` in `d0`. Drop the `#` and `move.l $2000, d0` reads the
-four bytes _at address_ `$2000` and puts those in `d0` instead. One character, two completely
+four bytes _at address_ `$2000` and puts those in `d0` instead. One character makes two completely
 different instructions.
 
 Most instructions also carry a **size**, which says how much of the register or of memory they touch.
@@ -102,7 +102,8 @@ Try putting `move.b #$11, d0` back at the end and see that `$33333333` becomes `
 ## The flags panel
 
 The flags sit just above the registers. `cmp` subtracts its first operand from its second, throws
-the answer away and keeps only what the answer did to the flags. `Z` goes to 1 when the two were equal, which is what `beq` and `bne` read.
+the answer away and keeps only what the answer did to the flags. `Z` goes to 1 when the two were
+equal, which is what `beq` and `bne` read.
 
 ```m68k|playground
     move.l #5, d0       ; x = 5
