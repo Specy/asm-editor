@@ -1,5 +1,5 @@
-Everything until now decided for itself where to go next: the program counter walked forward and a
-branch moved it. Two things can take that decision away. The program can ask for something the CPU
+Everything until now decided for itself where to go next: the program counter moved to the next
+instruction and a branch moved it somewhere else. Two things can take that decision away. The program can ask for something the CPU
 cannot do, and the outside world can arrive while the program was busy with something else.
 
 ## Three words for one piece of machinery
@@ -68,7 +68,8 @@ main:
 `$k0` and `$k1` are the two MIPS registers reserved for handlers: a handler may overwrite them at any
 moment, so no program is allowed to rely on them, which is what makes them safe to use here. Take
 the `addi $k0, $k0, 4` out and the handler returns to the very instruction that faulted, which faults
-again, and the message repeats until the run reaches its instruction limit.
+again, so the program never gets past that line: the fault and the handler take turns until the run
+reaches its instruction limit, and the message is never printed.
 
 RISC-V does the same with different names: `csrrw zero, utvec, t0` points `utvec` at your handler,
 `csrrsi zero, ustatus, 1` turns the enable bit on, `uepc` is the saved address, and `uret` returns.

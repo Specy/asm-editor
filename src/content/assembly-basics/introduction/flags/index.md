@@ -22,8 +22,8 @@ The M68K adds an **Extend flag (X)**, a second copy of the carry kept for the in
 and subtract across more than one register, and it is the first of the five in the flags panel of
 every program on this page.
 
-Nobody writes the flags on purpose, the CPU **updates them by itself** after nearly every arithmetic
-and logic instruction. An `add` writes the zero, negative, carry and overflow flags from its own
+A program almost never writes the flags itself, the CPU **updates them by itself** after nearly every
+arithmetic and logic instruction. An `add` writes the zero, negative, carry and overflow flags from its own
 result, and the branch on the next line reads them.
 
 ## Compare and branch
