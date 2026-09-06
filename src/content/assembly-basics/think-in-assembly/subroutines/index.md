@@ -39,8 +39,8 @@ function). The words C uses for its pieces mean the same things here:
 
 Jumping _to_ the subroutine is a branch to a label, which we saw in
 [branching](/learn/courses/assembly-basics/think-in-assembly/branching-and-control-flow). Coming back
-needs more, because "back" is a different address every time: the first call returns to the
-instruction after it, the second call to the instruction after it.
+needs more, because "back" is a different address every time, each call has to return to the
+instruction that follows that particular call.
 
 So whoever calls leaves the return address where the subroutine can find it. The M68K leaves it on
 the stack, RISC-V in a register.
@@ -51,7 +51,7 @@ the stack, RISC-V in a register.
 jumps to the label. `rts` (return from subroutine) pops it back off into the program counter, so the
 program carries on where it left off.
 
-Build this one and step through it, it is the C above, so there is a call inside a call. Watch the
+Build this one and step through it. It is the C above, so there is a call inside a call. Watch the
 program counter on the top right, and `a7`, the stack pointer, drop by 4 at every `bsr` and climb
 back at every `rts`.
 
@@ -202,8 +202,9 @@ end:
 ```
 
 Step through it and watch `a7` fall as the calls go deeper and climb back as they return. The
-`bsr factorial` inside the routine is at `0x101C`, so it pushes `0x1020`, and the first call, at
-`0x1004`, pushed `0x1008`. With `n = 5` the deepest point comes when `d0` reaches 1:
+`bsr factorial` inside the routine is at `0x101C`, so it pushes `0x1020`, the `move.l (sp)+, d1`
+after it, and the first call, at `0x1004`, pushed `0x1008`. With `n = 5` the deepest point comes when
+`d0` reaches 1:
 
 |    address |    value    |
 | ---------: | :---------: |

@@ -25,7 +25,7 @@ long you wrote as `$12345678` reads left to right in memory as `12 34 56 78`.
 
 There is no real 68000 in your browser, there is a simulator, and this one follows **EASy68K**.
 Printing, reading input and drawing go through the instruction `trap #15`, which is taught in the
-"Talking to the outside world" module of this course; until then, programs show what they did in the
+"Talking to the outside world" module of this course. Until then, programs show what they did in the
 registers and the memory.
 
 ## How a program is written down
@@ -77,7 +77,7 @@ on the M68K the operand on the right is the destination, the one that gets writt
 42 and `d1` is still 32.
 
 **Build** assembles what you wrote and points the simulator at the first instruction, **Run** runs
-the program to the end, and **Step**, which we use further down, runs one instruction at a time.
+the program to the end, and **Step** runs one instruction at a time.
 
 Nothing in the program says "stop". The simulator ends a program when there is no next instruction to
 run, which here is the end of what you wrote.
@@ -101,8 +101,8 @@ Try putting `move.b #$11, d0` back at the end and see that `$33333333` becomes `
 
 ## The flags panel
 
-`cmp` subtracts its first operand from its second, throws the answer away and keeps only what the
-answer did to the flags. `Z` goes to 1 when the two were equal, which is what `beq` and `bne` read.
+The flags sit just above the registers. `cmp` subtracts its first operand from its second, throws
+the answer away and keeps only what the answer did to the flags. `Z` goes to 1 when the two were equal, which is what `beq` and `bne` read.
 
 ```m68k|playground
     move.l #5, d0       ; x = 5
