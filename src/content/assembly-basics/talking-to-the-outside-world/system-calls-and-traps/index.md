@@ -1,149 +1,99 @@
-Every program so far has left its answer in a register or in memory, and you read it in a panel. A
-program that is any use has to do more than that: print something, read what you typed, draw, open a
-file. None of those is an instruction, because none of them is arithmetic. A CPU does not know how to
-print a line. It asks somebody else to do it.
+Every program in this course has left its answer in a register or in memory, and you read it in a
+panel. A program that is any use has to do more: print a line, read what you typed, draw something,
+open a file. None of those is arithmetic, and arithmetic, moving data and jumping are all a CPU can
+do. There is no instruction that prints.
 
-## Asking the environment
+So the program asks somebody else to do it.
 
-On a real computer the somebody else is the **operating system**. The program puts a number
-somewhere that says what it wants, puts the arguments in agreed registers, and runs one instruction
-that hands control over. The CPU jumps to a handler the operating system installed, switches to a
-mode where that handler is allowed to touch the hardware, does the work and comes back to the
-instruction after. That instruction is called a **trap** on some machines and a **system call**
-instruction on others, and the numbered thing you asked for is a **system call** or a **service** or
-a **task**, depending on whose manual you are reading.
+## Who it asks
 
-In this editor there is no operating system, there is a simulator, and it answers the trap itself:
-the text you print goes to the console panel, the line you type comes from the box under it. Each
-language imitates a simulator that already existed, and the numbers come from those: **EASy68K** for
-the M68K, **MARS** for MIPS and **RARS** for RISC-V. A Z80 has no system call instruction at all, so
-this editor gives it a convention of its own, which the last section of this lecture uses.
+On a real computer it asks the **operating system**, which is a program too, and one that was there
+first: it loaded yours (we saw that in the lifecycle lecture) and it owns the screen, the keyboard
+and the disk that your program wants.
 
-## The M68K: `trap #15`
+It owns them because the CPU makes it own them. A CPU runs in one of two modes, and the names change
+between architectures. In **user mode**, which is where your program runs, the instructions that
+touch hardware are refused. In **supervisor mode**, also called kernel or privileged mode, they work.
+So a program cannot write to the screen even if it knows exactly which address the screen is at,
+which is the point: one program cannot take the machine down, and it cannot read what another
+program is doing.
 
-`trap #15` hands control to the environment. The number of the task goes in `d0` and the arguments
-go where that task expects them. Task 14 prints the string at the address in `a1`, up to the byte of
-0 that ends it, which is the terminator we saw in the previous lecture.
+What is left to it is asking, and there is one instruction for that.
 
-```m68k|playground|console|no-flags
-    lea message, a1     ; a1 = &message
-    move.b #14, d0      ; task 14: print the string at a1
-    trap #15
+## How it asks
 
-message: dc.b 'Hello from a trap!', 0
+The instruction has a different name on every machine and the shape of the request is the same
+everywhere. The program:
+
+1. puts a **number** in an agreed register, saying which service it wants,
+2. puts the **arguments** in other agreed registers, say the address of the string to print,
+3. runs the one instruction that hands control over.
+
+The CPU switches to supervisor mode, jumps to the piece of the operating system that was installed
+for this, runs it, switches back, and carries on at the instruction after. If there is an answer, it
+comes back in a register the two sides agreed on.
+
+That instruction is a **trap** on some machines, a **software interrupt** on others, and the
+**system call instruction** on the rest. The numbered thing you asked for is a **system call**, a
+**service** or a **task**, depending on whose manual you are reading. They all describe the same
+thing: the program asked, the environment did it.
+
+| language | the instruction                           |
+| -------- | ----------------------------------------- |
+| M68K     | `trap`                                    |
+| MIPS     | `syscall`                                 |
+| RISC-V   | `ecall`                                   |
+| x86      | `int` or `syscall`                        |
+| Z80      | none, it uses ports, see the next lecture |
+
+Those five words are the vocabulary you need to recognise a system call when you meet one. In M68K
+the three steps come out like this:
+
+```
+    move.b #14, d0      ; the number: 14 is "print the string whose address is in a1"
+    lea message, a1     ; the argument
+    trap #15            ; hand over
 ```
 
-Build it and press Run, and the console panel under the code shows the line. Three instructions:
-load the argument, load the task number, execute the trap. That shape does not change, only the
-numbers do.
+What I want, what to work on, go. The other languages write the same three lines with different
+names in them, and which names is what their own course is for.
 
-Reading is the same in reverse. Task 4 reads a line, parses it as a decimal number and leaves it in
-`d1`, and task 3 prints the number in `d1`.
+## The numbers belong to the environment, not to the CPU
 
-```m68k|playground|console|no-flags
-    lea prompt, a1
-    move.b #14, d0      ; task 14: print the string at a1
-    trap #15
-    move.b #4, d0       ; task 4: read a number into d1
-    trap #15
-    add.l #1, d1        ; n = n + 1
-    move.b #3, d0       ; task 3: print the number in d1
-    trap #15
+The CPU knows the instruction. It knows nothing whatsoever about the number 14. That number means
+"print a string" because the environment on the other side decided it does, and for no other reason.
 
-prompt: dc.b 'Type a number: ', 0
-```
+Change the environment and the numbers change under a program that has not changed at all. This is
+why a program built for Linux does not run on Windows even on the same processor: every instruction
+in it is valid, and the conversation it tries to have is with somebody who is not there.
 
-```testcase
-{
-    "input": ["41"]
-}
-```
+The list of numbers, the registers each service reads, and where it leaves its answer are together
+the environment's **calling convention**. That is the same term we used for subroutines, and the
+same idea: two sides agreeing on where things go, with nothing in the hardware to enforce the
+agreement.
 
-Type 41 in the console panel and press enter and the program answers 42. While it is waiting for you
-the program is stopped in the middle of the `trap #15`, which is exactly what happens on a real
-machine: a program that reads input spends most of its life inside a system call.
+## What this editor does
 
-## RISC-V and MIPS: `ecall` and `syscall`
+There is no operating system here. Each language imitates a simulator that already existed, and the
+simulator answers the trap itself: what a program prints appears in the console panel, and what it
+reads comes from the box under that panel. While a program waits for input the run is stopped in the
+middle of that one instruction, which is exactly what happens on a real machine. A program that
+reads a lot of input spends most of its life inside a system call.
 
-The same program in RISC-V. The instruction is `ecall`, the service number goes in `a7`, and the
-argument goes in `a0`, which is also where the answer comes back.
+The services on offer are much the same wherever you look, because programs want the same things:
 
-```riscv|playground|console
-.data
-prompt: .string "Type a number: "
+- print a string, a number or a single character
+- read a number, a character or a whole line
+- ask for a block of memory
+- ask what the time is, or to be left alone for a while
+- end the program
 
-.text
-main:
-    li a7, 4            # service 4: print the string at a0
-    la a0, prompt
-    ecall
-    li a7, 5            # service 5: read an integer, into a0
-    ecall
-    addi a0, a0, 1      # n = n + 1
-    li a7, 1            # service 1: print the integer in a0
-    ecall
-    li a7, 10           # service 10: end the program
-    ecall
-```
+That last one is worth knowing about now. On most environments a program has to say that it is
+finished, because the CPU would otherwise carry straight on into whatever bytes follow it and try to
+decode them as instructions.
 
-```testcase
-{
-    "input": ["41"]
-}
-```
+Which number each of those is, and which register carries it, is exactly the sort of thing that
+differs between languages, so it is taught in each language's own course rather than here.
 
-MIPS is the same again with different names: the instruction is `syscall`, the service number goes
-in `$v0`, arguments go in `$a0` and up, and a service that answers a number leaves it in `$v0`.
-
-| language | instruction | the number goes in | the arguments go in |
-| -------- | ----------- | ------------------ | ------------------- |
-| M68K     | `trap #15`  | `d0`               | `d1` and `a1`       |
-| MIPS     | `syscall`   | `$v0`              | `$a0`, `$a1`, `$a2` |
-| RISC-V   | `ecall`     | `a7`               | `a0`, `a1`, `a2`    |
-
-MARS and RARS use the same service numbers as each other, and EASy68K's task numbers are its own:
-
-| what you want       | M68K task in `d0` | MIPS service in `$v0` | RISC-V service in `a7` |
-| ------------------- | ----------------: | --------------------: | ---------------------: |
-| print a string      |                14 |                     4 |                      4 |
-| print a number      |                 3 |                     1 |                      1 |
-| read a number       |                 4 |                     5 |                      5 |
-| print one character |                 6 |                    11 |                     11 |
-| end the program     |                 9 |                    10 |                     10 |
-
-An M68K program does not have to ask to be ended, the simulator stops it when it runs out of
-instructions, which is why none of the programs in the earlier lectures said anything about ending.
-A MIPS or RISC-V program does ask, with service 10, because its text segment holds whatever comes
-after `main` and running into that is not what you want.
-
-## The Z80: ports instead
-
-The Z80 has no trap and no system call at all. It reaches the outside world through **I/O ports**,
-256 numbers in an address space of their own that has nothing to do with memory: `out (n), a` sends
-the byte in `a` to port `n`, and `in a, (n)` reads a byte back from it. There is no service number,
-the port number _is_ the choice of what happens.
-
-This editor gives the console five of them: port `0` writes a byte as a character, port `1` as an
-unsigned number, port `2` as a signed number, port `3` as two hexadecimal digits, and port `4` as a
-16 bit number. Reading from the same ports asks you for a line.
-
-```z80|playground|console
-        .org 0x8000
-start:
-        ld a, 'H'
-        out (0), a      ; port 0: print a as a character
-        ld a, 'i'
-        out (0), a
-        ld a, 42
-        out (1), a      ; port 1: print a as a number
-        halt
-```
-
-One byte at a time, and there is no "print a string" to ask for: a Z80 program that prints a string
-writes a loop that walks the bytes and sends each one to port 0. The same wish comes out as a task
-number, a service number or a port number, depending on who built the environment the program talks
-to.
-
-Try changing `move.b #3, d0` in the second program to `move.b #15, d0` and putting `move.b #2, d2`
-on the line before it. Task 15 prints an unsigned number in the base in `d2`, so 42 comes out as
-`101010`.
+The next lecture is the other way of reaching a device, where a program writes to an address and
+nobody is asked at all.

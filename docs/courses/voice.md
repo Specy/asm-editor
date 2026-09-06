@@ -168,6 +168,29 @@ them.
 Same as today: overview depth, examples from more than one language, "try changing" prompts and no
 Exercises.
 
+## What the General course uses assembly for
+
+Added 2026-09-06, from Specy's review of the outside-world module, which had grown into four working
+programs and two tables of service numbers. The General course teaches somebody who has never touched
+assembly the features and the terminology they need before they can study a language. Assembly is
+used there to explain the general idea, never the other way round: a page in this course never
+teaches how to write a language.
+
+- A program in a General course Lecture is there to make one general idea concrete, and the reader is
+  told it is fine not to follow every line of it (the structure lecture's "It's ok if you don't
+  understand what the code does, it's a simple example to show you how sections work" is the model).
+  It is short, it is about the idea, and nothing later on the page depends on remembering it.
+- Language-specific numbers and lists do not belong in this course: task and service numbers, port
+  numbers, the addresses of device registers, a language's full set of directives. Those are what the
+  Language courses are for, and the topic link at the bottom of the page already points at them.
+- The outside-world module has no Playgrounds at all. Asking the environment, devices at addresses
+  and interrupts are terminology and mechanism, and a reader who has not yet studied a language
+  cannot run a program that prints without first being taught a convention this course is not here to
+  teach. A three-line fragment showing the shape of a request is a very small detail and is allowed;
+  a working program is not.
+- Name the instruction each language uses, in a word, because the reader needs the vocabulary
+  (`trap`, `syscall`, `ecall`, `in` and `out`) to recognise it later. Stop there.
+
 ## How long a page is
 
 As long as the explanation needs. The word counts in the plan say how deep a page goes, they are not

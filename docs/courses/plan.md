@@ -30,7 +30,9 @@ ADR 0012.
    the ladders; its URLs redirect.
 8. Slugs `m68k`, `mips`, `risc-v`, `z80`. Names "M68K assembly", "MIPS assembly", "RISC-V assembly",
    "Z80 assembly". Courses page order: Assembly basics, M68K, MIPS, RISC-V, Z80. Author Specy.
-9. Length guides, not limits (Specy, 2026-09-06: "better prioritize proper explanation than word
+9. Assembly serves the explanation: in the **General course** a program makes a general idea
+   concrete and no page teaches a language's own numbers or directive set; the outside-world module
+   carries no Playgrounds at all. Length guides, not limits (Specy, 2026-09-06: "better prioritize proper explanation than word
    count"): General lectures around 500 to 900 words with one to three Playgrounds; Language lectures
    around 800 to 1,500 words with three to five Playgrounds and one or two Exercises; Example pages
    around 150 to 300 words of prose. A lecture is as long as its explanation needs; the lower number
@@ -98,12 +100,22 @@ What the new ones cover:
 | 1   | `memory-mapped-io`          | Memory-mapped I/O         | `mmio`       | new    |
 | 2   | `interrupts-and-exceptions` | Interrupts and exceptions | `interrupts` | new    |
 
-- System calls and traps: the program asks the environment to do something; what a simulator does
-  instead of an operating system; a trap is an instruction that hands control to the environment.
-- Memory-mapped I/O: devices that live at addresses, polling a status bit, a framebuffer as a grid of
-  pixels; port-mapped I/O as the sibling (the Z80).
-- Interrupts and exceptions: what happens when the outside world or a fault stops the program, vectors
-  and handlers, and what this editor does and does not simulate.
+This module has **no Playgrounds** (Specy, 2026-09-06: it "should only give an idea of how assembly
+languages do things, it should not actually use the assembly code... in this course the assembly
+languages are used to explain things in the general term, not the opposite"). Its three Lectures are
+terminology and mechanism, with at most a three-line fragment showing the shape of a request, and no
+service numbers, port numbers or device addresses, which belong to the Language courses. See "What
+the General course uses assembly for" in the voice guide.
+
+- System calls and traps: the program asks the environment to do something; user and supervisor mode;
+  the number, the arguments, the one instruction that hands control over; the numbers belong to the
+  environment, not to the CPU; what a simulator does instead of an operating system.
+- Memory-mapped I/O: devices that live at addresses, their data, status and control registers,
+  polling a ready bit, a framebuffer as a grid of pixels; port-mapped I/O as the sibling (Z80 and
+  x86); which of the three each language here has.
+- Interrupts and exceptions: exception, interrupt and trap as one piece of machinery, vectors and
+  handlers, why interrupts beat polling, masking and priority, and what this editor does and does not
+  simulate.
 
 ## The Language course skeleton, 17 lectures (18 for RISC-V) plus the ladder
 
