@@ -13,6 +13,7 @@
  * import it while prerendering and a probe can import it under node.
  */
 
+import { KEY_CODES } from '../peripherals/keyCodes'
 import { rgb, type ScreenColor } from '../peripherals/screen/color'
 
 export type M68KTrapGroup = 'text' | 'graphics' | 'input' | 'time'
@@ -506,3 +507,48 @@ export const M68K_COLORS = {
     LTGRAY: 0x00c0c0c0,
     WHITE: 0x00ffffff
 } as const
+
+/**
+ * The key codes task 19 works in, for the documentation page. The numbers come from `keyCodes.ts`,
+ * which is EASy68K's own table and the one every environment in this editor uses; the rules at the
+ * top are the ones that cover the keys not named here.
+ */
+export const M68K_KEY_CODE_RULES = [
+    'A letter key is the ASCII code of its capital, so `A` is $41 and `Z` is $5A. Shift, Alt and Ctrl do not change it.',
+    'A top row digit is its ASCII code, so `0` is $30 and `9` is $39.',
+    'The function keys are contiguous from F1, so F1 is $70 and F12 is $7B.',
+    'The keypad digits with Num Lock on are contiguous from $60.'
+] as const
+
+export const M68K_KEY_CODE_DOCS: { name: string; code: number }[] = [
+    { name: 'Backspace', code: KEY_CODES.BACKSPACE },
+    { name: 'Tab', code: KEY_CODES.TAB },
+    { name: 'Enter', code: KEY_CODES.ENTER },
+    { name: 'Shift', code: KEY_CODES.SHIFT },
+    { name: 'Ctrl', code: KEY_CODES.CTRL },
+    { name: 'Alt', code: KEY_CODES.ALT },
+    { name: 'Caps Lock', code: KEY_CODES.CAPS_LOCK },
+    { name: 'Esc', code: KEY_CODES.ESCAPE },
+    { name: 'Space', code: KEY_CODES.SPACE },
+    { name: 'Page Up', code: KEY_CODES.PAGE_UP },
+    { name: 'Page Down', code: KEY_CODES.PAGE_DOWN },
+    { name: 'End', code: KEY_CODES.END },
+    { name: 'Home', code: KEY_CODES.HOME },
+    { name: 'Left arrow', code: KEY_CODES.LEFT_ARROW },
+    { name: 'Up arrow', code: KEY_CODES.UP_ARROW },
+    { name: 'Right arrow', code: KEY_CODES.RIGHT_ARROW },
+    { name: 'Down arrow', code: KEY_CODES.DOWN_ARROW },
+    { name: 'Insert', code: KEY_CODES.INSERT },
+    { name: 'Delete', code: KEY_CODES.DELETE },
+    { name: 'Semicolon', code: KEY_CODES.SEMICOLON },
+    { name: 'Equals', code: KEY_CODES.EQUALS },
+    { name: 'Comma', code: KEY_CODES.COMMA },
+    { name: 'Minus', code: KEY_CODES.MINUS },
+    { name: 'Period', code: KEY_CODES.PERIOD },
+    { name: 'Slash', code: KEY_CODES.SLASH },
+    { name: 'Backquote', code: KEY_CODES.BACKQUOTE },
+    { name: 'Open bracket', code: KEY_CODES.OPEN_BRACKET },
+    { name: 'Backslash', code: KEY_CODES.BACKSLASH },
+    { name: 'Close bracket', code: KEY_CODES.CLOSE_BRACKET },
+    { name: 'Quote', code: KEY_CODES.QUOTE }
+]

@@ -1,5 +1,10 @@
 import { BASE_CODE } from '$lib/Config'
 import {
+    M68K_REJECTED_TRAP_TASKS,
+    M68K_TRAP_DOCS,
+    M68K_TRAP_GROUP_DOCS
+} from '$lib/languages/M68K/M68K-traps'
+import {
     Z80_PORT_DOCS,
     Z80_PORT_GROUP_DOCS,
     Z80_SCREEN_COMMAND_DOCS
@@ -244,6 +249,30 @@ const Z80_PORT_INFORMATION = Z80_PORT_GROUP_DOCS.map((group) =>
     ].join('\n')
 ).join('\n\n')
 
+/**
+ * Generated from the trap task table itself (see `M68K-traps.ts`), grouped like the documentation
+ * page, so the prompt says exactly what the adapter implements and no more.
+ */
+const M68K_TRAP_INFORMATION = M68K_TRAP_GROUP_DOCS.map((group) =>
+    [
+        `### ${group.title} tasks`,
+        group.description,
+        ...M68K_TRAP_DOCS.filter((task) => task.group === group.group).map((task) =>
+            [
+                `- Task ${task.task} (${task.title}): ${task.description}`,
+                task.input ? ` In: ${task.input}.` : '',
+                task.output ? ` Out: ${task.output}.` : '',
+                task.deviation ? ` ${task.deviation}` : ''
+            ].join('')
+        )
+    ].join('\n')
+).join('\n\n')
+
+/** The tasks that stop the program, so the agent does not reach for one and then debug the error. */
+const M68K_REJECTED_TRAP_INFORMATION = M68K_REJECTED_TRAP_TASKS.map(
+    (task) => `${task.task} (${task.title})`
+).join(', ')
+
 /** The commands the Screen's command port runs, the other half of the Screen interface. */
 const Z80_SCREEN_COMMAND_INFORMATION = Z80_SCREEN_COMMAND_DOCS.map(
     (command) => `- ${command.command}: ${command.description}`
@@ -255,14 +284,16 @@ function toPortNumber(port: number): string {
 }
 
 const EMULATOR_INFORMATION = `# Emulator Information
-The editor supports one editable assembly file and an output-only console. There are no graphics, screens, imported ROMs, or produced binaries.
+The editor supports one editable assembly file, an output-only console and, for M68K, MIPS, RISC-V and Z80, a pixel screen with a keyboard and a mouse. There are no imported ROMs and no produced binaries.
 
 ## M68K
 - Uses Easy68K-style syntax and big-endian memory.
 - Execution stops when it reaches the bottom of the code. There is no END START directive and no SIMHALT instruction.
 - END: is only a normal label often placed at the bottom; jump or fall through to terminate.
-- Basic TRAP I/O calls are implemented.
 - Data/global memory starts at 0x1000. The stack pointer starts at 0x2000 and grows downward.
+- All I/O is "trap #15" with the task number in D0.B, EASy68K's interface. Text and graphics share one window: what a program prints is drawn on the screen at the text cursor as well as appended to the console transcript. The screen starts at 640 by 480 and only the program resizes it, with task 33.
+- These tasks stop the program with an error, so do not use them: ${M68K_REJECTED_TRAP_INFORMATION}. Task 92's bitwise drawing modes (0, 1, 3 and 5 to 15) stop it too.
+${M68K_TRAP_INFORMATION}
 
 ## MIPS
 - Uses the MARS assembler/emulator syntax and syscalls. Memory is little-endian.

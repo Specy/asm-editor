@@ -289,6 +289,42 @@ describe('M68K keyboard and mouse tasks', () => {
     })
 })
 
+describe('M68K input in graphical use', () => {
+    it('takes a character from the Screen keyboard and echoes it to both views', async () => {
+        //the first graphics task is what moves the Terminal onto the Screen's Keyboard (ADR 0009)
+        const code =
+            ORG +
+            trap(80, ['    move.l #$00FFFFFF,d1']) +
+            trap(5) +
+            trap(6, ['    move.b d1,d1']) +
+            trap(9)
+        const emulator = M68KEmulator(code)
+        await emulator.compile(0, code)
+        const run = emulator.run(INSTRUCTION_LIMIT)
+        //typed after the program asked, which is what a suspended read has to survive
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        emulator.peripherals.keyboard.typeText('q')
+        await run
+        expect(emulator.errors).toEqual([])
+        //once as the echo of what was typed and once as what the program printed
+        expect(emulator.stdOut).toBe('qq')
+        expect(emulator.peripherals.screen.cursorColumn).toBe(2)
+    })
+
+    it('keeps the input prompt for a program that never touches the Screen', async () => {
+        const code = ORG + trap(2, ['    lea buffer,a1']) + trap(9) + 'buffer: ds.b 32\n'
+        const emulator = M68KEmulator(code)
+        await emulator.compile(0, code)
+        expect(emulator.peripherals.terminal.interactiveSource).toBe('prompt')
+        emulator.peripherals.terminal.useScriptedInput(['typed'])
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        //scripted input is not echoed, like piped stdin, and nothing was drawn
+        expect(emulator.stdOut).toBe('')
+        expect(inkCount(emulator)).toBe(0)
+    })
+})
+
 describe('M68K program time tasks', () => {
     it('reads the clock in hundredths of a second with task 8', async () => {
         const code = ORG + trap(8) + trap(9)
@@ -330,6 +366,66 @@ describe('M68K unsupported tasks', () => {
     it('lets the Core name the drawing mode it refused', async () => {
         const emulator = await run(trap(92, ['    move.b #14,d1']) + trap(9))
         expect(emulator.errors.join('\n')).toContain('Unsupported drawing mode: 14')
+    })
+})
+
+describe('M68K Undo and testcases', () => {
+    it('walks the Screen back with the code', async () => {
+        //two pixels, drawn one step at a time, then undone one step at a time (ADR 0005)
+        const code =
+            ORG +
+            trap(80, ['    move.l #$00FFFFFF,d1']) +
+            trap(82, ['    move.l #10,d1', '    move.l #10,d2']) +
+            trap(82, ['    move.l #20,d1', '    move.l #20,d2']) +
+            trap(9)
+        const emulator = M68KEmulator(code)
+        //a history size, without which the Core keeps nothing to roll back to
+        await emulator.compile(200, code)
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(inkCount(emulator)).toBe(2)
+        //back to before the second pixel, then before the first
+        while (emulator.canUndo && inkCount(emulator) > 1) emulator.undo(1)
+        expect(inkCount(emulator)).toBe(1)
+        while (emulator.canUndo && inkCount(emulator) > 0) emulator.undo(1)
+        expect(inkCount(emulator)).toBe(0)
+    })
+
+    it('runs a testcase over a drawing program on a virtual clock', async () => {
+        const code =
+            ORG +
+            trap(23, ['    move.l #500,d1']) +
+            trap(8) +
+            '    move.l d1,d5\n' +
+            trap(80, ['    move.l #$00FFFFFF,d1']) +
+            trap(82, ['    move.l #5,d1', '    move.l #5,d2']) +
+            trap(14, ['    lea text,a1']) +
+            trap(9) +
+            "text: dc.b 'done',0\n"
+        const emulator = M68KEmulator(code)
+        await emulator.compile(0, code)
+        const started = Date.now()
+        const [result] = await emulator.test(
+            code,
+            [
+                {
+                    input: [],
+                    expectedOutput: 'done',
+                    startingRegisters: {},
+                    expectedRegisters: {},
+                    startingMemory: [],
+                    expectedMemory: []
+                }
+            ],
+            INSTRUCTION_LIMIT
+        )
+        expect(result.passed).toBe(true)
+        //five seconds of program time, and the testcase still finished at once (ADR 0010)
+        expect(Date.now() - started).toBeLessThan(2_000)
+        expect(Number(registerOf(emulator, 'D5'))).toBeGreaterThanOrEqual(500)
+        //the drawing still happened, on a Screen the testcase reset before it started, and the
+        //printed text was drawn at the cursor next to it as it is in an interactive run
+        expect(pixelAt(emulator, 5, 5)).toBe(0xffffff)
+        expect(inkCount(emulator)).toBeGreaterThan(50)
     })
 })
 

@@ -31,6 +31,9 @@
         <NavigationLinkButton href="/documentation/m68k/shift-direction">
             <div>Shift directions</div>
         </NavigationLinkButton>
+        <NavigationLinkButton href="/documentation/m68k/traps">
+            <div>Trap tasks</div>
+        </NavigationLinkButton>
         <NavigationLinkButton href="/documentation/m68k/directive">
             <div>Directives</div>
         </NavigationLinkButton>

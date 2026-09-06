@@ -80,6 +80,11 @@
             onClick={() => (menuOpen = false)}
         />
         <MenuLink
+            href="/documentation/m68k/traps"
+            title="Trap tasks"
+            onClick={() => (menuOpen = false)}
+        />
+        <MenuLink
             href="/documentation/m68k/directive"
             title="Directives"
             onClick={() => (menuOpen = false)}
