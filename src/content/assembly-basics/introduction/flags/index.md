@@ -1,41 +1,84 @@
-When the CPU executes operations, it keeps information about the outcome of each instruction in something called **flags**.
-Each CPU has a different set of flags, but they usually follow similar patterns.
+An instruction leaves a number behind, and the CPU also keeps a few single bits saying how that
+number came out. Those bits are the **flags**. Each CPU has a different set of them, and they follow
+the same patterns.
 
-**Flags** are a way for the CPU to track the result of the **most recent operation**, and they are commonly used in **conditional instructions**
-(e.g., _branch if zero_, _branch if negative_, etc.) to decide what to do next in the program.
+A flag describes the **most recent operation** and nothing else, and what reads them are the
+**conditional instructions** (_branch if zero_, _branch if negative_, etc...), which is how a program
+decides where to go next.
 
-Flags are stored in a special register inside the CPU, often called the **status register**, **condition code register (CCR)**, or **flags register**, depending on the architecture.
+They live together in one register, called the **status register**, the **condition code register
+(CCR)** or the **flags register**, depending on the architecture.
 
-Here are some **common flags** you'll encounter in most CPU architectures:
+These are the ones you meet in most of them:
 
-- **Zero flag (Z)**: Set if the result of an operation is zero.
-  Example: If you subtract two equal numbers, the result is zero, so the zero flag is set.
+- **Zero flag (Z)**: set when the result is zero. Subtract two equal numbers and it goes to 1.
+- **Negative flag (N)**: set when the result is negative, which in practice is when the highest bit of the result is 1.
+- **Carry flag (C)**: set when the operation carried out of the highest bit. This is the one unsigned arithmetic reads, say adding two numbers whose sum does not fit in the register.
+- **Overflow flag (V, or O)**: set when the result is too large or too small for the _signed_ range of the register.
+- **Sign flag (S)**: the same idea as N, used instead of it or next to it on some architectures.
+- **Parity flag (P)**: set when the number of 1 bits in the result is even. x86 has one and uses it for error checking.
 
-- **Negative flag (N)**: Set if the result of an operation is negative (usually if the highest bit is set in a signed value).
-  Example: Subtracting a larger number from a smaller one.
+The M68K adds an **Extend flag (X)**, a second copy of the carry kept for the instructions that add
+and subtract across more than one register, and it is the first of the five in the flags panel of
+every program on this page.
 
-- **Carry flag (C)**: Set if an operation results in a carry out of the most significant bit (used in unsigned arithmetic).
-  Example: Adding two large numbers that overflow the size of the register.
+A program almost never writes the flags itself, the CPU **updates them by itself** after nearly every
+arithmetic and logic instruction. An `add` writes the zero, negative, carry and overflow flags from its own
+result, and the branch on the next line reads them.
 
-- **Overflow flag (V or O)**: Set if the result of an operation caused a signed overflow (i.e., the result is too large or too small for the signed number range).
+## Compare and branch
 
-- **Sign flag (S)**: Sometimes used instead of or in addition to the Negative flag, depending on the architecture.
+`cmp` subtracts its first operand from its second, throws the answer away and keeps only what the
+answer did to the flags. `beq` (branch if equal) reads the zero flag, because the two operands were
+equal exactly when that subtraction came out at zero.
 
-- **Parity flag (P)**: Set if the number of 1s in the result is even (used in some architectures like x86 for error checking).
+Build this one and step through it watching the flags panel, which sits above the registers.
 
----
-
-These flags are typically **updated automatically** by the CPU after every arithmetic or logical operation.
-For example, if you perform an `add` instruction, the CPU will update the **zero**, **carry**, and **overflow** flags based on the result.
-
-Later instructions, like `branch if zero (BEQ)` or `branch if negative (BMI)`, can then check these flags to determine whether or not to change the flow of execution.
-
-### Example:
-
-```assembly
-cmp d0, d1     ; Compare d0 with d1 (sets flags based on result)
-beq equal      ; If result was zero (d0 == d1), jump to 'equal'
+```m68k|playground|pc
+    move.l #5, d0       ; x = 5
+    cmp.l #5, d0        ; compare x with 5
+    beq equal           ; if(x == 5) goto equal
+    move.l #100, d1     ; y = 100
+    bra end
+equal:
+    move.l #200, d1     ; y = 200
+end:
 ```
 
-Here, the `cmp` instruction subtracts `d1` from `d0` and sets the flags based on the result, without storing the result anywhere.
-Then `beq` checks the **zero flag**—if it's set, that means the values were equal, and the program jumps to the `equal` label.
+| after this line   |   X |   N |   Z |   V |   C |
+| ----------------- | --: | --: | --: | --: | --: |
+| `move.l #5, d0`   |   0 |   0 |   0 |   0 |   0 |
+| `cmp.l #5, d0`    |   0 |   0 |   1 |   0 |   0 |
+| `beq equal`       |   0 |   0 |   1 |   0 |   0 |
+| `move.l #200, d1` |   0 |   0 |   0 |   0 |   0 |
+
+`cmp.l #5, d0` computes 5 minus 5, so `Z` goes to 1 and `beq` jumps. `beq` itself changes nothing,
+it only reads. The `move.l #200, d1` at the end puts `Z` back to 0, because 200 is not zero: a flag
+is about the last instruction, not about the comparison you made three lines ago.
+
+Try changing `move.l #5, d0` to `move.l #3, d0`. Now the subtraction is 3 minus 5, so `Z` stays 0,
+`N` goes to 1 because the answer is negative, and `C` goes to 1 because the subtraction borrowed.
+`beq` does not jump and `d1` comes out at 100.
+
+## Carry and overflow are two different questions
+
+Both of them are about a result that did not fit, and they are asked of the same bits from two
+different sides: `C` is the unsigned answer, `V` is the signed one. Build this and step through it.
+
+```m68k|playground
+    move.l #$7FFFFFFF, d0   ; the largest positive long
+    add.l #1, d0            ; one past it
+    move.l #$FFFFFFFF, d1   ; every bit set
+    add.l #1, d1            ; one past it
+```
+
+The first `add.l` leaves `d0` at `80000000`, with `N` and `V` at 1 and `C` at 0. Read as a signed
+number, `$7FFFFFFF` plus 1 wrapped around to the most negative long there is, which is what `V`
+reports; read as an unsigned number the answer is 2147483648 and perfectly correct, so `C` stays 0.
+
+The second `add.l` leaves `d1` at `00000000`, with `Z` and `C` at 1 and `V` at 0. Read as unsigned,
+4294967295 plus 1 did not fit, which is what `C` reports; read as signed, `$FFFFFFFF` is -1 and -1
+plus 1 is 0, which is right, so `V` stays 0. The `X` flag copies `C` and is also 1.
+
+The same bits, then, and the CPU sets both flags every time so that your program can ask whichever
+of the two questions it cares about.

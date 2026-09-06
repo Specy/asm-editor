@@ -59,7 +59,7 @@ We then flatten it out:
 ```c
 int i = 0;
 while_start:
-    if(f >= 10) goto while_end;
+    if(i >= 10) goto while_end;
     i++;
     goto while_start;
 while_end:

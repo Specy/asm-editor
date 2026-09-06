@@ -1,0 +1,6 @@
+{
+    "name": "Sum of an array",
+    "description": "Six numbers sitting in memory, added up with a pointer that steps through them, and the total left in d0.",
+    "order": 4,
+    "topic": "sum-of-an-array"
+}

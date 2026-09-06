@@ -224,12 +224,14 @@
 {/snippet}
 
 {#snippet controlsPanel()}
+    <!-- an embedded playground carrying testcases is a lecture's Exercise, and the reader checks it
+         by pressing Test, so there the button stays next to the Testcases panel -->
     <Controls
         children={controls}
         {running}
         {building}
         paused={emulator.paused}
-        hasTests={layout === 'fullscreen'
+        hasTests={layout === 'fullscreen' || embedded
             ? testcases.length > 0
             : testcases.length > 0 && !showTestcases}
         canEditTests={showTestcases}

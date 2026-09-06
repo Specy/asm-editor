@@ -1,5 +1,6 @@
 {
     "name": "Loops",
-    "description": "Learn how to implement loops in assembly language. This lecture covers the mechanics of creating loops using jump instructions.",
-    "order": 1
+    "description": "Assembly has no `while` and no `for`, so a loop is a compare, a branch out, and a jump backwards. The same loop is written twice, in M68K and in RISC-V.",
+    "order": 1,
+    "topic": "loops"
 }

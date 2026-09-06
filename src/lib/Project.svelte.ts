@@ -333,7 +333,7 @@ export function cleanTestcases(testcases: Testcase[]) {
                     return {
                         ...memory,
                         address: BigInt(memory.address),
-                        expected: BigInt(memory.address)
+                        expected: BigInt(memory.expected)
                     }
                 } else {
                     return memory
@@ -360,7 +360,7 @@ export function cleanTestcases(testcases: Testcase[]) {
                     return {
                         ...memory,
                         address: BigInt(memory.address),
-                        expected: BigInt(memory.address)
+                        expected: BigInt(memory.expected)
                     }
                 } else {
                     return memory

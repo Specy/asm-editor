@@ -67,3 +67,43 @@ A Project handed to a student under a track, a password and a time limit, with a
 ## Testcase
 
 A declarative check run against a program: starting registers/memory/input, expected registers/memory/output. Language-independent; endianness of memory expectations follows the Emulator's endianness. Its run uses a scripted **Input Source** and a virtual **Time Source**.
+
+## Course
+
+A sequence of **Modules** on one subject, listed on the Learn page with its own landing text and metadata (name, description, authors, date, order). Two kinds exist: the **General course** and the **Language courses**. Content only: a Course is a folder of markdown and metadata, never code.
+
+## Module
+
+A themed, ordered group of **Lectures** inside a **Course**. A Module has a name and a description but no body of its own that the reader studies.
+
+## Lecture
+
+One page of a **Course**: markdown text with **Playgrounds**, read in order with Previous and Next. The unit a reader studies in one sitting.
+
+## Playground
+
+A runnable code block inside a **Lecture**: an embedded editor with its own **Emulator**, configured by flags on the code fence (memory, console, tests, program counter, screen, open in the editor). Every Lecture that teaches an instruction shows it in a Playground.
+
+## General course
+
+The Course "Assembly basics": the overview of what most assembly languages share, using several of the editor's languages as examples and covering each topic once, shallowly. Its three Modules define the topic order every **Language course** mirrors.
+_Avoid_: beginner course, basics course
+
+## Language course
+
+A **Course** about one of the editor's languages (M68K, MIPS, RISC-V, Z80). It mirrors the **General course** Module for Module and Lecture for Lecture, retitled for the language, with an opening "Getting started" Lecture and the outside-world Module bent to what the machine really has (traps, syscalls, memory-mapped or port-mapped I/O). It closes with an **Examples** Module.
+_Avoid_: specific course, single course, deep dive
+
+## Example
+
+A complete, verified program that closes a **Language course**: one **Lecture** in its Examples Module, placed by what the reader needs to know before it. The same ladder of Examples exists in every Language course, program for program (the snake game in M68K is the snake game in RISC-V), so a reader can compare how each language does the same thing.
+_Avoid_: demo, sample, snippet
+
+## Exercise
+
+A task that closes a **Lecture** of a **Language course**: a **Playground** preloaded with a skeleton, a stated goal, and a **Testcase** that checks the reader's solution. One or two per Lecture; none in the **General course**, whose Lectures only invite the reader to change a Playground and watch.
+_Avoid_: quiz, challenge, problem
+
+## Topic
+
+The subject a **Lecture** teaches, named the same way in every **Course** that covers it (registers, the stack, syscalls, the snake game). It is what ties a **General course** Lecture to its deep dives in the **Language courses**, and an **Example** to the same program in the other languages; the links between them are derived from it, never written by hand.

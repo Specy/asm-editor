@@ -1,7 +1,7 @@
 {
     "id": "examples",
     "name": "Assembly Examples",
-    "author": "Specy",
+    "authors": ["Specy"],
     "description": "See some examples of assembly code in different languages.",
     "image": "",
     "tags": ["assembly"],

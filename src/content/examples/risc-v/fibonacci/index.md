@@ -77,7 +77,7 @@ fib:
 
     # First recursive call: fib(n-1)
     mv s0, a0             # Save the current value of n (from a0) into s0.
-                          # This is crucial because a0 will be modified for the recursive call.
+                          # This matters because a0 will be modified for the recursive call.
     addi a0, a0, -1       # Set argument for next call: a0 = n - 1
     jal ra, fib           # Call fib(n-1) recursively.
                           # The result (Fib(n-1)) will be in a0 upon return.
@@ -122,4 +122,10 @@ fib_base_one:
     addi sp, sp, 12
     jr ra                 # Return
 
+```
+
+```testcase
+{
+    "input": ["10"]
+}
 ```
