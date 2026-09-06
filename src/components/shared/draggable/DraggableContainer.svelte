@@ -14,8 +14,14 @@
         left?: number
         top?: number
         /**
-         * Controls of the caller's own, rendered in the header bar between the title and the
-         * button on its right. The bar is the drag handle, so they are marked `data-no-drag`,
+         * Read-only detail belonging with the title, rendered immediately after it on the left of
+         * the bar. Deliberately not marked `data-no-drag`: it is text rather than a control, so it
+         * is more useful as drag surface, like the title itself.
+         */
+        headerInfo?: import('svelte').Snippet
+        /**
+         * Controls of the caller's own, rendered at the right of the header bar, against the
+         * button on its end. The bar is the drag handle, so they are marked `data-no-drag`,
          * which is where `Draggable` stops a press on them from picking the window up.
          */
         headerActions?: import('svelte').Snippet
@@ -36,6 +42,7 @@
         hiddenOnMobile = true,
         left = $bindable(300),
         top = $bindable(13),
+        headerInfo,
         headerActions,
         onClose,
         closeTitle = 'Close',
@@ -71,6 +78,11 @@
         <FaGripHorizontal />
     </Icon>
     <div class="ellipsis">{title}</div>
+    {#if headerInfo}
+        <div class="header-info row">
+            {@render headerInfo()}
+        </div>
+    {/if}
     {#if headerActions}
         <div class="header-actions row" data-no-drag>
             {@render headerActions()}
@@ -156,9 +168,17 @@
         }
     }
 
+    .header-info {
+        align-items: center;
+        gap: 0.3rem;
+    }
+
     .header-actions {
         align-items: center;
         gap: 0.3rem;
         cursor: default;
+        /* against the button on the end of the bar, however wide the title and its detail are:
+           the bar is `space-between`, which would otherwise strand the controls in the middle */
+        margin-left: auto;
     }
 </style>

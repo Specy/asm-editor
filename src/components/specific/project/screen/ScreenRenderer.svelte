@@ -330,8 +330,13 @@
     </button>
 {/snippet}
 
-{#snippet windowActions()}
+<!-- the window's bar reads like the in-page header: what the screen IS on the left, next to the
+     title, and what you can DO to it on the right, against the button that puts it back -->
+{#snippet windowInfo()}
     <span class="screen-size">{logicalWidth} × {logicalHeight}</span>
+{/snippet}
+
+{#snippet windowActions()}
     {@render actions()}
 {/snippet}
 
@@ -382,6 +387,7 @@
         <ToggleableDraggable
             title={name}
             hiddenOnMobile={false}
+            headerInfo={windowInfo}
             headerActions={windowActions}
             closeTitle="Put the screen back in the page (Esc)"
             onClose={toggleWindow}
