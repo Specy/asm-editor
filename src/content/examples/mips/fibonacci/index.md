@@ -56,3 +56,9 @@ equal_to_zero:
     li $a0, 1
     syscall
 ```
+
+```testcase
+{
+    "input": ["10"]
+}
+```
