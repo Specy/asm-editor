@@ -1,0 +1,6 @@
+{
+    "name": "System calls and traps",
+    "description": "Printing is not arithmetic, so a program has to ask the environment for it. The one instruction that hands control over, the number that says what you want, and the four ways the languages here spell it.",
+    "order": 0,
+    "topic": "syscalls"
+}
