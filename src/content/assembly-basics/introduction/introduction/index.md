@@ -1,6 +1,7 @@
 This course is generalist, it covers topics that are commonly used in most assembly languages. It might feel a bit too
-"rushed" as we will cover a lot of topics shallowly and quickly, it's ok if you don't understand everything, the individual
-courses for each assembly language will go more in depth on all of the topics, and show you examples of how to use them.
+"rushed" as we will cover a lot of topics shallowly and quickly, it's ok if you don't understand everything. Every topic
+here has a lecture of its own in the course of each assembly language, which goes deeper on it and ends with programs
+that use it.
 
 The goal of the course is to give you a _general understanding_ of the fundamentals needed to understand assembly.
 
