@@ -7,27 +7,24 @@
     import rehypeExternalLinks from 'rehype-external-links'
     import '@cartamd/plugin-code/default.css'
     import { code } from '@cartamd/plugin-code'
-    import type { Element, Parent, Root } from 'hast'
+    import type { Element, Parent, Root, RootContent } from 'hast'
     import { visit } from 'unist-util-visit'
-    import type { AvailableLanguages, Testcase } from '$lib/Project.svelte'
+    import type { Testcase } from '$lib/Project.svelte'
     import lzstring from 'lz-string'
     import { ThemeStore } from '$stores/themeStore.svelte'
     import { serializer } from '$lib/json'
+    import {
+        isTestcaseFence,
+        parsePlaygroundFence,
+        parseTestcaseFence,
+        type PlaygroundFence,
+        type PlaygroundSettings
+    } from '$lib/content/playgrounds'
     let isDark = $derived(ThemeStore.isColorDark(ThemeStore.theme.background.color))
 
     let theme = $derived(isDark ? ('one-dark-pro' as const) : ('one-light' as const))
 
-    type Settings = {
-        showMemory: boolean
-        language: AvailableLanguages
-        showConsole: boolean
-        showTests: boolean
-        showPc: boolean
-        showRegisters: boolean
-        showFlags: boolean
-        showScreen: boolean
-        openButton: boolean
-    }
+    type Settings = PlaygroundSettings
 
     function createCodeUrl(code: string, settings: Settings, testcases: Testcase[]) {
         const showMemory = settings.showMemory ? 'showMemory=true&' : ''
@@ -59,111 +56,119 @@
         return `/embed?${lang}${props}${tests}code=${compressed}`
     }
 
-    function parsePlaygroundLanguage(language: string | undefined): AvailableLanguages | undefined {
-        const normalized = language?.trim().toLowerCase().replace(/[-_]/g, '')
-        switch (normalized) {
-            case 'm68k':
-                return 'M68K'
-            case 'mips':
-                return 'MIPS'
-            case 'x86':
-                return 'X86'
-            case 'riscv':
-            case 'riscv32':
-                return 'RISC-V'
-            case 'riscv64':
-                return 'RISC-V-64'
-            case 'z80':
-                return 'Z80'
-            default:
-                return undefined
+    /** The fence info string of a `<pre><code class="language-...">`, when it has one. */
+    function fenceInfoOf(node: RootContent): string | undefined {
+        if (node.type !== 'element' || node.tagName !== 'pre') return undefined
+        const codeNode = node.children?.find(
+            (child): child is Element => child.type === 'element' && child.tagName === 'code'
+        )
+        if (!codeNode?.properties || !Array.isArray(codeNode.properties.className)) return undefined
+        const langClass = codeNode.properties.className.find(
+            (cls): cls is string => typeof cls === 'string' && cls.startsWith('language-')
+        )
+        return langClass?.substring('language-'.length)
+    }
+
+    function textOf(node: RootContent): string {
+        if (node.type === 'text') return node.value
+        if ('children' in node && Array.isArray(node.children)) {
+            return (node.children as RootContent[]).map(textOf).join('')
+        }
+        return ''
+    }
+
+    /** The next node that is not whitespace between two blocks. */
+    function nextBlock(
+        children: RootContent[],
+        from: number
+    ): { node: RootContent; index: number } | undefined {
+        for (let cursor = from + 1; cursor < children.length; cursor++) {
+            const node = children[cursor]
+            if (node.type === 'comment') continue
+            if (node.type === 'text' && node.value.trim().length === 0) continue
+            return { node, index: cursor }
+        }
+        return undefined
+    }
+
+    /**
+     * The testcases of a `testcase` fence attached to a playground. A malformed one is an authoring
+     * mistake, so it is announced in the console and the playground renders without it rather than
+     * taking the page down with it. The console line carries what the renderer can see of the page:
+     * the fence, the JSON and, in the browser, the lecture's own address.
+     */
+    function attachedTestcases(node: RootContent, info: string): Testcase[] {
+        const raw = textOf(node)
+        try {
+            return [parseTestcaseFence(raw).testcase]
+        } catch (e) {
+            const where = typeof window === 'undefined' ? '' : ` on ${window.location.pathname}`
+            console.error(
+                `Malformed testcase fence${where}, after the "${info}" playground: ${(e as Error).message}\n${raw}`
+            )
+            return []
         }
     }
 
-    const rehypePlaygroundTransformer = () => (tree: Root) => {
-        visit(tree, 'element', (node: Element, index?: number, parent?: Parent) => {
-            if (node.tagName === 'pre') {
-                const codeNode = node.children?.find(
-                    (child): child is Element =>
-                        child.type === 'element' && child.tagName === 'code'
-                )
+    function playgroundIframe(
+        node: Element,
+        fence: PlaygroundFence,
+        testcases: Testcase[]
+    ): Element {
+        const codeNode = node.children?.find(
+            (child): child is Element => child.type === 'element' && child.tagName === 'code'
+        )
+        const { large, tall } = fence
+        return {
+            type: 'element',
+            tagName: 'iframe',
+            properties: {
+                style: `
+                	${!large ? 'max-width: 70ch; margin: 1.5rem auto;' : ''}
+                	${tall ? 'height: 80dvh;' : fence.settings.showScreen ? 'height: 48rem;' : ''}
+                `,
+                className: ['code-playground'],
+                src: createCodeUrl(textOf(codeNode ?? node).trimEnd(), fence.settings, testcases)
+            },
+            children: []
+        }
+    }
 
-                if (codeNode?.properties && Array.isArray(codeNode.properties.className)) {
-                    const langClass = codeNode.properties.className.find(
-                        (cls): cls is string =>
-                            typeof cls === 'string' && cls.startsWith('language-')
-                    )
-
-                    if (langClass) {
-                        const fullLanguage = langClass.substring('language-'.length)
-                        const entries = fullLanguage.split('|')
-                        const isPlayground = entries.includes('playground')
-                        const showMemory = entries.includes('memory')
-                        const showConsole = entries.includes('console')
-                        const showTests = entries.includes('tests')
-                        const showPc = entries.includes('pc')
-                        const showRegisters = !entries.includes('no-registers')
-                        const showFlags = !entries.includes('no-flags')
-                        const showScreen = entries.includes('screen')
-                        const large = entries.includes('large') || showMemory || showScreen
-                        const tall = entries.includes('tall')
-                        const openButton = entries.includes('allow-open')
-                        if (isPlayground) {
-                            const actualLanguage = parsePlaygroundLanguage(entries[0])
-                            if (!actualLanguage) return
-
-                            const getAllText = (
-                                n: import('hast').Node | import('hast').Parent
-                            ): string => {
-                                // @ts-ignore -- hast's base Node type omits text-node values
-                                if (n.type === 'text') return n.value as string
-                                if ('children' in n && Array.isArray(n.children)) {
-                                    return (
-                                        n.children as Array<
-                                            import('hast').Node | import('hast').Parent
-                                        >
-                                    )
-                                        .map(getAllText)
-                                        .join('')
-                                }
-                                return ''
-                            }
-                            if (parent && typeof index === 'number' && parent.children) {
-                                // Replace the <pre> node with our placeholder <div>
-                                const placeholder: Element = {
-                                    type: 'element',
-                                    tagName: 'iframe',
-                                    properties: {
-                                        style: `
-                                        	${!large ? 'max-width: 70ch; margin: 1.5rem auto;' : ''}
-                                        	${tall ? 'height: 80dvh;' : showScreen ? 'height: 48rem;' : ''}
-                                        `,
-                                        className: ['code-playground'],
-                                        src: createCodeUrl(
-                                            getAllText(codeNode).trimEnd(),
-                                            {
-                                                showMemory,
-                                                showConsole,
-                                                showTests,
-                                                showPc,
-                                                showRegisters: showRegisters,
-                                                showFlags,
-                                                showScreen,
-                                                language: actualLanguage,
-                                                openButton
-                                            },
-                                            []
-                                        )
-                                    },
-                                    children: []
-                                }
-                                parent.children[index] = placeholder
-                            }
-                        }
-                    }
+    /**
+     * Replaces every playground fence with its embed iframe and drops the `testcase` fences, which
+     * are instructions to the embed and to the verification test and are never shown to a reader.
+     * The children of a block are rebuilt rather than patched in place, so a testcase and the blank
+     * line before it leave together.
+     */
+    function transformPlaygrounds(parent: Parent): void {
+        const children = parent.children as RootContent[]
+        const result: RootContent[] = []
+        for (let index = 0; index < children.length; index++) {
+            const node = children[index]
+            const info = fenceInfoOf(node)
+            const fence = info === undefined ? undefined : parsePlaygroundFence(info)
+            if (fence && node.type === 'element') {
+                let testcases: Testcase[] = []
+                const following = nextBlock(children, index)
+                const followingInfo = following && fenceInfoOf(following.node)
+                if (following && followingInfo !== undefined && isTestcaseFence(followingInfo)) {
+                    testcases = attachedTestcases(following.node, info as string)
+                    //the testcase block and the whitespace before it go with the playground
+                    index = following.index
                 }
+                result.push(playgroundIframe(node, fence, testcases))
+                continue
             }
-        })
+            //a testcase fence that attached to nothing is still not something a reader should read
+            if (info !== undefined && isTestcaseFence(info)) continue
+            if (node.type === 'element') transformPlaygrounds(node)
+            result.push(node)
+        }
+        parent.children = result
+    }
+
+    const rehypePlaygroundTransformer = () => (tree: Root) => {
+        transformPlaygrounds(tree)
     }
 
     const customPlaygroundPlugin: Plugin = {
