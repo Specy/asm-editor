@@ -60,7 +60,7 @@ located in memory at the address that is inside of the Program Counter.
 Once the instruction finishes execution, the Program Counter is incremented by the size of the instruction that was just executed
 (some CPUs can have instructions be 16 or 32 bits for example), and now the Program Counter will point to the next instruction to execute.
 
-Look at this example in m68k that adds 1 to a register a few times, click compile and then `step` until the end. Look at the Program Counter on the
+Look at this example in m68k that adds 1 to a register a few times, press **Build** and then **Step** until the end. Look at the Program Counter on the
 top right increasing as you run the code.
 
 ```m68k|playground|pc|no-flags
