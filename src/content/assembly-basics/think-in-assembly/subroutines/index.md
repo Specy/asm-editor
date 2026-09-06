@@ -40,7 +40,7 @@ The M68K pushes it. `bsr label` (branch to subroutine) pushes the address of the
 onto the stack and then jumps to the label. `rts` (return from subroutine) pops that address back off
 and puts it in the program counter, so the program carries on exactly where it left off.
 
-Compile this one and step through it. Watch the program counter on the top right jump into `double`
+Build this one and step through it. Watch the program counter on the top right jump into `double`
 and come back, and watch `a7`, which is the stack pointer, drop by 4 at the call and climb back at
 the `rts`.
 
