@@ -537,8 +537,10 @@
     }
 
     :global(._markdown .code-playground.in-details) {
-        width: calc(100% - 2rem);
-        margin: 1rem;
+        width: 100%;
+        margin: 0;
+        border-radius: 0rem !important;
+        display: block;
         box-shadow: none;
     }
 
