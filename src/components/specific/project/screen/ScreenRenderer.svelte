@@ -167,27 +167,36 @@
      * shortcuts would fire too, and Shift+C would clear execution while a program is reading it
      * (ADR 0008). Ctrl and Meta combinations keep their browser default, which is also where the
      * Keyboard leaves them: they type nothing and stay with the host.
+     *
+     * Only a key down is stopped. Shortcuts fire on key down, while the project page keeps its own
+     * map of the keys it has seen go down and empties it from a `window` key up: swallowing the
+     * release of a key that was pressed before the Screen took focus would leave it in that map for
+     * good, and the next `r` typed anywhere would run the program as Shift+R. The Keyboard ignores
+     * the release of a key it never saw pressed, so nothing is lost by letting it bubble.
      */
-    function routeKey(event: KeyboardEvent) {
-        event.stopPropagation()
+    function routeKey(event: KeyboardEvent, stopShortcuts: boolean) {
+        if (stopShortcuts) event.stopPropagation()
         if (!event.ctrlKey && !event.metaKey) event.preventDefault()
     }
 
     function handleKeyDown(event: KeyboardEvent) {
         //every other key belongs to the program while this panel has focus, so Escape is the one
-        //way back out for someone working without a mouse
+        //way back out for someone working without a mouse. It is the panel's own gesture and the
+        //page must not see it either: a user who binds an action to Escape would otherwise trigger
+        //it from a focused Screen, which ADR 0008 forbids
         if (event.code === 'Escape') {
+            event.stopPropagation()
             canvas?.blur()
             return
         }
         keyboard.keyDown(event)
-        routeKey(event)
+        routeKey(event, true)
     }
 
     function handleKeyUp(event: KeyboardEvent) {
         if (event.code === 'Escape') return
         keyboard.keyUp(event)
-        routeKey(event)
+        routeKey(event, false)
     }
 
     function handlePaste(event: ClipboardEvent) {
@@ -208,6 +217,12 @@
         focused = false
         releaseInput()
     }
+
+    $effect(() => {
+        //tells the scheduler that somebody is painting this Screen, so its dirty flag is worth
+        //shortening a slice for (ADR 0007); a Screen with no panel would stay dirty for ever
+        return screen.watch()
+    })
 
     onMount(() => {
         let frame = requestAnimationFrame(function tick() {

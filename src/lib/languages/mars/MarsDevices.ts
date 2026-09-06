@@ -62,8 +62,15 @@ export type MarsCore = {
 export type MarsDeviceHost = {
     screen: Screen
     keyboard: Keyboard
-    /** The Terminal, narrowed to what the transmitter register does to it. */
-    terminal: { write(text: string): void; clear(): void }
+    /**
+     * The Terminal, narrowed to what the transmitter register does to it plus the Input Source,
+     * which says whether the run is the user's or a Testcase's.
+     */
+    terminal: {
+        write(text: string): void
+        clear(): void
+        readonly inputSource: 'interactive' | 'scripted'
+    }
 }
 
 export class MarsDevices {
@@ -258,6 +265,11 @@ export class MarsDevices {
     private refillReceiver(): void {
         const core = this.core
         if (!core || this.receiverArmed) return
+        //an automated run does not consume live Screen input
+        //([ADR 0009](../../../../docs/adr/0009-share-screen-keyboard-input-with-terminal.md)): a
+        //keystroke typed into the panel while a Testcase runs stays in the queue, and the register
+        //keeps the Ready bit `observeRegisters` cleared when the scripted run built its Core
+        if (this.host.terminal.inputSource === 'scripted') return
         const code = this.host.keyboard.readCharacterCode()
         if (code === undefined) {
             core.setPeripheralWord(MARS_RECEIVER_CONTROL | 0, 0)

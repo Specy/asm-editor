@@ -229,6 +229,7 @@ describe('slice scheduling', () => {
 
     it('asks for the short budget only while a Screen is showing unpainted pixels', async () => {
         const emulator = new FakeEmulator()
+        emulator.peripherals.screen.watch()
         emulator.peripherals.screen.markPainted()
         emulator.behavior = (request, index) => {
             //the second slice runs into a program that drew something
@@ -243,13 +244,34 @@ describe('slice scheduling', () => {
         ])
     })
 
-    it('runs a long budget when the Screen panel is hidden', async () => {
-        settingsStore.values.showScreen.value = false
+    it('runs a long budget when no renderer is painting the Screen', async () => {
+        //x86 has a Screen for shape and no panel, and any surface can have its Screen toggle closed:
+        //nothing ever paints those, so `dirty` stays set and must not shorten every slice
         const emulator = new FakeEmulator()
         emulator.peripherals.screen.drawPixel(1, 1)
-        emulator.behavior = () => ({ reason: 'terminated', instructions: 1 })
+        emulator.behavior = (_request, index) => ({
+            reason: index < 2 ? 'budget' : 'terminated',
+            instructions: 1
+        })
         await emulator.run(1000)
-        expect(emulator.requests[0].timeBudgetMs).toBe(COMPUTE_SLICE_MS)
+        expect(emulator.requests.map((r) => r.timeBudgetMs)).toEqual(
+            emulator.requests.map(() => COMPUTE_SLICE_MS)
+        )
+    })
+
+    it('goes back to the long budget when the renderer goes away', async () => {
+        const emulator = new FakeEmulator()
+        const unwatch = emulator.peripherals.screen.watch()
+        emulator.peripherals.screen.drawPixel(1, 1)
+        emulator.behavior = (_request, index) => {
+            if (index === 0) unwatch()
+            return { reason: index < 1 ? 'budget' : 'terminated', instructions: 1 }
+        }
+        await emulator.run(1000)
+        expect(emulator.requests.map((r) => r.timeBudgetMs)).toEqual([
+            SCREEN_SLICE_MS,
+            COMPUTE_SLICE_MS
+        ])
     })
 
     it('grows the budget of a Core the estimate was too slow for', async () => {

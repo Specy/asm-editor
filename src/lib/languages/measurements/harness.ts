@@ -148,10 +148,14 @@ export const ANIMATION_EXAMPLES: AnimationExample[] = [
  * short slice budget, so a measurement without this would not be measuring the GUI's behaviour.
  */
 export function startFakeRenderer(screen: Screen, intervalMs = 16): () => void {
+    const unwatch = screen.watch()
     const timer = setInterval(() => {
         if (screen.dirty) screen.markPainted()
     }, intervalMs)
-    return () => clearInterval(timer)
+    return () => {
+        clearInterval(timer)
+        unwatch()
+    }
 }
 
 export function example(path: string): string {

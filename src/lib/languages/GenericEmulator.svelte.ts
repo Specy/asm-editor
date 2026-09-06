@@ -586,10 +586,14 @@ export abstract class GenericEmulator<T, R extends string>
      * yet means an animating program, which needs to reach its next frame and its next input poll
      * soon; everything else is compute and yields only often enough to keep Stop answering. Measured
      * in phase 8; `speedCorrection` is what turns the target into instructions for this program.
+     *
+     * The Screen has to be watched as well as dirty: a Screen nobody paints — x86's, which has no
+     * panel, or any surface whose Screen toggle is closed — never comes back from dirty, and would
+     * otherwise hold every one of its programs at the animation budget for the whole run.
      */
     private sliceTimeBudgetMs(): number {
         const screen = this._peripherals.screen
-        if (settingsStore.values.showScreen.value && screen.dirty) return SCREEN_SLICE_MS
+        if (screen.watched && screen.dirty) return SCREEN_SLICE_MS
         return COMPUTE_SLICE_MS
     }
 
