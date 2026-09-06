@@ -26,11 +26,26 @@
         /** The environment this Screen belongs to, shown in the header. */
         name?: string
         style?: string
-        /** Where phase 7 hangs the MIPS and RISC-V display configuration popover. */
+        /** The MIPS and RISC-V display configuration popover, rendered in the header. */
         configuration?: Snippet
+        /**
+         * What the zoom toggle's actual-size position means. MIPS and RISC-V pass MARS's unit
+         * width, whose whole point is how many screen pixels one memory word covered there, so
+         * turning the fit off reproduces the tool's own geometry; everything else draws in Screen
+         * pixels and leaves it at 1.
+         */
+        actualSizeZoom?: number
     }
 
-    let { screen, keyboard, mouse, name = 'Screen', style = '', configuration }: Props = $props()
+    let {
+        screen,
+        keyboard,
+        mouse,
+        name = 'Screen',
+        style = '',
+        configuration,
+        actualSizeZoom = 1
+    }: Props = $props()
 
     const MOUSE_BUTTONS: Record<number, MouseButton> = { 0: 'left', 1: 'middle', 2: 'right' }
 
@@ -55,7 +70,7 @@
      * alternative is showing part of the image.
      */
     let zoom = $derived.by(() => {
-        if (!fitToPanel) return 1
+        if (!fitToPanel) return Math.max(1, Math.floor(actualSizeZoom))
         if (viewportWidth <= 0 || viewportHeight <= 0) return 1
         const scale = Math.min(viewportWidth / logicalWidth, viewportHeight / logicalHeight)
         return scale >= 1 ? Math.floor(scale) : scale

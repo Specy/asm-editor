@@ -182,7 +182,11 @@
 {/snippet}
 <Page>
     {#key project.id}
-        <EmulatorLoader bind:code={project.code} language={project.language}>
+        <EmulatorLoader
+            bind:code={project.code}
+            language={project.language}
+            settings={{ display: project.display }}
+        >
             {#snippet children(emulator)}
                 <ProjectEditor
                     {emulator}
@@ -190,6 +194,7 @@
                     language={project.language}
                     bind:code={project.code}
                     bind:testcases={project.testcases}
+                    bind:display={project.display}
                     on:wantsToLeave={() => {
                         changePage('/projects')
                     }}

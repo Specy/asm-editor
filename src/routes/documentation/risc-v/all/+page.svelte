@@ -3,6 +3,7 @@
     import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
     import RISCVDirectiveDocumentation from '$cmp/documentation/riscv/RISCVDirectiveDocumentation.svelte'
     import RISCVSyscallExplanation from '$cmp/documentation/riscv/RISCVSyscallExplanation.svelte'
+    import MarsScreenDocumentation from '$cmp/documentation/mars/MarsScreenDocumentation.svelte'
     import {
         riscvInstructionEntries,
         formatAggregatedArgs,
@@ -31,6 +32,7 @@
         <a href="#instructions">Instructions</a>
         <a href="#directives">Directives</a>
         <a href="#syscalls">Syscalls</a>
+        <a href="#screen">Screen and I/O</a>
     </nav>
 
     <section id="instructions">
@@ -76,6 +78,11 @@
     <section id="syscalls">
         <h2>Syscalls</h2>
         <RISCVSyscallExplanation />
+    </section>
+
+    <section id="screen">
+        <h2>Screen and memory-mapped I/O</h2>
+        <MarsScreenDocumentation variant="RISC-V" disableLinks />
     </section>
 </Page>
 

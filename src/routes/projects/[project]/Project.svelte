@@ -48,13 +48,21 @@
     import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
     import { resolve } from '$app/paths'
     import ScreenRenderer from '$cmp/specific/project/screen/ScreenRenderer.svelte'
+    import ScreenDisplayConfiguration from '$cmp/specific/project/screen/ScreenDisplayConfiguration.svelte'
     import { languageHasScreen } from '$lib/languages/peripherals/peripheralSet'
+    import {
+        DEFAULT_PROJECT_DISPLAY,
+        normalizeMarsDisplay,
+        type ProjectDisplay
+    } from '$lib/languages/mars/marsDisplay'
 
     interface Props {
         name?: string
         language?: AvailableLanguages
         code?: string
         testcases?: Testcase[]
+        /** MIPS and RISC-V only: MARS's five bitmap-display parameters, saved with the project. */
+        display?: ProjectDisplay
         emulator: Emulator
         embedded?: boolean
         children?: Snippet
@@ -67,6 +75,7 @@
         language = 'M68K',
         code = $bindable(''),
         testcases = $bindable([] as Testcase[]),
+        display = $bindable(undefined as ProjectDisplay | undefined),
         emulator = $bindable(),
         embedded = false,
         children,
@@ -80,6 +89,18 @@
     const showScreen = $derived(
         settingsStore.values.showScreen.value && languageHasScreen(language)
     )
+    //only MARS and RARS put the screen's geometry in the user's hands: every other environment's
+    //program sizes its own screen, so there is nothing to configure
+    const configurableDisplay = $derived(emulator.setDisplay !== undefined)
+    const currentDisplay = $derived(normalizeMarsDisplay(display ?? DEFAULT_PROJECT_DISPLAY))
+
+    function applyDisplay(next: ProjectDisplay) {
+        display = next
+        //applied at once and with a re-sync from memory, as MARS does; the save keeps a reopened
+        //project on the display its example's header comment asked for
+        emulator.setDisplay?.(next)
+        dispatcher('save', { silent: true })
+    }
 
     $effect(() => {
         emulator.setCode(code)
@@ -674,8 +695,18 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                 screen={emulator.peripherals.screen}
                 keyboard={emulator.peripherals.keyboard}
                 mouse={emulator.peripherals.mouse}
+                actualSizeZoom={configurableDisplay ? currentDisplay.unitWidth : 1}
                 style="height: 20rem; flex: none;"
-            />
+            >
+                {#snippet configuration()}
+                    {#if configurableDisplay}
+                        <ScreenDisplayConfiguration
+                            display={currentDisplay}
+                            onChange={applyDisplay}
+                        />
+                    {/if}
+                {/snippet}
+            </ScreenRenderer>
         {/if}
         <StdOut
             {info}

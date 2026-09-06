@@ -8,7 +8,9 @@
 # Click the screen panel to give the program the keyboard, then type. Every key is echoed through
 # the transmitter, so it appears in the console, and paints one word of the bitmap display in a
 # color made from its character code. Typing "c" clears the console with a form feed (ASCII 12)
-# and "q" ends the program.
+# and "q" ends the program. The poll loop sleeps for ten milliseconds when nothing is waiting:
+# a wait costs no instructions, so the editor's execution limit never ends a program that is only
+# waiting for a key. MARS itself has no such limit and spins instead.
 #
 # Screen configuration (the Display button in the screen panel's header):
 #   unit width 8, unit height 8, display 512 by 256, base address 0x10010000 (static data),
@@ -36,7 +38,13 @@ main:
 poll:
         lw      $t0, 0($s2)                     # receiver control
         andi    $t0, $t0, READY
-        beqz    $t0, poll                       # nothing typed yet, ask again
+        bnez    $t0, take
+        li      $v0, 32                         # nothing typed yet. Sleeping instead of spinning
+        li      $a0, 10                         # costs no instructions, so the editor's execution
+        syscall                                 # limit never ends a program that is only waiting
+        j       poll
+
+take:
 
         lw      $t1, 4($s2)                     # receiver data dequeues one character
         andi    $t1, $t1, 0xff

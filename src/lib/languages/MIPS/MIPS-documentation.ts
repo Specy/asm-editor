@@ -506,26 +506,25 @@ export const mipsSyscall = {
         }
     },
     [30]: {
-        name: 'time (system time)',
+        name: 'time (program time)',
         code: 30,
         arguments: [],
         result: {
             arguments: [
-                { name: '$a0', description: 'low order 32 bits of system time' },
-                { name: '$a1', description: 'high order 32 bits of system time' }
+                { name: '$a0', description: 'low order 32 bits of the program time' },
+                { name: '$a1', description: 'high order 32 bits of the program time' }
             ],
-            other: 'Service 30 - System time as milliseconds since 1 January 1970.'
+            other: 'Service 30 - Milliseconds since the run started, rather than since 1 January 1970 as in MARS: it is the time the program can observe passing, and in a testcase it comes from a virtual clock that starts at zero and only advances through the waits of service 32.'
         }
     },
-    /*
-[32]: {
-        name: "sleep",
+    [32]: {
+        name: 'sleep',
         code: 32,
-        arguments: [{ name: "$a0", description: "the length of time to sleep in milliseconds." }],
-        result: { other: "Causes the MARS Java thread to sleep for (at least) the specified number of milliseconds. This timing will not be precise, as the Java implementation will add some overhead." }
+        arguments: [{ name: '$a0', description: 'the length of time to sleep in milliseconds' }],
+        result: {
+            other: 'Service 32 - Lets that much program time pass before the next instruction. The editor stays responsive while it waits and the wait costs no instructions, so a program idling on the keyboard never reaches the execution limit; in a testcase it completes at once and advances the virtual clock instead.'
+        }
     },
-
-    */
 
     [34]: {
         name: 'print integer in hexadecimal',

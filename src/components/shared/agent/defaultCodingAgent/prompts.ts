@@ -9,6 +9,14 @@ import {
     Z80_PORT_GROUP_DOCS,
     Z80_SCREEN_COMMAND_DOCS
 } from '$lib/languages/Z80/Z80-model'
+import {
+    DEFAULT_PROJECT_DISPLAY,
+    formatMarsBaseAddress,
+    MARS_BASE_ADDRESS_CHOICES,
+    MARS_DISPLAY_SIZE_CHOICES,
+    MARS_UNIT_SIZE_CHOICES
+} from '$lib/languages/mars/marsDisplay'
+import { MARS_RECEIVER_CONTROL } from '$lib/languages/mars/MarsDevices'
 import type {
     AgentWorkflow,
     DefaultCodingAgentToolName,
@@ -283,6 +291,22 @@ function toPortNumber(port: number): string {
     return `0x${port.toString(16).padStart(2, '0').toUpperCase()}`
 }
 
+/**
+ * The MARS and RARS memory-mapped devices, the same text for both environments: the two simulators'
+ * bitmap display and keyboard-and-display simulator are the same two tools, and only the register a
+ * service number goes in differs.
+ */
+function MARS_SCREEN_INFORMATION(service: string, argument: string): string {
+    const base = MARS_RECEIVER_CONTROL >>> 0
+    return [
+        `- Graphics go through memory, not through a syscall: the screen is a grid of words, one word per pixel, whose low 24 bits are the color (red 23-16, green 15-8, blue 7-0). Words run left to right and then top to bottom. The program must reserve that memory itself, usually with \`.space\`.`,
+        `- The user configures the grid in the screen panel, with the tool's own five parameters: unit width and height (${MARS_UNIT_SIZE_CHOICES.join(', ')}), display width and height (${MARS_DISPLAY_SIZE_CHOICES.join(', ')}) and a base address among ${MARS_BASE_ADDRESS_CHOICES.map((choice) => formatMarsBaseAddress(choice.address)).join(', ')}. Default: ${DEFAULT_PROJECT_DISPLAY.unitWidth} by ${DEFAULT_PROJECT_DISPLAY.unitHeight} units, ${DEFAULT_PROJECT_DISPLAY.width} by ${DEFAULT_PROJECT_DISPLAY.height} pixels at ${formatMarsBaseAddress(DEFAULT_PROJECT_DISPLAY.baseAddress)}, so ${DEFAULT_PROJECT_DISPLAY.width} by ${DEFAULT_PROJECT_DISPLAY.height} words. A program cannot change them, so say in a header comment which ones it wants.`,
+        `- Keyboard and console are four words: 0x${base.toString(16)} receiver control (bit 0 Ready, a character is waiting), 0x${(base + 4).toString(16)} receiver data (the character, reading it takes it), 0x${(base + 8).toString(16)} transmitter control (bit 0 Ready, always set) and 0x${(base + 12).toString(16)} transmitter data (storing a character prints it, ASCII 12 clears the console).`,
+        `- Setting bit 1 of either control register, the interrupt-enable bit, stops the program with an error: poll the Ready bit instead.`,
+        `- Service 30 (${service} = 30) answers the program time in milliseconds since the run started, low word in ${argument} and high word in the next register; service 32 (${service} = 32, ${argument} = milliseconds) waits. A wait costs no instructions, so a polling loop should sleep about 10 ms instead of spinning, or it will hit the execution limit.`
+    ].join('\n')
+}
+
 const EMULATOR_INFORMATION = `# Emulator Information
 The editor supports one editable assembly file, an output-only console and, for M68K, MIPS, RISC-V and Z80, a pixel screen with a keyboard and a mouse. There are no imported ROMs and no produced binaries.
 
@@ -298,11 +322,13 @@ ${M68K_TRAP_INFORMATION}
 ## MIPS
 - Uses the MARS assembler/emulator syntax and syscalls. Memory is little-endian.
 - .data starts at 0x10010000. $sp starts at 0x7ffffffc and grows downward.
+${MARS_SCREEN_INFORMATION('$v0', '$a0')}
 
 ## RISC-V
 - Uses the RARS assembler/emulator syntax and syscalls. Memory is little-endian.
 - RISC-V is 32-bit; RISC-V-64 is 64-bit.
 - .data starts at 0x10010000. sp starts at 0x7ffffffc and grows downward.
+${MARS_SCREEN_INFORMATION('a7', 'a0')}
 
 ## X86
 - The X86 emulator is experimental and incomplete. It uses the NASM syntax and assembler. Uses Blink as the emulator.

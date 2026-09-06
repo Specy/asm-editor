@@ -80,6 +80,11 @@
             onClick={() => (menuOpen = false)}
         />
         <MenuLink
+            href="/documentation/risc-v/screen"
+            title="Screen and I/O"
+            onClick={() => (menuOpen = false)}
+        />
+        <MenuLink
             href="/documentation/risc-v/syscall"
             title="Syscalls"
             onClick={() => (menuOpen = false)}

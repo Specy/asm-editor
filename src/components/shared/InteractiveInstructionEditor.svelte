@@ -23,6 +23,8 @@
         RegisterSize
     } from '$lib/languages/commonLanguageFeatures.svelte'
     import ScreenRenderer from '$cmp/specific/project/screen/ScreenRenderer.svelte'
+    import ScreenDisplayConfiguration from '$cmp/specific/project/screen/ScreenDisplayConfiguration.svelte'
+    import { DEFAULT_PROJECT_DISPLAY } from '$lib/languages/mars/marsDisplay'
     import { languageHasScreen } from '$lib/languages/peripherals/peripheralSet'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import FaDesktop from '~icons/fa-solid/desktop'
@@ -79,6 +81,10 @@
     let showScreen = $derived(
         showScreenProp ?? (settingsStore.values.showScreen.value && languageHasScreen(language))
     )
+    //no project to save it in here, so the lecture, exam, embed and chat surfaces get the popover
+    //with the display living for as long as the page does. Only MIPS and RISC-V have one at all
+    let display = $state(DEFAULT_PROJECT_DISPLAY)
+    const configurableDisplay = $derived(emulator.setDisplay !== undefined)
     //the small layout has no room to spare, so the Screen starts folded away behind its toggle
     let screenOpen = $state(false)
     let groupSize = $state(RegisterSize.Word)
@@ -390,8 +396,21 @@
         screen={emulator.peripherals.screen}
         keyboard={emulator.peripherals.keyboard}
         mouse={emulator.peripherals.mouse}
+        actualSizeZoom={configurableDisplay ? display.unitWidth : 1}
         style={`height: ${height}; flex: none;`}
-    />
+    >
+        {#snippet configuration()}
+            {#if configurableDisplay}
+                <ScreenDisplayConfiguration
+                    {display}
+                    onChange={(next) => {
+                        display = next
+                        emulator.setDisplay?.(next)
+                    }}
+                />
+            {/if}
+        {/snippet}
+    </ScreenRenderer>
 {/snippet}
 
 {#snippet consolePanel()}

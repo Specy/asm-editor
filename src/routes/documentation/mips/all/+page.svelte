@@ -5,6 +5,7 @@
     import MIPSSyscallExplanation from '$cmp/documentation/mips/MIPSSyscallExplanation.svelte'
     import MIPSRegistersDocumentation from '$cmp/documentation/mips/MIPSRegistersDocumentation.svelte'
     import Header from '$cmp/shared/layout/Header.svelte'
+    import MarsScreenDocumentation from '$cmp/documentation/mars/MarsScreenDocumentation.svelte'
 
     import {
         mipsInstructionEntries,
@@ -35,6 +36,7 @@
         <a href="#directives">Directives</a>
         <a href="#syscalls">Syscalls</a>
         <a href="#registers">Registers</a>
+        <a href="#screen">Screen and I/O</a>
     </nav>
 
     <section id="instructions">
@@ -86,6 +88,11 @@
         <Header type="h3">Registers</Header>
         <p>MIPS has 32 GPR registers each of 32 bits</p>
         <MIPSRegistersDocumentation />
+    </section>
+
+    <section id="screen">
+        <h2>Screen and memory-mapped I/O</h2>
+        <MarsScreenDocumentation variant="MIPS" disableLinks />
     </section>
 </Page>
 
