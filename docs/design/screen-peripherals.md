@@ -94,12 +94,99 @@ Decided on 2026-09-06.
 
 ## Validation
 
-Decided on 2026-09-06.
+Decided on 2026-09-06; measured on 2026-09-06, below.
 
 - Compatibility corpus: EASy68K's own examples and the MARS and RARS bitmap and keyboard samples, checked in under an examples directory with source and license notes (EASy68K is GPL, compatible with this repository's AGPL), plus Z80 programs written here. Graphical assertions are deferred, so this is a manual matrix, recreated as a verification document in `docs/`.
 - Automated tests: vitest as a dev dependency with a node environment, the repository's first test infrastructure, for the peripherals' pure logic (Screen journal and Undo, Keyboard queue and hold interval, Mouse views and clamping, virtual time, the Z80 port device), then adapter tests where a Core runs under node.
 - History memory: a clear or a present journals a whole image, over a megabyte at 640 by 480, so the Screen history has its own byte budget setting and the Undo depth is the smaller of the Core's history and the Screen's history within that budget ([ADR 0005](../adr/0005-restore-screen-state-on-undo.md)). Validation measures typical programs to set the default.
-- Scheduling: measure instructions per second with and without yields on every Core, and the frame pacing of the animation examples. Targets: yields cost under five percent of throughput, and Stop is answered within a tenth of a second. The numbers are recorded here once measured.
+- Scheduling: measure instructions per second with and without yields on every Core, and the frame pacing of the animation examples. Targets: yields cost under five percent of throughput, and Stop is answered within a tenth of a second.
+
+### How the numbers were taken
+
+`npm run measure` runs the harness (`vitest.measure.config.ts`, `src/lib/languages/measurements/`): the app's own Vite config pointed at `*.measure.ts` instead of `*.test.ts`, one file at a time in one process, kept out of `npm test` because it takes minutes. Every Core loads under node, x86's Blink included, so all five are measured. A program is built the way the project page builds one — the shipped undo history of a hundred steps, which is not free: RARS records a backstep entry per instruction and runs about ten times slower with it — and a stand-in for the Screen panel repaints on a 16 ms timer, because a Screen nobody paints stays dirty and would hold the scheduler at the short slice budget for the whole run. A browser's absolute numbers will differ; the ratios and the conclusions are what the values below come from.
+
+### What a Core costs
+
+A compute-only loop, arithmetic in a two instruction loop, run twice: once as a single slice, the way the Emulator ran a whole program before [ADR 0007](../adr/0007-generic-emulator-run-scheduling.md), and once through `run()`, which slices it, yields to the host between slices and re-enters the Core each time.
+
+| Core   | Instructions/s, one slice | Instructions/s, sliced and yielding | Cost of the yields |
+| ------ | ------------------------- | ----------------------------------- | ------------------ |
+| Z80    | 11 392 676                | 11 182 971                          | 1.9%               |
+| M68K   | 19 561 824                | 18 761 858                          | 4.3%               |
+| MIPS   | 1 226 522                 | 1 184 756                           | 3.5%               |
+| RISC-V | 26 887                    | 26 521                              | 1.4%               |
+| x86    | 10 641                    | 10 494                              | 1.4%               |
+
+Under the five percent the ADR budgets, on every Core. One yield costs about 1.1 ms under node, which has no `scheduler.yield()` and falls back to a timer, so what keeps the cost down is the length of the slice rather than the price of the yield.
+
+The compute loop is the fastest a Core ever goes, and it is not the whole story: inside one Core the spread is large. RARS runs `addi`/`j` at 26 instructions a millisecond and everything else — a store loop, the bitmap tour — at 150 to 320, because its unconditional jump is an order of magnitude dearer than a branch. One M68K trap or one Z80 `out` can clear a whole Screen, which is a hundred thousand pixels and a journal record of the image it overwrote. A single constant per Core therefore cannot both keep the host free and keep the throughput, which is what the two mechanisms below are for.
+
+### What the host feels
+
+A Core runs on the main thread, so a click on Stop is not delivered until the slice it lands in comes back: the honest form of "Stop is answered within a tenth of a second" is how long the host is held. The measurement is the loop lag, how late a 10 ms timer fires while a program runs, over three kinds of program.
+
+| Program                  | Core   | Median loop lag | Worst loop lag | Ticks over 100 ms | Stop answered in |
+| ------------------------ | ------ | --------------- | -------------- | ----------------- | ---------------- |
+| compute loop             | Z80    | 41.0 ms         | 54.1 ms        | 0                 | 0.7 ms           |
+| compute loop             | M68K   | 41.0 ms         | 85.4 ms        | 0                 | 1.0 ms           |
+| compute loop             | MIPS   | 41.0 ms         | 60.8 ms        | 0                 | 0.8 ms           |
+| compute loop             | RISC-V | 41.2 ms         | 56.3 ms        | 0                 | 0.9 ms           |
+| compute loop             | x86    | 41.3 ms         | 77.0 ms        | 0                 | 2.6 ms           |
+| `z80/bouncing-ball.z80`  | Z80    | 0.2 ms          | 2.0 ms         | 0                 | 0.7 ms           |
+| `m68k/bouncing-ball.x68` | M68K   | 0.2 ms          | 3.7 ms         | 0                 | 1.2 ms           |
+| `mips/bouncing-ball.asm` | MIPS   | 0.2 ms          | 66.9 ms        | 0                 | 1.0 ms           |
+| `risc-v/bouncing-ball.s` | RISC-V | 0.2 ms          | 52.5 ms        | 0                 | 1.0 ms           |
+| drawing loop, no wait    | Z80    | 51.0 ms         | 57.3 ms        | 0                 | 0.8 ms           |
+| drawing loop, no wait    | M68K   | 43.5 ms         | 47.1 ms        | 0                 | 1.6 ms           |
+
+Nothing held the host for a tenth of a second, on any Core or any kind of program. The compute loops all settle at about 41 ms, which is a 50 ms slice sampled at a random point inside it: the scheduler's correction has found every Core's real speed whatever its constant said. The animation examples hold the host for a fifth of a millisecond between frames, and their worst tick is the first slice of the MIPS and RISC-V ball, which fills its whole grid before it ever sleeps. Stop itself, once the host is free, is answered in one to three milliseconds — the lag is the whole of the wait.
+
+### Frame pacing
+
+Every animation example paces itself with a wait, and none of them is late by more than a frame. The Z80 waits for the host's animation frame, the M68K asks for two hundredths of a second, MIPS and RISC-V sleep 16 ms.
+
+| Core   | Program                  | Asks for       | Median frame | Slowest frame | Frames/s |
+| ------ | ------------------------ | -------------- | ------------ | ------------- | -------- |
+| Z80    | `z80/bouncing-ball.z80`  | the next frame | 17.0 ms      | 17.5 ms       | 58.9     |
+| M68K   | `m68k/bouncing-ball.x68` | 20 ms          | 24.0 ms      | 28.7 ms       | 41.6     |
+| MIPS   | `mips/bouncing-ball.asm` | 16 ms          | 17.2 ms      | 18.7 ms       | 58.2     |
+| RISC-V | `risc-v/bouncing-ball.s` | 16 ms          | 18.4 ms      | 21.7 ms       | 54.5     |
+
+The M68K's four milliseconds over its 20 are the frame itself: a clear, a filled ellipse and a present at 640 by 480, each of the first and last journaling a whole image.
+
+### The Screen journal
+
+Undo walks the Core's instruction history one Screen record per step, and the shipped Core history is a hundred steps, so what the budget has to hold is the newest hundred records.
+
+| Core   | Program                  | Screen    | Records per frame | Journal for 100 undo steps |
+| ------ | ------------------------ | --------- | ----------------- | -------------------------- |
+| Z80    | `z80/bouncing-ball.z80`  | 256 × 192 | 6.0               | 6.4 MB                     |
+| M68K   | `m68k/bouncing-ball.x68` | 640 × 480 | 4.0               | 58.8 MB                    |
+| MIPS   | `mips/bouncing-ball.asm` | 128 × 128 | 0                 | 0                          |
+| RISC-V | `risc-v/bouncing-ball.s` | 128 × 128 | 0                 | 0                          |
+
+The M68K program is the heaviest case there is: double buffered at EASy68K's window size, it journals a whole 1.2 MB image for its clear and another for its present, twice a frame. MIPS and RISC-V journal nothing at all, because their image lives in Core memory and Undo re-reads it from there ([ADR 0005](../adr/0005-restore-screen-state-on-undo.md)).
+
+### The values chosen
+
+| Value                              | Was    | Now    | Why                                                                                                                                                                                     |
+| ---------------------------------- | ------ | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `COMPUTE_SLICE_MS`                 | 100    | 50     | The host is held for as long as the slice runs, and half the ADR's tenth of a second leaves room for a program two or three times slower than the loop the estimates were calibrated on |
+| `SCREEN_SLICE_MS`                  | 16     | 16     | One display frame; the animation examples end every slice on a wait long before it anyway                                                                                               |
+| `Z80_INSTRUCTIONS_PER_MS`          | 20 000 | 10 000 | Measured 11 000, rounded down                                                                                                                                                           |
+| `M68K_INSTRUCTIONS_PER_MS`         | 20 000 | 15 000 | Measured 18 800, rounded down                                                                                                                                                           |
+| `MIPS_INSTRUCTIONS_PER_MS`         | 1 000  | 1 000  | Measured 1 200; the phase 7 estimate stands                                                                                                                                             |
+| `RISCV_INSTRUCTIONS_PER_MS`        | 1 000  | 25     | Measured 27 with the shipped undo history. The old estimate made one slice hold the host for 3.7 seconds                                                                                |
+| `X86_INSTRUCTIONS_PER_MS`          | 2 000  | 10     | Measured 11. The old estimate held the host for 0.9 s a slice and answered Stop 17 seconds after it was pressed                                                                         |
+| `screenHistoryBudgetMb`            | 64     | 64     | The heaviest animation example needs 58.8 MB for the hundred undo steps the Core history keeps                                                                                          |
+| `DEFAULT_SCREEN_HISTORY_BYTES`     | 32 MB  | 64 MB  | The Screen's own default now agrees with the setting every Emulator applies                                                                                                             |
+| `DEFAULT_KEY_HOLD_INTERVAL_MS`     | 30     | 30     | A program polls once a frame, and a frame is 17 to 24 ms: a 30 ms hold is seen by at least one poll                                                                                     |
+| `DEFAULT_DOUBLE_CLICK_INTERVAL_MS` | 500    | 500    | Windows' own default, which is what EASy68K's double-click flag means; nothing measured argues with it                                                                                  |
+
+### Two mechanisms the numbers forced
+
+- **A slice deadline on the Z80 and the M68K.** Their instructions are not all the same size: a drawing loop that clears and presents without ever waiting held the host for 57 seconds on the Z80 and for the whole run on the M68K, because the budget counts instructions and one of those instructions is a hundred thousand pixels. Both adapters now watch the clock as well — the Z80 by spending its budget in chunks it resizes from what the last one cost, the M68K between the traps its loop already breaks on — and both drawing loops now hold the host for about 50 ms.
+- **A speed correction in the scheduler.** Each adapter's constant is one number for a Core that is not one speed, so `GenericEmulator` multiplies it by what its own slices have cost, within a factor of sixteen either way and starting again at every clear. A slice that came back on its budget is the only one that teaches, and only the part of it that was not the program's own wait, which the clock now reports. Without it the tuned RISC-V estimate — right for a `j` loop — made everything else run six times more slices than it needed and cost 17% of the throughput.
 
 ## Open decisions
 

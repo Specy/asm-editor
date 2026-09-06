@@ -602,3 +602,62 @@ The built app was served with `vite preview` and driven through the DevTools pro
 - **The memory-mapped registers are untested in RV64 mode** (matrix row V11); the Core's own smoke test pins them for RV32 only, and the memory map may not exist at `0xffff0000` there.
 - A **testcase cannot script keyboard input into the receiver register**, by the choice above; it answers only what a live Keyboard has typed.
 - Matrix rows P10's project-close case and V-side browser runs beyond V1 and V2 were not walked by hand; everything else on the RISC-V side is covered by the node suite, which is the same suite as the MIPS one against the other Core.
+
+## Phase 8: validation and tuning — 2026-09-06
+
+Repository `/home/dev/code/asm-editor`, branch `feat/screen-peripherals`, commits `717ee3b` (the harness, the tuning and the two mechanisms) and the one this log follows. The last phase of the plan.
+
+### Done
+
+- **The measurement harness.** `npm run measure` (`vitest.measure.config.ts`, `src/lib/languages/measurements/`): the app's own Vite config pointed at `*.measure.ts` instead of `*.test.ts`, one file at a time in one process. `throughput` (compute-only instructions a second with and without the scheduler's yields), `responsiveness` (how long the host is held while a program runs, and how long Stop then takes), `animation` (frame pacing and the Screen journal of the four `bouncing-ball` examples) and `examples` (every program in `examples/`, run headlessly). Kept out of `npm test`: it takes minutes and asserts almost nothing.
+- **Every example runs headlessly**, on every Core — all five load under node, x86's Blink included. The table is the new "Headless runs" section of `docs/manual-verification.md`. The two bitmap tours draw the same picture pixel for pixel on MARS and RARS; the three EASy68K reference programs do not assemble, on purpose; `Bad_Apple.s68k` prints and draws nothing because its only trap is task 23 and it writes its frames into memory.
+- **Every provisional number is measured and recorded**: the design record's Validation section holds the tables and the reasoning, `docs/manual-verification.md` holds the measurement rows, and both name the values chosen.
+- **The estimates are tuned.** `RISCV_INSTRUCTIONS_PER_MS` 1 000 → 25 and `X86_INSTRUCTIONS_PER_MS` 2 000 → 10 were the two that mattered: the first held the host for 3.7 seconds a slice, the second answered Stop seventeen seconds after it was pressed. Z80 20 000 → 10 000, M68K 20 000 → 15 000, MIPS unchanged at 1 000. `COMPUTE_SLICE_MS` 100 → 50, `SCREEN_SLICE_MS` unchanged at 16, `screenHistoryBudgetMb` unchanged at 64 with `DEFAULT_SCREEN_HISTORY_BYTES` raised from 32 to 64 MB to agree with it.
+- **A slice deadline on the Z80 and the M68K** (`sliceDeadline` in `ExecutionSlice.ts`). Their instructions are not all the same size — one `out` or one trap can clear a whole Screen — and a drawing loop that never waits held the host for 57 seconds on the Z80 and for the whole run on the M68K. The Z80 spends its budget in chunks it resizes from what the last one cost (`nextSliceChunk`), the M68K looks at the clock between the traps its loop already breaks on. Both now hold the host for about 50 ms.
+- **A speed correction in the scheduler** (`nextSpeedCorrection`, `GenericEmulator.learnSliceSpeed`). One constant per Core is not one speed: RARS runs `addi`/`j` at 26 instructions a millisecond and everything else at 150 to 320. The scheduler multiplies the adapter's estimate by what its own slices cost, within a factor of sixteen, starting again at every clear. Only a slice that came back on its budget teaches it, and only the part of it that was not the program's own wait — `ProgramClock` gained `waitedMs` for that, because MIPS, RISC-V and x86 serve a `sleep` without leaving their slice.
+- **An M68K run stopped by its instruction limit names the user's limit**, not the last slice's share of it: `ExecutionSliceRequest` gained `runInstructionLimit`, which is what the adapter puts in the error it rebuilds. The confusing message was phase 6's last open item.
+- **Matrix rows Z7 and Z8 are covered**, under node, in `Z80Emulator.test.ts`: a rebuild blanks the Screen and forgets the typed queue and the last click, and a testcase over a drawing program answers the character port from the scripted input, completes its wait at once and reads the elapsed-time port as 10 hundredths. Rows M8, M9, P7 to P10 and V3 to V10 were already covered by the node suites; what is left needs a browser and now has steps.
+- **`docs/manual-verification.md`** gained the headless-run table, the x86 rows (X1 to X3, which the empty section was missing), a "Rows still needing a browser" section with the steps for each, and the filled-in measurements table.
+- Verification at both commits: `npm run check` at the branch baseline (the same two pre-existing errors, 205 warnings), `npm run lint` 0 errors and 18 warnings, `npm test` 320 tests in 17 files, `npm run format:check` clean.
+
+### The numbers that settle ADR 0007
+
+Both targets are met on every Core (the full tables are in the design record):
+
+- Yields cost **1.4% to 4.3%** of compute-only throughput — Z80 1.9, M68K 4.3, MIPS 3.5, RISC-V 1.4, x86 1.4. One yield is about 1.1 ms under node, which has no `scheduler.yield()`, so it is the slice length that keeps the cost down.
+- **Nothing holds the host for a tenth of a second**: the worst tick of a 10 ms timer during a run was 85 ms, and the compute loops settle at 41 ms, which is a 50 ms slice sampled at a random point. Stop itself, once the host is free, is answered in 0.7 to 2.6 ms.
+- Frame pacing: Z80 17.0 ms, M68K 24.0 (asking 20), MIPS 17.2 (asking 16), RISC-V 18.4 (asking 16).
+- The Screen journal of 100 undo steps: Z80 6.4 MB at 256 by 192, M68K 58.8 MB at 640 by 480, MIPS and RISC-V nothing at all.
+
+### Choices where the plan left a detail open
+
+- **The harness is committed rather than thrown away.** The plan only asked for numbers, but a number nobody can take again is a claim; `npm run measure` is how the next person checks one. It is a separate config so `npm test` stays seconds long.
+- **The estimates are calibrated on a compute-only loop and rounded down**, because that loop is the fastest a Core ever goes and everything else is slower. The correction is what covers the spread; without it the choice would have been between a laggy host and a slow run, and neither meets the ADR.
+- **The correction moves the instruction budget, never the deadline.** `timeBudgetMs` stays the true target, which is what the Z80 and M68K deadlines are measured against, and the correction rides in `speedCorrection` next to it. Otherwise a correction of four would have let a drawing loop hold the host for four times the budget.
+- **A slice under a millisecond teaches nothing**, which is also what keeps the fake-adapter tests of phase 3 exact: their slices return instantly.
+- **The correction is bounded to a factor of sixteen either way** and to four per slice. Sixteen covers the spread measured inside a single Core (twelve to one on RARS); the per-slice bound means a slice distorted by something other than compute is forgotten in two or three slices.
+- **The animation runs are ended from inside the clock**, by throwing once the program has asked for its 120th frame, rather than by Stop (which resets the Screen and its journal) or by an instruction limit (which buys a thousand times more frames on the M68K, whose slices charge one instruction per trap, than on the Z80).
+- **A program that never terminates is given the app's own instruction limit and 2.5 seconds of wall clock** in the headless runs, because a program paced by waits spends no instructions while it waits.
+- **The measurements run with a stand-in for the Screen panel's repaint**, a 16 ms timer that calls `markPainted()`. Without it a Screen stays dirty and the scheduler holds the short slice budget for the whole run, which is not what a browser does — and is a real defect on any surface that runs a program with the Screen panel closed (see the gaps).
+- **The key hold interval and the double-click interval keep phase 2's values.** 30 ms is more than the 17 to 24 ms frame the pacing measurement found, so a program polling once a frame sees every transition; 500 ms is Windows' own double-click default, which is what EASy68K's flag means, and nothing here can measure a human.
+
+### Overall status of the feature
+
+**Complete.** Every phase of `screen-peripherals-plan.md` has landed: the test infrastructure and the Screen model, the Keyboard, Mouse and ProgramClock, the injection and the slice scheduler, the Screen panel and its hosting, the Z80 port map, the M68K trap tasks, the MIPS and RISC-V bitmap display and memory-mapped registers, and this phase's validation. 320 tests, the type check at its branch baseline, the lint clean, `npm run build` clean, and a manual matrix whose remaining rows are listed with the steps to run them.
+
+**What the user must do before this branch can merge.**
+
+1. **Publish the three Core packages** and replace the `file:` tarballs in `package.json` with caret ranges: `@specy/s68k` 1.4.0 (`/home/dev/code/s68k`, branch `feat/screen-peripherals`, commit `65de8f7`), `@specy/mips` 2.1.0 (`/home/dev/code/mars`, commits `db4ec5b` and `cea61e5`) and `@specy/risc-v` 2.1.0 (`/home/dev/code/rars`, commit `f72406e`). The tarballs are in `/home/dev/code/local-packages/`. Nothing else in the editor depends on an unpublished build. Remember npm's `save-exact` here: the caret ranges have to be restored by hand after an install.
+2. **Walk the rows that need a browser**, listed with their steps in `docs/manual-verification.md`: the zoom half of Z3, the project-close half of Z7, M10, P10 and V10, M8's Undo in the GUI, the RISC-V browser spot check V3 to V9, RV64 (V11), the chat page (H9) and a live exam session (H10).
+3. Decide whether the settings reset that `CURRENT_VERSION` 1.1.8 causes is worth announcing: every user's stored settings go back to their defaults once, which is what makes the two new keys exist.
+
+**Known gaps**, none of them blocking:
+
+- **Undo cannot be walked in the GUI on MIPS or RISC-V**, and it is not this feature's doing: `assemble()` reallocates the backstep buffer that MARS and RARS keep as a singleton, so the semantic check that follows every Build empties the undo history. The fix is a per-instance backstepper in the two Cores. Rows P7 and V7.
+- **The M68K charges one instruction per trap**, so a trap-heavy program runs far past the instruction limit the user set — the limit is enforced exactly in instructions the Core reports, and the Core reports none. Only a Core-side instruction counter fixes it; the slice deadline at least bounds the time such a program can hold the host.
+- **The Screen's Undo follows the Core one record per step**, not by instruction, because no Core reports an instruction count at a Screen operation. With sparse drawing the image rewinds ahead of the code and re-converges; phase 3 recorded the reasoning.
+- **A Screen with no renderer stays dirty**, so a surface that runs a program with the Screen panel closed (the small layout's toggle, or `showScreen` on with no panel mounted) keeps the scheduler at the 16 ms slice budget. It costs throughput, not correctness, and the fix belongs to whoever gives the panel a "is anyone watching" signal.
+- **A program suspended on Screen keyboard input shows nothing in the GUI** but disabled execution buttons. Phase 5 asked for a small indicator; it is a panel change rather than a measurement, so this phase left it.
+- **A testcase cannot script keyboard input into the MIPS and RISC-V receiver register**, by phase 7's choice: a memory read observer runs inside the load instruction and cannot await the Terminal.
+- **The memory-mapped registers are untested in RV64 mode** (row V11).
+- **The panel is 20 rem tall wherever it is hosted**, which leaves a 640 by 480 Screen at about 60 percent. Phase 4 asked whether phase 8 should revisit it; with real programs on screen it reads fine, and a taller panel would take room from the editor, so it stays.
