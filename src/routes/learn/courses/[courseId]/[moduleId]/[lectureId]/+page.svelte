@@ -18,6 +18,8 @@
     import type { SupportedLanguage } from '$cmp/shared/agent/DefaultCodingAgent.svelte'
     import type { AvailableLanguages } from '$lib/Project.svelte'
     import type { Emulator } from '$lib/languages/Emulator'
+    import { GENERAL_COURSE_SLUG, type TopicSibling } from '$lib/content/getters'
+    import { resolve } from '$app/paths'
 
     interface Props {
         data: PageData & { content: string }
@@ -40,6 +42,14 @@
     let currentLectureName = $derived(page.params.lectureId)
 
     let currentModuleName = $derived(page.params.moduleId)
+
+    //the same Topic is taught once in the General course and once in each Language course, so a
+    //reader of the overview is pointed down into the languages and a reader of one language is
+    //pointed back at the overview and across at the others. An Example has no overview, only the
+    //same program elsewhere. All of it comes from the `topic` key of the lectures' `meta.json`
+    let inGeneralCourse = $derived(data.course.slug === GENERAL_COURSE_SLUG)
+    let isExample = $derived(currentModuleName === 'examples')
+    let topicLinks = $derived(data.topicLinks)
 
     let lectures = $derived(
         data.course.modules.flatMap((m) =>
@@ -80,6 +90,18 @@
     <meta property="og:image" content={data.course.image} />
 </svelte:head>
 
+{#snippet topicList(siblings: TopicSibling[])}
+    {#each siblings as sibling, index (sibling.courseSlug + sibling.lectureSlug)}
+        {index === 0 ? '' : ', '}<a
+            href={resolve('/learn/courses/[courseId]/[moduleId]/[lectureId]', {
+                courseId: sibling.courseSlug,
+                moduleId: sibling.moduleSlug,
+                lectureId: sibling.lectureSlug
+            })}>{sibling.courseName}</a
+        >
+    {/each}
+{/snippet}
+
 <Page cropped="110ch" style="padding: 1rem;" contentStyle="gap: 1rem;">
     <Card padding="1.5rem" gap="1rem" background="secondary">
         <Header noMargin style="width: min(100%, 46rem); margin: 0 auto">
@@ -89,7 +111,26 @@
             {data.lecture.description}
         </p>
     </Card>
+    {#if topicLinks && !inGeneralCourse}
+        <p class="topic-links">
+            {#if isExample}
+                The same program in {@render topicList(topicLinks.siblings)}.
+            {:else}
+                {#if topicLinks.overview}
+                    The overview of this topic is in {@render topicList([topicLinks.overview])}.
+                {/if}
+                {#if topicLinks.siblings.length > 0}
+                    The same topic in {@render topicList(topicLinks.siblings)}.
+                {/if}
+            {/if}
+        </p>
+    {/if}
     <MarkdownRenderer style="font-size: 1.1rem;" source={data.content} spacing="1.2rem" />
+    {#if topicLinks && inGeneralCourse && topicLinks.siblings.length > 0}
+        <p class="topic-links">
+            Go deeper: this topic in {@render topicList(topicLinks.siblings)}.
+        </p>
+    {/if}
     {#if editorLanguage}
         <div class="editor-section" bind:this={editorSection}>
             {#key editorLanguage}
@@ -229,6 +270,18 @@ When the user asks a question about the lecture topic or for a demonstration of 
 </button>
 
 <style>
+    .topic-links {
+        font-family: 'Noto Serif', Rubik, sans-serif;
+        font-weight: 500;
+        width: min(100%, 70ch);
+        margin: 0 auto;
+        opacity: 0.75;
+    }
+
+    .topic-links a {
+        color: var(--accent);
+    }
+
     .description {
         white-space: pre-line;
         line-height: 1.5;
