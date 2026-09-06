@@ -1,5 +1,6 @@
 {
     "name": "The stack",
-    "description": "Learn what the stack is, how it works, and how to use it in assembly language.",
-    "order": 2
+    "description": "A region of memory you push values onto and pop them back off, with one register keeping track of where the top is. Push and pop drawn step by step, then done by hand in M68K.",
+    "order": 4,
+    "topic": "the-stack"
 }
