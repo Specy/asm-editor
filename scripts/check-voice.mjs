@@ -83,7 +83,36 @@ const RULES = [
         name: 'Summary or Conclusion heading',
         pattern: /^#{1,6}\s+.*\b(summary|conclusion|recap|takeaways?)\b/gim,
         hint: 'close on the code, not on a recap'
-    }
+    },
+
+    // --- the performing phrases of "Say it straight": announcing, narrating, paraphrasing ---
+    { name: 'worth seeing', pattern: /\bworth seeing\b/gi, hint: 'say the fact' },
+    { name: 'worth stopping', pattern: /\bworth stopping\b/gi, hint: 'start with the fact' },
+    { name: 'worth watching', pattern: /\bworth watching\b/gi, hint: 'say what to look at' },
+    { name: 'worth the trouble', pattern: /\bworth the trouble\b/gi, hint: 'say what it does' },
+    { name: 'the part that makes', pattern: /\bthe part that makes\b/gi, hint: 'say the fact' },
+    { name: 'nothing so far', pattern: /\bnothing so far\b/gi, hint: "ask the reader's question" },
+    { name: 'so far we', pattern: /\bso far,? we\b/gi, hint: 'do not narrate the lecture' },
+    {
+        name: 'here is the part',
+        pattern: /\bhere is the part\b/gi,
+        hint: 'do not narrate the lecture'
+    },
+    { name: 'last piece', pattern: /\blast piece\b/gi, hint: 'start with the fact' },
+    {
+        name: 'one line at a time',
+        pattern: /\bone line at a time\b/gi,
+        hint: 'go straight to the explanation'
+    },
+    {
+        name: 'has no opinion',
+        pattern: /\bhas no opinion\b/gi,
+        hint: 'say what the machine does not have, then what we do ourselves'
+    },
+    { name: 'the way home', pattern: /\bthe way home\b/gi, hint: 'say the return address' },
+    { name: 'housekeeping', pattern: /\bhousekeeping\b/gi, hint: 'say what the line does' },
+    { name: 'the real reason', pattern: /\bthe real reasons?\b/gi, hint: 'give the reason' },
+    { name: 'the other half of', pattern: /\bthe other half of\b/gi, hint: 'say what it is' }
 ]
 
 function contentFiles(directory) {
