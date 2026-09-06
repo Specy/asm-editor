@@ -212,6 +212,18 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         this.mips = null
     }
 
+    /**
+     * Build, Stop and dispose reset the Screen to the language default, but the bitmap display's
+     * geometry belongs to the user rather than to a program, so it comes straight back — blank,
+     * because the picture is memory that the next build clears.
+     *
+     * Guarded: the base constructor clears before this subclass's fields exist.
+     */
+    clear(): void {
+        super.clear()
+        this.devices?.resetScreen(this.display)
+    }
+
     /** Framebuffer mode journals nothing, so Undo restores the image from the rolled-back memory. */
     _resyncScreenFromMemory(): void {
         this.devices.resync()

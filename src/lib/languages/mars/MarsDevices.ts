@@ -131,6 +131,16 @@ export class MarsDevices {
     }
 
     /**
+     * Puts the geometry back on a Screen the Emulator's clear path has just reset to its language
+     * default, leaving the image blank. The size is the user's configuration rather than something a
+     * program asked for, so it survives a Build or a Stop; the picture does not, because it is
+     * memory the next build clears.
+     */
+    resetScreen(display: ProjectDisplay): void {
+        this.configureDisplay(display, { sync: false })
+    }
+
+    /**
      * Copies the words written since the last call into the Screen. Called at the end of every
      * slice and before a program's `sleep`, rather than once per stored word: a handler call per
      * word costs more than the re-read of the range they touched (phase 7's Core measurements).
@@ -176,7 +186,7 @@ export class MarsDevices {
         this.dirtyTo = -1
     }
 
-    private configureDisplay(display: ProjectDisplay): void {
+    private configureDisplay(display: ProjectDisplay, options = { sync: true }): void {
         const geometry = marsDisplayGeometry(display)
         this.geometry = geometry
         this.words = new Int32Array(geometry.words)
@@ -190,7 +200,7 @@ export class MarsDevices {
         }
         this.observeFramebuffer(core, geometry)
         this.readableWords = this.probeReadableWords(core, geometry)
-        this.resync()
+        if (options.sync) this.resync()
     }
 
     private observeFramebuffer(core: MarsCore, geometry: MarsDisplayGeometry): void {

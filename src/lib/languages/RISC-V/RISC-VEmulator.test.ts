@@ -118,6 +118,16 @@ describe('RISC-V bitmap display', () => {
         expect(pixelAt(emulator, 0, 0)).toBe(0x000000)
     })
 
+    it('comes back blank in the configured geometry after Build and after Stop', async () => {
+        const emulator = await run(DATA + storePixel(0, '0x00ffffff') + EXIT)
+        expect(pixelAt(emulator, 0, 0)).toBe(0xffffff)
+        //Stop is this editor's Clear execution: the picture goes, the user's geometry stays
+        emulator.clear()
+        expect(emulator.peripherals.screen.width).toBe(8)
+        expect(emulator.peripherals.screen.height).toBe(8)
+        expect(pixelAt(emulator, 0, 0)).toBe(0x000000)
+    })
+
     it('starts from what the data segment already holds', async () => {
         const emulator = await build(
             '        .data\ndisplay:.word  0x00abcdef\n        .space 16380\n        .text\nmain:\n' +
