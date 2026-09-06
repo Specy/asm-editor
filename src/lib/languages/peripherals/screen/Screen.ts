@@ -61,6 +61,14 @@ const LINE_FEED = 0x0a
 
 const BYTES_PER_PIXEL = 4
 
+/**
+ * Which end of a 32-bit word the red byte lands on when the images are written a word at a time.
+ * The images are RGBA bytes in memory order, so the word a little-endian host has to store for
+ * them is ABGR; every desktop and phone this runs on is little-endian, and the other branch is
+ * there because a typed-array view is defined to use the host's order, not the array's.
+ */
+const LITTLE_ENDIAN = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1
+
 export class Screen {
     readonly history: ScreenHistory
     private readonly options: ScreenOptions
@@ -487,13 +495,9 @@ export class Screen {
      */
     syncFramebuffer(words: ArrayLike<number>, from = 0, to = words.length): void {
         const last = Math.min(to, words.length, this._width * this._height)
+        const image = imageWords(this.drawing)
         for (let index = Math.max(0, from); index < last; index++) {
-            const offset = index * BYTES_PER_PIXEL
-            const color = words[index]
-            this.drawing[offset] = (color >> 16) & 0xff
-            this.drawing[offset + 1] = (color >> 8) & 0xff
-            this.drawing[offset + 2] = color & 0xff
-            this.drawing[offset + 3] = 0xff
+            image[index] = packColor(words[index])
         }
         this.markDrawn()
     }
@@ -590,9 +594,10 @@ export class Screen {
         )
         if (right <= left || bottom <= top) return
         if (filled) {
-            for (let y = top; y < bottom; y++) {
-                for (let x = left; x < right; x++) this.paint(this.drawing, x, y, this._fillColor)
-            }
+            this.fillRegion(
+                { x: left, y: top, width: right - left, height: bottom - top },
+                this._fillColor
+            )
         }
         this.strokeLine(left, top, right - 1, top)
         this.strokeLine(right - 1, top, right - 1, bottom - 1)
@@ -670,6 +675,22 @@ export class Screen {
             for (let offsetX = 0; offsetX < this._penWidth; offsetX++) {
                 this.paint(this.drawing, x - before + offsetX, y - before + offsetY, this._penColor)
             }
+        }
+    }
+
+    /**
+     * A rectangle of one color, a row of words at a time. The clipping and the color are settled
+     * once for the whole rectangle instead of once per pixel, which is what `paint` in a double
+     * loop does; the pixels covered are the same ones that loop would have kept.
+     */
+    private fillRegion(rect: Rect, color: ScreenColor): void {
+        const clipped = this.clip(rect)
+        if (clipped === null) return
+        const words = imageWords(this.drawing)
+        const value = packColor(color)
+        for (let row = 0; row < clipped.height; row++) {
+            const start = (clipped.y + row) * this._width + clipped.x
+            words.fill(value, start, start + clipped.width)
         }
     }
 
@@ -768,13 +789,8 @@ export class Screen {
         const shift = this._cell.height * this._width * BYTES_PER_PIXEL
         const total = this.drawing.length
         if (shift < total) this.drawing.copyWithin(0, shift)
-        const from = Math.max(0, total - shift)
-        for (let offset = from; offset < total; offset += BYTES_PER_PIXEL) {
-            this.drawing[offset] = (this._backgroundColor >> 16) & 0xff
-            this.drawing[offset + 1] = (this._backgroundColor >> 8) & 0xff
-            this.drawing[offset + 2] = this._backgroundColor & 0xff
-            this.drawing[offset + 3] = 0xff
-        }
+        const from = Math.max(0, total - shift) / BYTES_PER_PIXEL
+        imageWords(this.drawing).fill(packColor(this._backgroundColor), from)
     }
 
     private clampCursor(): void {
@@ -936,16 +952,29 @@ export class Screen {
     }
 }
 
-function fillImage(image: Uint8ClampedArray, color: ScreenColor): void {
+/**
+ * The same pixels as one word each, which is what makes a bulk fill a fill: clearing a 640 by 480
+ * image byte by byte is 1.2 million stores and about a millisecond, and `Uint32Array.fill` over the
+ * same buffer is a memset (measured 20 times faster under node; see the rendering research note).
+ * The view is built where it is used rather than kept beside the image, so a resize, an Undo or a
+ * buffering change cannot leave a stale one behind.
+ */
+function imageWords(image: Uint8ClampedArray): Uint32Array {
+    return new Uint32Array(image.buffer, image.byteOffset, image.length / BYTES_PER_PIXEL)
+}
+
+/** One opaque pixel of a color as the word `imageWords` stores, red first in memory order. */
+function packColor(color: ScreenColor): number {
     const red = (color >> 16) & 0xff
     const green = (color >> 8) & 0xff
     const blue = color & 0xff
-    for (let offset = 0; offset < image.length; offset += BYTES_PER_PIXEL) {
-        image[offset] = red
-        image[offset + 1] = green
-        image[offset + 2] = blue
-        image[offset + 3] = 0xff
-    }
+    return LITTLE_ENDIAN
+        ? ((0xff << 24) | (blue << 16) | (green << 8) | red) >>> 0
+        : ((red << 24) | (green << 16) | (blue << 8) | 0xff) >>> 0
+}
+
+function fillImage(image: Uint8ClampedArray, color: ScreenColor): void {
+    imageWords(image).fill(packColor(color))
 }
 
 function boundsOf(points: { x: number; y: number }[]): Rect {

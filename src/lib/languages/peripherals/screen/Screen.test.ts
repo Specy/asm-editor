@@ -174,6 +174,34 @@ describe('Screen primitives', () => {
         ])
     })
 
+    it('fills only the part of a rectangle that is on the Screen', () => {
+        //the interior is filled a row of words at a time rather than pixel by pixel, so the
+        //clipping the per-pixel path used to do has to hold for the whole rectangle at once
+        screen.setPenColor(RED)
+        screen.setFillColor(RED)
+        screen.drawRectangle(-3, -2, 3, 2)
+        expect(pointsOf(screen, RED)).toEqual(['0,0', '1,0', '2,0', '0,1', '1,1', '2,1'])
+        screen.clear()
+        screen.drawRectangle(14, 10, 20, 20)
+        expect(pointsOf(screen, RED)).toEqual(['14,10', '15,10', '14,11', '15,11'])
+    })
+
+    it('writes every pixel as opaque bytes in red, green, blue order', () => {
+        //the pixel loops store one word a pixel and `putImageData` reads the same buffer as bytes,
+        //so the word the host stores has to come back out as RGBA in memory order
+        screen.clear(rgb(1, 2, 3))
+        const pixels = screen.visiblePixels
+        expect([...pixels.slice(0, 8)]).toEqual([1, 2, 3, 255, 1, 2, 3, 255])
+        expect([...pixels.slice(-4)]).toEqual([1, 2, 3, 255])
+        screen.setPenColor(rgb(4, 5, 6))
+        screen.drawPixel(2, 0)
+        expect([...pixels.slice(8, 12)]).toEqual([4, 5, 6, 255])
+        screen.setFillColor(rgb(7, 8, 9))
+        screen.drawRectangle(4, 0, 8, 4)
+        //(5,1), inside the border, so it is the fill color the row of words wrote
+        expect([...pixels.slice(84, 88)]).toEqual([7, 8, 9, 255])
+    })
+
     it('draws nothing for a rectangle whose edges meet, as GDI does', () => {
         screen.setPenColor(RED)
         screen.setFillColor(GREEN)
@@ -534,6 +562,14 @@ describe('Screen framebuffer mode', () => {
         expect(visibleAt(screen, 0, 0)).toBe(RED)
         expect(visibleAt(screen, 1, 1)).toBe(GREEN)
         expect(visibleAt(screen, 1, 0)).toBe(BLACK)
+    })
+
+    it('leaves every framebuffer pixel opaque, whatever the word held', () => {
+        const screen = makeScreen()
+        screen.useFramebuffer(2, 1)
+        const words = new Uint32Array([0x00010203, 0xff040506])
+        screen.syncFramebuffer(words)
+        expect([...screen.visiblePixels]).toEqual([1, 2, 3, 255, 4, 5, 6, 255])
     })
 
     it('re-reads only the range a memory observer reported dirty', () => {

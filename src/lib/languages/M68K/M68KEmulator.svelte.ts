@@ -452,16 +452,14 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                 if (this.state.terminated || !this.state.canExecute) break
                 const ins = interpreter.getLastInstruction()
                 this.state.line = ins?.parsed_line?.line_index ?? -1
-                this.updateRegisters()
-                this.updateStatusRegisters()
-                this.updateMemory()
-                this.updateData()
-                this.scrollStackTab()
-                return await this.handleInterrupt(
-                    interpreter.getCurrentInterrupt(),
-                    interpreter,
-                    execution
+                const interrupt = interpreter.getCurrentInterrupt()
+                //a trap is not a display frame: a graphical program reaches this a few hundred
+                //times a second and the panels can only be seen sixty times a second. The traps
+                //that stop and ask the user something are refreshed whatever the rate limit says
+                this.refreshRunningPanels(
+                    interrupt !== null && INTERRUPT_INPUT_QUESTIONS[interrupt.type] !== undefined
                 )
+                return await this.handleInterrupt(interrupt, interpreter, execution)
             }
         }
         return undefined

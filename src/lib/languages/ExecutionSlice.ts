@@ -77,6 +77,19 @@ export type ExecutionSlice = {
 export const SCREEN_SLICE_MS = 16
 
 /**
+ * How long after the last visible Screen change a program still counts as animating. The dirty flag
+ * alone is instantaneous: the renderer clears it when it paints, and a drawing loop with no wait of
+ * its own then gets the compute slice and spends all 50 ms of it drawing frames the GUI cannot show
+ * until the slice comes back. Phase 8's own no-wait drawing loop measured 8.4 delivered frames a
+ * second that way, one per 16 ms slice and one per 50 ms slice in turn.
+ *
+ * A window rather than a flag keeps the animation budget for as long as the program keeps drawing,
+ * and gives it back a few frames after the drawing stops, so a program that draws once and then
+ * computes is not held at the short slice for the rest of its run.
+ */
+export const SCREEN_ACTIVITY_MS = 200
+
+/**
  * The long slice, used by everything else. A compute-only run yields this often only to keep Stop
  * and the GUI answering; ADR 0007 budgets under five percent of throughput for it and a tenth of a
  * second for Stop.
@@ -106,17 +119,44 @@ export function sliceInstructionBudget(
     return Math.max(1, Math.min(request.instructionBudget, fromTime))
 }
 
-type HostScheduler = { yield?: () => Promise<void> }
+/**
+ * The port pair the browser yield posts through, and the runs waiting on it. One channel for the
+ * page: a pair per yield would allocate two ports sixty times a second, and the messages are
+ * delivered in the order they were posted, so a queue of resolvers matches them.
+ */
+let hostChannel: MessageChannel | null = null
+const hostWaiters: (() => void)[] = []
 
 /**
- * Hands the host a turn between two slices. `scheduler.yield()` gives the task back priority over
- * whatever else the page queued, which a `setTimeout(0)` does not; browsers without it (and node)
- * fall back to the timer.
+ * Hands the host a turn between two slices, in a way that lets the browser draw a frame in it.
+ *
+ * A posted message, not `scheduler.yield()`: yielding gives the continuation priority over whatever
+ * else the page has queued, and rendering is one of the things it wins against. Measured in the
+ * headless shell, a loop that burns a slice and yields left the browser drawing **9 frames a second
+ * with `scheduler.yield()` and 60 with a posted message**, whether the slice was 16 ms or 50 ms, and
+ * a whole M68K drawing loop went from 8 delivered frames a second to 35. Ordinary tasks are starved
+ * the same way — page timers, and anything else the app has queued — while a click still arrives,
+ * because input outranks both, which is why Stop kept answering and nothing else did.
+ *
+ * A `setTimeout(0)` also lets the browser draw, but a timer scheduled from a timer callback is
+ * clamped to about 4 ms once it is a few deep: measured 4.3 ms a yield, which is 21% of a 16 ms
+ * slice. The posted message costs 0.8 ms, so it stays inside the throughput ADR 0007 budgets. Node
+ * has no such clamping problem and its `MessagePort` would hold the process open, so the tests and
+ * the measurement harness keep the timer.
  */
 export function yieldToHost(): Promise<void> {
-    const scheduler = (globalThis as { scheduler?: HostScheduler }).scheduler
-    if (typeof scheduler?.yield === 'function') return scheduler.yield()
-    return new Promise<void>((resolve) => setTimeout(resolve, 0))
+    if (typeof MessageChannel !== 'function' || typeof document === 'undefined') {
+        return new Promise<void>((resolve) => setTimeout(resolve, 0))
+    }
+    if (hostChannel === null) {
+        hostChannel = new MessageChannel()
+        hostChannel.port1.onmessage = () => hostWaiters.shift()?.()
+    }
+    const channel = hostChannel
+    return new Promise<void>((resolve) => {
+        hostWaiters.push(resolve)
+        channel.port2.postMessage(0)
+    })
 }
 
 /**

@@ -16,6 +16,7 @@ import {
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import {
     COMPUTE_SLICE_MS,
+    SCREEN_ACTIVITY_MS,
     SCREEN_SLICE_MS,
     type ExecutionSlice,
     type ExecutionSliceRequest
@@ -109,8 +110,17 @@ class FakeEmulator extends GenericEmulator<object, FakeRegister> {
 
     _writeMemoryBytes(): void {}
 
+    /** How many times the panels have read the Core, so a test can count refreshes. */
+    memoryReads = 0
+
     _readMemoryBytes(_address: bigint, length: bigint): Uint8Array {
+        this.memoryReads += 1
         return new Uint8Array(Number(length))
+    }
+
+    /** `refreshRunningPanels` is what an adapter calls from inside a slice; it is protected. */
+    refreshPanels(force: boolean): void {
+        this.refreshRunningPanels(force)
     }
 
     _getNextInstruction(): Instruction | null {
@@ -227,7 +237,7 @@ describe('slice scheduling', () => {
         }
     })
 
-    it('asks for the short budget only while a Screen is showing unpainted pixels', async () => {
+    it('asks for the short budget only once a program has drawn on a watched Screen', async () => {
         const emulator = new FakeEmulator()
         emulator.peripherals.screen.watch()
         emulator.peripherals.screen.markPainted()
@@ -242,6 +252,56 @@ describe('slice scheduling', () => {
             SCREEN_SLICE_MS,
             SCREEN_SLICE_MS
         ])
+    })
+
+    it('keeps the short budget after the renderer has painted, while the program keeps drawing', async () => {
+        //the dirty flag is instantaneous: the renderer clears it the moment it paints, and a
+        //drawing loop with no wait of its own would then be handed the compute budget and spend all
+        //of it on frames nothing can show until it comes back (ADR 0007)
+        const emulator = new FakeEmulator()
+        emulator.peripherals.screen.watch()
+        emulator.behavior = (_request, index) => {
+            emulator.peripherals.screen.drawPixel(1, index)
+            //the renderer paints between two slices, which used to give the next one 50 ms
+            emulator.peripherals.screen.markPainted()
+            return { reason: index < 3 ? 'budget' : 'terminated', instructions: 1 }
+        }
+        await emulator.run(1000)
+        expect(emulator.requests.slice(1).map((r) => r.timeBudgetMs)).toEqual([
+            SCREEN_SLICE_MS,
+            SCREEN_SLICE_MS,
+            SCREEN_SLICE_MS
+        ])
+    })
+
+    it('goes back to the long budget once the drawing stops', async () => {
+        const emulator = new FakeEmulator()
+        emulator.peripherals.screen.watch()
+        emulator.peripherals.screen.drawPixel(1, 1)
+        emulator.behavior = async (_request, index) => {
+            //nothing draws again, so the activity window runs out
+            if (index === 0) await new Promise((resolve) => setTimeout(resolve, SCREEN_ACTIVITY_MS))
+            return { reason: index < 1 ? 'budget' : 'terminated', instructions: 1 }
+        }
+        await emulator.run(1000)
+        expect(emulator.requests.map((r) => r.timeBudgetMs)).toEqual([
+            SCREEN_SLICE_MS,
+            COMPUTE_SLICE_MS
+        ])
+    })
+
+    it('reads the Core for the panels at most once a display frame, unless forced', async () => {
+        //an adapter reaches this once per Core interrupt, which a graphical program hits a few
+        //hundred times a second; nothing can be seen more than once a frame
+        const emulator = new FakeEmulator()
+        emulator.refreshPanels(false)
+        const afterFirst = emulator.memoryReads
+        expect(afterFirst).toBeGreaterThan(0)
+        for (let index = 0; index < 20; index++) emulator.refreshPanels(false)
+        expect(emulator.memoryReads).toBe(afterFirst)
+        //a trap that stops to ask the user something shows the panels beside the prompt
+        emulator.refreshPanels(true)
+        expect(emulator.memoryReads).toBeGreaterThan(afterFirst)
     })
 
     it('runs a long budget when no renderer is painting the Screen', async () => {

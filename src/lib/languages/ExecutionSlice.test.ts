@@ -9,6 +9,7 @@ import {
     SCREEN_SLICE_MS,
     sliceDeadline,
     sliceInstructionBudget,
+    yieldToHost,
     type ExecutionSliceRequest
 } from '$lib/languages/ExecutionSlice'
 
@@ -101,5 +102,21 @@ describe('nextSliceChunk', () => {
         expect(nextSliceChunk(1_000, 10, 1_000_000, 4_000)).toBe(MIN_SLICE_CHUNK)
         //a cap below the floor still leaves a chunk that runs something
         expect(nextSliceChunk(1_000, 10, 1, 4)).toBe(MIN_SLICE_CHUNK)
+    })
+})
+
+describe('yieldToHost', () => {
+    it('resolves every yield in the order it was asked for', async () => {
+        //the browser path posts one message a yield through a single port pair and matches the
+        //replies against a queue, so a run that yields while another still has one outstanding must
+        //not be handed somebody else's turn. Node takes the timer path, which orders the same way
+        const order: number[] = []
+        await Promise.all(
+            [0, 1, 2, 3].map(async (index) => {
+                await yieldToHost()
+                order.push(index)
+            })
+        )
+        expect(order).toEqual([0, 1, 2, 3])
     })
 })

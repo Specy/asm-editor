@@ -23,6 +23,7 @@ import {
     COMPUTE_SLICE_MS,
     nextSpeedCorrection,
     type ExecutionSlice,
+    SCREEN_ACTIVITY_MS,
     SCREEN_SLICE_MS,
     yieldToHost
 } from '$lib/languages/ExecutionSlice'
@@ -38,6 +39,16 @@ import {
 import { ExecutionController, type ExecutionGeneration } from '$lib/languages/ExecutionController'
 import { Prompt } from '$stores/promptStore.svelte'
 import structuredClone from '@ungap/structured-clone'
+
+/**
+ * How often the panels a user watches — registers, memory, the call stack, the undo history — are
+ * read back out of the Core while a program is running. One display frame: the browser cannot show
+ * more than one change per frame, so a refresh per Core interrupt costs work that is thrown away.
+ * Measured in the headless shell on `m68k/bouncing-ball.x68`, whose frame is six traps: refreshing
+ * per trap held the main thread at 76% busy and delivered 32 frames a second, and refreshing at
+ * most this often held it at 47% and delivered 40.
+ */
+const RUNNING_PANEL_REFRESH_MS = 16
 
 export abstract class GenericEmulator<T, R extends string>
     extends BaseEmulator<R>
@@ -60,6 +71,15 @@ export abstract class GenericEmulator<T, R extends string>
      * every clear (`learnSliceSpeed`, [ADR 0007](../../../docs/adr/0007-generic-emulator-run-scheduling.md)).
      */
     private speedCorrection = 1
+    /**
+     * What `sliceTimeBudgetMs` remembers about the Screen: the version it last saw, and the moment
+     * the animation budget stops applying if nothing draws again before then. The version starts at
+     * the one a fresh Screen has, so a program that never draws never asks for the short slice.
+     */
+    private lastScreenVersion = 0
+    private screenActiveUntil = 0
+    /** When `refreshRunningPanels` last read the Core for the panels, see the constant above. */
+    private lastPanelRefresh = 0
     /**
      * The pause the Run button turns into while a program is running. `pauseRequested` is set by
      * `pause()` and honored by `runSlices` at its next slice boundary; `resumePausedRun` settles the
@@ -411,6 +431,11 @@ export abstract class GenericEmulator<T, R extends string>
         //a new program is a new speed, and the estimates in the adapters are where it starts again
         this.speedCorrection = 1
         this.resetPeripherals()
+        //the reset above is itself a visible change, and what the previous program drew must not
+        //make the next one's first slices the animation ones
+        this.lastScreenVersion = this._peripherals.screen.version
+        this.screenActiveUntil = 0
+        this.lastPanelRefresh = 0
         this.state = {
             ...this.state,
             terminated: false,
@@ -679,19 +704,53 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     /**
-     * How long the next slice should aim to run. A Screen with pixels the renderer has not painted
-     * yet means an animating program, which needs to reach its next frame and its next input poll
-     * soon; everything else is compute and yields only often enough to keep Stop answering. Measured
-     * in phase 8; `speedCorrection` is what turns the target into instructions for this program.
+     * How long the next slice should aim to run. A Screen a program is drawing on means an animating
+     * program, which needs to reach its next frame and its next input poll soon; everything else is
+     * compute and yields only often enough to keep Stop answering. Measured in phase 8;
+     * `speedCorrection` is what turns the target into instructions for this program.
      *
-     * The Screen has to be watched as well as dirty: a Screen nobody paints — x86's, which has no
-     * panel, or any surface whose Screen toggle is closed — never comes back from dirty, and would
-     * otherwise hold every one of its programs at the animation budget for the whole run.
+     * Drawing is recognized from the version counter and remembered for `SCREEN_ACTIVITY_MS`, not
+     * from the dirty flag alone: the renderer clears dirty the moment it paints, so a program that
+     * draws without ever waiting used to be handed the 50 ms compute budget for the very next slice
+     * and drew a dozen more frames the GUI could not show until it came back. The version is what a
+     * renderer already compares, and it moves for a change to the visible image whether or not
+     * anybody has painted it yet, which is why the flag itself is no longer consulted.
+     *
+     * The Screen still has to be watched: a Screen nobody paints — x86's, which has no panel, or
+     * any surface whose Screen toggle is closed — would otherwise hold its programs at the
+     * animation budget for as long as they draw, with no frames to show for it.
      */
     private sliceTimeBudgetMs(): number {
         const screen = this._peripherals.screen
-        if (screen.watched && screen.dirty) return SCREEN_SLICE_MS
-        return COMPUTE_SLICE_MS
+        if (!screen.watched) return COMPUTE_SLICE_MS
+        const now = performance.now()
+        if (screen.version !== this.lastScreenVersion) {
+            this.lastScreenVersion = screen.version
+            this.screenActiveUntil = now + SCREEN_ACTIVITY_MS
+        }
+        return now < this.screenActiveUntil ? SCREEN_SLICE_MS : COMPUTE_SLICE_MS
+    }
+
+    /**
+     * The panels, refreshed from inside a running program — the path an adapter takes when its Core
+     * stops on an interrupt. Reading the registers, a page of memory per tab, the call stack and the
+     * undo history is not free, and none of it can be seen more than once a display frame, so it is
+     * rate limited to `RUNNING_PANEL_REFRESH_MS` rather than done per interrupt.
+     *
+     * `force` is for the interrupts that suspend the program for the user: an input prompt is read
+     * beside the panels, and the user has all the time in the world to notice that they are one
+     * frame stale. The end of a run and a pause go through `refreshVisibleState` instead, which is
+     * never rate limited, so what a stopped program leaves on screen is always current.
+     */
+    protected refreshRunningPanels(force: boolean): void {
+        const now = performance.now()
+        if (!force && now - this.lastPanelRefresh < RUNNING_PANEL_REFRESH_MS) return
+        this.lastPanelRefresh = now
+        this.updateRegisters()
+        this.updateStatusRegisters()
+        this.updateMemory()
+        this.updateData()
+        this.scrollStackTab()
     }
 
     /**
