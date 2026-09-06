@@ -20,7 +20,7 @@ and column `B`, which means that its address is:
 | 00000020 | 00  | 00  | 00  | 00  | 00  | 00  | 00  | 00  | 00  | 00  | BB  | FF  | AA  | 00  | 00  | 00  |
 | 00000030 | 00  | 00  | 00  | 00  | 00  | 00  | 00  | 00  | 00  | 00  | 00  | 00  | 00  | 00  | 00  | 00  |
 
-## Endianess
+## Endianness
 
 When we read from memory, we can read more than one byte at a time, usually either **1, 2, 4 or 8 bytes**.
 Usually, instructions allow you to specify the **address of the first byte** you want to read and the **size** of how
