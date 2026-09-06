@@ -19,7 +19,9 @@ ADR 0012.
    Introduction and also holds the syntax conventions and the first program. "Using the editor" is not
    mirrored. The outside-world module bends to the machine.
 4. Each Language course closes with an Examples module: the same ladder of programs in every language,
-   program for program, in prerequisite order. 23 programs (the list below), one page each.
+   program for program, in prerequisite order. 24 programs (the list below), one page each: the
+   compute-only ones first (result in the registers or memory panel), then the console ones, then the
+   screen ones, because traps, syscalls and ports are taught in the last module.
 5. Language course lectures end with one or two checked Exercises with a visible, collapsed solution.
    General course lectures keep "try changing" prompts only.
 6. Links between the overview, the deep dives and sibling Examples are generated from a `topic` key in
@@ -129,10 +131,13 @@ topic key must match the General course's. Titles by language:
 Getting started covers, in this order: what the CPU is and where it was used (verify every date and
 name before writing it), which simulator the editor imitates (EASy68K, MARS, RARS; none for the Z80),
 the syntax conventions (comments, labels, number literals, case, sizes), the first program built and
-run in a Playground, and only the editor details that differ for this language: the M68K console comes
-from trap 15, MIPS and RISC-V need `.text` and an exit syscall or they run off the end, the Z80
-prints through ports, which panels matter (flags for M68K and Z80, the screen panel and its `@screen`
-line for MIPS and RISC-V).
+run in a Playground, and only the editor details that differ for this language: which panels matter
+(flags for M68K and Z80, the screen panel and its `@screen` line for MIPS and RISC-V), and one sentence
+saying that the console exists and that printing is taught in the outside-world module.
+
+No I/O before it is taught: every Playground in the first two modules shows its result in the
+registers or memory panel. The first program of Getting started moves values and adds them, read in
+the registers panel; no trap, syscall or port appears before the `syscalls` lecture.
 
 Going 64-bit (RISC-V, after Numbers): registers become 64 bits, `ld` and `sd` join `lw` and `sw`,
 the `w`-suffixed instructions exist because 32-bit results are sign-extended, `li` holds a 64-bit
@@ -142,40 +147,55 @@ Interrupts lectures explain the machine's real mechanism and state plainly what 
 of the Cores runs a user interrupt handler today; verify in each Core what exceptions it raises
 (division by zero, illegal instruction, address errors) before claiming it on a page.
 
-### Module `examples`, "Examples": the ladder, 23 programs
+### Module `examples`, "Examples": the ladder, 24 programs
 
-Same slug and topic in every course. Panels are the fence flags the page uses.
+Same slug and topic in every course. Panels are the fence flags the page uses. The first group never
+prints: its result is read in the registers or memory panel, since traps, syscalls and ports are
+taught in the outside-world module and an easy program must not use what the reader has not studied.
 
-| #   | slug / topic                         | title                                                 | what is new                                       | panels          |
-| --- | ------------------------------------ | ----------------------------------------------------- | ------------------------------------------------- | --------------- |
-| 0   | `moving-values`                      | Moving values around                                  | registers, sizes, immediates                      | registers       |
-| 1   | `sum-of-two-numbers`                 | Read two numbers and print their sum                  | console I/O through the environment               | console         |
-| 2   | `variables-in-memory`                | Variables in memory and constants                     | data directives, load and store, named constants  | memory          |
-| 3   | `if-else`                            | The bigger of two numbers                             | compare and branch                                | registers       |
-| 4   | `counting-loop`                      | Print the numbers from 1 to 10                        | a loop with a counter                             | console         |
-| 5   | `sum-of-an-array`                    | Sum of an array                                       | walking memory with a pointer                     | memory          |
-| 6   | `max-of-an-array`                    | The largest element                                   | keeping a best-so-far                             | memory          |
-| 7   | `string-length`                      | Length of a string                                    | scanning to the terminator                        | memory, console |
-| 8   | `reverse-a-string`                   | Reverse a string in place                             | two pointers, swapping bytes                      | memory, console |
-| 9   | `multiply-and-divide`                | Multiply and divide, with the remainder               | mul and div (a shift-and-add routine on the Z80)  | registers       |
-| 10  | `bit-tricks`                         | Even or odd, count the set bits, multiply by shifting | and, shifts, testing a bit                        | registers       |
-| 11  | `subroutine-with-register-arguments` | A subroutine with its arguments in registers          | call and return                                   | registers       |
-| 12  | `subroutine-with-stack-arguments`    | Stack arguments and a stack frame                     | saving registers, frame pointer, stack discipline | memory          |
-| 13  | `factorial-and-fibonacci`            | Recursion: factorial and Fibonacci                    | a subroutine calling itself                       | memory, console |
-| 14  | `bubble-sort`                        | Bubble sort                                           | nested loops over memory                          | memory          |
-| 15  | `jump-table`                         | A jump table                                          | computed jumps, a switch                          | registers       |
-| 16  | `number-to-string`                   | Print a number in any base without help               | repeated division, building a string backwards    | console         |
-| 17  | `binary-search`                      | Binary search                                         | index arithmetic, halving                         | memory          |
-| 18  | `two-dimensional-array`              | A 2D array                                            | rows, columns, address scaling                    | memory          |
-| 19  | `drawing-on-the-screen`              | Drawing shapes on the screen                          | the screen peripheral                             | screen          |
-| 20  | `bouncing-ball`                      | A bouncing ball                                       | double buffering, delay, program time             | screen          |
-| 21  | `keyboard-control`                   | Move a square with the keyboard                       | polling the keyboard                              | screen          |
-| 22  | `snake`                              | The snake game                                        | everything above                                  | screen, console |
+Compute only:
+
+| #   | slug / topic                         | title                                                 | what is new                                       | panels    |
+| --- | ------------------------------------ | ----------------------------------------------------- | ------------------------------------------------- | --------- |
+| 0   | `moving-values`                      | Moving values around                                  | registers, sizes, immediates, an add              | registers |
+| 1   | `variables-in-memory`                | Variables in memory and constants                     | data directives, load and store, named constants  | memory    |
+| 2   | `if-else`                            | The bigger of two numbers                             | compare and branch                                | registers |
+| 3   | `counting-loop`                      | Fill an array with the numbers from 1 to 10           | a loop with a counter, writing memory             | memory    |
+| 4   | `sum-of-an-array`                    | Sum of an array                                       | walking memory with a pointer                     | memory    |
+| 5   | `max-of-an-array`                    | The largest element                                   | keeping a best-so-far                             | memory    |
+| 6   | `string-length`                      | Length of a string                                    | scanning to the terminator                        | memory    |
+| 7   | `reverse-a-string`                   | Reverse a string in place                             | two pointers, swapping bytes                      | memory    |
+| 8   | `multiply-and-divide`                | Multiply and divide, with the remainder               | mul and div (a shift-and-add routine on the Z80)  | registers |
+| 9   | `bit-tricks`                         | Even or odd, count the set bits, multiply by shifting | and, shifts, testing a bit                        | registers |
+| 10  | `subroutine-with-register-arguments` | A subroutine with its arguments in registers          | call and return                                   | registers |
+| 11  | `subroutine-with-stack-arguments`    | Stack arguments and a stack frame                     | saving registers, frame pointer, stack discipline | memory    |
+| 12  | `factorial-and-fibonacci`            | Recursion: factorial and Fibonacci                    | a subroutine calling itself                       | memory    |
+| 13  | `bubble-sort`                        | Bubble sort                                           | nested loops over memory                          | memory    |
+| 14  | `jump-table`                         | A jump table                                          | computed jumps, a switch                          | registers |
+| 15  | `binary-search`                      | Binary search                                         | index arithmetic, halving                         | memory    |
+| 16  | `two-dimensional-array`              | A 2D array                                            | rows, columns, address scaling                    | memory    |
+
+Console, after the syscalls lecture:
+
+| #   | slug / topic         | title                                   | what is new                                                         | panels  |
+| --- | -------------------- | --------------------------------------- | ------------------------------------------------------------------- | ------- |
+| 17  | `hello-world`        | Print a string                          | the first trap, syscall or port write                               | console |
+| 18  | `sum-of-two-numbers` | Read two numbers and print their sum    | reading input, printing a number                                    | console |
+| 19  | `number-to-string`   | Print a number in any base without help | repeated division, building a string backwards, printing characters | console |
+
+Screen, after the memory-mapped I/O lecture:
+
+| #   | slug / topic            | title                           | what is new                           | panels          |
+| --- | ----------------------- | ------------------------------- | ------------------------------------- | --------------- |
+| 20  | `drawing-on-the-screen` | Drawing shapes on the screen    | the screen peripheral                 | screen          |
+| 21  | `bouncing-ball`         | A bouncing ball                 | double buffering, delay, program time | screen          |
+| 22  | `keyboard-control`      | Move a square with the keyboard | polling the keyboard                  | screen          |
+| 23  | `snake`                 | The snake game                  | everything above                      | screen, console |
 
 The mouse has no ladder program because MIPS and RISC-V have no mouse; it is shown in the `mmio`
-lecture of M68K and Z80. The retired examples course's Fibonacci programs become `factorial-and-fibonacci`.
-Programs that run until Stop (bouncing ball, keyboard control, snake) declare how many instructions the
-verification test runs them for.
+lecture of M68K and Z80. The retired examples course's Fibonacci programs become
+`factorial-and-fibonacci`. Programs that run until Stop (bouncing ball, keyboard control, snake)
+declare how many instructions the verification test runs them for.
 
 ## Page formats and fence syntax
 
@@ -245,6 +265,7 @@ Lecture `meta.json` gains `"topic": "<key>"`. Course `meta.json` is unchanged ap
 | I   | Pre-existing bug found in batch 0: `cleanTestcases` sets `expected: BigInt(memory.address)` instead of `BigInt(memory.expected)` for `number` memory entries, in both starting and expected memory. It runs on every project loaded from storage and on every embed URL, so a `number` memory expectation is checked against its address in the app | `src/lib/Project.svelte.ts`                                              | worktree, batch 1 (or the main checkout, the owner's call)              |
 | J   | The Test button stays on an embedded Playground that carries testcases (it was hidden when the testcases panel was shown); the exam editor passes `embedded={false}` and is unchanged                                                                                                                                                               | `InteractiveInstructionEditor.svelte`                                    | done 2026-09-06, b48f09b                                                |
 | K   | The existing lectures say "click compile"; the button is labelled Build. Part of the light pass                                                                                                                                                                                                                                                     | `src/content/assembly-basics`                                            | batch 1                                                                 |
+| L   | Custom components for lectures (a stack or memory diagram a markdown table cannot show), allowed by Specy on 2026-09-06; add renderer support in the worktree when a page needs one and record it here                                                                                                                                              | `MarkdownRenderer.svelte`                                                | when needed                                                             |
 
 ## Verification
 
@@ -268,8 +289,10 @@ Lecture `meta.json` gains `"topic": "<key>"`. Course `meta.json` is unchanged ap
    the sample; the voice guide is amended before anything else is written.
    Done 2026-09-06 (commits e95aaaf to 3f4264c on `feat/courses`): 20 content tests green, voice
    script green, `npm run check` at the two-error baseline, lint clean. Left out of Getting started
-   for lack of a source in the repo: the 68000's dates and the machines it shipped in. Waiting on
-   Specy's verdict on the voice.
+   for lack of a source in the repo: the 68000's dates and the machines it shipped in.
+   Specy's verdict (2026-09-06): the pages performed instead of explaining; the rules are now the
+   "Say it straight" section of the voice guide, the ladder was reordered so no easy program prints,
+   and the three pages are being rewritten before batch 1.
 4. Batch 1: the General course (10 revised, 8 new). Changes B, C, D, H land in the same batch.
 5. Batches 2 to 5: M68K, RISC-V, MIPS, Z80, each delivered whole with the dev server running in the
    worktree. The Examples of each later language are ported program by program from the M68K pages.

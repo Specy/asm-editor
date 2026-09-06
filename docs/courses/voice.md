@@ -63,6 +63,50 @@ of `instruction-set` are flatter and are not models.
 - Contractions are fine ("it's", "don't", "you'd"). Numbers are written as the reader would type
   them (`0x12345678`, `#100`, 4 bytes).
 
+## Say it straight
+
+Added 2026-09-06 from Specy's review of the first three pages. The writer explained well but kept
+performing: teasing a point before making it, replacing a fact with a metaphor, narrating the lecture
+itself. Every sentence on a page does one of four things: states a fact, connects it to something the
+reader knows (usually C), tells the reader what to do with the code, or asks the question the reader
+would ask and answers it. A sentence that only sets up, decorates or comments on the text is cut.
+
+1. **Say the fact in technical words, never a paraphrase of it.** "the program would lose the address
+   to return to", not "the way home would be gone". A metaphor may sit next to a fact as an
+   illustration (the stack of plates), never in its place.
+2. **Do not announce that something is interesting, hard or worth it. Say it.** "That is cheaper than
+   a push, but there is a catch, there is only one `ra`", not "and it has a catch worth seeing now".
+   No "worth stopping on", "worth watching", "worth the trouble", "the part that makes", "the real
+   reason".
+3. **Do not narrate the lecture. Ask the reader's question instead.** "But how do we pass the
+   parameter `x`?", not "Nothing so far said how `x` gets in". No "so far we", "here is the part",
+   "last piece", "four new things, one line at a time", "the other half of".
+4. **No personification, no aphorism.** "The hardware has no concept of parameters in procedures, so
+   we need to write that logic ourselves", not "The hardware has no opinion: registers are registers".
+   The pattern is: what the machine does not have, so what we do ourselves.
+5. **Precise words over folksy ones, and examples in their own sentence.** "The real conventions of
+   each assembly language are standardized and everyone follows them. For example in RISC-V the `a`
+   registers are argument registers", not "Real conventions are written down and everybody follows
+   them: the `a` registers of RISC-V are...". "For example" starts a new sentence; a colon does not
+   chain a rule to its instance.
+6. **Plain transitions.** "Here is where we see the stack being used", not "Here is the part that
+   makes the stack worth the trouble". "Let's now see", "Let's try", "Now", "Say for example".
+7. **Go straight to the explanation.** No framing sentence before it ("Four new things, one line at a
+   time.", "The `#` is worth stopping on."). Start with the first thing explained.
+8. **Name the C concept, then show the assembly for it.** When a lecture uses call, return, argument,
+   parameter, return value, variable, array, pointer, loop or condition, say what it is in C terms and
+   then which instruction or convention does it here: "in C you call a function and it returns to
+   where it was called; in M68K the call is `bsr` and the return is `rts`". Never assume the term.
+9. **Show state, do not describe it.** When a program pushes, pops, or writes memory the reader has to
+   follow, show the memory as tables step by step, the way the stack lecture does, with 🟢 for the
+   stack pointer. Registers that change get named with their before and after values. A custom
+   component for lectures is allowed when a table cannot show it; add it to the renderer in the
+   worktree and record it in the plan.
+10. **No I/O before it is taught.** Traps, syscalls and ports are taught in the outside-world module,
+    so programs in the first two modules and the easy Examples show their result in the registers or
+    memory panel, never on the console. The Getting started lecture may say the console exists and
+    where it is taught, and nothing more.
+
 ## What must not appear
 
 These are checked mechanically by the voice script, so a page with any of them fails.
@@ -78,6 +122,10 @@ These are checked mechanically by the voice script, so a page with any of them f
 - Recap bullets at the end of a page, "Summary" or "Conclusion" headings, "Note that", "It is
   important to", "Keep in mind that".
 - Every sentence the same length, three adjectives in a row, a bullet list where a paragraph would do.
+- The performing phrases of "Say it straight": "worth seeing", "worth stopping", "worth watching",
+  "worth the trouble", "the part that makes", "nothing so far", "so far we", "here is the part",
+  "last piece", "one line at a time", "has no opinion", "the way home", "housekeeping", "the real
+  reason", "the other half of".
 
 Real typos in the existing lectures get fixed ("explaination", "Endianess", "decrese", "couter"),
 never imitated.
