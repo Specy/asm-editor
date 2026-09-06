@@ -141,6 +141,10 @@
             properties: {
                 style: `${placement} ${height}`.trim(),
                 className: details ? ['code-playground', 'in-details'] : ['code-playground'],
+                //each embed boots a whole editor, so a lecture with five of them would boot five
+                //before the reader has scrolled to the second; `loading` is in DOMPurify's default
+                //attribute list, so the sanitizer keeps it
+                loading: 'lazy',
                 src: createCodeUrl(textOf(codeNode ?? node).trimEnd(), fence.settings, testcases)
             },
             children: []
