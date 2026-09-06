@@ -47,6 +47,8 @@
     import FloatingAgentSidebar from '$cmp/shared/agent/FloatingAgentSidebar.svelte'
     import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
     import { resolve } from '$app/paths'
+    import ScreenRenderer from '$cmp/specific/project/screen/ScreenRenderer.svelte'
+    import { languageHasScreen } from '$lib/languages/peripherals/peripheralSet'
 
     interface Props {
         name?: string
@@ -73,6 +75,11 @@
     }: Props = $props()
 
     const testcasesEditable = $derived(canEditTestcases && !readonly)
+    //the Screen panel is hidden for x86, which has no graphics device at all, and behind the same
+    //kind of setting as the memory panel everywhere else
+    const showScreen = $derived(
+        settingsStore.values.showScreen.value && languageHasScreen(language)
+    )
 
     $effect(() => {
         emulator.setCode(code)
@@ -661,6 +668,15 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                 {/if}
             </div>
         </div>
+        {#if showScreen}
+            <ScreenRenderer
+                name={language}
+                screen={emulator.peripherals.screen}
+                keyboard={emulator.peripherals.keyboard}
+                mouse={emulator.peripherals.mouse}
+                style="height: 20rem; flex: none;"
+            />
+        {/if}
         <StdOut
             {info}
             stdOut={errorStrings ? `${errorStrings}\n${emulator.stdOut}` : emulator.stdOut}

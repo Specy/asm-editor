@@ -53,6 +53,15 @@ export function defaultScreenOptions(language: AvailableLanguages): ScreenOption
 }
 
 /**
+ * Whether the Screen panel is shown for a language. x86 is the exception the design record makes:
+ * `@specy/x86` wraps a Linux userland with no graphics device, so its Screen exists only to keep
+ * every Emulator the same shape and nothing will ever draw on it.
+ */
+export function languageHasScreen(language: AvailableLanguages): boolean {
+    return language !== 'X86'
+}
+
+/**
  * Builds the peripherals a language needs, keeping whatever the caller already created. The Mouse
  * takes the Screen and the Keyboard rather than copies of their state, so a program that resizes its
  * Screen mid-run clamps against the new size and a click carries the modifiers actually held.

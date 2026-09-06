@@ -56,9 +56,20 @@ No Screen: `@specy/x86` wraps a Linux userland emulator with no graphics device,
 
 The Screen panel appears in the project page's right column and in the interactive editor, so every surface that embeds the editor has to be walked: project page, lecture pages, the exam page, embeds and chat, in both the fullscreen and the small layout. Focus indication, editor-shortcut suppression and context-menu suppression are checked on each.
 
-| #   | Surface | Checks | Result |
-| --- | ------- | ------ | ------ |
-|     |         |        |        |
+| #   | Surface                               | Checks                                                                                                                           | Result                                                                               |
+| --- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| H1  | Project page, M68K                    | Panel in the right column under memory, header reads the language and 640 × 480, transcript still at the bottom, editor unshrunk | Pass, phase 4 (2026-09-06)                                                           |
+| H2  | Project page, Z80                     | Integer zoom ×1 on a 256 × 192 Screen                                                                                            | Pass, phase 4                                                                        |
+| H3  | Project page, x86                     | No Screen panel at all                                                                                                           | Pass, phase 4                                                                        |
+| H4  | Project page, narrow window           | Panel spans the column without widening the page                                                                                 | Pass, phase 4 (700 px viewport)                                                      |
+| H5  | Project page, focus and shortcuts     | Click gives the canvas focus and a visible ring; Shift+C never reaches the window handler; Esc releases and the keys return      | Pass, phase 4 (driven through CDP)                                                   |
+| H6  | Project page, mouse                   | Pointer capture held through a drag that leaves the canvas, released on button up; context menu and middle click both cancelled  | Pass, phase 4                                                                        |
+| H7  | Project page, zoom toggle             | Actual size shows 640 × 480 inside the panel's own scroll box without widening the page                                          | Pass, phase 4                                                                        |
+| H8  | Interactive editor, small layout      | Show/Hide screen bar above the transcript, panel appears below it (embed page, lecture page)                                     | Pass, phase 4                                                                        |
+| H9  | Interactive editor, fullscreen layout | Panel between the memory column and the transcript                                                                               | Pass, phase 4 (scratch route; the chat page needs a conversation to show the editor) |
+| H10 | Exam page                             | Small layout, toggle present, nothing else moved                                                                                 | Pass, phase 4 (exam authoring page; the session page needs a live exam)              |
+| H11 | Rendering                             | Drawing on the Screen reaches the canvas within a frame and clears `dirty`                                                       | Pass, phase 4 (rectangle, line and text drawn from the console)                      |
+| H12 | Resize                                | A program's resize follows through to the backing store, the header and the zoom                                                 | Pass, phase 4                                                                        |
 
 ## Measurements (phase 8)
 

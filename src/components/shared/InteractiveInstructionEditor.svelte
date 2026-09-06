@@ -22,6 +22,10 @@
         makeRegister,
         RegisterSize
     } from '$lib/languages/commonLanguageFeatures.svelte'
+    import ScreenRenderer from '$cmp/specific/project/screen/ScreenRenderer.svelte'
+    import { languageHasScreen } from '$lib/languages/peripherals/peripheralSet'
+    import Icon from '$cmp/shared/layout/Icon.svelte'
+    import FaDesktop from '~icons/fa-solid/desktop'
 
     let running = $state(false)
     let building = $state(false)
@@ -37,6 +41,7 @@
         showPc?: boolean
         showRegisters?: boolean
         showFlags?: boolean
+        showScreen?: boolean
         embedded?: boolean
         language?: AvailableLanguages
         emulator: Emulator
@@ -55,6 +60,7 @@
         showConsole: showConsoleProp,
         showTestcases: showTestcasesProp,
         showPc: showPcProp,
+        showScreen: showScreenProp,
         testcases = $bindable([]),
         embedded = false,
         emulator = $bindable(),
@@ -69,6 +75,12 @@
     let showConsole = $derived(showConsoleProp ?? layout === 'fullscreen')
     let showTestcases = $derived(showTestcasesProp ?? false)
     let showPc = $derived(showPcProp ?? layout === 'fullscreen')
+    //hidden for x86, which has no graphics device, and behind the same setting as the project page
+    let showScreen = $derived(
+        showScreenProp ?? (settingsStore.values.showScreen.value && languageHasScreen(language))
+    )
+    //the small layout has no room to spare, so the Screen starts folded away behind its toggle
+    let screenOpen = $state(false)
     let groupSize = $state(RegisterSize.Word)
     let testcasesVisible = $state(false)
     let testcasesResult: TestcaseResult[] = $state([])
@@ -372,6 +384,16 @@
     </div>
 {/snippet}
 
+{#snippet screenPanel(height: string)}
+    <ScreenRenderer
+        name={language}
+        screen={emulator.peripherals.screen}
+        keyboard={emulator.peripherals.keyboard}
+        mouse={emulator.peripherals.mouse}
+        style={`height: ${height}; flex: none;`}
+    />
+{/snippet}
+
 {#snippet consolePanel()}
     <StdOutRenderer
         {info}
@@ -403,7 +425,7 @@
             {@render editorSurface()}
             {@render controlsPanel()}
         </div>
-        {#if showRegsColumn || showMemory || showConsole || children}
+        {#if showRegsColumn || showMemory || showConsole || showScreen || children}
             <div class="fullscreen-right-side">
                 {#if showRegsColumn || showMemory || children}
                     <div class="fullscreen-memory-wrapper">
@@ -421,6 +443,9 @@
                             </Card>
                         {/if}
                     </div>
+                {/if}
+                {#if showScreen}
+                    {@render screenPanel('20rem')}
                 {/if}
                 {#if showConsole}
                     {@render consolePanel()}
@@ -445,6 +470,18 @@
                 {@render smallMemoryPanel()}
             {/if}
         </div>
+
+        {#if showScreen}
+            <button class="screen-toggle" onclick={() => (screenOpen = !screenOpen)}>
+                <Icon size={0.9}>
+                    <FaDesktop />
+                </Icon>
+                {screenOpen ? 'Hide screen' : 'Show screen'}
+            </button>
+            {#if screenOpen}
+                {@render screenPanel('16rem')}
+            {/if}
+        {/if}
 
         {#if showRegsColumn && showMemory && !forceMemoryRight}
             <div class="bottom-row">
@@ -479,6 +516,27 @@
         display: flex;
         flex-wrap: wrap;
         gap: 0.5rem;
+    }
+
+    /* the small layout has no room for a Screen that most programs never draw on, so it lives
+       behind this bar; the fullscreen layout shows the panel itself */
+    .screen-toggle {
+        display: flex;
+        gap: 0.4rem;
+        align-items: center;
+        justify-content: center;
+        padding: 0.3rem;
+        border: none;
+        border-radius: 0.4rem;
+        font-family: Rubik;
+        font-size: 0.9rem;
+        color: var(--secondary-text);
+        background-color: var(--secondary);
+        cursor: pointer;
+
+        &:hover {
+            filter: brightness(1.2);
+        }
     }
 
     .editor {
