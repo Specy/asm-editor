@@ -143,6 +143,28 @@
         }
     }
 
+    /**
+     * The run, awaited so `running` stays true for as long as the program is in flight: that is what
+     * turns the Run button into Pause here too, and what keeps Step and Undo out of a run.
+     */
+    async function startRun() {
+        if (building || running) return
+        running = true
+        if (layout === 'fullscreen') {
+            testcasesResult = []
+        }
+        //the delay lets the button's own repaint land before a slow first slice
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        try {
+            await emulator.run(settingsStore.values.instructionsLimit.value)
+        } catch (e) {
+            console.error(e)
+            toast.error('Error executing code. ' + getM68kErrorMessage(e))
+        } finally {
+            running = false
+        }
+    }
+
     function handleRegisterClick(value: bigint) {
         const clampedSize = value - (value % BigInt(emulator.memory.global.pageSize))
         emulator.setGlobalMemoryAddress(clampBigInt(clampedSize, 0n, MEMORY_SIZE[language]))
@@ -186,6 +208,7 @@
         children={controls}
         {running}
         {building}
+        paused={emulator.paused}
         hasTests={layout === 'fullscreen'
             ? testcases.length > 0
             : testcases.length > 0 && !showTestcases}
@@ -219,21 +242,13 @@
             }, 50)
         }}
         on:run={async () => {
-            if (building || running) return
-            running = true
-            if (layout === 'fullscreen') {
-                testcasesResult = []
-            }
-            setTimeout(() => {
-                try {
-                    emulator.run(settingsStore.values.instructionsLimit.value)
-                    running = false
-                } catch (e) {
-                    console.error(e)
-                    running = false
-                    toast.error('Error executing code. ' + getM68kErrorMessage(e))
-                }
-            }, 50)
+            await startRun()
+        }}
+        on:pause={() => {
+            emulator.pause()
+        }}
+        on:resume={() => {
+            emulator.resume()
         }}
         on:build={async () => {
             await buildCode()

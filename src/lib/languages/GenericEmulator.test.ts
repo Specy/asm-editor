@@ -358,6 +358,171 @@ describe('stop', () => {
     })
 })
 
+describe('pause and resume', () => {
+    it('parks the run at a slice boundary and stops advancing', async () => {
+        const emulator = new FakeEmulator()
+        emulator.behavior = (request, index) => {
+            if (index === 0) emulator.pause()
+            return { reason: 'budget', instructions: Math.min(request.instructionBudget, 10) }
+        }
+        const run = emulator.run(1000)
+        await settle()
+        expect(emulator.paused).toBe(true)
+        //the slice that asked for the pause is the last one that ran, and it stays that way
+        expect(emulator.requests).toHaveLength(1)
+        await settle()
+        expect(emulator.requests).toHaveLength(1)
+        emulator.resume()
+        emulator.behavior = () => ({ reason: 'terminated', instructions: 1 })
+        await run
+        expect(emulator.paused).toBe(false)
+    })
+
+    it('carries on from where it parked, with the limit intact', async () => {
+        const emulator = new FakeEmulator()
+        emulator.behavior = (request, index) => {
+            if (index === 0) emulator.pause()
+            return { reason: 'budget', instructions: Math.min(request.instructionBudget, 100) }
+        }
+        const run = emulator.run(250)
+        await settle()
+        expect(emulator.paused).toBe(true)
+        emulator.resume()
+        await run
+        //the same three slices the un-paused run makes: the limit did not restart with the program
+        expect(emulator.requests.map((r) => r.instructionBudget)).toEqual([250, 150, 50])
+        expect(emulator.coreSteps).toBe(250)
+    })
+
+    it('keeps the breakpoints and the speed correction across the pause', async () => {
+        const emulator = new FakeEmulator()
+        emulator.peripherals.screen.markPainted()
+        emulator.toggleBreakpoint(7)
+        emulator.behavior = (_request, index) => {
+            burnMilliseconds(5)
+            if (index === 0) emulator.pause()
+            if (index < 2) return { reason: 'budget', instructions: 1_000 }
+            return { reason: 'terminated', instructions: 1 }
+        }
+        const run = emulator.run(1_000_000)
+        await settle()
+        expect(emulator.paused).toBe(true)
+        emulator.resume()
+        await run
+        expect(emulator.requests.map((r) => r.breakpoints)).toEqual(
+            emulator.requests.map(() => [7])
+        )
+        //what the first slice taught is still there after the pause, rather than back at 1
+        expect(emulator.requests.map((r) => r.speedCorrection)).toEqual([1, 4, 16])
+    })
+
+    it('shows where the program got to instead of where it started', async () => {
+        const emulator = new FakeEmulator()
+        //a register and a memory byte the "Core" only reveals once the run has moved
+        let value = 0n
+        emulator._getRegisterValues = () => [value]
+        emulator._readMemoryBytes = (_address, length) =>
+            new Uint8Array(Number(length)).fill(Number(value))
+        emulator._getPc = () => value
+        emulator._getFlags = () => [{ name: 'Z', value: Number(value) }]
+        emulator._getNextInstruction = () => ({ lineNumber: Number(value) }) as Instruction
+        emulator.behavior = (_request, index) => {
+            if (index === 0) {
+                value = 3n
+                emulator.pause()
+            }
+            return { reason: 'budget', instructions: 10 }
+        }
+        const run = emulator.run(1000)
+        await settle()
+        expect(emulator.paused).toBe(true)
+        expect(emulator.registers[0].value).toBe(3n)
+        expect(emulator.memory.global.data.current[0]).toBe(3)
+        expect(emulator.pc).toBe(3n)
+        expect(emulator.statusRegisters[0].value).toBe(1)
+        expect(emulator.line).toBe(3)
+        //the Core has steps behind it, so Undo is offered while parked
+        expect(emulator.canUndo).toBe(true)
+        emulator.clear()
+        await run
+    })
+
+    it('takes the pause after a program-requested wait rather than skipping it', async () => {
+        const emulator = new FakeEmulator()
+        let waited = false
+        emulator.behavior = (_request, index) => {
+            if (index === 0) {
+                emulator.pause()
+                return {
+                    reason: 'wait',
+                    instructions: 1,
+                    wait: emulator.peripherals.clock.wait(1).then(() => {
+                        waited = true
+                    })
+                }
+            }
+            return { reason: 'terminated', instructions: 1 }
+        }
+        const run = emulator.run(1000)
+        await settle()
+        expect(waited).toBe(true)
+        expect(emulator.paused).toBe(true)
+        expect(emulator.requests).toHaveLength(1)
+        emulator.resume()
+        await run
+        expect(emulator.requests).toHaveLength(2)
+    })
+
+    it('does nothing when no run is in flight', async () => {
+        const emulator = new FakeEmulator()
+        emulator.pause()
+        expect(emulator.paused).toBe(false)
+        emulator.behavior = (_request, index) => ({
+            reason: index < 1 ? 'budget' : 'terminated',
+            instructions: 1
+        })
+        //the request is not remembered: the next run is not stopped before its first slice
+        await emulator.run(1000)
+        expect(emulator.paused).toBe(false)
+        expect(emulator.requests).toHaveLength(2)
+    })
+
+    it('is torn down by Stop, which also frees the Build path', async () => {
+        const emulator = new FakeEmulator()
+        emulator.behavior = (_request, index) => {
+            if (index === 0) emulator.pause()
+            return { reason: 'budget', instructions: 1 }
+        }
+        const run = emulator.run(1000)
+        await settle()
+        expect(emulator.paused).toBe(true)
+        //Stop, and the same call a Build makes first
+        emulator.clear()
+        const status = await run
+        expect(status).toBe(InterpreterStatus.Terminated)
+        expect(emulator.paused).toBe(false)
+        //the parked slice is the last one that ever ran
+        expect(emulator.requests).toHaveLength(1)
+        //and the emulator is idle again, not still holding a core operation
+        await emulator.compile(0, '')
+        expect(emulator.canExecute).toBe(true)
+    })
+
+    it('leaves the paused time out of the reported execution time', async () => {
+        const emulator = new FakeEmulator()
+        emulator.behavior = (_request, index) => {
+            if (index === 0) emulator.pause()
+            return { reason: index < 1 ? 'budget' : 'terminated', instructions: 1 }
+        }
+        const run = emulator.run(1000)
+        await settle()
+        burnMilliseconds(30)
+        emulator.resume()
+        await run
+        expect(emulator.executionTime).toBeLessThan(30)
+    })
+})
+
 describe('undo', () => {
     it('rolls the Screen back with the Core', () => {
         const emulator = new FakeEmulator()
@@ -475,6 +640,11 @@ describe('testcase run configuration', () => {
         expect(emulator.peripherals.clock.isVirtual).toBe(false)
     })
 })
+
+/** Lets every pending microtask and timer of a paused or waiting run land. */
+async function settle(): Promise<void> {
+    for (let i = 0; i < 10; i++) await new Promise((resolve) => setTimeout(resolve, 1))
+}
 
 /** Holds the host for a while, which is what a Core does inside a slice. */
 function burnMilliseconds(milliseconds: number): void {

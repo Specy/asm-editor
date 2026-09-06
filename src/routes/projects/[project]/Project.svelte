@@ -171,7 +171,11 @@
             case ShortcutAction.RunCode: {
                 if (emulator.terminated || emulator.interrupt !== undefined || !emulator.canExecute)
                     break
-                void runCode()
+                //the same three-way the button offers, so the shortcut and the button never disagree
+                //about what is running
+                if (emulator.paused) emulator.resume()
+                else if (running) emulator.pause()
+                else void startRun()
                 break
             }
             case ShortcutAction.SaveCode: {
@@ -276,6 +280,24 @@
         } catch (e) {
             console.error(e)
             toast.error('Error executing code. ' + getM68kErrorMessage(e))
+        }
+    }
+
+    /**
+     * The whole run, from the button and from the shortcut alike: `running` has to be true for as
+     * long as the program is in flight, because that is what turns the Run button into Pause and
+     * keeps Step and Undo out of a run they would re-enter the Core inside of.
+     */
+    async function startRun() {
+        if (building || running) return
+        running = true
+        testcasesResult = []
+        //the delay lets the button's own repaint land before a slow first slice
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        try {
+            await runCode()
+        } finally {
+            running = false
         }
     }
 
@@ -544,6 +566,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
         <Controls
             {running}
             {building}
+            paused={emulator.paused}
             hasTests={testcases.length > 0}
             hasErrorsInTests={testcasesResult.some((r) => !r.passed)}
             hasNoErrorsInTests={testcasesResult.every((r) => r.passed) &&
@@ -576,16 +599,13 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                 }, 50)
             }}
             on:run={async () => {
-                if (building || running) return
-                running = true
-                testcasesResult = []
-                setTimeout(async () => {
-                    try {
-                        await runCode()
-                    } finally {
-                        running = false
-                    }
-                }, 50)
+                await startRun()
+            }}
+            on:pause={() => {
+                emulator.pause()
+            }}
+            on:resume={() => {
+                emulator.resume()
             }}
             on:build={async () => {
                 await buildCode()

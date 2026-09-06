@@ -16,6 +16,10 @@ A compile/check-time finding about the program's source, tagged `error`, `warnin
 
 The generic state "the Emulator is paused mid-execution waiting on the user" (e.g. a program requested keyboard input). Owned by this codebase, not by any Core's type system; language-specific interruption details (like s68k interrupt payloads) are mapped _into_ it. While an Interrupt is pending, execution controls are disabled.
 
+## Pause
+
+A run parked between two instruction slices at the user's request, keeping everything it had: its place in the program, its remaining instruction limit, its breakpoints and what the scheduler learned about its speed. The Run button is Pause while a program runs and Resume once it is parked. Distinct from an **Interrupt**, which the program itself causes by asking for input, and from Stop, which is `clear()` and throws the program away.
+
 ## Peripheral
 
 A device owned by an Emulator that programs interact with through the Core: Cores write to it and read from it (via the adapter), the UI presents its output or supplies its input. Peripherals are part of the Emulator, not siblings of it. First peripheral: the **Terminal**. Planned: **Screen**, **Keyboard**, **Mouse**.

@@ -270,6 +270,12 @@ export type BaseEmulatorState = {
     stdOut: string
     canExecute: boolean
     canUndo: boolean
+    /**
+     * Whether a run is parked between two slices, waiting for `resume()`. Only ever true while a
+     * run is in flight, so the GUI reads it together with its own "a run is going" flag to tell
+     * Run, Pause and Resume apart.
+     */
+    paused: boolean
     breakpoints: number[]
     interrupt?: EmulatorInterrupt
     memory: {
@@ -370,6 +376,14 @@ export type BaseEmulatorActions = {
     setTabMemoryAddress: (address: bigint, tabId: number) => void
     toggleBreakpoint: (line: number) => void
     undo: (amount?: number) => void
+    /**
+     * Asks the run in flight to park at its next slice boundary; does nothing when nothing is
+     * running. The program keeps everything it had — its place, its remaining instruction limit,
+     * its breakpoints — which is what tells it apart from Stop.
+     */
+    pause: () => void
+    /** Lets a paused run carry on. Harmless when nothing is paused. */
+    resume: () => void
     resetSelectedLine: () => void
     dispose: () => void
     test: (

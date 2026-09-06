@@ -788,3 +788,58 @@ The floating window was checked at 1280 × 800, 1600 × 900 and 1920 × 1080: it
 - No blocker for the other three follow-up parts; nothing outside the panel, its two hosts and the two documents changed.
 - **On the small layout the floating window can still cover the control bar.** That layout is a page that scrolls, so its bar is wherever the editor ends — measured at y 391 on the embed page — and a bottom inset cannot clear it. The bar is one click or one Escape away from being uncovered, and the surface it matters on, the project page, is clear at every size checked.
 - The right column scrolls further than it did, by the 6 rem the panel grew. Making the panel fill the column instead of taking a fixed height would need the registers column's fixed 33.25 rem to go first, which is outside this change.
+
+## Follow-up 2: Run becomes Pause while a program is running — 2026-09-06
+
+Repository `/home/dev/code/asm-editor`, branch `feat/screen-peripherals`. This section ships in the same commit as the change it describes. The second of four follow-up parts the user asked for after the feature landed; the other three are untouched here.
+
+The Run button was disabled for the whole run and the only way out was Stop, which is `clear()` and throws the program away. It is now Pause while a program is running and Resume once the run is parked, so a long program can be stopped where it is and looked at.
+
+**Where this contradicts the design record.** Nowhere. Nothing in `screen-peripherals.md` or the ADRs says what the run controls do; this is the first thing that suspends a run without ending it, and it uses the slice boundary [ADR 0007](../adr/0007-generic-emulator-run-scheduling.md) already yields at.
+
+### Done
+
+- **`GenericEmulator.pause()`, `resume()` and `paused`** (`src/lib/languages/GenericEmulator.svelte.ts`). `pause()` sets a flag that the slice scheduler honors at its next boundary — the top of the loop, before a slice is asked for, which is the only place the Core is not running. The parked run awaits a promise through `executionController.waitFor(execution, …)`, the same way it awaits a program-requested wait, so Stop cancels it exactly as it cancels a wait: `clear()` releases the promise and invalidates the generation, and the woken run throws `ExecutionSupersededError` and ends itself. Nothing about the run is touched by the pause: `remaining`, `state.breakpoints` and `speedCorrection` all live in the loop and are picked up again by the next slice, so resuming carries on rather than restarting the program or resetting the limit.
+- **The state the user inspects is refreshed on the pause.** The tail of `runInternal` moved into `refreshVisibleState(terminated)` — the current line, `canUndo`, and the registers, memory, status registers, program counter and history views (`refreshCoreViews`, which `stepInternal` now shares) — and the pause calls it. Without it the panels would still hold whatever they showed when Run was pressed: on the Z80 the browser check below saw exactly that, all registers at zero and `PC 8000` through a whole run, and `A=0d BC=fdfe DE=8876 PC 8032` the moment it was paused.
+- **`runSlices` split into a wrapper and `sliceLoop`**, so the wrapper owns `runInFlight` (which makes `pause()` with no run a no-op) and releases any pause whichever way the run ends, including an exception.
+- **`BaseEmulatorState` gained `paused` and `BaseEmulatorActions` gained `pause`/`resume`**, so the whole `Emulator` type carries them; `GenericEmulator` is the only implementation.
+- **The button** (`src/components/specific/project/Controls.svelte`): one Button whose mode is `!running ? 'run' : paused ? 'resume' : 'pause'`, dispatching an event of that name, with the pause icon in the Pause state. Stop is untouched and works in both states.
+- **Both hosts.** `src/routes/projects/[project]/Project.svelte` and `src/components/shared/InteractiveInstructionEditor.svelte` pass `paused={emulator.paused}` and answer `pause`/`resume`. Both grew a `startRun()` that awaits the run, so `running` is true for as long as the program is in flight — the interactive editor used to set `running = false` on the tick it started, which left its Run button live for the whole run. The project page's Run shortcut (Shift+R) goes through `startRun()` too and toggles Pause/Resume while a run is in flight, so the shortcut and the button never disagree.
+- **Tests.** 8 more in `src/lib/languages/GenericEmulator.test.ts` on the phase 3 fake adapter: the run parks at a slice boundary and stops asking for slices, resume carries on with the same three requests and the same limit an un-paused run makes, the breakpoints and the speed correction survive it, the visible state refreshes on the pause (registers, memory, PC, status registers, line, `canUndo`), a pause asked for during a program-requested wait is taken _after_ the wait rather than skipping it, a pause with no run in flight does nothing and is not remembered by the next run, Stop tears a paused run down and leaves the emulator able to compile again, and the paused time is left out of the reported execution time.
+- Verification at the commit: `npm run check` at the branch baseline (the same two pre-existing errors, 205 warnings), `npm run lint` 0 errors and 18 warnings, `npm test` 352 passing (was 344), `npm run format:check` clean for this change, `npm run build` clean.
+
+### How it was checked in a browser
+
+The build was served with `vite preview --port 4183` and driven through the DevTools protocol in the Playwright-cached headless Chromium (`LD_LIBRARY_PATH=~/.cache/ms-playwright/firefox-1538/firefox` for `libnspr4.so`, as the previous follow-up recorded), on `/projects/share?project=…` for the project page and `/embed?language=Z80&code=…` for the interactive editor's small layout, both payloads lz-string compressed. The animation was measured as a hash of the Screen canvas' pixels, sampled through `getImageData`.
+
+| What                             | `m68k/bouncing-ball.x68`                     | `z80/bouncing-ball.z80`                      |
+| -------------------------------- | -------------------------------------------- | -------------------------------------------- |
+| Controls while running           | Stop, **Pause**, Undo off, Step off          | Stop, **Pause**, Undo off, Step off          |
+| Canvas over 0.75 s while running | 3 samples, all different                     | 3 samples, all different                     |
+| Controls once paused             | Stop, **Resume**, Undo off, Step off         | Stop, **Resume**, Undo off, Step off         |
+| Canvas over 1.6 s while paused   | 4 samples, all identical                     | 4 samples, all identical                     |
+| Registers while running          | live (the M68K adapter refreshes on traps)   | `A=00 BC=0000 DE=0000`, the Build values     |
+| Registers at the pause           | `D2=f2 D3=1a2 D4=122`, the ball's frame      | `A=0d BC=fdfe DE=8876`, `PC 8032`            |
+| Registers 1.6 s later            | unchanged                                    | unchanged                                    |
+| After Resume                     | canvas moving again                          | 8 samples over 1.6 s, all different          |
+| At a second pause                | a later frame's registers                    | `BC=0302 DE=9748`, a later frame             |
+| Stop while paused                | back to Build; Build and Run again both work | back to Build; Build and Run again both work |
+
+The embed page (the small layout) behaves identically: Run to Pause to Resume, registers frozen at `A=0d BC=fd02 DE=e2ac` for 1.2 s and a later frame at the second pause, Stop back to Build. Shift+R on the project page cycles Pause, Resume, Pause. A program suspended on input (trap task 4, with the prompt up) shows Pause **disabled**, and Stop still ends it. No console errors in any run.
+
+### Choices where the brief left a detail open
+
+- **Step and Undo are disabled for the whole run, paused included**, which is the brief's "if in doubt". `duringCoreOperation` is a counter, not a mutex, and a paused run is still inside it, so it would not stop a Step from entering the Core; the gesture that breaks it is Step then Resume in quick succession, because `_step()` is async on the MARS/RARS-derived adapters and the resumed slice would re-enter a Core the step has not left — precisely the hijack `duringCoreOperation`'s own comment describes. Making them safe needs a real mutual exclusion between the resumed loop and any other Core operation, which is a scheduler change, not a button change. They were in fact _enabled_ during a run before this change (only Run was disabled), so this closes an existing hazard as well.
+- **Pause is disabled while the program waits for input**, because the button's `executionDisabled` already covers `interrupt !== undefined`. A program suspended on input is not executing, there is nothing to park, and the pause would only be taken once the input was answered. `pause()` itself is harmless there — the request is honored at the next boundary — so the disabling is a GUI choice, not a rule the Emulator enforces.
+- **A pause asked for during a program-requested wait is taken after the wait.** The check is at the top of the loop and a wait `continue`s to it, so the wait runs to its end and the pause lands before the next slice. Pausing must not make a program's `sleep` shorter.
+- **`paused` flips when the pause is actually taken**, not when the button is pressed. The window is one slice — 16 or 50 ms — and reporting a pause the Core has not reached yet would be a lie the Screen would contradict.
+- **The paused time is subtracted from `executionTime`.** "Ran in 4.2 s" for a program the user held for four seconds would be wrong; program waits stay in it, because those are the program's own.
+- **The Run shortcut toggles.** Shift+R with a run in flight pauses it and pauses again resume it, rather than doing nothing. It also now goes through the same `startRun()` the button uses, so a run started from the keyboard sets `running` and shows Pause; before this it did not, and the button stayed on Run for the whole run.
+- **No new setting and no new shortcut.** Pause is the Run button's second state, which is what the user asked for.
+
+### Left and blockers
+
+- No blocker for the other two follow-up parts; outside `GenericEmulator`, the two emulator types and the three GUI files, nothing changed.
+- **Nothing pauses a Testcase run.** `_runTestcase` was never sliced (phase 3's choice), so there is no boundary to park at, and a scripted run has no GUI to keep responsive. `pause()` during one does nothing.
+- **A pause is answered at the next slice boundary, so how quickly it lands is how long a slice is**: 16 ms while a Screen is being painted, 50 ms otherwise, plus whatever a program's own wait or input prompt is doing. Phase 8 measured the same numbers for Stop.
+- The Emulator does not remember a pause across a Build: `clear()` releases it, which is what lets the Build through.
