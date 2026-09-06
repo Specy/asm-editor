@@ -124,7 +124,8 @@ const PROGRAMS: Program[] = [
     {
         path: 'Bad_Apple.s68k',
         language: 'M68K',
-        exercises: 'the repository’s pre-existing text animation (tasks 6, 11, 23)'
+        exercises:
+            'the repository’s own animation: a video drawn cell by cell (tasks 11, 23, 80, 81, 87)'
     },
     {
         path: 'mips/bitmap-tour.asm',

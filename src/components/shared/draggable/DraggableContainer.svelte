@@ -128,11 +128,14 @@
             </button>
         {/if}
     {/snippet}
-    {#if !collapsed}
-        <div in:fly|global={{ x: -10, duration: 500 }} out:fly|global={{ x: -10, duration: 300 }}>
-            {@render children?.()}
+        <div
+            class="draggable-container-content"
+            class:hidden={collapsed}
+        >
+            {#if !collapsed}
+                {@render children?.()}
+            {/if}
         </div>
-    {/if}
 </Draggable>
 
 <style lang="scss">
@@ -159,11 +162,11 @@
         border-top-left-radius: 0.4rem;
         border-top-right-radius: 0.4rem;
         border: 0.1rem solid transparent;
+        border-color: var(--accent2);
         &.hidden {
             width: 0;
             min-width: 9rem;
             border-bottom-left-radius: 0.4rem;
-            border-color: var(--accent2);
             border-bottom-right-radius: 0.4rem;
         }
     }
@@ -181,4 +184,20 @@
            the bar is `space-between`, which would otherwise strand the controls in the middle */
         margin-left: auto;
     }
+
+    .draggable-container-content {
+        interpolate-size: allow-keywords; /* 👈 */
+        border: 0.1rem solid var(--accent2);
+        border-bottom-left-radius: 0.8rem;
+        border-bottom-right-radius: 0.8rem;
+        height: auto;
+        transition: all 0.2s;
+        overflow: hidden;
+        &.hidden {
+            border: 0.1rem solid transparent;
+            height: 0;
+            transition: all 0s;
+        }
+    }
+
 </style>

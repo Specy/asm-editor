@@ -11,6 +11,8 @@ import { clamp } from '$lib/utils'
 
 /** The gap between the window and the edges of the viewport. */
 const MARGIN_REM = 0.5
+/** Extra room above the Screen for the floating project tabs. */
+const TOP_MARGIN_REM = 2.7
 /**
  * The room left below the window for the execution controls. The control bar of every surface that
  * hosts the Screen is a row at the bottom of the editor column, and it is as wide as that column,
@@ -54,10 +56,11 @@ export function screenWindowGeometry(input: ScreenWindowInput): ScreenWindowBox 
     const rootFontSize = input.rootFontSize > 0 ? input.rootFontSize : 16
     const rem = (value: number) => value * rootFontSize
     const margin = rem(MARGIN_REM)
+    const topMargin = margin + rem(TOP_MARGIN_REM)
     const availableWidth = Math.max(0, viewportWidth - 2 * margin)
     const availableHeight = Math.max(
         0,
-        viewportHeight - margin - rem(CONTROLS_CLEARANCE_REM) - rem(HEADER_REM)
+        viewportHeight - topMargin - rem(CONTROLS_CLEARANCE_REM) - rem(HEADER_REM)
     )
     const width = Math.min(
         availableWidth,
@@ -69,8 +72,8 @@ export function screenWindowGeometry(input: ScreenWindowInput): ScreenWindowBox 
         left: Math.round(left === undefined ? rightMost : clamp(left, margin, rightMost)),
         top: Math.round(
             top === undefined
-                ? margin
-                : clamp(top, margin, Math.max(margin, viewportHeight - margin))
+                ? topMargin
+                : clamp(top, topMargin, Math.max(topMargin, viewportHeight - margin))
         ),
         width: Math.round(width),
         height: Math.round(height)

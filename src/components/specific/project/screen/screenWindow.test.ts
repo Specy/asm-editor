@@ -4,11 +4,13 @@ import { screenWindowGeometry } from './screenWindow'
 const desktop = { viewportWidth: 1600, viewportHeight: 900, rootFontSize: 16 }
 /** The window's own bar, which sits above the body the geometry sizes. */
 const HEADER = 1.8 * 16
+/** The edge margin plus the room reserved for the floating project tabs. */
+const TOP = (0.5 + 2.7) * 16
 
 describe('screenWindowGeometry', () => {
     it('opens at the top right of the viewport', () => {
         const box = screenWindowGeometry(desktop)
-        expect(box.top).toBe(8)
+        expect(box.top).toBe(Math.round(TOP))
         expect(box.left + box.width).toBe(1600 - 8)
     })
 
@@ -63,7 +65,7 @@ describe('screenWindowGeometry', () => {
     it('measures in rem, so a page with a larger root font gets a larger window', () => {
         const bigger = screenWindowGeometry({ ...desktop, viewportWidth: 2560, rootFontSize: 20 })
         expect(bigger.width).toBe(68 * 20)
-        expect(bigger.top).toBe(10)
+        expect(bigger.top).toBe(Math.round((0.5 + 2.7) * 20))
     })
 
     it('answers in whole pixels', () => {

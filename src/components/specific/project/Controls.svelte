@@ -46,14 +46,12 @@
     }: Props = $props()
 
     /**
-     * The Run button is Pause while a program is running and Resume once it is parked, so a long
+     * The Run button is Pause while a program is running and Run once it is parked, so a long
      * program can be stopped to look at without throwing it away (Stop, which is `clear()`, does
      * that). `paused` only ever means anything while a run is in flight, so `running` decides first.
      */
     const runMode = $derived(!running ? 'run' : paused ? 'resume' : 'pause')
-    const runLabel = $derived(
-        runMode === 'pause' ? 'Pause' : runMode === 'resume' ? 'Resume' : 'Run'
-    )
+    const runLabel = $derived(runMode === 'pause' ? 'Pause' : 'Run')
 </script>
 
 <div class="project-controls">

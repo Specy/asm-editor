@@ -103,7 +103,7 @@
 {/snippet}
 
 <Page cropped="110ch" style="padding: 1rem;" contentStyle="gap: 1rem;">
-    <Card padding="1.5rem" gap="1rem" background="secondary">
+    <Card padding="1.5rem 0 0 0" gap="1rem">
         <Header noMargin style="width: min(100%, 46rem); margin: 0 auto">
             {data.lecture.name}
         </Header>
@@ -273,9 +273,11 @@ When the user asks a question about the lecture topic or for a demonstration of 
     .topic-links {
         font-family: 'Noto Serif', Rubik, sans-serif;
         font-weight: 500;
-        width: min(100%, 70ch);
         margin: 0 auto;
         opacity: 0.75;
+        background: var(--secondary);
+        padding: 0.5rem;
+        border-radius: 0.4rem;
     }
 
     .topic-links a {

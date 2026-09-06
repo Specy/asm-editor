@@ -45,8 +45,8 @@
     .side-menu {
         background-color: var(--secondary);
         color: var(--secondary-text);
-        width: 16rem;
-        min-width: 16rem;
+        width: 20rem;
+        min-width: 20rem;
         gap: 1rem;
         top: 3.2rem;
         padding-top: 1rem;
