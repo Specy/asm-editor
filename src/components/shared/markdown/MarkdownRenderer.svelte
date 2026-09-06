@@ -25,6 +25,7 @@
         showPc: boolean
         showRegisters: boolean
         showFlags: boolean
+        showScreen: boolean
         openButton: boolean
     }
 
@@ -37,6 +38,7 @@
             ? 'showRegisters=true&'
             : 'showRegisters=false&'
         const showFlags = settings.showFlags ? 'showFlags=true&' : 'showFlags=false&'
+        const showScreen = settings.showScreen ? 'showScreen=true&' : ''
         const showOpenButton = settings.openButton ? 'openButton=true&' : ''
         const props = [
             showMemory,
@@ -45,6 +47,7 @@
             showPc,
             showRegisters,
             showFlags,
+            showScreen,
             showOpenButton
         ].join('')
         const lang = `language=${settings.language}&`
@@ -101,7 +104,8 @@
                         const showPc = entries.includes('pc')
                         const showRegisters = !entries.includes('no-registers')
                         const showFlags = !entries.includes('no-flags')
-                        const large = entries.includes('large') || showMemory
+                        const showScreen = entries.includes('screen')
+                        const large = entries.includes('large') || showMemory || showScreen
                         const tall = entries.includes('tall')
                         const openButton = entries.includes('allow-open')
                         if (isPlayground) {
@@ -132,7 +136,7 @@
                                     properties: {
                                         style: `
                                         	${!large ? 'max-width: 70ch; margin: 1.5rem auto;' : ''}
-                                        	${tall ? 'height: 80dvh;' : ''}
+                                        	${tall ? 'height: 80dvh;' : showScreen ? 'height: 48rem;' : ''}
                                         `,
                                         className: ['code-playground'],
                                         src: createCodeUrl(
@@ -144,6 +148,7 @@
                                                 showPc,
                                                 showRegisters: showRegisters,
                                                 showFlags,
+                                                showScreen,
                                                 language: actualLanguage,
                                                 openButton
                                             },
