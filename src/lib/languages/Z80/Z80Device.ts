@@ -2,6 +2,7 @@ import type { Keyboard } from '$lib/languages/peripherals/Keyboard'
 import type { Mouse, MouseSnapshot } from '$lib/languages/peripherals/Mouse'
 import type { ScreenColor } from '$lib/languages/peripherals/screen/color'
 import type { Screen } from '$lib/languages/peripherals/screen/Screen'
+import { echoToScreen } from '$lib/languages/peripherals/screen/textEcho'
 import {
     Z80_MOUSE_FLAGS,
     Z80_MOUSE_VIEWS,
@@ -71,8 +72,6 @@ const READ_HEX_QUESTION = 'Enter a hexadecimal number'
  * silently split into surrogate halves.
  */
 const UNREPRESENTABLE_CHARACTER = 0x3f
-
-const BACKSPACE = '\b'
 
 const PORT_NAME_BY_NUMBER = new Map<number, Z80PortName>(
     Object.entries(Z80_PORTS).map(([name, port]) => [port, name as Z80PortName])
@@ -323,23 +322,11 @@ export class Z80Device {
 
     /**
      * Draws the echo of typed input at the Screen's text cursor, the single output window of
-     * [ADR 0003](../../../../docs/adr/0003-preserve-simulator-graphics-conventions.md). The Terminal
-     * hands over the characters as typed, `\n` for the Enter that ended a line and `\b` for a
-     * backspace that erased one; the Screen has no notion of erasing, so a backspace is a step left
-     * and a blank cell over what was there.
+     * [ADR 0003](../../../../docs/adr/0003-preserve-simulator-graphics-conventions.md). The M68K
+     * traps echo through the same helper, since EASy68K and the Z80 share the convention.
      */
     echo(text: string): void {
-        const screen = this.host.screen
-        for (const character of text) {
-            if (character !== BACKSPACE) {
-                screen.writeText(character)
-                continue
-            }
-            const column = Math.max(0, screen.cursorColumn - 1)
-            screen.setCursor(column, screen.cursorRow)
-            screen.writeText(' ')
-            screen.setCursor(column, screen.cursorRow)
-        }
+        echoToScreen(this.host.screen, text)
     }
 
     /** Drops everything buffered, for a machine that is being restarted. */

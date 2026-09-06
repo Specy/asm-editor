@@ -33,6 +33,18 @@ import {
 import { GenericEmulator } from '$lib/languages/GenericEmulator.svelte'
 import type { ExecutionGeneration } from '$lib/languages/ExecutionController'
 import { getM68kErrorMessage } from '$lib/languages/M68K/M68kUtils'
+import {
+    describeUnsupportedTrapTask,
+    easy68kColorOf,
+    M68K_DRAWING_MODES,
+    M68K_MIN_SCREEN_HEIGHT,
+    M68K_MIN_SCREEN_WIDTH,
+    M68K_MOUSE_FLAGS,
+    M68K_MOUSE_MODES,
+    screenColorOf
+} from '$lib/languages/M68K/M68K-traps'
+import type { MouseSnapshot } from '$lib/languages/peripherals/Mouse'
+import { echoToScreen } from '$lib/languages/peripherals/screen/textEcho'
 import type { Testcase } from '$lib/Project.svelte'
 import { settingsStore } from '$stores/settingsStore.svelte'
 
@@ -72,7 +84,8 @@ const READ_STRING_QUESTION = 'Enter a string'
 const INTERRUPT_INPUT_QUESTIONS: Partial<Record<Interrupt['type'], string>> = {
     ReadChar: READ_CHAR_QUESTION,
     ReadNumber: READ_NUMBER_QUESTION,
-    ReadKeyboardString: READ_STRING_QUESTION
+    ReadKeyboardString: READ_STRING_QUESTION,
+    DisplayStringAndReadNumber: READ_NUMBER_QUESTION
 }
 
 const sizeMap = {
@@ -88,6 +101,18 @@ export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
 class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterName> {
     private s68k: S68k | null = null
     private interpreter: Interpreter | null = null
+    /**
+     * EASy68K's drawing mode 2, "move cursor but do not draw": the Windows GDI `R2_NOP` the
+     * simulator sets, where a drawing operation leaves every pixel alone but still moves the drawing
+     * point. Mode 4 puts it back; the other modes never reach the editor, the Core rejects them.
+     */
+    private penOnly = false
+    /**
+     * Whether the program has used the Screen, the Keyboard or the Mouse in this run. It is what
+     * decides where the Terminal's interactive reads come from
+     * ([ADR 0009](../../../../docs/adr/0009-share-screen-keyboard-input-with-terminal.md)).
+     */
+    private graphical = false
 
     constructor(code: string, options: EmulatorSettings) {
         super(
@@ -119,6 +144,10 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             value: 0,
             prev: 0
         }))
+        //the trap state of the run that just ended must not colour the next one: a program stopped
+        //while drawing in mode 2 would otherwise start the next run unable to draw
+        this.penOnly = false
+        this.graphical = false
     }
 
     protected positionStackTabOnCompile(): void {
@@ -160,6 +189,9 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     _initialize(undoSize: number): void {
         const s68k = this.s68k
         if (!s68k) throw new Error('Interpreter not initialized')
+        //a run starts with the input prompt every M68K program has always had; the first graphics,
+        //keyboard or mouse task moves input to the focused Screen instead (see `useScreenInput`)
+        this._peripherals.terminal.usePromptInput()
         this.interpreter = s68k.createInterpreter({
             history_size: undoSize,
             keep_history: undoSize > 0
@@ -302,14 +334,21 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         const execution = this.executionController.capture()
         interpreter.step()
         if (interpreter.getStatus() === CoreInterpreterStatus.Interrupt) {
-            await this.handleInterrupt(interpreter.getCurrentInterrupt(), interpreter, execution)
+            const wait = await this.handleInterrupt(
+                interpreter.getCurrentInterrupt(),
+                interpreter,
+                execution
+            )
+            //a step has no scheduler to hand the wait to, so it is awaited here; a testcase's
+            //virtual clock makes that immediate (ADR 0010)
+            if (wait) await this.executionController.waitFor(execution, () => wait)
         }
         this.executionController.ensureCurrent(execution)
         return { terminated: interpreter.hasTerminated() }
     }
 
     _stringifyError(error: unknown, line?: number): string {
-        return getM68kErrorMessage(error, line)
+        return getM68kErrorMessage(withTrapTaskExplained(error), line)
     }
 
     _undo(): void {
@@ -350,7 +389,10 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             //an interrupt is one instruction of progress: without it a program that does nothing but
             //trap would never reach the run's limit, which is what the old unaccounted loop did
             instructions += 1
-            await this.handleInterpreterInterruption(interpreter, execution)
+            const wait = await this.handleInterpreterInterruption(interpreter, execution)
+            //a Delay is program time, not execution: the scheduler awaits it between slices, so the
+            //GUI keeps repainting and Stop still answers while it runs (ADR 0007, ADR 0010)
+            if (wait) return { reason: 'wait', instructions, wait }
         }
         return { reason: 'terminated', instructions }
     }
@@ -361,14 +403,21 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         const execution = this.executionController.capture()
         while (!interpreter.hasTerminated()) {
             interpreter.runWithLimit(limit)
-            await this.handleInterpreterInterruption(interpreter, execution)
+            //a testcase runs unsliced, so a wait is awaited here; its clock is the virtual one, on
+            //which waits complete at once (ADR 0010)
+            const wait = await this.handleInterpreterInterruption(interpreter, execution)
+            if (wait) await this.executionController.waitFor(execution, () => wait)
         }
     }
 
+    /**
+     * Answers whatever the Core stopped for, and hands back the program-requested wait when the trap
+     * was a Delay, for the caller to await where it belongs.
+     */
     private async handleInterpreterInterruption(
         interpreter: Interpreter,
         execution: ExecutionGeneration
-    ) {
+    ): Promise<Promise<void> | undefined> {
         switch (interpreter.getStatus()) {
             case CoreInterpreterStatus.Terminated: {
                 const ins = interpreter.getLastInstruction()
@@ -393,90 +442,334 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                 this.updateMemory()
                 this.updateData()
                 this.scrollStackTab()
-                await this.handleInterrupt(
+                return await this.handleInterrupt(
                     interpreter.getCurrentInterrupt(),
                     interpreter,
                     execution
                 )
-                break
             }
         }
+        return undefined
     }
 
+    /**
+     * The whole `trap #15` interface, task by task: EASy68K's tasks as the Core decodes them, each
+     * routed to the peripheral that owns it
+     * ([ADR 0003](../../../../docs/adr/0003-preserve-simulator-graphics-conventions.md)). Answering
+     * is what resumes the Core, so every branch ends in `answerInterrupt`; the Delay branch answers
+     * first and returns its wait, because the program is not blocked on the trap any more, only on
+     * time passing.
+     */
     private async handleInterrupt(
         interrupt: Interrupt | null,
         interpreter: Interpreter,
         execution: ExecutionGeneration
-    ) {
+    ): Promise<Promise<void> | undefined> {
         if (!interrupt) throw new Error('Expected interrupt')
         this.executionController.ensureCurrent(execution)
         const terminal = this._peripherals.terminal
+        const screen = this._peripherals.screen
         const { type } = interrupt
         const question = INTERRUPT_INPUT_QUESTIONS[type]
         this.state.interrupt = question ? { type, message: question } : { type }
         try {
             switch (type) {
+                // ------------------------------------------------------------- text
                 case 'DisplayStringWithCRLF': {
-                    terminal.write(`${interrupt.value}\n`)
+                    this.print(`${interrupt.value}\n`)
                     interpreter.answerInterrupt({ type })
                     break
                 }
                 case 'DisplayStringWithoutCRLF':
                 case 'DisplayChar':
                 case 'DisplayNumber': {
-                    terminal.write(String(interrupt.value))
+                    this.print(String(interrupt.value))
                     interpreter.answerInterrupt({ type })
                     break
                 }
                 case 'DisplayNumberInBase': {
                     const { value, base } = interrupt.value
-                    terminal.write(value.toString(base))
+                    this.print(value.toString(base))
                     interpreter.answerInterrupt({ type })
                     break
                 }
+                case 'DisplaySignedNumberInField': {
+                    const { value, width } = interrupt.value
+                    //EASy68K right justifies in the field and lets a longer number overflow it
+                    this.print(String(value).padStart(width))
+                    interpreter.answerInterrupt({ type })
+                    break
+                }
+                case 'DisplayStringAndNumber': {
+                    const { string, number } = interrupt.value
+                    this.print(`${string}${number}`)
+                    interpreter.answerInterrupt({ type })
+                    break
+                }
+                case 'DisplayStringAndReadNumber': {
+                    this.print(interrupt.value)
+                    const number = await this.readNumber(execution)
+                    interpreter.answerInterrupt({ type, value: number })
+                    break
+                }
                 case 'ReadChar': {
-                    const char = (await terminal.readAsync(READ_CHAR_QUESTION, execution))[0]
+                    //one keystroke at a time once the Screen's Keyboard is the source; with a prompt
+                    //it is still the first character of the answered line (ADR 0009)
+                    const char = await this.requestCharacter(READ_CHAR_QUESTION, execution)
                     if (!char) throw new Error(`Expected a character, got "${char}"`)
                     this.executionController.ensureCurrent(execution)
                     interpreter.answerInterrupt({ type, value: char })
                     break
                 }
                 case 'ReadNumber': {
-                    const answer = await terminal.readAsync(READ_NUMBER_QUESTION, execution)
-                    const number = Number(answer)
-                    if (Number.isNaN(number) || answer === '')
-                        throw new Error(`Expected a number, got "${answer === '' ? '' : number}"`)
-                    this.executionController.ensureCurrent(execution)
+                    const number = await this.readNumber(execution)
                     interpreter.answerInterrupt({ type, value: number })
                     break
                 }
                 case 'ReadKeyboardString': {
-                    const string = await terminal.readAsync(READ_STRING_QUESTION, execution)
+                    const string = await this.requestInput(READ_STRING_QUESTION, execution)
                     this.executionController.ensureCurrent(execution)
                     interpreter.answerInterrupt({ type, value: string })
-                    break
-                }
-                case 'GetTime': {
-                    const time = await this.executionController.waitFor(execution, () =>
-                        Promise.resolve(Math.round(Date.now() / 1000))
-                    )
-                    this.executionController.ensureCurrent(execution)
-                    interpreter.answerInterrupt({ type, value: time }) //unix seconds
                     break
                 }
                 case 'Terminate': {
                     interpreter.answerInterrupt({ type })
                     break
                 }
-                case 'Delay': {
-                    //program time, not host sleep: a Testcase's virtual clock completes it at once
-                    //and advances by the duration (ADR 0010)
-                    await this.executionController.waitFor(execution, () =>
-                        this._peripherals.clock.wait(interrupt.value)
-                    )
-                    this.executionController.ensureCurrent(execution)
+
+                // --------------------------------------------------- keyboard and mouse
+                case 'CheckKeyboardInput': {
+                    this.useScreenInput()
+                    //through the Terminal rather than straight to the Keyboard, so the poll and the
+                    //read after it see the same pending input, scripted input included (ADR 0009)
+                    interpreter.answerInterrupt({ type, value: terminal.hasPendingInput() })
+                    break
+                }
+                case 'GetKeyState': {
+                    this.useScreenInput()
+                    const keyboard = this._peripherals.keyboard
+                    const request = interrupt.value
+                    if (request.type === 'Keys') {
+                        const [first, second, third, fourth] = keyboard.areKeysDown(request.value)
+                        interpreter.answerInterrupt({
+                            type,
+                            value: { type: 'Keys', value: [first, second, third, fourth] }
+                        })
+                        break
+                    }
+                    const { down, up } = keyboard.lastKeys()
+                    interpreter.answerInterrupt({
+                        type,
+                        value: { type: 'LastKeys', value: { up, down } }
+                    })
+                    break
+                }
+                case 'ReadMouse': {
+                    this.useScreenInput()
+                    const mouse = this._peripherals.mouse
+                    const mode = interrupt.value
+                    const snapshot =
+                        mode === M68K_MOUSE_MODES.LAST_UP
+                            ? mouse.lastUp()
+                            : mode === M68K_MOUSE_MODES.LAST_DOWN
+                              ? mouse.lastDown()
+                              : mouse.state()
+                    interpreter.answerInterrupt({
+                        type,
+                        value: {
+                            flags: mouseFlagsOf(snapshot),
+                            x: snapshot.x,
+                            y: snapshot.y
+                        }
+                    })
+                    break
+                }
+                case 'SetSimulatorShortcuts': {
+                    //nothing to give up: the Screen panel already hands every key it takes to the
+                    //program, so enabling and disabling the shortcuts are both no-ops (ADR 0008)
                     interpreter.answerInterrupt({ type })
                     break
+                }
+
+                // ----------------------------------------------------------- the screen
+                case 'SetPenColor': {
+                    this.useScreenInput()
+                    screen.setPenColor(screenColorOf(interrupt.value))
+                    interpreter.answerInterrupt({ type })
+                    break
+                }
+                case 'SetFillColor': {
+                    this.useScreenInput()
+                    screen.setFillColor(screenColorOf(interrupt.value))
+                    interpreter.answerInterrupt({ type })
+                    break
+                }
+                case 'DrawPixel': {
+                    this.useScreenInput()
+                    const [x, y] = interrupt.value
+                    if (!this.penOnly) screen.drawPixel(x, y)
+                    interpreter.answerInterrupt({ type })
+                    break
+                }
+                case 'GetPixelColor': {
+                    this.useScreenInput()
+                    const [x, y] = interrupt.value
+                    interpreter.answerInterrupt({
+                        type,
+                        value: easy68kColorOf(screen.getPixel(x, y))
+                    })
+                    break
+                }
+                case 'DrawLine': {
+                    this.useScreenInput()
+                    const [x1, y1, x2, y2] = interrupt.value
+                    //mode 2 draws nothing but still moves the drawing point, which tasks 84 and 85
+                    //leave at their end point
+                    if (this.penOnly) screen.moveTo(x2, y2)
+                    else screen.drawLine(x1, y1, x2, y2)
+                    interpreter.answerInterrupt({ type })
+                    break
+                }
+                case 'DrawLineTo': {
+                    this.useScreenInput()
+                    const [x, y] = interrupt.value
+                    if (this.penOnly) screen.moveTo(x, y)
+                    else screen.lineTo(x, y)
+                    interpreter.answerInterrupt({ type })
+                    break
+                }
+                case 'MoveTo': {
+                    this.useScreenInput()
+                    const [x, y] = interrupt.value
+                    screen.moveTo(x, y)
+                    interpreter.answerInterrupt({ type })
+                    break
+                }
+                case 'DrawRectangle': {
+                    this.useScreenInput()
+                    const [x1, y1, x2, y2] = interrupt.value
+                    if (!this.penOnly) screen.drawRectangle(x1, y1, x2, y2)
+                    interpreter.answerInterrupt({ type })
+                    break
+                }
+                case 'DrawUnfilledRectangle': {
+                    this.useScreenInput()
+                    const [x1, y1, x2, y2] = interrupt.value
+                    if (!this.penOnly) screen.drawUnfilledRectangle(x1, y1, x2, y2)
+                    interpreter.answerInterrupt({ type })
+                    break
+                }
+                case 'DrawEllipse': {
+                    this.useScreenInput()
+                    const [x1, y1, x2, y2] = interrupt.value
+                    if (!this.penOnly) screen.drawEllipse(x1, y1, x2, y2)
+                    interpreter.answerInterrupt({ type })
+                    break
+                }
+                case 'DrawUnfilledEllipse': {
+                    this.useScreenInput()
+                    const [x1, y1, x2, y2] = interrupt.value
+                    if (!this.penOnly) screen.drawUnfilledEllipse(x1, y1, x2, y2)
+                    interpreter.answerInterrupt({ type })
+                    break
+                }
+                case 'FloodFill': {
+                    this.useScreenInput()
+                    const [x, y] = interrupt.value
+                    if (!this.penOnly) screen.floodFill(x, y)
+                    interpreter.answerInterrupt({ type })
+                    break
+                }
+                case 'DrawText': {
+                    this.useScreenInput()
+                    const [x, y, text] = interrupt.value
+                    if (!this.penOnly) screen.drawText(x, y, text)
+                    interpreter.answerInterrupt({ type })
+                    break
+                }
+                case 'SetPenWidth': {
+                    this.useScreenInput()
+                    screen.setPenWidth(interrupt.value)
+                    interpreter.answerInterrupt({ type })
+                    break
+                }
+                case 'SetDrawingMode': {
+                    this.useScreenInput()
+                    this.setDrawingMode(interrupt.value)
+                    interpreter.answerInterrupt({ type })
+                    break
+                }
+                case 'Repaint': {
+                    this.useScreenInput()
+                    screen.present()
+                    interpreter.answerInterrupt({ type })
+                    break
+                }
+                case 'GetPenPosition': {
+                    this.useScreenInput()
+                    interpreter.answerInterrupt({ type, value: [screen.penX, screen.penY] })
+                    break
+                }
+                case 'SetScreenSize': {
+                    this.useScreenInput()
+                    const [width, height] = interrupt.value
+                    //EASy68K's own minimum output window, which its help states for task 33
+                    screen.resize(
+                        Math.max(M68K_MIN_SCREEN_WIDTH, width),
+                        Math.max(M68K_MIN_SCREEN_HEIGHT, height)
+                    )
+                    interpreter.answerInterrupt({ type })
+                    break
+                }
+                case 'GetScreenSize': {
+                    this.useScreenInput()
+                    interpreter.answerInterrupt({ type, value: [screen.width, screen.height] })
+                    break
+                }
+                case 'SetScreenMode': {
+                    //windowed and full screen are the simulator window's business; here the Screen
+                    //is a panel the user sizes, so both requests are accepted and ignored
+                    interpreter.answerInterrupt({ type })
+                    break
+                }
+                case 'ClearScreen': {
+                    this.useScreenInput()
+                    //text and graphics share one image, so clearing clears both and homes the cursor
+                    screen.clear()
+                    interpreter.answerInterrupt({ type })
+                    break
+                }
+                case 'SetTextCursorPosition': {
+                    this.useScreenInput()
+                    const [column, row] = interrupt.value
+                    screen.setCursor(column, row)
+                    interpreter.answerInterrupt({ type })
+                    break
+                }
+                case 'GetTextCursorPosition': {
+                    this.useScreenInput()
+                    interpreter.answerInterrupt({
+                        type,
+                        value: [screen.cursorColumn, screen.cursorRow]
+                    })
+                    break
+                }
+
+                // ------------------------------------------------------- program time
+                case 'GetTime': {
+                    //hundredths of a second since the run started, from the clock a testcase swaps
+                    //for a virtual one (ADR 0010); EASy68K counts from midnight instead
+                    interpreter.answerInterrupt({
+                        type,
+                        value: this._peripherals.clock.nowHundredths()
+                    })
+                    break
+                }
+                case 'Delay': {
+                    //answered before the wait: the program is no longer stopped on the trap, only on
+                    //time passing, which the scheduler awaits between slices
+                    interpreter.answerInterrupt({ type })
+                    return this._peripherals.clock.waitHundredths(interrupt.value)
                 }
                 default:
                     throw new Error(`Unknown interrupt type "${type}"`)
@@ -484,12 +777,93 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         } finally {
             this.state.interrupt = undefined
         }
+        return undefined
+    }
+
+    /**
+     * Console output goes to the Terminal transcript and to the Screen's text cursor at once:
+     * EASy68K has one output window where text and graphics share the image, and the transcript is
+     * what testcases assert on (ADR 0003).
+     */
+    private print(text: string): void {
+        this._peripherals.terminal.write(text)
+        this._peripherals.screen.writeText(text)
+    }
+
+    /** Tasks 4 and 18, which read the same line and reject the same answers. */
+    private async readNumber(execution: ExecutionGeneration): Promise<number> {
+        const answer = await this.requestInput(READ_NUMBER_QUESTION, execution)
+        const number = Number(answer)
+        if (Number.isNaN(number) || answer === '') {
+            throw new Error(`Expected a number, got "${answer === '' ? '' : number}"`)
+        }
+        this.executionController.ensureCurrent(execution)
+        return number
+    }
+
+    /** Task 92, of whose modes the Core only ever forwards these four. */
+    private setDrawingMode(mode: number): void {
+        switch (mode) {
+            case M68K_DRAWING_MODES.MOVE_WITHOUT_DRAWING:
+                this.penOnly = true
+                return
+            case M68K_DRAWING_MODES.DRAW:
+                this.penOnly = false
+                return
+            case M68K_DRAWING_MODES.DOUBLE_BUFFERING_OFF:
+                this._peripherals.screen.setDoubleBuffering(false)
+                return
+            case M68K_DRAWING_MODES.DOUBLE_BUFFERING_ON:
+                this._peripherals.screen.setDoubleBuffering(true)
+                return
+        }
+    }
+
+    /**
+     * The Terminal's interactive source is chosen by what the program does, once per run: a program
+     * that only prints keeps the input prompt it has always had, and the first graphics, keyboard or
+     * mouse task moves reads to the focused Screen's Keyboard, echoing what is typed at the text
+     * cursor as well as into the transcript (ADR 0003, ADR 0009). The switch happens at most once
+     * and never goes back, so the source is still fixed for the run.
+     */
+    private useScreenInput(): void {
+        if (this.graphical) return
+        this.graphical = true
+        const { terminal, keyboard, screen } = this._peripherals
+        terminal.useKeyboardInput(keyboard, (text) => echoToScreen(screen, text))
     }
 
     private requireInterpreter(): Interpreter {
         if (!this.interpreter) throw new Error('Interpreter not initialized')
         return this.interpreter
     }
+}
+
+/**
+ * The Core knows a task it cannot decode only as a number, and says so; this says which task it was
+ * and, for the ones this editor deliberately does not support, why. Anything else is passed through
+ * untouched.
+ */
+function withTrapTaskExplained(error: unknown): unknown {
+    if (typeof error !== 'object' || error === null) return error
+    const raw = error as { type?: unknown; value?: unknown }
+    if (raw.type !== 'Raw' || typeof raw.value !== 'string') return error
+    const match = /^Unknown interrupt: (\d+)$/.exec(raw.value)
+    if (!match) return error
+    return { type: 'Raw', value: describeUnsupportedTrapTask(Number(match[1])) }
+}
+
+/** Task 61's flags byte: `Ctrl, Alt, Shift, Double, Middle, Right, Left` from bit 6 down. */
+function mouseFlagsOf(snapshot: MouseSnapshot): number {
+    return (
+        (snapshot.left ? M68K_MOUSE_FLAGS.LEFT : 0) |
+        (snapshot.right ? M68K_MOUSE_FLAGS.RIGHT : 0) |
+        (snapshot.middle ? M68K_MOUSE_FLAGS.MIDDLE : 0) |
+        (snapshot.double ? M68K_MOUSE_FLAGS.DOUBLE : 0) |
+        (snapshot.shift ? M68K_MOUSE_FLAGS.SHIFT : 0) |
+        (snapshot.alt ? M68K_MOUSE_FLAGS.ALT : 0) |
+        (snapshot.ctrl ? M68K_MOUSE_FLAGS.CTRL : 0)
+    )
 }
 
 /** The Core's way of saying "the limit I was given ran out": `{ type: 'ExecutionLimit', value }`. */
