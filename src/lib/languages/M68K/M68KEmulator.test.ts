@@ -311,6 +311,23 @@ describe('M68K input in graphical use', () => {
         expect(emulator.peripherals.screen.cursorColumn).toBe(2)
     })
 
+    it('journals one Screen record for the whole of a read trap', async () => {
+        //a `trap #15` is one Core step and Undo pops one Screen record per step, so the echo of a
+        //typed line — a glyph per character, three for a backspace — cannot journal one each
+        //([ADR 0005](../../../../docs/adr/0005-restore-screen-state-on-undo.md))
+        const code = ORG + trap(80, ['    move.l #$00FFFFFF,d1']) + trap(2, ['    lea buffer,a1'])
+        const emulator = M68KEmulator(code + trap(9) + 'buffer: ds.b 32\n')
+        await emulator.compile(0, code + trap(9) + 'buffer: ds.b 32\n')
+        const running = emulator.run(INSTRUCTION_LIMIT)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        emulator.peripherals.keyboard.typeText('ax\bb\n')
+        await running
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('ab\n')
+        //the pen color task and the read task, one record each
+        expect(emulator.peripherals.screen.history.sequence).toBe(2)
+    })
+
     it('keeps the input prompt for a program that never touches the Screen', async () => {
         const code = ORG + trap(2, ['    lea buffer,a1']) + trap(9) + 'buffer: ds.b 32\n'
         const emulator = M68KEmulator(code)

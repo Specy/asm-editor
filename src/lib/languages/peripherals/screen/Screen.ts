@@ -86,6 +86,11 @@ export class Screen {
 
     private _version = 0
     private _dirty = true
+    /** How many renderers are painting this Screen; see `watch`. */
+    private watchers = 0
+    /** Depth of the open compound operations and the records they have collected so far. */
+    private compoundDepth = 0
+    private compoundRecords: ScreenRecord[] = []
 
     constructor(options: ScreenOptions) {
         this.options = options
@@ -191,6 +196,28 @@ export class Screen {
 
     markPainted(): void {
         this._dirty = false
+    }
+
+    /** Whether a renderer is painting this Screen, and so whether `dirty` can ever come back down. */
+    get watched(): boolean {
+        return this.watchers > 0
+    }
+
+    /**
+     * Registers a renderer and answers with the function that unregisters it. The scheduler asks for
+     * the short slice budget only for a watched Screen
+     * ([ADR 0007](../../../../../docs/adr/0007-generic-emulator-run-scheduling.md)): a Screen nobody
+     * paints — x86's, which has no panel, or any surface whose Screen toggle is closed — stays dirty
+     * for the whole run and would otherwise hold every program at the animation budget.
+     */
+    watch(): () => void {
+        this.watchers++
+        let released = false
+        return () => {
+            if (released) return
+            released = true
+            this.watchers = Math.max(0, this.watchers - 1)
+        }
     }
 
     setPenColor(color: ScreenColor): void {
@@ -439,6 +466,7 @@ export class Screen {
      * ([ADR 0005](../../../../../docs/adr/0005-restore-screen-state-on-undo.md)).
      */
     useFramebuffer(width: number, height: number): void {
+        this.discardCompound()
         this.history.clear()
         this._framebuffer = null
         this.resize(width, height)
@@ -449,6 +477,7 @@ export class Screen {
     /** Leaves framebuffer mode; the image stays as it is until something draws on it. */
     useDrawing(): void {
         this._framebuffer = null
+        this.discardCompound()
         this.history.clear()
     }
 
@@ -495,8 +524,40 @@ export class Screen {
         return true
     }
 
+    /**
+     * Opens a compound operation: everything journaled until the matching `endCompoundOperation`
+     * becomes one record, which undoes it all newest first. Undo pops one record per rolled back
+     * Core step ([ADR 0005](../../../../../docs/adr/0005-restore-screen-state-on-undo.md)), so an
+     * operation a program reaches with a single instruction must not journal twice — otherwise the
+     * journal drifts one operation ahead of the code and every later Undo restores the wrong image.
+     * The Z80's clear (adopt the fill color, then clear) and the echo of typed input (one glyph per
+     * character while a single trap is suspended) are the two that need it. Nesting is counted, and
+     * a compound that journaled nothing pushes nothing.
+     */
+    beginCompoundOperation(): void {
+        this.compoundDepth++
+    }
+
+    endCompoundOperation(): void {
+        if (this.compoundDepth === 0) return
+        this.compoundDepth--
+        if (this.compoundDepth > 0) return
+        const records = this.compoundRecords
+        this.compoundRecords = []
+        if (records.length === 0) return
+        //one operation is its own record: a compound wrapper would only cost bytes and indirection
+        if (records.length === 1) {
+            this.history.push(records[0])
+            return
+        }
+        //the state is the one the first operation found, which is where undoing them all ends up
+        this.history.push({ state: records[0].state, pixels: { kind: 'compound', records } })
+    }
+
     /** Back to the state a fresh Screen has, on the same path as the Terminal's clear. */
     reset(): void {
+        //Stop can land while a compound is open, on a program suspended in the middle of a read
+        this.discardCompound()
         this.history.clear()
         this._framebuffer = null
         this._width = Math.max(1, Math.trunc(this.options.width))
@@ -727,7 +788,14 @@ export class Screen {
         //a memory-backed image is restored by re-reading Core memory after the Core's own rollback,
         //so framebuffer mode journals nothing (ADR 0005)
         if (this._framebuffer !== null) return
-        this.history.push({ state: this.captureState(), pixels })
+        const record: ScreenRecord = { state: this.captureState(), pixels }
+        if (this.compoundDepth > 0) this.compoundRecords.push(record)
+        else this.history.push(record)
+    }
+
+    private discardCompound(): void {
+        this.compoundDepth = 0
+        this.compoundRecords = []
     }
 
     private journalPatch(target: 'drawing' | 'visible', rect: Rect | null): void {
@@ -770,6 +838,13 @@ export class Screen {
     }
 
     private apply(record: ScreenRecord): void {
+        if (record.pixels.kind === 'compound') {
+            //undoing a compound is undoing the operations inside it newest first, which is exactly
+            //what separate Undos would have done; each carries the state it has to restore
+            const inner = record.pixels.records
+            for (let index = inner.length - 1; index >= 0; index--) this.apply(inner[index])
+            return
+        }
         const state = record.state
         this._width = state.width
         this._height = state.height

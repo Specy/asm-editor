@@ -474,6 +474,10 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
      * is what resumes the Core, so every branch ends in `answerInterrupt`; the Delay branch answers
      * first and returns its wait, because the program is not blocked on the trap any more, only on
      * time passing.
+     *
+     * The whole task is one journal record, whatever it draws: a `trap #15` is one Core step and
+     * Undo pops one Screen record per step, while a task like 18 prints a prompt and then echoes
+     * every character the user types ([ADR 0005](../../../../docs/adr/0005-restore-screen-state-on-undo.md)).
      */
     private async handleInterrupt(
         interrupt: Interrupt | null,
@@ -487,6 +491,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         const { type } = interrupt
         const question = INTERRUPT_INPUT_QUESTIONS[type]
         this.state.interrupt = question ? { type, message: question } : { type }
+        screen.beginCompoundOperation()
         try {
             switch (type) {
                 // ------------------------------------------------------------- text
@@ -790,6 +795,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                     throw new Error(`Unknown interrupt type "${type}"`)
             }
         } finally {
+            screen.endCompoundOperation()
             this.state.interrupt = undefined
         }
         return undefined

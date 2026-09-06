@@ -569,27 +569,37 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
      * character port takes one keystroke at a time once the Screen's Keyboard is the source
      * (ADR 0009); every other case is the line the port has always read (ADR 0002), which is also
      * what a testcase's scripted input is made of.
+     *
+     * The whole read is one journal record: the echo draws a glyph per typed character, and all of
+     * them belong to the single `in` the machine is about to re-execute, which is the one step Undo
+     * rolls back ([ADR 0005](../../../../docs/adr/0005-restore-screen-state-on-undo.md)).
      */
     private async provideInput(execution: ExecutionGeneration): Promise<void> {
         const machine = this.requireMachine()
         const device = this.requireDevice()
         const terminal = this._peripherals.terminal
+        const screen = this._peripherals.screen
         const port = machine.pendingInputPort ?? 0
         const question = device.inputQuestion(port)
-        if (
-            Z80Device.isCharacterPort(port) &&
-            terminal.inputSource === 'interactive' &&
-            terminal.interactiveSource === 'keyboard'
-        ) {
-            const character = await this.requestCharacter(question, execution)
+        screen.beginCompoundOperation()
+        try {
+            if (
+                Z80Device.isCharacterPort(port) &&
+                terminal.inputSource === 'interactive' &&
+                terminal.interactiveSource === 'keyboard'
+            ) {
+                const character = await this.requestCharacter(question, execution)
+                this.executionController.ensureCurrent(execution)
+                device.provideCharacter(character)
+                return
+            }
+            const value = await this.requestInput(question, execution)
             this.executionController.ensureCurrent(execution)
-            device.provideCharacter(character)
-            return
+            //throws for a line that does not parse as the number the port asked for, stopping the run
+            device.provideInput(port, value)
+        } finally {
+            screen.endCompoundOperation()
         }
-        const value = await this.requestInput(question, execution)
-        this.executionController.ensureCurrent(execution)
-        //throws for a line that does not parse as the number the port asked for, which stops the run
-        device.provideInput(port, value)
     }
 
     /**

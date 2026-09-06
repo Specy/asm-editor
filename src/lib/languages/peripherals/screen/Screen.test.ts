@@ -426,6 +426,102 @@ describe('Screen text', () => {
     })
 })
 
+describe('Screen compound operations', () => {
+    it('journals everything inside one as a single record', () => {
+        const screen = makeScreen()
+        screen.setFillColor(RED)
+        screen.drawRectangle(0, 0, 4, 4)
+        const before = screen.history.sequence
+        //what the Z80's clear command does for one `out`: adopt the fill color, then clear
+        screen.beginCompoundOperation()
+        screen.setBackgroundColor(BLUE)
+        screen.setFillColor(BLUE)
+        screen.clear()
+        screen.endCompoundOperation()
+        expect(screen.history.sequence).toBe(before + 1)
+    })
+
+    it('undoes the operations inside it newest first, in one step', () => {
+        const screen = makeScreen()
+        screen.setFillColor(RED)
+        screen.drawRectangle(0, 0, 4, 4)
+        screen.beginCompoundOperation()
+        screen.setBackgroundColor(BLUE)
+        screen.setFillColor(BLUE)
+        screen.clear()
+        screen.endCompoundOperation()
+        expect(visibleAt(screen, 1, 1)).toBe(BLUE)
+
+        expect(screen.undo()).toBe(true)
+        //the pen outlines the rectangle, so the fill color is what is inside it
+        expect(visibleAt(screen, 1, 1)).toBe(RED)
+        expect(screen.backgroundColor).toBe(BLACK)
+        expect(screen.fillColor).toBe(RED)
+        //and the rectangle underneath is still one step of its own
+        expect(screen.undo()).toBe(true)
+        expect(pointsOf(screen, RED)).toEqual([])
+    })
+
+    it('counts nesting and pushes nothing for a compound that drew nothing', () => {
+        const screen = makeScreen()
+        screen.beginCompoundOperation()
+        screen.beginCompoundOperation()
+        screen.drawPixel(1, 1)
+        screen.endCompoundOperation()
+        expect(screen.history.sequence).toBe(0)
+        screen.endCompoundOperation()
+        expect(screen.history.sequence).toBe(1)
+
+        screen.beginCompoundOperation()
+        screen.endCompoundOperation()
+        expect(screen.history.sequence).toBe(1)
+    })
+
+    it('charges the budget for what the compound holds', () => {
+        const screen = makeScreen()
+        screen.beginCompoundOperation()
+        screen.clear()
+        screen.clear()
+        screen.endCompoundOperation()
+        //two whole images, plus the record overheads, in the one record they were pushed as
+        expect(screen.history.depth).toBe(1)
+        expect(screen.history.bytes).toBeGreaterThan(16 * 12 * 4 * 2)
+    })
+
+    it('drops an open compound on a reset, which Stop can land in the middle of', () => {
+        const screen = makeScreen()
+        screen.beginCompoundOperation()
+        screen.drawPixel(1, 1)
+        screen.reset()
+        screen.endCompoundOperation()
+        expect(screen.history.sequence).toBe(0)
+        expect(screen.canUndo()).toBe(false)
+    })
+})
+
+describe('Screen watchers', () => {
+    it('is watched only while a renderer is registered', () => {
+        const screen = makeScreen()
+        expect(screen.watched).toBe(false)
+        const unwatch = screen.watch()
+        const second = screen.watch()
+        expect(screen.watched).toBe(true)
+        unwatch()
+        //releasing twice must not take the other renderer's registration with it
+        unwatch()
+        expect(screen.watched).toBe(true)
+        second()
+        expect(screen.watched).toBe(false)
+    })
+
+    it('keeps its renderers across a reset, which only clears what a program left', () => {
+        const screen = makeScreen()
+        screen.watch()
+        screen.reset()
+        expect(screen.watched).toBe(true)
+    })
+})
+
 describe('Screen framebuffer mode', () => {
     it('maps one word per logical pixel, taking the low 24 bits as the color', () => {
         const screen = makeScreen()

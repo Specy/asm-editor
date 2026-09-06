@@ -318,6 +318,22 @@ describe('Z80Device screen', () => {
         expect(screen.cursorRow).toBe(0)
     })
 
+    it('journals the clear as the one record its `out` is worth', () => {
+        const { device, screen } = makeDevice()
+        device.writePort(Z80_PORTS.SCREEN_PEN_COLOR, Z80_COLORS.RED)
+        draw(device, Z80_SCREEN_COMMANDS.PIXEL, { x: 10, y: 10 })
+        const beforeClear = screen.history.sequence
+        device.writePort(Z80_PORTS.SCREEN_FILL_COLOR, Z80_COLORS.BLUE)
+        //Undo pops one Screen record per rolled back Core step, so the two operations behind this
+        //one `out` have to be one record or the journal drifts ahead of the code (ADR 0005)
+        draw(device, Z80_SCREEN_COMMANDS.CLEAR)
+        expect(screen.history.sequence).toBe(beforeClear + 2)
+
+        screen.undo()
+        expect(screen.getPixel(10, 10)).toBe(0xff0000)
+        expect(screen.backgroundColor).toBe(BLACK)
+    })
+
     it('resizes with a byte per side, where 0 means 256', () => {
         const { device, screen } = makeDevice()
         draw(device, Z80_SCREEN_COMMANDS.RESIZE, { x: 0, y: 128 })

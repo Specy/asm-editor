@@ -50,6 +50,15 @@ export type ScreenPixelRecord =
     /** Both images, for the operations that replace them: resize and the buffering mode. A null
      * visible image means the two were the same array, which is how direct drawing is represented. */
     | { kind: 'images'; drawing: Uint8ClampedArray; visible: Uint8ClampedArray | null }
+    /**
+     * The records of a compound operation, oldest first, undone newest first. Undo pops exactly one
+     * record per rolled back Core step, so an operation a program reaches with a single instruction
+     * has to cost the journal a single record however many Screen operations it is made of: the
+     * Z80's clear, which adopts the fill color as the background before clearing, or the echo of a
+     * whole typed line, drawn character by character while one trap is suspended. See
+     * `Screen.beginCompoundOperation`.
+     */
+    | { kind: 'compound'; records: ScreenRecord[] }
 
 export type ScreenRecord = {
     state: ScreenState
@@ -76,6 +85,14 @@ export function recordBytes(record: ScreenRecord): number {
     if (pixels.kind === 'patch') return RECORD_OVERHEAD_BYTES + pixels.pixels.byteLength
     if (pixels.kind === 'images') {
         return RECORD_OVERHEAD_BYTES + pixels.drawing.byteLength + (pixels.visible?.byteLength ?? 0)
+    }
+    if (pixels.kind === 'compound') {
+        //what the compound costs is what its operations cost: a whole line of echoed input is a
+        //cell-sized patch per character, and the budget has to see all of them
+        return pixels.records.reduce(
+            (total, inner) => total + recordBytes(inner),
+            RECORD_OVERHEAD_BYTES
+        )
     }
     return RECORD_OVERHEAD_BYTES
 }

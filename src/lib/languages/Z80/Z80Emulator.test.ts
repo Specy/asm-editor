@@ -58,6 +58,49 @@ const DRAWING_TESTCASE_PROGRAM = [
     '        halt'
 ].join('\n')
 
+/**
+ * Draws a pixel, which is what moves the Terminal's reads to the Screen's Keyboard, and then reads a
+ * decimal number: a line read, whose echo draws one glyph per typed character while a single `in` is
+ * suspended. Four Core steps touch the Screen and the journal has to hold four records
+ * ([ADR 0005](../../../../docs/adr/0005-restore-screen-state-on-undo.md), ADR 0009).
+ */
+const READ_LINE_PROGRAM = [
+    '        org $8000',
+    '        ld a, 0xFF',
+    '        out (0x10), a       ; white pen',
+    '        ld a, 50',
+    '        out (0x13), a',
+    '        out (0x14), a',
+    '        ld a, 0',
+    '        out (0x17), a       ; the pixel at (50, 50)',
+    '        in a, (0x01)        ; a decimal number, typed and echoed at the text cursor',
+    '        out (0x01), a       ; printed back',
+    '        halt'
+].join('\n')
+
+describe('Z80 Screen journal', () => {
+    it('journals one record per Core step, echo of a whole typed line included', async () => {
+        const code = READ_LINE_PROGRAM
+        const emulator = Z80Emulator(code)
+        await emulator.compile(100, code)
+        //queued before the run: the read suspends until the Keyboard has a line to give it
+        emulator.peripherals.keyboard.typeText('42\n')
+        await emulator.run(100_000)
+        const screen = emulator.peripherals.screen
+        expect(emulator.stdOut).toBe('42\n42')
+        //the pen `out`, the drawing `out`, the one `in` whose echo drew three glyphs, and the
+        //`out` that printed the number back at the text cursor: four steps, four records
+        expect(screen.history.sequence).toBe(4)
+        expect(colorAt(screen, 50, 50)).toBe(0xffffff)
+
+        //and walking the whole program back empties the journal with it, rather than leaving
+        //records the Core has no steps left to pop
+        emulator.undo(100)
+        expect(screen.history.sequence).toBe(0)
+        expect(colorAt(screen, 50, 50)).toBe(0)
+    })
+})
+
 describe('Z80 reset and testcases', () => {
     it('leaves a blank Screen and no input state after a rebuild', async () => {
         const code = DRAWING_TESTCASE_PROGRAM

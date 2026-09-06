@@ -380,10 +380,19 @@ export class Z80Device {
             case Z80_SCREEN_COMMANDS.FLOOD_FILL:
                 return screen.floodFill(this.x, this.y)
             case Z80_SCREEN_COMMANDS.CLEAR:
-                //the fill color becomes the background, so a scrolled text row and a later resize
-                //leave the same color behind as the clear did
-                screen.setBackgroundColor(screen.fillColor)
-                return screen.clear()
+                //two Screen operations for one `out`, so they are journaled as one record: Undo
+                //pops one per Core step and a second record would offset the whole journal
+                //([ADR 0005](../../../../docs/adr/0005-restore-screen-state-on-undo.md))
+                screen.beginCompoundOperation()
+                try {
+                    //the fill color becomes the background, so a scrolled text row and a later
+                    //resize leave the same color behind as the clear did
+                    screen.setBackgroundColor(screen.fillColor)
+                    screen.clear()
+                } finally {
+                    screen.endCompoundOperation()
+                }
+                return
             case Z80_SCREEN_COMMANDS.RESIZE:
                 return screen.resize(sizeOf(this.x), sizeOf(this.y))
             case Z80_SCREEN_COMMANDS.BUFFERING_ON:
