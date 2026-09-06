@@ -1,0 +1,6 @@
+{
+    "name": "Arithmetic, logic and bits",
+    "description": "Add, subtract, multiply and divide, and then the operators that work one bit at a time: and, or, xor, not and the shifts. Masks, and how a program asks about a single bit.",
+    "order": 2,
+    "topic": "arithmetic"
+}
