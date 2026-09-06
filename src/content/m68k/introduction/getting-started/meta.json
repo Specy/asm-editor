@@ -1,0 +1,6 @@
+{
+    "name": "Getting started with M68K",
+    "description": "The Motorola 68000 the way this editor runs it: what it gives you to work with, which simulator it imitates, how the syntax is written down, and your first program printed on the console.",
+    "order": 0,
+    "topic": "introduction"
+}
