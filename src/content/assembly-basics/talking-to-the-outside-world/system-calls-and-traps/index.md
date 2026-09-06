@@ -1,7 +1,7 @@
 Every program so far has left its answer in a register or in memory, and you read it in a panel. A
 program that is any use has to do more than that: print something, read what you typed, draw, open a
-file. None of those is an instruction, because none of them is arithmetic. Printing a line is not
-something a CPU knows how to do, it is something a CPU asks somebody else to do.
+file. None of those is an instruction, because none of them is arithmetic. A CPU does not know how to
+print a line. It asks somebody else to do it.
 
 ## Asking the environment
 
@@ -16,8 +16,8 @@ a **task**, depending on whose manual you are reading.
 In this editor there is no operating system, there is a simulator, and it answers the trap itself:
 the text you print goes to the console panel, the line you type comes from the box under it. Each
 language imitates a simulator that already existed, and the numbers come from those: **EASy68K** for
-the M68K, **MARS** for MIPS and **RARS** for RISC-V. The Z80 had no such convention, so this editor
-gives it one of its own.
+the M68K, **MARS** for MIPS and **RARS** for RISC-V. A Z80 has no system call instruction at all, so
+this editor gives it a convention of its own, which the last section of this lecture uses.
 
 ## The M68K: `trap #15`
 
@@ -119,9 +119,9 @@ after `main` and running into that is not what you want.
 ## The Z80: ports instead
 
 The Z80 has no trap and no system call at all. It reaches the outside world through **I/O ports**,
-which are 256 numbered doors that are not memory addresses: `out (n), a` sends the byte in `a` out of
-door `n`, and `in a, (n)` reads a byte in from it. There is no service number, the port number _is_
-the choice of what happens.
+256 numbers in an address space of their own that has nothing to do with memory: `out (n), a` sends
+the byte in `a` to port `n`, and `in a, (n)` reads a byte back from it. There is no service number,
+the port number _is_ the choice of what happens.
 
 This editor gives the console five of them: port `0` writes a byte as a character, port `1` as an
 unsigned number, port `2` as a signed number, port `3` as two hexadecimal digits, and port `4` as a
@@ -140,9 +140,10 @@ start:
 ```
 
 One byte at a time, and there is no "print a string" to ask for: a Z80 program that prints a string
-writes a loop that walks the bytes and sends each one to port 0. That is what four machines side by
-side are good for. The same wish comes out as a task number, a service number or a door number,
-depending on who built the environment the program is talking to.
+writes a loop that walks the bytes and sends each one to port 0. The same wish comes out as a task
+number, a service number or a port number, depending on who built the environment the program talks
+to.
 
-Try changing task 3 to task 15 in the second program, which prints an unsigned number in the base in
-`d2`, and setting `d2` to 2 before the trap. The answer comes out in binary.
+Try changing `move.b #3, d0` in the second program to `move.b #15, d0` and putting `move.b #2, d2`
+on the line before it. Task 15 prints an unsigned number in the base in `d2`, so 42 comes out as
+`101010`.

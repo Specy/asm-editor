@@ -23,10 +23,10 @@ an operating system does before it runs anything else.
 The steps are the same wherever you look:
 
 1. The CPU finishes or abandons the instruction it is on.
-2. It saves where it was, so that the handler can go back. The 68000 pushes the address and the status register onto the stack; MIPS puts the address in a register called **EPC**, for exception program counter; RISC-V calls its own `uepc`.
+2. It saves where it was, so that the handler can go back. Some machines push that address on the stack; MIPS puts it in a register called **EPC**, for exception program counter, and RISC-V calls its own `uepc`.
 3. It looks the cause up in the table and jumps to the handler.
 4. The handler saves any register it is about to use, because the program it interrupted was in the middle of something, deals with the cause, and puts the registers back.
-5. It returns with an instruction made for it, `rte` on the M68K, `eret` on MIPS, `uret` on RISC-V, which restores the saved address and carries on.
+5. It returns with an instruction made for the job, `eret` on MIPS and `uret` on RISC-V, which restores the saved address and carries on where the program left off.
 
 Step 4 is what makes writing one awkward. A handler runs between two instructions of a program that
 knows nothing about it, so a handler that leaves `d3` different from how it found it is a bug in a
@@ -66,7 +66,7 @@ main:
 ```
 
 `$k0` and `$k1` are the two MIPS registers reserved for handlers: a handler may overwrite them at any
-moment, so no program is allowed to rely on them, which is what makes them safe to use in here. Take
+moment, so no program is allowed to rely on them, which is what makes them safe to use here. Take
 the `addi $k0, $k0, 4` out and the handler returns to the very instruction that faulted, which faults
 again, and the message repeats until the run reaches its instruction limit.
 
@@ -75,18 +75,19 @@ RISC-V does the same with different names: `csrrw zero, utvec, t0` points `utvec
 Both of those are only exceptions, though, the kind the program causes itself.
 
 The M68K here has no handler at all. There is no vector table you can fill in: `trap #15` is the only
-trap the assembler accepts, and anything else stops with "Only implemented TRAP is 15 for IO". A
-fault ends the run and prints a line above the console, `Error at line 2: Division by zero` or
-`Error at line 2: Address error: Tried to read/write to an odd memory address`. The code is not in
-the memory you can see either, which is why a branch to a label with no instruction after it ends the
-program quietly instead of decoding whatever bytes are there.
+trap the assembler accepts, and any other number fails the Build with "Only implemented TRAP is 15
+for IO". A fault ends the run and puts its message in the console panel, ahead of anything the
+program had printed: `Error at line 2: Division by zero`, or `Error at line 2: Address error: Tried
+to read/write to an odd memory address`. The code is not in the memory you can see either, which is
+why a branch to a label with no instruction after it ends the program quietly instead of decoding
+whatever bytes are there.
 
 The Z80 assembles `di`, `ei` and `im 1` and they change nothing you can observe, because nothing here
 will ever interrupt it. `halt`, which on a real Z80 stops the CPU until an interrupt wakes it, ends
 the program.
 
-And no device in this editor raises an interrupt at all, which is the part to remember. The MARS
-keyboard has an interrupt enable bit, bit 1 of its control register, and a program that sets it is
+And no device in this editor raises an interrupt at all. The MARS keyboard has an interrupt enable
+bit, bit 1 of its control register, and a program that sets it is
 stopped with `Interrupt-driven I/O is not supported: ... Poll the Ready bit (bit 0) instead`.
 EASy68K's tasks 60 and 62, which turn on the mouse and keyboard interrupts, are refused with the same
 reason. Input here is polled, the way we polled it in the previous lecture, and a program that wants

@@ -16,8 +16,8 @@ the pixel, and nothing else has to happen: the display reads that memory and sho
 
 The MIPS and RISC-V simulators this editor follows, MARS and RARS, both have such a display, and this
 editor has the same one. One word is one pixel, the low 24 bits are the colour as `0x00RRGGBB`, and
-four numbers say how the grid is laid out: the size of a word on screen, the width and height of the
-drawing area, and the address the grid starts at.
+the grid is described by how big one word is drawn (`unit`, or `unitWidth` and `unitHeight`), how
+wide and tall the drawing area is, and the address the grid starts at.
 
 The program states them itself in a comment:
 
@@ -26,8 +26,8 @@ The program states them itself in a comment:
 ```
 
 The editor reads that line at every Build and configures the screen panel from it, so there is
-nothing to set by hand. MARS and RARS read it as the ordinary comment it is, where you type the same
-four numbers into the tool's own window. `unit=16` draws one word as a 16 by 16 square, and 256
+nothing to set by hand. MARS and RARS read it as the ordinary comment it is, and there you set the
+same values in the tool's own window yourself. `unit=16` draws one word as a 16 by 16 square, and 256
 divided by 16 is 16, so this one is a 16 by 16 grid of chunky pixels, 256 words in all.
 
 This program walks the grid and writes a colour that grows redder to the right and greener downwards.
@@ -83,8 +83,8 @@ type. MARS and RARS put the keyboard and a character display behind four registe
 | `0xffff0008` | transmitter control | bit 0 is Ready: the display will take a character |
 | `0xffff000c` | transmitter data    | store a character here and it is printed          |
 
-A **status bit** like Ready is how a device says whether it is worth talking to, and reading it in a
-loop until it turns on is called **polling**. The loop is the whole of the program's idea of waiting:
+A **status bit** like Ready is how a device says whether it has anything for the program, and reading
+it in a loop until it turns on is called **polling**. The loop is the whole of the program's idea of waiting:
 look, nothing there, look again.
 
 Click the screen panel of this one to give it the keyboard, then type. Each key is echoed into the
@@ -133,8 +133,8 @@ take:
 ```
 
 Reading the data register is what takes the character out of the device: Ready goes back to 0 and the
-next key can arrive. That is why the program reads `0xffff0004` exactly once per character, and why a
-program that reads it twice loses one.
+next key can move in. That is why the program reads `0xffff0004` exactly once, after Ready told it
+there was something there.
 
 The `li a7, 32` inside the poll loop is a sleep, and it is there because a loop that only looks is a
 loop that burns the whole instruction budget looking. A wait costs no instructions here, so a program
@@ -145,7 +145,7 @@ that is doing nothing but waiting for a key can wait all day.
 Not every environment maps its devices into memory. The M68K in this editor follows EASy68K, which
 has no framebuffer at all: drawing is more trap tasks, tasks 80 to 96, one per operation, so a pixel
 is `trap #15` with 82 in `d0` and the coordinates in `d1` and `d2`, and there is no address you could
-write a picture into. The Z80 draws through its ports, the same doors we used for the console: the
+write a picture into. The Z80 draws through its ports, the same ones the console used: the
 colour goes out of port `0x10`, the coordinates out of `0x13` to `0x16`, and a write to port `0x17`
 performs one drawing operation with whatever was set.
 

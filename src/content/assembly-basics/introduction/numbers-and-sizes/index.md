@@ -36,8 +36,8 @@ letter after the mnemonic:
 - `.l` is a **long**, 4 bytes, 32 bits.
 
 The names are the CPU's own and they do not travel: a "word" is 2 bytes on the M68K and 4 bytes on
-MIPS and RISC-V, which call 2 bytes a halfword. Which is why the size is worth reading twice when you
-move between languages.
+MIPS and RISC-V, which call 2 bytes a halfword. So when you move between languages, check what that
+language calls a word before you trust the name.
 
 A size touches the low end of the register and leaves what is above it alone. Build this one and step
 through it, watching `d1`, `d2` and `d3`.
@@ -68,9 +68,9 @@ that reads them picks.
 
 The signed reading is **two's complement**, which every CPU in this editor uses. The rule is: the
 highest bit is the sign, and to negate a number you flip every bit and add 1. Flip `00000001` and you
-get `11111110`, add 1 and you get `11111111`, which is -1 in one byte. It sounds like a trick and it
-is a useful one, because with two's complement the CPU adds signed and unsigned numbers with the very
-same instruction, and only the flags come out differently.
+get `11111110`, add 1 and you get `11111111`, which is -1 in one byte. Every CPU here uses it
+because with two's complement one `add` instruction adds signed and unsigned numbers correctly, and
+only the flags come out differently.
 
 Build this and hover the values in the registers panel: where a register reads differently signed and
 unsigned, the panel shows you both.
@@ -89,8 +89,8 @@ those same 4294967296 patterns.
 
 ## Sign extension
 
-Copying a byte into a long is not just a matter of putting it at the bottom. `$FF` as an unsigned
-byte is 255, and as a signed byte it is -1: as a long, 255 is `000000FF` and -1 is `FFFFFFFF`.
+Copying a byte into a long has to decide what goes in the three bytes above it. `$FF` as an unsigned
+byte is 255, and as a signed byte it is -1, and as a long 255 is `000000FF` while -1 is `FFFFFFFF`.
 
 Filling the bytes above with copies of the sign bit is called **sign extension**, and it is what
 turns a small signed number into the same signed number in a bigger box. The M68K does it with `ext`.

@@ -62,8 +62,8 @@ returns to `00000003` and PC to `00001008`. The simulator recorded what every in
 it can put each one back, and that is the quickest way to look again at something that went past
 while you were reading the other panel.
 
-Undo works on M68K, which is why this lecture is written in it. On MIPS and RISC-V the button is
-there but does not yet work.
+This lecture is written in M68K because that is where Undo works. On MIPS and RISC-V the button is
+there but stepping backwards is not usable yet.
 
 ## The full editor
 

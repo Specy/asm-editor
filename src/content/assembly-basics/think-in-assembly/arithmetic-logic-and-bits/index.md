@@ -75,8 +75,8 @@ out at `FFFFFFF3`, because `not` flipped all 32 bits and not only the four you w
 
 ## Masks, shifts and one bit
 
-A **mask** is a number whose bits are what you want from it, and the three operators above are the
-three things you do with one:
+A **mask** is a number you write for the pattern of its bits, one bit set per bit you want to touch,
+and the three operators above are the three things you do with one:
 
 - `and` with a mask **keeps** the bits the mask has set and clears the rest. `x & 0xFF` in C.
 - `or` with a mask **sets** those bits and leaves the rest alone. `x | 4`.
@@ -86,8 +86,9 @@ A **shift** slides every bit sideways, which is `x << 2` and `x >> 2` in C. Shif
 multiplies by 2 to the `n` and shifting right by `n` divides by it, which is why they turn up
 wherever an index has to be scaled to a byte offset. The M68K writes them `lsl` and `lsr`, and has
 `asr` for the signed shift right, which drags the sign bit along instead of feeding in zeroes, so
-`asr.l #2` on -20 gives -5 where `lsr.l #2` would give a huge positive number. MIPS and RISC-V call
-the same three `sll`, `srl` and `sra`.
+`asr.l #2` on -20 gives -5 where `lsr.l #2` gives 1073741819. MIPS and RISC-V spell the same three
+`sll`, `srl` and `sra`, and RISC-V puts an `i` on the end when the amount is a constant: `slli`,
+`srli`, `srai`.
 
 Together they read a piece out of the middle of a value: slide it down to the bottom, then mask off
 what is above it.

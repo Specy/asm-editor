@@ -6,7 +6,7 @@ there.
 ## Telling the assembler to put something there
 
 Data does not appear in memory by itself, a **directive** puts it there while the program is being
-assembled. The M68K has two of them and they do the two things you would want:
+assembled. The M68K's are short:
 
 - `dc` **defines a constant**: it writes the values you list into memory, right where the line is. `dc.b`, `dc.w` and `dc.l` write bytes, words and longs.
 - `ds` **defines storage**: it reserves room for a number of them and writes nothing. `ds.l 6` is six longs of space, and what is in them is whatever was there before.
@@ -21,8 +21,8 @@ An array in C is a run of elements of the same size, one after another, and `a[i
 `a[0]` plus `i` times the size of an element. Assembly has exactly the same thing without the
 brackets: you keep the address of an element in a register and move it along by the size.
 
-This one reserves six longs and writes 0 to 5 into them. Build it, open the memory panel and type
-`1020` in its address box, then Run.
+This one reserves six longs and writes 0 to 5 into them. Build it, type `1020` in the memory panel's
+address box, then Run.
 
 ```m68k|playground|memory|no-flags
     lea numbers, a0     ; p = &numbers[0]
@@ -56,18 +56,20 @@ written out, because C hides the size of what a pointer points at and assembly d
 
 ## A string
 
-A string is an array of bytes holding character codes. `'H'` is not a kind of thing to the CPU, it is
-the number 72, or `$48`, which is what ASCII assigns to that letter.
+A string is an array of bytes holding character codes. To the CPU `'H'` is the number 72, or `$48`,
+which is what ASCII assigns to that letter, and nothing anywhere marks that byte as a letter rather
+than a number.
 
-Nothing records how long a string is, so something has to say where it ends, and the convention C
-uses is a byte of 0 after the last character. `message: dc.b 'Hi!', 0` puts four bytes in memory:
+Nothing records how long a string is either, so something has to say where it ends, and the
+convention C uses is a byte of 0 after the last character. `message: dc.b 'Hi!', 0` puts four bytes
+in memory:
 
-| address  | byte | as a character |
-| -------- | ---- | -------------- |
-| `0x1020` | `48` | `H`            |
-| `0x1021` | `69` | `i`            |
-| `0x1022` | `21` | `!`            |
-| `0x1023` | `00` | the terminator |
+| address       | byte | as a character |
+| ------------- | ---- | -------------- |
+| `message`     | `48` | `H`            |
+| `message + 1` | `69` | `i`            |
+| `message + 2` | `21` | `!`            |
+| `message + 3` | `00` | the terminator |
 
 Which is why counting the characters of a string is a loop that reads bytes until it reads a zero,
 and why a string of three letters takes four bytes.
