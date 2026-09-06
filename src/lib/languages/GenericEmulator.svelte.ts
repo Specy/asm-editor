@@ -44,7 +44,7 @@ export abstract class GenericEmulator<T, R extends string>
 {
     protected state: Omit<BaseEmulatorState, 'code' | 'stdOut'>
     protected _code: string
-    protected _emulatorOptions: Required<Omit<EmulatorSettings, 'peripherals'>>
+    protected _emulatorOptions: Required<Omit<EmulatorSettings, 'peripherals' | 'display'>>
     protected readonly _peripherals: EmulatorPeripherals
     /**
      * The host-time clock of interactive runs, kept because a Testcase swaps in a virtual one and a

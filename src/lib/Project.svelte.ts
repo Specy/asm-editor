@@ -1,4 +1,8 @@
 import { BASE_CODE, COMMENT_CHARACTER } from './Config'
+import {
+    DEFAULT_PROJECT_DISPLAY as MARS_DEFAULT_DISPLAY,
+    type ProjectDisplay
+} from './languages/mars/marsDisplay'
 import { serializer } from '$lib/json'
 import { detectAssemblyLanguage } from './languages/languageDetector'
 
@@ -20,30 +24,11 @@ export interface ProjectData {
 }
 
 /**
- * The MIPS and RISC-V bitmap display configuration, MARS's and RARS's five parameters. It is project
- * data rather than a setting because every example states it in its header comment and a project has
- * to reopen with the same display; a Testcase run uses it too. The M68K and the Z80 have no entry
- * here: their programs configure their own Screen.
+ * The MIPS and RISC-V bitmap display configuration lives with the two adapters that read it, since
+ * the parameters, their choice lists and their defaults are MARS's and RARS's own; it is re-exported
+ * here because it is project data, saved and shared with the rest of a project.
  */
-export type ProjectDisplay = {
-    /** The width in Screen pixels of one memory word, 1 to 32; also the initial GUI zoom. */
-    unitWidth: number
-    unitHeight: number
-    /** The Screen size in pixels, 64 to 1024 in MARS's lists. */
-    width: number
-    height: number
-    /** Where the word grid starts in Core memory. A number, not a bigint: MARS's own choices fit. */
-    baseAddress: number
-}
-
-/** MARS's and RARS's own defaults: one word per pixel, 512 by 256, in static data. */
-export const DEFAULT_PROJECT_DISPLAY: ProjectDisplay = {
-    unitWidth: 1,
-    unitHeight: 1,
-    width: 512,
-    height: 256,
-    baseAddress: 0x10010000
-}
+export { DEFAULT_PROJECT_DISPLAY, type ProjectDisplay } from './languages/mars/marsDisplay'
 
 export type MemoryValue =
     | {
@@ -396,7 +381,7 @@ export function cleanTestcases(testcases: Testcase[]) {
  * to MARS's default rather than failing the load: a project must always open.
  */
 export function cleanDisplay(display: Partial<ProjectDisplay> | undefined): ProjectDisplay {
-    const fallback = DEFAULT_PROJECT_DISPLAY
+    const fallback = MARS_DEFAULT_DISPLAY
     return {
         unitWidth: cleanDisplayNumber(display?.unitWidth, fallback.unitWidth),
         unitHeight: cleanDisplayNumber(display?.unitHeight, fallback.unitHeight),

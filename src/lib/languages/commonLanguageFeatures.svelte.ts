@@ -1,4 +1,5 @@
 import { numberToByteSlice } from '$cmp/specific/project/memory/memoryTabUtils'
+import type { ProjectDisplay } from '$lib/languages/mars/marsDisplay'
 import type { InjectedPeripheralOptions } from '$lib/languages/peripherals/peripheralSet'
 import type { AvailableLanguages, Testcase, TestcaseResult } from '$lib/Project.svelte'
 import { unsignedBigIntToSigned } from '$lib/utils'
@@ -350,6 +351,12 @@ export type EmulatorSettings = {
      * built from the language defaults, which is what every caller that does not care gets.
      */
     peripherals?: InjectedPeripheralOptions
+    /**
+     * MIPS and RISC-V only: MARS's and RARS's five bitmap-display parameters, from the project the
+     * Emulator was opened for. Every other language configures its Screen from the program itself,
+     * and an Emulator that is given none starts from MARS's defaults.
+     */
+    display?: ProjectDisplay
 }
 
 export type BaseEmulatorActions = {
@@ -373,4 +380,10 @@ export type BaseEmulatorActions = {
     ) => Promise<TestcaseResult[]>
     getLineFromAddress: (address: bigint) => number
     readMemoryBytes: (address: bigint, length: number) => Uint8Array
+    /**
+     * MIPS and RISC-V only: applies MARS's five bitmap-display parameters, re-syncing the Screen
+     * from memory at once as the tool does. Absent on every other Emulator, whose Screen is the
+     * program's to configure.
+     */
+    setDisplay?: (display: ProjectDisplay) => void
 }

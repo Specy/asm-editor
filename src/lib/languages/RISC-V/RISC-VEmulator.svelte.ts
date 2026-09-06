@@ -37,6 +37,8 @@ import {
 } from '$lib/languages/ExecutionSlice'
 import type { ExecutionGeneration } from '$lib/languages/ExecutionController'
 import type { Testcase } from '$lib/Project.svelte'
+import { MarsDevices } from '$lib/languages/mars/MarsDevices'
+import { normalizeMarsDisplay, type ProjectDisplay } from '$lib/languages/mars/marsDisplay'
 
 export type RISCVRegisterName = RegisterName | 'pc'
 
@@ -69,6 +71,14 @@ export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) 
 class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName> {
     private riscv: JsRiscV | null = null
     /**
+     * RARS's bitmap display and keyboard-and-display registers, ports of MARS's tools and driven by
+     * the same module. Built once and pointed at each freshly assembled Core, because the
+     * peripherals it drives live as long as the Emulator does.
+     */
+    private readonly devices: MarsDevices
+    /** RARS's five display parameters, from the project and changed from the Screen panel. */
+    private display: ProjectDisplay
+    /**
      * The generation the currently running `_run`/`_step`/`_runTestcase` belongs to. The IO handlers
      * are registered once (at `_initialize`) but every async read has to be tied to the execution
      * that is actually running, so they read this field instead of capturing a generation.
@@ -96,6 +106,22 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         //`pc` is readable in testcase expectations but the core has no setter for it, so it must not
         //be offered as a starting register (see `_setRegisterValue`)
         this.state.startingRegisterNames = [...RISCV_REGISTERS]
+        this.display = normalizeMarsDisplay(options.display)
+        this.devices = new MarsDevices({
+            screen: this._peripherals.screen,
+            keyboard: this._peripherals.keyboard,
+            terminal: this._peripherals.terminal
+        })
+        this.devices.setDisplay(this.display)
+    }
+
+    /**
+     * The Screen panel's configuration popover, applied at once and with a re-sync from memory, as
+     * RARS's tool does. The caller stores the same value in the project so it comes back with it.
+     */
+    setDisplay(display: ProjectDisplay): void {
+        this.display = normalizeMarsDisplay(display)
+        this.devices.setDisplay(this.display)
     }
 
     /**
@@ -166,10 +192,18 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         riscv.setUndoEnabled(normalizeUndoSize(undoSize) > 0)
         riscv.initialize(true)
         registerHandlers(riscv, this.makeHandlers())
+        //after `initialize`, so the observers see the program's writes and not the loading of `.data`
+        this.devices.attach(riscv, this.display)
     }
 
     _dispose(): void {
+        this.devices.dispose()
         this.riscv = null
+    }
+
+    /** Framebuffer mode journals nothing, so Undo restores the image from the rolled-back memory. */
+    _resyncScreenFromMemory(): void {
+        this.devices.resync()
     }
 
     _getCallStack(): StackFrame[] {
@@ -356,7 +390,11 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
     async _step(): Promise<{ terminated: boolean }> {
         const riscv = this.requireRiscV()
         this.currentExecution = this.executionController.capture()
-        await riscv.step()
+        try {
+            await riscv.step()
+        } finally {
+            this.devices.flush()
+        }
         //the stop reason cannot answer this: the step that executes the *last* instruction reports
         //`MAX_STEPS` (only the step after it reports `CLIFF_TERMINATION`), and an `exit` ecall
         //reports `NORMAL_TERMINATION` while the core still has statements left to run. Legacy asked
@@ -382,10 +420,17 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         const riscv = this.requireRiscV()
         const budget = sliceInstructionBudget(request, RISCV_INSTRUCTIONS_PER_MS)
         this.currentExecution = this.executionController.capture()
-        const stopReason = await riscv.simulateWithBreakpointsAndLimit(
-            calculateBreakpoints(riscv, request.breakpoints),
-            budget
-        )
+        let stopReason: StopReason
+        try {
+            stopReason = await riscv.simulateWithBreakpointsAndLimit(
+                calculateBreakpoints(riscv, request.breakpoints),
+                budget
+            )
+        } finally {
+            //the bitmap display catches up once per slice rather than once per stored word, which is
+            //what keeps the observer cheap; a program that sleeps flushes from the handler too
+            this.devices.flush()
+        }
         if (isTerminationStopReason(stopReason) || this._hasTerminated()) {
             return { reason: 'terminated', instructions: budget }
         }
@@ -399,7 +444,28 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         const riscv = this.requireRiscV()
         this.currentExecution = this.executionController.capture()
         //the testcase input is served by the terminal's scripted source, swapped in by the caller
-        await riscv.simulateWithLimit(toHaltLimit(haltLimit))
+        try {
+            await riscv.simulateWithLimit(toHaltLimit(haltLimit))
+        } finally {
+            this.devices.flush()
+        }
+    }
+
+    /**
+     * Syscall 32. Program time passes without the Core blocking the host: the handler's promise is
+     * what suspends the pending `simulate` call, and the clock resolves it — immediately, on a
+     * virtual clock, so a Testcase never sleeps
+     * ([ADR 0010](../../../docs/adr/0010-program-time-without-clock-pacing.md)).
+     *
+     * The Screen catches up first: an animation draws a frame and then sleeps, and the frame has to
+     * be on screen while the program waits, not at the end of the slice several frames later.
+     */
+    private async sleep(milliseconds: number): Promise<void> {
+        const execution = this.currentExecution
+        this.devices.flush()
+        //read the clock at the point of use: a Testcase swaps a virtual one in and the injected one back
+        const clock = this._peripherals.clock
+        await this.executionController.waitFor(execution, () => clock.wait(milliseconds))
     }
 
     /**
@@ -477,7 +543,11 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
             openFile: unimplementedHandler('openFile'),
             closeFile: unimplementedHandler('closeFile'),
             stdIn: unimplementedHandler('stdIn'),
-            sleep: unimplementedHandler('sleep')
+
+            sleep: (milliseconds: number) => this.sleep(milliseconds),
+            //syscall 30, elapsed program time. Host time in an interactive run and the virtual clock
+            //of a Testcase, which starts at zero so elapsed-time output is reproducible (ADR 0010)
+            time: () => this._peripherals.clock.now()
         }
     }
 
