@@ -605,7 +605,7 @@ The built app was served with `vite preview` and driven through the DevTools pro
 
 ## Phase 8: validation and tuning — 2026-09-06
 
-Repository `/home/dev/code/asm-editor`, branch `feat/screen-peripherals`, commits `717ee3b` (the harness, the tuning and the two mechanisms) and the one this log follows. The last phase of the plan.
+Repository `/home/dev/code/asm-editor`, branch `feat/screen-peripherals`, commits `717ee3b` (the harness, the tuning and the two mechanisms), `be0ae55` (the design record's Validation section, the matrix and this log) and `60853c3` (the matrix's "needs manual run" markers). The last phase of the plan.
 
 ### Done
 
