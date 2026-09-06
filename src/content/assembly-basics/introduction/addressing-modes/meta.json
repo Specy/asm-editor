@@ -1,5 +1,6 @@
 {
     "name": "Addressing modes",
-    "description": "Get familiar with the basic syntax of assembly languages, how instructions are written, and how operands are used. We’ll also introduce key features like labels, macros, and directives used to structure and simplify code.",
-    "order": 4
+    "description": "An operand can be a number, a register, an address, or an address worked out while the instruction runs. The five common ways of naming what an instruction works on, and one M68K program that uses all of them.",
+    "order": 6,
+    "topic": "addressing-modes"
 }
