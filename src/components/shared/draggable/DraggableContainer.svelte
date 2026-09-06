@@ -6,7 +6,6 @@
     import FaEye from '~icons/fa-solid/eye'
     import FaEyeSlash from '~icons/fa-solid/eye-slash'
     import FaWindowRestore from '~icons/fa-solid/window-restore'
-    import { fly } from 'svelte/transition'
     interface Props {
         hidden?: boolean
         title?: string
@@ -128,14 +127,11 @@
             </button>
         {/if}
     {/snippet}
-        <div
-            class="draggable-container-content"
-            class:hidden={collapsed}
-        >
-            {#if !collapsed}
-                {@render children?.()}
-            {/if}
-        </div>
+    <div class="draggable-container-content" class:hidden={collapsed}>
+        {#if !collapsed}
+            {@render children?.()}
+        {/if}
+    </div>
 </Draggable>
 
 <style lang="scss">
@@ -199,5 +195,4 @@
             transition: all 0s;
         }
     }
-
 </style>
