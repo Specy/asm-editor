@@ -113,21 +113,34 @@
     function playgroundIframe(
         node: Element,
         fence: PlaygroundFence,
-        testcases: Testcase[]
+        testcases: Testcase[],
+        parent: Parent
     ): Element {
         const codeNode = node.children?.find(
             (child): child is Element => child.type === 'element' && child.tagName === 'code'
         )
         const { large, tall } = fence
+        //inside a collapsed block (an Exercise's solution) the block itself is the centered column and
+        //the frame, so the iframe fills it instead of placing itself; a large playground widens the block
+        const details =
+            parent.type === 'element' && (parent as Element).tagName === 'details'
+                ? (parent as Element)
+                : undefined
+        if (details && large) {
+            const className = details.properties?.className
+            details.properties = {
+                ...details.properties,
+                className: [...(Array.isArray(className) ? className : []), 'wide']
+            }
+        }
+        const placement = details || large ? '' : 'max-width: 70ch; margin: 1.5rem auto;'
+        const height = tall ? 'height: 80dvh;' : fence.settings.showScreen ? 'height: 48rem;' : ''
         return {
             type: 'element',
             tagName: 'iframe',
             properties: {
-                style: `
-                	${!large ? 'max-width: 70ch; margin: 1.5rem auto;' : ''}
-                	${tall ? 'height: 80dvh;' : fence.settings.showScreen ? 'height: 48rem;' : ''}
-                `,
-                className: ['code-playground'],
+                style: `${placement} ${height}`.trim(),
+                className: details ? ['code-playground', 'in-details'] : ['code-playground'],
                 src: createCodeUrl(textOf(codeNode ?? node).trimEnd(), fence.settings, testcases)
             },
             children: []
@@ -156,7 +169,7 @@
                     //the testcase block and the whitespace before it go with the playground
                     index = following.index
                 }
-                result.push(playgroundIframe(node, fence, testcases))
+                result.push(playgroundIframe(node, fence, testcases, parent))
                 continue
             }
             //a testcase fence that attached to nothing is still not something a reader should read
@@ -484,6 +497,45 @@
     }
     :global(.code-playground:first-child) {
         margin: 0 auto;
+    }
+
+    /* a collapsed block of a lecture (an Exercise's solution): an expanding item in the same centered
+       column as the text and the playgrounds around it, the summary alone when closed, the frame
+       around everything when open */
+    :global(._markdown details) {
+        box-sizing: border-box;
+        width: min(100%, 70ch);
+        margin: 0 auto;
+        border: solid 0.1rem var(--tertiary);
+        border-radius: 0.8rem;
+        overflow: hidden;
+    }
+
+    :global(._markdown details.wide) {
+        width: 100%;
+    }
+
+    :global(._markdown summary) {
+        padding: 0.6rem 1rem;
+        background-color: var(--secondary);
+        font-family: Rubik, sans-serif;
+        font-weight: bold;
+        cursor: pointer;
+        user-select: none;
+    }
+
+    :global(._markdown details[open] > summary) {
+        border-bottom: solid 0.1rem var(--tertiary);
+    }
+
+    :global(._markdown details > :not(summary)) {
+        margin: 1rem;
+    }
+
+    :global(._markdown .code-playground.in-details) {
+        width: calc(100% - 2rem);
+        margin: 1rem;
+        box-shadow: none;
     }
 
     :global(.simple-code .shiki) {

@@ -226,7 +226,7 @@ Exercise, to be supported by the renderer and the verification test:
 ```
 
 <details>
-<summary>Show a solution</summary>
+<summary>Show solution</summary>
 
 ```m68k|playground|solution
     add.l d0, d0

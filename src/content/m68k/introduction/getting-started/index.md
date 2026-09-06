@@ -132,7 +132,7 @@ and put `100` in `d1`. The test starts `d0` at `$12345678`, so a correct answer 
 ```
 
 <details>
-<summary>Show a solution</summary>
+<summary>Show solution</summary>
 
 ```m68k|playground|solution
     move.b #$FF, d0     ; only the lowest byte of d0

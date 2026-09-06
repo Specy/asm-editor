@@ -149,7 +149,7 @@ never imitated.
 2. The topic in three to five steps, each with a Playground the reader steps through.
 3. Where the language differs from the others, say so plainly in one sentence, no more.
 4. "Your turn": one or two Exercises. Each states the goal in one sentence ("leave the sum of the
-   array in `d0`"), gives a Playground with the skeleton and the testcase, and a collapsed "Show a
+   array in `d0`"), gives a Playground with the skeleton and the testcase, and a collapsed "Show
    solution" block with a working solution.
 
 ### An Example page
