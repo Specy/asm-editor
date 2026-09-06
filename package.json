@@ -14,7 +14,8 @@
         "format:check": "prettier --check .",
         "check": "svelte-kit sync && svelte-check --threshold error --tsconfig ./tsconfig.json",
         "check:watch": "svelte-kit sync && svelte-check --threshold error --tsconfig ./tsconfig.json --watch",
-        "lint": "eslint .",
+        "lint": "eslint . && npm run check:voice",
+        "check:voice": "node scripts/check-voice.mjs",
         "test": "vitest run",
         "test:watch": "vitest",
         "measure": "vitest run --config vitest.measure.config.ts"

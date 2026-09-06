@@ -22,7 +22,7 @@ and column `B`, which means that its address is:
 
 ## Endianess
 
-When we read from memory, we can read more than one byte at a time — usually either **1, 2, 4 or 8 bytes**.
+When we read from memory, we can read more than one byte at a time, usually either **1, 2, 4 or 8 bytes**.
 Usually, instructions allow you to specify the **address of the first byte** you want to read and the **size** of how
 many bytes you want to read.
 
@@ -55,7 +55,7 @@ For example, if you have the value `0x12345678` at address `0x00000000` in memor
 
 ## Big Endian
 
-In **big endian**, it's the _opposite_ — the **most significant byte (MSB)** is stored at the _lowest address_, and the
+In **big endian**, it's the _opposite_, the **most significant byte (MSB)** is stored at the _lowest address_, and the
 **least significant byte (LSB)** is stored at the _highest address_.
 
 This is _easier to understand_, because it reads the **same way we write numbers**.

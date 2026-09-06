@@ -38,4 +38,4 @@ beq equal      ; If result was zero (d0 == d1), jump to 'equal'
 ```
 
 Here, the `cmp` instruction subtracts `d1` from `d0` and sets the flags based on the result, without storing the result anywhere.
-Then `beq` checks the **zero flag**—if it's set, that means the values were equal, and the program jumps to the `equal` label.
+Then `beq` checks the **zero flag**, if it's set, that means the values were equal, and the program jumps to the `equal` label.

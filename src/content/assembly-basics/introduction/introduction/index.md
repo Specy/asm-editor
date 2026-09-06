@@ -15,7 +15,7 @@ CPUs are _"dumb"_, that is, they don't understand code, or meaning behind it, th
 Those operations are called **"machine instructions"**, often basic operations like _addition_, _multiplication_,
 or _moving data around_.
 The goal of a programming language, regardless of its level, is to convert (or _"compile"_) the code you write into a
-sequence of machine instructions that the CPU can execute — this is what we consider **"machine code"**.
+sequence of machine instructions that the CPU can execute, this is what we consider **"machine code"**.
 
 Machine code is dependent on the **CPU architecture** (like _x86, ARM, RISC-V_, etc...), what we call the **"instruction
 set architecture" (ISA).**
@@ -58,12 +58,12 @@ Which we can see as:
 |  0111   |     000     |    0    | 01100100 |
 |  0111   |     111     |    0    | 11001000 |
 
-The first 4 bits are the **OP code**, it tells the CPU what operation it needs to perform — in this case, `0111` is the
+The first 4 bits are the **OP code**, it tells the CPU what operation it needs to perform. In this case, `0111` is the
 OP code for the `moveq` instruction.
 Each instruction has its own **OP code**.
 
 The next bits are dependent on the instruction itself. In this case, the next 3 bits tell us the **destination register**
-(we will explain later what _registers_ are — pretend it's a variable for now), where `000` is the register `d0` and
+(we will explain later what _registers_ are, pretend it's a variable for now), where `000` is the register `d0` and
 `111` is the register `d7`.
 
 Then there is a **padding** of 1 bit, which we can ignore, and the last 8 bits are the **source**, which is the value we
@@ -77,7 +77,7 @@ During the **decode** step, the CPU will look at the **OP code** to understand w
 the rest
 of the instruction to understand what data it needs to work with.
 
-You might have heard before about **"64-bit"** or **"32-bit"** CPUs — this refers to the _size of a single instruction_,
+You might have heard before about **"64-bit"** or **"32-bit"** CPUs, this refers to the _size of a single instruction_,
 and how much data a CPU can process at once.
 
 ## Components of assembly languages and CPUs
