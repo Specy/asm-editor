@@ -312,8 +312,33 @@ Lecture `meta.json` gains `"topic": "<key>"`. Course `meta.json` is unchanged ap
    C, H, I and K land in the same batch; D waits for the last batch. Visual checks of rendered pages
    are the owner's, in the browser: the machine has no usable headless browser (the cached Chromium
    lacks libnss3 and libnspr4).
-5. Batches 2 to 5: M68K, RISC-V, MIPS, Z80, each delivered whole with the dev server running in the
-   worktree. The Examples of each later language are ported program by program from the M68K pages.
+5. Batches 2 to 5: M68K, RISC-V, MIPS, Z80. The Examples of each later language are ported program
+   by program from the M68K pages. A course is too big for one writer's context, so each is split:
+   **2a**, the sixteen lectures, then **2b**, the twenty-three remaining Examples, sequentially, with
+   the earlier pages as the second writer's voice reference.
+
+    Batch 2a done 2026-09-06 (commits 8c38014 to 7ed426b): all sixteen M68K lectures, 65 teaching
+    Playgrounds and 30 Exercises, 190 content tests green, voice/lint/check clean. Facts the writer
+    established by running, worth knowing before writing another M68K page: this simulator does not
+    place assembled instructions in memory (four bytes reserved per instruction, those addresses still
+    read `$FF`); the top byte of a 24-bit address is ignored; `org` only moves forwards; an `equ` takes
+    `+` and `-` on another `equ` but not `*`; a byte push moves `sp` by 1, where a real 68000 moves it
+    by 2; `addx`, `subx`, `negx`, `roxl`, `roxr`, `rte`, `stop`, `chk` and `trapv` are unknown to this
+    assembler, so the `X` flag is written and never read; `divu` overflow sets `V` and leaves the
+    register alone; `trap #14` fails at build time. An Exercise's `solution` Playground is also run
+    plainly, with every register at zero and no scripted input, so a solution that divides or loops
+    must survive that; expected register values are written as unsigned hex.
+
+    Batch 2b done 2026-09-06 (commits 32f0053 to 1780c5c): the twenty-three remaining Examples, so
+    the M68K course is complete at 41 pages. 213 content tests green. The M68K Core charges its
+    instruction budget per run segment between traps, so a trap-heavy program's `runFor` is a budget
+    rather than a count. `.prettierignore` carried a gitignore-style `examples/` line that also
+    matched `src/content/<course>/examples/`, so every Example page was silently skipped by the
+    formatter; it is anchored to `/examples/` in 3777c7d, which leaves the repository’s own
+    `examples/` folder ignored. The cross-course links were checked in the browser both ways: a
+    General course lecture offers "Go deeper" into M68K, an M68K lecture points back at its
+    overview, and an Example renders nothing until a second language has the same rung.
+
 6. Pull request from `feat/courses` after PR #71 merges; rebase onto main first.
 
 Reviewer's gates per batch: voice script clean, verification test green, the pages read aloud like the

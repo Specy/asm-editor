@@ -1,0 +1,6 @@
+{
+    "name": "Data and address registers",
+    "description": "The eight data registers and the eight address registers, what each kind is for, and the three rules an address register follows that a data register does not.",
+    "order": 1,
+    "topic": "registers"
+}

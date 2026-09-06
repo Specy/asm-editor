@@ -1,0 +1,6 @@
+{
+    "name": "Loops and dbra",
+    "description": "A while loop written out of a compare and two branches, and then dbra, the one instruction that counts and jumps at once. Its off by one, its word sized counter and the db<cc> forms that leave the loop early.",
+    "order": 1,
+    "topic": "loops"
+}

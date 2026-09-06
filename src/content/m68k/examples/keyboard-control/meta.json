@@ -1,0 +1,6 @@
+{
+    "name": "Move a square with the keyboard",
+    "description": "Task 19 polled once a frame for the four arrow keys, a direction kept in memory, and a square that keeps going until you steer it somewhere else.",
+    "order": 22,
+    "topic": "keyboard-control"
+}

@@ -1,0 +1,6 @@
+{
+    "name": "Compare and branch",
+    "description": "cmp subtracts and keeps the flags, and one of fourteen conditional branches reads them. The operand order that decides what your comparison means, the signed and unsigned families, and the instruction between the two that quietly breaks it.",
+    "order": 0,
+    "topic": "branching"
+}

@@ -134,7 +134,7 @@
             }
         }
         const placement = details || large ? '' : 'max-width: 70ch; margin: 1.5rem auto;'
-        const height = tall ? 'height: 80dvh;' : fence.settings.showScreen ? 'height: 48rem;' : ''
+        const height = tall ? 'height: 80dvh;' : fence.settings.showScreen ? 'height: min(40rem, 85vh);' : ''
         return {
             type: 'element',
             tagName: 'iframe',

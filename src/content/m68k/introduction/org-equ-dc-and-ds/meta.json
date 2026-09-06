@@ -1,0 +1,6 @@
+{
+    "name": "org, equ, dc and ds",
+    "description": "The M68K has no data section: the assembler lays your program out in the order you wrote it, and four directives say where things go and what is in them.",
+    "order": 7,
+    "topic": "program-structure"
+}

@@ -1,0 +1,6 @@
+{
+    "name": "Recursion: factorial and Fibonacci",
+    "description": "Two subroutines that call themselves, each call with a stack frame of its own, and the word sized multiply that puts a limit on how far factorial can go.",
+    "order": 12,
+    "topic": "factorial-and-fibonacci"
+}

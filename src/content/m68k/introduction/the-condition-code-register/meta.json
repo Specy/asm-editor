@@ -1,0 +1,6 @@
+{
+    "name": "The condition code register",
+    "description": "The five bits X, N, Z, V and C, which instructions write which of them, and the fourteen conditions the branches read them through. It ends on the signed and unsigned families and what happens when you pick the wrong one.",
+    "order": 6,
+    "topic": "flags"
+}

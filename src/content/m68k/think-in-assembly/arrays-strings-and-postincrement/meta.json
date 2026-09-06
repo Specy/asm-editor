@@ -1,0 +1,6 @@
+{
+    "name": "Arrays, strings and (a0)+",
+    "description": "Walking memory with an address register that steps itself, indexing it with a scaled register instead, and the two loops that every string on this machine is made of.",
+    "order": 3,
+    "topic": "data-in-memory"
+}

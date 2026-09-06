@@ -1,0 +1,6 @@
+{
+    "name": "Memory, big endian and sizes",
+    "description": "The 16 megabytes an M68K program can address, where its code, its data and its stack sit in them, and the order the bytes of a word or a long are written in. It ends on the odd addresses that stop a program.",
+    "order": 2,
+    "topic": "memory"
+}

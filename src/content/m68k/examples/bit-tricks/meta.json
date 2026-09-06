@@ -1,0 +1,6 @@
+{
+    "name": "Even or odd, count the set bits, multiply by shifting",
+    "description": "Four questions about one number answered with a bit test, a shift, a mask and a loop that reads the carry flag.",
+    "order": 9,
+    "topic": "bit-tricks"
+}

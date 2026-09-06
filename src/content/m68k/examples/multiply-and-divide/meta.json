@@ -1,0 +1,6 @@
+{
+    "name": "Multiply and divide, with the remainder",
+    "description": "Days into hours with mulu, seconds into minutes and seconds with divu, and the two answers a division packs into one register pulled apart.",
+    "order": 8,
+    "topic": "multiply-and-divide"
+}

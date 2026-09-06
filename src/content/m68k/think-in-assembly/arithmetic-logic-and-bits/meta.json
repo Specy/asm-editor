@@ -1,0 +1,6 @@
+{
+    "name": "Arithmetic, logic and bits",
+    "description": "Multiplication and division on a machine whose operands are words and whose answer comes back packed into one register, then the masks, shifts and rotates, and the four instructions that work on one bit.",
+    "order": 2,
+    "topic": "arithmetic"
+}
