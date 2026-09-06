@@ -1,0 +1,6 @@
+{
+    "name": "Memory-mapped I/O",
+    "description": "Devices that live at an address instead of behind a trap, a framebuffer written one word per pixel, and the status bit a program polls until the keyboard has something to give it.",
+    "order": 1,
+    "topic": "mmio"
+}
