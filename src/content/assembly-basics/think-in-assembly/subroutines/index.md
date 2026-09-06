@@ -2,8 +2,9 @@ In the previous lecture we saw the **stack**: a region of memory that grows down
 values onto and pop them back off, with one register keeping track of where the top is. Let's now use
 it for calling code.
 
-Say you need the instructions that double a number in five places in your program. In C you would
-write a function and call it:
+Say you wrote the instructions that double a number, and you need them in five places in your
+program. You could write them out five times, but then every time you change your mind you have to
+find all five copies and fix each one. In C you would write a function instead, and call it:
 
 ```c
 int doubled(int x) {
@@ -21,8 +22,9 @@ int main() {
 }
 ```
 
-In assembly that piece of code is a **subroutine** (you will also hear procedure, routine, or
-function). The words C uses for its pieces mean the same things here:
+In assembly a piece of code you can jump to from anywhere, and that goes back to whoever jumped to
+it, is called a **subroutine** (you will also hear procedure, routine, or simply function). The words
+C uses for its pieces mean the same things here:
 
 - **Call**: in C, `quadrupled(10)` stops `main` and starts running `quadrupled`. In assembly a call
   is a jump to the subroutine's first instruction.
@@ -32,8 +34,8 @@ function). The words C uses for its pieces mean the same things here:
   C never shows it to you, in assembly the call has to leave it somewhere.
 - **Parameter** and **argument**: `x` is the parameter of `doubled`, the `10` that `main` hands over
   is the argument. In assembly they travel in a register or on the stack.
-- **Return value**: what `return` hands back. In assembly it comes back in a register the two sides
-  agreed on.
+- **Return value**: what `return` hands back, the `int` in front of `doubled`. In assembly it comes
+  back in a register the two sides agreed on.
 
 ## The return address
 
@@ -118,7 +120,8 @@ already there:
 | `0x1000000` |             |
 
 The `rts` of `doubled` pops `0x1014` into the program counter, so the program goes on at the second
-`bsr doubled`, and the stack pointer climbs back by 4:
+`bsr doubled`, and the stack pointer climbs back by 4. The value stays in memory, we are just not
+supposed to read it any more:
 
 |     address |    value    |
 | ----------: | :---------: |
@@ -157,7 +160,8 @@ end:
 That is cheaper than a push, but there is a catch, there is only one `ra`. If `doubled` called a
 subroutine of its own, that `jal` would write a new return address into `ra` and the program would
 lose the address where to return to. So a subroutine that calls anything else pushes `ra` on the
-stack first and pops it back before `ret`.
+stack first and pops it back before `ret`. The stack turns up either way, RISC-V just does not make
+you use it when you don't have to.
 
 ## Passing values
 
@@ -168,11 +172,13 @@ it from that same place. The agreement on where is the **calling convention**.
 In the two programs above the agreement was "the argument arrives in `d0` (or `a0`), the return value
 leaves in the same register", which works because we wrote both sides. The real conventions of
 each assembly language are standardized and everyone follows them. For example in RISC-V the `a`
-registers are the argument registers and the return value comes back in `a0`.
+registers are the argument registers, `a0` to `a7`, which is where the letter comes from, and the
+return value comes back in `a0`.
 
 A convention also says which registers a subroutine may change. One that uses `d3` for scratch work
 destroys what the caller kept there, so either the subroutine pushes `d3` on entry and pops it before
-returning, or the caller saves it first.
+returning, or the caller saves it before making the call. Both are done in practice, and the
+convention is the list of which registers are whose problem.
 
 ## Recursion
 
@@ -203,8 +209,8 @@ end:
 
 Step through it and watch `a7` fall as the calls go deeper and climb back as they return. The
 `bsr factorial` inside the routine is at `0x101C`, so it pushes `0x1020`, the `move.l (sp)+, d1`
-after it, and the first call, at `0x1004`, pushed `0x1008`. With `n = 5` the deepest point comes when
-`d0` reaches 1:
+after it, and the first call, the one at `0x1004` outside the routine, pushed `0x1008`. With `n = 5`
+the deepest point comes when `d0` reaches 1:
 
 |    address |    value    |
 | ---------: | :---------: |
