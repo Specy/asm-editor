@@ -496,7 +496,7 @@ The port map, all in `Z80-model.ts`:
 
 ## Phase 6 (editor part): M68K — 2026-09-06
 
-Repository `/home/dev/code/asm-editor`, branch `feat/screen-peripherals`, commits `f7086da` (the adapter, the examples and the tests) and this log's own. Phase 7 (the MIPS and RISC-V editor half) is untouched.
+Repository `/home/dev/code/asm-editor`, branch `feat/screen-peripherals`, commits `f7086da` (the adapter, the examples and the tests) and `a219bf9` (the documentation, the matrix and this log). Phase 7 (the MIPS and RISC-V editor half) is untouched.
 
 The Core half of this phase **did land**, despite the agent reporting `done=false`: `/home/dev/code/s68k` commit `65de8f7` and the tarball `/home/dev/code/local-packages/specy-s68k-1.4.0.tgz`, whose API notes are the section at the top of this log. Every shape it documents was observed to be correct. The tarball is now a `file:` dependency; `@specy/s68k` 1.4.0 still has to be published before this branch can merge.
 
