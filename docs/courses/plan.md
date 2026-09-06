@@ -48,17 +48,17 @@ Slug, title, topic key, status. Order is the position in the module.
 
 ### Module `introduction`, "Introduction"
 
-| # | slug | title | topic | status |
-| - | ---- | ----- | ----- | ------ |
-| 0 | `introduction` | Introduction | `introduction` | existing, light pass |
-| 1 | `using-the-editor` | Using the editor | `using-the-editor` | new |
-| 2 | `registers` | Registers | `registers` | existing, expanded with a Playground |
-| 3 | `memory` | Memory | `memory` | existing, light pass |
-| 4 | `numbers-and-sizes` | Numbers and sizes | `numbers` | new |
-| 5 | `instruction-set` | Instruction set | `instruction-set` | existing, light pass |
-| 6 | `addressing-modes` | Addressing modes | `addressing-modes` | existing, expanded with a Playground |
-| 7 | `flags` | Flags | `flags` | existing, re-voiced with a Playground |
-| 8 | `structure-and-lifecycle-of-a-program` | Structure and lifecycle of a program | `program-structure` | existing, light pass |
+| #   | slug                                   | title                                | topic               | status                                |
+| --- | -------------------------------------- | ------------------------------------ | ------------------- | ------------------------------------- |
+| 0   | `introduction`                         | Introduction                         | `introduction`      | existing, light pass                  |
+| 1   | `using-the-editor`                     | Using the editor                     | `using-the-editor`  | new                                   |
+| 2   | `registers`                            | Registers                            | `registers`         | existing, expanded with a Playground  |
+| 3   | `memory`                               | Memory                               | `memory`            | existing, light pass                  |
+| 4   | `numbers-and-sizes`                    | Numbers and sizes                    | `numbers`           | new                                   |
+| 5   | `instruction-set`                      | Instruction set                      | `instruction-set`   | existing, light pass                  |
+| 6   | `addressing-modes`                     | Addressing modes                     | `addressing-modes`  | existing, expanded with a Playground  |
+| 7   | `flags`                                | Flags                                | `flags`             | existing, re-voiced with a Playground |
+| 8   | `structure-and-lifecycle-of-a-program` | Structure and lifecycle of a program | `program-structure` | existing, light pass                  |
 
 What the new ones cover:
 
@@ -70,14 +70,14 @@ What the new ones cover:
 
 ### Module `think-in-assembly`, "Think in assembly"
 
-| # | slug | title | topic | status |
-| - | ---- | ----- | ----- | ------ |
-| 0 | `branching-and-control-flow` | Branching and control flow | `branching` | existing, light pass |
-| 1 | `loops` | Loops | `loops` | existing, light pass |
-| 2 | `arithmetic-logic-and-bits` | Arithmetic, logic and bits | `arithmetic` | new |
-| 3 | `data-in-memory` | Data in memory | `data-in-memory` | new |
-| 4 | `the-stack` | The stack | `the-stack` | existing, light pass |
-| 5 | `subroutines` | Subroutines | `subroutines` | new |
+| #   | slug                         | title                      | topic            | status               |
+| --- | ---------------------------- | -------------------------- | ---------------- | -------------------- |
+| 0   | `branching-and-control-flow` | Branching and control flow | `branching`      | existing, light pass |
+| 1   | `loops`                      | Loops                      | `loops`          | existing, light pass |
+| 2   | `arithmetic-logic-and-bits`  | Arithmetic, logic and bits | `arithmetic`     | new                  |
+| 3   | `data-in-memory`             | Data in memory             | `data-in-memory` | new                  |
+| 4   | `the-stack`                  | The stack                  | `the-stack`      | existing, light pass |
+| 5   | `subroutines`                | Subroutines                | `subroutines`    | new                  |
 
 - Arithmetic, logic and bits: add, sub, mul, div; and, or, xor, not; shifts; masks; testing a bit.
 - Data in memory: arrays, indexing with a register, strings as bytes with a terminator, the directives
@@ -87,11 +87,11 @@ What the new ones cover:
 
 ### Module `talking-to-the-outside-world`, "Talking to the outside world" (new)
 
-| # | slug | title | topic | status |
-| - | ---- | ----- | ----- | ------ |
-| 0 | `system-calls-and-traps` | System calls and traps | `syscalls` | new |
-| 1 | `memory-mapped-io` | Memory-mapped I/O | `mmio` | new |
-| 2 | `interrupts-and-exceptions` | Interrupts and exceptions | `interrupts` | new |
+| #   | slug                        | title                     | topic        | status |
+| --- | --------------------------- | ------------------------- | ------------ | ------ |
+| 0   | `system-calls-and-traps`    | System calls and traps    | `syscalls`   | new    |
+| 1   | `memory-mapped-io`          | Memory-mapped I/O         | `mmio`       | new    |
+| 2   | `interrupts-and-exceptions` | Interrupts and exceptions | `interrupts` | new    |
 
 - System calls and traps: the program asks the environment to do something; what a simulator does
   instead of an operating system; a trap is an instruction that hands control to the environment.
@@ -105,26 +105,26 @@ What the new ones cover:
 Module slugs are the same as the General course. Lecture slugs may follow the language's title; the
 topic key must match the General course's. Titles by language:
 
-| topic | M68K | MIPS | RISC-V | Z80 |
-| ----- | ---- | ---- | ------ | --- |
-| `introduction` | Getting started with M68K | Getting started with MIPS | Getting started with RISC-V | Getting started with the Z80 |
-| `registers` | Data and address registers | The 32 registers and their names | The 32 registers and their names | Registers, pairs and the shadow set |
-| `memory` | Memory, big endian and sizes | Memory, little endian and alignment | Memory, little endian and alignment | The 64 KB address space |
-| `numbers` | Bytes, words and longs | Words, halves and bytes | Words, halves and bytes | Bytes and 16-bit pairs |
-| `rv64` (RISC-V only) | | | Going 64-bit | |
-| `instruction-set` | The M68K instruction set | The MIPS instruction set | The RISC-V instruction set | The Z80 instruction set |
-| `addressing-modes` | Addressing modes | Loads, stores and immediates | Loads, stores and immediates | Addressing on the Z80 |
-| `flags` | The condition code register | Comparing without flags | Comparing without flags | The F register |
-| `program-structure` | org, equ, dc and ds | .data, .text and directives | .data, .text and directives | org, db, dw and ds |
-| `branching` | Compare and branch | Branch on compare | Branch on compare | jp, jr and the conditions |
-| `loops` | Loops and dbra | Loops | Loops | Loops and djnz |
-| `arithmetic` | Arithmetic, logic and bits | Arithmetic, logic and bits | Arithmetic, logic and bits | 8-bit and 16-bit arithmetic, logic and bits |
-| `data-in-memory` | Arrays, strings and (a0)+ | Arrays and strings | Arrays and strings | Arrays, strings and ix |
-| `the-stack` | The stack, -(sp) and movem | The stack and $sp | The stack and sp | The stack, push and pop |
-| `subroutines` | bsr, rts, link and unlk | jal, jr and the calling convention | jal, ret and the calling convention | call, ret and passing values |
-| `syscalls` | trap #15 and its tasks | syscall | ecall | Ports: in and out |
-| `mmio` | The screen, keyboard and mouse through traps | The bitmap display and the keyboard registers | The bitmap display and the keyboard registers | The screen, keyboard and mouse through ports |
-| `interrupts` | Exceptions and the vector table | Exceptions, coprocessor 0 and interrupts | Exceptions, CSRs and interrupts | Interrupts: im, ei, di and halt |
+| topic                | M68K                                         | MIPS                                          | RISC-V                                        | Z80                                          |
+| -------------------- | -------------------------------------------- | --------------------------------------------- | --------------------------------------------- | -------------------------------------------- |
+| `introduction`       | Getting started with M68K                    | Getting started with MIPS                     | Getting started with RISC-V                   | Getting started with the Z80                 |
+| `registers`          | Data and address registers                   | The 32 registers and their names              | The 32 registers and their names              | Registers, pairs and the shadow set          |
+| `memory`             | Memory, big endian and sizes                 | Memory, little endian and alignment           | Memory, little endian and alignment           | The 64 KB address space                      |
+| `numbers`            | Bytes, words and longs                       | Words, halves and bytes                       | Words, halves and bytes                       | Bytes and 16-bit pairs                       |
+| `rv64` (RISC-V only) |                                              |                                               | Going 64-bit                                  |                                              |
+| `instruction-set`    | The M68K instruction set                     | The MIPS instruction set                      | The RISC-V instruction set                    | The Z80 instruction set                      |
+| `addressing-modes`   | Addressing modes                             | Loads, stores and immediates                  | Loads, stores and immediates                  | Addressing on the Z80                        |
+| `flags`              | The condition code register                  | Comparing without flags                       | Comparing without flags                       | The F register                               |
+| `program-structure`  | org, equ, dc and ds                          | .data, .text and directives                   | .data, .text and directives                   | org, db, dw and ds                           |
+| `branching`          | Compare and branch                           | Branch on compare                             | Branch on compare                             | jp, jr and the conditions                    |
+| `loops`              | Loops and dbra                               | Loops                                         | Loops                                         | Loops and djnz                               |
+| `arithmetic`         | Arithmetic, logic and bits                   | Arithmetic, logic and bits                    | Arithmetic, logic and bits                    | 8-bit and 16-bit arithmetic, logic and bits  |
+| `data-in-memory`     | Arrays, strings and (a0)+                    | Arrays and strings                            | Arrays and strings                            | Arrays, strings and ix                       |
+| `the-stack`          | The stack, -(sp) and movem                   | The stack and $sp                             | The stack and sp                              | The stack, push and pop                      |
+| `subroutines`        | bsr, rts, link and unlk                      | jal, jr and the calling convention            | jal, ret and the calling convention           | call, ret and passing values                 |
+| `syscalls`           | trap #15 and its tasks                       | syscall                                       | ecall                                         | Ports: in and out                            |
+| `mmio`               | The screen, keyboard and mouse through traps | The bitmap display and the keyboard registers | The bitmap display and the keyboard registers | The screen, keyboard and mouse through ports |
+| `interrupts`         | Exceptions and the vector table              | Exceptions, coprocessor 0 and interrupts      | Exceptions, CSRs and interrupts               | Interrupts: im, ei, di and halt              |
 
 Getting started covers, in this order: what the CPU is and where it was used (verify every date and
 name before writing it), which simulator the editor imitates (EASy68K, MARS, RARS; none for the Z80),
@@ -146,31 +146,31 @@ of the Cores runs a user interrupt handler today; verify in each Core what excep
 
 Same slug and topic in every course. Panels are the fence flags the page uses.
 
-| # | slug / topic | title | what is new | panels |
-| - | ------------ | ----- | ----------- | ------ |
-| 0 | `moving-values` | Moving values around | registers, sizes, immediates | registers |
-| 1 | `sum-of-two-numbers` | Read two numbers and print their sum | console I/O through the environment | console |
-| 2 | `variables-in-memory` | Variables in memory and constants | data directives, load and store, named constants | memory |
-| 3 | `if-else` | The bigger of two numbers | compare and branch | registers |
-| 4 | `counting-loop` | Print the numbers from 1 to 10 | a loop with a counter | console |
-| 5 | `sum-of-an-array` | Sum of an array | walking memory with a pointer | memory |
-| 6 | `max-of-an-array` | The largest element | keeping a best-so-far | memory |
-| 7 | `string-length` | Length of a string | scanning to the terminator | memory, console |
-| 8 | `reverse-a-string` | Reverse a string in place | two pointers, swapping bytes | memory, console |
-| 9 | `multiply-and-divide` | Multiply and divide, with the remainder | mul and div (a shift-and-add routine on the Z80) | registers |
-| 10 | `bit-tricks` | Even or odd, count the set bits, multiply by shifting | and, shifts, testing a bit | registers |
-| 11 | `subroutine-with-register-arguments` | A subroutine with its arguments in registers | call and return | registers |
-| 12 | `subroutine-with-stack-arguments` | Stack arguments and a stack frame | saving registers, frame pointer, stack discipline | memory |
-| 13 | `factorial-and-fibonacci` | Recursion: factorial and Fibonacci | a subroutine calling itself | memory, console |
-| 14 | `bubble-sort` | Bubble sort | nested loops over memory | memory |
-| 15 | `jump-table` | A jump table | computed jumps, a switch | registers |
-| 16 | `number-to-string` | Print a number in any base without help | repeated division, building a string backwards | console |
-| 17 | `binary-search` | Binary search | index arithmetic, halving | memory |
-| 18 | `two-dimensional-array` | A 2D array | rows, columns, address scaling | memory |
-| 19 | `drawing-on-the-screen` | Drawing shapes on the screen | the screen peripheral | screen |
-| 20 | `bouncing-ball` | A bouncing ball | double buffering, delay, program time | screen |
-| 21 | `keyboard-control` | Move a square with the keyboard | polling the keyboard | screen |
-| 22 | `snake` | The snake game | everything above | screen, console |
+| #   | slug / topic                         | title                                                 | what is new                                       | panels          |
+| --- | ------------------------------------ | ----------------------------------------------------- | ------------------------------------------------- | --------------- |
+| 0   | `moving-values`                      | Moving values around                                  | registers, sizes, immediates                      | registers       |
+| 1   | `sum-of-two-numbers`                 | Read two numbers and print their sum                  | console I/O through the environment               | console         |
+| 2   | `variables-in-memory`                | Variables in memory and constants                     | data directives, load and store, named constants  | memory          |
+| 3   | `if-else`                            | The bigger of two numbers                             | compare and branch                                | registers       |
+| 4   | `counting-loop`                      | Print the numbers from 1 to 10                        | a loop with a counter                             | console         |
+| 5   | `sum-of-an-array`                    | Sum of an array                                       | walking memory with a pointer                     | memory          |
+| 6   | `max-of-an-array`                    | The largest element                                   | keeping a best-so-far                             | memory          |
+| 7   | `string-length`                      | Length of a string                                    | scanning to the terminator                        | memory, console |
+| 8   | `reverse-a-string`                   | Reverse a string in place                             | two pointers, swapping bytes                      | memory, console |
+| 9   | `multiply-and-divide`                | Multiply and divide, with the remainder               | mul and div (a shift-and-add routine on the Z80)  | registers       |
+| 10  | `bit-tricks`                         | Even or odd, count the set bits, multiply by shifting | and, shifts, testing a bit                        | registers       |
+| 11  | `subroutine-with-register-arguments` | A subroutine with its arguments in registers          | call and return                                   | registers       |
+| 12  | `subroutine-with-stack-arguments`    | Stack arguments and a stack frame                     | saving registers, frame pointer, stack discipline | memory          |
+| 13  | `factorial-and-fibonacci`            | Recursion: factorial and Fibonacci                    | a subroutine calling itself                       | memory, console |
+| 14  | `bubble-sort`                        | Bubble sort                                           | nested loops over memory                          | memory          |
+| 15  | `jump-table`                         | A jump table                                          | computed jumps, a switch                          | registers       |
+| 16  | `number-to-string`                   | Print a number in any base without help               | repeated division, building a string backwards    | console         |
+| 17  | `binary-search`                      | Binary search                                         | index arithmetic, halving                         | memory          |
+| 18  | `two-dimensional-array`              | A 2D array                                            | rows, columns, address scaling                    | memory          |
+| 19  | `drawing-on-the-screen`              | Drawing shapes on the screen                          | the screen peripheral                             | screen          |
+| 20  | `bouncing-ball`                      | A bouncing ball                                       | double buffering, delay, program time             | screen          |
+| 21  | `keyboard-control`                   | Move a square with the keyboard                       | polling the keyboard                              | screen          |
+| 22  | `snake`                              | The snake game                                        | everything above                                  | screen, console |
 
 The mouse has no ladder program because MIPS and RISC-V have no mouse; it is shown in the `mmio`
 lecture of M68K and Z80. The retired examples course's Fibonacci programs become `factorial-and-fibonacci`.
@@ -216,23 +216,35 @@ Rules: a `testcase` fence directly after a Playground attaches to it (register v
 or hex strings, memory entries in the Testcase shape of `src/lib/Project.svelte.ts`); a Playground
 with `exercise` must be followed by a `testcase` and by a `solution` Playground in a `<details>`
 block; a plain Playground may carry a `testcase` fence only to supply `input` or `runFor` (the
-instruction budget for a program that never ends) to the verification test. `<details>` renders
-today; nothing else in this format does until the renderer change lands.
+instruction budget for a program that never ends) to the verification test.
+
+As implemented in batch 0 (2026-09-06): "directly follows" means only blank lines between the two
+fences; every field of the testcase JSON is optional; register values may be JSON numbers or strings
+in any base JavaScript's `BigInt` reads (`0x`, `0o`, `0b`, decimal, with a leading `-`);
+`runFor` sits inside the same JSON and is stripped before the Testcase reaches the embed; every
+`testcase` fence is removed from the rendered page, attached or not, and the test fails a page with
+a stray one; malformed JSON logs an error and renders the Playground without testcases, and fails the
+test. The parser shared by the renderer and the test is `src/lib/content/playgrounds.ts`. Until item
+I below is fixed, Exercises check registers, output, `string-chunk` or `number-chunk` memory, never
+a `number` memory entry.
 
 Lecture `meta.json` gains `"topic": "<key>"`. Course `meta.json` is unchanged apart from the values.
 
 ## Implementation list (code)
 
-| # | change | where | when |
-| - | ------ | ----- | ---- |
-| A | `screen` fence flag, `showScreen` embed parameter and checkbox, `showScreen` prop passed explicitly (false by default) | `MarkdownRenderer.svelte`, `routes/embed/+page.svelte` | main checkout, now |
-| B | `loading="lazy"` on the playground iframe (check DOMPurify keeps the attribute) | `MarkdownRenderer.svelte` | worktree |
-| C | `topic` key read by the getters; lecture page renders "Go deeper", "The overview is in", "The same topic in", "The same program in" from it | `lib/content/getters.ts`, lecture page | worktree |
-| D | Retire `src/content/examples`; redirect `/learn/courses/examples` and its three lectures to the new pages (in the `[courseId]` layout load) | routes | worktree |
-| E | `testcase` fence attached to the preceding Playground; `exercise` and `solution` flags | `MarkdownRenderer.svelte`, embed | worktree |
-| F | Verification test: walk `src/content`, build and run every Playground with its Core, apply the exercise rules, respect `runFor` | `src/lib/content/content.test.ts` | worktree, before the first course batch |
-| G | Voice script: grep the content folder for the banned list in `voice.md`, fail on any hit | `scripts/check-voice.mjs`, wired into `npm run lint` | worktree, before the sample review |
-| H | `getters.ts` reads `authors`, the course files write `author`; align on `authors` | `getters.ts`, course `meta.json` | worktree |
+| #   | change                                                                                                                                                                                                                                                                                                                                              | where                                                                    | when                                                                    |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| A   | `screen` fence flag, `showScreen` embed parameter and checkbox, `showScreen` prop passed explicitly (false by default)                                                                                                                                                                                                                              | `MarkdownRenderer.svelte`, `routes/embed/+page.svelte`                   | done 2026-09-06, main checkout (uncommitted) and `feat/courses` d64940f |
+| B   | `loading="lazy"` on the playground iframe (check DOMPurify keeps the attribute)                                                                                                                                                                                                                                                                     | `MarkdownRenderer.svelte`                                                | worktree                                                                |
+| C   | `topic` key read by the getters; lecture page renders "Go deeper", "The overview is in", "The same topic in", "The same program in" from it                                                                                                                                                                                                         | `lib/content/getters.ts`, lecture page                                   | worktree                                                                |
+| D   | Retire `src/content/examples`; redirect `/learn/courses/examples` and its three lectures to the new pages (in the `[courseId]` layout load)                                                                                                                                                                                                         | routes                                                                   | worktree                                                                |
+| E   | `testcase` fence attached to the preceding Playground; `exercise` and `solution` flags                                                                                                                                                                                                                                                              | `MarkdownRenderer.svelte`, `lib/content/playgrounds.ts`                  | done 2026-09-06, e95aaaf                                                |
+| F   | Verification test: walk `src/content`, build and run every Playground with its Core, apply the exercise rules, respect `runFor`                                                                                                                                                                                                                     | `src/lib/content/content.test.ts`                                        | done 2026-09-06, 13bf2be (`npx vitest run src/lib/content`)             |
+| G   | Voice script: grep the content folder for the banned list in `voice.md`, fail on any hit                                                                                                                                                                                                                                                            | `scripts/check-voice.mjs`, `npm run check:voice`, part of `npm run lint` | done 2026-09-06, f4b8bd7                                                |
+| H   | `getters.ts` reads `authors`, the course files write `author`; align on `authors`                                                                                                                                                                                                                                                                   | `getters.ts`, course `meta.json`                                         | worktree, batch 1                                                       |
+| I   | Pre-existing bug found in batch 0: `cleanTestcases` sets `expected: BigInt(memory.address)` instead of `BigInt(memory.expected)` for `number` memory entries, in both starting and expected memory. It runs on every project loaded from storage and on every embed URL, so a `number` memory expectation is checked against its address in the app | `src/lib/Project.svelte.ts`                                              | worktree, batch 1 (or the main checkout, the owner's call)              |
+| J   | The Test button stays on an embedded Playground that carries testcases (it was hidden when the testcases panel was shown); the exam editor passes `embedded={false}` and is unchanged                                                                                                                                                               | `InteractiveInstructionEditor.svelte`                                    | done 2026-09-06, b48f09b                                                |
+| K   | The existing lectures say "click compile"; the button is labelled Build. Part of the light pass                                                                                                                                                                                                                                                     | `src/content/assembly-basics`                                            | batch 1                                                                 |
 
 ## Verification
 
@@ -254,6 +266,10 @@ Lecture `meta.json` gains `"topic": "<key>"`. Course `meta.json` is unchanged ap
    three-page voice sample: `assembly-basics/think-in-assembly/subroutines`,
    `m68k/introduction/getting-started` (with one Exercise), `m68k/examples/sum-of-an-array`. Specy reads
    the sample; the voice guide is amended before anything else is written.
+   Done 2026-09-06 (commits e95aaaf to 3f4264c on `feat/courses`): 20 content tests green, voice
+   script green, `npm run check` at the two-error baseline, lint clean. Left out of Getting started
+   for lack of a source in the repo: the 68000's dates and the machines it shipped in. Waiting on
+   Specy's verdict on the voice.
 4. Batch 1: the General course (10 revised, 8 new). Changes B, C, D, H land in the same batch.
 5. Batches 2 to 5: M68K, RISC-V, MIPS, Z80, each delivered whole with the dev server running in the
    worktree. The Examples of each later language are ported program by program from the M68K pages.
