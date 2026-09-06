@@ -1,12 +1,13 @@
 <script lang="ts">
-    import { onMount, untrack, type Snippet } from 'svelte'
+    import { onMount, tick, untrack, type Snippet } from 'svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import FaDesktop from '~icons/fa-solid/desktop'
     import FaExpand from '~icons/fa-solid/expand'
     import FaCompress from '~icons/fa-solid/compress'
     import FaWindowMaximize from '~icons/fa-solid/window-maximize'
-    import FaWindowRestore from '~icons/fa-solid/window-restore'
+    import ToggleableDraggable from '$cmp/shared/draggable/DraggableContainer.svelte'
     import { screenZoom, screenZoomLabel } from './screenZoom'
+    import { screenWindowGeometry } from './screenWindow'
     import type { Screen } from '$lib/languages/peripherals/screen/Screen'
     import type { Keyboard } from '$lib/languages/peripherals/Keyboard'
     import type { Mouse, MouseButton } from '$lib/languages/peripherals/Mouse'
@@ -61,9 +62,14 @@
     let logicalHeight = $state(untrack(() => screen.height))
     let fitToPanel = $state(true)
     let focused = $state(false)
-    //the floating window is a class on this same element, never a second panel: the component that
-    //calls `screen.watch()` has to stay mounted exactly once, or the scheduler counts two painters
+    //the floating window is another container for the same canvas, never a second panel: the
+    //component that calls `screen.watch()` has to stay mounted exactly once, or the scheduler
+    //counts two painters (ADR 0007)
     let expanded = $state(false)
+    let windowLeft = $state(0)
+    let windowTop = $state(0)
+    let windowWidth = $state(0)
+    let windowHeight = $state(0)
 
     let context: CanvasRenderingContext2D | null = null
     let image: ImageData | null = null
@@ -82,6 +88,35 @@
     )
 
     let zoomLabel = $derived(screenZoomLabel(fitToPanel, zoom))
+
+    /**
+     * The window's box comes from the viewport (`screenWindow.ts`), because a box the user drags
+     * cannot be written as CSS insets the way the in-page panel's height is.
+     */
+    function fitWindowToViewport(place: 'keep' | 'top right') {
+        const root = parseFloat(getComputedStyle(document.documentElement).fontSize)
+        const box = screenWindowGeometry({
+            viewportWidth: window.innerWidth,
+            viewportHeight: window.innerHeight,
+            rootFontSize: root,
+            left: place === 'keep' ? windowLeft : undefined,
+            top: place === 'keep' ? windowTop : undefined
+        })
+        windowLeft = box.left
+        windowTop = box.top
+        windowWidth = box.width
+        windowHeight = box.height
+    }
+
+    async function toggleWindow() {
+        const wasFocused = focused
+        //opening always starts at the top right, whatever the last drag left behind
+        if (!expanded) fitWindowToViewport('top right')
+        expanded = !expanded
+        //the canvas is a new element in the other container, so the program's input follows it
+        await tick()
+        if (wasFocused) canvas?.focus()
+    }
 
     function paint() {
         if (!canvas) return
@@ -230,6 +265,27 @@
     })
 
     $effect(() => {
+        //the canvas is rebuilt whenever the Screen moves between the page and the floating window:
+        //the cached context belongs to the element that went away, and the new one is blank
+        if (!canvas) return
+        context = null
+        paintedVersion = -1
+        return () => {
+            //a removed element never fires its own blur, so anything held would stay down for ever
+            focused = false
+            releaseInput()
+        }
+    })
+
+    $effect(() => {
+        if (!expanded) return
+        //the window's size comes from the viewport, so a resize has to give it back a place inside
+        const onResize = () => fitWindowToViewport('keep')
+        window.addEventListener('resize', onResize)
+        return () => window.removeEventListener('resize', onResize)
+    })
+
+    $effect(() => {
         if (!expanded) return
         //Escape closes the floating window, but only once the Screen no longer holds the keyboard:
         //the canvas stops its own Escape from propagating, so the first press releases the input
@@ -256,50 +312,33 @@
     })
 </script>
 
-<div class="screen-panel" class:expanded style={expanded ? undefined : style}>
-    <div class="screen-header">
-        <Icon size={0.9}>
-            <FaDesktop />
+{#snippet actions()}
+    {@render configuration?.()}
+    <button
+        class="screen-action"
+        title={fitToPanel ? 'Show at actual size' : 'Zoom to fit the panel'}
+        onclick={() => (fitToPanel = !fitToPanel)}
+    >
+        <Icon size={0.8}>
+            {#if fitToPanel}
+                <FaExpand />
+            {:else}
+                <FaCompress />
+            {/if}
         </Icon>
-        <span class="screen-name ellipsis">{name}</span>
-        <span class="screen-size">{logicalWidth} × {logicalHeight}</span>
-        <div class="screen-actions">
-            {@render configuration?.()}
-            <button
-                class="screen-action"
-                title={fitToPanel ? 'Show at actual size' : 'Zoom to fit the panel'}
-                onclick={() => (fitToPanel = !fitToPanel)}
-            >
-                <Icon size={0.8}>
-                    {#if fitToPanel}
-                        <FaExpand />
-                    {:else}
-                        <FaCompress />
-                    {/if}
-                </Icon>
-                {zoomLabel}
-            </button>
-            <button
-                class="screen-action"
-                aria-pressed={expanded}
-                title={expanded
-                    ? 'Put the screen back in the page (Esc)'
-                    : 'Open the screen in a floating window'}
-                onclick={() => (expanded = !expanded)}
-            >
-                <Icon size={0.8}>
-                    {#if expanded}
-                        <FaWindowRestore />
-                    {:else}
-                        <FaWindowMaximize />
-                    {/if}
-                </Icon>
-            </button>
-        </div>
-    </div>
-    <!-- the padding is a frame around the stage rather than padding on it, because the stage is
-         what is measured: `clientWidth` counts padding, and fitting to a box that is larger than
-         the box the canvas actually has is what used to spill the image into a scrollbar -->
+        {zoomLabel}
+    </button>
+{/snippet}
+
+{#snippet windowActions()}
+    <span class="screen-size">{logicalWidth} × {logicalHeight}</span>
+    {@render actions()}
+{/snippet}
+
+<!-- the padding is a frame around the stage rather than padding on it, because the stage is what
+     is measured: `clientWidth` counts padding, and fitting to a box that is larger than the box
+     the canvas actually has is what used to spill the image into a scrollbar -->
+{#snippet stage()}
     <div class="screen-viewport">
         <div
             class="screen-stage"
@@ -330,7 +369,57 @@
             ></canvas>
         </div>
     </div>
-</div>
+{/snippet}
+
+{#if expanded}
+    <!-- a zero-sized fixed layer, so the window inside it is placed in viewport coordinates (which
+         is what the draggable's own clamping assumes) without ever covering the page it floats on.
+         Its z-index puts it over the page — the editor is 2 and the sidebars are 3 — and under
+         everything the app opens *over* a page: the Settings, Documentation and Share drawers at 5,
+         the input prompt and the toasts at 20. The window has no backdrop and leaves the page
+         interactive on purpose, so a drawer the user just opened has to come out in front of it -->
+    <div class="screen-window-layer">
+        <ToggleableDraggable
+            title={name}
+            hiddenOnMobile={false}
+            headerActions={windowActions}
+            closeTitle="Put the screen back in the page (Esc)"
+            onClose={toggleWindow}
+            bind:left={windowLeft}
+            bind:top={windowTop}
+        >
+            <div
+                class="screen-panel screen-window"
+                style="width: {windowWidth}px; height: {windowHeight}px;"
+            >
+                {@render stage()}
+            </div>
+        </ToggleableDraggable>
+    </div>
+{:else}
+    <div class="screen-panel" {style}>
+        <div class="screen-header">
+            <Icon size={0.9}>
+                <FaDesktop />
+            </Icon>
+            <span class="screen-name ellipsis">{name}</span>
+            <span class="screen-size">{logicalWidth} × {logicalHeight}</span>
+            <div class="screen-actions">
+                {@render actions()}
+                <button
+                    class="screen-action"
+                    title="Open the screen in a floating window"
+                    onclick={toggleWindow}
+                >
+                    <Icon size={0.8}>
+                        <FaWindowMaximize />
+                    </Icon>
+                </button>
+            </div>
+        </div>
+        {@render stage()}
+    </div>
+{/if}
 
 <style lang="scss">
     .screen-panel {
@@ -415,25 +504,22 @@
         overflow: hidden;
     }
 
-    /* The floating window the header's second button opens, anchored to the right of the viewport
-       and deliberately not the whole of it. The control bar of every surface that hosts this panel
-       is a row at the bottom of the editor column, and it is as wide as that column, so a window
-       wide enough to be worth opening always reaches over its right end: the bottom inset, not the
-       left edge, is what keeps Build, Run, Step and Testcases visible and clickable. It costs a
-       4 by 3 Screen nothing, because in a box this shape the width is what constrains the fit. */
-    .screen-panel.expanded {
+    /* the layer the floating window is dragged around in: no size of its own, so it never covers
+       the page, and a positioned ancestor at viewport 0,0 so the window's coordinates are the
+       viewport's, which is what the draggable's clamping already assumes */
+    .screen-window-layer {
         position: fixed;
-        top: 0.5rem;
-        right: 0.5rem;
-        bottom: 4rem;
-        width: min(58vw, 68rem);
-        min-width: min(20rem, calc(100vw - 1rem));
-        /* over the page it floats on — the editor is 2 and the sidebars are 3 — and deliberately
-           under everything the app puts *over* a page: the Settings, Documentation and Share
-           drawers at 5, the input prompt and the toasts at 20. This window has no backdrop and
-           leaves the page interactive on purpose, so a drawer the user just opened has to be able
-           to come out in front of it; at 15 it opened behind the window and could not be used */
+        top: 0;
+        left: 0;
+        width: 0;
+        height: 0;
         z-index: 4;
+    }
+
+    /* the window's body: the draggable's own bar carries the title and the controls, so this is
+       the stage alone, and its size is set from the viewport when the window opens */
+    .screen-panel.screen-window {
+        border-radius: 0 0 0.4rem 0.4rem;
         box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.45);
     }
 
@@ -445,10 +531,14 @@
         outline: none;
     }
 
-    /* the ring follows focus itself, not :focus-visible: a click is how most users hand the
-       keyboard to the program, and they have to see that the editor's shortcuts are now off */
+    /* The ring follows focus itself, not :focus-visible: a click is how most users hand the
+       keyboard to the program, and they have to see that the editor's shortcuts are now off. It is
+       drawn *inside* the canvas, because the stage around it is a clipping box in both containers —
+       hidden while fitting, a scroll container at actual size — and an outward ring loses its
+       outer half to it. The alternative was room to draw it in, which is padding the panel has
+       nowhere to take from without shrinking the image. */
     canvas.focused {
         outline: 0.15rem solid var(--accent);
-        outline-offset: 0.1rem;
+        outline-offset: -0.15rem;
     }
 </style>

@@ -5,6 +5,7 @@
     import Button from '$cmp/shared/button/Button.svelte'
     import FaEye from '~icons/fa-solid/eye'
     import FaEyeSlash from '~icons/fa-solid/eye-slash'
+    import FaWindowRestore from '~icons/fa-solid/window-restore'
     import { fly } from 'svelte/transition'
     interface Props {
         hidden?: boolean
@@ -12,6 +13,20 @@
         hiddenOnMobile?: boolean
         left?: number
         top?: number
+        /**
+         * Controls of the caller's own, rendered in the header bar between the title and the
+         * button on its right. The bar is the drag handle, so they are marked `data-no-drag`,
+         * which is where `Draggable` stops a press on them from picking the window up.
+         */
+        headerActions?: import('svelte').Snippet
+        /**
+         * What the button on the right of the header does. Left unset it is an eye that collapses
+         * the body and leaves the bar in place, which is what a panel that lives only in this
+         * window wants. Given, it closes the whole window through this callback instead — the
+         * caller stops rendering the container — for a panel that has somewhere else to be.
+         */
+        onClose?: () => void
+        closeTitle?: string
         children?: import('svelte').Snippet
     }
 
@@ -19,10 +34,16 @@
         hidden = $bindable(true),
         title = '',
         hiddenOnMobile = true,
-        left = 300,
-        top = 13,
+        left = $bindable(300),
+        top = $bindable(13),
+        headerActions,
+        onClose,
+        closeTitle = 'Close',
         children
     }: Props = $props()
+
+    //a window the caller can take away has no collapsed state: its bar goes with its body
+    const collapsed = $derived(onClose ? false : hidden)
 
     let dragStartX = 0
     let dragStartY = 0
@@ -33,6 +54,8 @@
     }
 
     function onHeaderClick(e: MouseEvent) {
+        //the injected controls sit inside the header, which is itself the collapse button
+        if (e.target instanceof Element && e.target.closest('.header-actions')) return
         const dx = e.clientX - dragStartX
         const dy = e.clientY - dragStartY
         if (dx * dx + dy * dy < 25) {
@@ -41,39 +64,59 @@
     }
 </script>
 
-<Draggable {hiddenOnMobile} {left} {top}>
+{#snippet bar()}
+    <Icon
+        style="cursor:inherit; padding: 0.2rem 0.4rem; height: 1.4rem; width: 1.6rem; min-width: 1.6rem"
+    >
+        <FaGripHorizontal />
+    </Icon>
+    <div class="ellipsis">{title}</div>
+    {#if headerActions}
+        <div class="header-actions row" data-no-drag>
+            {@render headerActions()}
+        </div>
+    {/if}
+    <Button
+        style="padding: 0.2rem 0.3rem; height: 1.4rem; border-radius: 0.3rem"
+        cssVar="secondary"
+        title={onClose ? closeTitle : ''}
+        onClick={(e) => {
+            e.stopPropagation()
+            if (onClose) return onClose()
+            hidden = !hidden
+        }}
+    >
+        <Icon size={1.1}>
+            {#if onClose}
+                <FaWindowRestore />
+            {:else if !hidden}
+                <FaEye />
+            {:else}
+                <FaEyeSlash />
+            {/if}
+        </Icon>
+    </Button>
+{/snippet}
+
+<Draggable {hiddenOnMobile} bind:left bind:top>
     {#snippet header()}
-        <button
-            class="tab-header row"
-            class:hidden
-            onpointerdown={onHeaderPointerDown}
-            onclick={onHeaderClick}
-        >
-            <Icon
-                style="cursor:inherit; padding: 0.2rem 0.4rem; height: 1.4rem; width: 1.6rem; min-width: 1.6rem"
+        {#if onClose}
+            <!-- a plain bar: it only drags, and the caller's controls must not nest in a button -->
+            <div class="tab-header row">
+                {@render bar()}
+            </div>
+        {:else}
+            <button
+                class="tab-header row"
+                class:hidden
+                onpointerdown={onHeaderPointerDown}
+                onclick={onHeaderClick}
             >
-                <FaGripHorizontal />
-            </Icon>
-            <div class="ellipsis">{title}</div>
-            <Button
-                style="padding: 0.2rem 0.3rem; height: 1.4rem; border-radius: 0.3rem"
-                cssVar="secondary"
-                onClick={(e) => {
-                    e.stopPropagation()
-                    hidden = !hidden
-                }}
-            >
-                <Icon size={1.1}>
-                    {#if !hidden}
-                        <FaEye />
-                    {:else}
-                        <FaEyeSlash />
-                    {/if}
-                </Icon>
-            </Button>
-        </button>
+                {@render bar()}
+            </button>
+        {/if}
     {/snippet}
-    {#if !hidden}
+    {#if !collapsed}
         <div in:fly|global={{ x: -10, duration: 500 }} out:fly|global={{ x: -10, duration: 300 }}>
             {@render children?.()}
         </div>
@@ -98,6 +141,8 @@
         background-color: var(--secondary);
         color: var(--secondary-text);
         font-family: Rubik;
+        /* a button's own default, written down so the bar reads the same as a div */
+        font-size: 0.85rem;
         position: relative;
         border-top-left-radius: 0.4rem;
         border-top-right-radius: 0.4rem;
@@ -109,5 +154,11 @@
             border-color: var(--accent2);
             border-bottom-right-radius: 0.4rem;
         }
+    }
+
+    .header-actions {
+        align-items: center;
+        gap: 0.3rem;
+        cursor: default;
     }
 </style>
