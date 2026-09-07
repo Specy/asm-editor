@@ -18,10 +18,6 @@
 * Screen: 640 by 480, the size a program starts with. The tunables are the
 * equates at the bottom, next to the colors.
 *
-* Coordinates are read as unsigned words, so nothing here is ever asked to draw
-* at a negative X: the shapes that leave on the left are rectangles, and `rect`
-* clamps them to the edge instead. That is also why the clouds do not drift.
-*
 * A frame costs about 61 instructions, so the editor's default two million
 * instruction limit is worth something like a quarter of an hour of play before
 * it ends the program with an error. Set "Instruction execution limit" to 0 in
@@ -305,21 +301,7 @@ hit:
 *-----------------------------------------------------------------------------
 * Drawing
 *-----------------------------------------------------------------------------
-* The rectangle d1,d2 to d3,d4, with its left edge clamped to the screen, so a
-* shape halfway off the left draws the half that is on it. Touches d0 and d1.
-rect:
-    tst.w   d3
-    ble     rectdone            ; wholly off the left, nothing to draw
-    tst.w   d1
-    bge     rectgo
-    moveq   #0,d1
-rectgo:
-    move.b  #87,d0
-    trap    #15
-rectdone:
-    rts
-
-* The sky, and two clouds sitting in it.
+* The sky, and two clouds drifting across it.
 drawsky:
     move.l  #SKY,d1
     move.b  #80,d0
@@ -341,10 +323,23 @@ drawsky:
     move.b  #81,d0
     trap    #15                 ; pen and fill alike, so the lobes have no seams
 
-    move.w  #70,d5
+    move.w  cloud1x,d5
+    subq.w  #1,d5
+    cmp.w   #NEGCLOUD,d5
+    bgt     cl1ok
+    move.w  #WIDTH,d5           ; gone on the left, back in on the right
+cl1ok:
+    move.w  d5,cloud1x
     move.w  #56,d6
     bsr     cloud
-    move.w  #390,d5
+
+    move.w  cloud2x,d5
+    subq.w  #1,d5
+    cmp.w   #NEGCLOUD,d5
+    bgt     cl2ok
+    move.w  #WIDTH,d5
+cl2ok:
+    move.w  d5,cloud2x
     move.w  #120,d6
     bsr     cloud
     rts
@@ -410,7 +405,8 @@ onepipe:
     add.w   #PIPEW,d3
     move.w  d6,d4
     sub.w   #HALFGAP,d4         ; down to the top of the gap
-    bsr     rect
+    move.b  #87,d0
+    trap    #15
 
     move.w  d5,d1
     sub.w   #LIPOUT,d1
@@ -418,7 +414,8 @@ onepipe:
     sub.w   #LIPH,d2
     move.w  d5,d3
     add.w   #PIPER,d3
-    bsr     rect                ; the lip, still ending at the gap
+    move.b  #87,d0
+    trap    #15                ; the lip, still ending at the gap
 
     move.w  d5,d1
     move.w  d6,d2
@@ -426,7 +423,8 @@ onepipe:
     move.w  d5,d3
     add.w   #PIPEW,d3
     move.w  #GROUNDY,d4
-    bsr     rect
+    move.b  #87,d0
+    trap    #15
 
     move.w  d5,d1
     sub.w   #LIPOUT,d1
@@ -436,7 +434,8 @@ onepipe:
     add.w   #PIPER,d3
     move.w  d2,d4
     add.w   #LIPH,d4
-    bsr     rect
+    move.b  #87,d0
+    trap    #15
 
     lea     6(a0),a0
     rts
@@ -486,7 +485,8 @@ gtnext:
     move.w  d5,d3
     add.w   #TUFTW,d3
     move.w  #TUFTB,d4
-    bsr     rect
+    move.b  #87,d0
+    trap    #15
     add.w   #TUFTGAP,d5
     dbra    d6,gtnext
     rts
@@ -741,6 +741,8 @@ record:     dc.w    0
 wing:       dc.w    0
 held:       dc.w    0           ; was a flap key or button down last frame?
 scroll:     dc.w    0
+cloud1x:    dc.w    70
+cloud2x:    dc.w    390
 seed:       dc.w    $1D4B
 
 * one pipe is its left edge, the middle of its gap, and whether it is counted
@@ -774,6 +776,8 @@ TUFTY   equ     410
 TUFTB   equ     418
 TUFTW   equ     20
 TUFTGAP equ     56
+CLOUDW  equ     140
+NEGCLOUD equ    -140            ; -CLOUDW, where a cloud comes back on the right
 
 READY   equ     0
 PLAYING equ     1

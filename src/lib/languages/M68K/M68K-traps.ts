@@ -34,7 +34,7 @@ export const M68K_TRAP_GROUP_DOCS: {
         group: 'graphics',
         title: 'Graphics',
         description:
-            'Drawing on the screen. The origin is the top left, coordinates are pixels, and drawing outside the screen is ignored. Colors are `$00BBGGRR` longs, the same encoding EASy68K uses, so its color equates are unchanged. Rectangles and ellipses exclude their right and bottom edges, as they do in EASy68K, which draws them through the Windows GDI.'
+            'Drawing on the screen. The origin is the top left, coordinates are signed pixels, so a shape may start off the left or the top, and whatever falls outside the screen is clipped. Colors are `$00BBGGRR` longs, the same encoding EASy68K uses, so its color equates are unchanged. Rectangles and ellipses exclude their right and bottom edges, as they do in EASy68K, which draws them through the Windows GDI.'
     },
     {
         group: 'input',

@@ -214,6 +214,87 @@ describe('M68K graphics tasks', () => {
         //nothing reached the transcript: task 95 is graphics, not printing
         expect(emulator.stdOut).toBe('')
     })
+
+    /**
+     * Coordinates are signed words, as they are in EASy68K, which casts each one to a `short`
+     * before it draws (`simIO->rectangle((short)D[1], ...)` in `CODE9.CPP`). Read as unsigned, a
+     * shape starting off the left or the top does not vanish: its edges come back reversed, both
+     * simulators swap reversed edges, and it lands on the far side of the screen instead. Each
+     * case here straddles an edge, which is where the two readings differ.
+     */
+    describe('coordinates off the top left', () => {
+        const WHITE = '    move.l #$00FFFFFF,d1'
+
+        it('clips a rectangle that starts off the screen', async () => {
+            const emulator = await run(
+                trap(80, [WHITE]) +
+                    trap(81, [WHITE]) +
+                    trap(87, [
+                        '    move.w #-20,d1',
+                        '    move.w #-20,d2',
+                        '    move.w #40,d3',
+                        '    move.w #40,d4'
+                    ]) +
+                    trap(9)
+            )
+            expect(emulator.errors).toEqual([])
+            expect(pixelAt(emulator, 0, 0)).toBe(0xffffff)
+            expect(pixelAt(emulator, 39, 39)).toBe(0xffffff)
+            expect(pixelAt(emulator, 41, 41)).toBe(BLACK)
+            //read unsigned this would be a rectangle from 40,40 to the far corner instead
+            expect(pixelAt(emulator, 500, 400)).toBe(BLACK)
+            expect(inkCount(emulator)).toBe(40 * 40)
+        })
+
+        it('clips an ellipse that straddles the left edge', async () => {
+            const emulator = await run(
+                trap(80, [WHITE]) +
+                    trap(81, [WHITE]) +
+                    trap(88, [
+                        '    move.w #-30,d1',
+                        '    move.w #100,d2',
+                        '    move.w #30,d3',
+                        '    move.w #160,d4'
+                    ]) +
+                    trap(9)
+            )
+            expect(emulator.errors).toEqual([])
+            expect(pixelAt(emulator, 4, 130)).toBe(0xffffff)
+            expect(pixelAt(emulator, 400, 130)).toBe(BLACK)
+            //half of a 60 by 60 ellipse, not a band reaching the right hand edge
+            expect(inkCount(emulator)).toBeLessThan(1_600)
+        })
+
+        it('answers the pen position off the screen as a signed word', async () => {
+            const emulator = await run(
+                trap(86, ['    move.w #-20,d1', '    move.w #100,d2']) + trap(96) + trap(9)
+            )
+            expect(emulator.errors).toEqual([])
+            //task 96 leaves X in D1.W and Y in D2.W, the low word of a signed short
+            expect(registerOf(emulator, 'D1') & 0xffffn).toBe(0xffecn)
+            expect(registerOf(emulator, 'D2') & 0xffffn).toBe(100n)
+        })
+
+        it('draws the part of a string that is on the screen', async () => {
+            const emulator = await run(
+                trap(80, [WHITE]) +
+                    trap(95, ['    lea text,a1', '    move.w #-8,d1', '    move.w #100,d2']) +
+                    trap(9) +
+                    "text: dc.b 'AB',0\n"
+            )
+            expect(emulator.errors).toEqual([])
+            //the A is off the left, the B is in the first cell; read unsigned nothing would show
+            expect(inkCount(emulator)).toBeGreaterThan(5)
+            const screen = emulator.peripherals.screen
+            const pixels = screen.visiblePixels
+            for (let offset = 0; offset < pixels.length; offset += 4) {
+                if (pixels[offset] === 0 && pixels[offset + 1] === 0 && pixels[offset + 2] === 0) {
+                    continue
+                }
+                expect((offset / 4) % screen.width).toBeLessThan(screen.cell.width)
+            }
+        })
+    })
 })
 
 describe('M68K keyboard and mouse tasks', () => {
@@ -617,6 +698,17 @@ describe('examples/m68k', () => {
         //the title is in the transcript and on the Screen at the same time (ADR 0003)
         expect(later.stdOut).toContain('Arrow keys move the square')
         expect(inkCount(later)).toBeGreaterThan(1_000)
+    })
+
+    it('draws the flappy bird ready screen', async () => {
+        const emulator = await runExample('flappy-bird.x68', 400)
+        expectStoppedAtLimit(emulator)
+        expect(emulator.peripherals.screen.doubleBuffering).toBe(true)
+        //the sky is a filled rectangle over the whole screen, so nothing is left at the background
+        expect(inkCount(emulator)).toBe(640 * 480)
+        //and the bird is where it waits for the first flap, in the yellow the program picks.
+        //Left of the wing, which is the one part of it that moves from frame to frame
+        expect(pixelAt(emulator, 156, 220)).toBe(0xface3e)
     })
 
     it('paints under the pointer while the left button is held', async () => {
