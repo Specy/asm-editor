@@ -27,11 +27,8 @@ import {
     type StackFrame
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import { GenericEmulator } from '$lib/languages/GenericEmulator.svelte'
-import {
-    type ExecutionSlice,
-    type ExecutionSliceRequest,
-    sliceInstructionBudget
-} from '$lib/languages/ExecutionSlice'
+import { type ExecutionSlice, type ExecutionSliceRequest } from '$lib/languages/ExecutionSlice'
+import { MarsSlicePacer } from '$lib/languages/mars/marsSlice'
 import type { ExecutionGeneration } from '$lib/languages/ExecutionController'
 import type { Testcase } from '$lib/Project.svelte'
 import { MarsDevices } from '$lib/languages/mars/MarsDevices'
@@ -100,6 +97,14 @@ const READ_STRING_QUESTION = 'Enter a string'
  */
 const MIPS_INSTRUCTIONS_PER_MS = 1_000
 
+/**
+ * How much wall time one `simulate*` call aims at, which is also how far a chunk that turns out to
+ * sleep can carry the slice past its deadline before the next check (`marsSlice.ts`). A millisecond
+ * is about a thousand instructions of compute and fifty calls in a compute slice, which the call
+ * overhead measured there puts at half a percent of throughput.
+ */
+const MIPS_CHUNK_TARGET_MS = 1
+
 const INVALID_CHARACTER_ERROR = 'Invalid character'
 const INVALID_NUMBER_ERROR = 'Invalid number'
 
@@ -115,6 +120,8 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
      * assembled Core, because the peripherals it drives live as long as the Emulator does.
      */
     private readonly devices: MarsDevices
+    /** The chunking of a slice, which is what keeps a sleeping program's slice short (`marsSlice.ts`). */
+    private readonly pacer = new MarsSlicePacer(MIPS_CHUNK_TARGET_MS)
     /** MARS's five display parameters, from the project and changed from the Screen panel. */
     private display: ProjectDisplay
     /** Whether the last Build read them out of a `@screen` comment instead. */
@@ -246,6 +253,7 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         //unconditionally so this is what actually turns undo off when history is disabled
         mips.setUndoEnabled(normalizeUndoSize(undoSize) > 0)
         mips.initialize(true)
+        this.pacer.reset()
         registerHandlers(mips, this.makeHandlers())
         //after `initialize`, so the observers see the program's writes and not the loading of `.data`
         this.devices.attach(mips, this.display)
@@ -475,34 +483,40 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
     }
 
     /**
-     * The Core stops for input by leaving the pending `simulate*` promise unsettled, so an input
-     * wait is served inside the slice and only the budget, a breakpoint or the end of the program
-     * end one. It reports no instruction count, so a slice that came back still runnable ran its
-     * whole budget, which is exact for the compute-only case the budget exists for.
+     * The Core stops for input by leaving the pending `simulate*` promise unsettled, and serves a
+     * `sleep` the same way, so both are served inside the slice and only the budget, a breakpoint
+     * or the end of the program end one. The budget is spent in chunks by the pacer, which is what
+     * keeps the slice of a sleeping program, and the pause it holds off, to about one sleep
+     * (`marsSlice.ts`). The Core reports no instruction count, so a chunk that came back still
+     * runnable ran its whole limit, which is exact for the compute-only case the budget exists for.
      */
     async _runSlice(request: ExecutionSliceRequest): Promise<ExecutionSlice> {
         const mips = this.requireMips()
-        const budget = sliceInstructionBudget(request, MIPS_INSTRUCTIONS_PER_MS)
+        const breakpoints = calculateBreakpoints(mips, request.breakpoints)
         this.currentExecution = this.executionController.capture()
-        let terminated: boolean
         try {
-            terminated = await mips.simulateWithBreakpointsAndLimit(
-                calculateBreakpoints(mips, request.breakpoints),
-                budget
+            return await this.pacer.run(
+                request,
+                MIPS_INSTRUCTIONS_PER_MS,
+                this._peripherals.clock,
+                async (limit) => {
+                    const terminated = await mips.simulateWithBreakpointsAndLimit(
+                        breakpoints,
+                        limit
+                    )
+                    if (terminated || this._hasTerminated()) return 'terminated'
+                    //`simulate*` does not say whether the limit or a breakpoint stopped it; the line
+                    //the program is about to execute does, because a run stopped on a breakpoint is
+                    //parked on it
+                    const line = this._getNextInstruction()?.lineNumber ?? -1
+                    return line >= 0 && request.breakpoints.includes(line) ? 'breakpoint' : 'ran'
+                }
             )
         } finally {
             //the bitmap display catches up once per slice rather than once per stored word, which is
             //what keeps the observer cheap; a program that sleeps flushes from the handler too
             this.devices.flush()
         }
-        if (terminated || this._hasTerminated()) {
-            return { reason: 'terminated', instructions: budget }
-        }
-        //`simulate*` does not say whether the budget or a breakpoint stopped it; the line the
-        //program is about to execute does, because a run stopped on a breakpoint is parked on it
-        const line = this._getNextInstruction()?.lineNumber ?? -1
-        const onBreakpoint = line >= 0 && request.breakpoints.includes(line)
-        return { reason: onBreakpoint ? 'breakpoint' : 'budget', instructions: budget }
     }
 
     async _runTestcase(_testcase: Testcase, haltLimit: number): Promise<void> {

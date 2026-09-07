@@ -166,9 +166,6 @@
             <ButtonLink
                 style="gap: 1rem"
                 cssVar="secondary"
-                onClick={() => {
-                    document.body.scrollTo({ top: 0, behavior: 'smooth' })
-                }}
                 href={`/learn/courses/${data.course.slug}/${previousLecture?.module.slug}/${previousLecture?.slug}`}
             >
                 <Icon>
@@ -184,9 +181,6 @@
             <ButtonLink
                 style="gap: 1rem"
                 disabled={!nextLecture}
-                onClick={() => {
-                    document.body.scrollTo({ top: 0, behavior: 'smooth' })
-                }}
                 href={`/learn/courses/${data.course.slug}/${nextLecture?.module.slug}/${nextLecture?.slug}`}
             >
                 Next Lecture

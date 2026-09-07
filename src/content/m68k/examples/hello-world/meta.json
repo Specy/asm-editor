@@ -2,5 +2,6 @@
     "name": "Print a string",
     "description": "The first program that talks to anybody: two lines through trap #15, one of them with a number on the end, and a task 9 to stop.",
     "order": 17,
-    "topic": "hello-world"
+    "topic": "hello-world",
+    "template": 4
 }

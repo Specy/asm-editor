@@ -13,6 +13,7 @@ import type { ProjectDisplay } from '$lib/languages/mars/marsDisplay'
 import type { Testcase } from '$lib/Project.svelte'
 import { Keyboard } from '$lib/languages/peripherals/Keyboard'
 import { ProgramClock } from '$lib/languages/peripherals/ProgramClock'
+import { InterpreterStatus } from '$lib/languages/commonLanguageFeatures.svelte'
 
 /**
  * RARS's bitmap display and keyboard-and-display registers against the real Core under node, the
@@ -462,5 +463,28 @@ describe('the RISC-V examples', () => {
         expect(emulator.stdOut.endsWith('abq')).toBe(true)
         expect(pixelAt(emulator, 0, 0)).not.toBe(0)
         expect(pixelAt(emulator, 1, 0)).not.toBe(0)
+    })
+})
+
+describe('RISC-V pause', () => {
+    it('is taken within a sleep or two of a program that sleeps in a loop', async () => {
+        //the Core serves the sleep inside its `simulate*` call, so only the chunking of the slice
+        //(`marsSlice.ts`) keeps a pause from waiting for the whole instruction budget's worth of
+        //sleeps: four instructions a sleep and a compute slice's budget would be a minute
+        const emulator = await build(`        .text
+main:
+loop:   li      a7, 32
+        li      a0, 5
+        ecall
+        j       loop
+`)
+        const run = emulator.run(INSTRUCTION_LIMIT)
+        await new Promise((resolve) => setTimeout(resolve, 30))
+        const pressed = performance.now()
+        emulator.pause()
+        expect(await run).toBe(InterpreterStatus.Running)
+        expect(emulator.paused).toBe(true)
+        expect(emulator.errors).toEqual([])
+        expect(performance.now() - pressed).toBeLessThan(1_000)
     })
 })

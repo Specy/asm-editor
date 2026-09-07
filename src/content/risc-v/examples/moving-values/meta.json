@@ -2,5 +2,6 @@
     "name": "Moving values around",
     "description": "Two numbers in registers, added and doubled into a perimeter, with the answer read in the registers panel.",
     "order": 0,
-    "topic": "moving-values"
+    "topic": "moving-values",
+    "template": 1
 }

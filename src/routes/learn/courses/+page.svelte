@@ -3,7 +3,6 @@
     import Card from '$cmp/shared/layout/Card.svelte'
     import Header from '$cmp/shared/layout/Header.svelte'
     import Page from '$cmp/shared/layout/Page.svelte'
-    import Row from '$cmp/shared/layout/Row.svelte'
     import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
     import { resolve } from '$app/paths'
 
@@ -32,14 +31,14 @@
 <Page hasNavbar cropped contentStyle="padding: 1rem;">
     <Header>Courses</Header>
     <p></p>
-    <Row gap="1rem" wrap>
+    <div class="courses">
         {#each data.courses as course (course.slug)}
             <a href={resolve('/learn/courses/[courseId]', { courseId: course.slug })}>
                 <Card
                     background="secondary"
                     gap="1rem"
                     padding="1rem"
-                    style="width: min(100vw - 2rem,25rem)"
+                    style="width: 100%; height: 100%"
                 >
                     <Header type="h2" noMargin>
                         {course.name}
@@ -50,10 +49,19 @@
                 </Card>
             </a>
         {/each}
-    </Row>
+    </div>
 </Page>
 
 <style>
+    .courses {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
+        gap: 1rem;
+        width: 100%;
+    }
+    .courses a {
+        display: flex;
+    }
     .icon {
         height: 2.2rem;
         display: flex;

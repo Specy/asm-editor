@@ -94,9 +94,17 @@
         }
     })
 
-    async function save(project: Project): Promise<boolean> {
+    /**
+     * Saves the project, asking first when it is a shared one, which is nobody's yet. An automatic
+     * save (autosave while typing, the display a Build read from the source) is dropped for a
+     * shared project rather than asked about: it would put the question up as soon as the program
+     * is run, and whether a shared project becomes one of the user's own is theirs to decide, with
+     * the Save button or when they leave the page.
+     */
+    async function save(project: Project, silent: boolean): Promise<boolean> {
         if (status !== 'loaded') return false
         if (project.id === SHARE_ID) {
+            if (silent) return false
             const confirmed = await Prompt.confirm(
                 'Do you want to save this shared project in your projects?'
             )
@@ -199,7 +207,7 @@
                         changePage('/projects')
                     }}
                     on:save={async ({ detail }) => {
-                        if (!(await save(project))) return
+                        if (!(await save(project, detail.silent))) return
                         console.log('Saved')
                         if (!detail.silent) toast.logPill('Project saved')
                     }}

@@ -52,6 +52,17 @@ html {
     }
 }
 
+/* The document, not the body, is what scrolls. `overflow-x: hidden` alone would make the body a
+   scroll container (an `overflow-y` of `visible` computes to `auto` beside it), and a page would then
+   scroll inside a body that is exactly one viewport tall while the viewport itself stayed at the top:
+   nothing SvelteKit does on a navigation — scrolling to the top of the new page, restoring the
+   position on back — reaches a body scroller, so every page opened at the previous page's scroll
+   offset. `clip` clips the same horizontal overflow without creating a scroll container, and the
+   overflow of `html` propagates to the viewport as usual. */
+body {
+    overflow-x: clip;
+}
+
 @media print {
     body,
     html {
