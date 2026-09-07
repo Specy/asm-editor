@@ -153,5 +153,4 @@ the last clear filled the Screen with, which is why white on the sky looks right
 Try changing the `115` in the `C_LINE_TO` row of the roof to `70`. That row is the apex, so the roof
 stops being a triangle and leans over to the left, and nothing else in the program has to know. The
 fill point at `115, 65` is still inside the leaning roof, so command 8 still finds its fence. Push
-the apex far enough that it is not and the fill spreads over the sky instead, which is the one thing
-to keep in mind about a flood fill: it knows colours, not shapes.
+the apex far enough that it is not and the fill spreads over the sky instead.
