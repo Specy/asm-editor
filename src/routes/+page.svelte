@@ -82,7 +82,6 @@
                 </h1>
 
                 <Column gap="0.6rem">
-
                     <Row gap="0.6rem" wrap>
                         <ButtonLink
                             style={`${shadow}; padding: 0.5rem 0.7rem`}
@@ -150,7 +149,6 @@
                         </Button>
                     </Row>
                 </Column>
-
             </div>
         </div>
         <AnimatedRgbLine height="0.5rem" style="border-radius: 0;" />

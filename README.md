@@ -2,11 +2,10 @@
 
 A webapp to write, run and learn M68K, MIPS, RISC-V, X86 and Z80 assembly code with a focus on teaching and learning assembly.
 
-It includes many debugging and inspection tools aimed to help you understand assembly more easily. 
+It includes many debugging and inspection tools aimed to help you understand assembly more easily.
 
 > **Published research** ASM Editor is described in [_ASM Editor: Understanding Language Abstractions Through Assembly Programming_](https://doi.org/10.1109/EDUCON67543.2026.11574463), presented at the 2026 IEEE Global Engineering Education Conference (EDUCON), Cairo.
 > If you use it in teaching or research, please [cite the paper](#citing-asm-editor).
-
 
 [![localImage](https://asm-editor.specy.app/images/ASM-editor.webp)](https://asm-editor.specy.app/)
 
@@ -52,6 +51,7 @@ You can embed the editor in your website [here](https://asm-editor.specy.app/emb
 The webapp is made with [sveltekit](https://kit.svelte.dev/), [rust](https://www.rust-lang.org/it) webassembly and [java TEAVM](https://teavm.org/).
 
 Uses the same editor as vs-code, and the emulators:
+
 - [WASM M68K interpreter](https://github.com/Specy/s68k) to run the code
 - [MIPS Simulator (mars)](https://github.com/Specy/mars) compiled from java to javascript
 - [RISC-V Simulator (rars)](https://github.com/Specy/rars) compiled from java to javascript
