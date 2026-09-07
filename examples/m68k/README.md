@@ -13,6 +13,12 @@ Programs for the manual verification matrix in [`docs/manual-verification.md`](.
 
 `bouncing-ball.x68`, `keyboard-move.x68` and `mouse-paint.x68` run until you press Stop.
 
+## `flappy-bird.x68`: a game
+
+`flappy-bird.x68` It is a playable flappy bird built out of the same tasks the others check one at a time: double buffering (92 mode 17 and 94), the delay (23), key state (19), the mouse (61) and text drawn at a pixel position (95). Build it, Run it, click the screen panel so it has the keyboard, then tap SPACE to flap.
+
+It runs until you press Stop. A frame costs about 61 instructions, so the default two million instruction limit ends it after roughly a quarter of an hour; set "Instruction execution limit" to 0 in the settings to play longer than that.
+
 ## `easy68k/`: the reference programs
 
 `easy68k/` holds three of EASy68K's own example programs, unchanged apart from their line endings. They are the compatibility reference of [ADR 0003](../../docs/adr/0003-preserve-simulator-graphics-conventions.md): what a task draws here is compared against what these draw in EASy68K itself.
