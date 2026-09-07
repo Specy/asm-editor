@@ -66,7 +66,7 @@
 
     <section id="directives">
         <h2>Directives</h2>
-        <p>
+        <p class="text-muted">
             Directives are not executed by the CPU: they tell the assembler where to put the code,
             what data to emit, which names stand for which values, and when to expand a macro.
         </p>

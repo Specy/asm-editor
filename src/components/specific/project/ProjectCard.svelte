@@ -67,7 +67,12 @@
         <div style="margin-left: 0.4rem">
             {project.language.toUpperCase()}
         </div>
-        <div style="display: flex; gap: 0.4rem">
+        <div style="display: flex; gap: 0.2rem; align-items: center;">
+            <button class="trash-icon" onclick={deleteProject} title="Delete this project">
+                <Icon>
+                    <FaTrashAlt />
+                </Icon>
+            </button>
             <Button
                 cssVar="secondary"
                 style="width: 2.2rem; height: 2.2rem;"
@@ -88,11 +93,6 @@
                     <FaDownload />
                 </Icon>
             </Button>
-            <button class="trash-icon" onclick={deleteProject} title="Delete this project">
-                <Icon>
-                    <FaTrashAlt />
-                </Icon>
-            </button>
 
             <ButtonLink
                 bg={colors.theme.accent2.color}

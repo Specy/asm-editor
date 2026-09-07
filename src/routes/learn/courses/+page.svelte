@@ -43,7 +43,7 @@
                     <Header type="h2" noMargin>
                         {course.name}
                     </Header>
-                    <p>
+                    <p class="text-muted">
                         {course.description}
                     </p>
                 </Card>

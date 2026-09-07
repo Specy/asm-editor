@@ -16,7 +16,7 @@
 </svelte:head>
 <Page cropped contentStyle="padding: 1rem; gap: 1rem;">
     <h1>Z80 directives</h1>
-    <p>
+    <p class="text-muted">
         Directives are not executed by the CPU: they tell the assembler where to put the code, what
         data to emit, which names stand for which values, and when to expand a macro. Most of them
         have several accepted spellings, so sources written for other Z80 assemblers usually

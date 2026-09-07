@@ -280,6 +280,7 @@ When the user asks a question about the lecture topic or for a demonstration of 
 
     .description {
         white-space: pre-line;
+        color: var(--background-text-muted);
         line-height: 1.5;
         font-family: 'Noto Serif', Rubik, sans-serif;
         font-weight: 500;

@@ -19,6 +19,8 @@
     import Button from '$cmp/shared/button/Button.svelte'
     import Page from '$cmp/shared/layout/Page.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
+    import Column from '$cmp/shared/layout/Column.svelte'
+
     import { ProjectStore } from '$stores/projectsStore.svelte'
     import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
     import FaDumbbell from '~icons/fa-solid/dumbbell'
@@ -79,45 +81,56 @@
                     </span>
                 </h1>
 
-                <Row gap="0.6rem" wrap>
-                    <ButtonLink
-                        style={`${shadow}; padding: 0.5rem 0.7rem`}
-                        cssVar="tertiary"
-                        href="https://github.com/Specy/asm-editor"
-                        title="Open the project on github"
-                    >
-                        <Icon>
-                            <FaGithub />
-                        </Icon>
-                    </ButtonLink>
-                    <ButtonLink
-                        style={`${shadow}; padding: 0.5rem 0.7rem`}
-                        cssVar="tertiary"
-                        href="/donate"
-                        title="Donate to the project"
-                    >
-                        <Icon>
-                            <FaDonate />
-                        </Icon>
-                    </ButtonLink>
-                    <ButtonLink
-                        href={shouldGoToCurrentProjects ? '/projects' : '/projects/create'}
-                        style={`${shadow} gap: 0.5rem; min-width: 12.5rem`}
-                        title="Open the editor"
-                    >
-                        {#if shouldGoToCurrentProjects}
-                            Go to your projects
-                        {:else}
-                            Create first project
-                        {/if}
-                        <Icon>
-                            <FaArrowRight />
-                        </Icon>
-                    </ButtonLink>
-                </Row>
+                <Column gap="0.6rem">
 
-                <Row wrap gap="0.5rem">
-                    {#if installEvent}
+                    <Row gap="0.6rem" wrap>
+                        <ButtonLink
+                            style={`${shadow}; padding: 0.5rem 0.7rem`}
+                            cssVar="tertiary"
+                            href="https://github.com/Specy/asm-editor"
+                            title="Open the project on github"
+                        >
+                            <Icon>
+                                <FaGithub />
+                            </Icon>
+                        </ButtonLink>
+                        <ButtonLink
+                            style={`${shadow}; padding: 0.5rem 0.7rem`}
+                            cssVar="tertiary"
+                            href="/donate"
+                            title="Donate to the project"
+                        >
+                            <Icon>
+                                <FaDonate />
+                            </Icon>
+                        </ButtonLink>
+                        <ButtonLink
+                            href={shouldGoToCurrentProjects ? '/projects' : '/projects/create'}
+                            style={`${shadow} gap: 0.5rem; min-width: 12.5rem`}
+                            title="Open the editor"
+                        >
+                            {#if shouldGoToCurrentProjects}
+                                Go to your projects
+                            {:else}
+                                Create first project
+                            {/if}
+                            <Icon>
+                                <FaArrowRight />
+                            </Icon>
+                        </ButtonLink>
+                    </Row>
+
+                    <Row wrap gap="0.5rem">
+                        <ButtonLink
+                            href="/learn/courses"
+                            cssVar="accent2"
+                            style={`${shadow} gap: 0.5rem`}
+                        >
+                            Courses
+                            <Icon>
+                                <FaGraduationCap />
+                            </Icon>
+                        </ButtonLink>
                         <Button
                             style={`${shadow} gap: 0.5rem; ${!installEvent ? 'pointer-events: none; opacity: 0' : ''}`}
                             cssVar="secondary"
@@ -135,19 +148,9 @@
                             </Icon>
                             Install WebApp
                         </Button>
-                    {/if}
+                    </Row>
+                </Column>
 
-                    <ButtonLink
-                        href="/learn/courses"
-                        cssVar="accent2"
-                        style={`${shadow} gap: 0.5rem`}
-                    >
-                        View courses
-                        <Icon>
-                            <FaGraduationCap />
-                        </Icon>
-                    </ButtonLink>
-                </Row>
             </div>
         </div>
         <AnimatedRgbLine height="0.5rem" style="border-radius: 0;" />
@@ -258,7 +261,17 @@
                 can also customise the theme of the editor to your liking.
             </div>
         </MainPageSection>
-        <MainPageSection id="exam" reverse>
+        <MainPageSection id="peripherals" imageUrl="/images/ASM-Peripherals.webp" reverse>
+            {#snippet title()}
+                Peripherals
+            {/snippet}
+            <div class="description" class:textShadow={textShadowSecondary}>
+                Programs can draw on a screen and interact with the user through mouse and keyboard
+                or use the terminal for stdout and stdin. Available for M68K, MIPS, RISC-V and Z80.
+                This can also be used to write simple interactive games and programs.
+            </div>
+        </MainPageSection>
+        <MainPageSection id="exam">
             {#snippet title()}
                 Exam
             {/snippet}
@@ -276,7 +289,7 @@
                 where the editor is locked down.
             </div>
         </MainPageSection>
-        <MainPageSection id="chat" imageUrl="/images/ASM-AI-Chat.webp">
+        <MainPageSection id="chat" imageUrl="/images/ASM-AI-Chat.webp" reverse>
             {#snippet title()}
                 AI Chat
             {/snippet}
@@ -295,7 +308,7 @@
                 to get help with M68K, MIPS, RISC-V, X86 and Z80 assembly.
             </div>
         </MainPageSection>
-        <MainPageSection id="embed" reverse>
+        <MainPageSection id="embed">
             {#snippet title()}
                 Embed
             {/snippet}
@@ -312,11 +325,11 @@
                 </a>
             </div>
         </MainPageSection>
-        <MainPageSection id="citation">
+        <MainPageSection id="citation" reverse>
             {#snippet title()}
                 Published research
             {/snippet}
-            <div class="description" class:textShadow={textShadowPrimary}>
+            <div class="description" class:textShadow={textShadowSecondary}>
                 ASM Editor is described in a peer-reviewed paper presented at the 2026 IEEE Global
                 Engineering Education Conference, together with the first-year course it was built
                 for.
@@ -355,8 +368,6 @@
         padding: 1rem;
         max-width: 38rem;
         text-align: center;
-        margin-top: 0;
-        margin-bottom: 1rem;
         color: var(--primary-text);
         font-weight: bold;
         line-height: 1.15;

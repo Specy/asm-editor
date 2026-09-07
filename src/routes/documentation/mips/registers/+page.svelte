@@ -9,7 +9,7 @@
 </svelte:head>
 <Page cropped contentStyle="padding: 1rem; gap: 1rem;">
     <h1>MIPS Registers</h1>
-    <p>
+    <p class="text-muted">
         The MIPS architecture has 32 general-purpose registers, $HI and $LO registers for
         multiplication and division, and another 32 for floating point numbers.
     </p>

@@ -313,6 +313,10 @@ function makeThemeStore(_theme: StoredTheme<ThemeKeys>) {
         name: _theme.name,
         textForDark: '#dbdbdb',
         textForLight: '#181818',
+        //the same text, dimmed: what long-form prose (a lecture, a documentation description) is
+        //written in, so it sits a step below titles and interface text without losing contrast
+        textMutedForDark: '#d4d4d4',
+        textMutedForLight: '#3a3a3a',
         version: _theme.version,
         id: _theme.id,
         extends: _theme.extends,
@@ -411,6 +415,8 @@ function makeThemeStore(_theme: StoredTheme<ThemeKeys>) {
         meta = {
             textForDark: '#dbdbdb',
             textForLight: '#181818',
+            textMutedForDark: '#d4d4d4',
+            textMutedForLight: '#3a3a3a',
             version: selected.version,
             id: selected.id,
             extends: selected.extends,
@@ -448,6 +454,8 @@ function makeThemeStore(_theme: StoredTheme<ThemeKeys>) {
         meta = {
             textForDark: '#dbdbdb',
             textForLight: '#181818',
+            textMutedForDark: '#d4d4d4',
+            textMutedForLight: '#3a3a3a',
             name: newTheme.name,
             id: newTheme.id,
             version: newTheme.version,

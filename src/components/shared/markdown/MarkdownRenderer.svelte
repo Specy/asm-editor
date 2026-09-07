@@ -382,7 +382,7 @@
     }
 
     :global(._markdown p) {
-        opacity: 0.95;
+        color: var(--background-text-muted);
     }
 
     :global(._markdown table) {

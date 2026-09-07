@@ -9,12 +9,12 @@
     let { disableLinks = false }: Props = $props()
 </script>
 
-<p>
+<p class="text-muted">
     RISC-V syscalls are used to make requests to the operating system. They are not instructions
     that are executed by the CPU, but rather instructions that are used by the simulator to make
     requests to the operating system.
 </p>
-<p>
+<p class="text-muted">
     Each syscall has a unique code that is used to identify it. You must put the syscall code inside
     the the a7 register before calling the ecall instruction.
     <br />

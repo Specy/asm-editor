@@ -81,6 +81,11 @@ body {
     text-overflow: ellipsis;
 }
 
+/* prose (a lecture, a documentation description) written a step below titles and interface text */
+.text-muted {
+    color: var(--background-text-muted);
+}
+
 a {
     text-decoration: none;
     color: inherit;
