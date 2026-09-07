@@ -23,7 +23,7 @@ export type MeasuredLanguage = 'Z80' | 'M68K' | 'MIPS' | 'RISC-V' | 'X86'
 
 export const MEASURED_LANGUAGES: MeasuredLanguage[] = ['Z80', 'M68K', 'MIPS', 'RISC-V', 'X86']
 
-/** What a Build does in the app: `settingsStore.values.maxHistorySize`, whose default is 100. */
+/** What a Build does in the app: the Project's `maxHistorySize` Setting, whose default is 100. */
 export const HISTORY_SIZE = 100
 
 export type MeasurableEmulator = {

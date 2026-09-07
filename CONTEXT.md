@@ -60,6 +60,36 @@ The Z80's way of reaching every **Peripheral**: a fixed assignment of I/O port n
 
 The **Port map**'s group for the **Terminal**. A Z80 has no system calls: programs talk to the outside world with `in`/`out` on one of 256 I/O ports, so the Emulator maps a fixed handful of them (`Z80_PORTS` in `src/lib/languages/Z80/Z80-model.ts`) onto the Terminal, one port per output format (character, unsigned, signed, hexadecimal, 16 bit) instead of one syscall number per operation. A write formats the byte and appends it to the Terminal's output; a read with no buffered input pauses the machine — the Core stops with `WAITING_FOR_INPUT` and the adapter re-executes the `in` once the Terminal's **Input Source** has answered — so a port read raises an **Interrupt** like any other input request. See `docs/adr/0002-z80-console-ports.md`.
 
+## Project
+
+The unit of work the editor saves, opens and shares: one language, its **Files**, its **Settings**, its **Testcases**, its **Display configuration**, a name and a description. A record with those parts, not a folder: only its Files are visible to the assembler and the program.
+_Avoid_: workspace, folder, program
+
+## File
+
+A named entry of a **Project**'s files: a relative path with an extension, and content stored as a string together with the encoding that turns the string back into text or bytes. Files are what the assembler and the program can see; Settings and Testcases are not Files.
+_Avoid_: document, asset, source file (when the **Entry file** is meant)
+
+## Entry file
+
+The **File** a Build assembles first; every other File is reached from it, through an include, or is not built at all. A Project has exactly one, `main.<ext>` by default. Choosing another is a different act from choosing which File the editor shows.
+_Avoid_: main file, active file, selected file, open file
+
+## Settings
+
+Per-Project configuration that changes what the **Emulator** or the program does: the undo history size, the **Screen** undo budget. They belong to one **Project**, are edited through the editor's GUI and are never a file the program can see. A Project records only the Settings decided for it; anything undecided follows the app's default for its language. The MARS bitmap display is not a Setting, see **Display configuration**.
+_Avoid_: preferences, options, config, global settings
+
+## Preferences
+
+Per-person configuration that changes only how the editor looks or behaves for its user, never what a program does: register number base, panel visibility, autosave, theme, shortcuts. They follow the person across every **Project**.
+_Avoid_: settings, global settings, user settings
+
+## Display configuration
+
+The MARS and RARS bitmap display parameters of a MIPS or RISC-V **Project**: unit size, display size and base address. The program states them in an `@screen` comment, read at Build, or the user chooses them beside the **Screen**; a choice beside the Screen rewrites the comment when the program has one, and is only saved with the Project when it has none. Not a **Setting**.
+_Avoid_: display settings, screen settings, screen config
+
 ## Exam
 
 A Project handed to a student under a track, a password and a time limit, with a submission recorded against it. It is a Project-level concept: the Emulator has no exam-specific restriction, because no Core requires blocking input any more (see **Input Source**).

@@ -70,6 +70,7 @@
         "eslint": "^10.10.0",
         "eslint-config-prettier": "^10.1.8",
         "eslint-plugin-svelte": "^3.23.0",
+        "fake-indexeddb": "6.2.5",
         "mdsvex": "^0.12.8",
         "prettier": "^3.9.6",
         "prettier-plugin-svelte": "^4.1.1",

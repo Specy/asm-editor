@@ -1,17 +1,51 @@
-import { BASE_CODE, COMMENT_CHARACTER } from './Config'
+import { BASE_CODE, COMMENT_CHARACTER, LANGUAGE_EXTENSIONS } from './Config'
 import {
     DEFAULT_PROJECT_DISPLAY as MARS_DEFAULT_DISPLAY,
     type ProjectDisplay
 } from './languages/mars/marsDisplay'
 import { serializer } from '$lib/json'
 import { detectAssemblyLanguage } from './languages/languageDetector'
+import { cleanProjectSettings, type ProjectSettingsDecisions } from './projectSettings'
 
 export type AvailableLanguages = 'M68K' | 'MIPS' | 'X86' | 'RISC-V' | 'RISC-V-64' | 'Z80'
 
+export const AVAILABLE_LANGUAGES: readonly AvailableLanguages[] = [
+    'M68K',
+    'MIPS',
+    'X86',
+    'RISC-V',
+    'RISC-V-64',
+    'Z80'
+]
+
 export type AvailableProgrammingLanguages = 'c'
 
+/**
+ * How a File's content string is read back. `plain` is the text itself. The set is open, `base64`
+ * being the one the first binary File will add, and a reader that meets one it does not know fails
+ * rather than reading the string as text ([ADR 0013](../../docs/adr/0013-project-is-a-record.md)).
+ */
+export type FileEncoding = 'plain'
+export const FILE_ENCODINGS: readonly FileEncoding[] = ['plain']
+
+export type ProjectFile = {
+    encoding: FileEncoding
+    content: string
+}
+
+/** Path to File. Paths are relative, `/` separated, with an extension; see `isValidFilePath`. */
+export type ProjectFiles = Record<string, ProjectFile>
+
+/**
+ * A Project as stored and shared: a record of typed parts, of which only `files` is visible to the
+ * assembler and the program ([ADR 0013](../../docs/adr/0013-project-is-a-record.md)). `entry` is
+ * always a key of `files`; `settings` holds only what was decided for this Project
+ * ([ADR 0014](../../docs/adr/0014-settings-split-by-effect.md)).
+ */
 export interface ProjectData {
-    code: string
+    files: ProjectFiles
+    entry: string
+    settings: ProjectSettingsDecisions
     createdAt: number
     updatedAt: number
     name: string
@@ -24,11 +58,154 @@ export interface ProjectData {
 }
 
 /**
+ * Anything a Project may come back as: the current shape, the version 1 shape whose whole program
+ * was one `code` string, or a partial of either, straight out of JSON. `normalizeProjectData` is the
+ * one place that turns it into a `ProjectData`, so a project stored, exported or shared before the
+ * files map existed loads through the same path as a current one.
+ */
+export type StoredProject = Partial<
+    Omit<ProjectData, 'files' | 'entry' | 'settings' | 'language' | 'testcases' | 'display'>
+> & {
+    /** The version 1 program, and the convenience for creating a project from a template. */
+    code?: string
+    language?: string
+    files?: unknown
+    entry?: unknown
+    settings?: unknown
+    testcases?: Testcase[]
+    display?: Partial<ProjectDisplay>
+}
+
+/**
  * The MIPS and RISC-V bitmap display configuration lives with the two adapters that read it, since
  * the parameters, their choice lists and their defaults are MARS's and RARS's own; it is re-exported
  * here because it is project data, saved and shared with the rest of a project.
  */
 export { DEFAULT_PROJECT_DISPLAY, type ProjectDisplay } from './languages/mars/marsDisplay'
+
+/** A stored or imported project whose files cannot be read as this version's format. */
+export class ProjectFormatError extends Error {
+    constructor(message: string) {
+        super(message)
+        this.name = 'ProjectFormatError'
+    }
+}
+
+export function isAvailableLanguage(value: unknown): value is AvailableLanguages {
+    return typeof value === 'string' && (AVAILABLE_LANGUAGES as string[]).includes(value)
+}
+
+/** The one File a new Project starts with, which is also its Entry file. */
+export function defaultEntryPath(language: AvailableLanguages): string {
+    return `main.${LANGUAGE_EXTENSIONS[language]}`
+}
+
+/**
+ * The path rules, which the drive peripheral will inherit: relative, `/` separated, no leading
+ * slash, no empty, `.` or `..` segment, and a file name with an extension. Folders exist only
+ * through the paths of the Files in them.
+ */
+export function isValidFilePath(path: string): boolean {
+    if (typeof path !== 'string' || path.length === 0) return false
+    if (path.includes('\\')) return false
+    for (let i = 0; i < path.length; i++) if (path.charCodeAt(i) < 0x20) return false
+    const segments = path.split('/')
+    if (segments.some((segment) => segment === '' || segment === '.' || segment === '..'))
+        return false
+    const name = segments[segments.length - 1] ?? ''
+    const dot = name.lastIndexOf('.')
+    return dot > 0 && dot < name.length - 1
+}
+
+function cleanFiles(raw: unknown): ProjectFiles {
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+        throw new ProjectFormatError('The files of this project are not a map of path to file')
+    }
+    const files: ProjectFiles = {}
+    for (const [path, file] of Object.entries(raw as Record<string, unknown>)) {
+        if (!isValidFilePath(path)) {
+            throw new ProjectFormatError(`"${path}" is not a valid file path`)
+        }
+        if (typeof file !== 'object' || file === null) {
+            throw new ProjectFormatError(`The file "${path}" has no content`)
+        }
+        const { encoding, content } = file as Record<string, unknown>
+        if (!(FILE_ENCODINGS as unknown[]).includes(encoding)) {
+            throw new ProjectFormatError(
+                `The file "${path}" uses the encoding "${String(encoding)}", which this version of the editor does not know`
+            )
+        }
+        if (typeof content !== 'string') {
+            throw new ProjectFormatError(`The content of the file "${path}" is not a string`)
+        }
+        files[path] = { encoding: encoding as FileEncoding, content }
+    }
+    return files
+}
+
+function pickEntry(entry: unknown, files: ProjectFiles, language: AvailableLanguages): string {
+    if (typeof entry === 'string' && entry in files) return entry
+    const preferred = defaultEntryPath(language)
+    if (preferred in files) return preferred
+    return Object.keys(files)[0] ?? preferred
+}
+
+/**
+ * Every stored, exported or shared shape into the current one. A version 1 `code` becomes the
+ * default Entry file; a project without any program gets the language's empty one; an entry that
+ * names no File falls back to `main.<ext>` or the first File. Throws a `ProjectFormatError` for
+ * files this version cannot read, which is the one thing a project is not silently repaired from.
+ */
+export function normalizeProjectData(raw: StoredProject | undefined): ProjectData {
+    const language = isAvailableLanguage(raw?.language) ? raw.language : 'M68K'
+    let files = raw?.files !== undefined ? cleanFiles(raw.files) : {}
+    if (Object.keys(files).length === 0) {
+        const content = typeof raw?.code === 'string' ? raw.code : BASE_CODE[language]
+        files = { [defaultEntryPath(language)]: { encoding: 'plain', content } }
+    }
+    const now = Date.now()
+    return {
+        id: raw?.id ?? '',
+        files,
+        entry: pickEntry(raw?.entry, files, language),
+        settings: cleanProjectSettings(raw?.settings),
+        createdAt: raw?.createdAt ?? now,
+        updatedAt: raw?.updatedAt ?? now,
+        name: raw?.name ?? 'Untitled',
+        language,
+        description: raw?.description ?? '',
+        testcases: cleanTestcases(Array.isArray(raw?.testcases) ? raw.testcases : []),
+        exam: raw?.exam,
+        display: raw?.display ? cleanDisplay(raw.display) : undefined
+    }
+}
+
+/**
+ * Whether two projects hold the same content, which is what "unsaved changes" means: every part
+ * that is the user's, and none of the bookkeeping (id and timestamps).
+ */
+export function projectContentEquals(a: ProjectData, b: ProjectData): boolean {
+    return contentKey(a) === contentKey(b)
+}
+
+/** The Entry file's text, which is what a Build assembles and what an exported file's body is. */
+export function entryFileContent(project: ProjectData): string {
+    return project.files[project.entry]?.content ?? ''
+}
+
+function contentKey(project: ProjectData): string {
+    return serializer.stringify({
+        name: project.name,
+        description: project.description,
+        language: project.language,
+        files: project.files,
+        entry: project.entry,
+        settings: project.settings,
+        testcases: project.testcases,
+        display: project.display,
+        exam: project.exam
+    })
+}
 
 export type MemoryValue =
     | {
@@ -111,6 +288,11 @@ export type TestcaseResult = {
 
 const CODE_SEPARATOR = '---METADATA---'
 
+/**
+ * The metadata block of an exported file, version 2: the Entry file's text is the file's body and
+ * everything else is here, other Files included (there are none until multi-file editing exists).
+ * Version 1 had `code` as the body and no `entry`, `settings` or `files`.
+ */
 type ProjectMetadata = {
     version: number
     name: string
@@ -122,76 +304,88 @@ type ProjectMetadata = {
     testcases: Testcase[]
     exam?: Exam
     display?: ProjectDisplay
+    entry: string
+    settings: ProjectSettingsDecisions
+    files: ProjectFiles
 }
 
-const metaVersion = 1
+const metaVersion = 2
 
-export function makeProjectFromExternal(codeAndMeta: string) {
+export type ExternalImport = {
+    project: Project
+    /** Set when less than the whole file could be used, for the importer to show. */
+    notice?: string
+}
+
+const NEWER_VERSION_NOTICE =
+    'This file was saved by a newer version of the editor, so only its code was imported.'
+const UNREADABLE_METADATA_NOTICE =
+    'The metadata of this file could not be read, so only its code was imported.'
+
+/**
+ * A project from an exported file, or from a bare source file, which has no metadata block and
+ * whose language is detected from the code. A version 1 block (one `code`, no files) and the
+ * current one both load; a newer one, and one that cannot be parsed, give a project with the code
+ * only and a notice saying so, instead of dropping the metadata in silence.
+ */
+export function makeProjectFromExternal(codeAndMeta: string): ExternalImport {
     const lines = codeAndMeta.split('\n')
     const threshold = lines.findIndex((line) => line.includes(CODE_SEPARATOR))
     if (threshold === -1) {
-        // No metadata separator found — this is a raw assembly file.
-        // Detect the language from the code and create a new project.
         const code = codeAndMeta.trimEnd()
-        const language = detectAssemblyLanguage(code)
-        const project = makeProject({
-            language,
-            name: '',
-            description: '',
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-            testcases: [],
-            id: ''
-        })
-        project.code = code
-        return project
+        return { project: makeProject({ language: detectAssemblyLanguage(code), code }) }
     }
     const code = lines.slice(0, threshold).join('\n').trimEnd()
     const metaLines = lines.slice(threshold + 1)
     const commentCharacters = Object.values(COMMENT_CHARACTER)
     const separator = lines[threshold].split('').find((c) => commentCharacters.includes(c)) ?? '*'
-    let metaJson: ProjectMetadata = {
-        name: '',
-        description: '',
-        language: 'M68K',
-        version: metaVersion,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        testcases: [],
-        id: ''
-    }
+    let meta: Partial<ProjectMetadata> & { version?: unknown }
     try {
         const noComments = metaLines.map((l) => removeUntil(separator, l)).join('\n')
-        const temp = serializer.parse<ProjectMetadata>(noComments.trim())
-        if (typeof temp === 'object' && temp.version === metaVersion) {
-            metaJson = temp
-        }
+        const parsed = serializer.parse<unknown>(noComments.trim())
+        if (typeof parsed !== 'object' || parsed === null) throw new Error('not an object')
+        meta = parsed as Partial<ProjectMetadata>
     } catch (e) {
         console.error(e)
+        return {
+            project: makeProject({ language: detectAssemblyLanguage(code), code }),
+            notice: UNREADABLE_METADATA_NOTICE
+        }
     }
-    const project = makeProject(metaJson)
-    project.code = code
-    return project
+    const version = Number(meta.version)
+    if (version === 1) {
+        return { project: makeProject({ ...meta, files: undefined, entry: undefined, code }) }
+    }
+    if (version === metaVersion) {
+        const language = isAvailableLanguage(meta.language) ? meta.language : 'M68K'
+        const entry =
+            typeof meta.entry === 'string' && isValidFilePath(meta.entry)
+                ? meta.entry
+                : defaultEntryPath(language)
+        const others =
+            typeof meta.files === 'object' && meta.files !== null
+                ? (meta.files as Record<string, unknown>)
+                : {}
+        const files = { ...others, [entry]: { encoding: 'plain', content: code } }
+        return { project: makeProject({ ...meta, language, files, entry }) }
+    }
+    const language = isAvailableLanguage(meta.language)
+        ? meta.language
+        : detectAssemblyLanguage(code)
+    return {
+        project: makeProject({ language, name: meta.name, code }),
+        notice: NEWER_VERSION_NOTICE
+    }
 }
 
-export function makeProject(data?: Partial<ProjectData>) {
-    const lang = data?.language ?? ('M68K' as AvailableLanguages)
-    const state = $state({
-        id: data?.id ?? '',
-        code: data?.code ?? BASE_CODE[lang],
-        createdAt: data?.createdAt ?? Date.now(),
-        updatedAt: data?.updatedAt ?? Date.now(),
-        name: data?.name ?? 'Untitled',
-        language: lang,
-        description: data?.description ?? '',
-        testcases: (data?.testcases ?? []) as Testcase[],
-        exam: data?.exam,
-        display: data?.display ? cleanDisplay(data.display) : undefined
-    })
+export function makeProject(data?: StoredProject) {
+    const state = $state(normalizeProjectData(data))
 
     function toObject(): ProjectData {
         return $state.snapshot({
-            code: state.code,
+            files: state.files,
+            entry: state.entry,
+            settings: state.settings,
             createdAt: state.createdAt,
             updatedAt: state.updatedAt,
             name: state.name,
@@ -201,48 +395,80 @@ export function makeProject(data?: Partial<ProjectData>) {
             id: state.id,
             exam: state.exam,
             display: state.display
-        })
+        }) as ProjectData
     }
 
     function toExternal() {
+        const snapshot = toObject()
+        const files = Object.fromEntries(
+            Object.entries(snapshot.files).filter(([path]) => path !== snapshot.entry)
+        )
         const meta: ProjectMetadata = {
             version: metaVersion,
-            description: state.description,
-            name: state.name,
-            language: state.language,
-            createdAt: state.createdAt,
-            updatedAt: state.updatedAt,
-            testcases: state.testcases,
-            id: state.id,
-            exam: state.exam,
-            display: state.display
+            description: snapshot.description,
+            name: snapshot.name,
+            language: snapshot.language,
+            createdAt: snapshot.createdAt,
+            updatedAt: snapshot.updatedAt,
+            testcases: snapshot.testcases,
+            id: snapshot.id,
+            exam: snapshot.exam,
+            display: snapshot.display,
+            entry: snapshot.entry,
+            settings: snapshot.settings,
+            files
         }
-        const metaJson = serializer.stringify($state.snapshot(meta), null, 4)
-        const commentCharacter = COMMENT_CHARACTER[state.language]
+        const metaJson = serializer.stringify(meta, null, 4)
+        const commentCharacter = COMMENT_CHARACTER[snapshot.language]
         const commentedJson = metaJson
             .split('\n')
             .map((e) => `${commentCharacter} ${e}`)
             .join('\n')
         const separator = `${commentCharacter} ${CODE_SEPARATOR} do not write below here`
-        return `${state.code}\n\n\n${separator}\n${commentedJson}`
+        return `${getCode()}\n\n\n${separator}\n${commentedJson}`
     }
 
-    function set(data: Partial<ProjectData & { id: string }>) {
-        Object.assign(state, data)
-        if (data.testcases) {
-            state.testcases = cleanTestcases(data.testcases)
-        }
-        if (data.display) {
-            state.display = cleanDisplay(data.display)
-        }
+    function getCode(): string {
+        return state.files[state.entry]?.content ?? ''
+    }
+
+    function setCode(code: string) {
+        const file = state.files[state.entry]
+        if (file) file.content = code
+        else state.files[state.entry] = { encoding: 'plain', content: code }
+    }
+
+    /**
+     * Merges any stored shape into this project. A `code` given without `files` is the version 1
+     * shape (a legacy share link, say), so the files are rebuilt from it for the merged language
+     * rather than kept from before.
+     */
+    function set(data: Partial<StoredProject>) {
+        const legacyCode = typeof data.code === 'string' && data.files === undefined
+        const merged = normalizeProjectData({
+            ...toObject(),
+            ...data,
+            ...(legacyCode ? { files: undefined, entry: undefined } : {})
+        })
+        Object.assign(state, merged)
     }
 
     return {
         get id() {
             return state.id
         },
+        /** The Entry file's content. */
         get code() {
-            return state.code
+            return getCode()
+        },
+        get files() {
+            return state.files
+        },
+        get entry() {
+            return state.entry
+        },
+        get settings() {
+            return state.settings
         },
         get createdAt() {
             return state.createdAt
@@ -270,7 +496,19 @@ export function makeProject(data?: Partial<ProjectData>) {
         },
 
         set code(v: string) {
-            state.code = v
+            setCode(v)
+        },
+        set files(v: ProjectFiles) {
+            state.files = cleanFiles(v)
+            state.entry = pickEntry(state.entry, state.files, state.language)
+        },
+        set entry(v: string) {
+            if (!(v in state.files))
+                throw new ProjectFormatError(`"${v}" is not a file of this project`)
+            state.entry = v
+        },
+        set settings(v: ProjectSettingsDecisions) {
+            state.settings = cleanProjectSettings(v)
         },
         set name(v: string) {
             state.name = v

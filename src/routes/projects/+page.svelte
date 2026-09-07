@@ -12,7 +12,7 @@
     import { createShareLink, textDownloader } from '$lib/utils'
     import FaUpload from '~icons/fa-solid/upload'
     import { toast } from '$stores/toastStore'
-    import { makeProjectFromExternal } from '$lib/Project.svelte'
+    import { makeProjectFromExternal, projectContentEquals } from '$lib/Project.svelte'
     import { Prompt } from '$stores/promptStore.svelte'
     import { goto } from '$app/navigation'
     import Page from '$cmp/shared/layout/Page.svelte'
@@ -25,9 +25,10 @@
 
     async function importFromText(text: string) {
         try {
-            const project = makeProjectFromExternal(text)
+            const { project, notice } = makeProjectFromExternal(text)
+            if (notice) toast.warn(notice, 8000)
             const existing = await ProjectStore.getProject(project.id)
-            if (existing && existing.code.trim() !== project.code.trim()) {
+            if (existing && !projectContentEquals(existing.toObject(), project.toObject())) {
                 const override = await Prompt.confirm(
                     'An existing project with this id already exists, do you want to override it?'
                 )

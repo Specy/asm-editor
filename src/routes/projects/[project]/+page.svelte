@@ -1,6 +1,11 @@
 <script lang="ts">
     import { page } from '$app/stores'
-    import { makeProject, type Project } from '$lib/Project.svelte'
+    import {
+        makeProject,
+        type Project,
+        projectContentEquals,
+        type StoredProject
+    } from '$lib/Project.svelte'
     import { ProjectStore, SHARE_ID } from '$stores/projectsStore.svelte'
     import { onMount, untrack } from 'svelte'
     import { toast } from '$stores/toastStore'
@@ -18,6 +23,7 @@
     import { createShareLink } from '$lib/utils'
     import { serializer } from '$lib/json'
     import { createExamSessionLink, parseLegacyProjectExamPayload } from '$lib/exam'
+    import { resolveProjectSettings } from '$lib/projectSettings'
 
     let project = $state(makeProject())
     let status: 'loading' | 'loaded' | 'error' = $state('loading')
@@ -71,9 +77,9 @@
                 return
             }
 
-            const parsed = serializer.parse<Project>(parsedCode)
-            parsed.id = SHARE_ID
-            project.set(parsed)
+            //any shape a link was ever made from: the normalizer inside set reads them all
+            const parsed = serializer.parse<StoredProject>(parsedCode)
+            project.set({ ...parsed, id: SHARE_ID })
         } else {
             const loadedProject = await ProjectStore.getProject(id)
             if (!loadedProject) {
@@ -141,7 +147,7 @@
                 }
                 return goto(page)
             }
-            if (stored.code === project.code) return goto(page)
+            if (projectContentEquals(stored.toObject(), project.toObject())) return goto(page)
             const wantsToSave = await Prompt.confirm(
                 'You have unsaved changes. Do you want to save them?'
             )
@@ -193,7 +199,11 @@
         <EmulatorLoader
             bind:code={project.code}
             language={project.language}
-            settings={{ display: project.display }}
+            settings={{
+                display: project.display,
+                screenHistoryBudgetMb: resolveProjectSettings(project.language, project.settings)
+                    .screenHistoryBudgetMb
+            }}
         >
             {#snippet children(emulator)}
                 <ProjectEditor
@@ -203,6 +213,7 @@
                     bind:code={project.code}
                     bind:testcases={project.testcases}
                     bind:display={project.display}
+                    bind:settings={project.settings}
                     on:wantsToLeave={() => {
                         changePage('/projects')
                     }}

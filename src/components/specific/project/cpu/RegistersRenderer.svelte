@@ -5,7 +5,7 @@
         type RegisterChunk,
         RegisterSize
     } from '$lib/languages/commonLanguageFeatures.svelte'
-    import { settingsStore } from '$stores/settingsStore.svelte'
+    import { preferencesStore } from '$stores/preferencesStore.svelte'
     import { createEventDispatcher } from 'svelte'
     import SizeSelector from '$cmp/specific/project/cpu/SizeSelector.svelte'
 
@@ -36,7 +36,7 @@
     }: Props = $props()
 
     let registers = $derived(_registers.filter((r) => !hiddenRegistersNames.includes(r.name)))
-    let usesHex = $derived(!settingsStore.values.useDecimalAsDefault.value)
+    let usesHex = $derived(!preferencesStore.values.useDecimalAsDefault.value)
     let chunks: RegisterChunk[][] = $derived(registers.map((r) => r.toSizedGroups(size)))
 </script>
 

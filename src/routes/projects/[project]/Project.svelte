@@ -3,7 +3,7 @@
     import Button from '$cmp/shared/button/Button.svelte'
     import MemoryVisualiser from '$cmp/specific/project/memory/MemoryRenderer.svelte'
     import FaAngleLeft from '~icons/fa-solid/angle-left'
-    import { createEventDispatcher, onMount, type Snippet } from 'svelte'
+    import { createEventDispatcher, onMount, type Snippet, untrack } from 'svelte'
     import FaKeyboard from '~icons/fa-solid/keyboard'
     import type { AvailableLanguages, Testcase, TestcaseResult } from '$lib/Project.svelte'
     import FaSave from '~icons/fa-solid/save'
@@ -25,7 +25,10 @@
     import FaShareAlt from '~icons/fa-solid/share-alt'
     import MemoryTab from '$cmp/specific/project/memory/MemoryTab.svelte'
     import ShortcutEditor from '$cmp/specific/project/settings/ShortcutEditor.svelte'
-    import { settingsStore } from '$stores/settingsStore.svelte'
+    import { preferencesStore } from '$stores/preferencesStore.svelte'
+    import { type ProjectSettingsDecisions, resolveProjectSettings } from '$lib/projectSettings'
+    import { rewriteScreenDirective } from '$lib/languages/mars/screenDirective'
+    import { serializer } from '$lib/json'
     import type monaco from 'monaco-editor'
     import ToggleableDraggable from '$cmp/shared/draggable/DraggableContainer.svelte'
     import CallStack from '$cmp/specific/project/user-tools/CallStack.svelte'
@@ -65,6 +68,11 @@
         testcases?: Testcase[]
         /** MIPS and RISC-V only: MARS's five bitmap-display parameters, saved with the project. */
         display?: ProjectDisplay
+        /**
+         * The Project's Settings decisions ([ADR 0014](../../../../docs/adr/0014-settings-split-by-effect.md)).
+         * Left out where there is no Project to keep them in, which hides the panel's Project section.
+         */
+        settings?: ProjectSettingsDecisions
         emulator: Emulator
         embedded?: boolean
         children?: Snippet
@@ -78,6 +86,7 @@
         code = $bindable(''),
         testcases = $bindable([] as Testcase[]),
         display = $bindable(undefined as ProjectDisplay | undefined),
+        settings = $bindable(undefined as ProjectSettingsDecisions | undefined),
         emulator = $bindable(),
         embedded = false,
         children,
@@ -86,10 +95,12 @@
     }: Props = $props()
 
     const testcasesEditable = $derived(canEditTestcases && !readonly)
+    /** The values a Build and a Test run with: the decisions, the language's defaults elsewhere. */
+    const effectiveSettings = $derived(resolveProjectSettings(language, settings))
     //the Screen panel is hidden for x86, which has no graphics device at all, and behind the same
     //kind of setting as the memory panel everywhere else
     const showScreen = $derived(
-        settingsStore.values.showScreen.value && languageHasScreen(language)
+        preferencesStore.values.showScreen.value && languageHasScreen(language)
     )
     //only MARS and RARS put the screen's geometry in the user's hands: every other environment's
     //program sizes its own screen, so there is nothing to configure
@@ -99,16 +110,47 @@
     let displayOrigin: MarsDisplayOrigin = $state('user')
     let displayBaseLabel: string | undefined = $state(undefined)
 
-    function applyDisplay(next: ProjectDisplay) {
-        display = next
-        //a hand edit wins until the next Build reads the directive again
-        displayOrigin = 'user'
-        displayBaseLabel = undefined
-        //applied at once and with a re-sync from memory, as MARS does; the save keeps a reopened
-        //project on the display its example's header comment asked for
-        emulator.setDisplay?.(next)
-        dispatcher('save', { silent: true })
+    /**
+     * The one save rule (docs/design/project-format.md): a change to any part of the Project is
+     * saved at once under autosave and otherwise waits for Save, when the prompt on leaving compares
+     * the whole Project. Code goes through the same rule from the editor, debounced.
+     */
+    function changed() {
+        if (preferencesStore.values.autoSave.value) dispatcher('save', { silent: true })
     }
+
+    function applyDisplay(next: ProjectDisplay) {
+        //a program that states its display in a @screen comment gets that comment rewritten to say
+        //what was chosen, so the code and the popover agree and the next Build reads it back; a
+        //program without one keeps the choice in the Project alone
+        const rewritten = rewriteScreenDirective(code, currentDisplay, next)
+        const baseChanged = next.baseAddress !== currentDisplay.baseAddress
+        if (rewritten !== null) code = rewritten
+        display = next
+        displayOrigin = rewritten !== null ? 'directive' : 'user'
+        if (rewritten === null || baseChanged) displayBaseLabel = undefined
+        //applied at once and with a re-sync from memory, as MARS does
+        emulator.setDisplay?.(next)
+        changed()
+    }
+
+    /** A decision or a reset from the panel; it takes effect at the next Build. */
+    function applySettings(next: ProjectSettingsDecisions) {
+        settings = next
+        emulator.setScreenHistoryBudgetMb(
+            resolveProjectSettings(language, next).screenHistoryBudgetMb
+        )
+        changed()
+    }
+
+    //Testcases are edited in place behind bind:testcases, so a change is noticed by watching their
+    //content; the first run only remembers what was loaded
+    let knownTestcases: string | undefined
+    $effect(() => {
+        const current = serializer.stringify($state.snapshot(testcases))
+        if (knownTestcases !== undefined && current !== knownTestcases) untrack(changed)
+        knownTestcases = current
+    })
 
     /**
      * A Build reads the program's `@screen` directive, so the emulator may have configured itself
@@ -123,7 +165,7 @@
         if (configured.origin !== 'directive') return
         if (marsDisplayEquals(currentDisplay, configured.display)) return
         display = configured.display
-        dispatcher('save', { silent: true })
+        changed()
     }
 
     $effect(() => {
@@ -288,7 +330,7 @@
         try {
             running = false
             building = true
-            await emulator.compile(settingsStore.values.maxHistorySize.value, code)
+            await emulator.compile(effectiveSettings.maxHistorySize, code)
         } catch (e) {
             console.error(e)
             toast.error('Error compiling code. ' + getM68kErrorMessage(e))
@@ -436,7 +478,12 @@
             </Button>
         </Row>
         <ShortcutEditor bind:visible={shortcutsVisible} />
-        <Settings bind:visible={settingsVisible} {language} />
+        <Settings
+            bind:visible={settingsVisible}
+            {language}
+            projectSettings={settings}
+            onProjectSettingsChange={applySettings}
+        />
         <FloatingLanguageDocumentation bind:visible={documentationVisible} {language} />
     </header>
     <FloatingAgentSidebar
@@ -548,7 +595,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
         >
             {#key language}
                 <Editor
-                    viewZones={settingsStore.values.showPseudoInstructions.value
+                    viewZones={preferencesStore.values.showPseudoInstructions.value
                         ? emulator.decorations.map((v) => {
                               return {
                                   afterLineNumber: v.belowLine,
@@ -561,7 +608,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                         if (emulator.canExecute && emulator.terminated && emulator.line >= 0) {
                             emulator.resetSelectedLine()
                         }
-                        if (settingsStore.values.autoSave.value) {
+                        if (preferencesStore.values.autoSave.value) {
                             debounced(() => {
                                 dispatcher('save', {
                                     silent: true
@@ -611,7 +658,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                             $state.snapshot(code),
                             $state.snapshot(testcases),
                             TESTCASE_INSTRUCTION_LIMIT,
-                            settingsStore.values.maxHistorySize.value
+                            effectiveSettings.maxHistorySize
                         )
                     } catch (e) {
                         console.error(e)
@@ -681,7 +728,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
             </div>
 
             <div class="column" style="gap: 0.4rem">
-                {#if settingsStore.values.showMemory.value && (!children || !(!running && !(emulator.canExecute || !!emulator.compiledCode)))}
+                {#if preferencesStore.values.showMemory.value && (!children || !(!running && !(emulator.canExecute || !!emulator.compiledCode)))}
                     <div class="row" style="gap: 0.4rem">
                         <MemoryControls
                             systemSize={emulator.systemSize}
@@ -715,7 +762,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                 {:else}
                     <button
                         style="background: transparent; height: 100%; cursor: pointer"
-                        onclick={() => settingsStore.setValue('showMemory', true)}
+                        onclick={() => preferencesStore.setValue('showMemory', true)}
                     >
                         <Card
                             background="secondary"

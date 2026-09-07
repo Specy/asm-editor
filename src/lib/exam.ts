@@ -1,6 +1,12 @@
 import lzstring from 'lz-string'
 import { BASE_CODE } from '$lib/Config'
-import type { AvailableLanguages, ProjectData, Testcase } from '$lib/Project.svelte'
+import {
+    type AvailableLanguages,
+    entryFileContent,
+    normalizeProjectData,
+    type StoredProject,
+    type Testcase
+} from '$lib/Project.svelte'
 import { serializer } from '$lib/json'
 import { decryptData } from '$lib/utils'
 
@@ -221,28 +227,31 @@ export function parseLegacyProjectExamPayload(projectParam: string): ExamPayload
     const decoded = lzstring.decompressFromEncodedURIComponent(projectParam)
     if (!decoded) return null
     try {
-        const parsed = serializer.parse<ProjectData>(decoded)
-        if (!parsed?.exam) {
+        const stored = serializer.parse<StoredProject>(decoded)
+        if (!stored?.exam) {
             return null
         }
+        const exam = stored.exam
+        const parsed = normalizeProjectData(stored)
+        const code = entryFileContent(parsed)
 
         const sectionId = createExamEntityId()
         const legacySection: AssemblyCodingSection = {
             id: sectionId,
             type: ExamSectionType.AssemblyCoding,
             title: 'Assembly',
-            prompt: parsed.exam.track,
-            promptEncrypted: !!parsed.exam.accessPasswordHash,
+            prompt: exam.track,
+            promptEncrypted: !!exam.accessPasswordHash,
             language: parsed.language,
-            starterCode: parsed.code,
+            starterCode: code,
             testcases: parsed.testcases
         }
 
         const answers: Record<string, ExamSectionAnswer> = {}
-        if (parsed.exam.submission) {
+        if (exam.submission) {
             answers[sectionId] = {
                 type: 'assembly-coding',
-                code: parsed.code
+                code
             }
         }
 
@@ -250,13 +259,13 @@ export function parseLegacyProjectExamPayload(projectParam: string): ExamPayload
             version: 2,
             title: parsed.name || 'Migrated exam',
             instructions: parsed.description || '',
-            unlockPasswordHash: parsed.exam.passwordHash,
-            accessPasswordHash: parsed.exam.accessPasswordHash,
-            timeLimit: parsed.exam.timeLimit ?? -1,
+            unlockPasswordHash: exam.passwordHash,
+            accessPasswordHash: exam.accessPasswordHash,
+            timeLimit: exam.timeLimit ?? -1,
             sections: [legacySection],
-            submission: parsed.exam.submission
+            submission: exam.submission
                 ? {
-                      ...parsed.exam.submission,
+                      ...exam.submission,
                       answers
                   }
                 : undefined

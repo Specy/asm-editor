@@ -48,7 +48,7 @@ import type { MouseSnapshot } from '$lib/languages/peripherals/Mouse'
 import { echoToScreen } from '$lib/languages/peripherals/screen/textEcho'
 import { ScreenInstructionHistory } from '$lib/languages/peripherals/screen/ScreenInstructionHistory'
 import type { Testcase } from '$lib/Project.svelte'
-import { settingsStore } from '$stores/settingsStore.svelte'
+import { preferencesStore } from '$stores/preferencesStore.svelte'
 
 export const registerName = [
     'D0',
@@ -241,7 +241,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             .getFlagsAsArray()
             .map((flag) => (flag ? 1 : 0))
             .reverse()
-        if (settingsStore.values.maxVisibleHistoryModifications.value > 0) {
+        if (preferencesStore.values.maxVisibleHistoryModifications.value > 0) {
             const last = interpreter.getUndoHistory(1)[0]
             if (last) {
                 const old = ccrToFlagsArray(last.old_ccr.bits).reverse()

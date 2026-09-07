@@ -362,6 +362,12 @@ export type EmulatorSettings = {
      * and an Emulator that is given none starts from MARS's defaults.
      */
     display?: ProjectDisplay
+    /**
+     * The Screen undo journal's budget in megabytes, a Setting of the Project the Emulator was
+     * opened for ([ADR 0014](../../../docs/adr/0014-settings-split-by-effect.md)); the language's
+     * default when left out. Changed later with `setScreenHistoryBudgetMb`.
+     */
+    screenHistoryBudgetMb?: number
 }
 
 export type BaseEmulatorActions = {
@@ -390,6 +396,11 @@ export type BaseEmulatorActions = {
     ) => Promise<TestcaseResult[]>
     getLineFromAddress: (address: bigint) => number
     readMemoryBytes: (address: bigint, length: number) => Uint8Array
+    /**
+     * A new Screen undo budget, applied on the next clear, which is what a Build starts with: a
+     * Setting takes effect at the next Build and never resizes anything under a running program.
+     */
+    setScreenHistoryBudgetMb: (megabytes: number) => void
     /**
      * MIPS and RISC-V only: applies MARS's five bitmap-display parameters, re-syncing the Screen
      * from memory at once as the tool does. Absent on every other Emulator, whose Screen is the

@@ -1,7 +1,7 @@
 import { browser } from '$app/environment'
 import { db } from '$lib/storage/db'
 import { requestPersistentStorage } from '$lib/storage/persist'
-import { makeProjectFromExternal, type Project } from '$lib/Project.svelte'
+import { type ExternalImport, makeProjectFromExternal, type Project } from '$lib/Project.svelte'
 
 export const SHARE_ID = '__share__'
 
@@ -52,9 +52,10 @@ function createProjectStore() {
         await load()
     }
 
-    async function importFromExternal(code: string) {
-        const project = makeProjectFromExternal(code)
-        addProject(project)
+    async function importFromExternal(code: string): Promise<ExternalImport> {
+        const imported = makeProjectFromExternal(code)
+        await addProject(imported.project)
+        return imported
     }
 
     function setFileHandle(id: string, handle: FileSystemFileHandle) {

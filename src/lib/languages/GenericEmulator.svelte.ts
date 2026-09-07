@@ -30,7 +30,8 @@ import {
 import type { Testcase, TestcaseResult, TestcaseValidationError } from '$lib/Project.svelte'
 import { PAGE_ELEMENTS_PER_ROW, PAGE_SIZE } from '$lib/Config'
 import { createDebouncer } from '$lib/utils'
-import { settingsStore } from '$stores/settingsStore.svelte'
+import { preferencesStore } from '$stores/preferencesStore.svelte'
+import { projectSettingDefault } from '$lib/projectSettings'
 import {
     byteSliceToNum,
     isMemoryChunkEqual,
@@ -102,7 +103,10 @@ export abstract class GenericEmulator<T, R extends string>
             baseAddress: emulatorOptions.baseAddress ?? 0x1000n,
             stackAddress: emulatorOptions.stackAddress ?? 0x7ffffffcn,
             initialMemoryValue: emulatorOptions.initialMemoryValue ?? 0x0,
-            language: emulatorOptions.language ?? 'M68K'
+            language: emulatorOptions.language ?? 'M68K',
+            screenHistoryBudgetMb:
+                emulatorOptions.screenHistoryBudgetMb ??
+                projectSettingDefault('screenHistoryBudgetMb', emulatorOptions.language ?? 'M68K')
         }
         this._code = $state(code)
         this._peripherals = {
@@ -174,7 +178,7 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     protected scrollStackTab() {
-        const settings = settingsStore
+        const settings = preferencesStore
         const current = this.state
         if (!settings.values.autoScrollStackTab.value || !this.getInstance()) return
         const stackTab = current.memory.tabs.find((e) => e.name === 'Stack')
@@ -346,7 +350,7 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     protected updateData() {
-        const settings = settingsStore
+        const settings = preferencesStore
         if (!this.getInstance()) return
         this.state.terminated = this._hasTerminated()
         this.state.pc = this._getPc()
@@ -373,15 +377,19 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     /**
-     * The Screen history's byte budget is a user setting, because a clear, a present or a resize
-     * journals a whole image ([ADR 0005](../../../docs/adr/0005-restore-screen-state-on-undo.md)).
-     * Applied on every clear, so changing the setting takes effect on the next Build without the
+     * The Screen history's byte budget is a Setting of the Project, because a clear, a present or a
+     * resize journals a whole image ([ADR 0005](../../../docs/adr/0005-restore-screen-state-on-undo.md)).
+     * Applied on every clear, so a changed Setting takes effect on the next Build without the
      * settings panel having to know about emulators.
      */
     private applyScreenHistoryBudget(): void {
-        const megabytes = settingsStore.values.screenHistoryBudgetMb.value
+        const megabytes = this._emulatorOptions.screenHistoryBudgetMb
         if (!Number.isFinite(megabytes) || megabytes < 0) return
         this._peripherals.screen.history.byteBudget = megabytes * 1024 * 1024
+    }
+
+    setScreenHistoryBudgetMb(megabytes: number): void {
+        this._emulatorOptions.screenHistoryBudgetMb = megabytes
     }
 
     /**

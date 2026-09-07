@@ -3,7 +3,9 @@
     import { toast } from '$stores/toastStore'
     import Controls from '$cmp/specific/project/Controls.svelte'
     import { clampBigInt, formatTime } from '$lib/utils'
-    import { settingsStore } from '$stores/settingsStore.svelte'
+    import { preferencesStore } from '$stores/preferencesStore.svelte'
+    import { resolveProjectSettings } from '$lib/projectSettings'
+    import { rewriteScreenDirective } from '$lib/languages/mars/screenDirective'
     import MemoryControls from '$cmp/specific/project/memory/MemoryControls.svelte'
     import MemoryVisualiser from '$cmp/specific/project/memory/MemoryRenderer.svelte'
     import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE, TESTCASE_INSTRUCTION_LIMIT } from '$lib/Config'
@@ -82,8 +84,10 @@
     let showPc = $derived(showPcProp ?? layout === 'fullscreen')
     //hidden for x86, which has no graphics device, and behind the same setting as the project page
     let showScreen = $derived(
-        showScreenProp ?? (settingsStore.values.showScreen.value && languageHasScreen(language))
+        showScreenProp ?? (preferencesStore.values.showScreen.value && languageHasScreen(language))
     )
+    //no Project here, so a Playground runs on the language's default Settings
+    const settings = $derived(resolveProjectSettings(language, undefined))
     //no project to save it in here, so the lecture, exam, embed and chat surfaces get the popover
     //with the display living for as long as the page does. Only MIPS and RISC-V have one at all
     let display = $state(DEFAULT_PROJECT_DISPLAY)
@@ -152,7 +156,7 @@
             running = false
             building = true
             emulator.setCode(code)
-            await emulator.compile(settingsStore.values.maxHistorySize.value, code)
+            await emulator.compile(settings.maxHistorySize, code)
         } catch (e) {
             console.error(e)
             toast.error('Error compiling code. ' + getM68kErrorMessage(e))
@@ -251,7 +255,7 @@
                         $state.snapshot(code),
                         $state.snapshot(testcases),
                         TESTCASE_INSTRUCTION_LIMIT,
-                        settingsStore.values.maxHistorySize.value
+                        settings.maxHistorySize
                     )
                 } catch (e) {
                     console.error(e)
@@ -438,10 +442,15 @@
                     origin={displayOrigin}
                     baseLabel={displayBaseLabel}
                     onChange={(next) => {
+                        //the program's own @screen comment, when it has one, is rewritten to say
+                        //what was chosen, as on the project page; a program without one keeps the
+                        //choice for as long as the page lives
+                        const rewritten = rewriteScreenDirective(code, display, next)
+                        const baseChanged = next.baseAddress !== display.baseAddress
+                        if (rewritten !== null) code = rewritten
                         display = next
-                        //a hand edit wins until the next Build reads the directive again
-                        displayOrigin = 'user'
-                        displayBaseLabel = undefined
+                        displayOrigin = rewritten !== null ? 'directive' : 'user'
+                        if (rewritten === null || baseChanged) displayBaseLabel = undefined
                         emulator.setDisplay?.(next)
                     }}
                 />

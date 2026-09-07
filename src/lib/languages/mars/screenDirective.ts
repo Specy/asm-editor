@@ -331,3 +331,103 @@ function makeWarning(
         formatted: message
     }
 }
+
+/**
+ * The source with its `@screen` line rewritten to say what the user chose beside the Screen, so the
+ * code and the popover agree and the next Build reads the choice back (the display section of
+ * `docs/design/project-format.md`). Only the parameters whose value changed between `before` and
+ * `after` are touched: an entry the line already has is given the new value under its own spelling,
+ * one it lacks is appended, and a `base=<label>` the user did not change stays a label. A `unit=`
+ * entry becomes `unitWidth=` and `unitHeight=` when the two stop being equal.
+ *
+ * `null` when the program has no directive: then the choice is the Project's alone, and nothing is
+ * inserted into anyone's program.
+ */
+export function rewriteScreenDirective(
+    code: string,
+    before: ProjectDisplay,
+    after: ProjectDisplay
+): string | null {
+    const { directive } = parseScreenDirective(code)
+    if (!directive) return null
+    const changed = {
+        unitWidth: after.unitWidth !== before.unitWidth,
+        unitHeight: after.unitHeight !== before.unitHeight,
+        width: after.width !== before.width,
+        height: after.height !== before.height,
+        base: after.baseAddress !== before.baseAddress
+    }
+    if (!Object.values(changed).some(Boolean)) return code
+
+    const lines = code.split('\n')
+    const line = lines[directive.lineIndex] ?? ''
+    const match = DIRECTIVE_PATTERN.exec(line)
+    if (!match) return null
+    const head = line.slice(0, match.index + match[0].length)
+    const tokens: string[] = []
+    const written = {
+        unitWidth: false,
+        unitHeight: false,
+        width: false,
+        height: false,
+        base: false
+    }
+
+    let rest = line.slice(head.length)
+    for (;;) {
+        rest = rest.replace(/^[\s,]+/, '')
+        if (rest.length === 0) break
+        const entry = ENTRY_PATTERN.exec(rest)
+        if (!entry) {
+            //not a name=value: kept where it was, the parser warns about it either way
+            const stray = rest.split(/[\s,]/)[0] ?? rest
+            tokens.push(stray)
+            rest = rest.slice(stray.length)
+            continue
+        }
+        rest = rest.slice(entry[0].length)
+        const name = entry[1] ?? ''
+        const value = entry[2] ?? ''
+        const key = name.toLowerCase().replace(/[-_]/g, '')
+        if (key === 'unit') {
+            if (after.unitWidth === after.unitHeight) {
+                tokens.push(
+                    `${name}=${changed.unitWidth || changed.unitHeight ? after.unitWidth : value}`
+                )
+            } else {
+                tokens.push(`unitWidth=${after.unitWidth}`, `unitHeight=${after.unitHeight}`)
+            }
+            written.unitWidth = written.unitHeight = true
+        } else if (key === 'unitwidth') {
+            tokens.push(`${name}=${changed.unitWidth ? after.unitWidth : value}`)
+            written.unitWidth = true
+        } else if (key === 'unitheight') {
+            tokens.push(`${name}=${changed.unitHeight ? after.unitHeight : value}`)
+            written.unitHeight = true
+        } else if (key === 'width') {
+            tokens.push(`${name}=${changed.width ? after.width : value}`)
+            written.width = true
+        } else if (key === 'height') {
+            tokens.push(`${name}=${changed.height ? after.height : value}`)
+            written.height = true
+        } else if (key === 'base' || key === 'baseaddress') {
+            tokens.push(`${name}=${changed.base ? hex(after.baseAddress) : value}`)
+            written.base = true
+        } else {
+            tokens.push(`${name}=${value}`)
+        }
+    }
+    if (!written.unitWidth && !written.unitHeight && (changed.unitWidth || changed.unitHeight)) {
+        if (after.unitWidth === after.unitHeight) tokens.push(`unit=${after.unitWidth}`)
+        else tokens.push(`unitWidth=${after.unitWidth}`, `unitHeight=${after.unitHeight}`)
+    } else {
+        if (!written.unitWidth && changed.unitWidth) tokens.push(`unitWidth=${after.unitWidth}`)
+        if (!written.unitHeight && changed.unitHeight) tokens.push(`unitHeight=${after.unitHeight}`)
+    }
+    if (!written.width && changed.width) tokens.push(`width=${after.width}`)
+    if (!written.height && changed.height) tokens.push(`height=${after.height}`)
+    if (!written.base && changed.base) tokens.push(`base=${hex(after.baseAddress)}`)
+
+    lines[directive.lineIndex] = `${head} ${tokens.join(' ')}`
+    return lines.join('\n')
+}

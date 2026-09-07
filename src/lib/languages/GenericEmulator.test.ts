@@ -25,7 +25,6 @@ import { Screen } from '$lib/languages/peripherals/screen/Screen'
 import { RECORD_OVERHEAD_BYTES } from '$lib/languages/peripherals/screen/ScreenHistory'
 import { ScreenInstructionHistory } from '$lib/languages/peripherals/screen/ScreenInstructionHistory'
 import type { Testcase } from '$lib/Project.svelte'
-import { settingsStore } from '$stores/settingsStore.svelte'
 
 /**
  * The scheduler, the injection, the reset path and the Undo rule of phase 3, exercised through a
@@ -176,13 +175,8 @@ const emptyTestcase: Testcase = {
     expectedMemory: []
 }
 
-const budgetSetting = settingsStore.values.screenHistoryBudgetMb.value
-const showScreenSetting = settingsStore.values.showScreen.value
-
 afterEach(() => {
     vi.restoreAllMocks()
-    settingsStore.values.screenHistoryBudgetMb.value = budgetSetting
-    settingsStore.values.showScreen.value = showScreenSetting
 })
 
 describe('peripheral injection', () => {
@@ -210,10 +204,18 @@ describe('peripheral injection', () => {
         expect([z80.width, z80.height]).toEqual([256, 192])
     })
 
-    it('takes the Screen history budget from the settings', () => {
-        settingsStore.values.screenHistoryBudgetMb.value = 2
-        const emulator = new FakeEmulator()
+    it('takes the Screen history budget from the Project Settings it was opened with', () => {
+        const emulator = new FakeEmulator({ screenHistoryBudgetMb: 2 })
         expect(emulator.peripherals.screen.history.byteBudget).toBe(2 * 1024 * 1024)
+        expect(new FakeEmulator().peripherals.screen.history.byteBudget).toBe(64 * 1024 * 1024)
+    })
+
+    it('applies a changed budget on the next clear, which is what a Build starts with', () => {
+        const emulator = new FakeEmulator({ screenHistoryBudgetMb: 2 })
+        emulator.setScreenHistoryBudgetMb(3)
+        expect(emulator.peripherals.screen.history.byteBudget).toBe(2 * 1024 * 1024)
+        emulator.clear()
+        expect(emulator.peripherals.screen.history.byteBudget).toBe(3 * 1024 * 1024)
     })
 })
 

@@ -7,6 +7,21 @@ type Version = {
 }
 export const versions: Version[] = [
     {
+        version: '9.1.0',
+        title: 'Project settings and files',
+        date: new Date('2026-09-07'),
+        changes: [
+            'Settings that change what the emulator does (maximum undo steps, screen undo budget) now belong to each project, with a reset to the default for each; view settings stay global as preferences',
+            'A project is now made of files with an entry file, main.<ext> today, so a project can hold several source files in a later version',
+            'Changing a setting, a testcase or the screen configuration follows the same rule as the code: saved at once with auto save on, otherwise with Save, and the editor asks before leaving unsaved changes of any kind',
+            'On MIPS and RISC-V, choosing a display configuration beside the screen rewrites the @screen comment of the program, so the two never disagree',
+            'Exported M68K projects use the .m68k extension; files exported before, .s68k included, still import'
+        ],
+        notes: [
+            'Existing projects start from the default settings; the values set before this version are not carried over'
+        ]
+    },
+    {
         version: '9.0.0',
         title: 'Z80 language',
         date: new Date('2026-09-01'),

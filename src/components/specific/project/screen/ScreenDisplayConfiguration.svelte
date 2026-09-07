@@ -27,9 +27,9 @@
         display: ProjectDisplay
         onChange: (display: ProjectDisplay) => void
         /**
-         * Where these five values came from. `directive` means the last Build read them out of the
-         * program's `@screen` comment, which the popover says so that nobody wonders why the
-         * numbers moved; a change made here wins until the next Build reads the comment again.
+         * Where these five values came from. `directive` means they are the program's own `@screen`
+         * comment's, read by the last Build or rewritten by a change made here, which the popover
+         * says so that nobody wonders why the numbers moved.
          */
         origin?: MarsDisplayOrigin
         /** The label the directive's `base=` named, when it named one rather than an address. */
@@ -103,8 +103,8 @@
             <h3>Bitmap display</h3>
             {#if fromDirective}
                 <p class="hint source-note">
-                    Set by this program's <code>@screen</code> comment. A change made here is used until
-                    the next Build reads the comment again.
+                    Set by this program's <code>@screen</code> comment. A change made here rewrites the
+                    comment, so the next Build reads it back.
                 </p>
             {/if}
             <label>

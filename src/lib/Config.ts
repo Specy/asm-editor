@@ -115,7 +115,7 @@ export const LANGUAGE_THEMES = {
 } satisfies Record<AvailableLanguages, string>
 
 export const LANGUAGE_EXTENSIONS = {
-    M68K: 's68k',
+    M68K: 'm68k',
     MIPS: 'mips',
     X86: 'asm',
     'RISC-V': 'riscv',

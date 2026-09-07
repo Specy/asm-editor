@@ -1,9 +1,10 @@
 <script lang="ts">
-    import type { SettingValue } from '$stores/settingsStore.svelte'
+    import type { PreferenceValue } from '$stores/preferencesStore.svelte'
+    import Switch from '$cmp/shared/input/Switch.svelte'
     import { createEventDispatcher } from 'svelte'
 
     interface Props {
-        entry: SettingValue<unknown>
+        entry: PreferenceValue<unknown>
     }
 
     let { entry }: Props = $props()
@@ -19,11 +20,11 @@
     </div>
     <div>
         {#if entry.type === 'boolean'}
-            <input
-                type="checkbox"
+            <Switch
                 bind:checked={value as boolean}
-                onchange={() => {
-                    dispatcher('changeValue', value)
+                title={entry.name}
+                onChange={(checked) => {
+                    dispatcher('changeValue', checked)
                 }}
             />
         {/if}
@@ -45,7 +46,8 @@
         justify-content: space-between;
         align-items: center;
         gap: 0.4rem;
-        padding: 0.5rem;
+        padding: 0.4rem;
+        padding-left: 1rem;
     }
     .number {
         padding: 0.6rem 1rem;

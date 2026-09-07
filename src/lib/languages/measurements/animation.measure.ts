@@ -1,5 +1,4 @@
 import { describe, it } from 'vitest'
-import { settingsStore } from '$stores/settingsStore.svelte'
 import {
     ANIMATION_EXAMPLES,
     buildProgram,
@@ -58,7 +57,8 @@ type Frames = {
 
 async function measure(animation: AnimationExample): Promise<Frames> {
     const emulator = await buildProgram(animation.language, example(animation.path), {
-        display: animation.display
+        display: animation.display,
+        screenHistoryBudgetMb: MEASUREMENT_BUDGET_MB
     })
     const screen = emulator.peripherals.screen
     const clock = emulator.peripherals.clock
@@ -127,17 +127,11 @@ function intervals(stamps: number[]): number[] {
 }
 
 describe('the animation examples', () => {
-    const budget = settingsStore.values.screenHistoryBudgetMb.value
     const results = new Map<string, Frames>()
 
     it('paces its frames under the host clock and fills the Screen journal', async () => {
-        settingsStore.values.screenHistoryBudgetMb.value = MEASUREMENT_BUDGET_MB
-        try {
-            for (const animation of ANIMATION_EXAMPLES) {
-                results.set(animation.path, await measure(animation))
-            }
-        } finally {
-            settingsStore.values.screenHistoryBudgetMb.value = budget
+        for (const animation of ANIMATION_EXAMPLES) {
+            results.set(animation.path, await measure(animation))
         }
 
         printTable(

@@ -4,6 +4,7 @@ import {
     applyScreenDirective,
     parseScreenDirective,
     readScreenLabelProbe,
+    rewriteScreenDirective,
     type ScreenDirectiveLabelResolver,
     SCREEN_LABEL_PROBE_ADDRESS,
     screenLabelProbeSource
@@ -201,5 +202,68 @@ describe('MARS’s defaults', () => {
     it('are what a directive layers onto in a fresh project', () => {
         const applied = apply('# @screen unit=1', NO_LABELS, DEFAULT_PROJECT_DISPLAY)
         expect(applied.display).toEqual(DEFAULT_PROJECT_DISPLAY)
+    })
+})
+
+/**
+ * A choice beside the Screen rewrites the program's own directive, when it has one, so the two
+ * never disagree and the next Build reads the choice back; it never writes a directive into a
+ * program that has none (the display section of docs/design/project-format.md).
+ */
+describe('rewriting the directive', () => {
+    const shown: ProjectDisplay = {
+        unitWidth: 1,
+        unitHeight: 1,
+        width: 256,
+        height: 256,
+        baseAddress: 0x10010000
+    }
+
+    it('leaves a program without a directive alone', () => {
+        expect(rewriteScreenDirective('.data\n.text\n', shown, { ...shown, width: 512 })).toBeNull()
+    })
+
+    it('changes only the parameter that changed and keeps a base label the user did not touch', () => {
+        const code =
+            '# @screen width=256 height=256 unit=1 base=display\n.data\ndisplay: .space 4\n'
+        expect(rewriteScreenDirective(code, shown, { ...shown, width: 512 })).toBe(
+            '# @screen width=512 height=256 unit=1 base=display\n.data\ndisplay: .space 4\n'
+        )
+    })
+
+    it('writes a changed base as an address, replacing the label', () => {
+        const code = '# @screen width=256 base=display'
+        expect(rewriteScreenDirective(code, shown, { ...shown, baseAddress: 0x10008000 })).toBe(
+            '# @screen width=256 base=0x10008000'
+        )
+    })
+
+    it('keeps the spelling, the comment prefix and the indentation of the line', () => {
+        const code = '  ## @Screen Unit_Width=1, height=256'
+        expect(rewriteScreenDirective(code, shown, { ...shown, unitWidth: 4, height: 512 })).toBe(
+            '  ## @Screen Unit_Width=4 height=512'
+        )
+    })
+
+    it('splits unit= into width and height when they stop being equal, and appends what the line lacks', () => {
+        const code = '# @screen unit=1'
+        expect(rewriteScreenDirective(code, shown, { ...shown, unitWidth: 2 })).toBe(
+            '# @screen unitWidth=2 unitHeight=1'
+        )
+        expect(
+            rewriteScreenDirective('# @screen width=64', shown, {
+                ...shown,
+                unitWidth: 2,
+                unitHeight: 2
+            })
+        ).toBe('# @screen width=64 unit=2')
+        expect(rewriteScreenDirective('# @screen width=64', shown, { ...shown, height: 128 })).toBe(
+            '# @screen width=64 height=128'
+        )
+    })
+
+    it('returns the code as it was when nothing changed', () => {
+        const code = '# @screen width=256\nnop'
+        expect(rewriteScreenDirective(code, shown, { ...shown })).toBe(code)
     })
 })

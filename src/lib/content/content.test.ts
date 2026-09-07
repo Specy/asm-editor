@@ -31,7 +31,7 @@ const ROOT = fileURLToPath(new URL('../../..', import.meta.url))
 const CONTENT = join(ROOT, 'src', 'content')
 
 /**
- * The embed's own defaults, from `settingsStore.svelte.ts` and from the `EmulatorLoader` the embed
+ * The embed's own defaults, from `preferencesStore.svelte.ts` and from the `EmulatorLoader` the embed
  * page mounts: a run stops after two million instructions, and the memory panel pages in 32 bytes.
  * Everything else (the base address, the memory size, the stack) is the language default, which is
  * what an embed with no project behind it gets.
