@@ -1156,3 +1156,39 @@ the four performance source files restored to `2133746`; no comparison crosses u
 - No blocker. The review leaves the measured sparse MIPS/RISC-V framebuffer optimization rejected
   for the reasons in follow-up 6 and does not change the known Core API limitations around exact
   direct-drawing Undo or MARS/RARS pause boundaries.
+
+## Follow-up 8: a pause lands on MIPS and RISC-V while a program sleeps — 2026-09-07
+
+Repository `/home/dev/code/asm-editor`, branch `feat/screen-peripherals`. This section ships in the same commit as the change it describes. The user reported that MIPS and RISC-V programs could not be paused; M68K and Z80 could.
+
+**Where this contradicts the design record.** Nowhere. Follow-up 2 recorded that a pause is answered at the next slice boundary "plus whatever a program's own wait is doing", and the review of the four follow-ups left "MARS/RARS pause boundaries" as a known Core limitation. This narrows the boundary rather than moving it: [ADR 0007](../adr/0007-generic-emulator-run-scheduling.md)'s pause is still taken between two slices, and a pending program wait still completes first.
+
+### What was wrong
+
+The two MARS-derived adapters serve a `sleep` (syscall 32) inside the slice: the Core suspends the pending `simulate*` call until the handler's promise settles, and nothing outside the Core can end the call before its halt limit. Phase 7 chose that (the alternative is a Core change), and it was fine for what phase 8 measured, which was compute. For a sleeping program the halt limit is the only bound on how long one call holds the slice, and the halt limit is the slice's whole compute budget: 50 ms worth of instructions, then 16 times that once `speedCorrection` has decided a program that sleeps most of its slice is a fast one. Reproduced under node on a loop of four instructions and a ten millisecond sleep, with `pause()` pressed 30 ms into the run: RISC-V honored it after 3.3 s (1 250 instructions a slice, a sleep every four), MIPS not within 30 s (50 000 instructions a slice is 125 s of sleeps). A compute-only loop paused in 3 to 5 ms on both. Stop was never affected: `clear()` cancels the clock, which releases the sleep, and the superseded slice ends at its next instruction.
+
+### Done
+
+- **`src/lib/languages/mars/marsSlice.ts`**: `MarsSlicePacer`, which spends a slice's budget in chunks and looks at the deadline between them, and `nextMarsChunk`, which sizes the next chunk on what the last one cost in wall time, sleeps included. A chunk that slept is sized with no floor (the floor guards the cost of re-entering the Core, which is nothing next to a sleep), a chunk that came back at once grows by at most a factor of two (so it creeps up on the next sleep instead of jumping to the compute size and carrying a dozen sleeps), and a chunk whose instructions turned out expensive shrinks no further than `MIN_MARS_CHUNK` (64). The chunk is kept across slices, so a sleeping program is not rediscovered at every slice, and reset at Build. The deadline check is new to these two adapters as well: before this, a slice of expensive syscalls (printing in a loop) had nothing but the instruction count to end it.
+- **`MIPSEmulator.svelte.ts` and `RISC-VEmulator.svelte.ts`** run `_runSlice` through the pacer, each with its own chunk target: 1 ms on MIPS, 4 ms on RISC-V. Measured under node with the shipped undo history: a `simulateWithBreakpointsAndLimit` call costs about 5 µs on MIPS, which reaches its full 1 100 instructions a millisecond from 64-instruction chunks (823 a millisecond from chunks of 16), and the RISC-V Core spends 40 µs on every instruction, so its throughput is the same at any chunk size from one instruction up. The breakpoint and termination handling is unchanged, it runs per chunk instead of per slice.
+- **Tests**: 11 in `src/lib/languages/mars/marsSlice.test.ts` on a scripted Core (growth, the two floors, the cap, the deadline, the budget, the persisted chunk, the walk back up to the next sleep, breakpoints and termination), and one regression test each in `MIPSEmulator.test.ts` and `RISC-VEmulator.test.ts`: the sleeping loop above pauses within a second, which fails against the previous adapters (3.3 s and 125 s).
+- **Measured after the change**, same loop, same 30 ms: the pause lands after 140 ms on MIPS and 146 ms on RISC-V, which is the first chunk (64 instructions, 16 sleeps) since the request arrives inside it; a later request lands within a sleep or two. Compute-only loops: 5 ms and 3 ms.
+
+### Choices where the brief left a detail open
+
+- **Chunking rather than a Core-side stop.** RARS's `Simulator` has `stopExecution` and a `StopReason.PAUSE`, and MARS's has the same flag, but neither `JsRiscV` nor `JsMips` exposes it, so a pause that ends a `simulate*` call at the next instruction needs a change and a release of both `@specy/mips` and `@specy/risc-v`. Chunking gets the pause within a sleep or two from the editor alone; the Core-side stop would get it within one sleep exactly and is the fix to make when the wrappers are next touched.
+- **Sized on wall time, not busy time.** The scheduler's own `learnSliceSpeed` deliberately takes the waits out, because it is estimating the Core's speed. The pacer is bounding how long the host is held between two checks, and a sleep holds it as surely as an instruction does.
+- **Kept out of `ExecutionSlice.ts`.** `nextSliceChunk` and `MIN_SLICE_CHUNK` are the Z80's, whose waits end the slice; the sleeping-chunk rules are specific to Cores that serve waits inside a call, which is the MARS family, so they live beside `MarsDevices` in `src/lib/languages/mars/`.
+
+### Left and blockers
+
+- **One sleep still completes before a pause**, as ADR 0007 says it must. A program sleeping five seconds per iteration takes up to five seconds to pause on every Core.
+- **The first sleeping chunk after a compute phase carries a chunk target's worth of instructions** of sleeps once: about a thousand instructions on MIPS, which is two frames of `bouncing-ball.asm` or three iterations of a game loop that sleeps a tenth of a second; a hundred instructions on RISC-V. The Core-side stop above is what removes it.
+- **Testcase runs are still unsliced and unpausable** (follow-up 2).
+
+### Verification
+
+- `npm test`: 1 276 passing in 26 files on a quiet machine. A run with `svelte-check` and `eslint` going at the same time had the two RISC-V drawing examples (`bitmap-tour`, `bouncing-ball`, 2.4 s each alone, on either adapter) time out at their 5 s default, which is load, not the change: the same suite against the previous RISC-V adapter, run quietly, passes everything except the new pause regression test, which fails there at 1.7 s.
+- Compute-only throughput (`throughput.measure.ts`, ADR 0007's five percent budget for yields), sliced and yielding against one slice: MIPS 860 132 against 845 215 instructions a second (−1.7%, noise), RISC-V 25 431 against 25 460 (0.1%). The other Cores are untouched: Z80 4.3%, M68K 2.8%, x86 5.9%, as before.
+- `npm run check`: the same two baseline errors (the sitemap's `String#at` and the z80 instruction page's `description` prop) and 205 warnings; `npm run lint`: 0 errors and 18 warnings; `npm run format:check` clean.
+- In a headless Chrome (151) against `npm run dev`: a shared MIPS project with a `@screen` directive builds with no save prompt and Save still asks (the second bug report of the day, `src/routes/projects/[project]/+page.svelte`); a page scrolled 300 px lands at the top after a navigation and back at 300 px after Back, with the navbar pinned throughout (the third: the body was the scroll container, `src/global.css` and `src/components/shared/layout/Navbar.svelte`). Both reproduced on the code before the change with the same script.

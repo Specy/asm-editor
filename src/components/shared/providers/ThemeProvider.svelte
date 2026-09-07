@@ -31,14 +31,19 @@
     style={`
     ${theme
         .map(({ name, color }) => {
-            const text = new TinyColor(color).isDark()
-                ? ThemeStore.meta.textForDark
-                : ThemeStore.meta.textForLight
+            const isDark = new TinyColor(color).isDark()
+            const text = isDark ? ThemeStore.meta.textForDark : ThemeStore.meta.textForLight
+            //the dimmed variant of the same text, for prose sitting on this color
+            const textMuted = isDark
+                ? ThemeStore.meta.textMutedForDark
+                : ThemeStore.meta.textMutedForLight
             return `
     --${name}: ${color};
     --${name}-text: ${text};
+    --${name}-text-muted: ${textMuted};
     --RGB-${name}: ${toRgbChannels(color)};
 	--RGB-${name}-text : ${toRgbChannels(text)};
+	--RGB-${name}-text-muted : ${toRgbChannels(textMuted)};
     `
         })
         .join('\n')}

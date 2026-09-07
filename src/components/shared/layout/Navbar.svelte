@@ -12,8 +12,12 @@
 </div>
 
 <style lang="scss">
+    /* Pinned to the viewport. It used to be `absolute` with no positioned ancestor, which anchored
+       it to the initial containing block, and that only looked pinned because the body scrolled
+       inside itself while the viewport stood still. The document scrolls now (see `body` in
+       global.css), so the anchor has to be the viewport itself. */
     .navbar {
-        position: absolute;
+        position: fixed;
         top: 0rem;
         padding: 0.5rem;
         width: 100%;

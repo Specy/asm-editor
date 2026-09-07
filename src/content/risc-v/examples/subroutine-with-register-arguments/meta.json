@@ -2,5 +2,6 @@
     "name": "A subroutine with its arguments in registers",
     "description": "Euclid's greatest common divisor as a subroutine called with jal, its arguments in a0 and a1 and its answer left in a0.",
     "order": 10,
-    "topic": "subroutine-with-register-arguments"
+    "topic": "subroutine-with-register-arguments",
+    "template": 3
 }

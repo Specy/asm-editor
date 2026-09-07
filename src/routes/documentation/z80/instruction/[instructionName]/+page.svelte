@@ -101,7 +101,6 @@
         <SvelteComponent_1
             bind:code
             instructionKey={name}
-            {description}
             language="Z80"
             showPc={true}
             showFlags={true}

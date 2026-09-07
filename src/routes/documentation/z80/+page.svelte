@@ -53,6 +53,7 @@
     .intro {
         line-height: 1.5;
         max-width: 60rem;
+        color: var(--background-text-muted);
     }
     code {
         background-color: var(--secondary);

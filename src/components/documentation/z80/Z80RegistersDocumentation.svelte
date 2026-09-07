@@ -108,6 +108,7 @@
     }
     .note {
         line-height: 1.5;
+        color: var(--background-text-muted);
     }
     code {
         font-family: FiraCode;

@@ -14,7 +14,7 @@
                 {syscall.code} - {capitalize(syscall.name)}
             </h2>
             {#if syscall.result.other}
-                <p>
+                <p class="text-muted">
                     {syscall.result.other}
                 </p>
             {/if}

@@ -166,9 +166,6 @@
             <ButtonLink
                 style="gap: 1rem"
                 cssVar="secondary"
-                onClick={() => {
-                    document.body.scrollTo({ top: 0, behavior: 'smooth' })
-                }}
                 href={`/learn/courses/${data.course.slug}/${previousLecture?.module.slug}/${previousLecture?.slug}`}
             >
                 <Icon>
@@ -184,9 +181,6 @@
             <ButtonLink
                 style="gap: 1rem"
                 disabled={!nextLecture}
-                onClick={() => {
-                    document.body.scrollTo({ top: 0, behavior: 'smooth' })
-                }}
                 href={`/learn/courses/${data.course.slug}/${nextLecture?.module.slug}/${nextLecture?.slug}`}
             >
                 Next Lecture
@@ -286,6 +280,7 @@ When the user asks a question about the lecture topic or for a demonstration of 
 
     .description {
         white-space: pre-line;
+        color: var(--background-text-muted);
         line-height: 1.5;
         font-family: 'Noto Serif', Rubik, sans-serif;
         font-weight: 500;

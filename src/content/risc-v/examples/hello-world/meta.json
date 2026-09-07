@@ -2,5 +2,6 @@
     "name": "Print a string",
     "description": "The first program that talks to anybody: a service number in a7, an argument in a0, and the one instruction that hands the request over.",
     "order": 17,
-    "topic": "hello-world"
+    "topic": "hello-world",
+    "template": 4
 }

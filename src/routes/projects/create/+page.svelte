@@ -16,6 +16,9 @@
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import Page from '$cmp/shared/layout/Page.svelte'
     import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
+    import type { PageData } from './$types'
+
+    let { data }: { data: PageData } = $props()
 
     let name = $state('')
     let description = $state('')
@@ -29,11 +32,30 @@
         { key: 'Z80', value: 'Z80' }
     ]
 
+    const BAREBONES = 'barebones'
+    let templateId = $state(BAREBONES)
+
+    const templates = $derived(data.templates[language] ?? [])
+    const templateOptions = $derived(
+        templates.map((template) => ({ key: template.name, value: template.id }))
+    )
+    /** x86 offers fewer programs than the others, so a selection can stop existing when the
+     *  language changes. Fall back rather than leaving the select showing nothing. */
+    $effect(() => {
+        if (!templates.some((template) => template.id === templateId)) templateId = BAREBONES
+    })
+    /** A language that does not offer the selected program falls back to its empty one, so
+     *  switching language never leaves the form pointing at code it cannot create. */
+    const selected = $derived(
+        templates.find((template) => template.id === templateId) ?? templates[0]
+    )
+
     async function create() {
         const project = makeProject({
             name,
             description,
             language,
+            code: selected?.code,
             createdAt: new Date().getTime(),
             updatedAt: new Date().getTime()
         })
@@ -72,6 +94,20 @@
             <Input title="Name" placeholder="Name" bind:value={name} />
             <Textarea title="Description" bind:value={description} />
             <Select title="Language" options={languageOptions} bind:value={language} />
+            <div class="template-field">
+                <Select title="Template" options={templateOptions} bind:value={templateId}>
+                    {#snippet item(option)}
+                        <span class="template-option-name">{option.key}</span>
+                        <span class="template-option-description">
+                            {templates.find((template) => template.id === option.value)
+                                ?.description ?? ''}
+                        </span>
+                    {/snippet}
+                </Select>
+                {#if selected && selected.id !== BAREBONES}
+                    <span class="template-description">{selected.description}</span>
+                {/if}
+            </div>
         </Form>
         <div
             style="display:flex; justify-content: space-between; align-items:center; margin-top: 1rem;"
@@ -103,6 +139,31 @@
 
     .top-title {
         align-items: center;
+    }
+
+    .template-field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+
+    .template-option-name {
+        display: block;
+    }
+
+    /* one row, clipped: a description is a hint at what the program does, not the program */
+    .template-option-description {
+        display: block;
+        overflow: hidden;
+        font-size: 0.85rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        opacity: 0.75;
+    }
+
+    .template-description {
+        font-size: 0.85rem;
+        opacity: 0.8;
     }
 
     @media screen and (min-width: 650px) {

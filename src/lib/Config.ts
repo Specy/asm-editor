@@ -29,55 +29,79 @@ export const COMMENT_CHARACTER = {
     Z80: ';'
 } satisfies Record<AvailableLanguages, string>
 
+/**
+ * The empty project every language starts from. Each one ends by asking its environment to
+ * stop, because that is the single thing a first program cannot be read from: falling off the
+ * end of the text segment is not an ending, it is the assembler's next bytes being executed.
+ * Nothing else here does any work, so the reader has one correct line to keep and a blank
+ * space to write in, rather than a magic constant to wonder about.
+ */
 export const BASE_CODE = {
     MIPS: `
 .data
-    # Write here your data
-    
+    # Write your data here
+
 .text
+.globl main
 main:
-    # Write here your code
-    li $v0, 42
+    # Write your code here
+
+    li $v0, 10          # service 10: end the program
+    syscall
 `.trim(),
     M68K: `
 ORG $1000
+
 START:
-    * Write here your code
-    move.l #42, d0
-    
-END: * Jump here to end the program
+    ; Write your code here
+
+    move.b #9, d0       ; task 9: end the program
+    trap #15
 `.trim(),
     X86: `
 global _start
+
+section .data
+    ; Write your data here
+
 section .text
 _start:
-    ; Write here your code
-    mov rax, 42
+    ; Write your code here
+
+    mov rax, 60         ; syscall 60: exit
+    xor rdi, rdi        ; with status 0
+    syscall
 `.trim(),
     'RISC-V': `
 .data
-    # Write here your data
-    
+    # Write your data here
+
 .text
+.globl main
 main:
-    # Write here your code
-    li t0, 42
-    `.trim(),
+    # Write your code here
+
+    li a7, 10           # service 10: end the program
+    ecall
+`.trim(),
     'RISC-V-64': `
 .data
-    # Write here your data
-    
+    # Write your data here
+
 .text
+.globl main
 main:
-    # Write here your code
-    li t0, 42
-    `.trim(),
+    # Write your code here
+
+    li a7, 10           # service 10: end the program
+    ecall
+`.trim(),
     //not `.trim()`ed like the others: the leading indentation is load bearing, an assembler
     //directive in the first column is parsed as a label definition
     Z80: `        .org 0x8000
 start:
-        ; Write here your code
-        ld a, 42
+        ; Write your code here
+
         halt`
 } satisfies Record<AvailableLanguages, string>
 

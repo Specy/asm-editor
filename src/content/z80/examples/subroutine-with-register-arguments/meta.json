@@ -2,5 +2,6 @@
     "name": "A subroutine with its arguments in registers",
     "description": "Euclid's greatest common divisor by subtraction, called with call, its arguments in a and b and its answer in a.",
     "order": 10,
-    "topic": "subroutine-with-register-arguments"
+    "topic": "subroutine-with-register-arguments",
+    "template": 3
 }
