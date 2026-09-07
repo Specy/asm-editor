@@ -6,7 +6,7 @@
     import { settingsStore } from '$stores/settingsStore.svelte'
     import MemoryControls from '$cmp/specific/project/memory/MemoryControls.svelte'
     import MemoryVisualiser from '$cmp/specific/project/memory/MemoryRenderer.svelte'
-    import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE } from '$lib/Config'
+    import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE, TESTCASE_INSTRUCTION_LIMIT } from '$lib/Config'
     import StatusCodesVisualiser from '$cmp/specific/project/cpu/StatusCodesRenderer.svelte'
     import RegistersVisualiser from '$cmp/specific/project/cpu/RegistersRenderer.svelte'
     import { onMount, type Snippet } from 'svelte'
@@ -174,7 +174,8 @@
             testcasesResult = []
         }
         try {
-            await emulator.run(settingsStore.values.instructionsLimit.value)
+            //no limit: a Run is sliced, so Pause and Stop answer even in an infinite loop (ADR 0007)
+            await emulator.run(0)
         } catch (e) {
             console.error(e)
             toast.error('Error executing code. ' + getM68kErrorMessage(e))
@@ -249,7 +250,7 @@
                     testcasesResult = await emulator.test(
                         $state.snapshot(code),
                         $state.snapshot(testcases),
-                        settingsStore.values.instructionsLimit.value,
+                        TESTCASE_INSTRUCTION_LIMIT,
                         settingsStore.values.maxHistorySize.value
                     )
                 } catch (e) {
