@@ -2,7 +2,7 @@
     "id": "risc-v",
     "name": "RISC-V assembly",
     "authors": ["Specy"],
-    "description": "RISC-V as this editor runs it: a small base of about forty instructions, 32 registers with two sets of names, no flags register and no condition codes, and a calling convention that puts the return address in ra. Read Assembly basics first if you have never written assembly.",
+    "description": "RISC-V: an open instruction set with a base of about forty instructions and everything else an extension, 32 registers under two sets of names, no flags and no condition codes, and a calling convention that keeps the return address in a register.",
     "image": "",
     "tags": ["assembly", "risc-v"],
     "date": "2026-09-07",

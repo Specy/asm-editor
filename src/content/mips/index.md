@@ -1,5 +1,4 @@
-This course is about one architecture, MIPS, and about writing programs for it in the editor you are
-reading this in.
+This course is about one architecture, MIPS, and about writing programs for it.
 
 If you have never written assembly before, read
 [Assembly basics](/learn/courses/assembly-basics) first. It covers registers, memory, branching, the

@@ -2,7 +2,7 @@
     "id": "m68k",
     "name": "M68K assembly",
     "authors": ["Specy"],
-    "description": "Everything the editor's M68K can do, from your first program up to a ladder of finished ones you can read and run. Read Assembly basics first if you have never written assembly, this course takes for granted that you know what a register and a branch are.",
+    "description": "The Motorola 68000: eight data registers and eight address registers, an operand size written on the mnemonic itself, a condition code register, and one of the widest sets of addressing modes any CPU has offered. Big endian, and unusually pleasant to write by hand.",
     "image": "",
     "tags": ["assembly", "m68k"],
     "date": "2026-09-06",

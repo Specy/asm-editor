@@ -2,7 +2,7 @@
     "id": "mips",
     "name": "MIPS assembly",
     "authors": ["Specy"],
-    "description": "MIPS as this editor runs it: 32 registers with names that are a convention, three operand instructions, no flags register, and memory reached only by lw and sw. Read Assembly basics first if you have never written assembly.",
+    "description": "MIPS: 32 registers named by a convention the hardware does not enforce, three operand instructions, no flags register anywhere, and memory reached only through loads and stores. A design regular enough that most instructions are the same shape.",
     "image": "",
     "tags": ["assembly", "mips"],
     "date": "2026-09-07",
