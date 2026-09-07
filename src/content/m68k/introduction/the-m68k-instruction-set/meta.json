@@ -1,0 +1,6 @@
+{
+    "name": "The M68K instruction set",
+    "description": "The shape every M68K instruction has, the families the mnemonics fall into, and the letters glued on the end of one: the a of movea, the q of addq and the eq of beq.",
+    "order": 4,
+    "topic": "instruction-set"
+}

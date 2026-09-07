@@ -2,6 +2,7 @@
     import { createEventDispatcher, type Snippet } from 'svelte'
     import Button from '$cmp/shared/button/Button.svelte'
     import FaPlay from '~icons/fa-solid/play'
+    import FaPause from '~icons/fa-solid/pause'
     import FaWrench from '~icons/fa-solid/wrench'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import FaStepForward from '~icons/fa-solid/step-forward'
@@ -41,6 +42,13 @@
         running,
         children
     }: Props = $props()
+
+    /**
+     * Pause ends the current Run like a breakpoint. Once it returns, Run, Step and Undo become
+     * available together; Stop is the separate operation that clears the program.
+     */
+    const runMode = $derived(running ? 'pause' : 'run')
+    const runLabel = $derived(runMode === 'pause' ? 'Pause' : 'Run')
 </script>
 
 <div class="project-controls">
@@ -86,21 +94,21 @@
         </Button>
         <Button
             style="max-width: 5.5rem; flex:1; padding: 0.5rem 0.3rem"
-            onClick={() => dispatch('run')}
-            disabled={executionDisabled || running}
+            onClick={() => dispatch(runMode)}
+            disabled={executionDisabled}
         >
             <Icon size={1} style="margin-right: 0.4rem;">
-                {#if running}
-                    <FaRegClock />
+                {#if runMode === 'pause'}
+                    <FaPause />
                 {:else}
                     <FaPlay />
                 {/if}
             </Icon>
-            Run
+            {runLabel}
         </Button>
         <Button
             style="max-width: 5.5rem; flex:1; padding: 0.5rem 0.3rem"
-            disabled={executionDisabled || !canUndo}
+            disabled={executionDisabled || running || !canUndo}
             onClick={() => dispatch('undo')}
         >
             <Icon size={1} style="margin-right: 0.4rem;">
@@ -110,7 +118,7 @@
         </Button>
         <Button
             style="max-width: 5.5rem; flex:1; padding: 0.5rem 0.3rem"
-            disabled={executionDisabled}
+            disabled={executionDisabled || running}
             onClick={() => dispatch('step')}
         >
             <Icon size={1} style="margin-right: 0.4rem;">

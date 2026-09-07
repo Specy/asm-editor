@@ -6,6 +6,7 @@
     import M68KConditionCodesExplanation from '$cmp/documentation/m68k/M68KConditionCodesExplanation.svelte'
     import M68KShiftDirectionsExplanation from '$cmp/documentation/m68k/M68KShiftDirectionsExplanation.svelte'
     import M68KDirectives from '$cmp/documentation/m68k/M68KDirectives.svelte'
+    import M68KTrapsDocumentation from '$cmp/documentation/m68k/M68KTrapsDocumentation.svelte'
     import M68KAssemblerFeatures from '$cmp/documentation/m68k/M68KAssemblerFeatures.svelte'
     import {
         instructionsDocumentationList,
@@ -36,6 +37,7 @@
         <a href="#addressing-modes">Addressing Modes</a>
         <a href="#condition-codes">Condition Codes</a>
         <a href="#shift-directions">Shift Directions</a>
+        <a href="#traps">Trap tasks</a>
         <a href="#directives">Directives</a>
         <a href="#assembler-features">Assembler Features</a>
         <a href="#instructions">Instructions</a>
@@ -54,6 +56,11 @@
     <section id="shift-directions">
         <h2>Shift Directions</h2>
         <M68KShiftDirectionsExplanation />
+    </section>
+
+    <section id="traps">
+        <h2>Trap tasks</h2>
+        <M68KTrapsDocumentation />
     </section>
 
     <section id="directives">

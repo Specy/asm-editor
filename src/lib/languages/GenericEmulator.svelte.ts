@@ -14,6 +14,19 @@ import {
     numbersOfSizeToSlice
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import { Terminal } from '$lib/languages/peripherals/Terminal.svelte'
+import {
+    createInjectedPeripherals,
+    type EmulatorPeripherals
+} from '$lib/languages/peripherals/peripheralSet'
+import { ProgramClock } from '$lib/languages/peripherals/ProgramClock'
+import {
+    COMPUTE_SLICE_MS,
+    nextSpeedCorrection,
+    type ExecutionSlice,
+    SCREEN_ACTIVITY_MS,
+    SCREEN_SLICE_MS,
+    yieldToHost
+} from '$lib/languages/ExecutionSlice'
 import type { Testcase, TestcaseResult, TestcaseValidationError } from '$lib/Project.svelte'
 import { PAGE_ELEMENTS_PER_ROW, PAGE_SIZE } from '$lib/Config'
 import { createDebouncer } from '$lib/utils'
@@ -27,17 +40,56 @@ import { ExecutionController, type ExecutionGeneration } from '$lib/languages/Ex
 import { Prompt } from '$stores/promptStore.svelte'
 import structuredClone from '@ungap/structured-clone'
 
+/**
+ * How often the panels a user watches — registers, memory, the call stack, the undo history — are
+ * read back out of the Core while a program is running. One display frame: the browser cannot show
+ * more than one change per frame, so a refresh per Core interrupt costs work that is thrown away.
+ * Measured in the headless shell on `m68k/bouncing-ball.x68`, whose frame is six traps: refreshing
+ * per trap held the main thread at 76% busy and delivered 32 frames a second, and refreshing at
+ * most this often held it at 47% and delivered 40.
+ */
+const RUNNING_PANEL_REFRESH_MS = 16
+
 export abstract class GenericEmulator<T, R extends string>
     extends BaseEmulator<R>
     implements BaseEmulatorActions, BaseEmulatorState
 {
     protected state: Omit<BaseEmulatorState, 'code' | 'stdOut'>
     protected _code: string
-    protected _emulatorOptions: Required<EmulatorSettings>
-    protected readonly _peripherals: { terminal: Terminal }
+    protected _emulatorOptions: Required<Omit<EmulatorSettings, 'peripherals' | 'display'>>
+    protected readonly _peripherals: EmulatorPeripherals
+    /**
+     * The host-time clock of interactive runs, kept because a Testcase swaps in a virtual one and a
+     * clock's mode is fixed for its life. Adapters must therefore read `_peripherals.clock` when
+     * they need it instead of caching it.
+     */
+    private readonly interactiveClock: ProgramClock
     private semanticCheckId = 0
+    /**
+     * What the slices of the current run have taught about how fast this program runs, multiplied
+     * into the adapter's own throughput estimate. 1 until a slice says otherwise, and back to 1 on
+     * every clear (`learnSliceSpeed`, [ADR 0007](../../../docs/adr/0007-generic-emulator-run-scheduling.md)).
+     */
+    private speedCorrection = 1
+    /**
+     * What `sliceTimeBudgetMs` remembers about the Screen: the version it last saw, and the moment
+     * the animation budget stops applying if nothing draws again before then. The version starts at
+     * the one a fresh Screen has, so a program that never draws never asks for the short slice.
+     */
+    private lastScreenVersion = 0
+    private screenActiveUntil = 0
+    /** When `refreshRunningPanels` last read the Core for the panels, see the constant above. */
+    private lastPanelRefresh = 0
+    /**
+     * The pause the Run button turns into while a program is running. `pauseRequested` is set by
+     * `pause()` and honored by returning from `runSlices` at its next slice boundary, just as for
+     * a breakpoint. Step and Undo can then own the Core, and Run starts a new invocation at its PC.
+     */
+    private pauseRequested = false
+    private runInFlight = false
     /** Number of core operations currently in flight, see `duringCoreOperation`. */
     private coreOperations = 0
+    private coreOperationTail: Promise<void> = Promise.resolve()
     private coreIdleWaiters: (() => void)[] = []
     protected readonly executionController = new ExecutionController(() => Prompt.cancel())
 
@@ -54,8 +106,13 @@ export abstract class GenericEmulator<T, R extends string>
         }
         this._code = $state(code)
         this._peripherals = {
+            ...createInjectedPeripherals(
+                this._emulatorOptions.language,
+                emulatorOptions.peripherals
+            ),
             terminal: new Terminal({ executionController: this.executionController })
         }
+        this.interactiveClock = this._peripherals.clock
 
         this.state = $state({
             systemSize: options.systemSize,
@@ -75,6 +132,7 @@ export abstract class GenericEmulator<T, R extends string>
             executionTime: -1,
             canUndo: false,
             canExecute: false,
+            paused: false,
             breakpoints: [],
             interrupt: undefined,
             memory: {
@@ -146,7 +204,7 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     /**
-     * Serializes everything that touches the core against `_checkCode`'s throwaway assembly.
+     * Serializes execution commands and holds off `_checkCode`'s throwaway assembly until idle.
      *
      * The MARS/RARS derived cores (MIPS, RISC-V) keep the assembled program and the register file in
      * *module global* state, so assembling a second instance while one of them is executing hijacks
@@ -161,9 +219,16 @@ export abstract class GenericEmulator<T, R extends string>
      */
     private async duringCoreOperation<T>(operation: () => Promise<T>): Promise<T> {
         this.coreOperations += 1
+        const previous = this.coreOperationTail
+        let release!: () => void
+        this.coreOperationTail = new Promise<void>((resolve) => {
+            release = resolve
+        })
+        await previous
         try {
             return await operation()
         } finally {
+            release()
             this.coreOperations -= 1
             if (this.coreOperations === 0) {
                 const waiters = this.coreIdleWaiters
@@ -254,6 +319,20 @@ export abstract class GenericEmulator<T, R extends string>
         }
     }
 
+    /**
+     * One character rather than a line: with Screen keyboard input it is consumed as soon as it is
+     * typed ([ADR 0009](../../../docs/adr/0009-share-screen-keyboard-input-with-terminal.md)), and
+     * with a prompt it is the first character of the answered line, as the adapters read it before.
+     */
+    protected async requestCharacter(question: string, execution: ExecutionGeneration) {
+        this.state.interrupt = { type: 'ReadInput', message: question }
+        try {
+            return await this._peripherals.terminal.readCharAsync(question, execution)
+        } finally {
+            this.state.interrupt = undefined
+        }
+    }
+
     protected getLastExecutedLine(fallback = -1): number {
         try {
             const instruction = this._getLastInstruction?.()
@@ -277,11 +356,83 @@ export abstract class GenericEmulator<T, R extends string>
         )
     }
 
+    /**
+     * Everything a program left behind on its peripherals, on the Terminal's clear path: Build,
+     * Stop, dispose and the start of each Testcase. The Screen keeps its last frame visible after a
+     * termination and only loses it here, which is what the design record asks for.
+     */
+    private resetPeripherals(): void {
+        const { terminal, screen, keyboard, mouse, clock } = this._peripherals
+        terminal.clear()
+        terminal.useInteractiveInput()
+        this.applyScreenHistoryBudget()
+        screen.reset()
+        keyboard.reset()
+        mouse.reset()
+        clock.reset()
+    }
+
+    /**
+     * The Screen history's byte budget is a user setting, because a clear, a present or a resize
+     * journals a whole image ([ADR 0005](../../../docs/adr/0005-restore-screen-state-on-undo.md)).
+     * Applied on every clear, so changing the setting takes effect on the next Build without the
+     * settings panel having to know about emulators.
+     */
+    private applyScreenHistoryBudget(): void {
+        const megabytes = settingsStore.values.screenHistoryBudgetMb.value
+        if (!Number.isFinite(megabytes) || megabytes < 0) return
+        this._peripherals.screen.history.byteBudget = megabytes * 1024 * 1024
+    }
+
+    /**
+     * The adapter knows which peripheral effects belong to the next CPU undo record and preflights
+     * them against the Screen's byte budget. Unrelated CPU instructions remain undoable even if an
+     * older drawing has been evicted. Memory-backed framebuffers rely on the CPU history alone.
+     */
+    private canUndoStep(): boolean {
+        return this._canUndo()
+    }
+
+    /**
+     * The run configuration of a Testcase: scripted answers and a virtual Time Source, chosen
+     * together ([ADR 0010](../../../docs/adr/0010-program-time-without-clock-pacing.md)). Waits
+     * complete immediately and advance a clock that starts at zero, so elapsed-time output is
+     * reproducible and a sleeping program cannot stall a test.
+     *
+     * The clock instance is swapped, not switched: a clock's mode is fixed for its life, and an
+     * adapter that captured the interactive one before the test would otherwise keep host time.
+     */
+    private useScriptedRun(input: string[]): void {
+        this._peripherals.terminal.useScriptedInput(input)
+        this._peripherals.clock.cancel()
+        this._peripherals.clock = new ProgramClock({ mode: 'virtual' })
+        this._peripherals.clock.start()
+    }
+
+    /**
+     * Back to the interactive sources after a Testcase, including after one that threw. The
+     * interactive clock is the instance the caller injected, so a GUI holding it keeps the one it
+     * bound to.
+     */
+    private useInteractiveRun(): void {
+        this._peripherals.terminal.useInteractiveInput()
+        this._peripherals.clock.cancel()
+        this._peripherals.clock = this.interactiveClock
+        this._peripherals.clock.reset()
+    }
+
     // ----- public api ----- //
     clear(): void {
         this.executionController.invalidate()
-        this._peripherals.terminal.clear()
-        this._peripherals.terminal.useInteractiveInput()
+        this.pauseRequested = false
+        //a new program is a new speed, and the estimates in the adapters are where it starts again
+        this.speedCorrection = 1
+        this.resetPeripherals()
+        //the reset above is itself a visible change, and what the previous program drew must not
+        //make the next one's first slices the animation ones
+        this.lastScreenVersion = this._peripherals.screen.version
+        this.screenActiveUntil = 0
+        this.lastPanelRefresh = 0
         this.state = {
             ...this.state,
             terminated: false,
@@ -293,6 +444,7 @@ export abstract class GenericEmulator<T, R extends string>
             interrupt: undefined,
             errors: [],
             canUndo: false,
+            paused: false,
             executionTime: -1,
             canExecute: false,
             latestSteps: [],
@@ -325,6 +477,8 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     async compile(historySize: number, codeOverride: string | undefined): Promise<void> {
+        //Build must cancel an active run/input wait before queuing for its Core lock.
+        if (this.coreOperations > 0) this.clear()
         return this.duringCoreOperation(() => this.compileInternal(historySize, codeOverride))
     }
 
@@ -394,7 +548,198 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     async run(haltLimit: number): Promise<InterpreterStatus> {
-        return this.duringCoreOperation(() => this.runInternal(haltLimit))
+        const execution = this.executionController.capture()
+        return this.duringCoreOperation(() =>
+            this.executionController.isCurrent(execution)
+                ? this.runInternal(haltLimit)
+                : Promise.resolve(InterpreterStatus.Terminated)
+        )
+    }
+
+    /**
+     * Ends the current Run at its next instruction boundary, preserving the program and history.
+     * A subsequent Run gets its own instruction limit, just as after a breakpoint.
+     *
+     * A pause with no run in flight does nothing: there is nothing to park, and remembering the
+     * request would stop the *next* run before its first slice. A program suspended on input is not
+     * executing either, and its slice has not returned, so the pause is taken once the input is
+     * answered; the GUI disables the button while an input request is pending for that reason.
+     */
+    pause(): void {
+        if (!this.runInFlight) return
+        this.pauseRequested = true
+    }
+
+    /**
+     * The run scheduler ([ADR 0007](../../../docs/adr/0007-generic-emulator-run-scheduling.md)):
+     * the adapter never runs a whole program, it runs slices, and this loop decides how big each one
+     * is, hands the host a turn between them, keeps the run's overall instruction limit across all
+     * of them, and resumes a program that asked for time to pass.
+     *
+     * Every await goes through `execution`, so Stop answers during a slice boundary and during a
+     * program-requested wait instead of only when the Core felt like returning, and so does the
+     * pause `pause()` asks for.
+     */
+    private async runSlices(haltLimit: number, execution: ExecutionGeneration): Promise<void> {
+        this.runInFlight = true
+        this.state.paused = false
+        try {
+            await this.sliceLoop(haltLimit, execution)
+        } finally {
+            this.runInFlight = false
+            //a pause asked for in the slice that ended the run is not inherited by the next one
+            this.pauseRequested = false
+        }
+    }
+
+    /** The loop itself, so `runSlices` can own the flags a pause needs whichever way the run ends. */
+    private async sliceLoop(haltLimit: number, execution: ExecutionGeneration): Promise<void> {
+        let remaining = haltLimit
+        while (remaining > 0) {
+            //the slice boundary is the only place a pause can be taken: a slice is the Core running,
+            //and nothing here can interrupt it once it has started
+            if (this.pauseRequested) {
+                this.state.paused = true
+                return
+            }
+            const targetMs = this.sliceTimeBudgetMs()
+            const clock = this._peripherals.clock
+            const startedAt = performance.now()
+            const waitedAt = clock.waitedMs
+            const slice: ExecutionSlice = await this._runSlice({
+                //the whole rest of the limit, so an adapter can cap it with its own throughput
+                //estimate of `timeBudgetMs` and never has to know how long the run has been going
+                instructionBudget: remaining,
+                timeBudgetMs: targetMs,
+                breakpoints: this.state.breakpoints,
+                runInstructionLimit: haltLimit,
+                speedCorrection: this.speedCorrection
+            })
+            this.learnSliceSpeed(
+                slice,
+                targetMs,
+                performance.now() - startedAt,
+                clock.waitedMs - waitedAt
+            )
+            this.executionController.ensureCurrent(execution)
+            const progress = Math.max(0, slice.instructions)
+            remaining -= progress
+            if (slice.reason === 'wait') {
+                //a wait is not execution: it costs no instructions and the run continues after it.
+                //`clear()` resets the clock, which resolves pending waits, and the generation check
+                //that follows turns the resumed run into a superseded one. A wait without a promise
+                //is a bare yield, so the loop can never spin without giving the host a turn
+                const wait = slice.wait ?? yieldToHost()
+                await this.executionController.waitFor(execution, () => wait)
+                continue
+            }
+            if (slice.reason !== 'budget') return
+            if (remaining <= 0) return
+            //an adapter asking for another slice without having run anything would spin this loop
+            //forever, so the run ends instead of hanging the host
+            if (progress <= 0) return
+            await this.executionController.waitFor(execution, () => yieldToHost())
+        }
+    }
+
+    /**
+     * What the last slice taught about how fast this program runs
+     * ([ADR 0007](../../../docs/adr/0007-generic-emulator-run-scheduling.md)). Only a slice that came
+     * back on its budget says anything — one cut short by a breakpoint, a wait or the end of the
+     * program says nothing — and only the part of it that was compute: an adapter that serves a
+     * program's `sleep` without leaving its slice would otherwise look like a Core a hundred times
+     * slower than it is.
+     */
+    private learnSliceSpeed(
+        slice: ExecutionSlice,
+        targetMs: number,
+        elapsedMs: number,
+        waitedMs: number
+    ): void {
+        if (slice.reason !== 'budget' || slice.instructions <= 0) return
+        const busyMs = Math.max(0, elapsedMs - Math.min(waitedMs, elapsedMs))
+        this.speedCorrection = nextSpeedCorrection(this.speedCorrection, targetMs, busyMs)
+    }
+
+    /**
+     * How long the next slice should aim to run. A Screen a program is drawing on means an animating
+     * program, which needs to reach its next frame and its next input poll soon; everything else is
+     * compute and yields only often enough to keep Stop answering. Measured in phase 8;
+     * `speedCorrection` is what turns the target into instructions for this program.
+     *
+     * Drawing is recognized from the version counter and remembered for `SCREEN_ACTIVITY_MS`, not
+     * from the dirty flag alone: the renderer clears dirty the moment it paints, so a program that
+     * draws without ever waiting used to be handed the 50 ms compute budget for the very next slice
+     * and drew a dozen more frames the GUI could not show until it came back. The version is what a
+     * renderer already compares, and it moves for a change to the visible image whether or not
+     * anybody has painted it yet, which is why the flag itself is no longer consulted.
+     *
+     * The Screen still has to be watched: a Screen nobody paints — x86's, which has no panel, or
+     * any surface whose Screen toggle is closed — would otherwise hold its programs at the
+     * animation budget for as long as they draw, with no frames to show for it.
+     */
+    private sliceTimeBudgetMs(): number {
+        const screen = this._peripherals.screen
+        if (!screen.watched) return COMPUTE_SLICE_MS
+        const now = performance.now()
+        if (screen.version !== this.lastScreenVersion) {
+            this.lastScreenVersion = screen.version
+            this.screenActiveUntil = now + SCREEN_ACTIVITY_MS
+        }
+        return now < this.screenActiveUntil ? SCREEN_SLICE_MS : COMPUTE_SLICE_MS
+    }
+
+    /**
+     * The panels, refreshed from inside a running program — the path an adapter takes when its Core
+     * stops on an interrupt. Reading the registers, a page of memory per tab, the call stack and the
+     * undo history is not free, and none of it can be seen more than once a display frame, so it is
+     * rate limited to `RUNNING_PANEL_REFRESH_MS` rather than done per interrupt.
+     *
+     * `force` is for the interrupts that suspend the program for the user: an input prompt is read
+     * beside the panels, and the user has all the time in the world to notice that they are one
+     * frame stale. The end of a run and a pause go through `refreshVisibleState` instead, which is
+     * never rate limited, so what a stopped program leaves on screen is always current.
+     */
+    protected refreshRunningPanels(force: boolean): void {
+        const now = performance.now()
+        if (!force && now - this.lastPanelRefresh < RUNNING_PANEL_REFRESH_MS) return
+        this.lastPanelRefresh = now
+        this.updateRegisters()
+        this.updateStatusRegisters()
+        this.updateMemory()
+        this.updateData()
+        this.scrollStackTab()
+    }
+
+    /**
+     * Everything the user inspects, read back out of the Core: the current line, whether Undo is
+     * available, and the register, memory, status-register and program-counter views. The end of a
+     * run does this, and so does a pause, which would otherwise leave every panel showing what it
+     * held when Run was pressed.
+     */
+    private refreshVisibleState(terminated: boolean): void {
+        try {
+            const ins = this._getNextInstruction()
+            //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
+            if (!terminated) {
+                this.state.line = ins?.lineNumber ?? -1
+            } else {
+                this.state.line = this.getLastExecutedLine()
+            }
+        } catch {
+            this.state.line = terminated ? this.getLastExecutedLine() : -1
+        }
+        this.state.canUndo = this.canUndoStep()
+        this.refreshCoreViews()
+    }
+
+    /** The half of `refreshVisibleState` a step shares; a step owns its own line and Undo handling. */
+    private refreshCoreViews(): void {
+        this.updateRegisters()
+        this.scrollStackTab()
+        this.updateMemory()
+        this.updateData()
+        this.updateStatusRegisters()
     }
 
     private async runInternal(haltLimit: number): Promise<InterpreterStatus> {
@@ -402,32 +747,17 @@ export abstract class GenericEmulator<T, R extends string>
         const start = performance.now()
         const execution = this.executionController.capture()
         try {
-            await this._run(haltLimit, this.state.breakpoints)
+            await this.runSlices(haltLimit, execution)
             this.executionController.ensureCurrent(execution)
             const terminated = this._hasTerminated()
-            try {
-                const ins = this._getNextInstruction()
-                //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
-                if (!terminated) {
-                    this.state.line = ins?.lineNumber ?? -1
-                } else {
-                    this.state.line = this.getLastExecutedLine()
-                }
-            } catch {
-                this.state.line = terminated ? this.getLastExecutedLine() : -1
-            }
-            this.state.canUndo = this._canUndo()
-            this.updateRegisters()
-            this.scrollStackTab()
-            this.updateMemory()
-            this.updateData()
-            this.updateStatusRegisters()
+            this.refreshVisibleState(terminated)
             this.state.executionTime = performance.now() - start
             this.state.terminated = terminated
             //if it managed to run, it means it does not have valid errors
             this.state.errors = []
             return terminated ? InterpreterStatus.Terminated : InterpreterStatus.Running
         } catch (e) {
+            this.state.paused = false
             if (!this.executionController.isCurrent(execution)) {
                 return InterpreterStatus.Terminated
             }
@@ -565,10 +895,16 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     async step(): Promise<boolean> {
-        return this.duringCoreOperation(() => this.stepInternal())
+        const execution = this.executionController.capture()
+        return this.duringCoreOperation(() =>
+            this.executionController.isCurrent(execution)
+                ? this.stepInternal()
+                : Promise.resolve(false)
+        )
     }
 
     private async stepInternal(): Promise<boolean> {
+        this.state.paused = false
         let lastLine = -1
         const execution = this.executionController.capture()
         try {
@@ -586,7 +922,7 @@ export abstract class GenericEmulator<T, R extends string>
                 } catch {}
             }
 
-            this.state.canUndo = this._canUndo()
+            this.state.canUndo = this.canUndoStep()
             //if it managed to step, it means it does not have valid errors
             this.state.errors = []
         } catch (e) {
@@ -597,11 +933,7 @@ export abstract class GenericEmulator<T, R extends string>
             this.state.line = lastLine
             throw e
         }
-        this.updateRegisters()
-        this.scrollStackTab()
-        this.updateMemory()
-        this.updateData()
-        this.updateStatusRegisters()
+        this.refreshCoreViews()
         return this._hasTerminated()
     }
 
@@ -639,11 +971,11 @@ export abstract class GenericEmulator<T, R extends string>
                     this._writeMemoryBytes(value.address, encoded)
                 }
             }
-            this._peripherals.terminal.useScriptedInput(testcase.input)
+            this.useScriptedRun(testcase.input)
             try {
                 await this._runTestcase(testcase, haltLimit)
             } finally {
-                this._peripherals.terminal.useInteractiveInput()
+                this.useInteractiveRun()
             }
             const ins = this._getNextInstruction()
             //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
@@ -699,8 +1031,9 @@ export abstract class GenericEmulator<T, R extends string>
         for (const original of testcases) {
             const testcase = structuredClone($state.snapshot(original)) as Testcase
             try {
-                await this.compile(historySize, code)
-                await this.runTestcase(testcase, haltLimit)
+                //The whole testcase loop already owns the Core operation lock.
+                await this.compileInternal(historySize, code)
+                await this.runTestcaseInternal(testcase, haltLimit)
                 const errors = await this.validateTestcase(testcase)
                 results.push({
                     errors,
@@ -735,15 +1068,25 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     undo(amount: number | undefined): void {
+        //Undo is synchronous. An unfinished step/run/input handler still owns the Core.
+        if (this.coreOperations > 0) return
         try {
             if (!this.getInstance()) return
             const undoCount = Math.max(0, Math.floor(amount ?? 1))
-            for (let i = 0; i < undoCount && this._canUndo(); i++) {
+            let undone = 0
+            for (; undone < undoCount && this.canUndoStep(); undone++) {
+                //the Core owns the instruction boundary, so it rolls back first and the Screen
+                //follows it (ADR 0005)
                 this._undo()
             }
+            //an image that lives in Core memory was restored by the rollback itself, so the Screen
+            //re-reads it instead of having journaled it. Once for the whole rollback: the re-read is
+            //a whole region and only the state it ends in is shown
+            if (undone > 0) this._resyncScreenFromMemory?.()
             const instruction = this._getNextInstruction()
             this.state.line = instruction?.lineNumber ?? -1
-            this.state.canUndo = this._canUndo()
+            this.state.canUndo = this.canUndoStep()
+            this.state.terminated = this._hasTerminated()
             this.updateRegisters()
             this.scrollStackTab()
             this.updateMemory()
@@ -783,6 +1126,10 @@ export abstract class GenericEmulator<T, R extends string>
 
     get canUndo() {
         return this.state.canUndo
+    }
+
+    get paused() {
+        return this.state.paused
     }
 
     get compilerDiagnostics() {
@@ -845,7 +1192,7 @@ export abstract class GenericEmulator<T, R extends string>
         return this._peripherals.terminal.output
     }
 
-    get peripherals(): { terminal: Terminal } {
+    get peripherals(): EmulatorPeripherals {
         return this._peripherals
     }
 

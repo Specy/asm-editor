@@ -323,8 +323,9 @@ const desc = {
     jsr: 'Jumps to the specified address, like the "lea" instruction, when resolving the address, it does not read the memory, so "jsr 4(a0)" will jump to the value of "a0 + 4", the address is loaded and stores the return address in the stack',
     trap: `
 Executes a trap, the value of the operand is used as the trap number, only #15 is supported.
-The register d0 will be used as the trap type which are: 
-| Opcode | Description   |
+The register d0 holds the task number. The full table, with the registers each task takes and
+answers with, is on the [trap tasks page](/documentation/m68k/traps).
+| Task | Description   |
 |:------:|-------------------------------------------------------------------------------------------------------|
 | 0      | Print string pointed by a1 with length read in d1.w, null terminated with max of 255, then prints a new line.      |
 | 1      | Print string pointed by a1 with length read in d1.w.      |
@@ -333,12 +334,22 @@ The register d0 will be used as the trap type which are:
 | 4      | Read number, writes to d1.   |
 | 5      | Read character, writes to d1.|
 | 6      | Print character at d1.       |
-| 8      | Get time, writes to d1.      |
+| 7      | Check for keyboard input, writes 1 or 0 to d1.b.  |
+| 8      | Get the time in hundredths of a second since the run started, writes to d1.      |
 | 9      | Terminate.     |
+| 11     | Set or get the text cursor, or clear the screen with d1.w = $FF00.  |
 | 13     | Prints null terminated string pointed by a1 then prints new line, errors if string is longer than 16kb, to prevent infinite loops.   |
 | 14     | Prints null terminated string pointed by a1, errors if string is longer than 16kb, to prevent infinite loops.       |
-| 15     | Prints unsigned number at d1 in base (from 2 to 36) specified in d2.b
-| 23     | Delays the execution of the simulator by milliseconds of the value in d1.
+| 15     | Prints unsigned number at d1 in base (from 2 to 36) specified in d2.b  |
+| 17     | Prints the null terminated string at a1, then the signed number in d1.  |
+| 18     | Prints the null terminated string at a1, then reads a number into d1.  |
+| 19     | Reads the state of up to four keys given in d1.l, or the last keys pressed and released with d1.l = 0.  |
+| 20     | Print the signed number in d1 right justified in a field d2.b columns wide.  |
+| 23     | Delay for the number of hundredths of a second in d1.  |
+| 24     | Enable or disable the simulator shortcut keys; accepted and ignored.  |
+| 33     | Set or get the screen size, or set the window mode.  |
+| 61     | Read the mouse: flags in d0, y:x in d1.  |
+| 80-96  | Graphics: colors, pixels, lines, rectangles, ellipses, flood fill, drawing modes, double buffering, text and the pen position.  |
 `.trim(),
     nop: 'This instruction is a no-operation, it does not do anything.'
 }

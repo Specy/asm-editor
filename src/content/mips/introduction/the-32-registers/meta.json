@@ -1,0 +1,6 @@
+{
+    "name": "The 32 registers and their names",
+    "description": "All 32 are the same piece of hardware and the names are an agreement between programs. $zero and $at are the two the hardware and the assembler have opinions about, and $t against $s is the one that decides how you write a subroutine.",
+    "order": 1,
+    "topic": "registers"
+}

@@ -5,6 +5,7 @@ import type {
     BaseEmulatorState,
     EmulatorSettings
 } from './commonLanguageFeatures.svelte'
+import type { EmulatorPeripherals } from './peripherals/peripheralSet'
 import type { M68KEmulator } from './M68K/M68KEmulator.svelte'
 import type { MIPSEmulator } from './MIPS/MIPSEmulator.svelte'
 import type { X86Emulator } from './X86/X86Emulator.svelte'
@@ -42,7 +43,19 @@ function loadEmulator(type: AvailableLanguages) {
     return instances[type]
 }
 
-export type Emulator = BaseEmulatorActions & BaseEmulatorState & BaseEmulatorDerivedState
+/**
+ * The peripherals the GUI observes: the Terminal it already read `stdOut` from, plus the Screen it
+ * paints, the Keyboard and Mouse it feeds events to, and the clock a program's waits go through
+ * ([ADR 0004](../../../docs/adr/0004-inject-screens-at-emulator-boundary.md)).
+ */
+export type EmulatorPeripheralAccess = {
+    readonly peripherals: EmulatorPeripherals
+}
+
+export type Emulator = BaseEmulatorActions &
+    BaseEmulatorState &
+    BaseEmulatorDerivedState &
+    EmulatorPeripheralAccess
 
 export async function createEmulator<T extends AvailableLanguages>(
     type: T,

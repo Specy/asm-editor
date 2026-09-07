@@ -1,0 +1,6 @@
+{
+    "name": "Registers, pairs and the shadow set",
+    "description": "The seven 8 bit registers, the three pairs they make, the two index registers and the second copy of all of them that one instruction swaps in. What the accumulator can do that nothing else can, and what hl is for.",
+    "order": 1,
+    "topic": "registers"
+}

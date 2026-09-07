@@ -1,0 +1,6 @@
+{
+    "name": "Multiply and divide, with the remainder",
+    "description": "Days into hours with mul, seconds into minutes and seconds with div and rem, and the top half of a product that only mulh can give you.",
+    "order": 8,
+    "topic": "multiply-and-divide"
+}

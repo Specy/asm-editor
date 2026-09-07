@@ -1,0 +1,6 @@
+{
+    "name": "Loops and djnz",
+    "description": "A while loop written out of a compare and two jumps, then djnz, the one instruction that counts and jumps at once. Its counter in b, its 256 iterations when b starts at zero, and what a nested loop has to do about it.",
+    "order": 1,
+    "topic": "loops"
+}

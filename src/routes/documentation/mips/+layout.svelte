@@ -80,6 +80,11 @@
             onClick={() => (menuOpen = false)}
         />
         <MenuLink
+            href="/documentation/mips/screen"
+            title="Screen and I/O"
+            onClick={() => (menuOpen = false)}
+        />
+        <MenuLink
             href="/documentation/mips/syscall"
             title="Syscalls"
             onClick={() => (menuOpen = false)}

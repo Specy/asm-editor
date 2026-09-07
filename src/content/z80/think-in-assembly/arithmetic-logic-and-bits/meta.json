@@ -1,0 +1,6 @@
+{
+    "name": "8-bit and 16-bit arithmetic, logic and bits",
+    "description": "Adding and subtracting bytes through the accumulator and pairs through hl, the carry that joins two halves into one wider number, and the multiplication and division the Z80 has no instruction for. Then the masks, shifts and the three bit instructions.",
+    "order": 2,
+    "topic": "arithmetic"
+}

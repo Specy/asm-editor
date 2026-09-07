@@ -5,6 +5,7 @@
     import Header from '$cmp/shared/layout/Header.svelte'
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
     import type { EmulatorSettings } from '$lib/languages/commonLanguageFeatures.svelte'
+    import { createInjectedPeripherals } from '$lib/languages/peripherals/peripheralSet'
     import Column from '$cmp/shared/layout/Column.svelte'
 
     // Define the props the component expects
@@ -28,7 +29,20 @@
 
     let destroyed = false
 
-    const emulatorPromise = untrack(() => createEmulator(language, code, { ...settings, language }))
+    //One set per emulator, created here rather than inside it so that the GUI owns the instances the
+    //Core draws on and reads from (ADR 0004); `emulator.peripherals` hands them to the children.
+    //Anything the caller already passed in `settings.peripherals` is kept.
+    const injectedPeripherals = untrack(() =>
+        createInjectedPeripherals(language, settings?.peripherals)
+    )
+
+    const emulatorPromise = untrack(() =>
+        createEmulator(language, code, {
+            ...settings,
+            language,
+            peripherals: injectedPeripherals
+        })
+    )
     emulatorPromise.then((emulatorInstance) => {
         if (destroyed) {
             emulatorInstance.dispose()

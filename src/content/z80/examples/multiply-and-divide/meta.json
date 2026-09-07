@@ -1,0 +1,6 @@
+{
+    "name": "Multiply and divide, with the remainder",
+    "description": "The two instructions the Z80 does not have, written out: days into hours by shifting and adding, and seconds into minutes and seconds by shifting and subtracting.",
+    "order": 8,
+    "topic": "multiply-and-divide"
+}

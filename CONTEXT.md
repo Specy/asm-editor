@@ -16,9 +16,25 @@ A compile/check-time finding about the program's source, tagged `error`, `warnin
 
 The generic state "the Emulator is paused mid-execution waiting on the user" (e.g. a program requested keyboard input). Owned by this codebase, not by any Core's type system; language-specific interruption details (like s68k interrupt payloads) are mapped _into_ it. While an Interrupt is pending, execution controls are disabled.
 
+## Pause
+
+A run parked between two instruction slices at the user's request, keeping everything it had: its place in the program, its remaining instruction limit, its breakpoints and what the scheduler learned about its speed. The Run button is Pause while a program runs and Resume once it is parked. Distinct from an **Interrupt**, which the program itself causes by asking for input, and from Stop, which is `clear()` and throws the program away.
+
 ## Peripheral
 
-A device owned by an Emulator that programs interact with through the Core: Cores write to it and read from it (via the adapter), the UI observes it. Peripherals are part of the Emulator, not siblings of it. First peripheral: the **Terminal**. Planned: screen, keyboard.
+A device owned by an Emulator that programs interact with through the Core: Cores write to it and read from it (via the adapter), the UI presents its output or supplies its input. Peripherals are part of the Emulator, not siblings of it. First peripheral: the **Terminal**. Planned: **Screen**, **Keyboard**, **Mouse**.
+
+## Screen
+
+The Peripheral representing a program's graphical output through its simulator environment's graphics conventions. For environments whose simulator has a single output window, it also shows the program's text output and input echo at a text cursor. In double buffering mode, its visible image remains separate from the image being drawn until the program presents it.
+
+## Keyboard
+
+The Peripheral representing keyboard input for a program interacting with the **Screen**, observed either as typed characters or as key state. Its pending typed input also supplies the **Terminal**'s character, string and numeric reads in graphical use.
+
+## Mouse
+
+The Peripheral representing pointing input for a program interacting with the **Screen**, including mouse buttons and position in the Screen's logical pixels, observed as the current state or as the snapshots taken at the last button down and up. Its coordinates share the drawing origin at the top left and are independent of GUI zoom.
 
 ## Terminal
 
@@ -26,11 +42,23 @@ The Peripheral owning program output (stdout) and user input requests. Cores rea
 
 ## Input Source
 
-The strategy a Terminal uses to answer input requests: interactive (asking the user — today via modal prompt, in the future possibly a terminal widget) or scripted (a Testcase's predefined input list). Swapped per run, e.g. during Testcase execution. Every source answers asynchronously; a Core that needs input suspends its pending execution until the answer arrives.
+The source of answers to a **Terminal**'s input requests: interactive user input or a **Testcase**'s scripted answers. Interactive character, string and numeric input can come from prompts or the **Keyboard** associated with a **Screen**.
+
+## Program time
+
+The passage of time as a program observes it through its environment's wait and time operations. It follows host time; no environment emulates a clock rate. Distinct from a Core's instruction or cycle count, which drives the instruction limit and the Undo history.
+
+## Time Source
+
+Where a program's **Program time** comes from: host time in an interactive run, or a virtual clock in a **Testcase**'s scripted run, which starts at zero and advances only through the program's waits. Selected for the whole run together with the **Input Source**.
+
+## Port map
+
+The Z80's way of reaching every **Peripheral**: a fixed assignment of I/O port numbers, read and written with `in` and `out`, grouped by peripheral: the **Console ports** for the **Terminal**, and the ports for the **Screen**, **Keyboard**, **Mouse** and program time. Every port outside the map is an empty bus: writes are ignored and reads return 0xFF. See `docs/adr/0011-z80-peripherals-through-the-port-map.md`.
 
 ## Console port
 
-The Z80's way of reaching the **Terminal**. A Z80 has no system calls: programs talk to the outside world with `in`/`out` on one of 256 I/O ports, so the Emulator maps a fixed handful of them (`Z80_PORTS` in `src/lib/languages/Z80/Z80-model.ts`) onto the Terminal, one port per output format (character, unsigned, signed, hexadecimal, 16 bit) instead of one syscall number per operation. A write formats the byte and appends it to the Terminal's output; a read with no buffered input pauses the machine — the Core stops with `WAITING_FOR_INPUT` and the adapter re-executes the `in` once the Terminal's **Input Source** has answered — so a port read raises an **Interrupt** like any other input request. Every unmapped port ignores writes and reads as 0xFF, like an empty bus. See `docs/adr/0002-z80-console-ports.md`.
+The **Port map**'s group for the **Terminal**. A Z80 has no system calls: programs talk to the outside world with `in`/`out` on one of 256 I/O ports, so the Emulator maps a fixed handful of them (`Z80_PORTS` in `src/lib/languages/Z80/Z80-model.ts`) onto the Terminal, one port per output format (character, unsigned, signed, hexadecimal, 16 bit) instead of one syscall number per operation. A write formats the byte and appends it to the Terminal's output; a read with no buffered input pauses the machine — the Core stops with `WAITING_FOR_INPUT` and the adapter re-executes the `in` once the Terminal's **Input Source** has answered — so a port read raises an **Interrupt** like any other input request. See `docs/adr/0002-z80-console-ports.md`.
 
 ## Exam
 
@@ -38,4 +66,44 @@ A Project handed to a student under a track, a password and a time limit, with a
 
 ## Testcase
 
-A declarative check run against a program: starting registers/memory/input, expected registers/memory/output. Language-independent; endianness of memory expectations follows the Emulator's endianness.
+A declarative check run against a program: starting registers/memory/input, expected registers/memory/output. Language-independent; endianness of memory expectations follows the Emulator's endianness. Its run uses a scripted **Input Source** and a virtual **Time Source**.
+
+## Course
+
+A sequence of **Modules** on one subject, listed on the Learn page with its own landing text and metadata (name, description, authors, date, order). Two kinds exist: the **General course** and the **Language courses**. Content only: a Course is a folder of markdown and metadata, never code.
+
+## Module
+
+A themed, ordered group of **Lectures** inside a **Course**. A Module has a name and a description but no body of its own that the reader studies.
+
+## Lecture
+
+One page of a **Course**: markdown text with **Playgrounds**, read in order with Previous and Next. The unit a reader studies in one sitting.
+
+## Playground
+
+A runnable code block inside a **Lecture**: an embedded editor with its own **Emulator**, configured by flags on the code fence (memory, console, tests, program counter, screen, open in the editor). Every Lecture that teaches an instruction shows it in a Playground.
+
+## General course
+
+The Course "Assembly basics": the overview of what most assembly languages share, using several of the editor's languages as examples and covering each topic once, shallowly. Its three Modules define the topic order every **Language course** mirrors.
+_Avoid_: beginner course, basics course
+
+## Language course
+
+A **Course** about one of the editor's languages (M68K, MIPS, RISC-V, Z80). It mirrors the **General course** Module for Module and Lecture for Lecture, retitled for the language, with an opening "Getting started" Lecture and the outside-world Module bent to what the machine really has (traps, syscalls, memory-mapped or port-mapped I/O). It closes with an **Examples** Module.
+_Avoid_: specific course, single course, deep dive
+
+## Example
+
+A complete, verified program that closes a **Language course**: one **Lecture** in its Examples Module, placed by what the reader needs to know before it. The same ladder of Examples exists in every Language course, program for program (the snake game in M68K is the snake game in RISC-V), so a reader can compare how each language does the same thing.
+_Avoid_: demo, sample, snippet
+
+## Exercise
+
+A task that closes a **Lecture** of a **Language course**: a **Playground** preloaded with a skeleton, a stated goal, and a **Testcase** that checks the reader's solution. One or two per Lecture; none in the **General course**, whose Lectures only invite the reader to change a Playground and watch.
+_Avoid_: quiz, challenge, problem
+
+## Topic
+
+The subject a **Lecture** teaches, named the same way in every **Course** that covers it (registers, the stack, syscalls, the snake game). It is what ties a **General course** Lecture to its deep dives in the **Language courses**, and an **Example** to the same program in the other languages; the links between them are derived from it, never written by hand.

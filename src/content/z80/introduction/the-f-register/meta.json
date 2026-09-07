@@ -1,0 +1,6 @@
+{
+    "name": "The F register",
+    "description": "The six flags, where they sit in the byte, which instructions write which of them, and the eight conditions that read them. It ends on P/V doing three different jobs and on the signed comparison the Z80 has no condition for.",
+    "order": 6,
+    "topic": "flags"
+}

@@ -1,0 +1,6 @@
+{
+    "name": "Memory, little endian and alignment",
+    "description": "The four gigabytes a MIPS program can address and where this editor puts the code, the data and the stack in them. The byte order a word is written in, the five loads and three stores, and the addresses that end a run.",
+    "order": 2,
+    "topic": "memory"
+}

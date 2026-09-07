@@ -1,0 +1,6 @@
+{
+    "name": "The bigger of two numbers",
+    "description": "One branch picks the larger of two registers, a second turns the difference into a distance, and an slt answers the same question as a number.",
+    "order": 2,
+    "topic": "if-else"
+}

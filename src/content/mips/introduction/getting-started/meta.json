@@ -1,0 +1,6 @@
+{
+    "name": "Getting started with MIPS",
+    "description": "The architecture this editor runs, the 32 registers and the memory it works with, and how a program is written down. It ends with a first program whose answer you read in the registers panel.",
+    "order": 0,
+    "topic": "introduction"
+}

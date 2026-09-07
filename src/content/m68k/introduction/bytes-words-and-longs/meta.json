@@ -1,0 +1,6 @@
+{
+    "name": "Bytes, words and longs",
+    "description": "The five ways of writing a number in M68K source, the three sizes an instruction can carry and which one you get when you leave it off, and the instructions that read the same bits as signed or as unsigned.",
+    "order": 3,
+    "topic": "numbers"
+}

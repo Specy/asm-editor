@@ -1,0 +1,6 @@
+{
+    "name": "Even or odd, count the set bits, multiply by shifting",
+    "description": "Four questions about one number answered with a mask, two shifts and a loop that adds a bit to a counter.",
+    "order": 9,
+    "topic": "bit-tricks"
+}

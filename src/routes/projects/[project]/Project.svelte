@@ -47,12 +47,24 @@
     import FloatingAgentSidebar from '$cmp/shared/agent/FloatingAgentSidebar.svelte'
     import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
     import { resolve } from '$app/paths'
+    import ScreenRenderer from '$cmp/specific/project/screen/ScreenRenderer.svelte'
+    import ScreenDisplayConfiguration from '$cmp/specific/project/screen/ScreenDisplayConfiguration.svelte'
+    import { languageHasScreen } from '$lib/languages/peripherals/peripheralSet'
+    import {
+        DEFAULT_PROJECT_DISPLAY,
+        type MarsDisplayOrigin,
+        marsDisplayEquals,
+        normalizeMarsDisplay,
+        type ProjectDisplay
+    } from '$lib/languages/mars/marsDisplay'
 
     interface Props {
         name?: string
         language?: AvailableLanguages
         code?: string
         testcases?: Testcase[]
+        /** MIPS and RISC-V only: MARS's five bitmap-display parameters, saved with the project. */
+        display?: ProjectDisplay
         emulator: Emulator
         embedded?: boolean
         children?: Snippet
@@ -65,6 +77,7 @@
         language = 'M68K',
         code = $bindable(''),
         testcases = $bindable([] as Testcase[]),
+        display = $bindable(undefined as ProjectDisplay | undefined),
         emulator = $bindable(),
         embedded = false,
         children,
@@ -73,6 +86,45 @@
     }: Props = $props()
 
     const testcasesEditable = $derived(canEditTestcases && !readonly)
+    //the Screen panel is hidden for x86, which has no graphics device at all, and behind the same
+    //kind of setting as the memory panel everywhere else
+    const showScreen = $derived(
+        settingsStore.values.showScreen.value && languageHasScreen(language)
+    )
+    //only MARS and RARS put the screen's geometry in the user's hands: every other environment's
+    //program sizes its own screen, so there is nothing to configure
+    const configurableDisplay = $derived(emulator.setDisplay !== undefined)
+    const currentDisplay = $derived(normalizeMarsDisplay(display ?? DEFAULT_PROJECT_DISPLAY))
+    /** Whether the display on screen came from the program's own `@screen` comment, see `syncDisplay`. */
+    let displayOrigin: MarsDisplayOrigin = $state('user')
+    let displayBaseLabel: string | undefined = $state(undefined)
+
+    function applyDisplay(next: ProjectDisplay) {
+        display = next
+        //a hand edit wins until the next Build reads the directive again
+        displayOrigin = 'user'
+        displayBaseLabel = undefined
+        //applied at once and with a re-sync from memory, as MARS does; the save keeps a reopened
+        //project on the display its example's header comment asked for
+        emulator.setDisplay?.(next)
+        dispatcher('save', { silent: true })
+    }
+
+    /**
+     * A Build reads the program's `@screen` directive, so the emulator may have configured itself
+     * from the source; the popover and the saved project follow it. A program without a directive
+     * leaves everything as the user set it.
+     */
+    function syncDisplay() {
+        const configured = emulator.getDisplay?.()
+        if (!configured) return
+        displayOrigin = configured.origin
+        displayBaseLabel = configured.baseLabel
+        if (configured.origin !== 'directive') return
+        if (marsDisplayEquals(currentDisplay, configured.display)) return
+        display = configured.display
+        dispatcher('save', { silent: true })
+    }
 
     $effect(() => {
         emulator.setCode(code)
@@ -143,7 +195,8 @@
             case ShortcutAction.RunCode: {
                 if (emulator.terminated || emulator.interrupt !== undefined || !emulator.canExecute)
                     break
-                void runCode()
+                if (running) emulator.pause()
+                else void startRun()
                 break
             }
             case ShortcutAction.SaveCode: {
@@ -157,12 +210,14 @@
                 break
             }
             case ShortcutAction.Step: {
+                if (running || building) break
                 if (emulator.terminated || emulator.interrupt !== undefined || !emulator.canExecute)
                     break
                 void stepCode()
                 break
             }
             case ShortcutAction.Undo: {
+                if (running || building) break
                 if (
                     emulator.terminated ||
                     emulator.interrupt !== undefined ||
@@ -239,6 +294,8 @@
             toast.error('Error compiling code. ' + getM68kErrorMessage(e))
         } finally {
             building = false
+            //also after a failed build: the directive is read before the program is assembled
+            syncDisplay()
         }
     }
 
@@ -248,6 +305,22 @@
         } catch (e) {
             console.error(e)
             toast.error('Error executing code. ' + getM68kErrorMessage(e))
+        }
+    }
+
+    /**
+     * The whole run, from the button and from the shortcut alike: `running` has to be true for as
+     * long as the program is in flight, because that is what turns the Run button into Pause and
+     * keeps Step and Undo out of a run they would re-enter the Core inside of.
+     */
+    async function startRun() {
+        if (building || running) return
+        running = true
+        testcasesResult = []
+        try {
+            await runCode()
+        } finally {
+            running = false
         }
     }
 
@@ -548,16 +621,10 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                 }, 50)
             }}
             on:run={async () => {
-                if (building || running) return
-                running = true
-                testcasesResult = []
-                setTimeout(async () => {
-                    try {
-                        await runCode()
-                    } finally {
-                        running = false
-                    }
-                }, 50)
+                await startRun()
+            }}
+            on:pause={() => {
+                emulator.pause()
             }}
             on:build={async () => {
                 await buildCode()
@@ -666,6 +733,27 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
             stdOut={errorStrings ? `${errorStrings}\n${emulator.stdOut}` : emulator.stdOut}
             diagnostics={emulator.compilerDiagnostics}
         />
+        {#if showScreen}
+            <ScreenRenderer
+                name={language}
+                screen={emulator.peripherals.screen}
+                keyboard={emulator.peripherals.keyboard}
+                mouse={emulator.peripherals.mouse}
+                actualSizeZoom={configurableDisplay ? currentDisplay.unitWidth : 1}
+                style="height: 26rem; flex: none;"
+            >
+                {#snippet configuration()}
+                    {#if configurableDisplay}
+                        <ScreenDisplayConfiguration
+                            display={currentDisplay}
+                            origin={displayOrigin}
+                            baseLabel={displayBaseLabel}
+                            onChange={applyDisplay}
+                        />
+                    {/if}
+                {/snippet}
+            </ScreenRenderer>
+        {/if}
     </div>
 </div>
 

@@ -1,0 +1,6 @@
+{
+    "name": "The screen, keyboard and mouse through traps",
+    "description": "This M68K has no device at any address: the screen, the keyboard and the mouse are all trap #15 tasks. Drawing, colours, double buffering, key state and the pointer, each with a program you can run.",
+    "order": 1,
+    "topic": "mmio"
+}

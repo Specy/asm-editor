@@ -1,0 +1,6 @@
+{
+    "name": "Words, halves and bytes",
+    "description": "The three ways of writing a number in MIPS source, what the machine calls a word and how much of an instruction a constant gets, and the pairs of instructions that read the same 32 bits as signed or as unsigned.",
+    "order": 3,
+    "topic": "numbers"
+}

@@ -1,4 +1,6 @@
 import { numberToByteSlice } from '$cmp/specific/project/memory/memoryTabUtils'
+import type { MarsDisplayConfiguration, ProjectDisplay } from '$lib/languages/mars/marsDisplay'
+import type { InjectedPeripheralOptions } from '$lib/languages/peripherals/peripheralSet'
 import type { AvailableLanguages, Testcase, TestcaseResult } from '$lib/Project.svelte'
 import { unsignedBigIntToSigned } from '$lib/utils'
 
@@ -268,6 +270,11 @@ export type BaseEmulatorState = {
     stdOut: string
     canExecute: boolean
     canUndo: boolean
+    /**
+     * Whether the last Run returned because Pause was requested. The Core is idle and available
+     * for Step, Undo or another Run, as after a breakpoint.
+     */
+    paused: boolean
     breakpoints: number[]
     interrupt?: EmulatorInterrupt
     memory: {
@@ -342,6 +349,19 @@ export type EmulatorSettings = {
     baseAddress?: bigint
     stackAddress?: bigint
     initialMemoryValue?: number
+    /**
+     * The Screen, Keyboard, Mouse and clock the Emulator runs on
+     * ([ADR 0004](../../../docs/adr/0004-inject-screens-at-emulator-boundary.md)). The GUI creates
+     * them so it can bind its widgets to the very instances the Core uses; anything left out is
+     * built from the language defaults, which is what every caller that does not care gets.
+     */
+    peripherals?: InjectedPeripheralOptions
+    /**
+     * MIPS and RISC-V only: MARS's and RARS's five bitmap-display parameters, from the project the
+     * Emulator was opened for. Every other language configures its Screen from the program itself,
+     * and an Emulator that is given none starts from MARS's defaults.
+     */
+    display?: ProjectDisplay
 }
 
 export type BaseEmulatorActions = {
@@ -355,6 +375,11 @@ export type BaseEmulatorActions = {
     setTabMemoryAddress: (address: bigint, tabId: number) => void
     toggleBreakpoint: (line: number) => void
     undo: (amount?: number) => void
+    /**
+     * Ends the current Run at its next slice boundary, preserving the program and undo history.
+     * Does nothing when no run is in flight.
+     */
+    pause: () => void
     resetSelectedLine: () => void
     dispose: () => void
     test: (
@@ -365,4 +390,16 @@ export type BaseEmulatorActions = {
     ) => Promise<TestcaseResult[]>
     getLineFromAddress: (address: bigint) => number
     readMemoryBytes: (address: bigint, length: number) => Uint8Array
+    /**
+     * MIPS and RISC-V only: applies MARS's five bitmap-display parameters, re-syncing the Screen
+     * from memory at once as the tool does. Absent on every other Emulator, whose Screen is the
+     * program's to configure.
+     */
+    setDisplay?: (display: ProjectDisplay) => void
+    /**
+     * MIPS and RISC-V only: the display the Screen is configured with right now, and whether the
+     * last Build read it out of the program's own `@screen` comment directive rather than from the
+     * user. The GUI pulls it after a Build so the popover shows what the source asked for.
+     */
+    getDisplay?: () => MarsDisplayConfiguration
 }

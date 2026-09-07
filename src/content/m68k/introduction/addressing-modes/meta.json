@@ -1,0 +1,6 @@
+{
+    "name": "Addressing modes",
+    "description": "Every way an M68K instruction can name what it works on, from #7 to 4(a0, d1), with the C each of them is written as. It ends on the postincrement and predecrement modes that step a pointer for you.",
+    "order": 5,
+    "topic": "addressing-modes"
+}

@@ -1,0 +1,6 @@
+{
+    "name": "Read two numbers and print their sum",
+    "description": "Two prompts that wait for you to type, the numbers coming back in $v0, and their sum printed on a line of its own.",
+    "order": 18,
+    "topic": "sum-of-two-numbers"
+}

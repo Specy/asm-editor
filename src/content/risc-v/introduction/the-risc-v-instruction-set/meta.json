@@ -1,0 +1,6 @@
+{
+    "name": "The RISC-V instruction set",
+    "description": "Three operands with the destination first, six encodings that are all four bytes long, and a base of about forty instructions with everything else in an optional extension. It ends on the instructions that are not instructions at all.",
+    "order": 5,
+    "topic": "instruction-set"
+}

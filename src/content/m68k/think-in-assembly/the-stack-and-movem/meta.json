@@ -1,0 +1,6 @@
+{
+    "name": "The stack, -(sp) and movem",
+    "description": "Push and pop are two addressing modes on a7, and movem saves a whole list of registers in one instruction. The stack drawn step by step, and the byte push that leaves the stack pointer odd.",
+    "order": 4,
+    "topic": "the-stack"
+}

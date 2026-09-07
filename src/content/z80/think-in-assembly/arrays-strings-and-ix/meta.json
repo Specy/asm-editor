@@ -1,0 +1,6 @@
+{
+    "name": "Arrays, strings and ix",
+    "description": "Walking an array with hl, indexing one by a register when the Z80 has no mode for it, scaling for 16 bit elements, zero terminated strings, and ix parked on a record so the fields have names.",
+    "order": 3,
+    "topic": "data-in-memory"
+}

@@ -105,7 +105,7 @@ Remember that the stack grows downwards, we will have:
 
 The "????????" means that we don't know what is there, it can be anything.
 
-Now, if we want to push a new value, say `0x33333333`, we first decrese the stack pointer by 4 bytes (the size of the
+Now, if we want to push a new value, say `0x33333333`, we first decrease the stack pointer by 4 bytes (the size of the
 number we are pushing):
 
 | address |    value    |
@@ -191,7 +191,7 @@ move.l #$1018, sp
 * first we decrease the stack pointer
 sub #4, sp
 * then we write the value
-move.l #$333333333, (sp)
+move.l #$33333333, (sp)
 
 * let's push 0x4444
 * first we decrease the stack pointer

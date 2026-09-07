@@ -1,0 +1,5 @@
+# Screen double buffering
+
+The shared **Screen** will offer an optional double buffering primitive: drawing changes an off-screen image, and an explicit presentation updates the visible image; the default remains direct drawing. The EASy68K adapter will expose this through task 92's buffering modes and task 94's copy-to-visible operation, preserving the behavior described in the [EASy68K graphics help](https://acorn.huininga.nl/pub/projects/CiscOS/_emulators/EASy68Ksource/EASy68K_Help/graphics.htm) for existing animation programs. Both images and the buffering mode participate in [Undo](./0005-restore-screen-state-on-undo.md), including restoring the previous visible image when presentation is undone.
+
+Display scheduling must avoid imposing frame waits on programs that do not use graphical output. [ADR 0007](./0007-generic-emulator-run-scheduling.md) assigns scheduling to GenericEmulator, including occasional responsiveness yields for compute-only runs; exact time budgets remain to be tuned.

@@ -1,0 +1,6 @@
+{
+    "name": "Exceptions and the vector table",
+    "description": "The 68000's 256 vectors at the bottom of memory, what the CPU pushes before it jumps to a handler, and what this editor does instead: no vector table, no rte, and a fault that ends the run with a message.",
+    "order": 2,
+    "topic": "interrupts"
+}

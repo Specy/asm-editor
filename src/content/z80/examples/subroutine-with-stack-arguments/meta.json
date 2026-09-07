@@ -1,0 +1,6 @@
+{
+    "name": "Stack arguments and a stack frame",
+    "description": "Two arguments pushed by the caller, a local that survives a call inside a frame ix is parked on, and a subroutine that gives back the pair it borrowed.",
+    "order": 11,
+    "topic": "subroutine-with-stack-arguments"
+}

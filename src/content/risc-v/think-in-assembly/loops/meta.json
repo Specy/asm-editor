@@ -1,0 +1,6 @@
+{
+    "name": "Loops",
+    "description": "RISC-V has no counted loop instruction, so a loop is a branch backwards and a counter you keep yourself. Why the test belongs at the bottom, nested loops, and walking an array against an end pointer.",
+    "order": 1,
+    "topic": "loops"
+}

@@ -1,4 +1,8 @@
 import { BASE_CODE, COMMENT_CHARACTER } from './Config'
+import {
+    DEFAULT_PROJECT_DISPLAY as MARS_DEFAULT_DISPLAY,
+    type ProjectDisplay
+} from './languages/mars/marsDisplay'
 import { serializer } from '$lib/json'
 import { detectAssemblyLanguage } from './languages/languageDetector'
 
@@ -16,7 +20,15 @@ export interface ProjectData {
     language: AvailableLanguages
     testcases: Testcase[]
     exam?: Exam
+    display?: ProjectDisplay
 }
+
+/**
+ * The MIPS and RISC-V bitmap display configuration lives with the two adapters that read it, since
+ * the parameters, their choice lists and their defaults are MARS's and RARS's own; it is re-exported
+ * here because it is project data, saved and shared with the rest of a project.
+ */
+export { DEFAULT_PROJECT_DISPLAY, type ProjectDisplay } from './languages/mars/marsDisplay'
 
 export type MemoryValue =
     | {
@@ -109,6 +121,7 @@ type ProjectMetadata = {
     id: string
     testcases: Testcase[]
     exam?: Exam
+    display?: ProjectDisplay
 }
 
 const metaVersion = 1
@@ -172,7 +185,8 @@ export function makeProject(data?: Partial<ProjectData>) {
         language: lang,
         description: data?.description ?? '',
         testcases: (data?.testcases ?? []) as Testcase[],
-        exam: data?.exam
+        exam: data?.exam,
+        display: data?.display ? cleanDisplay(data.display) : undefined
     })
 
     function toObject(): ProjectData {
@@ -185,7 +199,8 @@ export function makeProject(data?: Partial<ProjectData>) {
             description: state.description,
             testcases: state.testcases,
             id: state.id,
-            exam: state.exam
+            exam: state.exam,
+            display: state.display
         })
     }
 
@@ -199,7 +214,8 @@ export function makeProject(data?: Partial<ProjectData>) {
             updatedAt: state.updatedAt,
             testcases: state.testcases,
             id: state.id,
-            exam: state.exam
+            exam: state.exam,
+            display: state.display
         }
         const metaJson = serializer.stringify($state.snapshot(meta), null, 4)
         const commentCharacter = COMMENT_CHARACTER[state.language]
@@ -215,6 +231,9 @@ export function makeProject(data?: Partial<ProjectData>) {
         Object.assign(state, data)
         if (data.testcases) {
             state.testcases = cleanTestcases(data.testcases)
+        }
+        if (data.display) {
+            state.display = cleanDisplay(data.display)
         }
     }
 
@@ -246,6 +265,9 @@ export function makeProject(data?: Partial<ProjectData>) {
         get exam() {
             return state.exam
         },
+        get display() {
+            return state.display
+        },
 
         set code(v: string) {
             state.code = v
@@ -273,6 +295,9 @@ export function makeProject(data?: Partial<ProjectData>) {
         },
         set exam(v: Exam | undefined) {
             state.exam = v
+        },
+        set display(v: ProjectDisplay | undefined) {
+            state.display = v ? cleanDisplay(v) : undefined
         },
         set,
         toObject,
@@ -308,7 +333,7 @@ export function cleanTestcases(testcases: Testcase[]) {
                     return {
                         ...memory,
                         address: BigInt(memory.address),
-                        expected: BigInt(memory.address)
+                        expected: BigInt(memory.expected)
                     }
                 } else {
                     return memory
@@ -335,7 +360,7 @@ export function cleanTestcases(testcases: Testcase[]) {
                     return {
                         ...memory,
                         address: BigInt(memory.address),
-                        expected: BigInt(memory.address)
+                        expected: BigInt(memory.expected)
                     }
                 } else {
                     return memory
@@ -348,4 +373,25 @@ export function cleanTestcases(testcases: Testcase[]) {
             )
         }
     })
+}
+
+/**
+ * A display read back from storage or from a shared file, which is JSON and can be missing fields or
+ * carry strings where numbers belong, exactly like the testcases above. Anything unusable falls back
+ * to MARS's default rather than failing the load: a project must always open.
+ */
+export function cleanDisplay(display: Partial<ProjectDisplay> | undefined): ProjectDisplay {
+    const fallback = MARS_DEFAULT_DISPLAY
+    return {
+        unitWidth: cleanDisplayNumber(display?.unitWidth, fallback.unitWidth),
+        unitHeight: cleanDisplayNumber(display?.unitHeight, fallback.unitHeight),
+        width: cleanDisplayNumber(display?.width, fallback.width),
+        height: cleanDisplayNumber(display?.height, fallback.height),
+        baseAddress: cleanDisplayNumber(display?.baseAddress, fallback.baseAddress)
+    }
+}
+
+function cleanDisplayNumber(value: unknown, fallback: number): number {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? Math.trunc(parsed) : fallback
 }

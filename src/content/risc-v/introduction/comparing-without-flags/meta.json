@@ -1,0 +1,6 @@
+{
+    "name": "Comparing without flags",
+    "description": "RISC-V has no condition code register, so a comparison either is the branch or leaves a 1 or a 0 in a register you named. The six real branches that each compare two registers, slt and its family, and the carry bit you have to work out yourself.",
+    "order": 7,
+    "topic": "flags"
+}

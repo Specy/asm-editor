@@ -1,0 +1,6 @@
+{
+    "name": ".data, .text and directives",
+    "description": "MIPS has sections, so the assembler knows which of your lines are code and which are data. The directives that fill a data section, the one that says where the program starts, and the syscall without which it walks into your subroutines.",
+    "order": 7,
+    "topic": "program-structure"
+}

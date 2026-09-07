@@ -22,6 +22,7 @@
     import FaExternal from '~icons/fa-solid/external-link-alt'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import { serializer } from '$lib/json'
+    import { languageHasScreen } from '$lib/languages/peripherals/peripheralSet'
 
     type Settings = {
         showMemory: boolean
@@ -31,6 +32,7 @@
         showPc: boolean
         showRegisters: boolean
         showFlags: boolean
+        showScreen: boolean
         openButton: boolean
     }
 
@@ -38,6 +40,7 @@
         { key: 'M68K', value: 'M68K' },
         { key: 'MIPS', value: 'MIPS' },
         { key: 'RISC-V', value: 'RISC-V' },
+        { key: 'RISC-V-64', value: 'RISC-V-64' },
         { key: 'X86', value: 'X86' },
         { key: 'Z80', value: 'Z80' }
     ]
@@ -50,6 +53,7 @@
         showPc: false,
         showRegisters: true,
         showFlags: false,
+        showScreen: false,
         openButton: false
     })
     let inIframe = $state(true)
@@ -97,6 +101,7 @@
         const showPc = searchParams.get('showPc') === 'true'
         const showRegisters = searchParams.get('showRegisters') !== 'false'
         const showFlags = searchParams.get('showFlags') === 'true'
+        const showScreen = searchParams.get('showScreen') === 'true'
         const openButton = searchParams.get('openButton') === 'true'
 
         return {
@@ -107,6 +112,7 @@
             showPc,
             showRegisters,
             showFlags,
+            showScreen,
             openButton
         } satisfies Settings
     }
@@ -120,6 +126,7 @@
             ? 'showRegisters=true&'
             : 'showRegisters=false&'
         const showFlags = settings.showFlags ? 'showFlags=true&' : 'showFlags=false&'
+        const showScreen = settings.showScreen ? 'showScreen=true&' : ''
         const openButton = settings.openButton ? 'openButton=true&' : ''
         const props = [
             showMemory,
@@ -128,6 +135,7 @@
             showPc,
             showRegisters,
             showFlags,
+            showScreen,
             openButton
         ].join('')
         const lang = `language=${settings.language}&`
@@ -194,6 +202,7 @@
                         showPc={settings.showPc}
                         showRegisters={settings.showRegisters}
                         showFlags={settings.showFlags}
+                        showScreen={settings.showScreen && languageHasScreen(settings.language)}
                         language={settings.language}
                         forceMemoryRight={true}
                     >
@@ -253,6 +262,10 @@
                 <div class="share-settings">
                     <span>Show flags</span>
                     <input type="checkbox" bind:checked={settings.showFlags} />
+                </div>
+                <div class="share-settings">
+                    <span>Show screen</span>
+                    <input type="checkbox" bind:checked={settings.showScreen} />
                 </div>
                 <div class="share-settings">
                     <span>Open in editor button</span>

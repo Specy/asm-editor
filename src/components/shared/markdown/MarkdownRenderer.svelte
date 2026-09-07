@@ -7,26 +7,24 @@
     import rehypeExternalLinks from 'rehype-external-links'
     import '@cartamd/plugin-code/default.css'
     import { code } from '@cartamd/plugin-code'
-    import type { Element, Parent, Root } from 'hast'
+    import type { Element, Parent, Root, RootContent } from 'hast'
     import { visit } from 'unist-util-visit'
-    import type { AvailableLanguages, Testcase } from '$lib/Project.svelte'
+    import type { Testcase } from '$lib/Project.svelte'
     import lzstring from 'lz-string'
     import { ThemeStore } from '$stores/themeStore.svelte'
     import { serializer } from '$lib/json'
+    import {
+        isTestcaseFence,
+        parsePlaygroundFence,
+        parseTestcaseFence,
+        type PlaygroundFence,
+        type PlaygroundSettings
+    } from '$lib/content/playgrounds'
     let isDark = $derived(ThemeStore.isColorDark(ThemeStore.theme.background.color))
 
     let theme = $derived(isDark ? ('one-dark-pro' as const) : ('one-light' as const))
 
-    type Settings = {
-        showMemory: boolean
-        language: AvailableLanguages
-        showConsole: boolean
-        showTests: boolean
-        showPc: boolean
-        showRegisters: boolean
-        showFlags: boolean
-        openButton: boolean
-    }
+    type Settings = PlaygroundSettings
 
     function createCodeUrl(code: string, settings: Settings, testcases: Testcase[]) {
         const showMemory = settings.showMemory ? 'showMemory=true&' : ''
@@ -37,6 +35,7 @@
             ? 'showRegisters=true&'
             : 'showRegisters=false&'
         const showFlags = settings.showFlags ? 'showFlags=true&' : 'showFlags=false&'
+        const showScreen = settings.showScreen ? 'showScreen=true&' : ''
         const showOpenButton = settings.openButton ? 'openButton=true&' : ''
         const props = [
             showMemory,
@@ -45,6 +44,7 @@
             showPc,
             showRegisters,
             showFlags,
+            showScreen,
             showOpenButton
         ].join('')
         const lang = `language=${settings.language}&`
@@ -56,109 +56,140 @@
         return `/embed?${lang}${props}${tests}code=${compressed}`
     }
 
-    function parsePlaygroundLanguage(language: string | undefined): AvailableLanguages | undefined {
-        const normalized = language?.trim().toLowerCase().replace(/[-_]/g, '')
-        switch (normalized) {
-            case 'm68k':
-                return 'M68K'
-            case 'mips':
-                return 'MIPS'
-            case 'x86':
-                return 'X86'
-            case 'riscv':
-            case 'riscv32':
-                return 'RISC-V'
-            case 'riscv64':
-                return 'RISC-V-64'
-            case 'z80':
-                return 'Z80'
-            default:
-                return undefined
+    /** The fence info string of a `<pre><code class="language-...">`, when it has one. */
+    function fenceInfoOf(node: RootContent): string | undefined {
+        if (node.type !== 'element' || node.tagName !== 'pre') return undefined
+        const codeNode = node.children?.find(
+            (child): child is Element => child.type === 'element' && child.tagName === 'code'
+        )
+        if (!codeNode?.properties || !Array.isArray(codeNode.properties.className)) return undefined
+        const langClass = codeNode.properties.className.find(
+            (cls): cls is string => typeof cls === 'string' && cls.startsWith('language-')
+        )
+        return langClass?.substring('language-'.length)
+    }
+
+    function textOf(node: RootContent): string {
+        if (node.type === 'text') return node.value
+        if ('children' in node && Array.isArray(node.children)) {
+            return (node.children as RootContent[]).map(textOf).join('')
+        }
+        return ''
+    }
+
+    /** The next node that is not whitespace between two blocks. */
+    function nextBlock(
+        children: RootContent[],
+        from: number
+    ): { node: RootContent; index: number } | undefined {
+        for (let cursor = from + 1; cursor < children.length; cursor++) {
+            const node = children[cursor]
+            if (node.type === 'comment') continue
+            if (node.type === 'text' && node.value.trim().length === 0) continue
+            return { node, index: cursor }
+        }
+        return undefined
+    }
+
+    /**
+     * The testcases of a `testcase` fence attached to a playground. A malformed one is an authoring
+     * mistake, so it is announced in the console and the playground renders without it rather than
+     * taking the page down with it. The console line carries what the renderer can see of the page:
+     * the fence, the JSON and, in the browser, the lecture's own address.
+     */
+    function attachedTestcases(node: RootContent, info: string): Testcase[] {
+        const raw = textOf(node)
+        try {
+            return [parseTestcaseFence(raw).testcase]
+        } catch (e) {
+            const where = typeof window === 'undefined' ? '' : ` on ${window.location.pathname}`
+            console.error(
+                `Malformed testcase fence${where}, after the "${info}" playground: ${(e as Error).message}\n${raw}`
+            )
+            return []
         }
     }
 
-    const rehypePlaygroundTransformer = () => (tree: Root) => {
-        visit(tree, 'element', (node: Element, index?: number, parent?: Parent) => {
-            if (node.tagName === 'pre') {
-                const codeNode = node.children?.find(
-                    (child): child is Element =>
-                        child.type === 'element' && child.tagName === 'code'
-                )
-
-                if (codeNode?.properties && Array.isArray(codeNode.properties.className)) {
-                    const langClass = codeNode.properties.className.find(
-                        (cls): cls is string =>
-                            typeof cls === 'string' && cls.startsWith('language-')
-                    )
-
-                    if (langClass) {
-                        const fullLanguage = langClass.substring('language-'.length)
-                        const entries = fullLanguage.split('|')
-                        const isPlayground = entries.includes('playground')
-                        const showMemory = entries.includes('memory')
-                        const showConsole = entries.includes('console')
-                        const showTests = entries.includes('tests')
-                        const showPc = entries.includes('pc')
-                        const showRegisters = !entries.includes('no-registers')
-                        const showFlags = !entries.includes('no-flags')
-                        const large = entries.includes('large') || showMemory
-                        const tall = entries.includes('tall')
-                        const openButton = entries.includes('allow-open')
-                        if (isPlayground) {
-                            const actualLanguage = parsePlaygroundLanguage(entries[0])
-                            if (!actualLanguage) return
-
-                            const getAllText = (
-                                n: import('hast').Node | import('hast').Parent
-                            ): string => {
-                                // @ts-ignore -- hast's base Node type omits text-node values
-                                if (n.type === 'text') return n.value as string
-                                if ('children' in n && Array.isArray(n.children)) {
-                                    return (
-                                        n.children as Array<
-                                            import('hast').Node | import('hast').Parent
-                                        >
-                                    )
-                                        .map(getAllText)
-                                        .join('')
-                                }
-                                return ''
-                            }
-                            if (parent && typeof index === 'number' && parent.children) {
-                                // Replace the <pre> node with our placeholder <div>
-                                const placeholder: Element = {
-                                    type: 'element',
-                                    tagName: 'iframe',
-                                    properties: {
-                                        style: `
-                                        	${!large ? 'max-width: 70ch; margin: 1.5rem auto;' : ''}
-                                        	${tall ? 'height: 80dvh;' : ''}
-                                        `,
-                                        className: ['code-playground'],
-                                        src: createCodeUrl(
-                                            getAllText(codeNode).trimEnd(),
-                                            {
-                                                showMemory,
-                                                showConsole,
-                                                showTests,
-                                                showPc,
-                                                showRegisters: showRegisters,
-                                                showFlags,
-                                                language: actualLanguage,
-                                                openButton
-                                            },
-                                            []
-                                        )
-                                    },
-                                    children: []
-                                }
-                                parent.children[index] = placeholder
-                            }
-                        }
-                    }
-                }
+    function playgroundIframe(
+        node: Element,
+        fence: PlaygroundFence,
+        testcases: Testcase[],
+        parent: Parent
+    ): Element {
+        const codeNode = node.children?.find(
+            (child): child is Element => child.type === 'element' && child.tagName === 'code'
+        )
+        const { large, tall } = fence
+        //inside a collapsed block (an Exercise's solution) the block itself is the centered column and
+        //the frame, so the iframe fills it instead of placing itself; a large playground widens the block
+        const details =
+            parent.type === 'element' && (parent as Element).tagName === 'details'
+                ? (parent as Element)
+                : undefined
+        if (details && large) {
+            const className = details.properties?.className
+            details.properties = {
+                ...details.properties,
+                className: [...(Array.isArray(className) ? className : []), 'wide']
             }
-        })
+        }
+        const placement = details || large ? '' : 'max-width: 70ch; margin: 1.5rem auto;'
+        const height = tall
+            ? 'height: 80dvh;'
+            : fence.settings.showScreen
+              ? 'height: min(40rem, 85vh);'
+              : ''
+        return {
+            type: 'element',
+            tagName: 'iframe',
+            properties: {
+                style: `${placement} ${height}`.trim(),
+                className: details ? ['code-playground', 'in-details'] : ['code-playground'],
+                //each embed boots a whole editor, so a lecture with five of them would boot five
+                //before the reader has scrolled to the second; `loading` is in DOMPurify's default
+                //attribute list, so the sanitizer keeps it
+                loading: 'lazy',
+                src: createCodeUrl(textOf(codeNode ?? node).trimEnd(), fence.settings, testcases)
+            },
+            children: []
+        }
+    }
+
+    /**
+     * Replaces every playground fence with its embed iframe and drops the `testcase` fences, which
+     * are instructions to the embed and to the verification test and are never shown to a reader.
+     * The children of a block are rebuilt rather than patched in place, so a testcase and the blank
+     * line before it leave together.
+     */
+    function transformPlaygrounds(parent: Parent): void {
+        const children = parent.children as RootContent[]
+        const result: RootContent[] = []
+        for (let index = 0; index < children.length; index++) {
+            const node = children[index]
+            const info = fenceInfoOf(node)
+            const fence = info === undefined ? undefined : parsePlaygroundFence(info)
+            if (fence && node.type === 'element') {
+                let testcases: Testcase[] = []
+                const following = nextBlock(children, index)
+                const followingInfo = following && fenceInfoOf(following.node)
+                if (following && followingInfo !== undefined && isTestcaseFence(followingInfo)) {
+                    testcases = attachedTestcases(following.node, info as string)
+                    //the testcase block and the whitespace before it go with the playground
+                    index = following.index
+                }
+                result.push(playgroundIframe(node, fence, testcases, parent))
+                continue
+            }
+            //a testcase fence that attached to nothing is still not something a reader should read
+            if (info !== undefined && isTestcaseFence(info)) continue
+            if (node.type === 'element') transformPlaygrounds(node)
+            result.push(node)
+        }
+        parent.children = result
+    }
+
+    const rehypePlaygroundTransformer = () => (tree: Root) => {
+        transformPlaygrounds(tree)
     }
 
     const customPlaygroundPlugin: Plugin = {
@@ -467,13 +498,54 @@
         border: none;
         border-radius: 0.8rem;
         width: 100%;
-        min-height: 20.8rem;
+        min-height: 21.4rem;
         margin: 1.5rem auto;
         background-color: var(--secondary);
         box-shadow: 0 0 2rem 10px rgba(0, 0, 0, 0.2);
     }
     :global(.code-playground:first-child) {
         margin: 0 auto;
+    }
+
+    /* a collapsed block of a lecture (an Exercise's solution): an expanding item in the same centered
+       column as the text and the playgrounds around it, the summary alone when closed, the frame
+       around everything when open */
+    :global(._markdown details) {
+        box-sizing: border-box;
+        width: min(100%, 70ch);
+        margin: 0 auto;
+        border: solid 0.1rem var(--tertiary);
+        border-radius: 0.8rem;
+        overflow: hidden;
+    }
+
+    :global(._markdown details.wide) {
+        width: 100%;
+    }
+
+    :global(._markdown summary) {
+        padding: 0.6rem 1rem;
+        background-color: var(--secondary);
+        font-family: Rubik, sans-serif;
+        font-weight: bold;
+        cursor: pointer;
+        user-select: none;
+    }
+
+    :global(._markdown details[open] > summary) {
+        border-bottom: solid 0.1rem var(--tertiary);
+    }
+
+    :global(._markdown details > :not(summary)) {
+        margin: 1rem;
+    }
+
+    :global(._markdown .code-playground.in-details) {
+        width: 100%;
+        margin: 0;
+        border-radius: 0rem !important;
+        display: block;
+        box-shadow: none;
     }
 
     :global(.simple-code .shiki) {

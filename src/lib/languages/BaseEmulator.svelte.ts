@@ -5,6 +5,7 @@ import {
     RegisterSize,
     type StackFrame
 } from '$lib/languages/commonLanguageFeatures.svelte'
+import type { ExecutionSlice, ExecutionSliceRequest } from '$lib/languages/ExecutionSlice'
 import type { Testcase } from '$lib/Project.svelte'
 
 type MaybePromise<T> = T | PromiseLike<T>
@@ -99,8 +100,10 @@ export abstract class BaseEmulator<R extends string> {
 
     abstract _checkCode(code: string): MaybePromise<Diagnostic[]>
 
+    /** Restores one CPU instruction and its associated peripheral effects. */
     abstract _undo(): void
 
+    /** Preflights both the CPU record and every peripheral effect belonging to it. */
     abstract _canUndo(): boolean
 
     abstract _step(): Promise<{ terminated: boolean }>
@@ -137,5 +140,20 @@ export abstract class BaseEmulator<R extends string> {
 
     abstract _hasTerminated(): boolean
 
-    abstract _run(limit?: number, breakpoints?: number[]): Promise<EmulatorStatus>
+    /**
+     * Runs one scheduling slice ([ADR 0007](../../../docs/adr/0007-generic-emulator-run-scheduling.md)):
+     * the Core executes at most `instructionBudget` instructions, aiming to come back within
+     * `timeBudgetMs`, and the answer says why it stopped and how much it ran. `GenericEmulator`
+     * loops over slices, yields to the host between them and keeps the overall limit across them,
+     * so an adapter must never run a whole program here.
+     */
+    abstract _runSlice(request: ExecutionSliceRequest): Promise<ExecutionSlice>
+
+    /**
+     * Called after the Core has been rolled back by `undo`, for adapters whose Screen image lives in
+     * Core memory: the Core's own rollback already restored the pixels, so the Screen re-reads the
+     * mapped region instead of journaling them
+     * ([ADR 0005](../../../docs/adr/0005-restore-screen-state-on-undo.md)).
+     */
+    _resyncScreenFromMemory?(): void
 }

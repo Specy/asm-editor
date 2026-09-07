@@ -1,0 +1,6 @@
+{
+    "name": "Numbers and sizes",
+    "description": "Bits, bytes, hexadecimal, and the sizes an instruction can touch. Then the same bits read as signed and as unsigned, two's complement, sign extension, and what happens when a number does not fit.",
+    "order": 4,
+    "topic": "numbers"
+}

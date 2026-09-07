@@ -1,0 +1,6 @@
+{
+    "name": "org, db, dw and ds",
+    "description": "The Z80 has no data section: the assembler lays your program out in the order you wrote it, and five directives say where things go, what is in them and what a number is called.",
+    "order": 7,
+    "topic": "program-structure"
+}

@@ -1,5 +1,5 @@
 We saw in previous lectures that instructions are executed sequentially, one after the other.
-As a reminder, to determine which instruction to execute next, the CPU looks at the instruction in memory which that is located at the address written in the **Program couter** (PC).
+As a reminder, to determine which instruction to execute next, the CPU looks at the instruction in memory which that is located at the address written in the **Program counter** (PC).
 Once an instruction is executed, the PC is incremented to point to the next instruction in memory.
 
 However, as you might imagine, this does not allow you to implement "conditional" logic, as in, since programs
@@ -103,8 +103,8 @@ Let's try to use M68K assembly to implement the above code using the `compare th
 
 ```m68k|playground
     move #50, d0    ;x = 50
-    cmpi #10, d0     ; compare x with 0
-    ble false_branch ; if x <= 0, jump to false_branch
+    cmpi #10, d0     ; compare x with 10
+    ble false_branch ; if x <= 10, jump to false_branch
     ; here is where the true branch starts
     move #100, d0   ; x = 100
     bra end          ; jump to end
@@ -123,7 +123,7 @@ Let's now try to implement the same code using the `test and jump` method, using
     li t0, 50        # x = 50
     li t4, 10        # t4 = 10
     ble t0, t4, false_branch # if x <= 10, jump to false_branch
-    # here is where the false branch starts
+    # here is where the true branch starts
     li t0, 100       # x = 100
     j end            # jump to end
 false_branch:

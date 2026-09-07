@@ -1,0 +1,10 @@
+{
+    "id": "risc-v",
+    "name": "RISC-V assembly",
+    "authors": ["Specy"],
+    "description": "RISC-V: an open instruction set with a base of about forty instructions and everything else an extension, 32 registers under two sets of names, no flags and no condition codes, and a calling convention that keeps the return address in a register.",
+    "image": "",
+    "tags": ["assembly", "risc-v"],
+    "date": "2026-09-07",
+    "order": 3
+}

@@ -1,0 +1,6 @@
+{
+    "name": "Arithmetic, logic and bits",
+    "description": "Multiplication and division each write one ordinary register, so the top half of a product takes a second instruction, and a division by zero says nothing at all. Then the masks, the shifts and the fields you pull out of a word with them.",
+    "order": 2,
+    "topic": "arithmetic"
+}

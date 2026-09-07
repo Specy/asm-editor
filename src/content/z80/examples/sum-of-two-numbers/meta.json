@@ -1,0 +1,6 @@
+{
+    "name": "Read two numbers and print their sum",
+    "description": "Two prompts that wait for you to type, the numbers coming back in a, and a total too big for a byte printed through the 16 bit port.",
+    "order": 18,
+    "topic": "sum-of-two-numbers"
+}

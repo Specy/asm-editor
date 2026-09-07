@@ -1,5 +1,22 @@
 import { BASE_CODE } from '$lib/Config'
-import { Z80_PORT_DOCS } from '$lib/languages/Z80/Z80-model'
+import {
+    M68K_REJECTED_TRAP_TASKS,
+    M68K_TRAP_DOCS,
+    M68K_TRAP_GROUP_DOCS
+} from '$lib/languages/M68K/M68K-traps'
+import {
+    Z80_PORT_DOCS,
+    Z80_PORT_GROUP_DOCS,
+    Z80_SCREEN_COMMAND_DOCS
+} from '$lib/languages/Z80/Z80-model'
+import {
+    DEFAULT_PROJECT_DISPLAY,
+    formatMarsBaseAddress,
+    MARS_BASE_ADDRESS_CHOICES,
+    MARS_DISPLAY_SIZE_CHOICES,
+    MARS_UNIT_SIZE_CHOICES
+} from '$lib/languages/mars/marsDisplay'
+import { MARS_RECEIVER_CONTROL } from '$lib/languages/mars/MarsDevices'
 import type {
     AgentWorkflow,
     DefaultCodingAgentToolName,
@@ -225,31 +242,94 @@ function renderToolSelectionTips(enabledToolNames: DefaultCodingAgentToolName[])
 }
 
 /**
- * Generated from the port map itself so the prompt cannot drift from what the console device
- * actually does (see `Z80-model.ts`).
+ * Generated from the port map itself so the prompt cannot drift from what the device actually does
+ * (see `Z80-model.ts`). Grouped like the documentation page, because the agent has to pick a
+ * peripheral before it picks a port.
  */
-const Z80_PORT_INFORMATION = Z80_PORT_DOCS.map(
-    (port) => `- Port ${port.port} (${port.title}): out -> ${port.write} in -> ${port.read}`
+const Z80_PORT_INFORMATION = Z80_PORT_GROUP_DOCS.map((group) =>
+    [
+        `### ${group.title} ports (${group.range})`,
+        group.description,
+        ...Z80_PORT_DOCS.filter((port) => port.group === group.group).map(
+            (port) =>
+                `- Port ${toPortNumber(port.port)} (${port.title}): out -> ${port.write} in -> ${port.read}`
+        )
+    ].join('\n')
+).join('\n\n')
+
+/**
+ * Generated from the trap task table itself (see `M68K-traps.ts`), grouped like the documentation
+ * page, so the prompt says exactly what the adapter implements and no more.
+ */
+const M68K_TRAP_INFORMATION = M68K_TRAP_GROUP_DOCS.map((group) =>
+    [
+        `### ${group.title} tasks`,
+        group.description,
+        ...M68K_TRAP_DOCS.filter((task) => task.group === group.group).map((task) =>
+            [
+                `- Task ${task.task} (${task.title}): ${task.description}`,
+                task.input ? ` In: ${task.input}.` : '',
+                task.output ? ` Out: ${task.output}.` : '',
+                task.deviation ? ` ${task.deviation}` : ''
+            ].join('')
+        )
+    ].join('\n')
+).join('\n\n')
+
+/** The tasks that stop the program, so the agent does not reach for one and then debug the error. */
+const M68K_REJECTED_TRAP_INFORMATION = M68K_REJECTED_TRAP_TASKS.map(
+    (task) => `${task.task} (${task.title})`
+).join(', ')
+
+/** The commands the Screen's command port runs, the other half of the Screen interface. */
+const Z80_SCREEN_COMMAND_INFORMATION = Z80_SCREEN_COMMAND_DOCS.map(
+    (command) => `- ${command.command}: ${command.description}`
 ).join('\n')
 
+function toPortNumber(port: number): string {
+    //the ports are written in hexadecimal everywhere else, and a program writes `out (0x17), a`
+    return `0x${port.toString(16).padStart(2, '0').toUpperCase()}`
+}
+
+/**
+ * The MARS and RARS memory-mapped devices, the same text for both environments: the two simulators'
+ * bitmap display and keyboard-and-display simulator are the same two tools, and only the register a
+ * service number goes in differs.
+ */
+function MARS_SCREEN_INFORMATION(service: string, argument: string): string {
+    const base = MARS_RECEIVER_CONTROL >>> 0
+    return [
+        `- Graphics go through memory, not through a syscall: the screen is a grid of words, one word per pixel, whose low 24 bits are the color (red 23-16, green 15-8, blue 7-0). Words run left to right and then top to bottom. The program must reserve that memory itself, usually with \`.space\`.`,
+        `- The grid has the tool's own five parameters: unit width and height (${MARS_UNIT_SIZE_CHOICES.join(', ')}), display width and height (${MARS_DISPLAY_SIZE_CHOICES.join(', ')}) and a base address, which the user can pick in the screen panel among ${MARS_BASE_ADDRESS_CHOICES.map((choice) => formatMarsBaseAddress(choice.address)).join(', ')}. Default: ${DEFAULT_PROJECT_DISPLAY.unitWidth} by ${DEFAULT_PROJECT_DISPLAY.unitHeight} units, ${DEFAULT_PROJECT_DISPLAY.width} by ${DEFAULT_PROJECT_DISPLAY.height} pixels at ${formatMarsBaseAddress(DEFAULT_PROJECT_DISPLAY.baseAddress)}, so ${DEFAULT_PROJECT_DISPLAY.width} by ${DEFAULT_PROJECT_DISPLAY.height} words.`,
+        `- **Any program that draws must configure them itself**, with a comment directive the editor reads at every build, before the first instruction: \`# @screen unit=1 width=256 height=256 base=display\`. \`base\` takes a label the program defines (preferred: the program never has to know the address) or an address such as 0x10010000; \`unit\` sets both unit sizes, \`unitWidth\` and \`unitHeight\` set them apart. Order and spacing are free, anything left out keeps its current value, and a bad value is a warning on that line, not an error. It is a comment, so the file still assembles in the real simulator.`,
+        `- Keyboard and console are four words: 0x${base.toString(16)} receiver control (bit 0 Ready, a character is waiting), 0x${(base + 4).toString(16)} receiver data (the character, reading it takes it), 0x${(base + 8).toString(16)} transmitter control (bit 0 Ready, always set) and 0x${(base + 12).toString(16)} transmitter data (storing a character prints it, ASCII 12 clears the console).`,
+        `- Setting bit 1 of either control register, the interrupt-enable bit, stops the program with an error: poll the Ready bit instead.`,
+        `- Service 30 (${service} = 30) answers the program time in milliseconds since the run started, low word in ${argument} and high word in the next register; service 32 (${service} = 32, ${argument} = milliseconds) waits. A wait costs no instructions, so a polling loop should sleep about 10 ms instead of spinning, or it will hit the execution limit.`
+    ].join('\n')
+}
+
 const EMULATOR_INFORMATION = `# Emulator Information
-The editor supports one editable assembly file and an output-only console. There are no graphics, screens, imported ROMs, or produced binaries.
+The editor supports one editable assembly file, an output-only console and, for M68K, MIPS, RISC-V and Z80, a pixel screen with a keyboard and a mouse. There are no imported ROMs and no produced binaries.
 
 ## M68K
 - Uses Easy68K-style syntax and big-endian memory.
 - Execution stops when it reaches the bottom of the code. There is no END START directive and no SIMHALT instruction.
 - END: is only a normal label often placed at the bottom; jump or fall through to terminate.
-- Basic TRAP I/O calls are implemented.
 - Data/global memory starts at 0x1000. The stack pointer starts at 0x2000 and grows downward.
+- All I/O is "trap #15" with the task number in D0.B, EASy68K's interface. Text and graphics share one window: what a program prints is drawn on the screen at the text cursor as well as appended to the console transcript. The screen starts at 640 by 480 and only the program resizes it, with task 33.
+- These tasks stop the program with an error, so do not use them: ${M68K_REJECTED_TRAP_INFORMATION}. Task 92's bitwise drawing modes (0, 1, 3 and 5 to 15) stop it too.
+${M68K_TRAP_INFORMATION}
 
 ## MIPS
 - Uses the MARS assembler/emulator syntax and syscalls. Memory is little-endian.
 - .data starts at 0x10010000. $sp starts at 0x7ffffffc and grows downward.
+${MARS_SCREEN_INFORMATION('$v0', '$a0')}
 
 ## RISC-V
 - Uses the RARS assembler/emulator syntax and syscalls. Memory is little-endian.
 - RISC-V is 32-bit; RISC-V-64 is 64-bit.
 - .data starts at 0x10010000. sp starts at 0x7ffffffc and grows downward.
+${MARS_SCREEN_INFORMATION('a7', 'a0')}
 
 ## X86
 - The X86 emulator is experimental and incomplete. It uses the NASM syntax and assembler. Uses Blink as the emulator.
@@ -258,8 +338,12 @@ The editor supports one editable assembly file and an output-only console. There
 - Uses the z80-asm syntax: ";" comments, labels ending with ":", directives like .org, .byte, .asciz and equ. Memory is 64 KB and little-endian.
 - The default program is assembled at 0x8000. SP starts at 0xFFFF and grows downward, the stack is empty at that address.
 - Execution stops on "halt", on a top-level "ret", or when the program counter runs past the end of the assembled code.
-- There are no syscalls or TRAPs: the console is a set of IO ports, written with "out (port), a" and read with "in a, (port)". An "in" pauses the program until a line of input is available, which is taken from the testcase input when running tests.
-${Z80_PORT_INFORMATION}`
+- There are no syscalls or TRAPs: every peripheral is a set of IO ports, written with "out (port), a" and read with "in a, (port)". The "(c)" forms take the port from C and put B on the high byte of the address bus, which is how a read carries a parameter. An "in" on an input port pauses the program until input is available, which is taken from the testcase input when running tests; an "in" on a wait port pauses it until the time has passed.
+- Ports outside the map are an empty bus: writes are dropped and reads answer 0xFF.
+${Z80_PORT_INFORMATION}
+
+### Screen commands, written to port 0x17
+${Z80_SCREEN_COMMAND_INFORMATION}`
 
 export function buildDefaultCodingAgentPrompt({
     enabledToolNames,

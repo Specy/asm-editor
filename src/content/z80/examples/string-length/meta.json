@@ -1,0 +1,6 @@
+{
+    "name": "Length of a string",
+    "description": "A walk to the zero byte at the end of a string, with the length worked out as the difference between two addresses, which on this machine takes a subtraction with a borrow.",
+    "order": 6,
+    "topic": "string-length"
+}

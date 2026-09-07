@@ -1,0 +1,6 @@
+{
+    "name": "Stack arguments and a stack frame",
+    "description": "Two arguments pushed by the caller, a local that survives a call inside a link frame, and a subroutine that gives back the register it borrowed.",
+    "order": 11,
+    "topic": "subroutine-with-stack-arguments"
+}

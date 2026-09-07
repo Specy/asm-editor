@@ -1,0 +1,6 @@
+{
+    "name": "The snake game",
+    "description": "The whole ladder in one program: a board of cells packed one to a byte, a body moved by a loop, keys polled every frame, food from a generator of its own, and a score on the Screen and in the transcript.",
+    "order": 23,
+    "topic": "snake"
+}

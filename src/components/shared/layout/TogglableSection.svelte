@@ -40,6 +40,7 @@
         display: flex;
         gap: 0.4rem;
         cursor: pointer;
+        text-align: left;
         background-color: transparent;
         font-family: FiraCode;
         color: var(--secondary-text);

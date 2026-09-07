@@ -1,0 +1,6 @@
+{
+    "name": "The 32 registers and their names",
+    "description": "Every register has two names, a number and an ABI name, and the ABI name is an agreement between programs that the hardware knows nothing about. zero is the one exception, t against s is the split that decides how you write a subroutine, and call is the one line that takes a register you did not name.",
+    "order": 1,
+    "topic": "registers"
+}

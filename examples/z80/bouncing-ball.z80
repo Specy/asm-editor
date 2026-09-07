@@ -1,0 +1,89 @@
+; Bouncing ball: double buffering and frame sync on the Z80 Screen.
+;
+; Every frame the program clears the off-screen image, draws the ball on it, presents it and waits
+; for the next animation frame. Nothing half drawn is ever shown, and the ball moves at the pace of
+; the display instead of as fast as the host can run.
+;
+; Screen: 256 by 192, the default. Press Stop to end it.
+
+; --- ports -------------------------------------------------------------------
+P_PEN   equ 0x10        ; pen color, one 3-3-2 byte
+P_FILL  equ 0x11        ; fill color
+P_X     equ 0x13
+P_Y     equ 0x14
+P_X2    equ 0x15
+P_Y2    equ 0x16
+P_CMD   equ 0x17        ; one drawing operation per write
+P_FRAME equ 0x41        ; waits for the next animation frame
+
+; --- commands ----------------------------------------------------------------
+C_ELLIPSE equ 6         ; filled ellipse inscribed in (X, Y)-(X2, Y2)
+C_CLEAR   equ 9         ; fill the Screen with the fill color
+C_BUF_ON  equ 11        ; draw off screen until PRESENT
+C_PRESENT equ 13
+
+; --- colors, 3 bits of red, 3 of green, 2 of blue ----------------------------
+BLUE    equ 0x03
+YELLOW  equ 0xFC
+WHITE   equ 0xFF
+
+SIZE    equ 16          ; the ball's diameter
+LIMITX  equ 256 - SIZE
+LIMITY  equ 192 - SIZE
+
+        .org 0x8000
+
+start:  ld a, C_BUF_ON
+        out (P_CMD), a
+        ld a, WHITE
+        out (P_PEN), a  ; the ball's outline
+        ld d, 40        ; x
+        ld e, 30        ; y
+        ld b, 3         ; dx
+        ld c, 2         ; dy
+
+frame:  ld a, BLUE
+        out (P_FILL), a
+        ld a, C_CLEAR
+        out (P_CMD), a  ; wipes the off-screen image only
+
+        ld a, YELLOW
+        out (P_FILL), a
+        ld a, d
+        out (P_X), a
+        add a, SIZE
+        out (P_X2), a
+        ld a, e
+        out (P_Y), a
+        add a, SIZE
+        out (P_Y2), a
+        ld a, C_ELLIPSE
+        out (P_CMD), a
+
+        ld a, C_PRESENT
+        out (P_CMD), a  ; the frame becomes visible here, all at once
+        in a, (P_FRAME) ; and the program waits for the next one
+
+        ; move the ball, turning it around at the edges. A step that would take x below zero wraps
+        ; it up past 250, which the same unsigned comparison catches as the right edge.
+        ld a, d
+        add a, b
+        cp LIMITX
+        jr c, keepx
+        ld a, b
+        neg
+        ld b, a         ; reverse dx
+        ld a, d         ; and stay where we were
+keepx:  ld d, a
+
+        ld a, e
+        add a, c
+        cp LIMITY
+        jr c, keepy
+        ld a, c
+        neg
+        ld c, a
+        ld a, e
+keepy:  ld e, a
+
+        jp frame

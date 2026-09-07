@@ -1,0 +1,6 @@
+{
+    "name": "Bubble sort",
+    "description": "Eight words sorted where they lie by an inner loop that swaps neighbours and an outer loop that keeps sending it back.",
+    "order": 13,
+    "topic": "bubble-sort"
+}

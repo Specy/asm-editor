@@ -3,4 +3,4 @@ build/
 package/
 package-lock.json
 static/native-apps/
-examples/
+/examples/

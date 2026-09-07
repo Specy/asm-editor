@@ -1,0 +1,6 @@
+{
+    "name": "syscall",
+    "description": "The one instruction that asks the simulator for something, the service number in $v0 that says what, and the registers each service reads and answers in. Printing, reading, the clock and ending a program.",
+    "order": 0,
+    "topic": "syscalls"
+}

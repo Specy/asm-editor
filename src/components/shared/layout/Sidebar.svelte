@@ -11,7 +11,9 @@
     let { children, content, menuOpen = $bindable(false), menuStyle }: Props = $props()
 </script>
 
-<Row flex1>
+<!-- the drawer's width lives on the wrapper so the menu and the content it leaves room for
+     cannot drift apart -->
+<Row flex1 style="--side-menu-width: 20rem;">
     <button
         class="side-menu-underlay"
         aria-label="close menu"
@@ -45,8 +47,8 @@
     .side-menu {
         background-color: var(--secondary);
         color: var(--secondary-text);
-        width: 16rem;
-        min-width: 16rem;
+        width: var(--side-menu-width);
+        min-width: var(--side-menu-width);
         gap: 1rem;
         top: 3.2rem;
         padding-top: 1rem;
@@ -63,7 +65,7 @@
         width: 100%;
         display: flex;
         flex: 1;
-        max-width: calc(100vw - 16rem);
+        max-width: calc(100vw - var(--side-menu-width));
     }
 
     @media (max-width: 600px) {
@@ -71,13 +73,17 @@
             max-width: unset;
         }
         .side-menu {
+            //a drawer, not a column beside the content: the width the desktop rule asks for would
+            //be wider than a narrow phone and would keep the menu on screen when it is closed
+            --side-menu-width: calc(100vw - 4rem);
             position: fixed;
-            width: calc(100vw - 4rem);
             left: 0;
             z-index: 5;
             transition: transform 0.3s;
             background-color: rgba(var(--RGB-secondary), 0.9);
-            transform: translateX(calc((100vw - 4rem) * -1));
+            //its own width, whatever that resolves to, so the drawer always leaves the screen
+            //completely
+            transform: translateX(-100%);
         }
         .mobile-only {
             display: flex;

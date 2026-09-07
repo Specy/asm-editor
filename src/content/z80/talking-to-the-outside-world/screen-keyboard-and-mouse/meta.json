@@ -1,0 +1,6 @@
+{
+    "name": "The screen, keyboard and mouse through ports",
+    "description": "The Screen is not memory here, it is a group of ports: colours, coordinates and one command per write. Drawing, a colour byte with three bits of red, double buffering, the keys polled by code and the pointer read three ways.",
+    "order": 1,
+    "topic": "mmio"
+}

@@ -1,0 +1,81 @@
+; Mouse: paint with the left button, erase the Screen with the right one.
+;
+; The mouse ports are polled, one read per frame: B selects the view (0 the current state), and the
+; buttons byte carries the modifiers too, so holding Shift paints in red. Coordinates are logical
+; Screen pixels whatever the panel's zoom is, so the brush lands under the pointer.
+;
+; Screen: 256 by 192, the default. Press Stop to end it.
+
+P_PEN   equ 0x10        ; a filled shape is outlined with the pen
+P_FILL  equ 0x11
+P_X     equ 0x13
+P_Y     equ 0x14
+P_X2    equ 0x15
+P_Y2    equ 0x16
+P_CMD   equ 0x17
+P_MX    equ 0x30        ; pointer X of the view in B
+P_MY    equ 0x31
+P_MBTN  equ 0x32        ; buttons and modifiers of that view
+P_FRAME equ 0x41
+
+C_RECT  equ 4
+C_CLEAR equ 9
+
+V_NOW   equ 0           ; view 0: where the pointer is and what is held right now
+
+B_LEFT  equ 0x01
+B_RIGHT equ 0x02
+B_SHIFT equ 0x10
+
+BLACK   equ 0x00
+RED     equ 0xE0
+WHITE   equ 0xFF
+
+BRUSH   equ 6
+
+        .org 0x8000
+
+start:  ld a, BLACK
+        out (P_FILL), a
+        ld a, C_CLEAR   ; the clear takes the fill color and adopts it as the background
+        out (P_CMD), a
+
+frame:  in a, (P_FRAME) ; one poll per animation frame is enough for a brush
+        ld b, V_NOW
+        ld c, P_MBTN
+        in a, (c)
+        ld h, a         ; keep the flags: reading the position does not change them
+        and B_RIGHT
+        jr nz, wipe
+        ld a, h
+        and B_LEFT
+        jr z, frame
+
+        ld l, WHITE
+        ld a, h
+        and B_SHIFT
+        jr z, colored
+        ld l, RED
+colored:ld a, l
+        out (P_FILL), a
+        out (P_PEN), a  ; a filled shape is outlined with the pen: the brush is one flat color
+
+        ld c, P_MX
+        in a, (c)       ; B still holds the view
+        out (P_X), a
+        add a, BRUSH
+        out (P_X2), a
+        ld c, P_MY
+        in a, (c)
+        out (P_Y), a
+        add a, BRUSH
+        out (P_Y2), a
+        ld a, C_RECT
+        out (P_CMD), a
+        jr frame
+
+wipe:   ld a, BLACK
+        out (P_FILL), a
+        ld a, C_CLEAR
+        out (P_CMD), a
+        jr frame

@@ -1,0 +1,6 @@
+{
+    "name": "jal, ret and the calling convention",
+    "description": "jal puts the return address in ra instead of on the stack, which is cheap until a subroutine calls something. The arguments in a0 to a7, the answer in a0, who has to preserve what, and a recursive program drawn frame by frame.",
+    "order": 5,
+    "topic": "subroutines"
+}

@@ -1,0 +1,6 @@
+{
+    "name": "Interrupts: im, ei, di and halt",
+    "description": "The two interrupt lines of a real Z80, its three interrupt modes and the vector table mode 2 reads through the I register, and why halt is an idle loop on hardware. Then what this editor actually does, which is nothing.",
+    "order": 2,
+    "topic": "interrupts"
+}

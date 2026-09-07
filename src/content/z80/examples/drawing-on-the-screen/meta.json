@@ -1,0 +1,6 @@
+{
+    "name": "Drawing shapes on the screen",
+    "description": "A house, a sun and a sky drawn out of a table of shapes, one record per command, with colours packed into a byte and the label at the text cursor.",
+    "order": 20,
+    "topic": "drawing-on-the-screen"
+}

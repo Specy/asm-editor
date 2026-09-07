@@ -1,0 +1,6 @@
+{
+    "name": "A subroutine with its arguments in registers",
+    "description": "Euclid's greatest common divisor as a subroutine called with bsr, its arguments in d0 and d1 and its answer in d0.",
+    "order": 10,
+    "topic": "subroutine-with-register-arguments"
+}

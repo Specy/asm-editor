@@ -1,0 +1,6 @@
+{
+    "name": "Bytes and 16-bit pairs",
+    "description": "What fits in eight bits and what does not, the same byte read as signed and unsigned, how you widen one into a pair when the Z80 has no instruction for it, and the two decimal digits daa packs into a byte.",
+    "order": 3,
+    "topic": "numbers"
+}

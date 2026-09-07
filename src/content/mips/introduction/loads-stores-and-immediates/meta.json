@@ -1,0 +1,6 @@
+{
+    "name": "Loads, stores and immediates",
+    "description": "MIPS has three ways of naming an operand and only one of them reaches memory. What offset(base) can and cannot do, why indexing an array costs a shift and an add, and what the assembler's label forms turn into.",
+    "order": 5,
+    "topic": "addressing-modes"
+}

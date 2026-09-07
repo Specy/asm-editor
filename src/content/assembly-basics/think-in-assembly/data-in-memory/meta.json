@@ -1,0 +1,6 @@
+{
+    "name": "Data in memory",
+    "description": "Arrays and strings, the directives that write them into memory or reserve room for them, and how a program walks one with a pointer. The memory panel is open next to both programs.",
+    "order": 3,
+    "topic": "data-in-memory"
+}

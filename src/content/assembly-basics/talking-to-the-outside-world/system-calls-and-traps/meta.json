@@ -1,0 +1,6 @@
+{
+    "name": "System calls and traps",
+    "description": "Printing is not arithmetic, so a program has to ask the environment to do it. The two modes a CPU runs in, the one instruction that hands control over, and why the numbers a program asks with belong to the environment rather than to the CPU.",
+    "order": 0,
+    "topic": "syscalls"
+}

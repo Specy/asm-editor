@@ -1,0 +1,129 @@
+; Keyboard: move a square with the arrow keys.
+;
+; The key state port answers "is this key held down" for the key code in B, which is how a game
+; reads the keyboard: it consumes nothing, so holding a key moves the square every frame. Click the
+; Screen first, so that the keys go to the program instead of to the editor.
+;
+; The title is printed on the console port, which also draws it at the Screen's text cursor: the
+; Z80 has one output window, like EASy68K. Only the play area below it is cleared each frame, so the
+; text survives.
+;
+; Screen: 256 by 192, the default. Press Stop to end it.
+
+P_CHAR  equ 0x00        ; console: prints a character and draws it at the text cursor
+P_PEN   equ 0x10
+P_FILL  equ 0x11
+P_X     equ 0x13
+P_Y     equ 0x14
+P_X2    equ 0x15
+P_Y2    equ 0x16
+P_CMD   equ 0x17
+P_KEY   equ 0x21        ; 1 while the key whose code is in B is held
+P_FRAME equ 0x41
+
+C_RECT    equ 4
+C_BUF_ON  equ 11
+C_PRESENT equ 13
+
+K_LEFT  equ 0x25        ; EASy68K key codes, the same table every environment here uses
+K_UP    equ 0x26
+K_RIGHT equ 0x27
+K_DOWN  equ 0x28
+
+BLACK   equ 0x00
+CYAN    equ 0x1F
+WHITE   equ 0xFF
+
+TOP     equ 16          ; the play area starts below the two text rows
+SIZE    equ 12
+LIMITX  equ 256 - SIZE
+LIMITY  equ 192 - SIZE
+
+        .org 0x8000
+
+start:  ld hl, title
+print:  ld a, (hl)
+        or a
+        jr z, ready
+        out (P_CHAR), a
+        inc hl
+        jr print
+
+ready:  ld a, C_BUF_ON  ; the off-screen image starts as a copy of what is on screen, title included
+        out (P_CMD), a
+        ld d, 120       ; x
+        ld e, 90        ; y
+
+frame:  ld a, BLACK     ; wipe the play area, not the title above it
+        out (P_FILL), a
+        out (P_PEN), a  ; a filled shape is outlined with the pen, so the wipe needs a black one
+        xor a
+        out (P_X), a
+        ld a, TOP
+        out (P_Y), a
+        ld a, 255
+        out (P_X2), a   ; the last column: a byte cannot say 256 outside a resize
+        ld a, 191
+        out (P_Y2), a
+        ld a, C_RECT
+        out (P_CMD), a
+
+        ld a, CYAN
+        out (P_FILL), a
+        ld a, WHITE
+        out (P_PEN), a  ; the square keeps a white outline
+        ld a, d
+        out (P_X), a
+        add a, SIZE
+        out (P_X2), a
+        ld a, e
+        out (P_Y), a
+        add a, SIZE
+        out (P_Y2), a
+        ld a, C_RECT
+        out (P_CMD), a
+
+        ld a, C_PRESENT
+        out (P_CMD), a
+        in a, (P_FRAME)
+
+        ld c, P_KEY
+        ld b, K_LEFT
+        in a, (c)
+        or a
+        jr z, noleft
+        ld a, d
+        or a
+        jr z, noleft    ; already against the left edge
+        dec d
+        dec d
+noleft: ld b, K_RIGHT
+        in a, (c)
+        or a
+        jr z, noright
+        ld a, d
+        cp LIMITX - 2
+        jr nc, noright
+        inc d
+        inc d
+noright:ld b, K_UP
+        in a, (c)
+        or a
+        jr z, noup
+        ld a, e
+        cp TOP + 2
+        jr c, noup
+        dec e
+        dec e
+noup:   ld b, K_DOWN
+        in a, (c)
+        or a
+        jr z, nodown
+        ld a, e
+        cp LIMITY - 2
+        jr nc, nodown
+        inc e
+        inc e
+nodown: jp frame
+
+title:  .asciz "ARROW KEYS MOVE", 10

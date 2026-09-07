@@ -1,0 +1,6 @@
+{
+    "name": "Multiply and divide, with the remainder",
+    "description": "Days into hours with mult, seconds into minutes and seconds with div, and the two answers pulled out of hi and lo.",
+    "order": 8,
+    "topic": "multiply-and-divide"
+}

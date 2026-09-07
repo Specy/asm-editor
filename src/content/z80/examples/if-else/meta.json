@@ -1,0 +1,6 @@
+{
+    "name": "The bigger of two numbers",
+    "description": "A compare and a jump pick the larger of two registers, and a second jump turns the difference into a distance.",
+    "order": 2,
+    "topic": "if-else"
+}

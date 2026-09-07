@@ -13,6 +13,11 @@ import {
     type StackFrame
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import { GenericEmulator } from '$lib/languages/GenericEmulator.svelte'
+import {
+    type ExecutionSlice,
+    type ExecutionSliceRequest,
+    sliceInstructionBudget
+} from '$lib/languages/ExecutionSlice'
 import type { ExecutionGeneration } from '$lib/languages/ExecutionController'
 import type { Testcase } from '$lib/Project.svelte'
 import {
@@ -29,6 +34,14 @@ import {
     type X86RegisterName
 } from '@specy/x86'
 import structuredClone from '@ungap/structured-clone'
+
+/**
+ * How many instructions Blink runs in a millisecond, used to turn a slice's time budget into a run
+ * limit. Measured in phase 8 on a compute-only loop under node: about 11, two hundred times slower
+ * than the estimate this replaces, which held the host for nine tenths of a second per slice and
+ * answered Stop seventeen seconds after it was pressed.
+ */
+const X86_INSTRUCTIONS_PER_MS = 10
 
 export const DEFAULT_X86_FLAGS = [
     { name: 'CF', value: 0 },
@@ -216,12 +229,24 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         }
     }
 
-    async _run(
-        limit: number | undefined,
-        breakpoints: number[] | undefined
-    ): Promise<EmulatorStatus> {
-        const status = await this.runWithInput(limit, breakpoints ?? [])
-        return toLocalStatus(status)
+    /**
+     * Blink has no instruction counter and its `run` stops for input rather than for a clock, so a
+     * slice is one `run` with the budget as its limit: exact when it comes back still running, which
+     * is the compute-only case the budget exists for. x86 has no Screen, so it never sees the short
+     * slice ([screen-peripherals.md](../../../../docs/design/screen-peripherals.md)).
+     */
+    async _runSlice(request: ExecutionSliceRequest): Promise<ExecutionSlice> {
+        const budget = sliceInstructionBudget(request, X86_INSTRUCTIONS_PER_MS)
+        const status = await this.runWithInput(budget, request.breakpoints)
+        if (status === CoreEmulatorStatus.Running) {
+            //still runnable: either the budget ran out or a breakpoint stopped it, and `run` does
+            //not say which. The line the program is about to execute does: a run that stopped on a
+            //breakpoint is parked on it
+            const line = this._getNextInstruction()?.lineNumber ?? -1
+            const onBreakpoint = line >= 0 && request.breakpoints.includes(line)
+            return { reason: onBreakpoint ? 'breakpoint' : 'budget', instructions: budget }
+        }
+        return { reason: 'terminated', instructions: budget }
     }
 
     async _runTestcase(_testcase: Testcase, haltLimit: number): Promise<void> {

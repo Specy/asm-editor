@@ -1,0 +1,6 @@
+{
+    "name": "Fill an array with the numbers from 1 to 10",
+    "description": "A loop that writes ten words into reserved room, stepping the pointer itself and counting down to zero, with the result read in the memory panel.",
+    "order": 3,
+    "topic": "counting-loop"
+}

@@ -1,0 +1,6 @@
+{
+    "name": "Branch on compare",
+    "description": "An if in C becomes a goto and a goto becomes one RISC-V branch, because the comparison is inside the branch instruction. The condition you invert, the else if chain, and what to write when the machine has no conditional move.",
+    "order": 0,
+    "topic": "branching"
+}

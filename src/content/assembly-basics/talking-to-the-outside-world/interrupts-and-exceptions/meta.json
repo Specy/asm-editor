@@ -1,0 +1,6 @@
+{
+    "name": "Interrupts and exceptions",
+    "description": "What happens when the CPU cannot carry out an instruction, or when a device arrives in the middle of one. Vectors, handlers, and what each simulator in this editor really does with a fault.",
+    "order": 2,
+    "topic": "interrupts"
+}

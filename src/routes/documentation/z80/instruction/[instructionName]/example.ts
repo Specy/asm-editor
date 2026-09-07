@@ -99,12 +99,14 @@ const IMPLICIT_SETUP: Record<string, ExampleFragments> = {
     cpir: { setup: ['ld a, 3', 'ld hl, source', 'ld bc, 4'], trailer: ['DATA'] },
     cpd: { setup: ['ld a, 3', 'ld hl, source + 3', 'ld bc, 4'], trailer: ['DATA'] },
     cpdr: { setup: ['ld a, 3', 'ld hl, source + 3', 'ld bc, 4'], trailer: ['DATA'] },
-    // Port 0x10 is not connected to anything, so the reads answer 0xFF instead of stopping the
-    // program to ask the user for four bytes of input.
-    ini: { setup: [`ld hl, ${SCRATCH}`, 'ld b, 2', 'ld c, 0x10'] },
-    inir: { setup: [`ld hl, ${SCRATCH}`, 'ld b, 2', 'ld c, 0x10'] },
-    ind: { setup: [`ld hl, ${SCRATCH}`, 'ld b, 2', 'ld c, 0x10'] },
-    indr: { setup: [`ld hl, ${SCRATCH}`, 'ld b, 2', 'ld c, 0x10'] },
+    // Port 0xF0 is outside the port map, so the reads answer 0xFF from an empty bus instead of
+    // stopping the program to ask the user for four bytes of input. The block I/O instructions
+    // count down with B, which the mapped ports read as a parameter, so an unmapped one is also the
+    // only port whose answer does not change as B does.
+    ini: { setup: [`ld hl, ${SCRATCH}`, 'ld b, 2', 'ld c, 0xF0'] },
+    inir: { setup: [`ld hl, ${SCRATCH}`, 'ld b, 2', 'ld c, 0xF0'] },
+    ind: { setup: [`ld hl, ${SCRATCH}`, 'ld b, 2', 'ld c, 0xF0'] },
+    indr: { setup: [`ld hl, ${SCRATCH}`, 'ld b, 2', 'ld c, 0xF0'] },
     // Port 1 is the console's unsigned number port, so these print "42" and "7".
     outi: { setup: ['ld hl, source', 'ld b, 2', 'ld c, 1'], trailer: ['OUT_DATA'] },
     otir: { setup: ['ld hl, source', 'ld b, 2', 'ld c, 1'], trailer: ['OUT_DATA'] },
