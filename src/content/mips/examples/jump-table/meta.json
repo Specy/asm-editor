@@ -1,0 +1,6 @@
+{
+    "name": "A jump table",
+    "description": "Four addresses in memory, an index that picks one of them, and a jr through a register instead of a chain of comparisons.",
+    "order": 14,
+    "topic": "jump-table"
+}

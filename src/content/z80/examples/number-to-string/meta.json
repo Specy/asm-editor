@@ -1,0 +1,6 @@
+{
+    "name": "Print a number in any base without help",
+    "description": "The division routine run once per digit, a buffer filled backwards from its end, and the same number printed in base 16, 10 and 2.",
+    "order": 19,
+    "topic": "number-to-string"
+}

@@ -104,6 +104,9 @@ function nameOf(playground: ContentPlayground): string {
 async function emulatorFor(playground: ContentPlayground): Promise<Emulator> {
     return await createEmulator(playground.settings.language, playground.code, {
         ...EMULATOR_SETTINGS,
+        //the RISC-V adapter reads its word size off `options.language`, the way EmulatorLoader passes
+        //it, so without this every riscv64 fence would be assembled by the 32 bit assembler
+        language: playground.settings.language,
         peripherals: { clock: new ProgramClock({ mode: 'virtual' }) }
     })
 }

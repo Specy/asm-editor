@@ -1,0 +1,6 @@
+{
+    "name": "A 2D array",
+    "description": "Three rows of four words, one element reached by row and column, and a whole column added up by stepping ix a row at a time.",
+    "order": 16,
+    "topic": "two-dimensional-array"
+}

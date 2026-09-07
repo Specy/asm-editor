@@ -1,0 +1,6 @@
+{
+    "name": "Binary search",
+    "description": "Twelve sorted words searched by halving the range four times, with the index left in $t4 and -1 when the value is not there.",
+    "order": 15,
+    "topic": "binary-search"
+}

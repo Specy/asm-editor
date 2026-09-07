@@ -1,0 +1,6 @@
+{
+    "name": "Print a string",
+    "description": "The first program that talks to anybody: a loop that writes one character per out, a number sent to a port of its own, and the newline written by hand.",
+    "order": 17,
+    "topic": "hello-world"
+}

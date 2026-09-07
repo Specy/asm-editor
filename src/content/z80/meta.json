@@ -1,0 +1,10 @@
+{
+    "id": "z80",
+    "name": "Z80 assembly",
+    "authors": ["Specy"],
+    "description": "The Zilog Z80 as this editor runs it: an 8 bit accumulator, sixteen bit pairs, a shadow set and a 64 KB address space, with the outside world reached through I/O ports. Read Assembly basics first if you have never written assembly.",
+    "image": "",
+    "tags": ["assembly", "z80"],
+    "date": "2026-09-07",
+    "order": 4
+}

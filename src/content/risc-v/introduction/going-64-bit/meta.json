@@ -1,0 +1,6 @@
+{
+    "name": "Going 64-bit",
+    "description": "RV64 is the same instruction set with 64 bit registers, a doubleword size, and a set of w instructions that work on the low 32 bits and sign extend the answer. What this simulator gets right about it, and the two shift forms it gets wrong.",
+    "order": 4,
+    "topic": "rv64"
+}

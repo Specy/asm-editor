@@ -1,0 +1,6 @@
+{
+    "name": "The 64 KB address space",
+    "description": "Sixty-four kilobytes, addressed by any 16 bit pair, with the program at 0x8000 and the stack coming down from the top. Little endian, no alignment rule, and your own instructions visible in the memory panel.",
+    "order": 2,
+    "topic": "memory"
+}

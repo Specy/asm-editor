@@ -160,6 +160,10 @@ never imitated.
 3. The program in a Playground with the panels it needs (console, memory, screen).
 4. One "try changing" prompt.
 
+The Playground carries `allow-open`, so a reader can take the program into a project of their own
+(Specy put it on all 24 M68K Example pages on 2026-09-07). A Lecture Playground does not, apart
+from the one in "Using the editor" that teaches the button.
+
 The page generates the "same program in the other languages" links from its topic key; do not write
 them.
 

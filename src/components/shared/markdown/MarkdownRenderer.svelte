@@ -498,7 +498,7 @@
         border: none;
         border-radius: 0.8rem;
         width: 100%;
-        min-height: 20.8rem;
+        min-height: 21.4rem;
         margin: 1.5rem auto;
         background-color: var(--secondary);
         box-shadow: 0 0 2rem 10px rgba(0, 0, 0, 0.2);

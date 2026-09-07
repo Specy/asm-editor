@@ -1,0 +1,6 @@
+{
+    "name": "Addressing on the Z80",
+    "description": "The seven ways a Z80 instruction names what it works on, with the C each of them is written as. It ends on the mode the Z80 does not have, and the four instructions you write instead of it.",
+    "order": 5,
+    "topic": "addressing-modes"
+}

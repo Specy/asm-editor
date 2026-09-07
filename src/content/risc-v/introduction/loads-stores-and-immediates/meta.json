@@ -1,0 +1,6 @@
+{
+    "name": "Loads, stores and immediates",
+    "description": "RISC-V has three ways of naming an operand and only one of them reaches memory. What offset(base) can and cannot do, why indexing an array costs a shift and an add, and how auipc puts an address in a register without knowing where the program was loaded.",
+    "order": 6,
+    "topic": "addressing-modes"
+}

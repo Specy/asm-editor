@@ -1,0 +1,6 @@
+{
+    "name": "Fill an array with the numbers from 1 to 10",
+    "description": "A djnz loop that writes ten bytes into reserved room, stepping the pointer itself, with the result read in the memory panel.",
+    "order": 3,
+    "topic": "counting-loop"
+}

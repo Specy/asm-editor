@@ -1,0 +1,6 @@
+{
+    "name": "Binary search",
+    "description": "Twelve sorted bytes searched by halving the range, with the index left in e, 0xFF when the value is not there, and the middle kept on the stack while the accumulator does the reading.",
+    "order": 15,
+    "topic": "binary-search"
+}

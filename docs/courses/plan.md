@@ -339,6 +339,52 @@ Lecture `meta.json` gains `"topic": "<key>"`. Course `meta.json` is unchanged ap
     General course lecture offers "Go deeper" into M68K, an M68K lecture points back at its
     overview, and an Example renders nothing until a second language has the same rung.
 
+    Batch 3a done 2026-09-07 (commits 5f433f9 to afbc8ff): the seventeen MIPS lectures. Facts the
+    writer established by running, which the RARS-based RISC-V course should re-check rather than
+    assume, since RARS is a port of MARS:
+
+    - **A testcase returns MIPS registers as signed BigInts**, so a negative expectation is written
+      `-5`, not the unsigned hex the M68K course uses. Getting this wrong fails an exercise that is
+      actually correct.
+    - `$v0` carries both a syscall number and a return value, so an exercise must check a register
+      the exit `li $v0, 10` has not overwritten.
+    - No branch delay slots: this Core follows MARS, whose delayed branching ships off, so the
+      instruction after a taken branch does not run.
+    - Execution starts at the **first instruction in `.text`**, not at `main`; `.globl main` names
+      the entry point and no other name works.
+    - The assembler does no arithmetic (`li $t0, 4*2` is a build error) and takes no `0b` literals.
+      Mnemonics and directives are case-insensitive, register names are not, and `$s8` is not a
+      name for `$fp`.
+    - `.word` and `.half` are auto-aligned, `.space`, `.ascii` and `.asciiz` are not, so a buffer
+      after an odd-length string faults on its first `sw`.
+    - Syscalls 13 to 16 (files) stop the run, and 55 to 59 (dialogs) throw under scripted input, so
+      neither can appear in a Playground. Unwritten memory reads 0 and the text segment cannot be
+      read as data.
+    - An infinite loop is cut off at the instruction budget silently, with no error.
+
+    Batch 4a done 2026-09-07 (commits 5757f94 to 1633d33): the seventeen Z80 lectures. What its
+    writer established by running, for batch 4b and anyone else touching Z80 content:
+
+    - Every Playground needs its own `.org 0x8000`; with no `.org` a program assembles at `0x0000`.
+    - Untouched memory reads `00` here, where the M68K reads `FF`, and **this simulator does place
+      the assembled instruction bytes in memory**, unlike the M68K one, so a program can read its
+      own opcodes.
+    - A program ends four ways, all reported as terminated: `halt`, `ei` then `halt`, a top-level
+      `ret`, and the cliff where the program counter reaches the byte after the last assembled one.
+      `rst n` ends a run too, by calling into empty low memory.
+    - Literals: `31`, `0x1F`, `$1F`, `1Fh`, `0b00011111`, `0o37` and `'A'` all work; **`%00011111`
+      does not**. A leading zero is decimal. `equ` accepts `*` as well as `+` and `-`, unlike the
+      M68K assembler. `.align` starts a second segment whose cliff stops the run, so avoid it.
+    - Condition-code names (`v`, `c`, `z`, `m`, `p`, `nz`, `nc`, `po`, `pe`, `nv`) cannot be labels.
+    - **A testcase can preset every register but `pc`, and only pairs can be checked**, so a result
+      in `b` is asserted on `bc` (`{"bc": "0x0100"}` for `b = 1`).
+    - **`expectedOutput` defaults to `""` and is always compared**, in every language, so any
+      Exercise whose program prints must declare what it prints or it fails.
+    - `P/V` does three jobs: parity after logic, overflow after arithmetic, and "`bc` is not zero"
+      after a block instruction. `bit n,r` sets `Z` when the bit is **0**. There is no
+      signed-comparison condition; after `cp`, signed less-than is `S` differing from `P/V`.
+    - An unmapped port reads `FF` and swallows writes silently.
+
 6. Pull request from `feat/courses` after PR #71 merges; rebase onto main first.
 
 Reviewer's gates per batch: voice script clean, verification test green, the pages read aloud like the

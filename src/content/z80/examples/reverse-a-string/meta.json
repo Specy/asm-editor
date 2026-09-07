@@ -1,0 +1,6 @@
+{
+    "name": "Reverse a string in place",
+    "description": "Two pointers that start at the ends of a string and swap bytes on their way towards each other, with the swaps counted, since the Z80 cannot compare two pairs.",
+    "order": 7,
+    "topic": "reverse-a-string"
+}

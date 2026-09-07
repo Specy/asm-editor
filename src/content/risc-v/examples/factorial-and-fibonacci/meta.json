@@ -1,0 +1,6 @@
+{
+    "name": "Recursion: factorial and Fibonacci",
+    "description": "Two subroutines that call themselves, each call with a frame of its own on the stack, and the one ra that makes saving it the first thing either of them does.",
+    "order": 12,
+    "topic": "factorial-and-fibonacci"
+}

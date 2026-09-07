@@ -1,0 +1,6 @@
+{
+    "name": "Move a square with the keyboard",
+    "description": "The receiver registers polled once a frame for w, a, s and d, a direction kept in registers, and a square that keeps going until you steer it somewhere else.",
+    "order": 22,
+    "topic": "keyboard-control"
+}

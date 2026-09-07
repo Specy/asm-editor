@@ -1,0 +1,6 @@
+{
+    "name": "Getting started with the Z80",
+    "description": "The Zilog Z80 as this editor runs it, its 8 bit registers and the pairs they make, how a program is written down and where it goes in memory. It ends with a first program and with the four ways a Z80 program here can stop.",
+    "order": 0,
+    "topic": "introduction"
+}

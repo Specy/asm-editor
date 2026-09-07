@@ -1,0 +1,6 @@
+{
+    "name": "jp, jr and the conditions",
+    "description": "An if statement flattened into a compare and a conditional jump, the two jump instructions and the 128 bytes that separate them, and the four conditions jr is allowed to test.",
+    "order": 0,
+    "topic": "branching"
+}

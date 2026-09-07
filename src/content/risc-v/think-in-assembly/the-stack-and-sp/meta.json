@@ -1,0 +1,6 @@
+{
+    "name": "The stack and sp",
+    "description": "RISC-V has no push and no pop: the stack is memory, sp is an ordinary register, and a push is a subtraction and a store. Saving several registers with one adjustment, local room, and giving every byte of it back.",
+    "order": 4,
+    "topic": "the-stack"
+}

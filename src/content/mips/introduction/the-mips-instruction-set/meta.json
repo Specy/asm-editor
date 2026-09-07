@@ -1,0 +1,6 @@
+{
+    "name": "The MIPS instruction set",
+    "description": "Three operands with the destination first, three encodings that are all four bytes long, and the letters glued on the end of a mnemonic. It ends on the instructions that are not instructions at all, and on the delay slot this simulator does not have.",
+    "order": 4,
+    "topic": "instruction-set"
+}

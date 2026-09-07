@@ -1,0 +1,6 @@
+{
+    "name": "Getting started with RISC-V",
+    "description": "The architecture this editor runs, its 32 registers under two sets of names, and how a program is written down. It ends with a first program whose answer you read in the registers panel.",
+    "order": 0,
+    "topic": "introduction"
+}

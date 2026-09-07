@@ -1,0 +1,6 @@
+{
+    "name": "Recursion: factorial and Fibonacci",
+    "description": "Two subroutines that call themselves, each call keeping its own n on the stack, and the sixteen bits that put a limit on how far factorial can go.",
+    "order": 12,
+    "topic": "factorial-and-fibonacci"
+}

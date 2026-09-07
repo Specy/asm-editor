@@ -1,0 +1,6 @@
+{
+    "name": "The largest element",
+    "description": "One walk through eight words, keeping the best one seen so far and where it was, with a negative number in there to make the signed comparison matter.",
+    "order": 5,
+    "topic": "max-of-an-array"
+}

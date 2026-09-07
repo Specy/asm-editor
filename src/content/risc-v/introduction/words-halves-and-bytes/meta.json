@@ -1,0 +1,6 @@
+{
+    "name": "Words, halves and bytes",
+    "description": "The three ways of writing a number in RISC-V source, how much of an instruction a constant gets and why every immediate here is sign extended, and the pairs of instructions that read the same 32 bits as signed or as unsigned.",
+    "order": 3,
+    "topic": "numbers"
+}

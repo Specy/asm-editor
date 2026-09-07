@@ -1,0 +1,6 @@
+{
+    "name": "Exceptions, coprocessor 0 and interrupts",
+    "description": "MIPS has one handler address instead of a vector table, and this editor really runs the handler you write there. Coprocessor 0, the Cause and EPC registers, eret, and why the handler has to step past the instruction that faulted.",
+    "order": 2,
+    "topic": "interrupts"
+}
