@@ -105,13 +105,13 @@ main:
     li $a3, 10
     jal fill_rect
 
-    li $s0, ROOF            # six rows, each two cells narrower than the last
+    li $s0, ROOF            # six rows up from the wall, each two cells narrower
     li $s3, 0
 roof:
     li $a0, 10
     add $a0, $a0, $s3
-    li $a1, 10
-    add $a1, $a1, $s3
+    li $a1, 15
+    sub $a1, $a1, $s3
     li $a2, 12
     sll $t7, $s3, 1
     sub $a2, $a2, $t7

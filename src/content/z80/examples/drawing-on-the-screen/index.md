@@ -1,6 +1,6 @@
 A picture in six shapes: the sky, the ground, an ellipse for the sun, a rectangle with an outline
-for the house, three lines for its roof and one more rectangle for the door, with a line of text
-over the top. Press Run and watch the Screen panel next to the program.
+for the house, three lines and a flood fill for its roof and one more rectangle for the door, with
+a line of text over the top. Press Run and watch the Screen panel next to the program.
 
 Print a string asked the environment for a line of text by writing one byte to a port. The Screen is
 more ports, right next to the console ones, and drawing is always the same two steps: write the
@@ -28,6 +28,7 @@ C_LINE_TO equ 2
 C_MOVE_TO equ 3
 C_RECT    equ 4
 C_ELLIPSE equ 6
+C_FLOOD   equ 8
 C_CLEAR   equ 9
 C_RESIZE  equ 10
 
@@ -103,10 +104,11 @@ shapes:
     .db C_LINE_TO,   WALL,  ROOF,   115, 40,  0,   0      ; up to the apex
     .db C_LINE_TO,   WALL,  ROOF,   172, 80,  0,   0      ; down to the right eave
     .db C_LINE_TO,   WALL,  ROOF,   58,  80,  0,   0      ; and back where it started
+    .db C_FLOOD,     ROOF,  ROOF,   115, 65,  0,   0      ; and the inside of the roof
     .db C_RECT,      DOOR,  DOOR,   100, 125, 125, 160    ; the door
 shapes_end:
 
-label:  .asciz "A HOUSE IN TEN COMMANDS"
+label:  .asciz "A HOUSE IN ELEVEN COMMANDS"
 ```
 
 Every coordinate is one byte, so the Screen is at most 256 by 256 pixels, and no coordinate can hold
@@ -135,6 +137,12 @@ drawing anything, and each command 2 after it draws from wherever that position 
 and leaves it there, so a polyline costs one command per corner. Command 1 is the other line
 command, the one that takes both ends at once.
 
+Command 8 is what colours it in, because there is no triangle command: it starts at the pixel in X
+and Y and spreads the **fill colour** in every direction, over every pixel of the colour it started
+on, until it meets anything else. The three lines are the fence it stops at, and `115, 65` is just a
+point inside them, any other would do the same. It is the one row of the roof whose fill field
+matters, which is why it says `ROOF` where the lines above it say `WALL`.
+
 The label goes through the console character port, the same port Print a string used, because **the
 Screen has no text command of its own**. Text lands at the text cursor, which is counted in 8 by 8
 character cells, so a 240 pixel Screen is 30 columns wide and the label can only start on a cell
@@ -143,4 +151,7 @@ characters are painted in the pen colour on the background colour, and the backg
 the last clear filled the Screen with, which is why white on the sky looks right.
 
 Try changing the `115` in the `C_LINE_TO` row of the roof to `70`. That row is the apex, so the roof
-stops being a triangle and leans over to the left, and nothing else in the program has to know.
+stops being a triangle and leans over to the left, and nothing else in the program has to know. The
+fill point at `115, 65` is still inside the leaning roof, so command 8 still finds its fence. Push
+the apex far enough that it is not and the fill spreads over the sky instead, which is the one thing
+to keep in mind about a flood fill: it knows colours, not shapes.
