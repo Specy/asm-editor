@@ -5,6 +5,8 @@
     import FaExpand from '~icons/fa-solid/expand'
     import FaCompress from '~icons/fa-solid/compress'
     import FaWindowMaximize from '~icons/fa-solid/window-maximize'
+    import FaLayerGroup from '~icons/fa-solid/layer-group'
+    import { preferencesStore } from '$stores/preferencesStore.svelte'
     import ToggleableDraggable from '$cmp/shared/draggable/DraggableContainer.svelte'
     import { screenZoom, screenZoomLabel } from './screenZoom'
     import { screenWindowGeometry } from './screenWindow'
@@ -61,6 +63,9 @@
     let logicalWidth = $state(untrack(() => screen.width))
     let logicalHeight = $state(untrack(() => screen.height))
     let fitToPanel = $state(true)
+    //the Screen has no runes here either, so what the frame loop last read from it is what decides
+    //whether the panel offers the drawing buffer at all
+    let doubleBuffering = $state(untrack(() => screen.doubleBuffering))
     let focused = $state(false)
     //the floating window is another container for the same canvas, never a second panel: the
     //component that calls `screen.watch()` has to stay mounted exactly once, or the scheduler
@@ -88,6 +93,15 @@
     )
 
     let zoomLabel = $derived(screenZoomLabel(fitToPanel, zoom))
+
+    /**
+     * The debug view of a double buffered Screen: the image the program is drawing on, which it
+     * would normally only show at `present` (ADR 0006). It is the `showDrawingBuffer` Preference,
+     * so the panel button and the Settings switch are the one toggle and it survives a reload, and
+     * it means nothing on a Screen that is not double buffering — there is only one image then.
+     */
+    let showDrawingBuffer = $derived(preferencesStore.values.showDrawingBuffer.value)
+    let showingDrawingBuffer = $derived(showDrawingBuffer && doubleBuffering)
 
     /**
      * The window's box comes from the viewport (`screenWindow.ts`), because a box the user drags
@@ -132,27 +146,37 @@
             paintedVersion = -1
             return
         }
-        if (paintedVersion === screen.version) return
+        doubleBuffering = screen.doubleBuffering
+        const drawingView = showDrawingBuffer && doubleBuffering
+        //the version counter moves for the visible image alone, so the drawing buffer — which every
+        //operation changes and only `present` copies out — is repainted every frame instead. It is
+        //a debug view, and one putImageData a frame costs nothing next to what it is showing
+        if (!drawingView && paintedVersion === screen.version) return
         context ??= canvas.getContext('2d')
         if (!context) return
+        const source = drawingView ? screen.drawingPixels : screen.visiblePixels
         //ImageData wraps the Screen's own array instead of copying it, so it is only rebuilt when
-        //that array is replaced: a Build, a resize or a double-buffering change
+        //that array is replaced: a Build, a resize, a double-buffering change or a switch between
+        //the two images
         if (
             !image ||
-            image.data !== screen.visiblePixels ||
+            image.data !== source ||
             image.width !== screen.width ||
             image.height !== screen.height
         ) {
             //the Screen allocates its images itself, so their buffers are the plain ArrayBuffers
             //the DOM's ImageDataArray asks for
-            const pixels = screen.visiblePixels as Uint8ClampedArray<ArrayBuffer>
+            const pixels = source as Uint8ClampedArray<ArrayBuffer>
             image = new ImageData(pixels, screen.width, screen.height)
         }
         context.putImageData(image, 0, 0)
-        paintedVersion = screen.version
+        //the drawing view leaves it at -1 so that going back to the visible image paints it once,
+        //however long the program has been sitting on the same frame
+        paintedVersion = drawingView ? -1 : screen.version
         //the scheduler shortens its slices while the Screen is dirty (ADR 0007), so telling it the
-        //frame reached the GUI is what lets a compute-only run go back to long slices
-        screen.markPainted()
+        //frame reached the GUI is what lets a compute-only run go back to long slices. The drawing
+        //view never paints the visible image, so it never claims to have shown it
+        if (!drawingView) screen.markPainted()
     }
 
     function logicalPosition(event: PointerEvent) {
@@ -314,6 +338,21 @@
 
 {#snippet actions()}
     {@render configuration?.()}
+    {#if doubleBuffering}
+        <button
+            class="screen-action"
+            class:active={showingDrawingBuffer}
+            title={showingDrawingBuffer
+                ? 'Show the visible buffer again'
+                : 'Show the drawing buffer, the frame the program is composing'}
+            onclick={() => preferencesStore.setValue('showDrawingBuffer', !showingDrawingBuffer)}
+        >
+            <Icon size={0.8}>
+                <FaLayerGroup />
+            </Icon>
+            {showingDrawingBuffer ? 'Drawing' : 'Visible'}
+        </button>
+    {/if}
     <button
         class="screen-action"
         title={fitToPanel ? 'Show at actual size' : 'Zoom to fit the panel'}
@@ -483,6 +522,13 @@
         &:hover {
             filter: brightness(1.2);
         }
+    }
+
+    /* the drawing buffer is not what the program is showing, so the panel says so for as long as
+       it is the image on the canvas */
+    .screen-action.active {
+        background-color: var(--accent);
+        color: var(--accent-text);
     }
 
     /* only the frame the stage sits in; the stage is the box the canvas is fitted to */

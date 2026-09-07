@@ -20,6 +20,7 @@ export type PreferenceValues = {
     autoSave: PreferenceValue<boolean>
     showMemory: PreferenceValue<boolean>
     showScreen: PreferenceValue<boolean>
+    showDrawingBuffer: PreferenceValue<boolean>
     maxVisibleHistoryModifications: PreferenceValue<number>
     showPseudoInstructions: PreferenceValue<boolean>
 }
@@ -46,6 +47,10 @@ export function defaultPreferences(): PreferenceValues {
         showPseudoInstructions: createValue('Show pseudo instructions', true, 'MIPS'),
         showMemory: createValue('Show memory tab', true),
         showScreen: createValue('Show screen', true),
+        showDrawingBuffer: createValue(
+            'Show the drawing buffer of a double buffered screen',
+            false
+        ),
         maxVisibleHistoryModifications: createValue('Maximum visible history steps', 10)
     }
 }
