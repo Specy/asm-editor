@@ -23,11 +23,11 @@ import {
  * the Screen can be checked here, and only pixels judged by eye, pacing and the feel of input need a
  * browser.
  *
- * A program that runs until Stop is given the instruction limit the app ships with and, on top of
+ * A program that runs until Stop is given an instruction limit of the harness' own and, on top of
  * it, a wall-clock budget, because a program paced by waits costs no instructions while it waits.
  */
 
-/** The app's `instructionsLimit` setting. */
+/** The harness' own safety net: a Run in the app has no instruction limit, this measurement does. */
 const INSTRUCTION_LIMIT = 2_000_000
 /** How long a program that never terminates is allowed to run before Stop ends it. */
 const RUN_BUDGET_MS = 2_500

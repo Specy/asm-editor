@@ -125,3 +125,11 @@ export const LANGUAGE_EXTENSIONS = {
 
 export const DISCERNS_AVATAR_ID = 65
 export const DISCERNS_AVATAR_INSTANCE_ID = 75
+
+/**
+ * The halt limit a Testcase run is given. Unlike a Run, a Testcase runs unsliced — the Core call
+ * returns only when the program ends — so nothing outside it can answer Pause or Stop, and this
+ * limit is the only thing that ends a testcase that loops forever. A Run needs no limit: it is
+ * sliced ([ADR 0007](../../docs/adr/0007-generic-emulator-run-scheduling.md)) and the user pauses it.
+ */
+export const TESTCASE_INSTRUCTION_LIMIT = 2_000_000

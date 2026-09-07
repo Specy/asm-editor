@@ -10,7 +10,6 @@ export type SettingValue<T> = {
 export type SettingValues = {
     useDecimalAsDefault: SettingValue<boolean>
     autoScrollStackTab: SettingValue<boolean>
-    instructionsLimit: SettingValue<number>
     autoSave: SettingValue<boolean>
     showMemory: SettingValue<boolean>
     showScreen: SettingValue<boolean>
@@ -43,12 +42,11 @@ const baseValues = {
     //a clear, a present or a resize journals a whole image, so the Screen's Undo history has its
     //own budget rather than a step count (ADR 0005). Provisional default, measured in phase 8
     screenHistoryBudgetMb: createValue('Screen undo history budget (MB)', 64),
-    instructionsLimit: createValue('Instruction execution limit, 0 to ignore', 2_000_000),
     maxHistorySize: createValue('Maximum undo steps, 0 to disable', 100),
     maxVisibleHistoryModifications: createValue('Maximum visible history steps', 10)
 } satisfies SettingValues
 
-const CURRENT_VERSION = '1.1.8'
+const CURRENT_VERSION = '1.1.9'
 function createSettingsStore() {
     let data = $state({
         meta: {

@@ -13,7 +13,7 @@
     import Controls from '$cmp/specific/project/Controls.svelte'
     import StdOut from '$cmp/specific/project/user-tools/StdOutRenderer.svelte'
     import { clampBigInt, createDebouncer, formatTime } from '$lib/utils'
-    import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE } from '$lib/Config'
+    import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE, TESTCASE_INSTRUCTION_LIMIT } from '$lib/Config'
     import Settings from '$cmp/specific/project/settings/Settings.svelte'
     import FloatingLanguageDocumentation from '$cmp/specific/project/FloatingLanguageDocumentation.svelte'
     import FaBook from '~icons/fa-solid/book'
@@ -301,7 +301,8 @@
 
     async function runCode() {
         try {
-            await emulator.run(settingsStore.values.instructionsLimit.value)
+            //no limit: a Run is sliced, so Pause and Stop answer even in an infinite loop (ADR 0007)
+            await emulator.run(0)
         } catch (e) {
             console.error(e)
             toast.error('Error executing code. ' + getM68kErrorMessage(e))
@@ -609,7 +610,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                         testcasesResult = await emulator.test(
                             $state.snapshot(code),
                             $state.snapshot(testcases),
-                            settingsStore.values.instructionsLimit.value,
+                            TESTCASE_INSTRUCTION_LIMIT,
                             settingsStore.values.maxHistorySize.value
                         )
                     } catch (e) {

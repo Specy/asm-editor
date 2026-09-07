@@ -14,6 +14,7 @@
         type ExamSectionAnswer,
         type ExamSubmission
     } from '$lib/exam'
+    import { TESTCASE_INSTRUCTION_LIMIT } from '$lib/Config'
     import { tool, type RegisteredTool } from '@discerns/sdk'
     import { z } from 'zod'
 
@@ -278,9 +279,11 @@
                     .min(1)
                     .max(10000000)
                     .optional()
-                    .describe('Maximum instructions per test case. Defaults to 1000000.')
+                    .describe(
+                        `Maximum instructions per test case. Defaults to ${TESTCASE_INSTRUCTION_LIMIT}.`
+                    )
             }),
-            execute: async ({ instructionLimit = 1000000 }) => {
+            execute: async ({ instructionLimit = TESTCASE_INSTRUCTION_LIMIT }) => {
                 const assemblySection = activeAssemblySection
                 const emulator = emulatorInstance
                 if (!assemblySection) {
