@@ -60,7 +60,7 @@ describe('M68K diagnostics', () => {
         const emulator = M68KEmulator('    mova d0,d1')
         const [diagnostic] = await emulator.check()
 
-        expect(diagnostic.hint).toContain('did you mean `move`?')
+        expect(diagnostic.hint).toContain('Did you mean `move`?')
         expect(diagnostic.formatted).toBe(`${diagnostic.message}\n${diagnostic.hint}`)
         emulator.dispose()
     })
