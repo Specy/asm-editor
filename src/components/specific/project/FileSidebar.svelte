@@ -7,7 +7,7 @@
     import { toast } from '$stores/toastStore'
     import { untrack } from 'svelte'
     import { SvelteSet } from 'svelte/reactivity'
-    import { fly } from 'svelte/transition'
+    import { fade, fly } from 'svelte/transition'
     import FaAngleRight from '~icons/fa-solid/angle-right'
     import FaBars from '~icons/fa-solid/bars'
     import FaDownload from '~icons/fa-solid/download'
@@ -225,18 +225,26 @@
         aria-label="Open Explorer"
         aria-expanded="false"
         onclick={() => (open = true)}
-        in:fly={{ x: -16, duration: 150 }}
+        in:fly={{ x: 16, opacity: 0, duration: 200 }}
     >
         <FaBars />
     </button>
 {/if}
 
 {#if open}
+    <button
+        class="explorer-backdrop"
+        title="Close Explorer"
+        aria-label="Close Explorer"
+        onclick={() => (open = false)}
+        in:fade={{ duration: 300 }}
+        out:fade={{ duration: 240 }}
+    ></button>
     <aside
         class="file-sidebar"
         aria-label="Project Explorer"
-        in:fly={{ x: -320, duration: 220 }}
-        out:fly={{ x: -320, duration: 170 }}
+        in:fly={{ x: 320, opacity: 0, duration: 320 }}
+        out:fly={{ x: 320, opacity: 0, duration: 260 }}
     >
         <header class="explorer-heading">
             <span>EXPLORER</span>
@@ -397,18 +405,29 @@
         }
     }
 
+    .explorer-backdrop {
+        position: absolute;
+        z-index: 4;
+        inset: 0.2rem;
+        border-radius: 0.45rem;
+        background: rgb(0 0 0 / 0.14);
+        cursor: default;
+    }
+
     .file-sidebar {
         position: absolute;
         z-index: 5;
-        inset: 0 auto 0 0;
+        inset: 0.2rem 0.2rem 0.2rem auto;
         display: flex;
         flex-direction: column;
         width: min(19rem, calc(100% - 0.75rem));
         min-height: 0;
         color: var(--secondary-text);
-        background: color-mix(in srgb, var(--secondary) 98%, transparent);
-        border-right: 1px solid var(--tertiary);
-        box-shadow: 5px 0 18px rgb(0 0 0 / 0.3);
+        overflow: hidden;
+        background: color-mix(in srgb, var(--secondary) 96%, transparent);
+        border: 1px solid var(--tertiary);
+        border-radius: 0.45rem;
+        box-shadow: -5px 0 18px rgb(0 0 0 / 0.3);
         backdrop-filter: blur(0.45rem);
     }
 

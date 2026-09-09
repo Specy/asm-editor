@@ -12,7 +12,6 @@
     import { BUILTIN_THEMES, ThemeStore } from '$stores/themeStore.svelte'
     import { LANGUAGE_THEMES } from '$lib/Config'
     import FaShareAlt from '~icons/fa-solid/share-alt'
-    import FaFileDownload from '~icons/fa-solid/file-download'
     import { projectToSingleSource } from '$lib/projectArchive'
 
     interface Props {
@@ -24,10 +23,9 @@
     let descriptionContent = $state(project.description || '')
     const dispatcher = createEventDispatcher<{
         download: Project
-        downloadSource: Project
         share: Project
     }>()
-    const canDownloadSource = $derived(projectToSingleSource(project) !== null)
+    const singleSource = $derived(projectToSingleSource(project))
 
     const colors = $derived(
         BUILTIN_THEMES.find((t) => t.id === LANGUAGE_THEMES[project.language]) ?? BUILTIN_THEMES[0]
@@ -93,25 +91,15 @@
             <Button
                 cssVar="secondary"
                 style="width: 2.2rem; height: 2.2rem;"
-                title="Download complete project archive"
+                title={singleSource
+                    ? 'Download source file for another editor'
+                    : 'Download complete project archive'}
                 onClick={() => dispatcher('download', project)}
             >
                 <Icon>
                     <FaDownload />
                 </Icon>
             </Button>
-            {#if canDownloadSource}
-                <Button
-                    cssVar="secondary"
-                    style="width: 2.2rem; height: 2.2rem;"
-                    title="Download source file for another editor"
-                    onClick={() => dispatcher('downloadSource', project)}
-                >
-                    <Icon>
-                        <FaFileDownload />
-                    </Icon>
-                </Button>
-            {/if}
 
             <ButtonLink
                 bg={colors.theme.accent2.color}

@@ -239,27 +239,22 @@
                                 toast.logPill('Copied to clipboard')
                             }}
                             on:download={(e) => {
+                                const source = projectToSingleSource(e.detail)
+                                if (source) {
+                                    blobDownloader(
+                                        new Blob([source.bytes], {
+                                            type: 'text/plain;charset=utf-8'
+                                        }),
+                                        source.fileName
+                                    )
+                                    return
+                                }
                                 const archive = projectToArchive(e.detail)
                                 blobDownloader(
                                     new Blob([new Uint8Array(archive).buffer], {
                                         type: 'application/zip'
                                     }),
                                     projectArchiveName(e.detail.name)
-                                )
-                            }}
-                            on:downloadSource={(e) => {
-                                const source = projectToSingleSource(e.detail)
-                                if (!source) {
-                                    toast.error(
-                                        'Only a single text Entry can be exported as source'
-                                    )
-                                    return
-                                }
-                                blobDownloader(
-                                    new Blob([source.bytes], {
-                                        type: 'text/plain;charset=utf-8'
-                                    }),
-                                    source.fileName
                                 )
                             }}
                         />
