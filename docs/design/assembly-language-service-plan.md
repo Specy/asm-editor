@@ -209,14 +209,7 @@ type LanguageDiagnostic = {
     related?: { location: SourceLocation; message: string }[]
 }
 
-type SymbolKind =
-    | 'label'
-    | 'constant'
-    | 'variable'
-    | 'register-list'
-    | 'macro'
-    | 'section'
-    | 'data'
+type SymbolKind = 'label' | 'constant' | 'variable' | 'register-list' | 'macro' | 'section' | 'data'
 type SymbolOccurrence = {
     symbolId?: string
     name: string
@@ -679,13 +672,13 @@ The contract suite should include at least:
 | ----------------- | ------------------------------------------------------------------------------------------------------ |
 | Words             | uppercase/lowercase mnemonics, prefixed directives, apostrophes, dotted/local labels                   |
 | Incomplete source | empty line, trailing comma, open parenthesis/bracket, partial string, unknown mnemonic                 |
-| Symbols           | definition/reference, constant, variable redefinition, register list, duplicate, scoped/local, macro  |
+| Symbols           | definition/reference, constant, variable redefinition, register list, duplicate, scoped/local, macro   |
 | Multiple Files    | relative/root include, repeated include, missing/cycle, unused File, `incbin`, rename/delete           |
 | M68K              | bare/colon/local labels, `set` by position, `.b/.w/.l/.s`, all modes, `*`, SR/CCR, refused operations  |
 | Target modes      | MIPS registers, RV32 versus RV64, RISC-V ABI versus `xN`, NASM effective addresses, Z80 conditions     |
 | Diagnostics       | exact range, UTF-16 conversion, code, Hint, severity, stale result, related expansion/include Location |
-| Navigation        | same File, another/unopened File, repeated expansion, Build snapshot, disposed session                |
-| Editing           | completion insertion, snippet tab stops, safe rename, idempotent formatting, quick-fix reanalysis     |
+| Navigation        | same File, another/unopened File, repeated expansion, Build snapshot, disposed session                 |
+| Editing           | completion insertion, snippet tab stops, safe rename, idempotent formatting, quick-fix reanalysis      |
 | Lifecycle         | register/dispose twice, switch Target, Project close, Worker idle termination, S68K WASM leak          |
 
 Where possible, provider tests should assert semantic results in neutral source-model types before
