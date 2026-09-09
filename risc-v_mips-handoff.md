@@ -19,9 +19,9 @@ The two packages now expose the same source-set model and source-location behavi
 
 Both packages were released as `3.0.0` because construction is a breaking change.
 
-| Package | Removed v2 factory | v3 factory | Static alias |
-| --- | --- | --- | --- |
-| `@specy/mips` | `MIPS.makeMipsFromSource(source)` | `makeMipsFromFiles(files, entryFile)` | `MIPS.makeMipsFromFiles(files, entryFile)` |
+| Package         | Removed v2 factory                  | v3 factory                             | Static alias                                 |
+| --------------- | ----------------------------------- | -------------------------------------- | -------------------------------------------- |
+| `@specy/mips`   | `MIPS.makeMipsFromSource(source)`   | `makeMipsFromFiles(files, entryFile)`  | `MIPS.makeMipsFromFiles(files, entryFile)`   |
 | `@specy/risc-v` | `RISCV.makeRiscVFromSource(source)` | `makeRiscVFromFiles(files, entryFile)` | `RISCV.makeRiscVFromFiles(files, entryFile)` |
 
 There is no single-source compatibility overload. A one-file program uses a one-entry Source Set:
@@ -29,19 +29,13 @@ There is no single-source compatibility overload. A one-file program uses a one-
 ```ts
 import { makeMipsFromFiles } from '@specy/mips'
 
-const mips = makeMipsFromFiles(
-  { 'main.asm': '.text\n.globl main\nmain:\n  nop' },
-  'main.asm',
-)
+const mips = makeMipsFromFiles({ 'main.asm': '.text\n.globl main\nmain:\n  nop' }, 'main.asm')
 ```
 
 ```ts
 import { makeRiscVFromFiles } from '@specy/risc-v'
 
-const riscv = makeRiscVFromFiles(
-  { 'main.asm': '.text\n.globl main\nmain:\n  nop' },
-  'main.asm',
-)
+const riscv = makeRiscVFromFiles({ 'main.asm': '.text\n.globl main\nmain:\n  nop' }, 'main.asm')
 ```
 
 The named functions and static aliases have identical behavior. They initialize the underlying simulator environment themselves.
@@ -53,13 +47,13 @@ type MIPSSourceSet = Readonly<Record<string, string>>
 type RISCVSourceSet = Readonly<Record<string, string>>
 
 type MIPSSourceLocation = {
-  sourcePath: string
-  sourceLine: number
+    sourcePath: string
+    sourceLine: number
 }
 
 type RISCVSourceLocation = {
-  sourcePath: string
-  sourceLine: number
+    sourcePath: string
+    sourceLine: number
 }
 ```
 
@@ -101,17 +95,17 @@ A canonical Source Path:
 
 Examples:
 
-| Path | Result |
-| --- | --- |
-| `main.asm` | valid |
-| `src/main.asm` | valid |
-| `directory with spaces/π.library.asm` | valid; segment contents are otherwise opaque |
-| `/src/main.asm` | invalid Source Set key |
-| `./src/main.asm` | invalid |
-| `src/../main.asm` | invalid as a key even though it could be normalized |
-| `src//main.asm` | invalid |
-| `src/main.asm/` | invalid |
-| `src\main.asm` | invalid |
+| Path                                  | Result                                              |
+| ------------------------------------- | --------------------------------------------------- |
+| `main.asm`                            | valid                                               |
+| `src/main.asm`                        | valid                                               |
+| `directory with spaces/π.library.asm` | valid; segment contents are otherwise opaque        |
+| `/src/main.asm`                       | invalid Source Set key                              |
+| `./src/main.asm`                      | invalid                                             |
+| `src/../main.asm`                     | invalid as a key even though it could be normalized |
+| `src//main.asm`                       | invalid                                             |
+| `src/main.asm/`                       | invalid                                             |
+| `src\main.asm`                        | invalid                                             |
 
 The same canonical-path validation applies to `getStatementsAtSourceLocation`.
 
@@ -123,11 +117,11 @@ Only the Entry File and its transitive include closure are assembled. A supplied
 
 Include resolution uses the file containing the directive:
 
-| Including file | Directive path | Resolved Source Path |
-| --- | --- | --- |
-| `src/main.asm` | `./helper.asm` | `src/helper.asm` |
-| `src/main.asm` | `../shared/macros.asm` | `shared/macros.asm` |
-| `src/main.asm` | `/shared/macros.asm` | `shared/macros.asm` |
+| Including file | Directive path         | Resolved Source Path |
+| -------------- | ---------------------- | -------------------- |
+| `src/main.asm` | `./helper.asm`         | `src/helper.asm`     |
+| `src/main.asm` | `../shared/macros.asm` | `shared/macros.asm`  |
+| `src/main.asm` | `/shared/macros.asm`   | `shared/macros.asm`  |
 
 Include paths may contain `.` and `..`; they are normalized during resolution. A leading `/` means the virtual Source Set root and is stripped from the resolved key. Traversal above the virtual root is an assembly error.
 
@@ -177,17 +171,17 @@ Program construction no longer tokenizes or assembles. The observable lifecycle 
 
 ```ts
 type MIPSAssembleResult = {
-  report: string
-  errors: MIPSAssembleError[]
-  hasErrors: boolean
-  hasWarnings: boolean
+    report: string
+    errors: MIPSAssembleError[]
+    hasErrors: boolean
+    hasWarnings: boolean
 }
 
 type RISCVAssembleResult = {
-  report: string
-  errors: RISCVAssembleError[]
-  hasErrors: boolean
-  hasWarnings: boolean
+    report: string
+    errors: RISCVAssembleError[]
+    hasErrors: boolean
+    hasWarnings: boolean
 }
 ```
 
@@ -207,19 +201,19 @@ The v2 tokenized-line shape contained only `line` and `tokens`. Version 3 replac
 
 ```ts
 type MipsTokenizedLine = {
-  sourcePath: string
-  sourceLine: number
-  source: string
-  processedSource: string
-  tokens: JsInstructionToken[]
+    sourcePath: string
+    sourceLine: number
+    source: string
+    processedSource: string
+    tokens: JsInstructionToken[]
 }
 
 type RiscvTokenizedLine = {
-  sourcePath: string
-  sourceLine: number
-  source: string
-  processedSource: string
-  tokens: JsInstructionToken[]
+    sourcePath: string
+    sourceLine: number
+    source: string
+    processedSource: string
+    tokens: JsInstructionToken[]
 }
 ```
 
@@ -241,11 +235,11 @@ Source splitting now preserves a final empty line. A source ending in `\n` can t
 
 ```ts
 {
-  sourceLine: number
-  sourceColumn: number
-  originalSourceLine: number
-  value: string
-  type: string
+    sourceLine: number
+    sourceColumn: number
+    originalSourceLine: number
+    value: string
+    type: string
 }
 ```
 
@@ -253,9 +247,9 @@ to:
 
 ```ts
 {
-  sourceColumn: number
-  value: string
-  type: string
+    sourceColumn: number
+    value: string
+    type: string
 }
 ```
 
@@ -267,13 +261,13 @@ Line ownership moved to the containing tokenized-line object. `sourceLine` and `
 
 ```ts
 interface JsProgramStatement {
-  readonly sourcePath: string
-  readonly sourceLine: number
-  readonly address: number
-  readonly binaryStatement: number
-  readonly source: string
-  readonly machineStatement: string
-  readonly assemblyStatement: string
+    readonly sourcePath: string
+    readonly sourceLine: number
+    readonly address: number
+    readonly binaryStatement: number
+    readonly source: string
+    readonly machineStatement: string
+    readonly assemblyStatement: string
 }
 ```
 
@@ -341,21 +335,21 @@ Version 3 exposes structured source identity:
 
 ```ts
 type MIPSAssembleError = {
-  isWarning: boolean
-  message: string
-  macroExpansionTrace: MIPSSourceLocation[]
-  sourcePath: string
-  sourceLine: number
-  sourceColumn: number
+    isWarning: boolean
+    message: string
+    macroExpansionTrace: MIPSSourceLocation[]
+    sourcePath: string
+    sourceLine: number
+    sourceColumn: number
 }
 
 type RISCVAssembleError = {
-  isWarning: boolean
-  message: string
-  macroExpansionTrace: RISCVSourceLocation[]
-  sourcePath: string
-  sourceLine: number
-  sourceColumn: number
+    isWarning: boolean
+    message: string
+    macroExpansionTrace: RISCVSourceLocation[]
+    sourcePath: string
+    sourceLine: number
+    sourceColumn: number
 }
 ```
 
@@ -379,7 +373,7 @@ Macro diagnostics deliberately differ from generated-statement mapping:
 Example: if `main.asm:5` calls `bad()` and the invalid instruction is in `macros.asm:2`, the diagnostic location is `macros.asm:2` and the trace is:
 
 ```ts
-[{ sourcePath: 'main.asm', sourceLine: 5 }]
+;[{ sourcePath: 'main.asm', sourceLine: 5 }]
 ```
 
 The assembly result's `report` remains a human-readable aggregate. Its text now uses canonical source paths and can render structured macro-expansion locations; the individual `errors` objects carry the stable structured data described above.
@@ -388,14 +382,14 @@ The assembly result's `report` remains a human-readable aggregate. Its text now 
 
 The behavior is intentionally parallel, but names are not interchangeable:
 
-| MIPS | RISC-V |
-| --- | --- |
-| package `@specy/mips` | package `@specy/risc-v` |
-| class `MIPS` | class `RISCV` |
-| `makeMipsFromFiles` | `makeRiscVFromFiles` |
-| `MIPSSourceSet` | `RISCVSourceSet` |
-| `MIPSSourceLocation` | `RISCVSourceLocation` |
-| `MipsTokenizedLine` | `RiscvTokenizedLine` |
+| MIPS                                       | RISC-V                                       |
+| ------------------------------------------ | -------------------------------------------- |
+| package `@specy/mips`                      | package `@specy/risc-v`                      |
+| class `MIPS`                               | class `RISCV`                                |
+| `makeMipsFromFiles`                        | `makeRiscVFromFiles`                         |
+| `MIPSSourceSet`                            | `RISCVSourceSet`                             |
+| `MIPSSourceLocation`                       | `RISCVSourceLocation`                        |
+| `MipsTokenizedLine`                        | `RiscvTokenizedLine`                         |
 | `MIPSAssembleError` / `MIPSAssembleResult` | `RISCVAssembleError` / `RISCVAssembleResult` |
 
 All path, include, lifecycle, token, statement, and diagnostic rules in this document apply to both packages.
