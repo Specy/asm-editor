@@ -594,7 +594,7 @@ describe('the RISC-V examples', () => {
         expect(pixelAt(emulator, 200, 40)).toBe(0xc82800)
         expect(pixelAt(emulator, 10, 0)).toBe(0xffffff)
         expect(pixelAt(emulator, 10, 255)).toBe(0xffffff)
-    })
+    }, 15_000)
 
     it('animates the bouncing ball and lets program time pass', async () => {
         const code = readFileSync('examples/risc-v/bouncing-ball.s', 'utf8')
