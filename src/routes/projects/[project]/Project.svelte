@@ -752,6 +752,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
             {#key language}
                 {#if hasProjectFiles && files && entry && fileSystem}
                     <FileSidebar
+                        {name}
                         {files}
                         {entry}
                         {fileSystem}

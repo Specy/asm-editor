@@ -5,19 +5,31 @@
     import { blobDownloader } from '$lib/utils'
     import { Prompt } from '$stores/promptStore.svelte'
     import { toast } from '$stores/toastStore'
+    import { untrack } from 'svelte'
+    import { SvelteSet } from 'svelte/reactivity'
+    import { fly } from 'svelte/transition'
+    import FaAngleRight from '~icons/fa-solid/angle-right'
     import FaBars from '~icons/fa-solid/bars'
     import FaDownload from '~icons/fa-solid/download'
     import FaFile from '~icons/fa-solid/file'
     import FaFolder from '~icons/fa-solid/folder'
+    import FaMinus from '~icons/fa-solid/minus'
     import FaPen from '~icons/fa-solid/pen'
     import FaPlus from '~icons/fa-solid/plus'
     import FaTrash from '~icons/fa-solid/trash'
     import FaUpload from '~icons/fa-solid/upload'
     import FaTimes from '~icons/fa-solid/times'
 
-    type TreeRow = { path: string; name: string; depth: number; directory: boolean }
+    type TreeNode = {
+        path: string
+        name: string
+        directory: boolean
+        children: TreeNode[]
+    }
+    type TreeRow = Omit<TreeNode, 'children'> & { depth: number; expanded: boolean }
 
     interface Props {
+        name?: string
         files: ProjectFiles
         entry: string
         fileSystem: FileSystem
@@ -31,6 +43,7 @@
     }
 
     let {
+        name = 'Project',
         files,
         entry,
         fileSystem,
@@ -43,44 +56,94 @@
         onDeleted
     }: Props = $props()
 
-    const rows = $derived(makeTreeRows(files))
+    const collapsedDirectories = new SvelteSet<string>()
+    let projectExpanded = $state(true)
+    const rows = $derived(makeTreeRows(files, collapsedDirectories))
+    const directories = $derived(directoryPaths(files))
     const selectedFile = $derived(files[selectedPath])
+
+    $effect(() => {
+        const path = selectedPath
+        if (!open) return
+        untrack(() => expandParents(path))
+    })
 
     function basename(path: string): string {
         const parts = path.split('/')
         return parts[parts.length - 1] ?? path
     }
 
-    function makeTreeRows(currentFiles: ProjectFiles): TreeRow[] {
-        const directories: Record<string, true> = Object.create(null)
+    function makeTreeRows(currentFiles: ProjectFiles, collapsed: ReadonlySet<string>): TreeRow[] {
+        const root: TreeNode = { path: '', name: '', directory: true, children: [] }
+        for (const path of Object.keys(currentFiles)) {
+            let parent = root
+            const parts = path.split('/')
+            for (let index = 0; index < parts.length; index++) {
+                const directory = index < parts.length - 1
+                const nodePath = parts.slice(0, index + 1).join('/')
+                let node = parent.children.find(
+                    (child) => child.path === nodePath && child.directory === directory
+                )
+                if (!node) {
+                    node = {
+                        path: nodePath,
+                        name: parts[index],
+                        directory,
+                        children: []
+                    }
+                    parent.children.push(node)
+                }
+                parent = node
+            }
+        }
+
+        const rows: TreeRow[] = []
+        const visit = (nodes: TreeNode[], depth: number) => {
+            nodes.sort((a, b) => {
+                if (a.directory !== b.directory) return a.directory ? -1 : 1
+                return a.name.localeCompare(b.name)
+            })
+            for (const node of nodes) {
+                const expanded = node.directory && !collapsed.has(node.path)
+                rows.push({
+                    path: node.path,
+                    name: node.name,
+                    depth,
+                    directory: node.directory,
+                    expanded
+                })
+                if (expanded) visit(node.children, depth + 1)
+            }
+        }
+        visit(root.children, 0)
+        return rows
+    }
+
+    function directoryPaths(currentFiles: ProjectFiles): string[] {
+        const paths = new SvelteSet<string>()
         for (const path of Object.keys(currentFiles)) {
             const parts = path.split('/')
             for (let index = 1; index < parts.length; index++) {
-                directories[parts.slice(0, index).join('/')] = true
+                paths.add(parts.slice(0, index).join('/'))
             }
         }
-        return [
-            ...Object.keys(directories).map((path) => ({
-                path,
-                name: basename(path),
-                depth: path.split('/').length - 1,
-                directory: true
-            })),
-            ...Object.keys(currentFiles).map((path) => ({
-                path,
-                name: basename(path),
-                depth: path.split('/').length - 1,
-                directory: false
-            }))
-        ].sort((a, b) => {
-            const aParts = a.path.split('/')
-            const bParts = b.path.split('/')
-            for (let index = 0; index < Math.min(aParts.length, bParts.length); index++) {
-                const comparison = aParts[index].localeCompare(bParts[index])
-                if (comparison !== 0) return comparison
-            }
-            return aParts.length - bParts.length
-        })
+        return [...paths]
+    }
+
+    function expandParents(path: string) {
+        const parts = path.split('/')
+        for (let index = 1; index < parts.length; index++) {
+            collapsedDirectories.delete(parts.slice(0, index).join('/'))
+        }
+    }
+
+    function toggleDirectory(path: string) {
+        if (collapsedDirectories.has(path)) collapsedDirectories.delete(path)
+        else collapsedDirectories.add(path)
+    }
+
+    function collapseAll() {
+        for (const path of directories) collapsedDirectories.add(path)
     }
 
     function reportFailure(error: unknown) {
@@ -93,19 +156,21 @@
         if (!path) return
         try {
             fileSystem.writeText(path.trim(), '', false)
+            expandParents(path.trim())
             onSelect(path.trim())
         } catch (error) {
             reportFailure(error)
         }
     }
 
-    async function renameFile() {
-        if (!selectedFile) return
-        const path = await Prompt.askText(`Rename or move ${selectedPath} to:`, true, selectedPath)
-        if (!path || path.trim() === selectedPath) return
+    async function renameFile(targetPath = selectedPath) {
+        if (!files[targetPath]) return
+        const path = await Prompt.askText(`Rename or move ${targetPath} to:`, true, targetPath)
+        if (!path || path.trim() === targetPath) return
         try {
-            const previousPath = selectedPath
+            const previousPath = targetPath
             fileSystem.rename(previousPath, path.trim())
+            expandParents(path.trim())
             onRenamed?.(previousPath, path.trim())
             onSelect(path.trim())
         } catch (error) {
@@ -113,20 +178,23 @@
         }
     }
 
-    async function deleteFile() {
-        if (!selectedFile) return
-        if (!(await Prompt.confirm(`Delete ${selectedPath}?`))) return
+    async function deleteFile(targetPath = selectedPath) {
+        if (!files[targetPath]) return
+        if (!(await Prompt.confirm(`Delete ${targetPath}?`))) return
         try {
-            const previousPath = selectedPath
+            const previousPath = targetPath
             fileSystem.remove(previousPath)
             onDeleted?.(previousPath)
-            onSelect(Object.keys(fileSystem.files)[0] ?? entry)
+            if (previousPath === selectedPath) {
+                onSelect(Object.keys(fileSystem.files)[0] ?? entry)
+            }
         } catch (error) {
             reportFailure(error)
         }
     }
 
     async function uploadFile(file: File, data: ArrayBuffer) {
+        if (locked) return
         const path = file.name
         try {
             if (files[path]) {
@@ -134,269 +202,543 @@
                 if (!replace) return
             }
             fileSystem.writeBytes(path, new Uint8Array(data), true)
+            expandParents(path)
             onSelect(path)
         } catch (error) {
             reportFailure(error)
         }
     }
 
-    function downloadFile() {
-        if (!selectedFile) return
-        const bytes = fileBytes(selectedFile)
+    function downloadFile(targetPath = selectedPath) {
+        const file = files[targetPath]
+        if (!file) return
+        const bytes = fileBytes(file)
         const contents = new Uint8Array(bytes).buffer
-        blobDownloader(new Blob([contents]), basename(selectedPath))
+        blobDownloader(new Blob([contents]), basename(targetPath))
     }
 </script>
 
-<button
-    class="files-toggle"
-    class:open
-    title="Project files"
-    aria-label="Project files"
-    aria-expanded={open}
-    onclick={() => (open = !open)}
->
-    {#if open}<FaTimes />{:else}<FaBars />{/if}
-</button>
+{#if !open}
+    <button
+        class="files-toggle"
+        title="Open Explorer"
+        aria-label="Open Explorer"
+        aria-expanded="false"
+        onclick={() => (open = true)}
+        in:fly={{ x: -16, duration: 150 }}
+    >
+        <FaBars />
+    </button>
+{/if}
 
 {#if open}
-    <aside class="file-sidebar" aria-label="Project files">
-        <div class="sidebar-heading">
-            <strong>Files</strong>
-            <span>{Object.keys(files).length} / 4,096</span>
-        </div>
-        <div class="entry-path" class:missing={!files[entry]} title={entry}>
-            Entry: {entry}{files[entry] ? '' : ' (missing)'}
-        </div>
+    <aside
+        class="file-sidebar"
+        aria-label="Project Explorer"
+        in:fly={{ x: -320, duration: 220 }}
+        out:fly={{ x: -320, duration: 170 }}
+    >
+        <header class="explorer-heading">
+            <span>EXPLORER</span>
+            <button class="icon-action close" title="Close Explorer" onclick={() => (open = false)}>
+                <FaTimes />
+            </button>
+        </header>
 
-        <div class="file-tree">
-            {#if rows.length === 0}
-                <div class="empty">No files</div>
-            {/if}
-            {#each rows as row (row.directory ? `directory:${row.path}` : `file:${row.path}`)}
-                {#if row.directory}
-                    <div
-                        class="tree-row directory"
-                        style:padding-left={`${0.55 + row.depth * 0.85}rem`}
-                    >
-                        <FaFolder />
-                        <span class="ellipsis">{row.name}</span>
-                    </div>
-                {:else}
+        <section class="explorer-section">
+            <div class="section-heading">
+                <button
+                    class="section-toggle"
+                    aria-expanded={projectExpanded}
+                    onclick={() => (projectExpanded = !projectExpanded)}
+                >
+                    <span class="disclosure" class:expanded={projectExpanded}>
+                        <FaAngleRight />
+                    </span>
+                    <strong title={name}>{name.trim() || 'Project'}</strong>
+                </button>
+                <div class="section-actions">
                     <button
-                        class="tree-row file"
-                        class:selected={row.path === selectedPath}
-                        class:entry={row.path === entry}
-                        style:padding-left={`${0.55 + row.depth * 0.85}rem`}
-                        title={row.path}
-                        onclick={() => onSelect(row.path)}
+                        class="icon-action"
+                        disabled={locked}
+                        title="New text file"
+                        onclick={createFile}
                     >
-                        <FaFile />
-                        <span class="ellipsis">{row.name}</span>
-                        {#if row.path === entry}<span class="entry-mark">Entry</span>{/if}
+                        <FaPlus />
                     </button>
+                    <FileImporter
+                        as="buffer"
+                        on:import={(event) => {
+                            if (event.detail.data instanceof ArrayBuffer) {
+                                void uploadFile(event.detail.file, event.detail.data)
+                            }
+                        }}
+                    >
+                        <button class="icon-action" disabled={locked} title="Upload file">
+                            <FaUpload />
+                        </button>
+                    </FileImporter>
+                    <button
+                        class="icon-action"
+                        disabled={directories.length === 0}
+                        title="Collapse folders"
+                        onclick={collapseAll}
+                    >
+                        <FaMinus />
+                    </button>
+                </div>
+            </div>
+
+            {#if projectExpanded}
+                {#if !files[entry]}
+                    <div class="entry-warning" title={entry}>Entry missing: {entry}</div>
                 {/if}
-            {/each}
-        </div>
+                <div class="file-tree">
+                    {#if rows.length === 0}
+                        <div class="empty">This Project has no files.</div>
+                    {/if}
+                    {#each rows as row (row.directory ? `directory:${row.path}` : `file:${row.path}`)}
+                        {#if row.directory}
+                            <button
+                                class="tree-row directory"
+                                style:padding-left={`${0.35 + row.depth * 0.85}rem`}
+                                title={row.path}
+                                aria-expanded={row.expanded}
+                                onclick={() => toggleDirectory(row.path)}
+                            >
+                                <span class="disclosure" class:expanded={row.expanded}>
+                                    <FaAngleRight />
+                                </span>
+                                <span class="file-icon folder"><FaFolder /></span>
+                                <span class="ellipsis">{row.name}</span>
+                            </button>
+                        {:else}
+                            <div
+                                class="tree-row file"
+                                class:selected={row.path === selectedPath}
+                                class:entry={row.path === entry}
+                                class:binary={files[row.path]?.encoding === 'base64'}
+                                title={row.path}
+                            >
+                                <button
+                                    class="file-select"
+                                    style:padding-left={`${0.35 + row.depth * 0.85}rem`}
+                                    onclick={() => onSelect(row.path)}
+                                >
+                                    <span class="disclosure-spacer"></span>
+                                    <span class="file-icon"><FaFile /></span>
+                                    <span class="ellipsis">{row.name}</span>
+                                    {#if row.path === entry}
+                                        <span class="entry-mark" title="Build Entry">E</span>
+                                    {/if}
+                                </button>
+                                <div class="row-actions">
+                                    <button
+                                        title="Download exact bytes"
+                                        onclick={() => downloadFile(row.path)}
+                                    >
+                                        <FaDownload />
+                                    </button>
+                                    <button
+                                        disabled={locked}
+                                        title="Rename or move"
+                                        onclick={() => renameFile(row.path)}
+                                    >
+                                        <FaPen />
+                                    </button>
+                                    <button
+                                        disabled={locked}
+                                        title="Delete"
+                                        onclick={() => deleteFile(row.path)}
+                                    >
+                                        <FaTrash />
+                                    </button>
+                                </div>
+                            </div>
+                        {/if}
+                    {/each}
+                </div>
 
-        <div class="file-actions">
-            <button disabled={locked} title="Create text file" onclick={createFile}
-                ><FaPlus /></button
-            >
-            <FileImporter
-                as="buffer"
-                on:import={(event) => {
-                    if (event.detail.data instanceof ArrayBuffer) {
-                        void uploadFile(event.detail.file, event.detail.data)
-                    }
-                }}
-            >
-                <button disabled={locked} title="Upload file"><FaUpload /></button>
-            </FileImporter>
-            <button disabled={locked || !selectedFile} title="Rename or move" onclick={renameFile}
-                ><FaPen /></button
-            >
-            <button disabled={!selectedFile} title="Download exact bytes" onclick={downloadFile}
-                ><FaDownload /></button
-            >
-            <button disabled={locked || !selectedFile} title="Delete" onclick={deleteFile}
-                ><FaTrash /></button
-            >
-        </div>
-
-        <button
-            class="set-entry"
-            disabled={locked || !selectedFile || selectedPath === entry}
-            onclick={() => onEntryChange(selectedPath)}
-        >
-            {selectedPath === entry ? 'Selected file is Entry' : 'Use selected file as Entry'}
-        </button>
-        {#if locked}
-            <div class="locked-note">File changes are owned by the program until Stop.</div>
-        {/if}
+                <footer class="explorer-footer">
+                    <div class="selected-path" title={selectedPath || entry}>
+                        <span>{selectedFile ? 'SELECTED' : 'ENTRY'}</span>
+                        <strong>{selectedFile ? selectedPath : entry}</strong>
+                    </div>
+                    <button
+                        class="set-entry"
+                        disabled={locked || !selectedFile || selectedPath === entry}
+                        onclick={() => onEntryChange(selectedPath)}
+                    >
+                        {selectedPath === entry ? 'ENTRY FILE' : 'SET AS ENTRY'}
+                    </button>
+                    <div class="file-count">{Object.keys(files).length} / 4,096 files</div>
+                    {#if locked}
+                        <div class="locked-note">
+                            Read-only while the program owns the filesystem
+                        </div>
+                    {/if}
+                </footer>
+            {/if}
+        </section>
     </aside>
 {/if}
 
 <style lang="scss">
     .files-toggle {
         position: absolute;
-        z-index: 5;
-        top: 0.7rem;
-        left: 0.7rem;
+        z-index: 6;
+        top: 0.55rem;
+        left: 0.55rem;
         display: grid;
         place-items: center;
-        width: 2rem;
-        height: 2rem;
-        padding: 0.5rem;
-        border: 0;
-        border-radius: 0.35rem;
+        width: 2.05rem;
+        height: 2.05rem;
+        padding: 0.48rem;
+        border: 1px solid color-mix(in srgb, var(--tertiary) 80%, transparent);
+        border-radius: 0.2rem;
         color: var(--secondary-text);
         background: var(--secondary);
-        box-shadow: 0 2px 8px rgb(0 0 0 / 0.25);
+        box-shadow: 0 2px 10px rgb(0 0 0 / 0.28);
         cursor: pointer;
 
-        &.open {
-            left: min(18.1rem, calc(100% - 2.8rem));
+        &:hover {
+            background: var(--tertiary);
         }
     }
 
     .file-sidebar {
         position: absolute;
-        z-index: 4;
-        inset: 0.45rem auto 0.45rem 0.45rem;
+        z-index: 5;
+        inset: 0 auto 0 0;
         display: flex;
         flex-direction: column;
-        width: min(17.5rem, calc(100% - 1rem));
+        width: min(19rem, calc(100% - 0.75rem));
         min-height: 0;
-        padding: 0.6rem;
-        border: 1px solid var(--tertiary);
-        border-radius: 0.45rem;
         color: var(--secondary-text);
-        background: color-mix(in srgb, var(--secondary) 96%, transparent);
-        box-shadow: 0 4px 18px rgb(0 0 0 / 0.35);
-        backdrop-filter: blur(0.35rem);
+        background: color-mix(in srgb, var(--secondary) 98%, transparent);
+        border-right: 1px solid var(--tertiary);
+        box-shadow: 5px 0 18px rgb(0 0 0 / 0.3);
+        backdrop-filter: blur(0.45rem);
     }
 
-    .sidebar-heading {
+    .explorer-heading {
         display: flex;
+        flex: none;
+        align-items: center;
         justify-content: space-between;
-        padding-right: 2.2rem;
+        height: 2.35rem;
+        padding: 0 0.45rem 0 1.15rem;
+        border-bottom: 1px solid color-mix(in srgb, var(--tertiary) 65%, transparent);
+        font-size: 0.68rem;
+        letter-spacing: 0.08em;
+    }
 
-        span {
-            opacity: 0.65;
-            font-size: 0.75rem;
+    .icon-action,
+    .row-actions button {
+        display: grid;
+        place-items: center;
+        width: 1.65rem;
+        height: 1.65rem;
+        padding: 0.38rem;
+        border: 0;
+        border-radius: 0.2rem;
+        color: inherit;
+        background: transparent;
+        cursor: pointer;
+
+        &:hover:not(:disabled) {
+            background: var(--tertiary);
+        }
+
+        &:disabled {
+            cursor: not-allowed;
+            opacity: 0.3;
         }
     }
 
-    .entry-path,
-    .locked-note {
-        margin-top: 0.35rem;
-        font-size: 0.75rem;
-        opacity: 0.75;
-        overflow-wrap: anywhere;
+    .explorer-section {
+        display: flex;
+        flex: 1;
+        min-height: 0;
+        flex-direction: column;
     }
 
-    .entry-path.missing {
+    .section-heading {
+        display: flex;
+        flex: none;
+        align-items: center;
+        justify-content: space-between;
+        height: 1.8rem;
+        background: color-mix(in srgb, var(--tertiary) 42%, transparent);
+        border-bottom: 1px solid color-mix(in srgb, var(--tertiary) 70%, transparent);
+    }
+
+    .section-toggle {
+        display: flex;
+        flex: 1;
+        align-items: center;
+        align-self: stretch;
+        min-width: 0;
+        padding: 0 0.3rem;
+        border: 0;
+        color: inherit;
+        background: transparent;
+        font: inherit;
+        font-size: 0.7rem;
+        text-align: left;
+        cursor: pointer;
+
+        strong {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+    }
+
+    .section-actions {
+        display: flex;
+        align-items: center;
+        padding-right: 0.25rem;
+
+        .icon-action {
+            width: 1.55rem;
+            height: 1.55rem;
+        }
+    }
+
+    .disclosure,
+    .disclosure-spacer {
+        display: grid;
+        flex: 0 0 0.85rem;
+        place-items: center;
+        width: 0.85rem;
+        height: 0.85rem;
+    }
+
+    .disclosure {
+        transition: transform 120ms ease;
+
+        &.expanded {
+            transform: rotate(90deg);
+        }
+    }
+
+    .entry-warning {
+        flex: none;
+        padding: 0.42rem 0.75rem;
         color: var(--red);
-        opacity: 1;
+        background: color-mix(in srgb, var(--red) 10%, transparent);
+        border-bottom: 1px solid color-mix(in srgb, var(--red) 25%, transparent);
+        font-size: 0.7rem;
+        overflow-wrap: anywhere;
     }
 
     .file-tree {
         flex: 1;
-        min-height: 4rem;
-        margin: 0.55rem 0;
-        padding: 0.25rem 0;
+        min-height: 3rem;
+        padding: 0.22rem 0;
         overflow: auto;
-        border-block: 1px solid var(--tertiary);
     }
 
     .tree-row {
         display: flex;
+        position: relative;
         align-items: center;
-        gap: 0.4rem;
         width: 100%;
         min-width: 0;
-        height: 1.8rem;
-        padding-right: 0.4rem;
+        height: 1.55rem;
         border: 0;
-        border-radius: 0.25rem;
         color: inherit;
         background: transparent;
         font: inherit;
-        font-size: 0.82rem;
+        font-size: 0.78rem;
         text-align: left;
+    }
+
+    button.tree-row.directory,
+    .file-select {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        width: 100%;
+        height: 100%;
+        min-width: 0;
+        padding-top: 0;
+        padding-right: 0.35rem;
+        padding-bottom: 0;
+        border: 0;
+        color: inherit;
+        background: transparent;
+        font: inherit;
+        font-size: inherit;
+        text-align: left;
+        cursor: pointer;
+    }
+
+    .tree-row:hover,
+    .tree-row.selected,
+    .tree-row:focus-within {
+        background: var(--tertiary);
+    }
+
+    .tree-row.selected {
+        box-shadow: inset 2px 0 0 var(--accent);
+    }
+
+    .file-icon {
+        display: grid;
+        flex: 0 0 0.85rem;
+        place-items: center;
+        width: 0.85rem;
+        height: 0.85rem;
+        color: color-mix(in srgb, var(--accent) 65%, var(--secondary-text));
 
         svg {
-            flex: none;
-            width: 0.8rem;
+            width: 0.78rem;
+            height: 0.78rem;
         }
     }
 
-    button.tree-row {
-        cursor: pointer;
-
-        &:hover,
-        &.selected {
-            background: var(--tertiary);
-        }
-
-        &.entry svg {
-            color: var(--accent);
-        }
+    .file-icon.folder {
+        color: color-mix(in srgb, #dcb864 78%, var(--secondary-text));
     }
 
-    .directory {
-        opacity: 0.72;
-        font-size: 0.77rem;
+    .file.binary .file-icon {
+        color: color-mix(in srgb, #b48bdb 78%, var(--secondary-text));
+    }
+
+    .file.entry .file-icon {
+        color: var(--accent);
+    }
+
+    .ellipsis {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
     .entry-mark {
         margin-left: auto;
+        padding: 0 0.22rem;
         color: var(--accent);
-        font-size: 0.65rem;
+        border: 1px solid color-mix(in srgb, var(--accent) 65%, transparent);
+        border-radius: 0.15rem;
+        font-size: 0.55rem;
+        font-weight: 700;
+        line-height: 0.85rem;
+    }
+
+    .row-actions {
+        display: flex;
+        position: absolute;
+        z-index: 1;
+        top: 0;
+        right: 0.15rem;
+        align-items: center;
+        height: 100%;
+        padding-left: 0.55rem;
+        opacity: 0;
+        pointer-events: none;
+        background: linear-gradient(90deg, transparent, var(--tertiary) 22%);
+
+        button {
+            width: 1.38rem;
+            height: 1.38rem;
+            padding: 0.32rem;
+            pointer-events: auto;
+        }
+    }
+
+    .file:hover .row-actions,
+    .file:focus-within .row-actions {
+        opacity: 1;
+        pointer-events: auto;
     }
 
     .empty {
-        padding: 0.8rem;
+        padding: 1.25rem 0.8rem;
         text-align: center;
-        opacity: 0.65;
+        opacity: 0.55;
+        font-size: 0.75rem;
     }
 
-    .file-actions {
+    .explorer-footer {
         display: flex;
-        gap: 0.3rem;
+        flex: none;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.55rem 0.65rem;
+        border-top: 1px solid var(--tertiary);
+        font-size: 0.65rem;
+    }
 
-        button {
-            display: grid;
-            place-items: center;
-            width: 2rem;
-            height: 2rem;
-            padding: 0.5rem;
-            border: 0;
-            border-radius: 0.3rem;
-            color: var(--secondary-text);
-            background: var(--tertiary);
-            cursor: pointer;
+    .selected-path {
+        display: flex;
+        min-width: 0;
+        flex: 1 1 8rem;
+        flex-direction: column;
+        gap: 0.12rem;
+
+        span,
+        strong {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
-        button:disabled {
-            cursor: not-allowed;
-            opacity: 0.35;
+        span {
+            opacity: 0.5;
+            font-size: 0.55rem;
+            letter-spacing: 0.08em;
+        }
+
+        strong {
+            font-size: 0.68rem;
+            font-weight: 500;
         }
     }
 
     .set-entry {
-        margin-top: 0.45rem;
-        padding: 0.45rem;
-        border: 0;
-        border-radius: 0.3rem;
-        color: var(--accent-text);
-        background: var(--accent);
+        flex: none;
+        padding: 0.3rem 0.42rem;
+        border: 1px solid var(--tertiary);
+        border-radius: 0.18rem;
+        color: inherit;
+        background: transparent;
+        font: inherit;
+        font-size: 0.58rem;
         cursor: pointer;
+
+        &:hover:not(:disabled) {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
 
         &:disabled {
             cursor: not-allowed;
-            opacity: 0.45;
+            opacity: 0.4;
+        }
+    }
+
+    .file-count,
+    .locked-note {
+        width: 100%;
+        opacity: 0.5;
+    }
+
+    .locked-note {
+        color: var(--accent);
+        opacity: 0.8;
+    }
+
+    @media (hover: none) {
+        .file.selected .row-actions {
+            opacity: 1;
+            pointer-events: auto;
         }
     }
 </style>
