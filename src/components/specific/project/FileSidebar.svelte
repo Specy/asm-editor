@@ -379,7 +379,7 @@
         position: absolute;
         z-index: 6;
         top: 0.55rem;
-        left: 0.55rem;
+        right: 0.55rem;
         display: grid;
         place-items: center;
         width: 2.05rem;

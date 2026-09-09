@@ -1076,8 +1076,8 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
             .source-identity {
                 position: absolute;
                 z-index: 3;
-                top: 0.7rem;
                 right: 0.9rem;
+                bottom: 0.7rem;
                 display: flex;
                 max-width: calc(100% - 4.5rem);
                 gap: 0.45rem;
