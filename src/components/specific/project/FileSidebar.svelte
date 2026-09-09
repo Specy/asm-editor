@@ -6,8 +6,9 @@
     import { Prompt } from '$stores/promptStore.svelte'
     import { toast } from '$stores/toastStore'
     import { untrack } from 'svelte'
+    import { cubicOut } from 'svelte/easing'
     import { SvelteSet } from 'svelte/reactivity'
-    import { fade, fly } from 'svelte/transition'
+    import { fly, type TransitionConfig } from 'svelte/transition'
     import FaAngleRight from '~icons/fa-solid/angle-right'
     import FaBars from '~icons/fa-solid/bars'
     import FaDownload from '~icons/fa-solid/download'
@@ -71,6 +72,15 @@
     function basename(path: string): string {
         const parts = path.split('/')
         return parts[parts.length - 1] ?? path
+    }
+
+    function revealFromRight(_node: Element): TransitionConfig {
+        return {
+            duration: 320,
+            easing: cubicOut,
+            css: (progress) =>
+                `clip-path: inset(0 0 0 ${(1 - progress) * 100}% round 0.45rem); opacity: ${progress};`
+        }
     }
 
     function makeTreeRows(currentFiles: ProjectFiles, collapsed: ReadonlySet<string>): TreeRow[] {
@@ -232,20 +242,7 @@
 {/if}
 
 {#if open}
-    <button
-        class="explorer-backdrop"
-        title="Close Explorer"
-        aria-label="Close Explorer"
-        onclick={() => (open = false)}
-        in:fade={{ duration: 300 }}
-        out:fade={{ duration: 240 }}
-    ></button>
-    <aside
-        class="file-sidebar"
-        aria-label="Project Explorer"
-        in:fly={{ x: 320, opacity: 0, duration: 320 }}
-        out:fly={{ x: 320, opacity: 0, duration: 260 }}
-    >
+    <aside class="file-sidebar" aria-label="Project Explorer" transition:revealFromRight>
         <header class="explorer-heading">
             <span>EXPLORER</span>
             <button class="icon-action close" title="Close Explorer" onclick={() => (open = false)}>
@@ -403,15 +400,6 @@
         &:hover {
             background: var(--tertiary);
         }
-    }
-
-    .explorer-backdrop {
-        position: absolute;
-        z-index: 4;
-        inset: 0.2rem;
-        border-radius: 0.45rem;
-        background: rgb(0 0 0 / 0.14);
-        cursor: default;
     }
 
     .file-sidebar {
