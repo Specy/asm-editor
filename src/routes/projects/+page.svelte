@@ -165,7 +165,7 @@
 </svelte:head>
 
 <DefaultNavbar />
-<Page hasNavbar style="padding-top: 2rem">
+<Page hasNavbar>
     <div class="project-display">
         <div class="content">
             <div class="top-row">
@@ -274,6 +274,7 @@
 <style lang="scss">
     .top-row {
         display: flex;
+        margin-top: 2rem;
         justify-content: space-between;
         align-items: center;
         margin-bottom: 2rem;
@@ -327,7 +328,7 @@
 
     @media screen and (max-width: 650px) {
         .top-row {
-            margin-top: 1rem;
+            margin-top: 0.5rem;
             margin-bottom: 1rem;
             flex-direction: column;
             align-items: unset;

@@ -3,7 +3,6 @@
     import { toast } from '$stores/toastStore'
     import Controls from '$cmp/specific/project/Controls.svelte'
     import { clampBigInt, formatTime } from '$lib/utils'
-    import { preferencesStore } from '$stores/preferencesStore.svelte'
     import { resolveProjectSettings } from '$lib/projectSettings'
     import { rewriteScreenDirective } from '$lib/languages/mars/screenDirective'
     import MemoryControls from '$cmp/specific/project/memory/MemoryControls.svelte'
@@ -82,10 +81,9 @@
     let showConsole = $derived(showConsoleProp ?? layout === 'fullscreen')
     let showTestcases = $derived(showTestcasesProp ?? false)
     let showPc = $derived(showPcProp ?? layout === 'fullscreen')
-    //hidden for x86, which has no graphics device, and behind the same setting as the project page
-    let showScreen = $derived(
-        showScreenProp ?? (preferencesStore.values.showScreen.value && languageHasScreen(language))
-    )
+    //A shared editor only shows the Screen when its caller asks for it. Documentation playgrounds
+    //derive that explicit request from their `screen` fence flag; x86 has no graphics device.
+    let showScreen = $derived((showScreenProp ?? false) && languageHasScreen(language))
     //no Project here, so a Playground runs on the language's default Settings
     const settings = $derived(resolveProjectSettings(language, undefined))
     //no project to save it in here, so the lecture, exam, embed and chat surfaces get the popover

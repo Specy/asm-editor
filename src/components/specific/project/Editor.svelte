@@ -56,6 +56,7 @@
     let hoveredGliphen: number | null = $state(null)
     let destroyed = false
     let applyingExternalValue = false
+    let overflowWidgets: HTMLDivElement | null = null
     const models = new SvelteMap<string, monaco.editor.ITextModel>()
     const toDispose: (monaco.IDisposable | (() => void))[] = []
     const dispatcher = createEventDispatcher<{
@@ -86,9 +87,17 @@
         initialModel.setEOL(0)
         models.set(modelKey, initialModel)
         activeModelKey = modelKey
+        overflowWidgets = document.createElement('div')
+        //Keep Monaco's widget styles/theme while escaping the editor's local stacking context.
+        overflowWidgets.className = 'monaco-overflow-widgets monaco-editor'
+        const overflowWidgetsHost =
+            editorElement.closest<HTMLElement>('.theme-root') ?? document.body
+        overflowWidgetsHost.appendChild(overflowWidgets)
         const mountedEditor = loadedMonaco.editor.create(editorElement, {
             model: initialModel,
             theme: 'custom-theme',
+            fixedOverflowWidgets: true,
+            overflowWidgetsDomNode: overflowWidgets,
             minimap: { enabled: false },
             scrollbar: {
                 vertical: 'auto',
@@ -189,6 +198,8 @@
         })
         decorations?.clear()
         editor?.dispose()
+        overflowWidgets?.remove()
+        overflowWidgets = null
         for (const model of models.values()) model.dispose()
         models.clear()
     })
@@ -322,7 +333,7 @@
                     const position = e.column
                     return {
                         severity: markerSeverities[e.severity],
-                        message: e.message,
+                        message: e.formatted,
                         startLineNumber: e.lineIndex + 1,
                         startColumn: position,
                         endLineNumber: e.lineIndex + 1,
@@ -388,10 +399,27 @@
         border-radius: 0.2rem;
     }
 
+    :global(.monaco-resizable-hover),
     :global(.monaco-hover) {
-        border-radius: 0.3rem;
+        border-radius: 0.4rem !important;
+    }
+
+    :global(.monaco-hover) {
         box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
         border: 1px solid var(--accent2) !important;
+    }
+
+    :global(.monaco-overflow-widgets) {
+        position: fixed;
+        z-index: 1000;
+        inset: 0;
+        background: transparent;
+        pointer-events: none;
+    }
+
+    :global(.monaco-overflow-widgets .overflowingContentWidgets > *),
+    :global(.monaco-overflow-widgets .overflowingOverlayWidgets > *) {
+        pointer-events: auto;
     }
 
     :global(.monaco-editor .monaco-hover .hover-row:not(:first-child):not(:empty)) {

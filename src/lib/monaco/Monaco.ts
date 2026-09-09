@@ -51,6 +51,10 @@ class MonacoLoader {
             this.toDispose.push(
                 //@ts-ignore custom language
                 monaco.languages.setMonarchTokensProvider('m68k', grammar.M68KLanguage),
+                monaco.languages.setLanguageConfiguration(
+                    'm68k',
+                    grammar.M68KLanguageConfiguration
+                ),
                 monaco.languages.registerCompletionItemProvider(
                     'm68k',
                     language.createM68KCompletition(monaco)

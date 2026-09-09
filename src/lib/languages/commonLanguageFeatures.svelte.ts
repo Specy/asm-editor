@@ -22,6 +22,8 @@ type DiagnosticBase = {
         line_index: number
     }
     message: string
+    /** Actionable help supplied by the Core, shown directly after the message when present. */
+    hint?: string
     formatted: string
 }
 

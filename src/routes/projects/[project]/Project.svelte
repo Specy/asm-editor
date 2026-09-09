@@ -957,7 +957,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                 />
             </div>
 
-            <div class="column" style="gap: 0.4rem">
+            <div class="column" style="gap: 0.4rem; height: 100%">
                 {#if preferencesStore.values.showMemory.value && (!children || !(!running && !(emulator.canExecute || !!emulator.compiledCode)))}
                     <div class="row" style="gap: 0.4rem">
                         <MemoryControls

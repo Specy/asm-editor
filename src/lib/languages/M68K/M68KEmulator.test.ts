@@ -55,6 +55,17 @@ function pixelAt(emulator: Awaited<ReturnType<typeof run>>, x: number, y: number
     return (pixels[offset] << 16) | (pixels[offset + 1] << 8) | pixels[offset + 2]
 }
 
+describe('M68K diagnostics', () => {
+    it('preserves the Core hint in the text shown by diagnostic renderers', async () => {
+        const emulator = M68KEmulator('    mova d0,d1')
+        const [diagnostic] = await emulator.check()
+
+        expect(diagnostic.hint).toContain('did you mean `move`?')
+        expect(diagnostic.formatted).toBe(`${diagnostic.message}\n${diagnostic.hint}`)
+        emulator.dispose()
+    })
+})
+
 describe('M68K Project Files', () => {
     it('assembles included source with its own file identity', async () => {
         const sources = {

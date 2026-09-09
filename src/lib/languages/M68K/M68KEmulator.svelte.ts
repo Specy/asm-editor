@@ -423,6 +423,11 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             //an interrupt is one instruction of progress: without it a program that does nothing but
             //trap would never reach the run's limit, which is what the old unaccounted loop did
             instructions += 1
+            //`simhalt` is a resumable program pause. End this Run here; the Core advances past the
+            //directive before pausing, so a later Run or Step continues with the next instruction.
+            if (interpreter.getStatus() === CoreInterpreterStatus.Paused) {
+                return { reason: 'paused', instructions }
+            }
             const wait = await this.handleInterpreterInterruption(interpreter, execution)
             //a Delay is program time, not execution: the scheduler awaits it between slices, so the
             //GUI keeps repainting and Stop still answers while it runs (ADR 0007, ADR 0010)
@@ -963,6 +968,7 @@ function s68kDiagnosticToDiagnostic(error: S68kDiagnostic): Diagnostic {
         column: error.location.column + 1,
         lineIndex: error.location.line,
         message: error.message,
+        hint: error.hint,
         formatted: error.hint ? `${error.message}\n${error.hint}` : error.message
     }
 }

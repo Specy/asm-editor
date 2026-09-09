@@ -69,6 +69,7 @@
                 {showFlags}
                 {showPc}
                 {showConsole}
+                showScreen={false}
                 forceMemoryRight
             />
             <button class="try-in-editor" onclick={openInEditor}>

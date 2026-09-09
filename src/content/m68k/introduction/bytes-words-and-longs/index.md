@@ -68,26 +68,29 @@ what you want least often.
 |     `d3` | `AABBCCDE` |
 
 `AABB` survived all four of them. Write `.l` on every one of those lines and the whole register
-changes instead. A few instructions have no size at all, because there is only one thing they could
-mean: `lea` and `movea` always work on a long address, `swap` always on the two words of a register,
-`btst` and its family always on one bit, and the branches on nothing.
+changes instead. Some instructions only accept the size their encoding can mean: `lea.l`,
+`moveq.l`, `swap.w` and the word-sized multiply and divide instructions, for example. You may leave
+that one suffix off. The bit instructions accept `.b` for memory or `.l` for a data register, while a
+branch's `.s`/`.b`, `.w` or `.l` describes its displacement rather than an operand.
 
 ## moveq, the size that is not a size
 
-`moveq #n, dn` takes a number between -128 and 127, sign extends it to 32 bits, and writes **all**
-of `dn`. It exists because that is the common case and it fits in a shorter encoding on a real 68000.
+`moveq #n, dn` takes an encoded byte between -128 and 255, sign extends it to 32 bits, and writes
+**all** of `dn`. The spellings 128 through 255 have the same bit patterns as -128 through -1. It
+exists because that is the common case and it fits in a shorter encoding on a real 68000.
 
 ```m68k|playground|no-flags
     move.l #$AABBCCDD, d0
     move.b #-1, d0      ; a byte, so the three bytes above it stay
     move.l #$AABBCCDD, d1
     moveq #-1, d1       ; the whole register, sign extended
-    moveq #127, d2      ; the largest it takes
+    moveq #255, d2      ; another spelling of -1
     moveq #-128, d3     ; and the smallest
 ```
 
-`d0` comes out at `AABBCCFF` and `d1` at `FFFFFFFF`, from the same `-1`. `d2` is `0000007F` and `d3`
-is `FFFFFF80`. `moveq #128, d4` does not assemble, because 128 does not fit in a signed byte.
+`d0` comes out at `AABBCCFF`, while `d1` and `d2` are both `FFFFFFFF`: `-1` and `255` encode the same
+byte. `d3` is `FFFFFF80`. `moveq #256, d4` does not assemble because it does not fit in the encoded
+byte.
 
 ## Sign extension
 

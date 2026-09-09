@@ -82,8 +82,8 @@ export function detectAssemblyLanguage(code: string): AvailableLanguages {
     let z80Score = 0
 
     for (const mnemonic of mnemonics) {
-        // For M68K, also try stripping size suffix (.b, .w, .l)
-        const m68kMnemonic = mnemonic.replace(/\.[bwl]$/, '')
+        // M68K branches also accept `.s` as the short-displacement spelling.
+        const m68kMnemonic = mnemonic.replace(/\.[bswl]$/, '')
         if (m68kSet.has(m68kMnemonic)) m68kScore++
         if (mipsSet.has(mnemonic)) mipsScore++
         if (x86Set.has(mnemonic)) x86Score++

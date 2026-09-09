@@ -23,7 +23,7 @@ It runs until you press Stop. A frame costs about 61 instructions, so the defaul
 
 `easy68k/` holds three of EASy68K's own example programs, unchanged apart from their line endings. They are the compatibility reference of [ADR 0003](../../docs/adr/0003-preserve-simulator-graphics-conventions.md): what a task draws here is compared against what these draw in EASy68K itself.
 
-They do not assemble in this editor, and are not meant to. EASy68K's assembler has structured control statements (`if.l … endi`, `repeat … until`), `SIMHALT`, `END START` and `OPT`/`SECTION` directives that `@specy/s68k` does not implement, and they call trap tasks this editor rejects on purpose (sound, the hardware window, the mouse IRQ). `graphics-tour.x68` is the runnable port of `graphicSound.X68`, and `mouse-paint.x68` covers what `mouseWindowSize.X68` demonstrates about task 61.
+They are compatibility inputs rather than runnable examples. The assembler now accepts their `SIMHALT`, `END START`, `OPT` and `SECTION` directives; the remaining build errors identify the macros and structured-control statements (`if.l … endi`, `repeat … until`) that are deliberately not implemented. They also call simulator tasks this editor rejects at runtime on purpose (sound, the hardware window, the mouse IRQ). `graphics-tour.x68` is the runnable port of `graphicSound.X68`, and `mouse-paint.x68` covers what `mouseWindowSize.X68` demonstrates about task 61.
 
 | File                       | Author       | Demonstrates                                              |
 | -------------------------- | ------------ | --------------------------------------------------------- |

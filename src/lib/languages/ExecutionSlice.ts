@@ -50,13 +50,15 @@ export type ExecutionSliceRequest = {
  *
  * - `budget`: the slice ran out of instructions or time. Nothing is wrong, run the next slice.
  * - `breakpoint`: the Core stopped on one of the requested breakpoints.
+ * - `paused`: the program itself asked the Core to pause, as M68K's `simhalt` does.
  * - `terminated`: the program ended, normally or with an exception the adapter already reported.
  * - `limit`: the Core refused to continue because of a limit of its own.
  * - `wait`: the program asked for time to pass ([ADR 0010](../../../docs/adr/0010-program-time-without-clock-pacing.md)).
  *   The adapter puts the wait in `wait`; the scheduler awaits it through the execution generation so
  *   Stop cancels it, and then runs the next slice.
  */
-export type ExecutionSliceReason = 'budget' | 'breakpoint' | 'terminated' | 'limit' | 'wait'
+export type ExecutionSliceReason =
+    'budget' | 'breakpoint' | 'paused' | 'terminated' | 'limit' | 'wait'
 
 export type ExecutionSlice = {
     reason: ExecutionSliceReason

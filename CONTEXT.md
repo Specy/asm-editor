@@ -10,7 +10,11 @@ The language-specific engine that actually assembles and executes code (s68k's `
 
 ## Diagnostic
 
-A compile/check-time finding about the program's source, tagged `error`, `warning` or `suggestion`. Only `error`-severity diagnostics block compilation and disable Build; the others are reported (amber/info squiggles, listed above stdout) while the program still builds and runs. Distinct from the Emulator's runtime **errors**, which are strings produced while executing. Producers today: s68k, MIPS and RISC-V preserve their Core-supplied severity; x86 and Z80 report errors only (the x86 Core only parses its assembler logs when the assembler exits non-zero, discarding the severity marker it matched on, and `@specy/z80` returns one flat diagnostic list with no severity field).
+A compile/check-time finding about the program's source, tagged `error`, `warning` or `suggestion`. Only `error`-severity diagnostics block compilation and disable Build; the others are reported (amber/info squiggles, listed above stdout) while the program still builds and runs. A Core may supply a **Hint**, which is shown directly with the finding. Distinct from the Emulator's runtime **errors**, which are strings produced while executing. Producers today: s68k, MIPS and RISC-V preserve their Core-supplied severity; x86 and Z80 report errors only (the x86 Core only parses its assembler logs when the assembler exits non-zero, discarding the severity marker it matched on, and `@specy/z80` returns one flat diagnostic list with no severity field).
+
+## Hint
+
+Actionable help supplied with a **Diagnostic** so the learner knows how to correct the source or investigate it further. It is displayed directly after the finding rather than hidden behind another interaction.
 
 ## Interrupt
 

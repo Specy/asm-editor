@@ -6,11 +6,9 @@
     import { Prompt } from '$stores/promptStore.svelte'
     import { toast } from '$stores/toastStore'
     import { untrack } from 'svelte'
-    import { cubicOut } from 'svelte/easing'
     import { SvelteSet } from 'svelte/reactivity'
-    import { fly, type TransitionConfig } from 'svelte/transition'
+    import { fly } from 'svelte/transition'
     import FaAngleRight from '~icons/fa-solid/angle-right'
-    import FaBars from '~icons/fa-solid/bars'
     import FaDownload from '~icons/fa-solid/download'
     import FaFile from '~icons/fa-solid/file'
     import FaFlag from '~icons/fa-solid/flag'
@@ -21,6 +19,7 @@
     import FaTrash from '~icons/fa-solid/trash'
     import FaUpload from '~icons/fa-solid/upload'
     import FaTimes from '~icons/fa-solid/times'
+    import IcRoundViewSidebar from '~icons/ic/round-view-sidebar'
 
     type TreeNode = {
         path: string
@@ -72,15 +71,6 @@
     function basename(path: string): string {
         const parts = path.split('/')
         return parts[parts.length - 1] ?? path
-    }
-
-    function revealFromRight(_node: Element): TransitionConfig {
-        return {
-            duration: 320,
-            easing: cubicOut,
-            css: (progress) =>
-                `clip-path: inset(0 0 0 ${(1 - progress) * 100}% round 0.45rem); opacity: ${progress};`
-        }
     }
 
     function makeTreeRows(currentFiles: ProjectFiles, collapsed: ReadonlySet<string>): TreeRow[] {
@@ -235,154 +225,164 @@
         aria-label="Open Explorer"
         aria-expanded="false"
         onclick={() => (open = true)}
-        in:fly={{ x: 16, opacity: 0, duration: 200 }}
     >
-        <FaBars />
+        <IcRoundViewSidebar />
     </button>
 {/if}
 
 {#if open}
-    <aside class="file-sidebar" aria-label="Project Explorer" transition:revealFromRight>
-        <header class="explorer-heading">
-            <span>EXPLORER</span>
-            <button class="icon-action close" title="Close Explorer" onclick={() => (open = false)}>
-                <FaTimes />
-            </button>
-        </header>
-
-        <section class="explorer-section">
-            <div class="section-heading">
+    <div class="file-sidebar-viewport">
+        <aside
+            class="file-sidebar"
+            aria-label="Project Explorer"
+            in:fly={{ x: 320, opacity: 0, duration: 320 }}
+            out:fly={{ x: 320, opacity: 0, duration: 260 }}
+        >
+            <header class="explorer-heading">
+                <span>EXPLORER</span>
                 <button
-                    class="section-toggle"
-                    aria-expanded={projectExpanded}
-                    onclick={() => (projectExpanded = !projectExpanded)}
+                    class="icon-action close"
+                    title="Close Explorer"
+                    onclick={() => (open = false)}
                 >
-                    <span class="disclosure" class:expanded={projectExpanded}>
-                        <FaAngleRight />
-                    </span>
-                    <strong title={name}>{name.trim() || 'Project'}</strong>
+                    <FaTimes />
                 </button>
-                <div class="section-actions">
-                    <button
-                        class="icon-action"
-                        disabled={locked}
-                        title="New text file"
-                        onclick={createFile}
-                    >
-                        <FaPlus />
-                    </button>
-                    <FileImporter
-                        as="buffer"
-                        on:import={(event) => {
-                            if (event.detail.data instanceof ArrayBuffer) {
-                                void uploadFile(event.detail.file, event.detail.data)
-                            }
-                        }}
-                    >
-                        <button class="icon-action" disabled={locked} title="Upload file">
-                            <FaUpload />
-                        </button>
-                    </FileImporter>
-                    <button
-                        class="icon-action"
-                        disabled={directories.length === 0}
-                        title="Collapse folders"
-                        onclick={collapseAll}
-                    >
-                        <FaMinus />
-                    </button>
-                </div>
-            </div>
+            </header>
 
-            {#if projectExpanded}
-                {#if !files[entry]}
-                    <div class="entry-warning" title={entry}>Entry missing: {entry}</div>
-                {/if}
-                <div class="file-tree">
-                    {#if rows.length === 0}
-                        <div class="empty">This Project has no files.</div>
-                    {/if}
-                    {#each rows as row (row.directory ? `directory:${row.path}` : `file:${row.path}`)}
-                        {#if row.directory}
-                            <button
-                                class="tree-row directory"
-                                style:padding-left={`${0.35 + row.depth * 0.85}rem`}
-                                title={row.path}
-                                aria-expanded={row.expanded}
-                                onclick={() => toggleDirectory(row.path)}
-                            >
-                                <span class="disclosure" class:expanded={row.expanded}>
-                                    <FaAngleRight />
-                                </span>
-                                <span class="file-icon folder"><FaFolder /></span>
-                                <span class="ellipsis">{row.name}</span>
+            <section class="explorer-section">
+                <div class="section-heading">
+                    <button
+                        class="section-toggle"
+                        aria-expanded={projectExpanded}
+                        onclick={() => (projectExpanded = !projectExpanded)}
+                    >
+                        <span class="disclosure" class:expanded={projectExpanded}>
+                            <FaAngleRight />
+                        </span>
+                        <strong title={name}>{name.trim() || 'Project'}</strong>
+                    </button>
+                    <div class="section-actions">
+                        <button
+                            class="icon-action"
+                            disabled={locked}
+                            title="New text file"
+                            onclick={createFile}
+                        >
+                            <FaPlus />
+                        </button>
+                        <FileImporter
+                            as="buffer"
+                            on:import={(event) => {
+                                if (event.detail.data instanceof ArrayBuffer) {
+                                    void uploadFile(event.detail.file, event.detail.data)
+                                }
+                            }}
+                        >
+                            <button class="icon-action" disabled={locked} title="Upload file">
+                                <FaUpload />
                             </button>
-                        {:else}
-                            <div
-                                class="tree-row file"
-                                class:selected={row.path === selectedPath}
-                                class:entry={row.path === entry}
-                                class:binary={files[row.path]?.encoding === 'base64'}
-                                title={row.path}
-                            >
+                        </FileImporter>
+                        <button
+                            class="icon-action"
+                            disabled={directories.length === 0}
+                            title="Collapse folders"
+                            onclick={collapseAll}
+                        >
+                            <FaMinus />
+                        </button>
+                    </div>
+                </div>
+
+                {#if projectExpanded}
+                    {#if !files[entry]}
+                        <div class="entry-warning" title={entry}>Entry missing: {entry}</div>
+                    {/if}
+                    <div class="file-tree">
+                        {#if rows.length === 0}
+                            <div class="empty">This Project has no files.</div>
+                        {/if}
+                        {#each rows as row (row.directory ? `directory:${row.path}` : `file:${row.path}`)}
+                            {#if row.directory}
                                 <button
-                                    class="file-select"
+                                    class="tree-row directory"
                                     style:padding-left={`${0.35 + row.depth * 0.85}rem`}
-                                    onclick={() => onSelect(row.path)}
+                                    title={row.path}
+                                    aria-expanded={row.expanded}
+                                    onclick={() => toggleDirectory(row.path)}
                                 >
-                                    <span class="disclosure-spacer"></span>
-                                    <span class="file-icon"><FaFile /></span>
+                                    <span class="disclosure" class:expanded={row.expanded}>
+                                        <FaAngleRight />
+                                    </span>
+                                    <span class="file-icon folder"><FaFolder /></span>
                                     <span class="ellipsis">{row.name}</span>
-                                    {#if row.path === entry}
-                                        <span class="entry-mark" title="Project entry file"
-                                            >ENTRY</span
-                                        >
-                                    {/if}
                                 </button>
-                                <div class="row-actions">
-                                    {#if row.path !== entry}
+                            {:else}
+                                <div
+                                    class="tree-row file"
+                                    class:selected={row.path === selectedPath}
+                                    class:entry={row.path === entry}
+                                    class:binary={files[row.path]?.encoding === 'base64'}
+                                    title={row.path}
+                                >
+                                    <button
+                                        class="file-select"
+                                        style:padding-left={`${0.35 + row.depth * 0.85}rem`}
+                                        onclick={() => onSelect(row.path)}
+                                    >
+                                        <span class="disclosure-spacer"></span>
+                                        <span class="file-icon"><FaFile /></span>
+                                        <span class="ellipsis">{row.name}</span>
+                                        {#if row.path === entry}
+                                            <span class="entry-mark" title="Project entry file"
+                                                >ENTRY</span
+                                            >
+                                        {/if}
+                                    </button>
+                                    <div class="row-actions">
+                                        {#if row.path !== entry}
+                                            <button
+                                                disabled={locked}
+                                                title="Set as entry file"
+                                                onclick={() => onEntryChange(row.path)}
+                                            >
+                                                <FaFlag />
+                                            </button>
+                                        {/if}
+                                        <button
+                                            title="Download exact bytes"
+                                            onclick={() => downloadFile(row.path)}
+                                        >
+                                            <FaDownload />
+                                        </button>
                                         <button
                                             disabled={locked}
-                                            title="Set as entry file"
-                                            onclick={() => onEntryChange(row.path)}
+                                            title="Rename or move"
+                                            onclick={() => renameFile(row.path)}
                                         >
-                                            <FaFlag />
+                                            <FaPen />
                                         </button>
-                                    {/if}
-                                    <button
-                                        title="Download exact bytes"
-                                        onclick={() => downloadFile(row.path)}
-                                    >
-                                        <FaDownload />
-                                    </button>
-                                    <button
-                                        disabled={locked}
-                                        title="Rename or move"
-                                        onclick={() => renameFile(row.path)}
-                                    >
-                                        <FaPen />
-                                    </button>
-                                    <button
-                                        disabled={locked}
-                                        title="Delete"
-                                        onclick={() => deleteFile(row.path)}
-                                    >
-                                        <FaTrash />
-                                    </button>
+                                        <button
+                                            disabled={locked}
+                                            title="Delete"
+                                            onclick={() => deleteFile(row.path)}
+                                        >
+                                            <FaTrash />
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
-                        {/if}
-                    {/each}
-                </div>
-            {/if}
-        </section>
-    </aside>
+                            {/if}
+                        {/each}
+                    </div>
+                {/if}
+            </section>
+        </aside>
+    </div>
 {/if}
 
 <style lang="scss">
     .files-toggle {
         position: absolute;
-        z-index: 6;
+        z-index: 4;
         top: 0.55rem;
         right: 0.55rem;
         display: grid;
@@ -402,13 +402,22 @@
         }
     }
 
-    .file-sidebar {
+    .file-sidebar-viewport {
         position: absolute;
         z-index: 5;
-        inset: 0.2rem 0.2rem 0.2rem auto;
+        inset: 0.2rem;
+        overflow: clip;
+        border-radius: 0.45rem;
+        pointer-events: none;
+    }
+
+    .file-sidebar {
+        position: absolute;
+        inset: 0 0 0 auto;
         display: flex;
         flex-direction: column;
         width: min(19rem, calc(100% - 0.75rem));
+        height: 100%;
         min-height: 0;
         color: var(--secondary-text);
         overflow: hidden;
@@ -417,6 +426,7 @@
         border-radius: 0.45rem;
         box-shadow: -5px 0 18px rgb(0 0 0 / 0.3);
         backdrop-filter: blur(0.45rem);
+        pointer-events: auto;
     }
 
     .explorer-heading {
