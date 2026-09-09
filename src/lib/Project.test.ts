@@ -105,7 +105,7 @@ describe('normalizeProjectData', () => {
         expect(project.entry).toBe('main.m68k')
     })
 
-    it('keeps an entry that names a File and falls back when it does not', () => {
+    it('keeps an entry path even when it temporarily names no File', () => {
         const files = {
             'lib/util.z80': { encoding: 'plain', content: '' },
             'main.z80': { encoding: 'plain', content: 'halt' }
@@ -114,7 +114,7 @@ describe('normalizeProjectData', () => {
             'lib/util.z80'
         )
         expect(normalizeProjectData({ language: 'Z80', files, entry: 'gone.z80' }).entry).toBe(
-            'main.z80'
+            'gone.z80'
         )
         expect(
             normalizeProjectData({
@@ -133,16 +133,21 @@ describe('normalizeProjectData', () => {
         expect(project.files['main.z80']?.content).toBe('new')
     })
 
-    it('refuses an encoding it does not know instead of reading it as text', () => {
+    it('accepts canonical base64 and refuses an encoding it does not know', () => {
+        expect(
+            normalizeProjectData({
+                files: { 'data.bin': { encoding: 'base64', content: 'AAAA' } }
+            }).files['data.bin']
+        ).toEqual({ encoding: 'base64', content: 'AAAA' })
         expect(() =>
             normalizeProjectData({
-                files: { 'main.m68k': { encoding: 'base64', content: 'AAAA' } }
+                files: { 'main.m68k': { encoding: 'rot13', content: 'AAAA' } }
             })
         ).toThrow(ProjectFormatError)
     })
 
     it('refuses a path outside the rules', () => {
-        for (const path of ['../main.m68k', '/main.m68k', 'main', 'dir//main.m68k', 'a/./b.s']) {
+        for (const path of ['../main.m68k', '/main.m68k', 'dir//main.m68k', 'a/./b.s']) {
             expect(
                 () =>
                     normalizeProjectData({ files: { [path]: { encoding: 'plain', content: '' } } }),
@@ -160,14 +165,20 @@ describe('normalizeProjectData', () => {
 })
 
 describe('isValidFilePath', () => {
-    it('accepts relative paths with an extension, folders included', () => {
-        for (const path of ['main.m68k', 'src/lib/util.s', 'a.b.c', 'data/sprites.bin']) {
+    it('accepts canonical relative paths, including extensionless names and dotfiles', () => {
+        for (const path of [
+            'main.m68k',
+            'src/lib/util.s',
+            'README',
+            '.config',
+            'data/sprites.bin'
+        ]) {
             expect(isValidFilePath(path), path).toBe(true)
         }
     })
 
-    it('rejects absolute, dotted, empty and extensionless paths', () => {
-        for (const path of ['', '/x.s', 'x', '.x', 'x.', 'a/../x.s', 'a\\x.s', 'a//x.s']) {
+    it('rejects absolute, traversal, empty, backslash and control-character paths', () => {
+        for (const path of ['', '/x.s', 'a/../x.s', 'a\\x.s', 'a//x.s', 'bad\0name', '\ud800']) {
             expect(isValidFilePath(path), path).toBe(false)
         }
     })
@@ -196,10 +207,20 @@ describe('makeProject', () => {
         expect(project.settings).toEqual({ maxHistorySize: 3 })
     })
 
-    it('only lets the entry point at a File', () => {
+    it('allows the configured entry path to name a missing File', () => {
         const project = makeProject({ language: 'Z80', code: 'halt' })
-        expect(() => (project.entry = 'other.z80')).toThrow(ProjectFormatError)
-        expect(project.entry).toBe('main.z80')
+        project.entry = 'other.z80'
+        expect(project.entry).toBe('other.z80')
+    })
+
+    it('renders a binary Entry through Files without exposing it as editable code', () => {
+        const project = makeProject({
+            language: 'Z80',
+            files: { 'main.z80': { encoding: 'base64', content: '/w==' } },
+            entry: 'main.z80'
+        })
+        expect(project.code).toBe('')
+        expect(project.files['main.z80']).toEqual({ encoding: 'base64', content: '/w==' })
     })
 })
 

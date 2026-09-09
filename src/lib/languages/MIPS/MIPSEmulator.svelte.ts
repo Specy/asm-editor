@@ -23,6 +23,7 @@ import {
     type ExecutionStep,
     makeLabelColor,
     type MutationOperation,
+    type SourceBreakpoint,
     RegisterSize,
     type StackFrame
 } from '$lib/languages/commonLanguageFeatures.svelte'
@@ -40,10 +41,18 @@ import {
 } from '$lib/languages/mars/marsDisplay'
 import {
     applyScreenDirective,
+    ignoredIncludedScreenDiagnostics,
     readScreenLabelProbe,
     SCREEN_LABEL_PROBE_ADDRESS,
     screenLabelProbeSource
 } from '$lib/languages/mars/screenDirective'
+import {
+    sourceText,
+    textAssemblyFiles,
+    updateEntryText,
+    type BuildInput,
+    type BuildSources
+} from '$lib/projectFiles'
 
 export const MIPSNumericRegisterNames: readonly RegisterName[] = [
     '$zero',
@@ -108,8 +117,8 @@ const MIPS_CHUNK_TARGET_MS = 1
 const INVALID_CHARACTER_ERROR = 'Invalid character'
 const INVALID_NUMBER_ERROR = 'Invalid number'
 
-export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
-    return new AsmEditorMIPSEmulator(baseCode, options)
+export function MIPSEmulator(source: BuildInput, options: EmulatorSettings = {}) {
+    return new AsmEditorMIPSEmulator(source, options)
 }
 
 class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
@@ -135,9 +144,9 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
      */
     private currentExecution: ExecutionGeneration = this.executionController.capture()
 
-    constructor(code: string, options: EmulatorSettings) {
+    constructor(source: BuildInput, options: EmulatorSettings) {
         super(
-            code,
+            source,
             {
                 systemSize: RegisterSize.Long,
                 registerNames: [...MIPSRegisterNames],
@@ -200,23 +209,32 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
     }
 
     _canUndo(): boolean {
-        return this.mips?.canUndo ?? false
+        const mips = this.mips
+        if (!mips?.canUndo) return false
+        const step = mips.getUndoStack()[0]
+        return !step || (this.fileSystemSession?.canUndoAfter(step.pc) ?? true)
     }
 
-    _checkCode(code: string): Diagnostic[] {
+    _checkCode(sources: BuildSources): Diagnostic[] {
         //the same warnings the Build reports, so the squiggle on a `@screen` line is there while it
         //is being typed and does not vanish half a second after a Build replaces this list
-        const directive = this.readScreenDirective(code).diagnostics
-        const result = MIPS.makeMipsFromSource(code).assemble()
-        return [...directive, ...result.errors.map(assembleErrorToDiagnostic)]
+        const directive = this.readScreenDirective(sources).diagnostics
+        const files = textAssemblyFiles(sources)
+        const mips = MIPS.makeMipsFromFiles(files, sources.entry)
+        const result = mips.assemble()
+        return [
+            ...directive,
+            ...includedScreenDiagnostics(files, sources.entry, mips),
+            ...result.errors.map(assembleErrorToDiagnostic)
+        ]
     }
 
-    _compile(code: string, undoSize: number): CompileResult {
+    _compile(sources: BuildSources, undoSize: number): CompileResult {
         this.mips = null
         //before the Core is built, so the first instruction and a Testcase alike run on the display
         //the source asked for; the label probe assembles a throwaway Core, which the real assembly
         //below then supersedes on the singletons both of them share
-        const configured = this.readScreenDirective(code)
+        const configured = this.readScreenDirective(sources)
         this.display = configured.display
         this.displayOrigin = configured.origin
         this.displayBaseLabel = configured.baseLabel
@@ -224,7 +242,8 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         //a re-sync here would repaint the Screen `clear()` has just blanked with the last program's
         //memory — and a build that then fails never reaches `_initialize` to put it right again
         this.devices.resetScreen(this.display)
-        const mips = MIPS.makeMipsFromSource(code)
+        const files = textAssemblyFiles(sources)
+        const mips = MIPS.makeMipsFromFiles(files, sources.entry)
         //`assemble()` allocates the backstep ring buffer from the size that `setUndoSize` stored, so
         //the size has to be set *before* assembling: setting it afterwards would only size the next
         //compile's buffer (legacy ordering was setUndoSize -> assemble -> setUndoEnabled)
@@ -232,6 +251,7 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         const result = mips.assemble()
         const diagnostics = [
             ...configured.diagnostics,
+            ...includedScreenDiagnostics(files, sources.entry, mips),
             ...result.errors.map(assembleErrorToDiagnostic)
         ]
         //`hasErrors` only means "the collection is non-empty", and warnings share that collection,
@@ -282,10 +302,18 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
      * `normalizeMarsDisplay` also covers the semantic check the base constructor starts before this
      * subclass's fields exist, when there is no current display to layer onto yet.
      */
-    private readScreenDirective(code: string) {
-        return applyScreenDirective(code, normalizeMarsDisplay(this.display), (label) =>
-            this.resolveLabelAddress(code, label)
+    private readScreenDirective(sources: BuildSources) {
+        const code = sourceText(sources)
+        const configured = applyScreenDirective(code, normalizeMarsDisplay(this.display), (label) =>
+            this.resolveLabelAddress(sources, label)
         )
+        return {
+            ...configured,
+            diagnostics: configured.diagnostics.map((diagnostic) => ({
+                ...diagnostic,
+                file: sources.entry
+            }))
+        }
     }
 
     /**
@@ -294,9 +322,16 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
      * at a fixed address and that word is read back: the assembler itself resolves the name, which is
      * what makes `.eqv` names, forward references and text labels all work.
      */
-    private resolveLabelAddress(code: string, label: string): number | null {
+    private resolveLabelAddress(sources: BuildSources, label: string): number | null {
         try {
-            const probe = MIPS.makeMipsFromSource(screenLabelProbeSource(code, label))
+            const probeSources = updateEntryText(
+                sources,
+                screenLabelProbeSource(sourceText(sources), label)
+            )
+            const probe = MIPS.makeMipsFromFiles(
+                textAssemblyFiles(probeSources),
+                probeSources.entry
+            )
             const result = probe.assemble()
             //a program that does not assemble has no labels to resolve; its own errors are reported
             if (result.errors.some((error) => !error.isWarning)) return null
@@ -323,6 +358,7 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
                 name:
                     mips.getLabelAtAddress(address) ?? `0x${address.toString(16).padStart(8, '0')}`,
                 line: (this.statementAtAddress(address)?.sourceLine ?? 0) - 1,
+                file: this.statementAtAddress(address)?.sourcePath,
                 color: makeLabelColor(i, frame.sp)
             }
         })
@@ -332,13 +368,14 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         const mips = this.mips
         if (!mips) return { decorations: [], code: '' }
         // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Scratch map is populated and read locally with no tracked consumer.
-        const joined = new Map<number, JsProgramStatement[]>()
+        const joined = new Map<string, JsProgramStatement[]>()
         for (const statement of mips.getCompiledStatements()) {
-            const arr = joined.get(statement.sourceLine)
+            const key = `${statement.sourcePath}:${statement.sourceLine}`
+            const arr = joined.get(key)
             if (arr) {
                 arr.push(statement)
             } else {
-                joined.set(statement.sourceLine, [statement])
+                joined.set(key, [statement])
             }
         }
         const decorations: EmulatorDecoration[] = []
@@ -354,9 +391,14 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
             )
             decorations.push({
                 type: 'below-line',
+                file: original.sourcePath,
                 note: 'Assembled instructions',
                 belowLine: original.sourceLine,
-                md: `\`\`\`mips\n${lines.join('\n')}\n\`\`\``
+                md: `\`\`\`mips\n${lines.join('\n')}\n\`\`\``,
+                instructions: statements.map((statement) => ({
+                    address: BigInt(statement.address),
+                    code: formatStatement(statement.assemblyStatement)
+                }))
             })
         }
         //MIPS has no generated code panel, only the per-line expansion decorations
@@ -427,6 +469,7 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
                 old_ccr: { bits: 0 },
                 new_ccr: { bits: 0 },
                 line: (this.statementAtAddress(step.pc)?.sourceLine ?? 0) - 1,
+                file: this.statementAtAddress(step.pc)?.sourcePath,
                 mutations: [backstepToMutation(step)]
             }))
     }
@@ -479,7 +522,13 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
     }
 
     _undo(): void {
-        this.requireMips().undo()
+        const mips = this.requireMips()
+        const step = mips.getUndoStack()[0]
+        if (step && !(this.fileSystemSession?.canUndoAfter(step.pc) ?? true)) {
+            throw new Error('FileSystem Undo history exhausted')
+        }
+        mips.undo()
+        if (step) this.fileSystemSession?.undoAfter(step.pc)
     }
 
     /**
@@ -508,8 +557,15 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
                     //`simulate*` does not say whether the limit or a breakpoint stopped it; the line
                     //the program is about to execute does, because a run stopped on a breakpoint is
                     //parked on it
-                    const line = this._getNextInstruction()?.lineNumber ?? -1
-                    return line >= 0 && request.breakpoints.includes(line) ? 'breakpoint' : 'ran'
+                    const instruction = this._getNextInstruction()
+                    return instruction &&
+                        request.breakpoints.some(
+                            (breakpoint) =>
+                                breakpoint.file === instruction.file &&
+                                breakpoint.line === instruction.lineNumber
+                        )
+                        ? 'breakpoint'
+                        : 'ran'
                 }
             )
         } finally {
@@ -588,7 +644,14 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
 
     private makeHandlers(): HandlerMapFns {
         const terminal = this._peripherals.terminal
-        return {
+        const instructionOperation = <T>(operation: () => T): T => {
+            const files = this.fileSystemSession
+            if (!files) throw new Error('FileSystem is not running')
+            //MARS advances PC before it invokes a syscall handler; the Core's backstep record is
+            //keyed by the address of the syscall itself.
+            return files.performInstruction(this.requireMips().programCounter - 4, operation)
+        }
+        const handlers: HandlerMapFns = {
             readChar: () => this.readCharacter('ReadChar', READ_CHAR_QUESTION),
             readDouble: () => this.readNumber('ReadDouble', READ_DOUBLE_QUESTION),
             readFloat: () => this.readNumber('ReadFloat', READ_FLOAT_QUESTION),
@@ -617,10 +680,19 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
             stdOut: (buffer: number[]) => terminal.write(decodeBuffer(buffer)),
             stdErr: (buffer: number[]) => terminal.write(decodeBuffer(buffer)),
 
-            readFile: unimplementedHandler('readFile'),
-            writeFile: unimplementedHandler('writeFile'),
-            openFile: unimplementedHandler('openFile'),
-            closeFile: unimplementedHandler('closeFile'),
+            readFile: (descriptor, _destination, length) =>
+                (() => {
+                    const bytes = this.fileSystemSession!.read(descriptor, length)
+                    return [bytes.length === 0 ? -1 : bytes.length, mipsReadBuffer(bytes)]
+                })(),
+            writeFile: (descriptor, buffer) =>
+                void this.fileSystemSession!.write(descriptor, handlerBytes(buffer)),
+            openFile: (path, flags, append) =>
+                this.fileSystemSession!.open(
+                    path,
+                    flags === 0 ? 'read' : append ? 'append' : 'write'
+                ),
+            closeFile: (descriptor) => this.fileSystemSession!.close(descriptor),
             stdIn: unimplementedHandler('stdIn'),
 
             sleep: (milliseconds: number) => this.sleep(milliseconds),
@@ -628,6 +700,17 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
             //of a Testcase, which starts at zero so elapsed-time output is reproducible (ADR 0010)
             time: () => this._peripherals.clock.now()
         }
+        //The same syscall address can select a different service on a later iteration. Empty
+        //markers for non-file handlers keep an older File diff from being paired only by equal PC.
+        return Object.fromEntries(
+            Object.entries(handlers).map(([name, handler]) => [
+                name,
+                (...args: unknown[]) =>
+                    instructionOperation(() =>
+                        (handler as (...parameters: unknown[]) => unknown)(...args)
+                    )
+            ])
+        ) as HandlerMapFns
     }
 
     private statementAtAddress(address: number): JsProgramStatement | null {
@@ -662,7 +745,30 @@ function toHaltLimit(limit: number | undefined): number {
 }
 
 function decodeBuffer(buffer: number[]): string {
-    return new TextDecoder().decode(new Uint8Array(buffer))
+    return new TextDecoder().decode(handlerBytes(buffer))
+}
+
+/** TeaVM currently exposes a Java byte[] as either the promised array or one nested typed array. */
+function handlerBytes(buffer: unknown): Uint8Array {
+    const first = Array.isArray(buffer) && buffer.length === 1 ? buffer[0] : undefined
+    const value =
+        first && typeof first === 'object' && 'data' in first && ArrayBuffer.isView(first.data)
+            ? first.data
+            : Array.isArray(first) || ArrayBuffer.isView(first)
+              ? first
+              : buffer
+    if (ArrayBuffer.isView(value)) {
+        return new Uint8Array(value.buffer, value.byteOffset, value.byteLength).slice()
+    }
+    if (Array.isArray(value)) return Uint8Array.from(value, (byte) => Number(byte) & 0xff)
+    throw new Error('Core returned an invalid byte buffer')
+}
+
+/** @specy/mips 3.0 currently unboxes returned read bytes as TeaVM Byte objects. */
+function mipsReadBuffer(bytes: Uint8Array): number[] {
+    return Array.from(bytes, (byte) => ({
+        $byteValue: () => (byte > 0x7f ? byte - 0x100 : byte)
+    })) as unknown as number[]
 }
 
 function isMIPSNumericRegisterName(register: string): register is RegisterName {
@@ -680,15 +786,28 @@ function toNumericRegisterName(register: MIPSRegisterName): RegisterName {
     return register
 }
 
-function calculateBreakpoints(mips: JsMips, breakpoints: number[]): number[] {
-    return breakpoints
-        .map((line) => {
-            //`state.breakpoints` holds 0 based editor lines, the core indexes source lines from 1
-            const statement = mips.getStatementAtSourceLine(line + 1)
-            if (!statement) return -1
-            return statement.address
-        })
-        .filter((address) => address !== -1)
+function calculateBreakpoints(mips: JsMips, breakpoints: SourceBreakpoint[]): number[] {
+    return breakpoints.flatMap((breakpoint) =>
+        mips
+            .getStatementsAtSourceLocation(breakpoint.file, breakpoint.line + 1)
+            .map((statement) => statement.address)
+    )
+}
+
+function includedScreenDiagnostics(
+    files: Readonly<Record<string, string>>,
+    entry: string,
+    mips: JsMips
+): Diagnostic[] {
+    try {
+        return ignoredIncludedScreenDiagnostics(
+            files,
+            entry,
+            mips.getTokenizedLines().map((line) => line.sourcePath)
+        )
+    } catch {
+        return []
+    }
 }
 
 function toInstruction(statement: JsProgramStatement | null | undefined): Instruction | null {
@@ -696,6 +815,7 @@ function toInstruction(statement: JsProgramStatement | null | undefined): Instru
     return {
         address: BigInt(statement.address),
         lineNumber: statement.sourceLine - 1,
+        file: statement.sourcePath,
         code: statement.source
     }
 }
@@ -703,11 +823,12 @@ function toInstruction(statement: JsProgramStatement | null | undefined): Instru
 function assembleErrorToDiagnostic(error: MIPSAssembleError): Diagnostic {
     return {
         severity: error.isWarning ? 'warning' : 'error',
-        lineIndex: error.lineNumber - 1,
-        column: error.columnNumber,
+        file: error.sourcePath,
+        lineIndex: error.sourceLine - 1,
+        column: error.sourceColumn,
         line: {
             line: '',
-            line_index: error.lineNumber
+            line_index: error.sourceLine
         },
         message: error.message,
         formatted: error.message

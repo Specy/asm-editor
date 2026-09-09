@@ -52,6 +52,9 @@ class FakeEmulator extends GenericEmulator<object, FakeRegister> {
 
     constructor(options: EmulatorSettings = {}) {
         super('', { systemSize: RegisterSize.Long, registerNames: ['R0'] }, options)
+        // Scheduler tests exercise an already-built fake Core without paying the unrelated compile
+        // setup cost. Real adapters acquire this capability only after a successful Build.
+        this.state.canExecute = true
     }
 
     protected getInstance(): object | null {
@@ -372,7 +375,7 @@ describe('slice scheduling', () => {
         expect(emulator.requests.map((r) => r.speedCorrection)).toEqual([1, 1, 1])
     })
 
-    it('starts again from the adapters’ own estimates after a clear', async () => {
+    it('starts again from the adapters’ own estimates after a new Build', async () => {
         const time = controlledPerformanceTime()
         const emulator = new FakeEmulator()
         emulator.peripherals.screen.markPainted()
@@ -383,7 +386,7 @@ describe('slice scheduling', () => {
         }
         await emulator.run(1_000_000)
         expect(emulator.requests[1].speedCorrection).toBe(4)
-        emulator.clear()
+        await emulator.compile(0, '')
         emulator.behavior = () => ({ reason: 'terminated', instructions: 1 })
         await emulator.run(1_000_000)
         expect(emulator.requests[emulator.requests.length - 1].speedCorrection).toBe(1)
@@ -470,7 +473,11 @@ describe('pause', () => {
         }
         await emulator.run(1_000_000)
         await emulator.run(1_000_000)
-        expect(emulator.requests.map((r) => r.breakpoints)).toEqual([[7], [7], [7]])
+        expect(emulator.requests.map((r) => r.breakpoints)).toEqual([
+            [{ file: 'main', line: 7 }],
+            [{ file: 'main', line: 7 }],
+            [{ file: 'main', line: 7 }]
+        ])
         expect(emulator.requests.map((r) => r.speedCorrection)).toEqual([1, 4, 16])
     })
 

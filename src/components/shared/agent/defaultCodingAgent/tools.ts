@@ -38,7 +38,9 @@ function getLineCount(code: string) {
 }
 
 function getBreakpointLines(emulator: Emulator) {
-    return emulator.breakpoints.map((breakpoint: number) => breakpoint + 1)
+    return emulator.breakpoints
+        .filter((breakpoint) => breakpoint.file === emulator.currentFile)
+        .map((breakpoint) => breakpoint.line + 1)
 }
 
 function statusName(status: InterpreterStatus) {
@@ -80,12 +82,9 @@ function executionBlocker(emulator: Emulator, action: 'execute' | 'undo'): Execu
         }
     }
 
-    if (emulator.terminated) {
+    if (emulator.terminated && action === 'execute') {
         return {
-            error:
-                action === 'undo'
-                    ? 'Program has terminated. Recompile to restart before undoing.'
-                    : 'Program has already terminated.',
+            error: 'Program has already terminated.',
             retryable: true,
             nextAction: 'Call compile to reset execution state, then run or step again.'
         }
@@ -290,7 +289,12 @@ Each line is prefixed with its 1-based line number and a "B" marker when a break
             execute: async () =>
                 runAgentTool(async (toolRun) => {
                     const editorCode = context.getEditorCode()
-                    const breakpoints = new Set(context.getEmulator()?.breakpoints ?? [])
+                    const emulator = context.getEmulator()
+                    const breakpoints = new Set(
+                        (emulator?.breakpoints ?? [])
+                            .filter((breakpoint) => breakpoint.file === emulator?.currentFile)
+                            .map((breakpoint) => breakpoint.line)
+                    )
                     const lines = editorCode.split('\n').map((text, index) => {
                         const breakpointMarker = breakpoints.has(index) ? ' B' : '  '
                         return `${String(index + 1).padStart(4)}${breakpointMarker} | ${text}`
@@ -508,7 +512,11 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                     }
 
                     const lineCount = getLineCount(context.getEditorCode())
-                    const current = new Set(emulator.breakpoints)
+                    const current = new Set(
+                        emulator.breakpoints
+                            .filter((breakpoint) => breakpoint.file === emulator.currentFile)
+                            .map((breakpoint) => breakpoint.line)
+                    )
                     const added: number[] = []
                     const removed: number[] = []
                     const ignored: number[] = []
@@ -520,7 +528,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                             continue
                         }
                         if (!current.has(lineIndex)) {
-                            emulator.toggleBreakpoint(lineIndex)
+                            emulator.toggleBreakpoint(lineIndex, emulator.currentFile)
                             current.add(lineIndex)
                             added.push(line)
                         }
@@ -533,7 +541,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                             continue
                         }
                         if (current.has(lineIndex)) {
-                            emulator.toggleBreakpoint(lineIndex)
+                            emulator.toggleBreakpoint(lineIndex, emulator.currentFile)
                             current.delete(lineIndex)
                             removed.push(line)
                         }

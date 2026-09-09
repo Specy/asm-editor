@@ -9,23 +9,32 @@
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
     import { scale } from 'svelte/transition'
     import FileImporter from '$cmp/shared/fileImporter/FileImporter.svelte'
-    import { createShareLink, textDownloader } from '$lib/utils'
+    import { blobDownloader, createShareLink } from '$lib/utils'
     import FaUpload from '~icons/fa-solid/upload'
     import { toast } from '$stores/toastStore'
-    import { makeProjectFromExternal, projectContentEquals } from '$lib/Project.svelte'
+    import {
+        makeProjectFromExternal,
+        projectContentEquals,
+        type ExternalImport
+    } from '$lib/Project.svelte'
     import { Prompt } from '$stores/promptStore.svelte'
     import { goto } from '$app/navigation'
     import Page from '$cmp/shared/layout/Page.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
-    import { LANGUAGE_EXTENSIONS } from '$lib/Config'
     import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
     import { resolve } from '$app/paths'
+    import {
+        looksLikeZip,
+        makeProjectFromArchive,
+        projectArchiveName,
+        projectToArchive,
+        projectToSingleSource
+    } from '$lib/projectArchive'
 
     let hasFileHandleSupport = false
 
-    async function importFromText(text: string) {
+    async function importProject({ project, notice }: ExternalImport) {
         try {
-            const { project, notice } = makeProjectFromExternal(text)
             if (notice) toast.warn(notice, 8000)
             const existing = await ProjectStore.getProject(project.id)
             if (existing && !projectContentEquals(existing.toObject(), project.toObject())) {
@@ -59,16 +68,36 @@
         return undefined
     }
 
+    async function importFromData(data: ArrayBuffer, fileName: string) {
+        try {
+            const bytes = new Uint8Array(data)
+            const archiveName = /\.(?:asmproj|zip)$/i.test(fileName)
+            const imported =
+                looksLikeZip(bytes) || archiveName
+                    ? makeProjectFromArchive(bytes)
+                    : makeProjectFromExternal(new TextDecoder().decode(bytes))
+            return await importProject(imported)
+        } catch (e) {
+            console.error(e)
+            toast.error(e instanceof Error ? e.message : 'Failed to import project!')
+            return undefined
+        }
+    }
+
     async function importFromFileHandle(fileHandles: FileSystemFileHandle[]) {
         for (const fileHandle of fileHandles) {
             const blob = await fileHandle.getFile()
             // @ts-ignore -- File omits the nonstandard handle retained by the importer
             blob.handle = fileHandle
-            const text = await blob.text()
-            const importedProject = await importFromText(text)
+            const data = await blob.arrayBuffer()
+            const importedProject = await importFromData(data, blob.name)
             if (!importedProject) continue
             const id = importedProject.id
-            ProjectStore.setFileHandle(id, fileHandle)
+            ProjectStore.setFileHandle(
+                id,
+                fileHandle,
+                looksLikeZip(new Uint8Array(data)) ? 'archive' : 'legacy'
+            )
             const proj = await ProjectStore.getProject(id)
             if (!proj) continue
             ProjectStore.save(proj) //saves the new metadata to the file
@@ -76,6 +105,7 @@
     }
 
     onMount(() => {
+        hasFileHandleSupport = 'showOpenFilePicker' in window
         async function run() {
             await ProjectStore.load()
             try {
@@ -87,11 +117,15 @@
                             try {
                                 const blob = await file.getFile()
                                 blob.handle = file
-                                const text = await blob.text()
-                                const importedProject = await importFromText(text)
+                                const data = await blob.arrayBuffer()
+                                const importedProject = await importFromData(data, blob.name)
                                 if (!importedProject) continue
                                 lastId = importedProject.id
-                                ProjectStore.setFileHandle(lastId, file)
+                                ProjectStore.setFileHandle(
+                                    lastId,
+                                    file,
+                                    looksLikeZip(new Uint8Array(data)) ? 'archive' : 'legacy'
+                                )
                                 const proj = await ProjectStore.getProject(lastId)
                                 if (!proj) continue
                                 ProjectStore.save(proj) //saves the new metadata to the file
@@ -162,9 +196,12 @@
                     {:else}
                         <FileImporter
                             on:import={(e) => {
-                                importFromText(e.detail.data as string)
+                                if (e.detail.data instanceof ArrayBuffer) {
+                                    void importFromData(e.detail.data, e.detail.file.name)
+                                }
                             }}
-                            as="text"
+                            as="buffer"
+                            accept=".asmproj,.zip,text/*,.s68k,.asm,.x68,.mips,.riscv,.z80"
                         >
                             <Button cssVar="secondary">
                                 <Icon style="margin-right: 0.4rem" size={1}>
@@ -202,9 +239,27 @@
                                 toast.logPill('Copied to clipboard')
                             }}
                             on:download={(e) => {
-                                textDownloader(
-                                    e.detail.toExternal(),
-                                    `${(e.detail.name || 'Untitled project').split(' ').join('_')}.${LANGUAGE_EXTENSIONS[e.detail.language]}`
+                                const archive = projectToArchive(e.detail)
+                                blobDownloader(
+                                    new Blob([new Uint8Array(archive).buffer], {
+                                        type: 'application/zip'
+                                    }),
+                                    projectArchiveName(e.detail.name)
+                                )
+                            }}
+                            on:downloadSource={(e) => {
+                                const source = projectToSingleSource(e.detail)
+                                if (!source) {
+                                    toast.error(
+                                        'Only a single text Entry can be exported as source'
+                                    )
+                                    return
+                                }
+                                blobDownloader(
+                                    new Blob([source.bytes], {
+                                        type: 'text/plain;charset=utf-8'
+                                    }),
+                                    source.fileName
                                 )
                             }}
                         />

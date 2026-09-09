@@ -3,6 +3,7 @@ import type { MarsDisplayConfiguration, ProjectDisplay } from '$lib/languages/ma
 import type { InjectedPeripheralOptions } from '$lib/languages/peripherals/peripheralSet'
 import type { AvailableLanguages, Testcase, TestcaseResult } from '$lib/Project.svelte'
 import { unsignedBigIntToSigned } from '$lib/utils'
+import type { BuildInput, BuildSources } from '$lib/projectFiles'
 
 export type StatusRegister = {
     name: string
@@ -10,8 +11,10 @@ export type StatusRegister = {
     prev: number
 }
 export type DiagnosticSeverity = 'error' | 'warning' | 'suggestion'
+export type SourceBreakpoint = { file: string; line: number }
 
 type DiagnosticBase = {
+    file?: string
     lineIndex: number
     column: number
     line: {
@@ -37,6 +40,7 @@ export type StackFrame = {
     destination: bigint
     sp: bigint
     line: number
+    file?: string
     color: string
 }
 
@@ -190,6 +194,7 @@ export type ExecutionStep = {
         bits: number
     }
     line: number
+    file?: string
 }
 
 export type MutationOperation =
@@ -241,7 +246,10 @@ export type EmulatorDecoration = {
     type: 'below-line'
     note?: string
     belowLine: number
+    file?: string
     md: string
+    /** Generated instructions shown below one original source line, in assembly-address order. */
+    instructions?: { address: bigint; code: string }[]
 }
 
 export type EmulatorInterrupt = {
@@ -264,6 +272,7 @@ export type BaseEmulatorState = {
     latestSteps: ExecutionStep[]
     callStack: StackFrame[]
     line: number
+    currentFile: string
     executionTime: number
     sp: bigint
     pc: bigint
@@ -275,7 +284,7 @@ export type BaseEmulatorState = {
      * for Step, Undo or another Run, as after a breakpoint.
      */
     paused: boolean
-    breakpoints: number[]
+    breakpoints: SourceBreakpoint[]
     interrupt?: EmulatorInterrupt
     memory: {
         global: MemoryTab
@@ -290,6 +299,8 @@ export type BaseEmulatorState = {
  */
 export type BaseEmulatorDerivedState = {
     readonly compilerErrors: Diagnostic[]
+    /** Immutable Files and Entry used by the current executable, retained until Stop. */
+    readonly buildSources?: BuildSources
 }
 
 export enum InterpreterStatus {
@@ -368,18 +379,21 @@ export type EmulatorSettings = {
      * default when left out. Changed later with `setScreenHistoryBudgetMb`.
      */
     screenHistoryBudgetMb?: number
+    /** FileSystem inverse-history budget in megabytes, applied at Build. */
+    fileSystemHistoryBudgetMb?: number
 }
 
 export type BaseEmulatorActions = {
-    compile: (historySize: number, codeOverride?: string) => Promise<void>
+    compile: (historySize: number, sourceOverride?: BuildInput) => Promise<void>
     step: () => Promise<boolean>
     run: (haltLimit: number) => Promise<InterpreterStatus>
     setGlobalMemoryAddress: (address: bigint) => void
     setCode: (code: string) => void
+    setSources: (sources: BuildInput) => void
     check: () => Promise<Diagnostic[]>
     clear: () => void
     setTabMemoryAddress: (address: bigint, tabId: number) => void
-    toggleBreakpoint: (line: number) => void
+    toggleBreakpoint: (line: number, file?: string) => void
     undo: (amount?: number) => void
     /**
      * Ends the current Run at its next slice boundary, preserving the program and undo history.
@@ -389,12 +403,13 @@ export type BaseEmulatorActions = {
     resetSelectedLine: () => void
     dispose: () => void
     test: (
-        code: string,
+        sources: BuildInput,
         testcases: Testcase[],
         haltLimit: number,
         historySize?: number
     ) => Promise<TestcaseResult[]>
     getLineFromAddress: (address: bigint) => number
+    getSourceLocationFromAddress: (address: bigint) => { file: string; line: number } | null
     readMemoryBytes: (address: bigint, length: number) => Uint8Array
     /**
      * A new Screen undo budget, applied on the next clear, which is what a Build starts with: a

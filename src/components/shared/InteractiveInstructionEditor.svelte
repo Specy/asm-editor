@@ -216,7 +216,9 @@
             bind:editor
             bind:code
             codeOverride={emulator.compiledCode}
-            breakpoints={emulator.breakpoints}
+            breakpoints={emulator.breakpoints
+                .filter((breakpoint) => breakpoint.file === emulator.currentFile)
+                .map((breakpoint) => breakpoint.line)}
             diagnostics={emulator.compilerDiagnostics}
             {language}
             highlightedLine={emulator.line}

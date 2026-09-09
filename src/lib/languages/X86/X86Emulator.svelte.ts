@@ -34,6 +34,7 @@ import {
     type X86RegisterName
 } from '@specy/x86'
 import structuredClone from '@ungap/structured-clone'
+import { sourceText, type BuildInput, type BuildSources } from '$lib/projectFiles'
 
 /**
  * How many instructions Blink runs in a millisecond, used to turn a slice's time budget into a run
@@ -54,7 +55,7 @@ export const DEFAULT_X86_FLAGS = [
     { name: 'OF', value: 0 }
 ]
 
-export async function X86Emulator(code: string, options: EmulatorSettings = {}) {
+export async function X86Emulator(source: BuildInput, options: EmulatorSettings = {}) {
     let wrapper: AsmEditorX86Emulator | null = null
     const core = await createX86Emulator({
         mode: 'NASM_trunk',
@@ -63,7 +64,7 @@ export async function X86Emulator(code: string, options: EmulatorSettings = {}) 
             stderr: (charCode) => wrapper?.appendOutput(charCode)
         }
     })
-    wrapper = new AsmEditorX86Emulator(code, options, core)
+    wrapper = new AsmEditorX86Emulator(source, options, core)
     return wrapper
 }
 
@@ -73,9 +74,9 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     private compileQueue: Promise<void> = Promise.resolve()
     private checkCodeQueue: Promise<void> = Promise.resolve()
 
-    constructor(code: string, options: EmulatorSettings, core: CoreX86Emulator) {
+    constructor(source: BuildInput, options: EmulatorSettings, core: CoreX86Emulator) {
         super(
-            code,
+            source,
             {
                 systemSize: RegisterSize.Double,
                 registerNames: [...X86_REGISTER_NAMES],
@@ -102,9 +103,9 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return this.core ?? null
     }
 
-    async compile(historySize: number, codeOverride?: string): Promise<void> {
+    async compile(historySize: number, sourceOverride?: BuildInput): Promise<void> {
         const currentCompile = this.compileQueue.then(() =>
-            super.compile(historySize, codeOverride)
+            super.compile(historySize, sourceOverride)
         )
         this.compileQueue = currentCompile.catch(() => undefined)
         await currentCompile
@@ -114,23 +115,28 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return this.core?.canUndo() ?? false
     }
 
-    async _checkCode(code: string): Promise<Diagnostic[]> {
+    async _checkCode(sources: BuildSources): Promise<Diagnostic[]> {
+        const code = sourceText(sources)
         if (!this.core && !this.diagnosticCore) return []
         const currentCheck = this.checkCodeQueue.then(async () => {
             const checker = await this.getDiagnosticCore()
             const errors = await checker.checkCode(code)
-            return errors.map(mapCoreDiagnostic)
+            return errors.map((error) => ({ ...mapCoreDiagnostic(error), file: sources.entry }))
         })
         this.checkCodeQueue = currentCheck.catch(() => undefined).then(() => undefined)
         return currentCheck
     }
 
-    async _compile(code: string): Promise<CompileResult> {
+    async _compile(sources: BuildSources): Promise<CompileResult> {
+        const code = sourceText(sources)
         const result = await this.requireCore().compile(code)
         if (!('errors' in result)) return { ok: true }
         return {
             ok: false,
-            diagnostics: result.errors.map((error) => coreDiagnosticToDiagnostic(code, error)),
+            diagnostics: result.errors.map((error) => ({
+                ...coreDiagnosticToDiagnostic(code, error),
+                file: sources.entry
+            })),
             report: result.report
         }
     }
@@ -149,14 +155,16 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     }
 
     _getCallStack(): StackFrame[] {
-        return this.core?.getCallStack().map((frame) => ({ ...frame })) ?? []
+        const file = this.buildSources?.entry ?? this._sources.entry
+        return this.core?.getCallStack().map((frame) => ({ ...frame, file })) ?? []
     }
 
     _getCompiledCode(): { decorations: EmulatorDecoration[]; code: string } {
         if (!this.core) return { decorations: [], code: '' }
         const compiled = this.core.getCompiledCode()
+        const file = this.buildSources?.entry ?? this._sources.entry
         return {
-            decorations: compiled.decorations.map((decoration) => ({ ...decoration })),
+            decorations: compiled.decorations.map((decoration) => ({ ...decoration, file })),
             code: compiled.code
         }
     }
@@ -168,11 +176,17 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     }
 
     _getInstructionAt(address: bigint): Instruction | null {
-        return this.core?.getInstructionAt(address) ?? null
+        const instruction = this.core?.getInstructionAt(address)
+        return instruction
+            ? { ...instruction, file: this.buildSources?.entry ?? this._sources.entry }
+            : null
     }
 
     _getNextInstruction(): Instruction | null {
-        return this.core?.getNextInstruction() ?? null
+        const instruction = this.core?.getNextInstruction()
+        return instruction
+            ? { ...instruction, file: this.buildSources?.entry ?? this._sources.entry }
+            : null
     }
 
     _getPc(): bigint {
@@ -211,7 +225,11 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     }
 
     _getUndoHistory(max: number): ExecutionStep[] {
-        return this.core?.getUndoHistory(max).map(mapExecutionStep) ?? []
+        const file = this.buildSources?.entry ?? this._sources.entry
+        return (
+            this.core?.getUndoHistory(max).map((step) => ({ ...mapExecutionStep(step), file })) ??
+            []
+        )
     }
 
     _hasTerminated(): boolean {
@@ -237,13 +255,17 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
      */
     async _runSlice(request: ExecutionSliceRequest): Promise<ExecutionSlice> {
         const budget = sliceInstructionBudget(request, X86_INSTRUCTIONS_PER_MS)
-        const status = await this.runWithInput(budget, request.breakpoints)
+        const entry = this.buildSources?.entry ?? this._sources.entry
+        const breakpoints = request.breakpoints
+            .filter((breakpoint) => breakpoint.file === entry)
+            .map((breakpoint) => breakpoint.line)
+        const status = await this.runWithInput(budget, breakpoints)
         if (status === CoreEmulatorStatus.Running) {
             //still runnable: either the budget ran out or a breakpoint stopped it, and `run` does
             //not say which. The line the program is about to execute does: a run that stopped on a
             //breakpoint is parked on it
             const line = this._getNextInstruction()?.lineNumber ?? -1
-            const onBreakpoint = line >= 0 && request.breakpoints.includes(line)
+            const onBreakpoint = line >= 0 && breakpoints.includes(line)
             return { reason: onBreakpoint ? 'breakpoint' : 'budget', instructions: budget }
         }
         return { reason: 'terminated', instructions: budget }

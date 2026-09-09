@@ -7,6 +7,7 @@
         onMount,
         unmount
     } from 'svelte'
+    import { SvelteMap } from 'svelte/reactivity'
     import type monaco from 'monaco-editor'
     import type {
         AvailableLanguages,
@@ -21,6 +22,8 @@
         disabled?: boolean
         code: string
         codeOverride?: string
+        /** Keeps each Project File on its own Monaco model and therefore its own text Undo stack. */
+        modelKey?: string
         highlightedLine?: number
         hasError?: boolean
         language: AvailableLanguages | AvailableProgrammingLanguages
@@ -38,6 +41,7 @@
         disabled = false,
         code = $bindable(),
         codeOverride,
+        modelKey = 'default',
         highlightedLine = -1,
         hasError = false,
         language,
@@ -48,8 +52,11 @@
     }: Props = $props()
     let mockEditor: HTMLDivElement | null = $state(null)
     let monacoInstance: MonacoType | null = $state.raw(null)
+    let activeModelKey = $state('')
     let hoveredGliphen: number | null = $state(null)
     let destroyed = false
+    let applyingExternalValue = false
+    const models = new SvelteMap<string, monaco.editor.ITextModel>()
     const toDispose: (monaco.IDisposable | (() => void))[] = []
     const dispatcher = createEventDispatcher<{
         change: string
@@ -72,9 +79,15 @@
         const editorLanguage = language
         await Monaco.registerLanguage(editorLanguage)
         if (destroyed) return
+        const initialModel = loadedMonaco.editor.createModel(
+            codeOverride ?? code,
+            editorLanguage.toLowerCase()
+        )
+        initialModel.setEOL(0)
+        models.set(modelKey, initialModel)
+        activeModelKey = modelKey
         const mountedEditor = loadedMonaco.editor.create(editorElement, {
-            value: code,
-            language: editorLanguage.toLowerCase(),
+            model: initialModel,
             theme: 'custom-theme',
             minimap: { enabled: false },
             scrollbar: {
@@ -90,10 +103,6 @@
             cursorSmoothCaretAnimation: 'on'
         })
         editor = mountedEditor
-        const model = mountedEditor.getModel()
-        if (model) {
-            model.setEOL(0)
-        }
         const observer = new ResizeObserver(() => {
             if (!mockEditor) return
             const bounds = mockEditor.getBoundingClientRect()
@@ -124,43 +133,55 @@
             })
         )
         toDispose.push(() => observer.disconnect())
-        if (model) {
-            toDispose.push(
-                model.onDidChangeContent(() => {
-                    if (disabled) return
-                    code = mountedEditor.getValue()
-                    dispatcher('change', code)
-                })
-            )
-        }
+        toDispose.push(
+            mountedEditor.onDidChangeModelContent(() => {
+                if (disabled || applyingExternalValue) return
+                code = mountedEditor.getValue()
+                dispatcher('change', code)
+            })
+        )
     })
 
-    function setEditorValue(value: string) {
+    function setModelValue(model: monaco.editor.ITextModel, value: string) {
+        if (model.getValue() === value) return
+        applyingExternalValue = true
+        try {
+            //External changes are authoritative (for example, a running program writing a live
+            //File), so they start a fresh text Undo history instead of becoming an editor edit.
+            model.setValue(value)
+        } finally {
+            applyingExternalValue = false
+        }
+    }
+
+    function selectModel(key: string, value: string) {
         const currentEditor = editor
-        if (!currentEditor) return
-        const model = currentEditor.getModel()
-        if (!model) return
-        const fullRange = model.getFullModelRange()
-        currentEditor.executeEdits('external', [
-            {
-                range: fullRange,
-                text: value
+        const currentMonaco = monacoInstance
+        if (!currentEditor || !currentMonaco) return
+        let model = models.get(key)
+        if (!model) {
+            model = currentMonaco.editor.createModel(value, language.toLowerCase())
+            model.setEOL(0)
+            models.set(key, model)
+        } else {
+            setModelValue(model, value)
+        }
+        if (currentEditor.getModel() !== model) {
+            applyingExternalValue = true
+            try {
+                currentEditor.setModel(model)
+            } finally {
+                applyingExternalValue = false
             }
-        ])
+        }
+        activeModelKey = key
     }
 
     $effect(() => {
-        if (editor && code !== editor.getValue()) {
-            console.log('overridden editor code')
-            setEditorValue(code)
-        }
-        if (codeOverride) {
-            setEditorValue(codeOverride)
-        }
+        selectModel(modelKey, codeOverride ?? code)
     })
     onDestroy(() => {
         destroyed = true
-        const model = editor?.getModel()
 
         toDispose.forEach((disposable) => {
             if (typeof disposable === 'function') return disposable()
@@ -168,17 +189,21 @@
         })
         decorations?.clear()
         editor?.dispose()
-        model?.dispose()
+        for (const model of models.values()) model.dispose()
+        models.clear()
     })
 
     let decorations: monaco.editor.IEditorDecorationsCollection | undefined = $state.raw()
 
     $effect(() => {
-        decorations = editor?.createDecorationsCollection()
+        if (!activeModelKey) return
+        const collection = editor?.createDecorationsCollection()
+        decorations = collection
+        return () => collection?.clear()
     })
 
     $effect(() => {
-        if (editor && viewZones.length > 0) {
+        if (activeModelKey && editor && viewZones.length > 0) {
             const viewZoneEditor = editor
             let currentViewZones = [] as {
                 id: string
@@ -235,7 +260,7 @@
 
     $effect(() => {
         const currentMonaco = monacoInstance
-        if (editor && decorations && currentMonaco) {
+        if (activeModelKey && editor && decorations && currentMonaco) {
             decorations.set([
                 ...(highlightedLine >= 0
                     ? [
@@ -275,13 +300,13 @@
     })
 
     $effect(() => {
-        if (editor && highlightedLine > 0) {
+        if (activeModelKey && editor && highlightedLine > 0) {
             editor.revealLineInCenter(highlightedLine)
         }
     })
     $effect(() => {
         const currentMonaco = monacoInstance
-        if (editor && currentMonaco) {
+        if (activeModelKey && editor && currentMonaco) {
             const model = editor.getModel()
             if (!model) return
 

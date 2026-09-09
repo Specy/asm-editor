@@ -55,6 +55,52 @@ function pixelAt(emulator: Awaited<ReturnType<typeof run>>, x: number, y: number
     return (pixels[offset] << 16) | (pixels[offset + 1] << 8) | pixels[offset + 2]
 }
 
+describe('M68K Project Files', () => {
+    it('assembles included source with its own file identity', async () => {
+        const sources = {
+            entry: 'src/main.m68k',
+            files: {
+                'src/main.m68k': {
+                    encoding: 'plain' as const,
+                    content: '    org $1000\n    include "lib/helper.m68k"\n'
+                },
+                'src/lib/helper.m68k': {
+                    encoding: 'plain' as const,
+                    content: '    moveq #7,d0\n'
+                }
+            }
+        }
+        const emulator = M68KEmulator(sources)
+        await emulator.compile(0, sources)
+        expect(emulator.currentFile).toBe('src/lib/helper.m68k')
+        await emulator.step()
+        expect(registerOf(emulator, 'D0')).toBe(7n)
+        emulator.dispose()
+    })
+
+    it('incbin embeds exact UTF-8 bytes independently of their storage encoding', async () => {
+        for (const note of [
+            { encoding: 'plain' as const, content: 'è' },
+            { encoding: 'base64' as const, content: 'w6g=' }
+        ]) {
+            const sources = {
+                entry: 'main.m68k',
+                files: {
+                    'main.m68k': {
+                        encoding: 'plain' as const,
+                        content: '    org $1000\n    incbin "note.txt"\n'
+                    },
+                    'note.txt': note
+                }
+            }
+            const emulator = M68KEmulator(sources)
+            await emulator.compile(0, sources)
+            expect(emulator.readMemoryBytes(0x1000n, 2)).toEqual(new Uint8Array([0xc3, 0xa8]))
+            emulator.dispose()
+        }
+    })
+})
+
 function inkCount(emulator: Awaited<ReturnType<typeof run>>): number {
     const pixels = emulator.peripherals.screen.visiblePixels
     let ink = 0

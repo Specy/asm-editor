@@ -37,9 +37,10 @@ function staticRoutes() {
  * themselves load, so the two cannot disagree: `$content/<course>/<module>/<lecture>`.
  */
 function courseRoutes() {
-    const courses = Object.keys(import.meta.glob('/src/content/*/meta.json')).map(
-        (path) => `/learn/courses/${path.split('/').at(-2)}`
-    )
+    const courses = Object.keys(import.meta.glob('/src/content/*/meta.json')).map((path) => {
+        const parts = path.split('/')
+        return `/learn/courses/${parts[parts.length - 2]}`
+    })
     const lectures = Object.keys(import.meta.glob('/src/content/*/*/*/meta.json')).map((path) => {
         const [, , , course, module_, lecture] = path.split('/')
         return `/learn/courses/${course}/${module_}/${lecture}`

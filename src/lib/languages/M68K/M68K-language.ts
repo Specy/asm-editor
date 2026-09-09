@@ -199,9 +199,9 @@ export function createM68kHoverProvider(monaco: MonacoType): monaco.languages.Ho
             const range = new monaco.Range(position.lineNumber, 1, position.lineNumber, 1000)
 
             const line = model.getValueInRange(range).trim()
-            const parsed = S68k.lexOne(line).parsed
+            const parsed = S68k.parseLine(line)
             const word = model.getWordAtPosition(position)?.word
-            if (parsed.type === 'Instruction' || parsed.type === 'Directive') {
+            if (parsed.kind === 'instruction' || parsed.kind === 'directive') {
                 const documentation = word
                     ? getInstructionDocumentation(word.toLowerCase())
                     : undefined

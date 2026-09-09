@@ -45,6 +45,7 @@ import {
     Z80_STARTING_REGISTER_NAMES,
     type Z80RegisterName
 } from '$lib/languages/Z80/Z80-model'
+import { assemblyFiles, type BuildInput, type BuildSources } from '$lib/projectFiles'
 
 /**
  * The `RegisterSet` field behind each register the panel shows. The alternate registers are spelled
@@ -84,8 +85,8 @@ const CHUNK_TARGET_FRACTION = 1 / 4
 
 const NOT_INITIALIZED_ERROR = 'Interpreter not initialized'
 
-export function Z80Emulator(baseCode: string, options: EmulatorSettings = {}) {
-    return new AsmEditorZ80Emulator(baseCode, options)
+export function Z80Emulator(source: BuildInput, options: EmulatorSettings = {}) {
+    return new AsmEditorZ80Emulator(source, options)
 }
 
 class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> {
@@ -96,7 +97,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
     private screenInstructions: ScreenInstructionHistory | null = null
     /** Echo is drawn while an IN is suspended; commit it with that IN when it succeeds. */
     private pendingEchoBefore: number | null = null
-    private sourceLines: string[] = []
+    private sourceLines: Record<string, string[]> = {}
     /**
      * One past the last byte of every assembled segment. The Z80 has no "end of program": running
      * past the last instruction just executes whatever the RAM holds (zeroes decode as `nop`), so
@@ -111,9 +112,9 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
      */
     private lastInstructionAddress: number | null = null
 
-    constructor(code: string, options: EmulatorSettings) {
+    constructor(source: BuildInput, options: EmulatorSettings) {
         super(
-            code,
+            source,
             {
                 systemSize: RegisterSize.Word,
                 registerNames: [...Z80_REGISTER_NAMES],
@@ -171,20 +172,21 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         this.state.registers.find((register) => register.name === 'a')?.setSize(RegisterSize.Byte)
     }
 
-    _checkCode(code: string): Diagnostic[] {
+    _checkCode(sources: BuildSources): Diagnostic[] {
         //`check()` would do, but the macro attribution below needs the assembled lines, and the
         //assembler does the same work either way
-        return toDiagnostics(assemble(code), code.split('\n'))
+        const result = assemble(assemblyFiles(sources), { entryPathname: sources.entry })
+        return toDiagnostics(result, sourceLinesOf(sources))
     }
 
-    _compile(code: string): CompileResult {
+    _compile(sources: BuildSources): CompileResult {
         this.machine = null
         this.assembly = null
         this.sourceMap = null
         this.device = null
         this.cliffBreakpoints = []
-        this.sourceLines = code.split('\n')
-        const result = assemble(code)
+        this.sourceLines = sourceLinesOf(sources)
+        const result = assemble(assemblyFiles(sources), { entryPathname: sources.entry })
         const diagnostics = toDiagnostics(result, this.sourceLines)
         //the assembler has no warning concept: every diagnostic it produces is an error
         if (result.hasErrors()) {
@@ -476,7 +478,8 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         return {
             address,
             lineNumber: location.lineNumber,
-            code: this.sourceLines[location.lineNumber]?.trim() ?? ''
+            file: location.pathname,
+            code: this.sourceLines[location.pathname]?.[location.lineNumber]?.trim() ?? ''
         }
     }
 
@@ -496,6 +499,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
                 destination: BigInt(frame.callSiteAddress),
                 sp: BigInt(frame.stackAddress),
                 line: sourceMap.addressToLocation(frame.targetAddress)?.lineNumber ?? -1,
+                file: sourceMap.addressToLocation(frame.targetAddress)?.pathname,
                 color: makeLabelColor(i, frame.stackAddress)
             }))
     }
@@ -514,6 +518,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
             steps.push({
                 pc: record.address,
                 line: this.sourceMap?.addressToLocation(record.address)?.lineNumber ?? -1,
+                file: this.sourceMap?.addressToLocation(record.address)?.pathname,
                 old_ccr: { bits: record.stateBefore.regs.f },
                 new_ccr: { bits: after.f },
                 mutations: this.recordToMutations(record, after)
@@ -532,6 +537,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
             if (expanded.length === 0) continue
             decorations.push({
                 type: 'below-line',
+                file: line.fileInfo.pathname,
                 note: 'Expanded macro',
                 belowLine: line.lineNumber,
                 //shiki has no z80 grammar, `asm` is the closest thing that highlights mnemonics
@@ -692,12 +698,12 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
     }
 
     /** 0 based editor lines to the addresses they assembled to; a line with no code has none. */
-    private toBreakpointAddresses(lines: number[]): number[] {
+    private toBreakpointAddresses(lines: { file: string; line: number }[]): number[] {
         const sourceMap = this.sourceMap
         if (!sourceMap) return []
         const addresses: number[] = []
-        for (const line of lines) {
-            const address = sourceMap.locationToAddress(line)
+        for (const breakpoint of lines) {
+            const address = sourceMap.locationToAddress(breakpoint.line, breakpoint.file)
             if (address !== undefined) addresses.push(address)
         }
         return addresses
@@ -734,22 +740,34 @@ function toInstructionLimit(limit: number | undefined): number {
     return !limit || limit <= 0 ? Number.MAX_SAFE_INTEGER : limit
 }
 
-function toDiagnostics(result: AssemblyResult, sourceLines: string[]): Diagnostic[] {
+function toDiagnostics(
+    result: AssemblyResult,
+    sourceLines: Record<string, string[]>
+): Diagnostic[] {
     return result.diagnostics.map((diagnostic) => {
         const lineIndex = diagnostic.lineNumber ?? expansionLineOf(result, diagnostic.message) ?? 0
         return {
             severity: 'error',
+            file: diagnostic.pathname,
             lineIndex,
             //the assembler reports the offending line, not a column inside it
             column: 0,
             line: {
-                line: sourceLines[lineIndex] ?? '',
+                line: sourceLines[diagnostic.pathname]?.[lineIndex] ?? '',
                 line_index: lineIndex
             },
             message: diagnostic.message,
             formatted: diagnostic.message
         }
     })
+}
+
+function sourceLinesOf(sources: BuildSources): Record<string, string[]> {
+    return Object.fromEntries(
+        Object.entries(sources.files).flatMap(([path, file]) =>
+            file.encoding === 'plain' ? [[path, file.content.split('\n')]] : []
+        )
+    )
 }
 
 /**

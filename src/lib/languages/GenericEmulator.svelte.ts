@@ -40,6 +40,15 @@ import {
 import { ExecutionController, type ExecutionGeneration } from '$lib/languages/ExecutionController'
 import { Prompt } from '$stores/promptStore.svelte'
 import structuredClone from '@ungap/structured-clone'
+import {
+    normalizeBuildInput,
+    ProjectFormatError,
+    sourceText,
+    updateEntryText,
+    type BuildInput,
+    type BuildSources
+} from '$lib/projectFiles'
+import { FileSystem, type FileSystemSession } from '$lib/languages/peripherals/FileSystem'
 
 /**
  * How often the panels a user watches — registers, memory, the call stack, the undo history — are
@@ -56,7 +65,7 @@ export abstract class GenericEmulator<T, R extends string>
     implements BaseEmulatorActions, BaseEmulatorState
 {
     protected state: Omit<BaseEmulatorState, 'code' | 'stdOut'>
-    protected _code: string
+    protected _sources: BuildSources
     protected _emulatorOptions: Required<Omit<EmulatorSettings, 'peripherals' | 'display'>>
     protected readonly _peripherals: EmulatorPeripherals
     /**
@@ -88,13 +97,19 @@ export abstract class GenericEmulator<T, R extends string>
      */
     private pauseRequested = false
     private runInFlight = false
+    protected fileSystemSession: FileSystemSession | null = null
+    private _buildSources: BuildSources | undefined = $state()
     /** Number of core operations currently in flight, see `duringCoreOperation`. */
     private coreOperations = 0
     private coreOperationTail: Promise<void> = Promise.resolve()
     private coreIdleWaiters: (() => void)[] = []
     protected readonly executionController = new ExecutionController(() => Prompt.cancel())
 
-    constructor(code: string, options: EmulatorConfig<R>, emulatorOptions: EmulatorSettings = {}) {
+    constructor(
+        source: BuildInput,
+        options: EmulatorConfig<R>,
+        emulatorOptions: EmulatorSettings = {}
+    ) {
         super(options)
         this._emulatorOptions = {
             globalPageSize: emulatorOptions.globalPageSize ?? PAGE_SIZE,
@@ -106,9 +121,15 @@ export abstract class GenericEmulator<T, R extends string>
             language: emulatorOptions.language ?? 'M68K',
             screenHistoryBudgetMb:
                 emulatorOptions.screenHistoryBudgetMb ??
-                projectSettingDefault('screenHistoryBudgetMb', emulatorOptions.language ?? 'M68K')
+                projectSettingDefault('screenHistoryBudgetMb', emulatorOptions.language ?? 'M68K'),
+            fileSystemHistoryBudgetMb:
+                emulatorOptions.fileSystemHistoryBudgetMb ??
+                projectSettingDefault(
+                    'fileSystemHistoryBudgetMb',
+                    emulatorOptions.language ?? 'M68K'
+                )
         }
-        this._code = $state(code)
+        this._sources = $state(normalizeBuildInput(source))
         this._peripherals = {
             ...createInjectedPeripherals(
                 this._emulatorOptions.language,
@@ -126,6 +147,7 @@ export abstract class GenericEmulator<T, R extends string>
             pc: 0n,
             terminated: false,
             line: -1,
+            currentFile: this._sources.entry,
             decorations: [],
             statusRegisters: [],
             compilerDiagnostics: [],
@@ -255,17 +277,24 @@ export abstract class GenericEmulator<T, R extends string>
             //check that a newer one superseded in the meantime is dropped instead of assembling.
             await this.waitForIdleCore()
             if (checkId !== this.semanticCheckId) return []
-            const diagnostics = await this._checkCode(this._code)
+            //MARS and RARS keep part of their active machine in generated module globals. Running
+            //their checker while a built machine is retained would replace those globals. The
+            //Build diagnostics already describe the immutable Build snapshot, so expose those to
+            //explicit callers until Stop instead of silently reporting that the program is clean.
+            if (this.fileSystemSession) return this.state.compilerDiagnostics
+            const diagnostics = await this._checkCode($state.snapshot(this._sources))
             if (checkId !== this.semanticCheckId) return diagnostics
             this.state.compilerDiagnostics = diagnostics
             this.state.errors = []
             return diagnostics
         } catch (e) {
-            console.error(e)
+            if (!(e instanceof ProjectFormatError)) console.error(e)
             if (checkId !== this.semanticCheckId) return []
-            const error = this._stringifyError(e)
-            this.addError(error)
-            return [makeGenericDiagnostic(error)]
+            const error = e instanceof ProjectFormatError ? e.message : this._stringifyError(e)
+            const diagnostic = { ...makeGenericDiagnostic(error), file: this._sources.entry }
+            this.state.compilerDiagnostics = [diagnostic]
+            this.state.errors = []
+            return [diagnostic]
         }
     }
 
@@ -346,6 +375,26 @@ export abstract class GenericEmulator<T, R extends string>
         } catch (e) {
             console.error(e)
             return fallback
+        }
+    }
+
+    private selectInstruction(instruction: { file: string; lineNumber: number } | null): void {
+        this.state.line = instruction?.lineNumber ?? -1
+        if (instruction) this.state.currentFile = instruction.file
+    }
+
+    private selectLastExecuted(fallback = -1): void {
+        try {
+            const instruction = this._getLastInstruction?.()
+            if (instruction) {
+                this.selectInstruction(instruction)
+                return
+            }
+            const [step] = this._getUndoHistory(1)
+            this.state.line = step?.line ?? fallback
+            if (step?.file) this.state.currentFile = step.file
+        } catch {
+            this.state.line = fallback
         }
     }
 
@@ -432,6 +481,9 @@ export abstract class GenericEmulator<T, R extends string>
     // ----- public api ----- //
     clear(): void {
         this.executionController.invalidate()
+        this.fileSystemSession?.stop()
+        this.fileSystemSession = null
+        this._buildSources = undefined
         this.pauseRequested = false
         //a new program is a new speed, and the estimates in the adapters are where it starts again
         this.speedCorrection = 1
@@ -449,6 +501,7 @@ export abstract class GenericEmulator<T, R extends string>
             sp: 0n,
             decorations: [],
             line: -1,
+            currentFile: this._sources.entry,
             interrupt: undefined,
             errors: [],
             canUndo: false,
@@ -484,20 +537,29 @@ export abstract class GenericEmulator<T, R extends string>
         this.updateStatusRegisters()
     }
 
-    async compile(historySize: number, codeOverride: string | undefined): Promise<void> {
+    async compile(historySize: number, sourceOverride: BuildInput | undefined): Promise<void> {
         //Build must cancel an active run/input wait before queuing for its Core lock.
         if (this.coreOperations > 0) this.clear()
-        return this.duringCoreOperation(() => this.compileInternal(historySize, codeOverride))
+        return this.duringCoreOperation(() =>
+            this.compileInternal(historySize, sourceOverride, this._peripherals.fileSystem)
+        )
     }
 
     private async compileInternal(
         historySize: number,
-        codeOverride: string | undefined
+        sourceOverride: BuildInput | undefined,
+        fileSystem: FileSystem
     ): Promise<void> {
         this.clear()
         const execution = this.executionController.capture()
+        let entry = this._sources.entry
         try {
-            const result = await this._compile(codeOverride ?? this._code, historySize)
+            const sources =
+                sourceOverride === undefined
+                    ? $state.snapshot(this._sources)
+                    : normalizeBuildInput(sourceOverride)
+            entry = sources.entry
+            const result = await this._compile(sources, historySize)
             this.executionController.ensureCurrent(execution)
             if (!result.ok) {
                 this.state.compilerDiagnostics = result.diagnostics
@@ -508,10 +570,18 @@ export abstract class GenericEmulator<T, R extends string>
             //warnings the assembler emitted while succeeding are shown
             this.state.compilerDiagnostics = result.diagnostics ?? []
             this._initialize(historySize)
+            const megabytes = this._emulatorOptions.fileSystemHistoryBudgetMb
+            this.fileSystemSession = fileSystem.beginSession(
+                Number.isFinite(megabytes) && megabytes >= 0 ? megabytes * 1024 * 1024 : 0,
+                Number.isFinite(historySize) ? Math.max(0, Math.floor(historySize)) : 0
+            )
+            this._buildSources = sources
             this.addDecorations()
             this.state.canExecute = true
             this.state.canUndo = false
-            this.state.line = this._getNextInstruction()?.lineNumber ?? -1
+            const instruction = this._getNextInstruction()
+            this.state.line = instruction?.lineNumber ?? -1
+            this.state.currentFile = instruction?.file ?? sources.entry
             this.updateRegisters()
             this.positionStackTabOnCompile()
             this.updateMemory()
@@ -522,6 +592,12 @@ export abstract class GenericEmulator<T, R extends string>
             //assembler errors already live in state.compilerDiagnostics and are rendered from there,
             //pushing them into state.errors too would render the whole list twice
             if (e instanceof CompilationFailedError) throw e
+            if (e instanceof ProjectFormatError) {
+                const report = e.message
+                const diagnostic = { ...makeGenericDiagnostic(report), file: entry }
+                this.state.compilerDiagnostics = [diagnostic]
+                throw new CompilationFailedError(report, [diagnostic])
+            }
             this.addError(this._stringifyError(e))
             this.debouncer[1]()
             throw e
@@ -535,10 +611,14 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     getLineFromAddress(address: bigint): number {
-        if (!this.getInstance()) return -1
+        return this.getSourceLocationFromAddress(address)?.line ?? -1
+    }
+
+    getSourceLocationFromAddress(address: bigint): { file: string; line: number } | null {
+        if (!this.getInstance()) return null
         const statement = this._getInstructionAt(address)
-        if (!statement) return -1
-        return statement.lineNumber
+        if (!statement) return null
+        return { file: statement.file, line: statement.lineNumber }
     }
 
     resetSelectedLine(): void {
@@ -556,6 +636,7 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     async run(haltLimit: number): Promise<InterpreterStatus> {
+        if (!this.state.canExecute) return InterpreterStatus.Terminated
         const execution = this.executionController.capture()
         return this.duringCoreOperation(() =>
             this.executionController.isCurrent(execution)
@@ -730,9 +811,9 @@ export abstract class GenericEmulator<T, R extends string>
             const ins = this._getNextInstruction()
             //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
             if (!terminated) {
-                this.state.line = ins?.lineNumber ?? -1
+                this.selectInstruction(ins)
             } else {
-                this.state.line = this.getLastExecutedLine()
+                this.selectLastExecuted()
             }
         } catch {
             this.state.line = terminated ? this.getLastExecutedLine() : -1
@@ -770,19 +851,17 @@ export abstract class GenericEmulator<T, R extends string>
                 return InterpreterStatus.Terminated
             }
             console.error(e)
-            let line = -1
+            let instruction: { file: string; lineNumber: number } | null = null
             try {
                 //the failing instruction is the last one that was attempted, not the one after it
-                line =
-                    this._getLastInstruction?.()?.lineNumber ??
-                    this._getNextInstruction()?.lineNumber ??
-                    -1
+                instruction = this._getLastInstruction?.() ?? this._getNextInstruction()
             } catch (e) {
                 console.error(e)
             }
+            const line = instruction?.lineNumber ?? -1
             this.addError(this._stringifyError(e, line >= 0 ? line + 1 : undefined))
             this.state.terminated = true
-            this.state.line = line
+            this.selectInstruction(instruction)
         }
         return InterpreterStatus.TerminatedWithException
     }
@@ -790,7 +869,17 @@ export abstract class GenericEmulator<T, R extends string>
     protected debouncer = createDebouncer(500)
 
     setCode(code: string): void {
-        this._code = code
+        this._sources = updateEntryText(this._sources, code)
+        if (this.fileSystemSession) return
+        this.debouncer[0](() => void this.semanticCheck())
+    }
+
+    setSources(sources: BuildInput): void {
+        this._sources = normalizeBuildInput(sources)
+        //A guest may update live source while the debugger still owns a Core built from the old
+        //snapshot. MARS and RARS assembly mutates module globals used by that Core, so live checking
+        //resumes only after Stop.
+        if (this.fileSystemSession) return
         this.debouncer[0](() => void this.semanticCheck())
     }
 
@@ -903,6 +992,7 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     async step(): Promise<boolean> {
+        if (!this.state.canExecute) return false
         const execution = this.executionController.capture()
         return this.duringCoreOperation(() =>
             this.executionController.isCurrent(execution)
@@ -913,20 +1003,20 @@ export abstract class GenericEmulator<T, R extends string>
 
     private async stepInternal(): Promise<boolean> {
         this.state.paused = false
-        let lastLine = -1
+        let attemptedInstruction: { file: string; lineNumber: number } | null = null
         const execution = this.executionController.capture()
         try {
             if (!this.getInstance()) throw new Error('Interpreter not initialized')
-            lastLine = this._getNextInstruction()?.lineNumber ?? -1
+            attemptedInstruction = this._getNextInstruction()
             const result = await this._step()
             this.executionController.ensureCurrent(execution)
             this.state.terminated = result.terminated
             if (result.terminated) {
-                this.state.line = this.getLastExecutedLine(lastLine)
+                this.selectLastExecuted(attemptedInstruction?.lineNumber ?? -1)
             } else {
                 try {
                     const ins = this._getNextInstruction()
-                    this.state.line = ins?.lineNumber ?? -1
+                    this.selectInstruction(ins)
                 } catch {}
             }
 
@@ -936,9 +1026,13 @@ export abstract class GenericEmulator<T, R extends string>
         } catch (e) {
             if (!this.executionController.isCurrent(execution)) return false
             console.error(e)
-            this.addError(this._stringifyError(e, lastLine >= 0 ? lastLine + 1 : undefined))
+            try {
+                attemptedInstruction = this._getLastInstruction?.() ?? attemptedInstruction
+            } catch {}
+            const line = attemptedInstruction?.lineNumber ?? -1
+            this.addError(this._stringifyError(e, line >= 0 ? line + 1 : undefined))
             this.state.terminated = true
-            this.state.line = lastLine
+            this.selectInstruction(attemptedInstruction)
             throw e
         }
         this.refreshCoreViews()
@@ -988,6 +1082,7 @@ export abstract class GenericEmulator<T, R extends string>
             const ins = this._getNextInstruction()
             //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
             this.state.line = ins?.lineNumber ?? this.getLastExecutedLine()
+            if (ins) this.state.currentFile = ins.file
             this.state.canUndo = false
 
             this.updateRegisters()
@@ -1003,44 +1098,44 @@ export abstract class GenericEmulator<T, R extends string>
                 return InterpreterStatus.Terminated
             }
             console.error(e)
-            let line = -1
+            let instruction: { file: string; lineNumber: number } | null = null
             try {
                 //the failing instruction is the last one that was attempted, not the one after it
-                line =
-                    this._getLastInstruction?.()?.lineNumber ??
-                    this._getNextInstruction()?.lineNumber ??
-                    -1
+                instruction = this._getLastInstruction?.() ?? this._getNextInstruction()
             } catch (e) {
                 console.error(e)
             }
+            const line = instruction?.lineNumber ?? -1
             this.addError(this._stringifyError(e, line >= 0 ? line + 1 : undefined))
             this.state.terminated = true
-            this.state.line = line
+            this.selectInstruction(instruction)
         }
         return InterpreterStatus.TerminatedWithException
     }
 
-    async test(code: string, testcases: Testcase[], haltLimit: number, historySize = 0) {
+    async test(sources: BuildInput, testcases: Testcase[], haltLimit: number, historySize = 0) {
         //held across the whole loop: `validateTestcase` reads registers and memory back out of the
         //core between two runs, which a semantic check must not be able to slip into either
         return this.duringCoreOperation(() =>
-            this.testInternal(code, testcases, haltLimit, historySize)
+            this.testInternal(sources, testcases, haltLimit, historySize)
         )
     }
 
     private async testInternal(
-        code: string,
+        sources: BuildInput,
         testcases: Testcase[],
         haltLimit: number,
         historySize = 0
     ) {
         const terminal = this._peripherals.terminal
         const results: TestcaseResult[] = []
+        const snapshot = normalizeBuildInput(sources)
         for (const original of testcases) {
             const testcase = structuredClone($state.snapshot(original)) as Testcase
             try {
                 //The whole testcase loop already owns the Core operation lock.
-                await this.compileInternal(historySize, code)
+                const isolatedFileSystem = new FileSystem(snapshot.files)
+                await this.compileInternal(historySize, snapshot, isolatedFileSystem)
                 await this.runTestcaseInternal(testcase, haltLimit)
                 const errors = await this.validateTestcase(testcase)
                 results.push({
@@ -1051,6 +1146,9 @@ export abstract class GenericEmulator<T, R extends string>
             } catch (e) {
                 console.error(e)
                 this.addError(this._stringifyError(e))
+            } finally {
+                this.fileSystemSession?.stop()
+                this.fileSystemSession = null
             }
         }
         const passedTests = results.filter((r) => r.passed)
@@ -1066,18 +1164,28 @@ export abstract class GenericEmulator<T, R extends string>
             }
             terminal.write(`\n✅ ${passedTests.length} testcases passed \n`)
         }
+        if (testcases.length > 0) {
+            //The final Core remains readable for registers, memory, Screen and result reporting,
+            //but its isolated FileSystem session has been released. It is therefore a Test result,
+            //not an interactive Debug session that can be undone and resumed.
+            this._buildSources = undefined
+            this.state.canExecute = false
+            this.state.canUndo = false
+        }
         return results
     }
 
-    toggleBreakpoint(line: number): void {
-        const index = this.state.breakpoints.indexOf(line)
-        if (index === -1) this.state.breakpoints.push(line)
+    toggleBreakpoint(line: number, file = this._buildSources?.entry ?? this._sources.entry): void {
+        const index = this.state.breakpoints.findIndex(
+            (breakpoint) => breakpoint.line === line && breakpoint.file === file
+        )
+        if (index === -1) this.state.breakpoints.push({ file, line })
         else this.state.breakpoints.splice(index, 1)
     }
 
-    undo(amount: number | undefined): void {
+    undo(amount?: number): void {
         //Undo is synchronous. An unfinished step/run/input handler still owns the Core.
-        if (this.coreOperations > 0) return
+        if (this.coreOperations > 0 || !this.state.canExecute) return
         try {
             if (!this.getInstance()) return
             const undoCount = Math.max(0, Math.floor(amount ?? 1))
@@ -1092,7 +1200,7 @@ export abstract class GenericEmulator<T, R extends string>
             //a whole region and only the state it ends in is shown
             if (undone > 0) this._resyncScreenFromMemory?.()
             const instruction = this._getNextInstruction()
-            this.state.line = instruction?.lineNumber ?? -1
+            this.selectInstruction(instruction)
             this.state.canUndo = this.canUndoStep()
             this.state.terminated = this._hasTerminated()
             this.updateRegisters()
@@ -1148,6 +1256,10 @@ export abstract class GenericEmulator<T, R extends string>
         return this.state.compilerDiagnostics.filter((d) => d.severity === 'error')
     }
 
+    get buildSources() {
+        return this._buildSources
+    }
+
     get decorations() {
         return this.state.decorations
     }
@@ -1170,6 +1282,10 @@ export abstract class GenericEmulator<T, R extends string>
 
     get line() {
         return this.state.line
+    }
+
+    get currentFile() {
+        return this.state.currentFile
     }
 
     get memory() {
@@ -1213,7 +1329,11 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     get code() {
-        return this._code
+        try {
+            return sourceText(this._sources)
+        } catch {
+            return ''
+        }
     }
 
     get systemSize() {

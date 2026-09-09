@@ -11,6 +11,8 @@
  */
 
 /** What the Emulator asks an adapter to execute. */
+import type { SourceBreakpoint } from './commonLanguageFeatures.svelte'
+
 export type ExecutionSliceRequest = {
     /**
      * The most instructions this slice may execute: what is left of the run's overall limit. Always
@@ -24,7 +26,7 @@ export type ExecutionSliceRequest = {
      */
     timeBudgetMs: number
     /** The 0-based editor lines the run must stop on; the adapter maps them to addresses. */
-    breakpoints: number[]
+    breakpoints: SourceBreakpoint[]
     /**
      * The whole run's instruction limit, which `instructionBudget` counts down from. Only for what
      * an adapter tells the user: the M68K Core reports an exhausted limit by throwing an error that

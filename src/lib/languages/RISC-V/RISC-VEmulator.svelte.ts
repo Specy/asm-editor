@@ -26,6 +26,7 @@ import {
     type ExecutionStep,
     makeLabelColor,
     type MutationOperation,
+    type SourceBreakpoint,
     RegisterSize,
     type StackFrame
 } from '$lib/languages/commonLanguageFeatures.svelte'
@@ -43,10 +44,18 @@ import {
 } from '$lib/languages/mars/marsDisplay'
 import {
     applyScreenDirective,
+    ignoredIncludedScreenDiagnostics,
     readScreenLabelProbe,
     SCREEN_LABEL_PROBE_ADDRESS,
     screenLabelProbeSource
 } from '$lib/languages/mars/screenDirective'
+import {
+    sourceText,
+    textAssemblyFiles,
+    updateEntryText,
+    type BuildInput,
+    type BuildSources
+} from '$lib/projectFiles'
 
 export type RISCVRegisterName = RegisterName | 'pc'
 
@@ -83,8 +92,8 @@ const RISCV_CHUNK_TARGET_MS = 4
 const INVALID_CHARACTER_ERROR = 'Invalid character'
 const INVALID_NUMBER_ERROR = 'Invalid number'
 
-export function RISCVEmulator(baseCode: string, options: EmulatorSettings = {}) {
-    return new AsmEditorRISCVEmulator(baseCode, options)
+export function RISCVEmulator(source: BuildInput, options: EmulatorSettings = {}) {
+    return new AsmEditorRISCVEmulator(source, options)
 }
 
 class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName> {
@@ -110,9 +119,9 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
      */
     private currentExecution: ExecutionGeneration = this.executionController.capture()
 
-    constructor(code: string, options: EmulatorSettings) {
+    constructor(source: BuildInput, options: EmulatorSettings) {
         super(
-            code,
+            source,
             {
                 systemSize:
                     options.language === 'RISC-V-64' ? RegisterSize.Double : RegisterSize.Long,
@@ -186,26 +195,35 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
     }
 
     _canUndo(): boolean {
-        return this.riscv?.canUndo ?? false
+        const riscv = this.riscv
+        if (!riscv?.canUndo) return false
+        const step = riscv.getUndoStack()[0]
+        return !step || (this.fileSystemSession?.canUndoAfter(step.pc) ?? true)
     }
 
-    _checkCode(code: string): Diagnostic[] {
+    _checkCode(sources: BuildSources): Diagnostic[] {
         //the bitness decides which instructions assemble (`ld` is RV64 only), so pin the module
         //global before creating the throwaway instance, exactly like `_compile` does
         //the same warnings the Build reports, so the squiggle on a `@screen` line is there while it
         //is being typed and does not vanish half a second after a Build replaces this list
-        const directive = this.readScreenDirective(code).diagnostics
+        const directive = this.readScreenDirective(sources).diagnostics
         RISCV.setIs64Bit(this.is64Bit)
-        const result = RISCV.makeRiscVFromSource(code).assemble()
-        return [...directive, ...result.errors.map(assembleErrorToDiagnostic)]
+        const files = textAssemblyFiles(sources)
+        const riscv = RISCV.makeRiscVFromFiles(files, sources.entry)
+        const result = riscv.assemble()
+        return [
+            ...directive,
+            ...includedScreenDiagnostics(files, sources.entry, riscv),
+            ...result.errors.map(assembleErrorToDiagnostic)
+        ]
     }
 
-    _compile(code: string, undoSize: number): CompileResult {
+    _compile(sources: BuildSources, undoSize: number): CompileResult {
         this.riscv = null
         //before the Core is built, so the first instruction and a Testcase alike run on the display
         //the source asked for; the label probe assembles a throwaway Core, which the real assembly
         //below then supersedes on the singletons both of them share
-        const configured = this.readScreenDirective(code)
+        const configured = this.readScreenDirective(sources)
         this.display = configured.display
         this.displayOrigin = configured.origin
         this.displayBaseLabel = configured.baseLabel
@@ -216,7 +234,8 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         //creation + assembly is synchronous, so pinning the module global here cannot be
         //interleaved with another instance's creation
         RISCV.setIs64Bit(this.is64Bit)
-        const riscv = RISCV.makeRiscVFromSource(code)
+        const files = textAssemblyFiles(sources)
+        const riscv = RISCV.makeRiscVFromFiles(files, sources.entry)
         //`assemble()` allocates the backstep ring buffer from the size that `setUndoSize` stored, so
         //the size has to be set *before* assembling: setting it afterwards would only size the next
         //compile's buffer (legacy ordering was setUndoSize -> assemble -> setUndoEnabled)
@@ -224,6 +243,7 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         const result = riscv.assemble()
         const diagnostics = [
             ...configured.diagnostics,
+            ...includedScreenDiagnostics(files, sources.entry, riscv),
             ...result.errors.map(assembleErrorToDiagnostic)
         ]
         //`hasErrors` only means "the collection is non-empty", and warnings share that collection,
@@ -274,10 +294,18 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
      * `normalizeMarsDisplay` also covers the semantic check the base constructor starts before this
      * subclass's fields exist, when there is no current display to layer onto yet.
      */
-    private readScreenDirective(code: string) {
-        return applyScreenDirective(code, normalizeMarsDisplay(this.display), (label) =>
-            this.resolveLabelAddress(code, label)
+    private readScreenDirective(sources: BuildSources) {
+        const code = sourceText(sources)
+        const configured = applyScreenDirective(code, normalizeMarsDisplay(this.display), (label) =>
+            this.resolveLabelAddress(sources, label)
         )
+        return {
+            ...configured,
+            diagnostics: configured.diagnostics.map((diagnostic) => ({
+                ...diagnostic,
+                file: sources.entry
+            }))
+        }
     }
 
     /**
@@ -286,10 +314,17 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
      * at a fixed address and that word is read back: the assembler itself resolves the name, which is
      * what makes `.eqv` names, forward references and text labels all work.
      */
-    private resolveLabelAddress(code: string, label: string): number | null {
+    private resolveLabelAddress(sources: BuildSources, label: string): number | null {
         try {
             RISCV.setIs64Bit(this.is64Bit)
-            const probe = RISCV.makeRiscVFromSource(screenLabelProbeSource(code, label))
+            const probeSources = updateEntryText(
+                sources,
+                screenLabelProbeSource(sourceText(sources), label)
+            )
+            const probe = RISCV.makeRiscVFromFiles(
+                textAssemblyFiles(probeSources),
+                probeSources.entry
+            )
             const result = probe.assemble()
             //a program that does not assemble has no labels to resolve; its own errors are reported
             if (result.errors.some((error) => !error.isWarning)) return null
@@ -318,6 +353,7 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
                     riscv.getLabelAtAddress(address) ??
                     `0x${address.toString(16).padStart(8, '0')}`,
                 line: statement ? sourceLineToIndex(statement.sourceLine) : -1,
+                file: statement?.sourcePath,
                 color: makeLabelColor(i, frame.sp)
             }
         })
@@ -327,13 +363,14 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         const riscv = this.riscv
         if (!riscv) return { decorations: [], code: '' }
         // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Scratch map is populated and read locally with no tracked consumer.
-        const joined = new Map<number, JsProgramStatement[]>()
+        const joined = new Map<string, JsProgramStatement[]>()
         for (const statement of riscv.getCompiledStatements()) {
-            const arr = joined.get(statement.sourceLine)
+            const key = `${statement.sourcePath}:${statement.sourceLine}`
+            const arr = joined.get(key)
             if (arr) {
                 arr.push(statement)
             } else {
-                joined.set(statement.sourceLine, [statement])
+                joined.set(key, [statement])
             }
         }
         const decorations: EmulatorDecoration[] = []
@@ -349,9 +386,14 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
             )
             decorations.push({
                 type: 'below-line',
+                file: original.sourcePath,
                 note: 'Assembled instructions',
                 belowLine: original.sourceLine,
-                md: `\`\`\`riscv\n${lines.join('\n')}\n\`\`\``
+                md: `\`\`\`riscv\n${lines.join('\n')}\n\`\`\``,
+                instructions: statements.map((statement) => ({
+                    address: BigInt(statement.address),
+                    code: formatStatement(statement.assemblyStatement)
+                }))
             })
         }
         //RISC-V has no generated code panel, only the per-line expansion decorations
@@ -450,6 +492,7 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
                 old_ccr: { bits: 0 },
                 new_ccr: { bits: 0 },
                 line: statement ? sourceLineToIndex(statement.sourceLine) : -1,
+                file: statement?.sourcePath,
                 mutations: [mutation]
             })
         }
@@ -505,7 +548,13 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
     }
 
     _undo(): void {
-        this.requireRiscV().undo()
+        const riscv = this.requireRiscV()
+        const step = riscv.getUndoStack()[0]
+        if (step && !(this.fileSystemSession?.canUndoAfter(step.pc) ?? true)) {
+            throw new Error('FileSystem Undo history exhausted')
+        }
+        riscv.undo()
+        if (step) this.fileSystemSession?.undoAfter(step.pc)
     }
 
     /**
@@ -612,7 +661,14 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
 
     private makeHandlers(): HandlerMapFns {
         const terminal = this._peripherals.terminal
-        return {
+        const instructionOperation = <T>(operation: () => T): T => {
+            const files = this.fileSystemSession
+            if (!files) throw new Error('FileSystem is not running')
+            //RARS advances PC before it invokes an ecall handler; the Core's backstep record is
+            //keyed by the address of the ecall itself.
+            return files.performInstruction(this.requireRiscV().programCounter - 4, operation)
+        }
+        const handlers: HandlerMapFns = {
             readChar: () => this.readCharacter('ReadChar', READ_CHAR_QUESTION),
             readDouble: () => this.readNumber('ReadDouble', READ_DOUBLE_QUESTION),
             readFloat: () => this.readNumber('ReadFloat', READ_FLOAT_QUESTION),
@@ -641,10 +697,19 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
             stdOut: (buffer: number[]) => terminal.write(decodeBuffer(buffer)),
             stdErr: (buffer: number[]) => terminal.write(decodeBuffer(buffer)),
 
-            readFile: unimplementedHandler('readFile'),
-            writeFile: unimplementedHandler('writeFile'),
-            openFile: unimplementedHandler('openFile'),
-            closeFile: unimplementedHandler('closeFile'),
+            readFile: (descriptor, _destination, length) =>
+                (() => {
+                    const bytes = this.fileSystemSession!.read(descriptor, length)
+                    return [bytes.length === 0 ? -1 : bytes.length, Array.from(bytes)]
+                })(),
+            writeFile: (descriptor, buffer) =>
+                void this.fileSystemSession!.write(descriptor, handlerBytes(buffer)),
+            openFile: (path, flags, append) =>
+                this.fileSystemSession!.open(
+                    path,
+                    flags === 0 ? 'read' : append ? 'append' : 'write'
+                ),
+            closeFile: (descriptor) => this.fileSystemSession!.close(descriptor),
             stdIn: unimplementedHandler('stdIn'),
 
             sleep: (milliseconds: number) => this.sleep(milliseconds),
@@ -652,6 +717,17 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
             //of a Testcase, which starts at zero so elapsed-time output is reproducible (ADR 0010)
             time: () => this._peripherals.clock.now()
         }
+        //An ecall address may choose a different service on a later iteration. Empty markers for
+        //non-file handlers prevent PC equality from associating that instruction with an old diff.
+        return Object.fromEntries(
+            Object.entries(handlers).map(([name, handler]) => [
+                name,
+                (...args: unknown[]) =>
+                    instructionOperation(() =>
+                        (handler as (...parameters: unknown[]) => unknown)(...args)
+                    )
+            ])
+        ) as HandlerMapFns
     }
 
     private backstepToMutation(step: JsBackStep): MutationOperation | null {
@@ -761,7 +837,23 @@ function isTerminationStopReason(stopReason: StopReason): boolean {
 }
 
 function decodeBuffer(buffer: number[]): string {
-    return new TextDecoder().decode(new Uint8Array(buffer))
+    return new TextDecoder().decode(handlerBytes(buffer))
+}
+
+/** TeaVM currently exposes a Java byte[] as either the promised array or one nested typed array. */
+function handlerBytes(buffer: unknown): Uint8Array {
+    const first = Array.isArray(buffer) && buffer.length === 1 ? buffer[0] : undefined
+    const value =
+        first && typeof first === 'object' && 'data' in first && ArrayBuffer.isView(first.data)
+            ? first.data
+            : Array.isArray(first) || ArrayBuffer.isView(first)
+              ? first
+              : buffer
+    if (ArrayBuffer.isView(value)) {
+        return new Uint8Array(value.buffer, value.byteOffset, value.byteLength).slice()
+    }
+    if (Array.isArray(value)) return Uint8Array.from(value, (byte) => Number(byte) & 0xff)
+    throw new Error('Core returned an invalid byte buffer')
 }
 
 function isRISCVCoreRegisterName(register: string): register is RegisterName {
@@ -779,15 +871,28 @@ function toCoreRegisterName(register: RISCVRegisterName): RegisterName {
     return register
 }
 
-function calculateBreakpoints(riscv: JsRiscV, breakpoints: number[]): number[] {
-    return breakpoints
-        .map((line) => {
-            //`state.breakpoints` holds 0 based editor lines, the core indexes source lines from 1
-            const statement = riscv.getStatementAtSourceLine(line + 1)
-            if (!statement) return -1
-            return statement.address
-        })
-        .filter((address) => address !== -1)
+function calculateBreakpoints(riscv: JsRiscV, breakpoints: SourceBreakpoint[]): number[] {
+    return breakpoints.flatMap((breakpoint) =>
+        riscv
+            .getStatementsAtSourceLocation(breakpoint.file, breakpoint.line + 1)
+            .map((statement) => statement.address)
+    )
+}
+
+function includedScreenDiagnostics(
+    files: Readonly<Record<string, string>>,
+    entry: string,
+    riscv: JsRiscV
+): Diagnostic[] {
+    try {
+        return ignoredIncludedScreenDiagnostics(
+            files,
+            entry,
+            riscv.getTokenizedLines().map((line) => line.sourcePath)
+        )
+    } catch {
+        return []
+    }
 }
 
 function toInstruction(statement: JsProgramStatement | null | undefined): Instruction | null {
@@ -795,16 +900,18 @@ function toInstruction(statement: JsProgramStatement | null | undefined): Instru
     return {
         address: BigInt(statement.address),
         lineNumber: sourceLineToIndex(statement.sourceLine),
+        file: statement.sourcePath,
         code: statement.source
     }
 }
 
 function assembleErrorToDiagnostic(error: RISCVAssembleError): Diagnostic {
-    const lineIndex = sourceLineToIndex(error.lineNumber)
+    const lineIndex = sourceLineToIndex(error.sourceLine)
     return {
         severity: error.isWarning ? 'warning' : 'error',
+        file: error.sourcePath,
         lineIndex,
-        column: error.columnNumber,
+        column: error.sourceColumn,
         line: {
             line: '',
             line_index: lineIndex

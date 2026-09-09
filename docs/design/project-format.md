@@ -10,6 +10,8 @@ Design record of the interview held on 2026-09-07 for [#72](https://github.com/S
 
 Out of scope, deferred until multi-file editing is built: editing more than one File, a folder or zip export, binary Files, the drive peripheral, `#include` for the Z80 and `%include` for x86 (the Z80 Core already takes an in-memory file map; the x86 wrapper takes one string), inheritance of Settings between projects, per-project workspace layout.
 
+Implementation update on 2026-09-09: the [multiple-file FileSystem design](./multiple-file-compilation.md) now supplies multi-file editing, a custom overlay sidebar, lossless ZIP Project archives, binary persistence, Z80 includes, and the FileSystem Peripheral under the name adopted in the glossary. C compilation, x86 multi-file compilation/runtime access, guest file operations for M68K and Z80, and a permanent horizontal layout remain deferred.
+
 ## Agreed decisions
 
 ### The Project is a record ([ADR 0013](../adr/0013-project-is-a-record.md))
@@ -23,9 +25,15 @@ A Project is a record with typed parts: id, name, description, timestamps, langu
 - A new Project holds one File, `main.<ext>`, which is also the Entry file. Extensions are the ones the export uses today with one change: M68K becomes `m68k` (was `s68k`). Old `.s68k` exports still import; the importer reads the content, not the extension.
 - Nothing changes a Project's language after creation, so the Entry file's extension is fixed at creation.
 
+Update on 2026-09-08: the [multiple-file FileSystem design](./multiple-file-compilation.md) removes the filename-extension requirement and allows extensionless filenames and dotfiles. New Projects retain their `main.<ext>` default; the other canonical stored-path rules continue to apply.
+
+Implementation update on 2026-09-09: `base64` is now a recognized lossless storage representation for arbitrary File bytes. `plain` means valid UTF-8 text; consumers that require text reject invalid UTF-8 instead of exposing the base64 storage string.
+
 ### Entry file
 
 `entry` names the File a Build assembles first. Invariant: it is always a key of `files`. Today it is the only File. Later, choosing which File to build means changing `entry`, which is a different act from choosing which File the editor shows; the shown File is UI state and is not part of the format.
+
+Update on 2026-09-08: [ADR 0017](../adr/0017-entry-path-can-name-a-missing-file.md) revises the existence invariant. `entry` is the configured Entry path and may name a missing File after deletion or rename; subsequent Builds report that condition. Explicit Files maps, including empty ones, must retain their contents and Entry path through saving and loading. New Projects and legacy code-only migration still create their default source File.
 
 ### Settings and Preferences ([ADR 0014](../adr/0014-settings-split-by-effect.md))
 
@@ -33,6 +41,7 @@ A Project is a record with typed parts: id, name, description, timestamps, langu
 | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
 | Use decimal for registers                                                                                     | Maximum undo steps (sizes the Core's undo history at Build) |
 | Auto scroll the stack tab                                                                                     | Screen undo budget (sizes the Screen's journal)             |
+|                                                                                                               | FileSystem undo budget (sizes its inverse-diff journal)     |
 | Auto save                                                                                                     |                                                             |
 | Show pseudo instructions (MIPS only, editor view zones)                                                       |                                                             |
 | Show memory tab, Show screen (the Screen peripheral is injected either way; the setting only hides the panel) |                                                             |
@@ -53,6 +62,8 @@ Stays its own project field, outside Settings, because the program can state it 
 2. The program has no directive and the user changes a value beside the Screen: stored in the Project as today; no comment is inserted into the user's program.
 3. The user edits the directive by typing: applied at Build, as designed, so the Screen is configured before the first instruction and does not resize on every keystroke.
 
+Update accepted on 2026-09-08: in a multi-file Project, only the Entry file's `@screen` directive configures the display. Included directives are ignored with warnings, and display controls rewrite the Entry file rather than whichever File is displayed; the Debug session's file-write lock still applies. A base label may be defined in an included File. See the [multiple-file design](./multiple-file-compilation.md#accepted-screen-across-source-files).
+
 ### Saving
 
 One rule for every part of a Project (code, Settings, Testcases, Display configuration): a change is saved at once when autosave is on, otherwise it waits for Save, and the unsaved-changes prompt compares the whole Project, not only the code. Consequences: Testcase changes start triggering autosave; the display stops saving on its own when autosave is off, so a Build that reads a directive leaves the Project dirty until saved. A shared Project, which is nobody's yet, keeps its changes in memory until the user chooses to save it, as today.
@@ -64,6 +75,8 @@ One floating panel behind the cog, with a Preferences section and, when a Projec
 ### Serialization and migration
 
 - **IndexedDB:** Dexie version 2 with an upgrade that rewrites every stored project once: `code` becomes `files["main.<ext>"]` with the `plain` encoding, `entry` is set, `settings` starts empty (existing projects start from the defaults; their old global values are not carried over, which the changelog should say), everything else is kept. The normalizer used for imports and share links also runs on read as a cheap defence.
-- **Exported file:** a Project with one File still exports as one source file: the Entry file's text on top, the commented metadata block below at version 2, carrying `entry`, `settings` and any other Files. It stays a program that opens in EASy68K or MARS, and the File System Access handle keeps writing back to it. A Project with several Files has no single-file form (deferred, see Scope).
+- **Legacy exported file:** the source-plus-commented-metadata representation remains readable and is still used when writing back a linked, compatible single-text-file Project. It cannot losslessly represent every multi-file, binary, empty, or missing-Entry Project; the archive update below is the whole-project format.
 - **Import:** a version 1 file or a raw source goes through the same normalizer: `code` becomes `main.<ext>`, the Entry file, no decisions. A metadata version newer than the app knows imports the code only and says so in a toast, instead of silently dropping the metadata as today.
 - **Share links** carry the new shape; old links and legacy exam links go through the normalizer. The embed page (code and flags in the query string) and exam sections (starter code and testcases) are not Projects and do not change. Templates go into `main.<ext>`.
+
+Update accepted on 2026-09-08: new whole-project exports use a ZIP Project archive named `<project-name>.asmproj`, and the same valid archive can also be imported with a `.zip` extension. The archive contains a versioned `project.json` manifest and actual file bytes under `files/`, which is an archive-only prefix, not part of emulator paths. Individual-file downloads preserve the selected File's exact bytes; legacy raw-source and source-plus-metadata imports remain supported. See [ADR 0019](../adr/0019-zip-project-archives.md). A linked legacy source keeps write-back only while it represents a compatible single-text-file Project; otherwise writes to it stop and the user is offered an explicit `Save As .asmproj`, while ordinary browser saving continues. See the [accepted linked-file migration](./multiple-file-compilation.md#accepted-migrating-linked-local-source-files); the original assembly file is never silently replaced with an archive.

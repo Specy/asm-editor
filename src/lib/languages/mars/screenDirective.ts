@@ -69,6 +69,37 @@ const ENTRY_PATTERN = /^([A-Za-z][A-Za-z0-9_-]*)[ \t]*=[ \t]*([^\s,]+)/
 /** MARS's and RARS's label charset, which is what tells a label apart from a mistyped number. */
 const LABEL_PATTERN = /^[A-Za-z_.$][A-Za-z0-9_.$]*$/
 
+/** Warnings for directives reached through includes, which never configure the Project display. */
+export function ignoredIncludedScreenDiagnostics(
+    files: Readonly<Record<string, string>>,
+    entry: string,
+    includedPaths: Iterable<string>
+): Diagnostic[] {
+    const diagnostics: Diagnostic[] = []
+    for (const path of new Set(includedPaths)) {
+        if (path === entry) continue
+        const code = files[path]
+        if (code === undefined) continue
+        const lines = code.split('\n')
+        for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+            const lineText = lines[lineIndex] ?? ''
+            const match = DIRECTIVE_PATTERN.exec(lineText)
+            if (!match) continue
+            const column = match.index + match[0].indexOf('@') + 1
+            diagnostics.push({
+                ...makeWarning(
+                    lineIndex,
+                    column,
+                    lineText,
+                    `This @screen directive is ignored; only the Entry file ${entry} configures the display.`
+                ),
+                file: path
+            })
+        }
+    }
+    return diagnostics
+}
+
 /**
  * Reads the first `@screen` line of a program. A second one is reported and ignored, so that the
  * configuration a program applies is always the one a reader sees first.

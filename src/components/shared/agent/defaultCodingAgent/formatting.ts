@@ -173,7 +173,9 @@ export function formatEmulatorState(editorCode: string, emulator: Emulator) {
         terminated: emulator.terminated,
         currentInterrupt: emulator.interrupt,
         stdOut: emulator.stdOut,
-        breakpoints: emulator.breakpoints.map((breakpoint: number) => breakpoint + 1),
+        breakpoints: emulator.breakpoints
+            .filter((breakpoint) => breakpoint.file === emulator.currentFile)
+            .map((breakpoint) => breakpoint.line + 1),
         canExecute: emulator.canExecute,
         canUndo: emulator.canUndo,
         callStack: emulator.callStack.map((frame) => ({

@@ -5,6 +5,7 @@ import { ProgramClock } from './ProgramClock'
 import { SCREEN_CELL_8X16, SCREEN_CELL_8X8, type ScreenCellSize } from './screen/bitmapFont'
 import { Screen, type ScreenOptions } from './screen/Screen'
 import type { Terminal } from './Terminal.svelte'
+import { FileSystem } from './FileSystem'
 
 /**
  * The peripherals an Emulator owns besides its Terminal, injected at the Emulator boundary so the
@@ -22,6 +23,7 @@ export type InjectedPeripherals = {
     keyboard: Keyboard
     mouse: Mouse
     clock: ProgramClock
+    fileSystem: FileSystem
 }
 
 /** What a caller may hand an Emulator; anything it leaves out is built from the language defaults. */
@@ -74,5 +76,6 @@ export function createInjectedPeripherals(
     const keyboard = overrides.keyboard ?? new Keyboard()
     const mouse = overrides.mouse ?? new Mouse({ screen, keyboard })
     const clock = overrides.clock ?? new ProgramClock()
-    return { screen, keyboard, mouse, clock }
+    const fileSystem = overrides.fileSystem ?? new FileSystem()
+    return { screen, keyboard, mouse, clock, fileSystem }
 }

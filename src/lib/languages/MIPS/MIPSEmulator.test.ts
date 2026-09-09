@@ -14,6 +14,7 @@ import type { Testcase } from '$lib/Project.svelte'
 import { Keyboard } from '$lib/languages/peripherals/Keyboard'
 import { ProgramClock } from '$lib/languages/peripherals/ProgramClock'
 import { InterpreterStatus } from '$lib/languages/commonLanguageFeatures.svelte'
+import { FileSystem } from '$lib/languages/peripherals/FileSystem'
 
 /**
  * The MARS bitmap display and keyboard-and-display registers against the real Core under node: what
@@ -43,6 +44,7 @@ type Options = {
     /** A virtual clock, so an animated example's frame waits do not make the test sleep. */
     virtualClock?: boolean
     limit?: number
+    fileSystem?: FileSystem
 }
 
 async function build(code: string, options: Options = {}) {
@@ -51,7 +53,8 @@ async function build(code: string, options: Options = {}) {
         display: options.display ?? SMALL,
         peripherals: {
             keyboard,
-            clock: options.virtualClock ? new ProgramClock({ mode: 'virtual' }) : undefined
+            clock: options.virtualClock ? new ProgramClock({ mode: 'virtual' }) : undefined,
+            fileSystem: options.fileSystem
         }
     })
     //the constructor starts a semantic check, and `_checkCode` assembles a throwaway Core whose
@@ -98,6 +101,197 @@ const SCREEN_TESTCASE: Testcase = {
 }
 
 const EXIT = '        li      $v0, 10\n        syscall\n'
+
+describe('MIPS FileSystem', () => {
+    const WRITE_FILE = `
+        .data
+path:   .asciiz "output.txt"
+payload:.asciiz "hello"
+        .text
+main:
+        li      $v0, 13
+        la      $a0, path
+        li      $a1, 1
+        li      $a2, 0
+        syscall
+        move    $s0, $v0
+        li      $v0, 15
+        move    $a0, $s0
+        la      $a1, payload
+        li      $a2, 5
+        syscall
+        move    $a0, $s0
+        li      $v0, 16
+        syscall
+${EXIT}`
+
+    it('persists guest bytes, keeps the host locked through exit, and undoes the write', async () => {
+        const fileSystem = new FileSystem()
+        const emulator = await run(WRITE_FILE, { fileSystem })
+        expect(emulator.errors).toEqual([])
+        expect(fileSystem.readText('output.txt')).toBe('hello')
+        expect(fileSystem.locked).toBe(true)
+
+        for (let count = 0; count < 12 && fileSystem.readText('output.txt') === 'hello'; count++) {
+            emulator.undo(1)
+        }
+        expect(fileSystem.readText('output.txt')).toBe('')
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(fileSystem.readText('output.txt')).toBe('hello')
+        emulator.clear()
+        expect(fileSystem.locked).toBe(false)
+    })
+
+    it('keeps generated Files when Stop ends the session', async () => {
+        const fileSystem = new FileSystem()
+        const emulator = await run(WRITE_FILE, { fileSystem })
+        emulator.clear()
+        expect(fileSystem.locked).toBe(false)
+        expect(fileSystem.readText('output.txt')).toBe('hello')
+    })
+
+    it('lets a guest read exact bytes from a Project File', async () => {
+        const fileSystem = new FileSystem({
+            'input.txt': { encoding: 'plain', content: 'hello' }
+        })
+        const emulator = await run(
+            `
+        .data
+path:   .asciiz "input.txt"
+buffer: .space  5
+        .text
+main:
+        li      $v0, 13
+        la      $a0, path
+        li      $a1, 0
+        li      $a2, 0
+        syscall
+        move    $s0, $v0
+        li      $v0, 14
+        move    $a0, $s0
+        la      $a1, buffer
+        li      $a2, 5
+        syscall
+        lbu     $s1, 1($a1)
+        move    $a0, $s0
+        li      $v0, 16
+        syscall
+${EXIT}`,
+            { fileSystem }
+        )
+        expect(emulator.errors).toEqual([])
+        expect(emulator.registers.find((register) => register.name === '$s1')?.value).toBe(101n)
+    })
+
+    it('keeps Testcase file writes isolated and does not leave a resumable Core behind', async () => {
+        const fileSystem = new FileSystem()
+        const emulator = MIPSEmulator(WRITE_FILE, { peripherals: { fileSystem } })
+        const results = await emulator.test(
+            WRITE_FILE,
+            [SCREEN_TESTCASE, SCREEN_TESTCASE],
+            INSTRUCTION_LIMIT,
+            200
+        )
+        expect(results).toHaveLength(2)
+        expect(results.every((result) => result.passed)).toBe(true)
+        expect(fileSystem.files['output.txt']).toBeUndefined()
+        expect(fileSystem.locked).toBe(false)
+        expect(emulator.canExecute).toBe(false)
+        expect(await emulator.step()).toBe(false)
+    })
+})
+
+describe('MIPS source set', () => {
+    it('assembles included Files and retains their source identity', async () => {
+        const sources = {
+            entry: 'main.s',
+            files: {
+                'main.s': { encoding: 'plain' as const, content: '.include "lib.s"\n' },
+                'lib.s': {
+                    encoding: 'plain' as const,
+                    content: '.text\nmain:\nli $s0, 7\nli $v0, 10\nsyscall\n'
+                }
+            }
+        }
+        const emulator = MIPSEmulator(sources)
+        await emulator.check()
+        await emulator.compile(20, sources)
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.registers.find((register) => register.name === '$s0')?.value).toBe(7n)
+        expect(emulator.currentFile).toBe('lib.s')
+    })
+
+    it('warns on an included @screen directive without applying it', async () => {
+        const sources = {
+            entry: 'main.s',
+            files: {
+                'main.s': { encoding: 'plain' as const, content: '.include "lib.s"\n' },
+                'lib.s': {
+                    encoding: 'plain' as const,
+                    content: '# @screen width=128\n.text\nmain:\nli $v0, 10\nsyscall\n'
+                },
+                'unused.s': {
+                    encoding: 'plain' as const,
+                    content: '# @screen width=256\n'
+                }
+            }
+        }
+        const emulator = MIPSEmulator(sources, { display: SMALL })
+        await emulator.check()
+        await emulator.compile(20, sources)
+        expect(emulator.getDisplay?.()?.display.width).toBe(SMALL.width)
+        expect(emulator.compilerDiagnostics).toMatchObject([
+            { severity: 'warning', file: 'lib.s', lineIndex: 0 }
+        ])
+        expect(emulator.compilerDiagnostics[0]?.message).toContain('only the Entry file main.s')
+        expect(
+            emulator.compilerDiagnostics.some((diagnostic) => diagnostic.file === 'unused.s')
+        ).toBe(false)
+    })
+
+    it('keeps every repeated-include instruction and address in its inline expansion', async () => {
+        const sources = {
+            entry: 'main.s',
+            files: {
+                'main.s': {
+                    encoding: 'plain' as const,
+                    content: '.text\nmain:\n.include "increment.s"\n.include "increment.s"\n' + EXIT
+                },
+                'increment.s': {
+                    encoding: 'plain' as const,
+                    content: 'addiu $s0, $s0, 1\n'
+                }
+            }
+        }
+        const emulator = MIPSEmulator(sources)
+        await emulator.check()
+        await emulator.compile(20, sources)
+        const expansion = emulator.decorations.find(
+            (decoration) => decoration.file === 'increment.s'
+        )
+        expect(expansion?.instructions).toHaveLength(2)
+        expect(
+            new Set(expansion?.instructions?.map((instruction) => instruction.address)).size
+        ).toBe(2)
+    })
+
+    it('reports a missing Entry as a file-aware compiler diagnostic', async () => {
+        const sources = {
+            entry: 'missing.s',
+            files: { 'other.s': { encoding: 'plain' as const, content: EXIT } }
+        }
+        const emulator = MIPSEmulator(sources)
+        const diagnostics = await emulator.check()
+        expect(diagnostics).toMatchObject([
+            { severity: 'error', file: 'missing.s', message: 'Entry file not found: missing.s' }
+        ])
+        await expect(emulator.compile(20, sources)).rejects.toThrow(
+            'Entry file not found: missing.s'
+        )
+        expect(emulator.compilerErrors[0]?.file).toBe('missing.s')
+    })
+})
 
 describe('MIPS bitmap display', () => {
     it('maps one word to one logical pixel, low 24 bits as the color', async () => {

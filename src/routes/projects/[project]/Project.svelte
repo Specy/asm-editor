@@ -3,9 +3,14 @@
     import Button from '$cmp/shared/button/Button.svelte'
     import MemoryVisualiser from '$cmp/specific/project/memory/MemoryRenderer.svelte'
     import FaAngleLeft from '~icons/fa-solid/angle-left'
-    import { createEventDispatcher, onMount, type Snippet, untrack } from 'svelte'
+    import { createEventDispatcher, onMount, tick, type Snippet, untrack } from 'svelte'
     import FaKeyboard from '~icons/fa-solid/keyboard'
-    import type { AvailableLanguages, Testcase, TestcaseResult } from '$lib/Project.svelte'
+    import type {
+        AvailableLanguages,
+        ProjectFiles,
+        Testcase,
+        TestcaseResult
+    } from '$lib/Project.svelte'
     import FaSave from '~icons/fa-solid/save'
     import FaCog from '~icons/fa-solid/cog'
     import Icon from '$cmp/shared/layout/Icon.svelte'
@@ -41,7 +46,8 @@
     import {
         makeColorizedLabels,
         makeRegister,
-        RegisterSize
+        RegisterSize,
+        type Diagnostic
     } from '$lib/languages/commonLanguageFeatures.svelte'
     import { type Emulator } from '$lib/languages/Emulator'
     import BelowLineContent from '$cmp/specific/project/user-tools/BelowLineContent.svelte'
@@ -60,11 +66,17 @@
         normalizeMarsDisplay,
         type ProjectDisplay
     } from '$lib/languages/mars/marsDisplay'
+    import type { FileSystem } from '$lib/languages/peripherals/FileSystem'
+    import type { BuildInput, ProjectFile } from '$lib/projectFiles'
+    import FileSidebar from '$cmp/specific/project/FileSidebar.svelte'
 
     interface Props {
         name?: string
         language?: AvailableLanguages
         code?: string
+        files?: ProjectFiles
+        entry?: string
+        fileSystem?: FileSystem
         testcases?: Testcase[]
         /** MIPS and RISC-V only: MARS's five bitmap-display parameters, saved with the project. */
         display?: ProjectDisplay
@@ -84,6 +96,9 @@
         name = 'Untitled',
         language = 'M68K',
         code = $bindable(''),
+        files = $bindable(undefined as ProjectFiles | undefined),
+        entry = $bindable(undefined as string | undefined),
+        fileSystem,
         testcases = $bindable([] as Testcase[]),
         display = $bindable(undefined as ProjectDisplay | undefined),
         settings = $bindable(undefined as ProjectSettingsDecisions | undefined),
@@ -97,6 +112,49 @@
     const testcasesEditable = $derived(canEditTestcases && !readonly)
     /** The values a Build and a Test run with: the decisions, the language's defaults elsewhere. */
     const effectiveSettings = $derived(resolveProjectSettings(language, settings))
+    const sourceInput = $derived.by<BuildInput>(() =>
+        files !== undefined && entry !== undefined ? { files: $state.snapshot(files), entry } : code
+    )
+    const hasProjectFiles = $derived(
+        files !== undefined && entry !== undefined && fileSystem !== undefined
+    )
+    let fileSystemLocked = $state(false)
+    let displayedPath = $state(entry ?? Object.keys(files ?? {})[0] ?? '')
+    let sourceView: 'live' | 'snapshot' = $state('live')
+    let fileSidebarOpen = $state(false)
+    let buildGeneration = $state(0)
+    let previousBuildSources = $state.raw(emulator.buildSources)
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- identities intentionally survive reactive File-map replacement.
+    const liveModelIds = new Map<string, string>()
+    let nextLiveModelId = 0
+
+    const displayedFile = $derived.by<ProjectFile | undefined>(() => {
+        if (!hasProjectFiles) return { encoding: 'plain', content: code }
+        return sourceView === 'snapshot'
+            ? emulator.buildSources?.files[displayedPath]
+            : files?.[displayedPath]
+    })
+    const displayedCode = $derived(displayedFile?.encoding === 'plain' ? displayedFile.content : '')
+    const displayedLanguage = $derived(
+        /\.(?:c|h)$/i.test(displayedPath) ? ('c' as const) : language
+    )
+    const displayedModelKey = $derived.by(() => {
+        if (!hasProjectFiles) return 'legacy-entry'
+        if (sourceView === 'snapshot') return `snapshot:${buildGeneration}:${displayedPath}`
+        let identity = liveModelIds.get(displayedPath)
+        if (!identity) {
+            identity = `live:${nextLiveModelId++}:${displayedPath}`
+            liveModelIds.set(displayedPath, identity)
+        }
+        return identity
+    })
+    const displayedDiagnostics = $derived(
+        sourceView === 'live' && fileSystemLocked
+            ? []
+            : emulator.compilerDiagnostics.filter(
+                  (diagnostic) => !diagnostic.file || diagnostic.file === displayedPath
+              )
+    )
     //the Screen panel is hidden for x86, which has no graphics device at all, and behind the same
     //kind of setting as the memory panel everywhere else
     const showScreen = $derived(
@@ -120,6 +178,10 @@
     }
 
     function applyDisplay(next: ProjectDisplay) {
+        if (fileSystemLocked) {
+            toast.warn('Stop execution before changing the display settings')
+            return
+        }
         //a program that states its display in a @screen comment gets that comment rewritten to say
         //what was chosen, so the code and the popover agree and the next Build reads it back; a
         //program without one keeps the choice in the Project alone
@@ -169,7 +231,25 @@
     }
 
     $effect(() => {
-        emulator.setCode(code)
+        emulator.setSources(sourceInput)
+    })
+
+    $effect(() => {
+        const buildSources = emulator.buildSources
+        if (buildSources && buildSources !== previousBuildSources) buildGeneration += 1
+        previousBuildSources = buildSources
+    })
+
+    $effect(() => {
+        if (!fileSystem) {
+            fileSystemLocked = false
+            return
+        }
+        fileSystemLocked = fileSystem.locked
+        return fileSystem.subscribe((filesChanged) => {
+            fileSystemLocked = fileSystem?.locked ?? false
+            if (filesChanged) debouncedFileSave(changed)
+        })
     })
 
     let editor: monaco.editor.IStandaloneCodeEditor | undefined = $state()
@@ -198,12 +278,84 @@
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Imperative window callbacks consume this accumulator; it has no tracked consumer.
     const pressedKeys = new Map<string, boolean>()
     const [debounced] = createDebouncer(3000)
+    const [debouncedFileSave] = createDebouncer(250)
 
     function revealEditorLine(lineNumber: number, column: number) {
         const currentEditor = editor
         if (!currentEditor) return
         currentEditor.revealLineInCenter(lineNumber)
         currentEditor.setPosition({ lineNumber, column })
+    }
+
+    function selectLiveFile(path: string) {
+        sourceView = 'live'
+        displayedPath = path
+    }
+
+    async function revealSourceLocation(file: string, line: number, column = 1) {
+        if (!emulator.buildSources?.files[file]) return
+        sourceView = 'snapshot'
+        displayedPath = file
+        await tick()
+        revealEditorLine(line + 1, column)
+    }
+
+    async function revealDiagnostic(diagnostic: Diagnostic) {
+        const path = diagnostic.file ?? emulator.buildSources?.entry ?? entry ?? displayedPath
+        if (emulator.buildSources?.files[path]) {
+            await revealSourceLocation(path, diagnostic.lineIndex, diagnostic.column)
+            return
+        }
+        sourceView = 'live'
+        displayedPath = path
+        await tick()
+        revealEditorLine(diagnostic.lineIndex + 1, diagnostic.column)
+    }
+
+    function revealCurrentInstruction() {
+        if (emulator.line < 0) return
+        void revealSourceLocation(emulator.currentFile, emulator.line)
+    }
+
+    function returnToLiveFiles() {
+        sourceView = 'live'
+        if (files?.[displayedPath]) return
+        displayedPath = entry ?? Object.keys(files ?? {})[0] ?? ''
+    }
+
+    function moveFileBreakpoints(from: string, to?: string) {
+        const moved = emulator.breakpoints.filter((breakpoint) => breakpoint.file === from)
+        for (const breakpoint of moved) emulator.toggleBreakpoint(breakpoint.line, from)
+        if (!to) return
+        for (const breakpoint of moved) {
+            if (
+                !emulator.breakpoints.some(
+                    (candidate) => candidate.file === to && candidate.line === breakpoint.line
+                )
+            ) {
+                emulator.toggleBreakpoint(breakpoint.line, to)
+            }
+        }
+    }
+
+    function handleDisplayedFileChange(nextCode: string) {
+        if (hasProjectFiles) {
+            if (sourceView !== 'live' || !fileSystem || !displayedFile) return
+            try {
+                fileSystem.writeText(displayedPath, nextCode)
+            } catch (error) {
+                console.error(error)
+                toast.error(getM68kErrorMessage(error))
+            }
+        } else {
+            code = nextCode
+        }
+        if (emulator.canExecute && emulator.terminated && emulator.line >= 0) {
+            emulator.resetSelectedLine()
+        }
+        if (!hasProjectFiles && preferencesStore.values.autoSave.value) {
+            debounced(() => dispatcher('save', { silent: true }))
+        }
     }
 
     function handleKeyDown(e: KeyboardEvent) {
@@ -249,6 +401,8 @@
             }
             case ShortcutAction.ClearExecution: {
                 emulator.clear()
+                emulator.setSources(sourceInput)
+                returnToLiveFiles()
                 break
             }
             case ShortcutAction.Step: {
@@ -260,14 +414,10 @@
             }
             case ShortcutAction.Undo: {
                 if (running || building) break
-                if (
-                    emulator.terminated ||
-                    emulator.interrupt !== undefined ||
-                    !emulator.canExecute ||
-                    !emulator.canUndo
-                )
+                if (emulator.interrupt !== undefined || !emulator.canExecute || !emulator.canUndo)
                     break
                 emulator.undo()
+                revealCurrentInstruction()
                 break
             }
         }
@@ -326,11 +476,11 @@
     })
 
     async function buildCode() {
-        if (readonly || building || running) return
+        if (readonly || building || running || fileSystemLocked) return
         try {
             running = false
             building = true
-            await emulator.compile(effectiveSettings.maxHistorySize, code)
+            await emulator.compile(effectiveSettings.maxHistorySize, sourceInput)
         } catch (e) {
             console.error(e)
             toast.error('Error compiling code. ' + getM68kErrorMessage(e))
@@ -338,6 +488,7 @@
             building = false
             //also after a failed build: the directive is read before the program is assembled
             syncDisplay()
+            if (emulator.canExecute) revealCurrentInstruction()
         }
     }
 
@@ -364,12 +515,14 @@
             await runCode()
         } finally {
             running = false
+            revealCurrentInstruction()
         }
     }
 
     async function stepCode() {
         try {
             await emulator.step()
+            revealCurrentInstruction()
         } catch (e) {
             console.error(e)
             toast.error('Error executing code. ' + getM68kErrorMessage(e))
@@ -547,12 +700,13 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
     <CallStack
         stack={emulator.callStack}
         onGoToInstruction={(address) => {
-            const line = emulator.getLineFromAddress(address)
-            if (line < 0) return
-            revealEditorLine(line + 1, 1)
+            const location = emulator.getSourceLocationFromAddress(address)
+            if (!location) return
+            void revealSourceLocation(location.file, location.line)
         }}
         onGoToLabel={(label) => {
-            revealEditorLine(label.line + 1, 1)
+            if (!label.file) return
+            void revealSourceLocation(label.file, label.line)
         }}
     />
 </ToggleableDraggable>
@@ -563,10 +717,12 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
         on:undo={(e) => {
             const amount = e.detail
             emulator.undo(amount)
+            revealCurrentInstruction()
         }}
         on:highlight={(e) => {
-            const line = e.detail
-            revealEditorLine(line + 1, 0)
+            const step = e.detail
+            if (!step.file) return
+            void revealSourceLocation(step.file, step.line, 0)
         }}
         steps={emulator.latestSteps}
     />
@@ -594,43 +750,112 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
             class:redBorder={emulator.errors.length > 0}
         >
             {#key language}
+                {#if hasProjectFiles && files && entry && fileSystem}
+                    <FileSidebar
+                        {files}
+                        {entry}
+                        {fileSystem}
+                        selectedPath={displayedPath}
+                        locked={fileSystemLocked}
+                        bind:open={fileSidebarOpen}
+                        onSelect={selectLiveFile}
+                        onEntryChange={(path) => {
+                            entry = path
+                            changed()
+                        }}
+                        onRenamed={(from, to) => {
+                            const modelIdentity = liveModelIds.get(from)
+                            if (modelIdentity) {
+                                liveModelIds.delete(from)
+                                liveModelIds.set(to, modelIdentity)
+                            }
+                            moveFileBreakpoints(from, to)
+                        }}
+                        onDeleted={(path) => {
+                            liveModelIds.delete(path)
+                            moveFileBreakpoints(path)
+                        }}
+                    />
+                {/if}
+                <div class="source-identity" title={displayedPath}>
+                    <span>{sourceView === 'snapshot' ? 'Build snapshot' : 'Live file'}</span>
+                    <strong>{displayedPath || '(no file)'}</strong>
+                </div>
                 <Editor
-                    viewZones={preferencesStore.values.showPseudoInstructions.value
-                        ? emulator.decorations.map((v) => {
-                              return {
-                                  afterLineNumber: v.belowLine,
-                                  content: BelowLineContent,
-                                  props: { md: v.md, note: v.note ?? '' }
-                              }
-                          })
+                    modelKey={displayedModelKey}
+                    viewZones={sourceView === 'snapshot' &&
+                    preferencesStore.values.showPseudoInstructions.value
+                        ? emulator.decorations
+                              .filter(
+                                  (decoration) =>
+                                      (decoration.file ?? emulator.buildSources?.entry) ===
+                                      displayedPath
+                              )
+                              .map((decoration) => {
+                                  return {
+                                      afterLineNumber: decoration.belowLine,
+                                      content: BelowLineContent,
+                                      props: {
+                                          md: decoration.md,
+                                          note: decoration.note ?? '',
+                                          instructions: decoration.instructions,
+                                          currentAddress: emulator.pc
+                                      }
+                                  }
+                              })
                         : []}
-                    on:change={(_d) => {
-                        if (emulator.canExecute && emulator.terminated && emulator.line >= 0) {
-                            emulator.resetSelectedLine()
-                        }
-                        if (preferencesStore.values.autoSave.value) {
-                            debounced(() => {
-                                dispatcher('save', {
-                                    silent: true
-                                })
-                            })
-                        }
-                    }}
-                    on:breakpointPress={(d) => {
-                        emulator.toggleBreakpoint(d.detail - 1)
+                    on:change={(event) => handleDisplayedFileChange(event.detail)}
+                    on:breakpointPress={(event) => {
+                        emulator.toggleBreakpoint(event.detail - 1, displayedPath)
                     }}
                     bind:editor
-                    bind:code
-                    codeOverride={emulator.compiledCode}
-                    breakpoints={emulator.breakpoints.map(Number)}
-                    diagnostics={emulator.compilerDiagnostics}
-                    {language}
-                    highlightedLine={emulator.line}
+                    code={displayedCode}
+                    codeOverride={hasProjectFiles ? undefined : emulator.compiledCode}
+                    breakpoints={(sourceView === 'snapshot' || !fileSystemLocked
+                        ? emulator.breakpoints
+                        : []
+                    )
+                        .filter((breakpoint) => breakpoint.file === displayedPath)
+                        .map((breakpoint) => breakpoint.line)}
+                    diagnostics={displayedDiagnostics}
+                    language={displayedLanguage}
+                    highlightedLine={sourceView === 'snapshot' &&
+                    emulator.currentFile === displayedPath
+                        ? emulator.line
+                        : -1}
                     disabled={readonly ||
+                        running ||
+                        building ||
+                        sourceView === 'snapshot' ||
+                        displayedFile?.encoding !== 'plain' ||
+                        fileSystemLocked ||
                         (emulator.canExecute && !emulator.terminated) ||
                         !!emulator.compiledCode}
                     hasError={emulator.errors.length > 0}
                 />
+                {#if displayedFile?.encoding === 'base64'}
+                    <div class="binary-file">
+                        <div class="binary-source-identity">
+                            {sourceView === 'snapshot' ? 'Build snapshot' : 'Live file'} ·
+                            {displayedPath}
+                        </div>
+                        <h2>Binary file</h2>
+                        <p>
+                            {displayedPath} is preserved as exact bytes and is not editable as text.
+                        </p>
+                    </div>
+                {:else if !displayedFile}
+                    <div class="binary-file">
+                        <div class="binary-source-identity">
+                            {sourceView === 'snapshot' ? 'Build snapshot' : 'Live file'} ·
+                            {displayedPath || '(no file)'}
+                        </div>
+                        <h2>File not found</h2>
+                        <p>
+                            {displayedPath || 'The configured Entry path'} does not currently name a File.
+                        </p>
+                    </div>
+                {/if}
             {/key}
         </div>
 
@@ -643,6 +868,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                 testcasesResult.length > 0}
             canEditTests={testcasesEditable}
             executionDisabled={readonly || emulator.terminated || emulator.interrupt !== undefined}
+            undoDisabled={readonly || emulator.interrupt !== undefined}
             buildDisabled={readonly || emulator.compilerErrors.length > 0}
             hasCompiled={emulator.canExecute || !!emulator.compiledCode}
             canUndo={emulator.canUndo}
@@ -655,7 +881,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                 setTimeout(async () => {
                     try {
                         testcasesResult = await emulator.test(
-                            $state.snapshot(code),
+                            sourceInput,
                             $state.snapshot(testcases),
                             TESTCASE_INSTRUCTION_LIMIT,
                             effectiveSettings.maxHistorySize
@@ -683,6 +909,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
             on:undo={() => {
                 try {
                     emulator.undo()
+                    revealCurrentInstruction()
                 } catch (e) {
                     console.error(e)
                     toast.error('Error executing undo ' + getM68kErrorMessage(e))
@@ -690,8 +917,10 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
             }}
             on:stop={() => {
                 emulator.clear()
+                emulator.setSources(sourceInput)
                 running = false
                 testcasesResult = []
+                returnToLiveFiles()
             }}
         />
     </div>
@@ -780,6 +1009,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
             {info}
             stdOut={errorStrings ? `${errorStrings}\n${emulator.stdOut}` : emulator.stdOut}
             diagnostics={emulator.compilerDiagnostics}
+            onDiagnosticSelect={(diagnostic) => void revealDiagnostic(diagnostic)}
         />
         {#if showScreen}
             <ScreenRenderer
@@ -840,6 +1070,59 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                 padding: 0.2rem;
                 margin-left: -0.2rem;
                 border-radius: 0.5rem;
+            }
+
+            .source-identity {
+                position: absolute;
+                z-index: 3;
+                top: 0.7rem;
+                right: 0.9rem;
+                display: flex;
+                max-width: calc(100% - 4.5rem);
+                gap: 0.45rem;
+                padding: 0.25rem 0.45rem;
+                border-radius: 0.3rem;
+                color: var(--secondary-text);
+                background: color-mix(in srgb, var(--secondary) 92%, transparent);
+                box-shadow: 0 2px 8px rgb(0 0 0 / 0.2);
+                font-size: 0.72rem;
+
+                span {
+                    flex: none;
+                    opacity: 0.65;
+                }
+
+                strong {
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+            }
+
+            .binary-file {
+                position: absolute;
+                z-index: 3;
+                inset: 0.2rem;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-direction: column;
+                padding: 2rem;
+                border-radius: 0.4rem;
+                color: var(--secondary-text);
+                background: var(--secondary);
+                text-align: center;
+
+                p {
+                    max-width: 30rem;
+                    opacity: 0.72;
+                }
+
+                .binary-source-identity {
+                    margin-bottom: 1rem;
+                    font-size: 0.75rem;
+                    opacity: 0.65;
+                }
             }
         }
 

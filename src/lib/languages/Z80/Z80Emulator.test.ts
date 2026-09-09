@@ -78,6 +78,46 @@ const READ_LINE_PROGRAM = [
     '        halt'
 ].join('\n')
 
+describe('Z80 source set', () => {
+    it('assembles included Files and retains their source identity', async () => {
+        const sources = {
+            entry: 'main.asm',
+            files: {
+                'main.asm': { encoding: 'plain' as const, content: '#include "lib.asm"\n' },
+                'lib.asm': {
+                    encoding: 'plain' as const,
+                    content: '    org $8000\n    ld a, 7\n    halt\n'
+                }
+            }
+        }
+        const emulator = Z80Emulator(sources)
+        await emulator.compile(20, sources)
+        await emulator.run(100)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.registers.find((register) => register.name === 'a')?.value).toBe(7n)
+        expect(emulator.currentFile).toBe('lib.asm')
+    })
+
+    it('embeds binary Files without transcoding their bytes', async () => {
+        const sources = {
+            entry: 'main.asm',
+            files: {
+                'main.asm': {
+                    encoding: 'plain' as const,
+                    content:
+                        '    org $8000\n    jp start\ndata:\n    #insert "blob.bin"\nstart:\n    ld a, (data)\n    halt\n'
+                },
+                'blob.bin': { encoding: 'base64' as const, content: '/w==' }
+            }
+        }
+        const emulator = Z80Emulator(sources)
+        await emulator.compile(20, sources)
+        await emulator.run(100)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.registers.find((register) => register.name === 'a')?.value).toBe(255n)
+    })
+})
+
 describe('Z80 Screen journal', () => {
     it('journals one record per Core step, echo of a whole typed line included', async () => {
         const code = READ_LINE_PROGRAM

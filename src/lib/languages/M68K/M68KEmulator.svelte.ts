@@ -2,12 +2,13 @@ import {
     ccrToFlagsArray,
     type ExecutionStep as CoreExecutionStep,
     type InstructionLine,
-    type Interpreter,
+    Interpreter,
     InterpreterStatus as CoreInterpreterStatus,
     type Interrupt,
     type RegisterOperand,
+    type Program,
     S68k,
-    type SemanticError,
+    type Diagnostic as S68kDiagnostic,
     Size
 } from '@specy/s68k'
 import {
@@ -49,6 +50,7 @@ import { echoToScreen } from '$lib/languages/peripherals/screen/textEcho'
 import { ScreenInstructionHistory } from '$lib/languages/peripherals/screen/ScreenInstructionHistory'
 import type { Testcase } from '$lib/Project.svelte'
 import { preferencesStore } from '$stores/preferencesStore.svelte'
+import { assemblyFiles, fileBytes, type BuildInput, type BuildSources } from '$lib/projectFiles'
 
 export const registerName = [
     'D0',
@@ -98,12 +100,12 @@ const sizeMap = {
     [Size.Long]: RegisterSize.Long
 } satisfies Record<Size, RegisterSize>
 
-export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
-    return new AsmEditorM68KEmulator(baseCode, options)
+export function M68KEmulator(source: BuildInput, options: EmulatorSettings = {}) {
+    return new AsmEditorM68KEmulator(source, options)
 }
 
 class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterName> {
-    private s68k: S68k | null = null
+    private program: Program | null = null
     private interpreter: Interpreter | null = null
     private screenInstructions: ScreenInstructionHistory | null = null
     /**
@@ -119,9 +121,9 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
      */
     private graphical = false
 
-    constructor(code: string, options: EmulatorSettings) {
+    constructor(source: BuildInput, options: EmulatorSettings) {
         super(
-            code,
+            source,
             {
                 systemSize: RegisterSize.Long,
                 registerNames: [...registerName],
@@ -176,33 +178,36 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         )
     }
 
-    _checkCode(code: string): Diagnostic[] {
-        return S68k.semanticCheck(code).map(semanticErrorToDiagnostic)
+    _checkCode(sources: BuildSources): Diagnostic[] {
+        const result = S68k.assemble({ files: m68kAssemblyFiles(sources), entry: sources.entry })
+        result.program?.dispose()
+        return result.diagnostics.map(s68kDiagnosticToDiagnostic)
     }
 
-    _compile(code: string): CompileResult {
-        this.s68k = null
+    _compile(sources: BuildSources): CompileResult {
+        this.program?.dispose()
+        this.program = null
         this.interpreter = null
-        const s68k = new S68k(code)
-        const diagnostics = s68k.semanticCheck().map(semanticErrorToDiagnostic)
-        if (diagnostics.length > 0) {
+        const result = S68k.assemble({ files: m68kAssemblyFiles(sources), entry: sources.entry })
+        const diagnostics = result.diagnostics.map(s68kDiagnosticToDiagnostic)
+        if (!result.program) {
             return {
                 ok: false,
                 diagnostics,
                 report: diagnostics.map((diagnostic) => diagnostic.formatted).join('\n')
             }
         }
-        this.s68k = s68k
-        return { ok: true }
+        this.program = result.program
+        return { ok: true, diagnostics }
     }
 
     _initialize(undoSize: number): void {
-        const s68k = this.s68k
-        if (!s68k) throw new Error('Interpreter not initialized')
+        const program = this.program
+        if (!program) throw new Error('Interpreter not initialized')
         //a run starts with the input prompt every M68K program has always had; the first graphics,
         //keyboard or mouse task moves input to the focused Screen instead (see `useScreenInput`)
         this._peripherals.terminal.usePromptInput()
-        this.interpreter = s68k.createInterpreter({
+        this.interpreter = new Interpreter(program, {
             history_size: undoSize,
             keep_history: undoSize > 0
         })
@@ -210,8 +215,10 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     }
 
     _dispose(): void {
+        this.interpreter?.dispose()
+        this.program?.dispose()
         this.interpreter = null
-        this.s68k = null
+        this.program = null
     }
 
     _getCallStack(): StackFrame[] {
@@ -219,7 +226,8 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             this.interpreter?.getCallStack().map((frame, i) => ({
                 address: BigInt(frame.address),
                 name: frame.label_name,
-                line: frame.label_line,
+                line: frame.label_location?.line ?? -1,
+                file: frame.label_location?.file,
                 sp: BigInt(frame.registers[15]),
                 destination: BigInt(frame.source_address),
                 color: makeLabelColor(i, frame.address)
@@ -311,6 +319,8 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         return (
             this.interpreter?.getUndoHistory(max).map((step) => ({
                 ...step,
+                line: step.location?.line ?? -1,
+                file: step.location?.file,
                 mutations: step.mutations.map(convertMutation)
             })) ?? []
         )
@@ -377,7 +387,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         const interpreter = this.requireInterpreter()
         const budget = sliceInstructionBudget(request, M68K_INSTRUCTIONS_PER_MS)
         const isLastSlice = budget >= request.instructionBudget
-        const parsedBreakpoints = new Uint32Array(request.breakpoints)
+        const parsedBreakpoints = request.breakpoints
         const hasBreakpoints = parsedBreakpoints.length > 0
         const execution = this.executionController.capture()
         //a trap is one instruction of progress but can be a whole screen of work, so the budget says
@@ -446,13 +456,15 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             case CoreInterpreterStatus.Terminated: {
                 const ins = interpreter.getLastInstruction()
                 this.state.terminated = true
-                this.state.line = ins?.parsed_line?.line_index ?? -1
+                this.state.line = ins?.location.line ?? -1
+                if (ins) this.state.currentFile = ins.location.file
                 break
             }
             case CoreInterpreterStatus.TerminatedWithException: {
                 const ins = interpreter.getLastInstruction()
                 this.state.terminated = true
-                this.state.line = ins?.parsed_line?.line_index ?? -1
+                this.state.line = ins?.location.line ?? -1
+                if (ins) this.state.currentFile = ins.location.file
                 this.state.canUndo = false
                 this.addError('Program terminated with errors')
                 break
@@ -460,7 +472,8 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             case CoreInterpreterStatus.Interrupt: {
                 if (this.state.terminated || !this.state.canExecute) break
                 const ins = interpreter.getLastInstruction()
-                this.state.line = ins?.parsed_line?.line_index ?? -1
+                this.state.line = ins?.location.line ?? -1
+                if (ins) this.state.currentFile = ins.location.file
                 const interrupt = interpreter.getCurrentInterrupt()
                 //a trap is not a display frame: a graphical program reaches this a few hundred
                 //times a second and the panels can only be seen sixty times a second. The traps
@@ -933,25 +946,99 @@ function toCoreSize(size: RegisterSize | undefined): Size {
 }
 
 function toInstruction(instruction: InstructionLine | null | undefined): Instruction | null {
-    if (!instruction?.parsed_line) return null
+    if (!instruction) return null
     return {
         address: BigInt(instruction.address),
-        lineNumber: instruction.parsed_line.line_index,
-        code: instruction.parsed_line.line
+        lineNumber: instruction.location.line,
+        file: instruction.location.file,
+        code: instruction.source
     }
 }
 
-//s68k has no warnings concept, every semantic check finding is a hard error
-function semanticErrorToDiagnostic(error: SemanticError): Diagnostic {
-    const line = error.getLine()
+function s68kDiagnosticToDiagnostic(error: S68kDiagnostic): Diagnostic {
     return {
-        severity: 'error',
-        line,
-        column: line.line.length - line.line.trimStart().length + 1,
-        lineIndex: error.getLineIndex(),
-        message: error.getError(),
-        formatted: error.getMessage()
+        severity: error.severity,
+        file: error.location.file,
+        line: { line: '', line_index: error.location.line },
+        column: error.location.column + 1,
+        lineIndex: error.location.line,
+        message: error.message,
+        formatted: error.hint ? `${error.message}\n${error.hint}` : error.message
     }
+}
+
+/**
+ * s68k 2.1 treats a text File read by `incbin` as Latin-1, while the shared FileSystem contract is
+ * UTF-8 bytes. Keep each real path in its original representation for `include`, and rewrite every
+ * resolved `incbin` operand to a private byte alias. That includes base64 Files whose bytes happen
+ * to be valid UTF-8 and would otherwise be treated as text. `parseLine` preserves the assembler's
+ * own comment, quoting and label grammar, and replacing one field keeps every original source line
+ * identity intact.
+ */
+function m68kAssemblyFiles(sources: BuildSources): Record<string, string | Uint8Array> {
+    const files = assemblyFiles(sources)
+    const aliases: Record<string, string> = Object.create(null)
+    let nextAlias = 0
+    const aliasFor = (path: string) => {
+        const existing = aliases[path]
+        if (existing) return existing
+        let alias: string
+        do alias = `.asm-editor-incbin/${nextAlias++}`
+        while (alias in files)
+        aliases[path] = alias
+        files[alias] = fileBytes(sources.files[path])
+        return alias
+    }
+
+    for (const [sourcePath, contents] of Object.entries(files)) {
+        if (typeof contents !== 'string' || sourcePath.startsWith('.asm-editor-incbin/')) continue
+        files[sourcePath] = contents
+            .split('\n')
+            .map((line) => {
+                const operation = S68k.parseLine(line).operation
+                const field = operation?.text
+                if (operation?.name.toLowerCase() !== 'incbin' || !field) return line
+                const target = resolveM68kFile(sourcePath, m68kWrittenPath(field.text), sources)
+                if (!target) return line
+                const alias = aliasFor(target)
+                return `${line.slice(0, field.span.start)}"${alias}"${line.slice(field.span.end)}`
+            })
+            .join('\n')
+    }
+    return files
+}
+
+function m68kWrittenPath(field: string): string {
+    const trimmed = field.trim()
+    const first = trimmed[0]
+    const last = trimmed[trimmed.length - 1]
+    if ((first === '"' || first === "'") && last === first) {
+        return trimmed.slice(1, -1).split(`${first}${first}`).join(first)
+    }
+    return trimmed
+}
+
+function resolveM68kFile(
+    sourcePath: string,
+    written: string,
+    sources: BuildSources
+): string | null {
+    const slash = sourcePath.lastIndexOf('/')
+    const directory = slash < 0 ? '' : sourcePath.slice(0, slash)
+    const beside = joinM68kPath(directory, written)
+    if (beside in sources.files) return beside
+    const root = joinM68kPath('', written)
+    return root in sources.files ? root : null
+}
+
+function joinM68kPath(base: string, written: string): string {
+    const parts: string[] = []
+    for (const part of [...base.split('/'), ...written.split(/[\\/]/)]) {
+        if (!part || part === '.') continue
+        if (part === '..') parts.pop()
+        else parts.push(part)
+    }
+    return parts.join('/')
 }
 
 function convertMutation(mutation: CoreExecutionStep['mutations'][number]): MutationOperation {
