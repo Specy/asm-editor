@@ -12,6 +12,7 @@
     import FaBars from '~icons/fa-solid/bars'
     import FaDownload from '~icons/fa-solid/download'
     import FaFile from '~icons/fa-solid/file'
+    import FaFlag from '~icons/fa-solid/flag'
     import FaFolder from '~icons/fa-solid/folder'
     import FaMinus from '~icons/fa-solid/minus'
     import FaPen from '~icons/fa-solid/pen'
@@ -60,7 +61,6 @@
     let projectExpanded = $state(true)
     const rows = $derived(makeTreeRows(files, collapsedDirectories))
     const directories = $derived(directoryPaths(files))
-    const selectedFile = $derived(files[selectedPath])
 
     $effect(() => {
         const path = selectedPath
@@ -329,10 +329,21 @@
                                     <span class="file-icon"><FaFile /></span>
                                     <span class="ellipsis">{row.name}</span>
                                     {#if row.path === entry}
-                                        <span class="entry-mark" title="Build Entry">E</span>
+                                        <span class="entry-mark" title="Project entry file"
+                                            >ENTRY</span
+                                        >
                                     {/if}
                                 </button>
                                 <div class="row-actions">
+                                    {#if row.path !== entry}
+                                        <button
+                                            disabled={locked}
+                                            title="Set as entry file"
+                                            onclick={() => onEntryChange(row.path)}
+                                        >
+                                            <FaFlag />
+                                        </button>
+                                    {/if}
                                     <button
                                         title="Download exact bytes"
                                         onclick={() => downloadFile(row.path)}
@@ -358,26 +369,6 @@
                         {/if}
                     {/each}
                 </div>
-
-                <footer class="explorer-footer">
-                    <div class="selected-path" title={selectedPath || entry}>
-                        <span>{selectedFile ? 'SELECTED' : 'ENTRY'}</span>
-                        <strong>{selectedFile ? selectedPath : entry}</strong>
-                    </div>
-                    <button
-                        class="set-entry"
-                        disabled={locked || !selectedFile || selectedPath === entry}
-                        onclick={() => onEntryChange(selectedPath)}
-                    >
-                        {selectedPath === entry ? 'ENTRY FILE' : 'SET AS ENTRY'}
-                    </button>
-                    <div class="file-count">{Object.keys(files).length} / 4,096 files</div>
-                    {#if locked}
-                        <div class="locked-note">
-                            Read-only while the program owns the filesystem
-                        </div>
-                    {/if}
-                </footer>
             {/if}
         </section>
     </aside>
@@ -563,7 +554,6 @@
         align-items: center;
         gap: 0.25rem;
         width: 100%;
-        height: 100%;
         min-width: 0;
         padding-top: 0;
         padding-right: 0.35rem;
@@ -577,13 +567,22 @@
         cursor: pointer;
     }
 
+    button.tree-row.directory {
+        flex: none;
+        height: 1.55rem;
+    }
+
+    .file-select {
+        height: 100%;
+    }
+
     .tree-row:hover,
-    .tree-row.selected,
     .tree-row:focus-within {
         background: var(--tertiary);
     }
 
     .tree-row.selected {
+        background: color-mix(in srgb, var(--accent) 24%, var(--tertiary));
         box-shadow: inset 2px 0 0 var(--accent);
     }
 
@@ -621,14 +620,17 @@
     }
 
     .entry-mark {
+        flex: none;
         margin-left: auto;
-        padding: 0 0.22rem;
+        padding: 0.02rem 0.3rem;
         color: var(--accent);
-        border: 1px solid color-mix(in srgb, var(--accent) 65%, transparent);
-        border-radius: 0.15rem;
-        font-size: 0.55rem;
+        background: color-mix(in srgb, var(--accent) 12%, transparent);
+        border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+        border-radius: 999px;
+        font-size: 0.48rem;
         font-weight: 700;
-        line-height: 0.85rem;
+        line-height: 0.72rem;
+        letter-spacing: 0.04em;
     }
 
     .row-actions {
@@ -663,76 +665,6 @@
         text-align: center;
         opacity: 0.55;
         font-size: 0.75rem;
-    }
-
-    .explorer-footer {
-        display: flex;
-        flex: none;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 0.4rem;
-        padding: 0.55rem 0.65rem;
-        border-top: 1px solid var(--tertiary);
-        font-size: 0.65rem;
-    }
-
-    .selected-path {
-        display: flex;
-        min-width: 0;
-        flex: 1 1 8rem;
-        flex-direction: column;
-        gap: 0.12rem;
-
-        span,
-        strong {
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        span {
-            opacity: 0.5;
-            font-size: 0.55rem;
-            letter-spacing: 0.08em;
-        }
-
-        strong {
-            font-size: 0.68rem;
-            font-weight: 500;
-        }
-    }
-
-    .set-entry {
-        flex: none;
-        padding: 0.3rem 0.42rem;
-        border: 1px solid var(--tertiary);
-        border-radius: 0.18rem;
-        color: inherit;
-        background: transparent;
-        font: inherit;
-        font-size: 0.58rem;
-        cursor: pointer;
-
-        &:hover:not(:disabled) {
-            border-color: var(--accent);
-            color: var(--accent);
-        }
-
-        &:disabled {
-            cursor: not-allowed;
-            opacity: 0.4;
-        }
-    }
-
-    .file-count,
-    .locked-note {
-        width: 100%;
-        opacity: 0.5;
-    }
-
-    .locked-note {
-        color: var(--accent);
-        opacity: 0.8;
     }
 
     @media (hover: none) {
