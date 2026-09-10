@@ -125,7 +125,6 @@ export function mipsVariantOperands(variant: MIPSInstruction): string[] {
 }
 
 export function formatAggregatedArgs(ins: MIPSInstruction[]): string {
-
     const allOps = ins.map(mipsVariantOperands)
     const maxLen = Math.max(...allOps.map((o) => o.length))
     const result: string[] = []

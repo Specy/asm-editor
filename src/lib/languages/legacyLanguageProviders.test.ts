@@ -1,18 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { MonacoType } from '$lib/monaco/Monaco'
-import {
-    createMIPSCompletion,
-    createMIPSSignatureHelpProvider
-} from './MIPS/MIPS-language'
-import {
-    createRISCVCompletion,
-    createRISCVSignatureHelpProvider
-} from './RISC-V/RISC-V-language'
+import { createMIPSCompletion, createMIPSSignatureHelpProvider } from './MIPS/MIPS-language'
+import { createRISCVCompletion, createRISCVSignatureHelpProvider } from './RISC-V/RISC-V-language'
 import { createZ80SignatureHelpProvider } from './Z80/Z80-language'
-import {
-    createX86CompletionProvider,
-    createX86SignatureHelpProvider
-} from './X86/X86-language'
+import { createX86CompletionProvider, createX86SignatureHelpProvider } from './X86/X86-language'
 
 class Range {
     constructor(
@@ -148,15 +139,12 @@ async function signature(
         { lineNumber: 1, column: line.length + 1 } as never,
         {} as never,
         {} as never
-    ) as Promise<
-        | {
-              value: {
-                  activeParameter: number
-                  signatures: { label: string }[]
-              }
-          }
-        | null
-    >
+    ) as Promise<{
+        value: {
+            activeParameter: number
+            signatures: { label: string }[]
+        }
+    } | null>
 }
 
 describe('assembly signature help', () => {
@@ -165,10 +153,7 @@ describe('assembly signature help', () => {
         expect(mips?.value.activeParameter).toBe(1)
         expect(mips?.value.signatures[0]?.label).toContain('lw ')
 
-        const riscv = await signature(
-            createRISCVSignatureHelpProvider(monacoStub),
-            'sw t0, 4(t1)'
-        )
+        const riscv = await signature(createRISCVSignatureHelpProvider(monacoStub), 'sw t0, 4(t1)')
         expect(riscv?.value.activeParameter).toBe(1)
         expect(
             await signature(createRISCVSignatureHelpProvider(monacoStub), 'addiw t0, t1, 1')

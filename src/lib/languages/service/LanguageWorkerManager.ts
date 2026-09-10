@@ -2,11 +2,7 @@ import M68kWorker from './workers/m68k.worker?worker'
 import MarsWorker from './workers/mars.worker?worker'
 import X86Worker from './workers/x86.worker?worker'
 import Z80Worker from './workers/z80.worker?worker'
-import type {
-    ProjectAnalysisTarget,
-    ProjectWorkerRequest,
-    ProjectWorkerResponse
-} from './protocol'
+import type { ProjectAnalysisTarget, ProjectWorkerRequest, ProjectWorkerResponse } from './protocol'
 
 type Listener = (response: ProjectWorkerResponse) => void
 type WorkerConstructor = new () => Worker

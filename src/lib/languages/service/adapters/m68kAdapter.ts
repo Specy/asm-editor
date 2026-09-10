@@ -152,7 +152,7 @@ export function analyzeM68kProject(
                     (symbol) =>
                         !authoritativeLocations.has(
                             `${symbol.location.path}:${symbol.location.range.start.line}:${symbol.location.range.start.column}`
-                    )
+                        )
                 )
             ],
             occurrences: [],

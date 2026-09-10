@@ -116,8 +116,7 @@ export function analyzeZ80Project(
         return {
             severity: 'error' as const,
             source: 'z80',
-            location:
-                direct ??
+            location: direct ??
                 expansionLocation(result, diagnostic.message, sources) ?? {
                     path,
                     range: {

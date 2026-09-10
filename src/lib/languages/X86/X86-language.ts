@@ -49,7 +49,10 @@ export const X86_SIGNATURES = new Map<string, X86Form[]>([
     ],
     ['add', [{ operands: ['destination', 'source'], description: 'Add source to destination.' }]],
     ['adc', [{ operands: ['destination', 'source'], description: 'Add with carry.' }]],
-    ['sub', [{ operands: ['destination', 'source'], description: 'Subtract source from destination.' }]],
+    [
+        'sub',
+        [{ operands: ['destination', 'source'], description: 'Subtract source from destination.' }]
+    ],
     ['sbb', [{ operands: ['destination', 'source'], description: 'Subtract with borrow.' }]],
     ['cmp', [{ operands: ['left', 'right'], description: 'Compare two operands.' }]],
     [
@@ -83,10 +86,7 @@ export const X86_SIGNATURES = new Map<string, X86Form[]>([
     ['rol', [{ operands: ['destination', 'count'], description: 'Rotate left.' }]],
     ['ror', [{ operands: ['destination', 'count'], description: 'Rotate right.' }]],
     ['int', [{ operands: ['vector'], description: 'Invoke a software interrupt.' }]],
-    [
-        'syscall',
-        [{ operands: [], description: 'Enter the operating-system syscall handler.' }]
-    ],
+    ['syscall', [{ operands: [], description: 'Enter the operating-system syscall handler.' }]],
     ['nop', [{ operands: [], description: 'Perform no operation.' }]]
 ])
 
@@ -203,7 +203,10 @@ export function createX86CompletionProvider(
                                     'Instruction snippet',
                                     `011${instruction}`
                                 ),
-                                label: { label: instruction, description: form.operands.join(', ') },
+                                label: {
+                                    label: instruction,
+                                    description: form.operands.join(', ')
+                                },
                                 insertText: instructionSnippet(
                                     typedCase(instruction, word.word),
                                     form.operands

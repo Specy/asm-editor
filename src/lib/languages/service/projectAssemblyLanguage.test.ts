@@ -34,7 +34,8 @@ const sources = normalizeBuildInput({
     files: {
         'src/main.s': {
             encoding: 'plain',
-            content: '.text\n.eqv SIZE 4\n.macro twice reg\n.end_macro\n.include "../lib/util.s"\nmain: nop'
+            content:
+                '.text\n.eqv SIZE 4\n.macro twice reg\n.end_macro\n.include "../lib/util.s"\nmain: nop'
         },
         'lib/util.s': { encoding: 'plain', content: 'data: .word 1' }
     }
@@ -43,7 +44,8 @@ const options = { comment: '#' as const, dialect: 'mars' as const }
 let unregister: () => void
 
 function model(path: string, currentLine = 1) {
-    const lines = sources.files[path]?.encoding === 'plain' ? sources.files[path].content.split('\n') : []
+    const lines =
+        sources.files[path]?.encoding === 'plain' ? sources.files[path].content.split('\n') : []
     return {
         uri: projectSourceUri(monaco, { sessionId, sourceKind: 'live', path }),
         getLineCount: () => lines.length,
@@ -78,9 +80,16 @@ describe('common Project language features', () => {
         const completionModel = {
             ...model('src/main.s'),
             getValueInRange: () => prefix,
-            getWordUntilPosition: () => ({ word: 'l', startColumn: prefix.length, endColumn: prefix.length + 1 })
+            getWordUntilPosition: () => ({
+                word: 'l',
+                startColumn: prefix.length,
+                endColumn: prefix.length + 1
+            })
         }
-        const completions = await createProjectSymbolCompletionProvider(monaco, options).provideCompletionItems(
+        const completions = await createProjectSymbolCompletionProvider(
+            monaco,
+            options
+        ).provideCompletionItems(
             completionModel as never,
             { lineNumber: 1, column: prefix.length + 1 } as never,
             {} as never,
@@ -92,10 +101,10 @@ describe('common Project language features', () => {
     })
 
     it('indexes sections, constants, macros, data and labels and hovers unique symbols', async () => {
-        const symbols = await createProjectDocumentSymbolProvider(monaco, options).provideDocumentSymbols(
-            model('src/main.s') as never,
-            {} as never
-        )
+        const symbols = await createProjectDocumentSymbolProvider(
+            monaco,
+            options
+        ).provideDocumentSymbols(model('src/main.s') as never, {} as never)
         expect(symbols?.map((symbol) => [symbol.name, symbol.detail])).toEqual(
             expect.arrayContaining([
                 ['.text', 'section'],
@@ -112,6 +121,8 @@ describe('common Project language features', () => {
             { lineNumber: 1, column: 2 } as never,
             {} as never
         )
-        expect(hover?.contents[0]).toEqual(expect.objectContaining({ value: expect.stringContaining('constant') }))
+        expect(hover?.contents[0]).toEqual(
+            expect.objectContaining({ value: expect.stringContaining('constant') })
+        )
     })
 })

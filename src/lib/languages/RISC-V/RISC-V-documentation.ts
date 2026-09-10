@@ -136,7 +136,6 @@ export function riscvVariantOperands(variant: RISCVInstruction): string[] {
 }
 
 export function formatAggregatedArgs(ins: RISCVInstruction[]): string {
-
     const allOps = ins.map(riscvVariantOperands)
     const maxLen = Math.max(...allOps.map((o) => o.length))
     const result: string[] = []

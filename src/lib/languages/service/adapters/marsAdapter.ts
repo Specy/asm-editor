@@ -9,12 +9,7 @@ import {
     SCREEN_LABEL_PROBE_ADDRESS,
     screenLabelProbeSource
 } from '$lib/languages/mars/screenDirective'
-import {
-    fileText,
-    sourceText,
-    textAssemblyFiles,
-    type BuildSources
-} from '$lib/projectFiles'
+import { fileText, sourceText, textAssemblyFiles, type BuildSources } from '$lib/projectFiles'
 import type {
     ProjectAnalysisSnapshot,
     ProjectAnalysisTarget,
@@ -109,7 +104,10 @@ function legacyDiagnostic(diagnostic: Diagnostic, entry: string): LanguageDiagno
             path: diagnostic.file ?? entry,
             range: {
                 start: { line, column },
-                end: { line, column: Math.max(column + 1, (diagnostic.endColumn ?? column + 2) - 1) }
+                end: {
+                    line,
+                    column: Math.max(column + 1, (diagnostic.endColumn ?? column + 2) - 1)
+                }
             }
         }
     }

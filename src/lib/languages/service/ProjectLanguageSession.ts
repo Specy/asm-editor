@@ -36,8 +36,7 @@ export class ProjectLanguageSession {
     private buildSnapshots = new Map<number, BuildSources>()
     private listeners = new Set<SnapshotListener>()
     private unregister: () => void
-    private connection:
-        { post(request: ProjectWorkerRequest): void; dispose(): void } | undefined
+    private connection: { post(request: ProjectWorkerRequest): void; dispose(): void } | undefined
 
     constructor(sessionId: string, sources: BuildSources, target: ProjectAnalysisTarget = 'M68K') {
         this.sessionId = sessionId
