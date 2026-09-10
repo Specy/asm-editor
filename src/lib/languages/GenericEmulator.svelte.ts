@@ -119,6 +119,7 @@ export abstract class GenericEmulator<T, R extends string>
             stackAddress: emulatorOptions.stackAddress ?? 0x7ffffffcn,
             initialMemoryValue: emulatorOptions.initialMemoryValue ?? 0x0,
             language: emulatorOptions.language ?? 'M68K',
+            automaticChecking: emulatorOptions.automaticChecking ?? true,
             screenHistoryBudgetMb:
                 emulatorOptions.screenHistoryBudgetMb ??
                 projectSettingDefault('screenHistoryBudgetMb', emulatorOptions.language ?? 'M68K'),
@@ -183,7 +184,7 @@ export abstract class GenericEmulator<T, R extends string>
             }
         })
         this.clear()
-        void this.semanticCheck()
+        if (this._emulatorOptions.automaticChecking) void this.semanticCheck()
     }
 
     protected abstract getInstance(): T | null
@@ -870,7 +871,7 @@ export abstract class GenericEmulator<T, R extends string>
 
     setCode(code: string): void {
         this._sources = updateEntryText(this._sources, code)
-        if (this.fileSystemSession) return
+        if (this.fileSystemSession || !this._emulatorOptions.automaticChecking) return
         this.debouncer[0](() => void this.semanticCheck())
     }
 
@@ -879,7 +880,7 @@ export abstract class GenericEmulator<T, R extends string>
         //A guest may update live source while the debugger still owns a Core built from the old
         //snapshot. MARS and RARS assembly mutates module globals used by that Core, so live checking
         //resumes only after Stop.
-        if (this.fileSystemSession) return
+        if (this.fileSystemSession || !this._emulatorOptions.automaticChecking) return
         this.debouncer[0](() => void this.semanticCheck())
     }
 

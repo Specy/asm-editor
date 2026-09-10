@@ -261,6 +261,7 @@
             source={{ files: project.files, entry: project.entry }}
             language={project.language}
             settings={{
+                automaticChecking: false,
                 display: project.display,
                 screenHistoryBudgetMb: resolveProjectSettings(project.language, project.settings)
                     .screenHistoryBudgetMb,

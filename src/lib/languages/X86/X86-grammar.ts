@@ -1,6 +1,23 @@
 import type monaco from 'monaco-editor'
 
 export const X86Registers = [
+    // General Purpose 64-bit
+    'rax',
+    'rbx',
+    'rcx',
+    'rdx',
+    'rsi',
+    'rdi',
+    'rbp',
+    'rsp',
+    'r8',
+    'r9',
+    'r10',
+    'r11',
+    'r12',
+    'r13',
+    'r14',
+    'r15',
     // General Purpose 32-bit
     'eax',
     'ebx',
@@ -10,6 +27,14 @@ export const X86Registers = [
     'edi',
     'ebp',
     'esp',
+    'r8d',
+    'r9d',
+    'r10d',
+    'r11d',
+    'r12d',
+    'r13d',
+    'r14d',
+    'r15d',
     // General Purpose 16-bit
     'ax',
     'bx',
@@ -19,6 +44,14 @@ export const X86Registers = [
     'di',
     'bp',
     'sp',
+    'r8w',
+    'r9w',
+    'r10w',
+    'r11w',
+    'r12w',
+    'r13w',
+    'r14w',
+    'r15w',
     // General Purpose 8-bit High
     'ah',
     'bh',
@@ -723,6 +756,11 @@ export const X86Language: monaco.languages.IMonarchLanguage = {
 
     tokenizer: {
         root: [
+            // These context-sensitive forms must run before the general identifier rule.
+            [/^[ \t]*%[a-zA-Z_]\w*/, 'preprocessor'],
+            [/^[ \t]*[a-zA-Z_@$.][\w@$.]*:/, 'tag.label'],
+            [/[a-zA-Z_@$.][\w@$.]*:/, 'tag.label'],
+
             // Identifiers and keywords (instructions, directives, registers, size specifiers)
             [
                 /[a-zA-Z_@$.%][\w@$.]*/,
@@ -736,10 +774,6 @@ export const X86Language: monaco.languages.IMonarchLanguage = {
                     }
                 }
             ],
-
-            // Labels definition (identifier followed by a colon)
-            [/^[ \t]*[a-zA-Z_@$.][\w@$.]*:/, 'tag.label'], // At start of line (more common)
-            [/[a-zA-Z_@$.][\w@$.]*:/, 'tag.label'], // Anywhere else
 
             // Whitespace
             { include: '@whitespace' },
@@ -812,6 +846,7 @@ export const X86Language: monaco.languages.IMonarchLanguage = {
 }
 
 export const X86LanguageConfiguration: monaco.languages.LanguageConfiguration = {
+    wordPattern: /[a-zA-Z_@$.%][\w@$.%]*/g,
     comments: {
         lineComment: ';'
     },

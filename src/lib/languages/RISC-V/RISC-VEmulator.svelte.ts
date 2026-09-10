@@ -56,14 +56,13 @@ import {
     type BuildInput,
     type BuildSources
 } from '$lib/projectFiles'
+import { RISCVRegisterNames, type RISCVRegisterName } from './RISC-V-registers'
 
-export type RISCVRegisterName = RegisterName | 'pc'
-
-export const RISCVRegisterNames: RISCVRegisterName[] = [...RISCV_REGISTERS, 'pc']
-
-export const ALTERNATIVE_RISCVRegister_NAMES = new Array(RISCV_REGISTERS.length)
-    .fill(0)
-    .map((_, i) => `x${i}`)
+export {
+    ALTERNATIVE_RISCVRegister_NAMES,
+    RISCVRegisterNames,
+    type RISCVRegisterName
+} from './RISC-V-registers'
 
 const READ_CHAR_QUESTION = 'Enter a character'
 const READ_DOUBLE_QUESTION = 'Enter a double'

@@ -31,8 +31,12 @@ export default defineConfig({
             emitFile: true,
             filename: 'stats.html'
         })
-         */
+        */
     ],
+    worker: {
+        format: 'es',
+        plugins: () => [wasm()]
+    },
     // The tests run on the app's own Vite config so a test resolves `$lib`, `$cmp` and the other
     // SvelteKit aliases exactly like the app does, and so the Svelte plugin compiles any `.svelte.ts`
     // module a test reaches. Peripheral logic itself stays plain TypeScript, which is why the

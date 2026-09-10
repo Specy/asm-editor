@@ -16,7 +16,19 @@ export type SourceBreakpoint = { file: string; line: number }
 type DiagnosticBase = {
     file?: string
     lineIndex: number
+    /** One-based UTF-16 column, matching Monaco. */
     column: number
+    /** One-based, exclusive UTF-16 column. */
+    endColumn?: number
+    source?: string
+    code?: string
+    related?: {
+        file: string
+        lineIndex: number
+        column: number
+        endColumn: number
+        message: string
+    }[]
     line: {
         line: string
         line_index: number
@@ -357,6 +369,8 @@ export type ColorizedLabel = {
 
 export type EmulatorSettings = {
     language?: AvailableLanguages
+    /** False when a Project-scoped Worker owns live diagnostics for this Emulator. */
+    automaticChecking?: boolean
     globalPageSize?: number
     globalPageElementsPerRow?: number
     baseAddress?: bigint

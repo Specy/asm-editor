@@ -39,15 +39,36 @@
         {#if onDiagnosticSelect && diagnostics.length}
             <div class="diagnostics">
                 {#each diagnostics as diagnostic, index (index)}
-                    <button
-                        class:error={diagnostic.severity === 'error'}
-                        onclick={() => onDiagnosticSelect?.(diagnostic)}
-                        title="Open source location"
-                    >
-                        {diagnostic.file
-                            ? `${diagnostic.file}:${diagnostic.lineIndex + 1}: `
-                            : ''}{formatDiagnostic(diagnostic)}
-                    </button>
+                    <div class="diagnostic-group">
+                        <button
+                            class:error={diagnostic.severity === 'error'}
+                            onclick={() => onDiagnosticSelect?.(diagnostic)}
+                            title="Open source location"
+                        >
+                            {diagnostic.file
+                                ? `${diagnostic.file}:${diagnostic.lineIndex + 1}: `
+                                : ''}{formatDiagnostic(diagnostic)}
+                        </button>
+                        {#each diagnostic.related ?? [] as related, relatedIndex (`${index}:${relatedIndex}`)}
+                            <button
+                                class="related-location"
+                                onclick={() =>
+                                    onDiagnosticSelect?.({
+                                        ...diagnostic,
+                                        file: related.file,
+                                        lineIndex: related.lineIndex,
+                                        column: related.column,
+                                        endColumn: related.endColumn,
+                                        message: related.message,
+                                        formatted: related.message,
+                                        related: []
+                                    })}
+                                title="Open related source location"
+                            >
+                                ↳ {related.file}:{related.lineIndex + 1}: {related.message}
+                            </button>
+                        {/each}
+                    </div>
                 {/each}
             </div>
             {#if stdOut}<Console value={stdOut} />{/if}
@@ -113,6 +134,12 @@
         padding: 0.35rem;
         gap: 0.2rem;
 
+        .diagnostic-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.1rem;
+        }
+
         button {
             padding: 0.2rem 0.35rem;
             border: 0;
@@ -128,6 +155,12 @@
         button.error {
             color: var(--red-text);
             background: var(--red);
+        }
+
+        button.related-location {
+            margin-left: 1rem;
+            color: var(--secondary-text);
+            background: color-mix(in srgb, var(--secondary-text) 12%, transparent);
         }
     }
     .info {

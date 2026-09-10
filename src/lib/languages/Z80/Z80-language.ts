@@ -12,6 +12,12 @@ import {
     z80Registers,
     type Z80InstructionVariant
 } from './Z80-documentation'
+import {
+    assemblyOperandContext,
+    instructionSnippet,
+    splitAssemblyComment,
+    type AssemblyTextOptions
+} from '$lib/languages/service/assemblyText'
 
 const registerMap = new Map(z80Registers.map((register) => [register.name, register]))
 const conditionMap = new Map(z80ConditionCodes.map((condition) => [condition.name, condition]))
@@ -20,6 +26,20 @@ const operandMap = new Map(z80Operands.map((operand) => [operand.name, operand])
 const directiveMap = new Map(
     z80Directives.flatMap((directive) => directive.names.map((name) => [name, directive] as const))
 )
+
+export const Z80_TEXT_OPTIONS = {
+    comment: ';',
+    bareLabels: true,
+    knownOperations: new Set([...z80InstructionNames, ...directiveMap.keys()]),
+    sectionPattern: /^(?:#?code|#?data|\.?(?:text|data|bss|section))$/i,
+    blockPairs: [
+        {
+            start: /^\s*(?:[A-Za-z_.][\w.]*\s+)?\.?macro\b/i,
+            end: /^\s*\.?endm\b/i
+        },
+        { start: /^\s*\.?(?:if|ifdef|ifndef)\b/i, end: /^\s*\.?endif\b/i }
+    ]
+} satisfies AssemblyTextOptions
 
 /** A hover on `ld` would otherwise print a 192 row table. */
 const HOVER_VARIANT_LIMIT = 25
@@ -224,6 +244,7 @@ export function createZ80Completion(monaco: MonacoType): monaco.languages.Comple
                 endLineNumber: position.lineNumber,
                 endColumn: position.column
             })
+            if (splitAssemblyComment(linePrefix, ';').comment) return { suggestions: [] }
             const word = model.getWordUntilPosition(position)
             const range = new monaco.Range(
                 position.lineNumber,
@@ -277,15 +298,33 @@ export function createZ80Completion(monaco: MonacoType): monaco.languages.Comple
                 // A directive prefix is unambiguous, so those sort first when one is being typed.
                 const directivesFirst = /^\s*[#.]/.test(linePrefix)
                 suggestions.push(
-                    ...z80InstructionNames.map((name) => ({
-                        label: name,
-                        kind: monaco.languages.CompletionItemKind.Function,
-                        insertText: name,
-                        detail: instructionDocs(name).summary,
-                        documentation: { value: instructionDocs(name).hover },
-                        sortText: `${directivesFirst ? '0200' : '0100'}${name}`,
-                        range
-                    })),
+                    ...z80InstructionNames.flatMap((name) => {
+                        const plain: monaco.languages.CompletionItem = {
+                            label: name,
+                            kind: monaco.languages.CompletionItemKind.Function,
+                            insertText: name,
+                            detail: instructionDocs(name).summary,
+                            documentation: { value: instructionDocs(name).hover },
+                            sortText: `${directivesFirst ? '0200' : '0100'}${name}`,
+                            range
+                        }
+                        const variant = z80InstructionMap.get(name)?.[0]
+                        if (!variant || variant.params.length === 0) return [plain]
+                        return [
+                            plain,
+                            {
+                                label: { label: name, description: variant.instruction },
+                                kind: monaco.languages.CompletionItemKind.Snippet,
+                                insertText: instructionSnippet(name, variant.params),
+                                insertTextRules:
+                                    monaco.languages.CompletionItemInsertTextRule?.InsertAsSnippet,
+                                detail: 'Instruction snippet',
+                                documentation: variant.description,
+                                sortText: `${directivesFirst ? '0201' : '0101'}${name}`,
+                                range
+                            }
+                        ]
+                    }),
                     ...z80Directives.flatMap((directive) => {
                         // With a prefix typed, a directive that has no spelling starting with it
                         // cannot be written here at all (`equ` has no `.equ`), so it is left out.
@@ -370,6 +409,48 @@ export function createZ80Completion(monaco: MonacoType): monaco.languages.Comple
                 suggestions.push(...symbolSuggestions(operandMap.get(expression.expr)?.description))
             }
             return { suggestions }
+        }
+    }
+}
+
+export function createZ80SignatureHelpProvider(
+    _monaco: MonacoType
+): monaco.languages.SignatureHelpProvider {
+    return {
+        signatureHelpTriggerCharacters: [' ', ',', '(', '['],
+        signatureHelpRetriggerCharacters: [','],
+        provideSignatureHelp(model, position) {
+            const prefix = model.getValueInRange({
+                startLineNumber: position.lineNumber,
+                startColumn: 1,
+                endLineNumber: position.lineNumber,
+                endColumn: position.column
+            })
+            const context = assemblyOperandContext(prefix, Z80_TEXT_OPTIONS)
+            if (!context) return null
+            const variants = z80InstructionMap.get(context.operation)
+            if (!variants?.length) return null
+            const signatures = variants.slice(0, 64).map((variant) => ({
+                label: variant.instruction,
+                documentation: variant.description,
+                parameters: variant.params.map((label) => ({ label }))
+            }))
+            const found = signatures.findIndex(
+                (signature) => signature.parameters.length > context.activeOperand
+            )
+            const activeSignature = found < 0 ? 0 : found
+            const parameters = signatures[activeSignature]?.parameters ?? []
+            return {
+                value: {
+                    signatures,
+                    activeSignature,
+                    activeParameter: Math.min(
+                        context.activeOperand,
+                        Math.max(0, parameters.length - 1)
+                    )
+                },
+                dispose() {}
+            }
         }
     }
 }

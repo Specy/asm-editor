@@ -1,8 +1,9 @@
 # M68K language-service research
 
-Researched on 2026-09-09 for the assembly language-service implementation plan. This note describes
-the current, uncommitted M68K provider work in `asm-editor`, the installed `@specy/s68k` 2.1.0
-package, and the adjacent `s68k` repository at commit `9175b95`. It proposes no production change.
+Researched on 2026-09-09 and updated on 2026-09-10 for the assembly language-service implementation
+plan. This note describes the current M68K provider work in `asm-editor`, the installed
+`@specy/s68k` 2.1.1 package, and the adjacent `s68k` repository at release commit `39e7744`. It
+proposes no production change.
 
 ## Conclusions
 
@@ -111,7 +112,205 @@ generic editor then ends every marker at column 100
 ([`Editor.svelte`](../../src/components/specific/project/Editor.svelte#L318)). The shared diagnostic
 publisher can improve M68K immediately without a Core change.
 
-## What `@specy/s68k` 2.1.0 exposes
+## Reported multi-File and Debug-view failures
+
+The three reported failures have related UI state, but not one common Monaco-provider cause. The
+current page tracks only `displayedPath` plus a `live`/`snapshot` flag. A successful Build starts a
+FileSystem session, which locks live Files until Stop, and retains the immutable sources that the
+Core is executing
+([`GenericEmulator.svelte.ts`](../../src/lib/languages/GenericEmulator.svelte.ts#L548),
+[`FileSystem.ts`](../../src/lib/languages/peripherals/FileSystem.ts#L38)). The page then has two
+different documents with the same path, but the File sidebar exposes only the path
+([`FileSidebar.svelte`](../../src/components/specific/project/FileSidebar.svelte#L32)).
+
+### A non-Entry M68K File has little or no language intelligence
+
+The blanket report needs splitting into three observable cases:
+
+- Static operation completion, operation Hover, and formatting are registered for the `m68k`
+  language ID, not for the Entry model. Every non-C/H Project File is assigned the Project language,
+  and every newly selected File gets a Monaco model with that language
+  ([`Monaco.ts`](../../src/lib/monaco/Monaco.ts#L46),
+  [`Editor.svelte`](../../src/components/specific/project/Editor.svelte#L166),
+  [`Project.svelte`](../../src/routes/projects/[project]/Project.svelte#L131)). A plain non-Entry
+  M68K model should therefore still offer the current instruction/size/addressing-template
+  completion. If it does not in the browser, that is a separate model-language lifecycle regression
+  and needs a real-Monaco File-switching test.
+- Project Symbol completion, definitions, references, document Symbols, links, and signature help
+  are not registered by the current provider for the Entry or non-Entry model. What can look like an
+  Entry-only completion failure is often the provider's present operation-only completion surface
+  ([`M68K-language.ts`](../../src/lib/languages/M68K/M68K-language.ts#L158)).
+- Core diagnostics really are Entry-rooted. The page sends the whole File map, but `S68k.assemble`
+  reads the Entry and only Files reached through `include`/`incbin`; an unrelated File is deliberately
+  not assembled ([installed API](../../node_modules/@specy/s68k/dist/index.d.ts#L13),
+  [installed README](../../node_modules/@specy/s68k/README.md#L75)). A reachable included File can
+  receive exact diagnostics; an unreachable File cannot. Treating each library File as a standalone
+  Entry would introduce false undefined-Symbol, Local-label, `set`, and `end` errors because M68K
+  include is textual and carries the including scope.
+
+There is an additional Debug-session suppression. On any live File, the page explicitly replaces
+the visible diagnostic list with `[]` while the FileSystem is locked
+([`Project.svelte`](../../src/routes/projects/[project]/Project.svelte#L151)). At the same time,
+`GenericEmulator.setSources` skips `semanticCheck` whenever any built FileSystem session exists,
+although the comment's Core-global hazard applies specifically to MARS/RARS
+([`GenericEmulator.svelte.ts`](../../src/lib/languages/GenericEmulator.svelte.ts#L877)). For M68K,
+the proposed independent language Worker should keep live analysis running while the execution Core
+retains a Build. Build diagnostics remain on Build URIs; live diagnostics stay on live URIs.
+
+The plan should consequently keep its two-tier answer: tolerant parsing and static features cache
+every text File, including unopened and unreachable Files, while authoritative S68K assembly is
+explicitly Entry-reachable. Exact syntax diagnostics for an unreachable physical File require an
+upstream tolerant Project-analysis result; `parseLine` intentionally reports no diagnostics and
+knows no Symbol or instruction operand rules
+([s68k wrapper](../../../s68k/ts-lib/src/index.ts#L444)). Until then, provisional standalone errors
+must not masquerade as authoritative Project errors.
+
+### The current-instruction decoration disappears after A -> B -> A
+
+Build, Step, Undo, and the end of Run reveal the current instruction by switching to the immutable
+Build snapshot. The selected-line decoration is likewise conditional on both `snapshot` source kind
+and an exact `currentFile` match
+([`Project.svelte`](../../src/routes/projects/[project]/Project.svelte#L295),
+[`Project.svelte`](../../src/routes/projects/[project]/Project.svelte#L823)). But every File-sidebar
+selection calls `selectLiveFile`, which unconditionally changes the source kind to `live`
+([`Project.svelte`](../../src/routes/projects/[project]/Project.svelte#L290),
+[`Project.svelte`](../../src/routes/projects/[project]/Project.svelte#L753)). Therefore the exact
+transition is:
+
+`Build snapshot A (highlighted) -> Live B -> Live A (not eligible for a Build highlight)`.
+
+The editor does recreate its decoration collection for the active model and reapplies
+`highlightedLine` and breakpoints, so source inspection points to source-kind routing rather than a
+lost Monaco collection
+([`Editor.svelte`](../../src/components/specific/project/Editor.svelte#L207)). There is also an
+independent reveal bug: the decoration converts the zero-based execution line to Monaco's one-based
+line correctly, but the reveal effect excludes source line 0 and passes every other zero-based line
+directly to `revealLineInCenter`
+([`Editor.svelte`](../../src/components/specific/project/Editor.svelte#L272),
+[`Editor.svelte`](../../src/components/specific/project/Editor.svelte#L313)). It should test `>= 0`
+and reveal `highlightedLine + 1`.
+
+The navigation fix should preserve the current source kind when choosing another File: while
+browsing a retained Build, choose that Build generation's B and then A whenever they exist.
+Switching to live source should be an explicit, visible action. If a selected File was not present
+in the Build, the UI may fall back to live only with a clear source-identity transition; it must
+never place a Build current-line decoration on the live URI.
+
+### Breakpoints appear uneditable after switching Files during a Debug session
+
+This is the same forced-live transition plus an inconsistent interaction contract. In a locked live
+view the Project passes no breakpoint decorations at all, yet its gutter event still toggles a
+`{file, line}` breakpoint. `Editor` dispatches that event even when text is read-only
+([`Project.svelte`](../../src/routes/projects/[project]/Project.svelte#L808),
+[`Editor.svelte`](../../src/components/specific/project/Editor.svelte#L127)). The result is a hidden
+mutation: a click can change the breakpoint, but the glyph disappears as soon as hover ends because
+the Project continues to pass `[]` for the locked live view.
+
+This is not an S68K execution limitation. Breakpoints are File-aware in both the app and Core, and
+the generic scheduler reads the current breakpoint array for every execution slice
+([`commonLanguageFeatures.svelte.ts`](../../src/lib/languages/commonLanguageFeatures.svelte.ts#L14),
+[`GenericEmulator.svelte.ts`](../../src/lib/languages/GenericEmulator.svelte.ts#L684)). M68K passes
+that slice's array directly to `Interpreter.runWithBreakpoints`
+([`M68KEmulator.svelte.ts`](../../src/lib/languages/M68K/M68KEmulator.svelte.ts#L386)). A breakpoint
+changed by the UI can therefore affect the next slice; it cannot interrupt the synchronous WASM call
+already in progress.
+
+The plan should make breakpoint interaction a separate capability from text editability. Build
+snapshot models remain read-only but allow visible, editable active breakpoints. An explicitly opened
+live model during a locked Debug session must either edit a separately modelled future/source
+breakpoint or suppress both gutter hover and dispatch with an explanation; it must not invisibly
+mutate the running Build's breakpoint set. This also requires source kind and Build generation in
+the breakpoint binding context, even if the persisted user request remains a physical `{file,
+line}`.
+
+### Concrete plan changes from these failures
+
+Add these requirements to the model/session and migration phases:
+
+- Represent the selected document everywhere as `{path, sourceKind, buildGeneration?}`, not as a
+  path plus implicit page state. File-sidebar navigation preserves source kind, and only an explicit
+  action crosses between live and Build documents.
+- Keep provider registration model-global, but bind each live model to the Project session so every
+  plain M68K File gets tolerant completion/Hover/structure immediately. Retain authoritative
+  reachability in the snapshot so the UI can distinguish “not assembled from Entry” from “checked
+  and clean.”
+- Run M68K live checks in the dedicated language Worker during a retained/running execution Core;
+  remove the generic FileSystem-lock suppression only through per-adapter capability, not by exposing
+  MARS/RARS to their known mutable-global hazard.
+- Give `Editor` separate `readOnly` and `breakpointsEditable` inputs. Bind execution highlights,
+  active breakpoint glyphs, Build diagnostics, and Build-only addresses exclusively to the retained
+  Build URI.
+- Specify that a breakpoint edit during Run takes effect at the next execution-slice boundary and
+  remains visible while switching among Build Files.
+
+These are not only M68K concerns: the source-kind routing and editor interaction contract are shared
+UI infrastructure. M68K supplies the strongest regression fixture because its Core already reports
+File-aware execution Locations and accepts File-aware breakpoints.
+
+## Dependency version and current upstream API
+
+### Live publication check (2026-09-10)
+
+The currently published npm `latest` is **`@specy/s68k` 2.1.1**, not 2.2.1. The npm registry's
+version-specific endpoint identifies 2.1.1 as the latest package and records Git commit
+`39e7744f5b9d909c52aabfc65e182947367ddf81`; the full registry metadata assigns the `latest`
+dist-tag to the same version
+([npm latest metadata](https://registry.npmjs.org/%40specy%2Fs68k/latest),
+[npm package metadata](https://registry.npmjs.org/%40specy%2Fs68k)). The official repository's tag
+list likewise has `v2.1.1` as its newest tag, at that commit
+([GitHub tags](https://github.com/Specy/s68k/tags),
+[tagged source](https://github.com/Specy/s68k/tree/v2.1.1)). The upstream `main` branch is currently
+identical to that tag as well
+([official v2.1.1...main comparison](https://github.com/Specy/s68k/compare/v2.1.1...main)). Therefore
+the dependency declaration, lock entry, and installed package in this workspace are already on the
+newest published release; installing `@specy/s68k@latest` should be a dependency no-op rather than
+a migration to 2.2.1.
+
+There is no API migration from the workspace's pinned 2.1.1 to npm `latest`, because they are the
+same artifact. The published surface still has synchronous `S68k.assemble` and tolerant
+`S68k.parseLine`; successful assembly still returns a WASM-backed `Program` whose caller must invoke
+`dispose`; and diagnostics still carry `severity`, stable `code`, `message`, optional `hint`, exact
+`location`, and `related` locations
+([2.1.1 TypeScript wrapper](https://github.com/Specy/s68k/blob/v2.1.1/ts-lib/src/index.ts),
+[2.1.1 exported diagnostic and parsed types](https://github.com/Specy/s68k/blob/v2.1.1/src/ts_types.rs#L170-L335)).
+The package also remains an ESM package whose wrapper statically imports the generated WASM module,
+so the existing Vite Worker WASM configuration and SSR-safe lazy Worker creation remain necessary
+([2.1.1 package manifest](https://github.com/Specy/s68k/blob/v2.1.1/ts-lib/package.json),
+[2.1.1 build configuration](https://github.com/Specy/s68k/blob/v2.1.1/ts-lib/build.js),
+[published 2.1.1 tarball](https://registry.npmjs.org/@specy/s68k/-/s68k-2.1.1.tgz)).
+
+The only compatibility caution is relevant when comparing 2.1.0 with 2.1.1, not when reinstalling
+the current version. That release capitalized and punctuated diagnostic prose and revised some
+Hints, including narrowing the address-register suggestion to operand positions that accept a data
+register; it did not change `assemble`, `parseLine`, `Program.dispose`, or the Worker-facing type
+shape
+([official 2.1.0...2.1.1 comparison](https://github.com/Specy/s68k/compare/v2.1.0...v2.1.1)).
+Language-provider and adapter tests should consequently match diagnostic codes and structured
+locations, not exact human-facing message text. No provider, disposal, or bundling change is needed
+for the latest published package.
+
+The current workspace does **not** contain `@specy/s68k` 2.2.1. The dependency declaration, root
+lock declaration, locked package entry, and installed manifest all say exactly 2.1.1
+([`package.json`](../../package.json#L33), [`package-lock.json`](../../package-lock.json#L21),
+[`package-lock.json`](../../package-lock.json#L1410),
+[installed manifest](../../node_modules/@specy/s68k/package.json#L1)). The adjacent `s68k` checkout is
+also version 2.1.1 in both the Rust crate and npm wrapper
+([`Cargo.toml`](../../../s68k/Cargo.toml#L1),
+[s68k npm manifest](../../../s68k/ts-lib/package.json#L1)); its local HEAD and latest tag are
+`39e7744`/`v2.1.1`. No local tag, branch, Git object, npm cache artifact, or manifest provides an
+S68K 2.2.x API to audit. A 2.2.1-specific implementation decision must wait until that package or
+source is present, then re-diff declarations and behavior before coding against it.
+
+The local `v2.1.0..v2.1.1` history contains no structural public API change in the wrapper,
+WASM-facing types, source Locations, Symbols, Program, or instruction table. It mainly rewords,
+capitalizes, and punctuates diagnostic prose, plus narrows one invalid-address-register Hint so it
+suggests a data register only where that operand position accepts one
+([s68k analyzer](../../../s68k/src/assembler/analyzer.rs#L560)). Stable diagnostic `code`, not message
+capitalization, is the supported matching contract
+([s68k diagnostics](../../../s68k/src/assembler/diagnostics.rs#L723)). Provider and code-action tests
+should therefore assert codes and structured fields, using message text only for presentation tests.
+
+### What `@specy/s68k` 2.1.1 exposes
 
 The installed version is pinned exactly in the app ([`package.json`](../../package.json#L33)). Its
 two relevant static calls are synchronous:
@@ -316,6 +515,30 @@ M68K generated code or pseudo-instruction decoration
 code lenses therefore remain unavailable.
 
 ## Concrete test additions
+
+### Multi-File editor and Debug-source identity
+
+- With a real Monaco instance, open Entry A, an included M68K File B, and an unreachable M68K File
+  C. Operation/size/addressing completion, operation Hover, formatting, and the `m68k` model language
+  remain available after A -> B -> C -> A. Project Symbol features report their capability honestly
+  rather than silently becoming Entry-only.
+- An error in reachable B is published on B's live URI; an error in unreachable C is not described as
+  an authoritative S68K result. The session records the difference between “analyzed and clean” and
+  “not assembled from Entry.”
+- Retain a runnable Build, then change or inspect live source: M68K live Worker diagnostics continue
+  while Build diagnostics remain on snapshot URIs. No live marker is copied from the Build solely
+  because the two documents share a path.
+- Stop at a line in Build File A, select Build B, then Build A. The current-instruction decoration is
+  restored on A. Repeat for zero-based source line 0 and a later line, asserting the decoration and
+  reveal APIs both receive the correct one-based Monaco line.
+- While a program runs or is paused, select Build B, add and remove a breakpoint, switch to Build A
+  and back, and assert the glyph and `{file, line}` request persist. A controlled next execution slice
+  receives the changed set and stops at the newly added breakpoint.
+- Explicitly switch from a Build File to its live counterpart: Build highlights, active breakpoint
+  glyphs, Build diagnostics, and Build-only values disappear together. Clicking a disabled live
+  gutter neither shows a hover glyph nor invisibly changes the active breakpoint set.
+- Select a File absent from the retained Build. The UI labels the deliberate fallback to live source
+  and never applies the current line or another File's diagnostics to it.
 
 ### Phase 0 provider contracts
 

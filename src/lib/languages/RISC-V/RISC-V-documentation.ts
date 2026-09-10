@@ -1,5 +1,6 @@
 import { RISCV } from '@specy/risc-v'
 
+const previousTargetWas64Bit = RISCV.is64Bit()
 RISCV.setIs64Bit(true)
 const riscvIse = RISCV.getInstructionSet().map((i) => ({
     name: i.name,
@@ -8,7 +9,7 @@ const riscvIse = RISCV.getInstructionSet().map((i) => ({
     example: i.example,
     isRv64Only: i.getIsRv64Only()
 }))
-RISCV.setIs64Bit(false)
+RISCV.setIs64Bit(previousTargetWas64Bit)
 
 type RISCVAddressingMode = {
     type: string
@@ -89,7 +90,7 @@ export const riscvInstructionEntries = [...riscvInstructionMap.entries()].sort((
 
 export const riscvInstructionNames = riscvInstructionEntries.map(([name]) => name)
 
-export function formatAggregatedArgs(ins: RISCVInstruction[]): string {
+export function riscvVariantOperands(variant: RISCVInstruction): string[] {
     const isReg = (s: string) => s === 'reg' || s === 'freg' || s === 'regnum'
 
     function getLabel(type: string): string {
@@ -97,45 +98,46 @@ export function formatAggregatedArgs(ins: RISCVInstruction[]): string {
         return hasOwnKey(RISCVAddressingModes, type) ? RISCVAddressingModes[type].label : type
     }
 
-    function parseOperands(variant: RISCVInstruction): string[] {
-        const tokens = variant.args.map((a) => a[0])
-        if (tokens.length === 0) return []
+    const tokens = variant.args.map((a) => a[0])
+    if (tokens.length === 0) return []
 
-        const operands: string[] = []
-        let parts: string[] = []
+    const operands: string[] = []
+    let parts: string[] = []
 
-        for (let i = 0; i < tokens.length; i++) {
-            const t = tokens[i]
-            const label = getLabel(t.type)
+    for (let i = 0; i < tokens.length; i++) {
+        const t = tokens[i]
+        const label = getLabel(t.type)
 
-            if (t.type === 'LEFT_PAREN') {
-                const last = parts[parts.length - 1]
-                if (parts.length > 0 && !isReg(last)) {
-                    parts.push('(')
-                } else {
-                    if (parts.length > 0) operands.push(parts.join(''))
-                    parts = ['(']
-                }
-            } else if (t.type === 'RIGHT_PAREN') {
-                parts.push(')')
+        if (t.type === 'LEFT_PAREN') {
+            const last = parts[parts.length - 1]
+            if (parts.length > 0 && !isReg(last)) {
+                parts.push('(')
+            } else {
+                if (parts.length > 0) operands.push(parts.join(''))
+                parts = ['(']
+            }
+        } else if (t.type === 'RIGHT_PAREN') {
+            parts.push(')')
+            operands.push(parts.join(''))
+            parts = []
+        } else if (t.type === 'PLUS') {
+            parts.push('+')
+        } else {
+            const prevType = i > 0 ? tokens[i - 1].type : null
+            if (parts.length > 0 && prevType !== 'LEFT_PAREN' && prevType !== 'PLUS') {
                 operands.push(parts.join(''))
                 parts = []
-            } else if (t.type === 'PLUS') {
-                parts.push('+')
-            } else {
-                const prevType = i > 0 ? tokens[i - 1].type : null
-                if (parts.length > 0 && prevType !== 'LEFT_PAREN' && prevType !== 'PLUS') {
-                    operands.push(parts.join(''))
-                    parts = []
-                }
-                parts.push(label)
             }
+            parts.push(label)
         }
-        if (parts.length > 0) operands.push(parts.join(''))
-        return operands
     }
+    if (parts.length > 0) operands.push(parts.join(''))
+    return operands
+}
 
-    const allOps = ins.map(parseOperands)
+export function formatAggregatedArgs(ins: RISCVInstruction[]): string {
+
+    const allOps = ins.map(riscvVariantOperands)
     const maxLen = Math.max(...allOps.map((o) => o.length))
     const result: string[] = []
 
@@ -172,7 +174,7 @@ export const RISCVAddressingModes = {
     REGISTER_NAME: {
         detail: 't1',
         label: 'reg',
-        insertText: '',
+        insertText: 't0',
         documentation: 'Register name',
         priority: 1
     },

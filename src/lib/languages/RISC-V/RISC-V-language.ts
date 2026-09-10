@@ -7,12 +7,25 @@ import {
     riscvInstructionMap,
     riscvInstructionsVariants,
     formatAggregatedArgs,
-    groupVariantsByDescription
+    groupVariantsByDescription,
+    riscvVariantOperands
 } from './RISC-V-documentation'
-import { ALTERNATIVE_RISCVRegister_NAMES } from './RISC-VEmulator.svelte'
-import { RISCV, RISCV_REGISTERS } from '@specy/risc-v'
+import { RISCVLanguageRegisterNames as RISCVRegisterNames } from './RISC-V-registers'
+import {
+    assemblyOperandContext,
+    instructionSnippet,
+    parseAssemblyLine,
+    type AssemblyTextOptions
+} from '$lib/languages/service/assemblyText'
 
-const RISCVRegisterNames = [...RISCV_REGISTERS, ...ALTERNATIVE_RISCVRegister_NAMES]
+export const RISCV_TEXT_OPTIONS = {
+    comment: '#',
+    sectionPattern: /^\.(?:text|data|ktext|kdata|bss)$/i,
+    blockPairs: [
+        { start: /^\s*\.macro\b/i, end: /^\s*\.(?:end_macro|endmacro)\b/i },
+        { start: /^\s*\.(?:if|ifdef|ifndef|ifb|ifnb)\b/i, end: /^\s*\.endif\b/i }
+    ]
+} satisfies AssemblyTextOptions
 
 type CompletionMetadata = {
     detail?: string
@@ -27,6 +40,16 @@ type RegisterMetadata = Required<
 
 function hasOwnKey<T extends object>(value: T, key: PropertyKey): key is keyof T {
     return Object.prototype.hasOwnProperty.call(value, key)
+}
+
+function insertTextWithTypedCase(value: string, typed: string): string {
+    return typed && typed === typed.toUpperCase() && typed !== typed.toLowerCase()
+        ? value.toUpperCase()
+        : value
+}
+
+function variantsForTarget(variants: RISCVInstruction[], is64: boolean): RISCVInstruction[] {
+    return is64 ? variants : variants.filter((instruction) => !instruction.isRv64Only)
 }
 
 function splitAtChars(text: string, chars: string[]) {
@@ -50,37 +73,37 @@ function parseArgs(args: string) {
 
 function getPossibleInstruction(args: string[]): { instruction: string; other: string[] } | null {
     const clone = [...args]
-    if (clone.length === 0) return null
+    if (clone.length === 0) return { instruction: '', other: [] }
     //label
     if (clone[0].endsWith(':')) {
+        if (!clone[1]) return { instruction: '', other: [] }
         //macro
         if (clone[1].startsWith('.')) return null
         return { instruction: clone[1], other: clone.slice(2) }
     } else if (clone[0].includes(':')) {
         //label:instruction
-        const [label, instruction] = clone[0].split(':')
+        const [, instruction = ''] = clone[0].split(':', 2)
+        if (!instruction) return null
         if (instruction.startsWith('.')) return null
-        return { instruction, other: [label, ...clone.slice(1)] }
+        return { instruction, other: clone.slice(1) }
     }
     return { instruction: clone[0], other: clone.slice(1) }
 }
 
-export function createRISCVCompletition(
+export function createRISCVCompletion(
     monaco: MonacoType,
     is64 = false
 ): monaco.languages.CompletionItemProvider {
     return {
-        triggerCharacters: ['.', ',', ' ', 'deleteLeft', 'tab'],
+        triggerCharacters: ['.', ',', ' '],
         provideCompletionItems: (model, position) => {
-            if (RISCV.is64Bit() === is64) {
-                RISCV.setIs64Bit(is64)
-            }
             const data: string = model.getValueInRange({
                 startLineNumber: position.lineNumber,
                 startColumn: 1,
                 endLineNumber: position.lineNumber,
                 endColumn: position.column
             })
+            if (parseAssemblyLine(data, RISCV_TEXT_OPTIONS).comment) return { suggestions: [] }
             const lines = model.getValue().split('\n')
             const labels = lines
                 .map((l) => l.trim())
@@ -98,15 +121,18 @@ export function createRISCVCompletition(
             const ins = getPossibleInstruction(args)
             const lastArg = args[args.length - 1]
             const someInstruction = lastArg
-                ? RISCVRegisterNames.some((r) => r.startsWith(lastArg))
+                ? RISCVRegisterNames.some((r) => r.startsWith(lastArg.toLowerCase()))
                 : false
-            if (someInstruction && !hasOwnKey(CompletitionMap, lastArg)) {
+            const registerPrefix = someInstruction ? lastArg.toLowerCase() : undefined
+            if (registerPrefix) {
                 suggestions.push(
-                    ...RISCVRegisterNames.map((r) => {
+                    ...RISCVRegisterNames.filter((register) =>
+                        register.startsWith(registerPrefix)
+                    ).map((r) => {
                         return {
                             label: r,
                             kind: monaco.languages.CompletionItemKind.Variable,
-                            insertText: r.substring(1),
+                            insertText: r,
                             documentation: `Register ${r}`,
                             detail: r,
                             range
@@ -116,22 +142,27 @@ export function createRISCVCompletition(
             }
 
             if (lastArg?.startsWith('.')) {
+                const directivePrefix = lastArg.slice(1).toLowerCase()
                 suggestions.push(
-                    ...Object.entries(riscvDirectivesMap).map(([key, value]) => {
-                        return {
-                            label: key,
-                            kind: monaco.languages.CompletionItemKind.Keyword,
-                            insertText: key,
-                            documentation: value.description,
-                            detail: value.description,
-                            range
-                        }
-                    })
+                    ...Object.entries(riscvDirectivesMap)
+                        .filter(([key]) => key.startsWith(directivePrefix))
+                        .map(([key, value]) => {
+                            return {
+                                label: key,
+                                kind: monaco.languages.CompletionItemKind.Keyword,
+                                insertText: insertTextWithTypedCase(key, lastArg.slice(1)),
+                                documentation: value.description,
+                                detail: value.description,
+                                range
+                            }
+                        })
                 )
             }
             if (ins) {
-                const match = riscvInstructionMap.get(ins.instruction)
-                if (match) {
+                const instructionPrefix = ins.instruction.toLowerCase()
+                const allMatches = riscvInstructionMap.get(instructionPrefix)
+                const match = allMatches ? variantsForTarget(allMatches, is64) : []
+                if (match.length > 0) {
                     const labelsSuggestions = labels.map((l) => {
                         return {
                             label: l,
@@ -145,17 +176,20 @@ export function createRISCVCompletition(
                     })
 
                     if (ins.other.length === 0) {
-                        const prefixed = riscvInstructionsVariants.filter(
-                            (i) =>
-                                i[0].name.startsWith(ins.instruction) &&
-                                i[0].name !== ins.instruction
-                        )
+                        const prefixed = riscvInstructionsVariants
+                            .map((variants) => variantsForTarget(variants, is64))
+                            .filter(
+                                (variants) =>
+                                    variants.length > 0 &&
+                                    variants[0].name.startsWith(instructionPrefix) &&
+                                    variants[0].name !== instructionPrefix
+                            )
                         suggestions.push(
                             ...[...prefixed, match].map((i) => {
                                 return {
                                     label: i[0].name,
                                     kind: monaco.languages.CompletionItemKind.Function,
-                                    insertText: i[0].name,
+                                    insertText: insertTextWithTypedCase(i[0].name, ins.instruction),
                                     documentation:
                                         i[0].example + ' ' + i.map((i) => i.description).join('\n'),
                                     detail: i.map((i) => i.description).join('\n'),
@@ -163,14 +197,43 @@ export function createRISCVCompletition(
                                 }
                             })
                         )
+                        if (!/[ \t]$/.test(data)) {
+                            for (const variants of [...prefixed, match]) {
+                                const targetVariants = variantsForTarget(variants, is64)
+                                if (targetVariants.length === 0) continue
+                                const operands = riscvVariantOperands(targetVariants[0])
+                                if (operands.length === 0) continue
+                                suggestions.push({
+                                    label: {
+                                        label: targetVariants[0].name,
+                                        description: operands.join(', ')
+                                    },
+                                    kind: monaco.languages.CompletionItemKind.Snippet,
+                                    insertText: instructionSnippet(
+                                        insertTextWithTypedCase(
+                                            targetVariants[0].name,
+                                            ins.instruction
+                                        ),
+                                        operands
+                                    ),
+                                    insertTextRules:
+                                        monaco.languages.CompletionItemInsertTextRule
+                                            ?.InsertAsSnippet,
+                                    detail: 'Instruction snippet',
+                                    documentation: targetVariants[0].description,
+                                    sortText: `0999${targetVariants[0].name}`,
+                                    range
+                                })
+                            }
+                        }
                     }
 
                     const possibleArgs = match.flatMap((m) => {
                         const suggestedArg = m.args[ins.other.length]
                         if (suggestedArg) {
                             return suggestedArg.map((suggestedArg) => {
-                                const metadata = hasOwnKey(CompletitionMap, suggestedArg.type)
-                                    ? CompletitionMap[suggestedArg.type]
+                                const metadata = hasOwnKey(CompletionMap, suggestedArg.type)
+                                    ? CompletionMap[suggestedArg.type]
                                     : undefined
                                 return {
                                     label: metadata?.label ?? suggestedArg.value,
@@ -204,18 +267,19 @@ export function createRISCVCompletition(
                     )
                     suggestions.push(...rest, ...onlyRegs)
                 } else {
-                    const prefixed = riscvInstructionsVariants.filter(
-                        (i) =>
-                            i[0].name.startsWith(ins.instruction) &&
-                            (is64 ? true : i.some((ins) => !ins.isRv64Only))
-                    )
-                    console.log(prefixed)
+                    const prefixed = riscvInstructionsVariants
+                        .map((variants) => variantsForTarget(variants, is64))
+                        .filter(
+                            (variants) =>
+                                variants.length > 0 &&
+                                variants[0].name.startsWith(instructionPrefix)
+                        )
                     suggestions.push(
                         ...prefixed.map((i) => {
                             return {
                                 label: i[0].name,
                                 kind: monaco.languages.CompletionItemKind.Function,
-                                insertText: i[0].name,
+                                insertText: insertTextWithTypedCase(i[0].name, ins.instruction),
                                 documentation:
                                     i[0].example + ' ' + i.map((i) => i.description).join('\n'),
                                 detail: i.map((i) => i.description).join('\n'),
@@ -223,6 +287,27 @@ export function createRISCVCompletition(
                             }
                         })
                     )
+                    for (const variants of prefixed) {
+                        const operands = riscvVariantOperands(variants[0])
+                        if (operands.length === 0) continue
+                        suggestions.push({
+                            label: {
+                                label: variants[0].name,
+                                description: operands.join(', ')
+                            },
+                            kind: monaco.languages.CompletionItemKind.Snippet,
+                            insertText: instructionSnippet(
+                                insertTextWithTypedCase(variants[0].name, ins.instruction),
+                                operands
+                            ),
+                            insertTextRules:
+                                monaco.languages.CompletionItemInsertTextRule?.InsertAsSnippet,
+                            detail: 'Instruction snippet',
+                            documentation: variants[0].description,
+                            sortText: `0999${variants[0].name}`,
+                            range
+                        })
+                    }
                 }
             }
             return {
@@ -231,11 +316,10 @@ export function createRISCVCompletition(
         },
         resolveCompletionItem(item) {
             const label = typeof item.label === 'string' ? item.label : item.label.label
-            const metadata = hasOwnKey(CompletitionMap, label) ? CompletitionMap[label] : undefined
+            const metadata = hasOwnKey(CompletionMap, label) ? CompletionMap[label] : undefined
             return {
                 ...metadata,
-                ...item,
-                preselect: true
+                ...item
             }
         }
     }
@@ -264,11 +348,7 @@ export function createRISCVHoverProvider(
 ): monaco.languages.HoverProvider {
     return {
         provideHover: (model, position) => {
-            if (RISCV.is64Bit() === is64) {
-                RISCV.setIs64Bit(is64)
-            }
-            const range = new monaco.Range(position.lineNumber, 1, position.lineNumber, 1000)
-            const line = model.getValueInRange(range).trim()
+            const line = model.getLineContent(position.lineNumber).trim()
             const contents: monaco.IMarkdownString[] = []
             const text = model.getValue()
             const labels = text
@@ -278,6 +358,15 @@ export function createRISCVHoverProvider(
                 .map((l) => l.substring(0, l.length - 1))
 
             const word = model.getWordAtPosition(position)?.word
+            if (!word) return null
+            const wordInfo = model.getWordAtPosition(position)
+            if (!wordInfo) return null
+            const range = new monaco.Range(
+                position.lineNumber,
+                wordInfo.startColumn,
+                position.lineNumber,
+                wordInfo.endColumn
+            )
             if (word && line.startsWith(word) && line.includes(':')) {
                 contents.push({
                     value: `Label **${word}**`
@@ -288,27 +377,70 @@ export function createRISCVHoverProvider(
                     value: `Label **${word}**`
                 })
             }
-            const ins = word ? riscvInstructionMap.get(word) : undefined
-            if (ins) {
+            const variants = riscvInstructionMap.get(word.toLowerCase())
+            const ins = variants ? variantsForTarget(variants, is64) : []
+            if (ins.length > 0) {
                 contents.push({
                     value: formatInstructionHover(ins)
                 })
             }
-            const register = word ? RISCVRegistersMap[word] : undefined
+            const register = RISCVRegistersMap[word.toLowerCase()]
             if (register) {
                 contents.push({
                     value: register.documentation
                 })
             }
-            if (word && hasOwnKey(riscvDirectivesMap, word)) {
-                contents.push({
-                    value: riscvDirectivesMap[word].description
-                })
+            const lowerWord = word.toLowerCase()
+            if (hasOwnKey(riscvDirectivesMap, lowerWord)) {
+                contents.push({ value: riscvDirectivesMap[lowerWord].description })
             }
 
+            return contents.length > 0 ? { range, contents } : null
+        }
+    }
+}
+
+export function createRISCVSignatureHelpProvider(
+    _monaco: MonacoType,
+    is64 = false
+): monaco.languages.SignatureHelpProvider {
+    return {
+        signatureHelpTriggerCharacters: [' ', ',', '('],
+        signatureHelpRetriggerCharacters: [','],
+        provideSignatureHelp(model, position) {
+            const prefix = model.getValueInRange({
+                startLineNumber: position.lineNumber,
+                startColumn: 1,
+                endLineNumber: position.lineNumber,
+                endColumn: position.column
+            })
+            const context = assemblyOperandContext(prefix, RISCV_TEXT_OPTIONS)
+            const allVariants = context ? riscvInstructionMap.get(context.operation) : undefined
+            const variants = allVariants ? variantsForTarget(allVariants, is64) : []
+            if (!context || variants.length === 0) return null
+            const signatures = variants.map((variant) => {
+                const operands = riscvVariantOperands(variant)
+                return {
+                    label: `${variant.name}${operands.length ? ` ${operands.join(', ')}` : ''}`,
+                    documentation: variant.description,
+                    parameters: operands.map((label) => ({ label }))
+                }
+            })
+            const found = variants.findIndex(
+                (variant) => riscvVariantOperands(variant).length > context.activeOperand
+            )
+            const activeSignature = found < 0 ? 0 : found
+            const parameters = signatures[activeSignature]?.parameters ?? []
             return {
-                range,
-                contents
+                value: {
+                    signatures,
+                    activeSignature,
+                    activeParameter: Math.min(
+                        context.activeOperand,
+                        Math.max(0, parameters.length - 1)
+                    )
+                },
+                dispose() {}
             }
         }
     }
@@ -328,7 +460,7 @@ const RISCVRegistersMap: Partial<Record<string, RegisterMetadata>> = Object.from
     })
 )
 
-const CompletitionMap: Partial<Record<string, CompletionMetadata>> = {
+const CompletionMap: Partial<Record<string, CompletionMetadata>> = {
     ...RISCVRegistersMap,
     ...RISCVAddressingModes
 }

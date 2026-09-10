@@ -79,7 +79,7 @@ export const mipsInstructionEntries = [...mipsInstructionMap.entries()].sort(([a
 
 export const mipsInstructionNames = mipsInstructionEntries.map(([name]) => name)
 
-export function formatAggregatedArgs(ins: MIPSInstruction[]): string {
+export function mipsVariantOperands(variant: MIPSInstruction): string[] {
     const isReg = (s: string) => s === '$reg' || s === '$freg' || s === 'regnum'
 
     function getLabel(type: string): string {
@@ -87,45 +87,46 @@ export function formatAggregatedArgs(ins: MIPSInstruction[]): string {
         return hasOwnKey(MIPSAddressingModes, type) ? MIPSAddressingModes[type].label : type
     }
 
-    function parseOperands(variant: MIPSInstruction): string[] {
-        const tokens = variant.args.map((a) => a[0])
-        if (tokens.length === 0) return []
+    const tokens = variant.args.map((a) => a[0])
+    if (tokens.length === 0) return []
 
-        const operands: string[] = []
-        let parts: string[] = []
+    const operands: string[] = []
+    let parts: string[] = []
 
-        for (let i = 0; i < tokens.length; i++) {
-            const t = tokens[i]
-            const label = getLabel(t.type)
+    for (let i = 0; i < tokens.length; i++) {
+        const t = tokens[i]
+        const label = getLabel(t.type)
 
-            if (t.type === 'LEFT_PAREN') {
-                const last = parts[parts.length - 1]
-                if (parts.length > 0 && !isReg(last)) {
-                    parts.push('(')
-                } else {
-                    if (parts.length > 0) operands.push(parts.join(''))
-                    parts = ['(']
-                }
-            } else if (t.type === 'RIGHT_PAREN') {
-                parts.push(')')
+        if (t.type === 'LEFT_PAREN') {
+            const last = parts[parts.length - 1]
+            if (parts.length > 0 && !isReg(last)) {
+                parts.push('(')
+            } else {
+                if (parts.length > 0) operands.push(parts.join(''))
+                parts = ['(']
+            }
+        } else if (t.type === 'RIGHT_PAREN') {
+            parts.push(')')
+            operands.push(parts.join(''))
+            parts = []
+        } else if (t.type === 'PLUS') {
+            parts.push('+')
+        } else {
+            const prevType = i > 0 ? tokens[i - 1].type : null
+            if (parts.length > 0 && prevType !== 'LEFT_PAREN' && prevType !== 'PLUS') {
                 operands.push(parts.join(''))
                 parts = []
-            } else if (t.type === 'PLUS') {
-                parts.push('+')
-            } else {
-                const prevType = i > 0 ? tokens[i - 1].type : null
-                if (parts.length > 0 && prevType !== 'LEFT_PAREN' && prevType !== 'PLUS') {
-                    operands.push(parts.join(''))
-                    parts = []
-                }
-                parts.push(label)
             }
+            parts.push(label)
         }
-        if (parts.length > 0) operands.push(parts.join(''))
-        return operands
     }
+    if (parts.length > 0) operands.push(parts.join(''))
+    return operands
+}
 
-    const allOps = ins.map(parseOperands)
+export function formatAggregatedArgs(ins: MIPSInstruction[]): string {
+
+    const allOps = ins.map(mipsVariantOperands)
     const maxLen = Math.max(...allOps.map((o) => o.length))
     const result: string[] = []
 

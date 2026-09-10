@@ -7,7 +7,12 @@ import {
     M68KRefusedInstructions,
     M68kInstructions
 } from './M68K-documentation'
-import { createM68KCompletition, formatM68kSource } from './M68K-language'
+import {
+    createM68KCompletion,
+    createM68kHoverProvider,
+    createM68kSignatureHelpProvider,
+    formatM68kSource
+} from './M68K-language'
 import { getM68kErrorMessage } from './M68kUtils'
 
 const ADDED_V2_INSTRUCTIONS = [
@@ -169,7 +174,7 @@ const monacoStub = {
 } as unknown as MonacoType
 
 async function completions(line: string) {
-    const provider = createM68KCompletition(monacoStub)
+    const provider = createM68KCompletion(monacoStub)
     const position = { lineNumber: 1, column: line.length + 1 }
     const model = {
         getValueInRange: () => line,
@@ -233,10 +238,60 @@ describe('M68K v2 language tooling', () => {
         )
     })
 
+    it('returns no empty hover and highlights only the operation token', async () => {
+        const provider = createM68kHoverProvider(monacoStub)
+        const line = 'entry: move.w #1,d0'
+        const model = { getLineContent: () => line }
+        const hover = await provider.provideHover(
+            model as never,
+            { lineNumber: 1, column: 10 } as never,
+            {} as never
+        )
+        expect(hover?.range).toEqual(new Range(1, 8, 1, 12))
+        expect(
+            await provider.provideHover(
+                model as never,
+                { lineNumber: 1, column: 2 } as never,
+                {} as never
+            )
+        ).toBeNull()
+    })
+
+    it('tracks the active operand in signature help without counting nested commas', async () => {
+        const provider = createM68kSignatureHelpProvider(monacoStub)
+        const line = 'move.w 0(a0,d0), '
+        const result = await provider.provideSignatureHelp(
+            { getValueInRange: () => line } as never,
+            { lineNumber: 1, column: line.length + 1 } as never,
+            {} as never,
+            {} as never
+        )
+        expect(result?.value.activeParameter).toBe(1)
+        expect(result?.value.signatures[0].label).toContain('move.w')
+        expect(result?.value.signatures[0].parameters).toHaveLength(2)
+        result?.dispose()
+    })
+
+    it('does not show signature help while the cursor is in a comment', async () => {
+        const provider = createM68kSignatureHelpProvider(monacoStub)
+        const line = 'move.w #1,d0 ; operand, comment'
+        expect(
+            await provider.provideSignatureHelp(
+                { getValueInRange: () => line } as never,
+                { lineNumber: 1, column: line.length + 1 } as never,
+                {} as never,
+                {} as never
+            )
+        ).toBeNull()
+    })
+
     it('formats v2 operations without changing separators in strings or comments', () => {
         expect(
             formatM68kSource("simhalt\nEND START\nlabel:move.w #1,d0\n dc.b 'a,b',1 ; leave,x")
         ).toBe("\tsimhalt\n\tEND START\nlabel:\tmove.w #1, d0\n dc.b 'a,b', 1 ; leave,x")
+        expect(formatM68kSource('move.w #1,d0\r\nsimhalt\r\n')).toBe(
+            '\tmove.w #1, d0\r\n\tsimhalt\r\n'
+        )
     })
 
     it('formats every new runtime exception for a learner', () => {

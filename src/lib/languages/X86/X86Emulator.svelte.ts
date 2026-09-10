@@ -34,7 +34,15 @@ import {
     type X86RegisterName
 } from '@specy/x86'
 import structuredClone from '@ungap/structured-clone'
-import { sourceText, type BuildInput, type BuildSources } from '$lib/projectFiles'
+import { type BuildInput, type BuildSources } from '$lib/projectFiles'
+import {
+    expandX86Project,
+    stageX86ProjectFiles,
+    x86GeneratedLinesFor,
+    x86SourceLineAt,
+    type X86ProjectDiagnostic,
+    type X86SourceLine
+} from './x86Project'
 
 /**
  * How many instructions Blink runs in a millisecond, used to turn a slice's time budget into a run
@@ -73,6 +81,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     private diagnosticCore: CoreX86Emulator | null = null
     private compileQueue: Promise<void> = Promise.resolve()
     private checkCodeQueue: Promise<void> = Promise.resolve()
+    private buildLineMap: X86SourceLine[] = []
 
     constructor(source: BuildInput, options: EmulatorSettings, core: CoreX86Emulator) {
         super(
@@ -91,7 +100,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             }
         )
         this.core = core
-        void this.semanticCheck()
+        if (this._emulatorOptions.automaticChecking) void this.semanticCheck()
     }
 
     appendOutput(charCode: number): void {
@@ -116,27 +125,46 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     }
 
     async _checkCode(sources: BuildSources): Promise<Diagnostic[]> {
-        const code = sourceText(sources)
         if (!this.core && !this.diagnosticCore) return []
         const currentCheck = this.checkCodeQueue.then(async () => {
+            const expanded = expandX86Project(sources)
+            if (expanded.diagnostics.length > 0) {
+                return expanded.diagnostics.map((diagnostic) =>
+                    projectDiagnosticToDiagnostic(sources, diagnostic)
+                )
+            }
             const checker = await this.getDiagnosticCore()
-            const errors = await checker.checkCode(code)
-            return errors.map((error) => ({ ...mapCoreDiagnostic(error), file: sources.entry }))
+            stageX86ProjectFiles(checker.module, expanded)
+            const errors = await checker.checkCode(expanded.code)
+            return errors.map((error) =>
+                mapCoreDiagnosticToProject(sources, expanded.lineMap, error)
+            )
         })
         this.checkCodeQueue = currentCheck.catch(() => undefined).then(() => undefined)
         return currentCheck
     }
 
     async _compile(sources: BuildSources): Promise<CompileResult> {
-        const code = sourceText(sources)
-        const result = await this.requireCore().compile(code)
+        const expanded = expandX86Project(sources)
+        this.buildLineMap = expanded.lineMap
+        if (expanded.diagnostics.length > 0) {
+            return {
+                ok: false,
+                diagnostics: expanded.diagnostics.map((diagnostic) =>
+                    projectDiagnosticToDiagnostic(sources, diagnostic)
+                ),
+                report: 'NASM Project expansion failed'
+            }
+        }
+        const core = this.requireCore()
+        stageX86ProjectFiles(core.module, expanded)
+        const result = await core.compile(expanded.code)
         if (!('errors' in result)) return { ok: true }
         return {
             ok: false,
-            diagnostics: result.errors.map((error) => ({
-                ...coreDiagnosticToDiagnostic(code, error),
-                file: sources.entry
-            })),
+            diagnostics: result.errors.map((error) =>
+                coreDiagnosticToDiagnostic(sources, expanded.code, expanded.lineMap, error)
+            ),
             report: result.report
         }
     }
@@ -155,8 +183,13 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     }
 
     _getCallStack(): StackFrame[] {
-        const file = this.buildSources?.entry ?? this._sources.entry
-        return this.core?.getCallStack().map((frame) => ({ ...frame, file })) ?? []
+        const entry = this.buildSources?.entry ?? this._sources.entry
+        return (
+            this.core?.getCallStack().map((frame) => {
+                const source = x86SourceLineAt(this.buildLineMap, frame.line, entry)
+                return { ...frame, line: source.line, file: source.path }
+            }) ?? []
+        )
     }
 
     _getCompiledCode(): { decorations: EmulatorDecoration[]; code: string } {
@@ -177,16 +210,24 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     _getInstructionAt(address: bigint): Instruction | null {
         const instruction = this.core?.getInstructionAt(address)
-        return instruction
-            ? { ...instruction, file: this.buildSources?.entry ?? this._sources.entry }
-            : null
+        if (!instruction) return null
+        const source = x86SourceLineAt(
+            this.buildLineMap,
+            instruction.lineNumber,
+            this.buildSources?.entry ?? this._sources.entry
+        )
+        return { ...instruction, lineNumber: source.line, file: source.path }
     }
 
     _getNextInstruction(): Instruction | null {
         const instruction = this.core?.getNextInstruction()
-        return instruction
-            ? { ...instruction, file: this.buildSources?.entry ?? this._sources.entry }
-            : null
+        if (!instruction) return null
+        const source = x86SourceLineAt(
+            this.buildLineMap,
+            instruction.lineNumber,
+            this.buildSources?.entry ?? this._sources.entry
+        )
+        return { ...instruction, lineNumber: source.line, file: source.path }
     }
 
     _getPc(): bigint {
@@ -225,10 +266,13 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     }
 
     _getUndoHistory(max: number): ExecutionStep[] {
-        const file = this.buildSources?.entry ?? this._sources.entry
+        const entry = this.buildSources?.entry ?? this._sources.entry
         return (
-            this.core?.getUndoHistory(max).map((step) => ({ ...mapExecutionStep(step), file })) ??
-            []
+            this.core?.getUndoHistory(max).map((step) => {
+                const mapped = mapExecutionStep(step)
+                const source = x86SourceLineAt(this.buildLineMap, mapped.line, entry)
+                return { ...mapped, line: source.line, file: source.path }
+            }) ?? []
         )
     }
 
@@ -255,17 +299,21 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
      */
     async _runSlice(request: ExecutionSliceRequest): Promise<ExecutionSlice> {
         const budget = sliceInstructionBudget(request, X86_INSTRUCTIONS_PER_MS)
-        const entry = this.buildSources?.entry ?? this._sources.entry
-        const breakpoints = request.breakpoints
-            .filter((breakpoint) => breakpoint.file === entry)
-            .map((breakpoint) => breakpoint.line)
+        const breakpoints = request.breakpoints.flatMap((breakpoint) =>
+            x86GeneratedLinesFor(this.buildLineMap, breakpoint.file, breakpoint.line)
+        )
         const status = await this.runWithInput(budget, breakpoints)
         if (status === CoreEmulatorStatus.Running) {
             //still runnable: either the budget ran out or a breakpoint stopped it, and `run` does
             //not say which. The line the program is about to execute does: a run that stopped on a
             //breakpoint is parked on it
-            const line = this._getNextInstruction()?.lineNumber ?? -1
-            const onBreakpoint = line >= 0 && breakpoints.includes(line)
+            const next = this._getNextInstruction()
+            const onBreakpoint =
+                next !== null &&
+                request.breakpoints.some(
+                    (breakpoint) =>
+                        breakpoint.file === next.file && breakpoint.line === next.lineNumber
+                )
             return { reason: onBreakpoint ? 'breakpoint' : 'budget', instructions: budget }
         }
         return { reason: 'terminated', instructions: budget }
@@ -410,34 +458,67 @@ function toLocalStatus(status: CoreEmulatorStatus): EmulatorStatus {
 
 //the core only parses its assembler logs when the assembler exits non-zero, and its NASM parser
 //discards the "error:"/"warning:" marker it matched on, so nothing here can identify a warning
-function mapCoreDiagnostic(error: CoreMonacoError): Diagnostic {
+function sourceLine(sources: BuildSources, source: X86SourceLine): string {
+    const file = sources.files[source.path]
+    return file?.encoding === 'plain' ? (file.content.split(/\r?\n/)[source.line] ?? '') : ''
+}
+
+function mapCoreDiagnosticToProject(
+    sources: BuildSources,
+    lineMap: readonly X86SourceLine[],
+    error: CoreMonacoError
+): Diagnostic {
+    const source = x86SourceLineAt(lineMap, error.lineIndex, sources.entry)
+    const line = sourceLine(sources, source)
     return {
         severity: 'error',
-        lineIndex: error.lineIndex,
-        column: error.column,
-        line: { ...error.line },
+        file: source.path,
+        lineIndex: source.line,
+        column: Math.max(1, error.column),
+        line: { line, line_index: source.line },
         message: error.message,
         formatted: error.formatted
     }
 }
 
 function coreDiagnosticToDiagnostic(
+    sources: BuildSources,
     code: string,
+    lineMap: readonly X86SourceLine[],
     diagnostic: X86CompilationDiagnostic
 ): Diagnostic {
     const lines = code.split('\n')
-    const lineIndex = Math.max(0, diagnostic.line - 1)
-    const line = lines[lineIndex] ?? ''
+    const generatedLine = Math.max(0, diagnostic.line - 1)
+    const source = x86SourceLineAt(lineMap, generatedLine, sources.entry)
+    const line = sourceLine(sources, source) || lines[generatedLine] || ''
     return {
         severity: 'error',
-        lineIndex,
-        column: 0,
+        file: source.path,
+        lineIndex: source.line,
+        column: 1,
         line: {
             line,
-            line_index: lineIndex
+            line_index: source.line
         },
         message: diagnostic.error,
         formatted: diagnostic.error
+    }
+}
+
+function projectDiagnosticToDiagnostic(
+    sources: BuildSources,
+    diagnostic: X86ProjectDiagnostic
+): Diagnostic {
+    const source = { path: diagnostic.path, line: diagnostic.line }
+    const line = sourceLine(sources, source)
+    return {
+        severity: 'error',
+        file: diagnostic.path,
+        lineIndex: diagnostic.line,
+        column: diagnostic.column + 1,
+        line: { line, line_index: diagnostic.line },
+        message: diagnostic.message,
+        formatted: diagnostic.message
     }
 }
 

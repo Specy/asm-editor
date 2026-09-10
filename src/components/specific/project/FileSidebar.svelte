@@ -36,6 +36,8 @@
         fileSystem: FileSystem
         selectedPath: string
         locked?: boolean
+        diagnosticCounts?: Readonly<Record<string, { errors: number; warnings: number }>>
+        analysisStatus?: Readonly<Record<string, 'assembled' | 'not-reachable' | 'binary'>>
         open?: boolean
         onSelect: (path: string) => void
         onEntryChange: (path: string) => void
@@ -50,6 +52,8 @@
         fileSystem,
         selectedPath,
         locked = false,
+        diagnosticCounts = {},
+        analysisStatus = {},
         open = $bindable(false),
         onSelect,
         onEntryChange,
@@ -332,6 +336,26 @@
                                         <span class="disclosure-spacer"></span>
                                         <span class="file-icon"><FaFile /></span>
                                         <span class="ellipsis">{row.name}</span>
+                                        {#if diagnosticCounts[row.path]?.errors}
+                                            <span
+                                                class="diagnostic-count error"
+                                                title={`${diagnosticCounts[row.path].errors} error${diagnosticCounts[row.path].errors === 1 ? '' : 's'}`}
+                                                >{diagnosticCounts[row.path].errors}</span
+                                            >
+                                        {/if}
+                                        {#if diagnosticCounts[row.path]?.warnings}
+                                            <span
+                                                class="diagnostic-count warning"
+                                                title={`${diagnosticCounts[row.path].warnings} warning${diagnosticCounts[row.path].warnings === 1 ? '' : 's'}`}
+                                                >{diagnosticCounts[row.path].warnings}</span
+                                            >
+                                        {/if}
+                                        {#if analysisStatus[row.path] === 'not-reachable'}
+                                            <span
+                                                class="analysis-status"
+                                                title="Not assembled from the current Entry">—</span
+                                            >
+                                        {/if}
                                         {#if row.path === entry}
                                             <span class="entry-mark" title="Project entry file"
                                                 >ENTRY</span
@@ -462,6 +486,31 @@
             cursor: not-allowed;
             opacity: 0.3;
         }
+    }
+
+    .diagnostic-count,
+    .analysis-status {
+        flex: none;
+        min-width: 1rem;
+        padding: 0.05rem 0.25rem;
+        border-radius: 0.5rem;
+        font-size: 0.65rem;
+        line-height: 1rem;
+        text-align: center;
+    }
+
+    .diagnostic-count.error {
+        color: #fff;
+        background: #c74444;
+    }
+
+    .diagnostic-count.warning {
+        color: #1c1607;
+        background: #d6a83c;
+    }
+
+    .analysis-status {
+        opacity: 0.55;
     }
 
     .explorer-section {

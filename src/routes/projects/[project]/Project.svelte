@@ -67,8 +67,26 @@
         type ProjectDisplay
     } from '$lib/languages/mars/marsDisplay'
     import type { FileSystem } from '$lib/languages/peripherals/FileSystem'
-    import type { BuildInput, ProjectFile } from '$lib/projectFiles'
+    import type { BuildInput, BuildSources, ProjectFile } from '$lib/projectFiles'
     import FileSidebar from '$cmp/specific/project/FileSidebar.svelte'
+    import {
+        buildSource,
+        canEditProjectBreakpoints,
+        isCurrentBuildLocation,
+        liveSource,
+        selectProjectFile,
+        type ProjectSourceSelection
+    } from '$lib/monaco/projectSourceSelection'
+    import {
+        createProjectLanguageSessionId,
+        projectSourceModelKey,
+        type ProjectModelIdentity
+    } from '$lib/languages/service/uri'
+    import { ProjectLanguageSession } from '$lib/languages/service/ProjectLanguageSession'
+    import type { ProjectAnalysisSnapshot } from '$lib/languages/service/protocol'
+    import { languageDiagnosticToDiagnostic } from '$lib/languages/service/legacyDiagnostics'
+    import { registerProjectNavigation } from '$lib/languages/service/navigation'
+    import { zeroBasedLineToMonaco } from '$lib/languages/service/monacoConversions'
 
     interface Props {
         name?: string
@@ -119,14 +137,17 @@
         files !== undefined && entry !== undefined && fileSystem !== undefined
     )
     let fileSystemLocked = $state(false)
-    let displayedPath = $state(entry ?? Object.keys(files ?? {})[0] ?? '')
-    let sourceView: 'live' | 'snapshot' = $state('live')
+    let sourceSelection = $state<ProjectSourceSelection>(
+        liveSource(entry ?? Object.keys(files ?? {})[0] ?? '')
+    )
+    const languageSessionId = createProjectLanguageSessionId()
+    let projectLanguageSession = $state.raw<ProjectLanguageSession>()
+    let languageAnalysis = $state.raw<ProjectAnalysisSnapshot>()
+    const displayedPath = $derived(sourceSelection.path)
+    const sourceView = $derived(sourceSelection.sourceKind === 'build' ? 'snapshot' : 'live')
     let fileSidebarOpen = $state(false)
     let buildGeneration = $state(0)
     let previousBuildSources = $state.raw(emulator.buildSources)
-    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- identities intentionally survive reactive File-map replacement.
-    const liveModelIds = new Map<string, string>()
-    let nextLiveModelId = 0
 
     const displayedFile = $derived.by<ProjectFile | undefined>(() => {
         if (!hasProjectFiles) return { encoding: 'plain', content: code }
@@ -138,23 +159,71 @@
     const displayedLanguage = $derived(
         /\.(?:c|h)$/i.test(displayedPath) ? ('c' as const) : language
     )
-    const displayedModelKey = $derived.by(() => {
-        if (!hasProjectFiles) return 'legacy-entry'
-        if (sourceView === 'snapshot') return `snapshot:${buildGeneration}:${displayedPath}`
-        let identity = liveModelIds.get(displayedPath)
-        if (!identity) {
-            identity = `live:${nextLiveModelId++}:${displayedPath}`
-            liveModelIds.set(displayedPath, identity)
-        }
-        return identity
+    const displayedModelIdentity = $derived.by<ProjectModelIdentity | undefined>(() => {
+        if (!hasProjectFiles || !displayedPath) return undefined
+        return sourceSelection.sourceKind === 'build'
+            ? {
+                  sessionId: languageSessionId,
+                  sourceKind: 'build',
+                  buildGeneration: sourceSelection.buildGeneration,
+                  path: displayedPath
+              }
+            : { sessionId: languageSessionId, sourceKind: 'live', path: displayedPath }
     })
-    const displayedDiagnostics = $derived(
-        sourceView === 'live' && fileSystemLocked
-            ? []
-            : emulator.compilerDiagnostics.filter(
-                  (diagnostic) => !diagnostic.file || diagnostic.file === displayedPath
-              )
+    const displayedModelKey = $derived(
+        displayedModelIdentity ? projectSourceModelKey(displayedModelIdentity) : 'legacy-entry'
     )
+    const retainedModelKeys = $derived.by(() => {
+        if (!hasProjectFiles) return undefined
+        const liveKeys = Object.keys(files ?? {}).map((path) =>
+            projectSourceModelKey({ sessionId: languageSessionId, sourceKind: 'live', path })
+        )
+        const buildKeys = Object.keys(emulator.buildSources?.files ?? {}).map((path) =>
+            projectSourceModelKey({
+                sessionId: languageSessionId,
+                sourceKind: 'build',
+                buildGeneration,
+                path
+            })
+        )
+        return [...liveKeys, ...buildKeys]
+    })
+    const liveLanguageDiagnostics = $derived.by<Diagnostic[]>(() => {
+        if (!languageAnalysis || typeof sourceInput === 'string') return []
+        return languageAnalysis.diagnostics.map((diagnostic) =>
+            languageDiagnosticToDiagnostic(diagnostic, sourceInput)
+        )
+    })
+    const activeDiagnostics = $derived(
+        sourceView === 'live' && hasProjectFiles
+            ? liveLanguageDiagnostics
+            : emulator.compilerDiagnostics
+    )
+    const liveBuildHasErrors = $derived(
+        hasProjectFiles
+            ? (languageAnalysis?.diagnostics.some(
+                  (diagnostic) => diagnostic.severity === 'error'
+              ) ?? false)
+            : emulator.compilerErrors.length > 0
+    )
+    const displayedDiagnostics = $derived(
+        activeDiagnostics.filter(
+            (diagnostic) => !diagnostic.file || diagnostic.file === displayedPath
+        )
+    )
+    const displayedAnalysisStatus = $derived(
+        sourceView === 'live' ? languageAnalysis?.fileStatus[displayedPath] : undefined
+    )
+    const diagnosticCounts = $derived.by(() => {
+        const counts: Record<string, { errors: number; warnings: number }> = Object.create(null)
+        for (const diagnostic of activeDiagnostics) {
+            if (!diagnostic.file) continue
+            const count = (counts[diagnostic.file] ??= { errors: 0, warnings: 0 })
+            if (diagnostic.severity === 'error') count.errors += 1
+            else if (diagnostic.severity === 'warning') count.warnings += 1
+        }
+        return counts
+    })
     //the Screen panel is hidden for x86, which has no graphics device at all, and behind the same
     //kind of setting as the memory panel everywhere else
     const showScreen = $derived(
@@ -235,9 +304,17 @@
     })
 
     $effect(() => {
-        const buildSources = emulator.buildSources
-        if (buildSources && buildSources !== previousBuildSources) buildGeneration += 1
-        previousBuildSources = buildSources
+        const session = projectLanguageSession
+        const sources = sourceInput
+        if (session && typeof sources !== 'string') session.update(sources)
+    })
+
+    $effect(() => {
+        projectLanguageSession?.setBuild(buildGeneration, emulator.buildSources)
+    })
+
+    $effect(() => {
+        synchronizeBuildGeneration(emulator.buildSources)
     })
 
     $effect(() => {
@@ -287,17 +364,29 @@
         currentEditor.setPosition({ lineNumber, column })
     }
 
-    function selectLiveFile(path: string) {
-        sourceView = 'live'
-        displayedPath = path
+    function selectDisplayedFile(path: string) {
+        sourceSelection = selectProjectFile(
+            sourceSelection,
+            path,
+            buildGeneration,
+            emulator.buildSources?.files[path] !== undefined
+        )
+    }
+
+    function synchronizeBuildGeneration(buildSources: BuildSources | undefined): void {
+        if (buildSources && buildSources !== previousBuildSources) buildGeneration += 1
+        previousBuildSources = buildSources
     }
 
     async function revealSourceLocation(file: string, line: number, column = 1) {
-        if (!emulator.buildSources?.files[file]) return
-        sourceView = 'snapshot'
-        displayedPath = file
+        const buildSources = emulator.buildSources
+        if (!buildSources?.files[file]) return
+        // A compile can reveal its first instruction before Svelte flushes the observer above.
+        // Synchronize here as well so the selection and model URI always use the new Build.
+        synchronizeBuildGeneration(buildSources)
+        sourceSelection = buildSource(file, buildGeneration)
         await tick()
-        revealEditorLine(line + 1, column)
+        revealEditorLine(zeroBasedLineToMonaco(line), column)
     }
 
     async function revealDiagnostic(diagnostic: Diagnostic) {
@@ -306,10 +395,9 @@
             await revealSourceLocation(path, diagnostic.lineIndex, diagnostic.column)
             return
         }
-        sourceView = 'live'
-        displayedPath = path
+        sourceSelection = liveSource(path)
         await tick()
-        revealEditorLine(diagnostic.lineIndex + 1, diagnostic.column)
+        revealEditorLine(zeroBasedLineToMonaco(diagnostic.lineIndex), diagnostic.column)
     }
 
     function revealCurrentInstruction() {
@@ -318,9 +406,9 @@
     }
 
     function returnToLiveFiles() {
-        sourceView = 'live'
-        if (files?.[displayedPath]) return
-        displayedPath = entry ?? Object.keys(files ?? {})[0] ?? ''
+        sourceSelection = liveSource(
+            files?.[displayedPath] ? displayedPath : (entry ?? Object.keys(files ?? {})[0] ?? '')
+        )
     }
 
     function moveFileBreakpoints(from: string, to?: string) {
@@ -432,6 +520,43 @@
     }
 
     onMount(() => {
+        let unsubscribeLanguageSession: (() => void) | undefined
+        const unregisterNavigation = registerProjectNavigation(
+            languageSessionId,
+            async (identity, selection) => {
+                if (identity.sourceKind === 'build') {
+                    if (
+                        identity.buildGeneration !== buildGeneration ||
+                        !emulator.buildSources?.files[identity.path]
+                    ) {
+                        return false
+                    }
+                    sourceSelection = buildSource(identity.path, identity.buildGeneration)
+                } else {
+                    if (!files?.[identity.path]) return false
+                    sourceSelection = liveSource(identity.path)
+                }
+                await tick()
+                if (selection) {
+                    const lineNumber =
+                        'lineNumber' in selection ? selection.lineNumber : selection.startLineNumber
+                    const column = 'column' in selection ? selection.column : selection.startColumn
+                    revealEditorLine(lineNumber, column)
+                }
+                return true
+            }
+        )
+        if (typeof sourceInput !== 'string') {
+            const session = new ProjectLanguageSession(
+                languageSessionId,
+                sourceInput as BuildSources,
+                language
+            )
+            projectLanguageSession = session
+            unsubscribeLanguageSession = session.subscribe((snapshot) => {
+                languageAnalysis = snapshot
+            })
+        }
         window.addEventListener('keydown', handleKeyDown)
         window.addEventListener('keyup', handleKeyUp)
         window.addEventListener('blur', clearPressed)
@@ -439,6 +564,10 @@
             window.removeEventListener('keydown', handleKeyDown)
             window.removeEventListener('keyup', handleKeyUp)
             window.removeEventListener('blur', clearPressed)
+            unsubscribeLanguageSession?.()
+            unregisterNavigation()
+            projectLanguageSession?.dispose()
+            projectLanguageSession = undefined
             emulator.dispose()
         }
     })
@@ -747,7 +876,8 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
         <div
             class="editor-border"
             class:gradientBorder={emulator.canExecute && !emulator.terminated}
-            class:redBorder={emulator.errors.length > 0}
+            class:redBorder={emulator.errors.length > 0 ||
+                activeDiagnostics.some((diagnostic) => diagnostic.severity === 'error')}
         >
             {#key language}
                 {#if hasProjectFiles && files && entry && fileSystem}
@@ -758,22 +888,20 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                         {fileSystem}
                         selectedPath={displayedPath}
                         locked={fileSystemLocked}
+                        {diagnosticCounts}
+                        analysisStatus={sourceView === 'live'
+                            ? languageAnalysis?.fileStatus
+                            : undefined}
                         bind:open={fileSidebarOpen}
-                        onSelect={selectLiveFile}
+                        onSelect={selectDisplayedFile}
                         onEntryChange={(path) => {
                             entry = path
                             changed()
                         }}
                         onRenamed={(from, to) => {
-                            const modelIdentity = liveModelIds.get(from)
-                            if (modelIdentity) {
-                                liveModelIds.delete(from)
-                                liveModelIds.set(to, modelIdentity)
-                            }
                             moveFileBreakpoints(from, to)
                         }}
                         onDeleted={(path) => {
-                            liveModelIds.delete(path)
                             moveFileBreakpoints(path)
                         }}
                     />
@@ -781,9 +909,18 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                 <div class="source-identity" title={displayedPath}>
                     <span>{sourceView === 'snapshot' ? 'Build snapshot' : 'Live file'}</span>
                     <strong>{displayedPath || '(no file)'}</strong>
+                    {#if displayedAnalysisStatus === 'not-reachable'}
+                        <em title="This File is not analyzed from the current Entry"
+                            >Not analyzed from Entry</em
+                        >
+                    {:else if sourceView === 'live' && !languageAnalysis}
+                        <em>Analyzing…</em>
+                    {/if}
                 </div>
                 <Editor
                     modelKey={displayedModelKey}
+                    modelIdentity={displayedModelIdentity}
+                    {retainedModelKeys}
                     viewZones={sourceView === 'snapshot' &&
                     preferencesStore.values.showPseudoInstructions.value
                         ? emulator.decorations
@@ -818,10 +955,18 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                     )
                         .filter((breakpoint) => breakpoint.file === displayedPath)
                         .map((breakpoint) => breakpoint.line)}
+                    breakpointsEditable={canEditProjectBreakpoints(sourceSelection, {
+                        readonly,
+                        building,
+                        fileSystemLocked
+                    })}
                     diagnostics={displayedDiagnostics}
                     language={displayedLanguage}
-                    highlightedLine={sourceView === 'snapshot' &&
-                    emulator.currentFile === displayedPath
+                    highlightedLine={isCurrentBuildLocation(
+                        sourceSelection,
+                        buildGeneration,
+                        emulator.currentFile
+                    )
                         ? emulator.line
                         : -1}
                     disabled={readonly ||
@@ -870,7 +1015,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
             canEditTests={testcasesEditable}
             executionDisabled={readonly || emulator.terminated || emulator.interrupt !== undefined}
             undoDisabled={readonly || emulator.interrupt !== undefined}
-            buildDisabled={readonly || emulator.compilerErrors.length > 0}
+            buildDisabled={readonly || liveBuildHasErrors}
             hasCompiled={emulator.canExecute || !!emulator.compiledCode}
             canUndo={emulator.canUndo}
             on:edit-tests={() => {
@@ -1009,7 +1154,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
         <StdOut
             {info}
             stdOut={errorStrings ? `${errorStrings}\n${emulator.stdOut}` : emulator.stdOut}
-            diagnostics={emulator.compilerDiagnostics}
+            diagnostics={activeDiagnostics}
             onDiagnosticSelect={(diagnostic) => void revealDiagnostic(diagnostic)}
         />
         {#if showScreen}
@@ -1097,6 +1242,12 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                     overflow: hidden;
                     text-overflow: ellipsis;
                     white-space: nowrap;
+                }
+
+                em {
+                    flex: none;
+                    color: var(--warning, #d49a30);
+                    font-style: normal;
                 }
             }
 

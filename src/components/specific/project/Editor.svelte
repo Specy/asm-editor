@@ -17,6 +17,8 @@
     import { Monaco } from '$lib/monaco/Monaco'
     import { generateTheme } from '$lib/monaco/editorTheme'
     import type { Diagnostic } from '$lib/languages/commonLanguageFeatures.svelte'
+    import { projectSourceUri, type ProjectModelIdentity } from '$lib/languages/service/uri'
+    import { zeroBasedLineToMonaco } from '$lib/languages/service/monacoConversions'
 
     interface Props {
         disabled?: boolean
@@ -24,11 +26,17 @@
         codeOverride?: string
         /** Keeps each Project File on its own Monaco model and therefore its own text Undo stack. */
         modelKey?: string
+        /** Gives a Project File a stable URI that providers can route back to its Project session. */
+        modelIdentity?: ProjectModelIdentity
+        /** Model identities still owned by the Project; omitted outside the Project File editor. */
+        retainedModelKeys?: readonly string[]
         highlightedLine?: number
         hasError?: boolean
         language: AvailableLanguages | AvailableProgrammingLanguages
         diagnostics?: Diagnostic[]
         breakpoints?: number[]
+        /** Text can be read-only while the Debug session still accepts breakpoint changes. */
+        breakpointsEditable?: boolean
         editor?: monaco.editor.IStandaloneCodeEditor
         viewZones?: {
             afterLineNumber: number
@@ -42,11 +50,14 @@
         code = $bindable(),
         codeOverride,
         modelKey = 'default',
+        modelIdentity,
+        retainedModelKeys,
         highlightedLine = -1,
         hasError = false,
         language,
         diagnostics = [],
         breakpoints = [],
+        breakpointsEditable = true,
         editor = $bindable(),
         viewZones = []
     }: Props = $props()
@@ -58,6 +69,7 @@
     let applyingExternalValue = false
     let overflowWidgets: HTMLDivElement | null = null
     const models = new SvelteMap<string, monaco.editor.ITextModel>()
+    const modelViewStates = new SvelteMap<string, monaco.editor.ICodeEditorViewState | null>()
     const toDispose: (monaco.IDisposable | (() => void))[] = []
     const dispatcher = createEventDispatcher<{
         change: string
@@ -80,9 +92,11 @@
         const editorLanguage = language
         await Monaco.registerLanguage(editorLanguage)
         if (destroyed) return
-        const initialModel = loadedMonaco.editor.createModel(
+        const initialModel = createModel(
+            loadedMonaco,
             codeOverride ?? code,
-            editorLanguage.toLowerCase()
+            editorLanguage.toLowerCase(),
+            modelIdentity
         )
         initialModel.setEOL(0)
         models.set(modelKey, initialModel)
@@ -126,7 +140,10 @@
 
         toDispose.push(
             mountedEditor.onMouseDown((e) => {
-                if (e.target.type === loadedMonaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
+                if (
+                    breakpointsEditable &&
+                    e.target.type === loadedMonaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN
+                ) {
                     dispatcher('breakpointPress', e.target.position.lineNumber)
                 }
             }),
@@ -134,7 +151,10 @@
                 hoveredGliphen = null
             }),
             mountedEditor.onMouseMove((e) => {
-                if (e.target.type === loadedMonaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
+                if (
+                    breakpointsEditable &&
+                    e.target.type === loadedMonaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN
+                ) {
                     hoveredGliphen = e.target.position.lineNumber
                 } else {
                     hoveredGliphen = null
@@ -163,22 +183,39 @@
         }
     }
 
+    function createModel(
+        currentMonaco: MonacoType,
+        value: string,
+        modelLanguage: string,
+        identity: ProjectModelIdentity | undefined
+    ): monaco.editor.ITextModel {
+        const uri = identity ? projectSourceUri(currentMonaco, identity) : undefined
+        return currentMonaco.editor.createModel(value, modelLanguage, uri)
+    }
+
     function selectModel(key: string, value: string) {
         const currentEditor = editor
         const currentMonaco = monacoInstance
         if (!currentEditor || !currentMonaco) return
         let model = models.get(key)
+        if (model?.isDisposed()) {
+            models.delete(key)
+            model = undefined
+        }
         if (!model) {
-            model = currentMonaco.editor.createModel(value, language.toLowerCase())
+            model = createModel(currentMonaco, value, language.toLowerCase(), modelIdentity)
             model.setEOL(0)
             models.set(key, model)
         } else {
             setModelValue(model, value)
         }
         if (currentEditor.getModel() !== model) {
+            if (activeModelKey) modelViewStates.set(activeModelKey, currentEditor.saveViewState())
             applyingExternalValue = true
             try {
                 currentEditor.setModel(model)
+                const viewState = modelViewStates.get(key)
+                if (viewState) currentEditor.restoreViewState(viewState)
             } finally {
                 applyingExternalValue = false
             }
@@ -188,6 +225,17 @@
 
     $effect(() => {
         selectModel(modelKey, codeOverride ?? code)
+    })
+
+    $effect(() => {
+        if (!retainedModelKeys) return
+        const retained = new Set(retainedModelKeys)
+        for (const [key, model] of models) {
+            if (key === modelKey || retained.has(key)) continue
+            model.dispose()
+            models.delete(key)
+            modelViewStates.delete(key)
+        }
     })
     onDestroy(() => {
         destroyed = true
@@ -202,6 +250,7 @@
         overflowWidgets = null
         for (const model of models.values()) model.dispose()
         models.clear()
+        modelViewStates.clear()
     })
 
     let decorations: monaco.editor.IEditorDecorationsCollection | undefined = $state.raw()
@@ -277,10 +326,10 @@
                     ? [
                           {
                               range: new currentMonaco.Range(
-                                  highlightedLine + 1,
-                                  0,
-                                  highlightedLine + 1,
-                                  0
+                                  zeroBasedLineToMonaco(highlightedLine),
+                                  1,
+                                  zeroBasedLineToMonaco(highlightedLine),
+                                  1
                               ),
                               options: {
                                   className: hasError ? 'error-line' : 'selected-line',
@@ -291,15 +340,17 @@
                       ]
                     : []),
                 ...breakpoints.map((e) => ({
-                    range: new currentMonaco.Range(e + 1, 0, e + 1, 0),
+                    range: new currentMonaco.Range(e + 1, 1, e + 1, 1),
                     options: {
                         glyphMarginClassName: 'breakpoint-glyph'
                     }
                 })),
-                ...(hoveredGliphen && !breakpoints.includes(hoveredGliphen - 1)
+                ...(breakpointsEditable &&
+                hoveredGliphen &&
+                !breakpoints.includes(hoveredGliphen - 1)
                     ? [
                           {
-                              range: new currentMonaco.Range(hoveredGliphen, 0, hoveredGliphen, 0),
+                              range: new currentMonaco.Range(hoveredGliphen, 1, hoveredGliphen, 1),
                               options: {
                                   glyphMarginClassName: 'hovered-glyph'
                               }
@@ -311,8 +362,8 @@
     })
 
     $effect(() => {
-        if (activeModelKey && editor && highlightedLine > 0) {
-            editor.revealLineInCenter(highlightedLine)
+        if (activeModelKey && editor && highlightedLine >= 0) {
+            editor.revealLineInCenter(zeroBasedLineToMonaco(highlightedLine))
         }
     })
     $effect(() => {
@@ -330,14 +381,37 @@
                 model,
                 language,
                 diagnostics.map((e) => {
-                    const position = e.column
+                    const lineNumber = Math.min(Math.max(e.lineIndex + 1, 1), model.getLineCount())
+                    const maxColumn = model.getLineMaxColumn(lineNumber)
+                    const startColumn = Math.min(Math.max(e.column, 1), maxColumn)
+                    const endColumn = Math.min(
+                        Math.max(e.endColumn ?? startColumn + 1, startColumn),
+                        maxColumn
+                    )
                     return {
                         severity: markerSeverities[e.severity],
                         message: e.formatted,
-                        startLineNumber: e.lineIndex + 1,
-                        startColumn: position,
-                        endLineNumber: e.lineIndex + 1,
-                        endColumn: 100
+                        source: e.source,
+                        code: e.code,
+                        startLineNumber: lineNumber,
+                        startColumn,
+                        endLineNumber: lineNumber,
+                        endColumn,
+                        relatedInformation: e.related?.map((related) => {
+                            const relatedIdentity = modelIdentity
+                                ? { ...modelIdentity, path: related.file }
+                                : undefined
+                            return {
+                                resource: relatedIdentity
+                                    ? projectSourceUri(currentMonaco, relatedIdentity)
+                                    : model.uri,
+                                startLineNumber: related.lineIndex + 1,
+                                startColumn: related.column,
+                                endLineNumber: related.lineIndex + 1,
+                                endColumn: related.endColumn,
+                                message: related.message
+                            }
+                        })
                     }
                 })
             )

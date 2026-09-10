@@ -8,7 +8,6 @@ import {
     type RegisterOperand,
     type Program,
     S68k,
-    type Diagnostic as S68kDiagnostic,
     Size
 } from '@specy/s68k'
 import {
@@ -50,7 +49,9 @@ import { echoToScreen } from '$lib/languages/peripherals/screen/textEcho'
 import { ScreenInstructionHistory } from '$lib/languages/peripherals/screen/ScreenInstructionHistory'
 import type { Testcase } from '$lib/Project.svelte'
 import { preferencesStore } from '$stores/preferencesStore.svelte'
-import { assemblyFiles, fileBytes, type BuildInput, type BuildSources } from '$lib/projectFiles'
+import type { BuildInput, BuildSources } from '$lib/projectFiles'
+import { m68kAssemblyFiles } from './m68kAssemblyFiles'
+import { s68kDiagnosticToDiagnostic } from './m68kDiagnostics'
 
 export const registerName = [
     'D0',
@@ -181,7 +182,9 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     _checkCode(sources: BuildSources): Diagnostic[] {
         const result = S68k.assemble({ files: m68kAssemblyFiles(sources), entry: sources.entry })
         result.program?.dispose()
-        return result.diagnostics.map(s68kDiagnosticToDiagnostic)
+        return result.diagnostics.map((diagnostic) =>
+            s68kDiagnosticToDiagnostic(diagnostic, sources)
+        )
     }
 
     _compile(sources: BuildSources): CompileResult {
@@ -189,7 +192,9 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         this.program = null
         this.interpreter = null
         const result = S68k.assemble({ files: m68kAssemblyFiles(sources), entry: sources.entry })
-        const diagnostics = result.diagnostics.map(s68kDiagnosticToDiagnostic)
+        const diagnostics = result.diagnostics.map((diagnostic) =>
+            s68kDiagnosticToDiagnostic(diagnostic, sources)
+        )
         if (!result.program) {
             return {
                 ok: false,
@@ -958,93 +963,6 @@ function toInstruction(instruction: InstructionLine | null | undefined): Instruc
         file: instruction.location.file,
         code: instruction.source
     }
-}
-
-function s68kDiagnosticToDiagnostic(error: S68kDiagnostic): Diagnostic {
-    return {
-        severity: error.severity,
-        file: error.location.file,
-        line: { line: '', line_index: error.location.line },
-        column: error.location.column + 1,
-        lineIndex: error.location.line,
-        message: error.message,
-        hint: error.hint,
-        formatted: error.hint ? `${error.message}\n${error.hint}` : error.message
-    }
-}
-
-/**
- * s68k 2.1 treats a text File read by `incbin` as Latin-1, while the shared FileSystem contract is
- * UTF-8 bytes. Keep each real path in its original representation for `include`, and rewrite every
- * resolved `incbin` operand to a private byte alias. That includes base64 Files whose bytes happen
- * to be valid UTF-8 and would otherwise be treated as text. `parseLine` preserves the assembler's
- * own comment, quoting and label grammar, and replacing one field keeps every original source line
- * identity intact.
- */
-function m68kAssemblyFiles(sources: BuildSources): Record<string, string | Uint8Array> {
-    const files = assemblyFiles(sources)
-    const aliases: Record<string, string> = Object.create(null)
-    let nextAlias = 0
-    const aliasFor = (path: string) => {
-        const existing = aliases[path]
-        if (existing) return existing
-        let alias: string
-        do alias = `.asm-editor-incbin/${nextAlias++}`
-        while (alias in files)
-        aliases[path] = alias
-        files[alias] = fileBytes(sources.files[path])
-        return alias
-    }
-
-    for (const [sourcePath, contents] of Object.entries(files)) {
-        if (typeof contents !== 'string' || sourcePath.startsWith('.asm-editor-incbin/')) continue
-        files[sourcePath] = contents
-            .split('\n')
-            .map((line) => {
-                const operation = S68k.parseLine(line).operation
-                const field = operation?.text
-                if (operation?.name.toLowerCase() !== 'incbin' || !field) return line
-                const target = resolveM68kFile(sourcePath, m68kWrittenPath(field.text), sources)
-                if (!target) return line
-                const alias = aliasFor(target)
-                return `${line.slice(0, field.span.start)}"${alias}"${line.slice(field.span.end)}`
-            })
-            .join('\n')
-    }
-    return files
-}
-
-function m68kWrittenPath(field: string): string {
-    const trimmed = field.trim()
-    const first = trimmed[0]
-    const last = trimmed[trimmed.length - 1]
-    if ((first === '"' || first === "'") && last === first) {
-        return trimmed.slice(1, -1).split(`${first}${first}`).join(first)
-    }
-    return trimmed
-}
-
-function resolveM68kFile(
-    sourcePath: string,
-    written: string,
-    sources: BuildSources
-): string | null {
-    const slash = sourcePath.lastIndexOf('/')
-    const directory = slash < 0 ? '' : sourcePath.slice(0, slash)
-    const beside = joinM68kPath(directory, written)
-    if (beside in sources.files) return beside
-    const root = joinM68kPath('', written)
-    return root in sources.files ? root : null
-}
-
-function joinM68kPath(base: string, written: string): string {
-    const parts: string[] = []
-    for (const part of [...base.split('/'), ...written.split(/[\\/]/)]) {
-        if (!part || part === '.') continue
-        if (part === '..') parts.pop()
-        else parts.push(part)
-    }
-    return parts.join('/')
 }
 
 function convertMutation(mutation: CoreExecutionStep['mutations'][number]): MutationOperation {
