@@ -8,12 +8,11 @@
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
     import Button from '$cmp/shared/button/Button.svelte'
     import FaDownload from '~icons/fa-solid/download'
-    import FaFileCode from '~icons/fa-solid/file-code'
     import { createEventDispatcher } from 'svelte'
     import { BUILTIN_THEMES, ThemeStore } from '$stores/themeStore.svelte'
     import { LANGUAGE_THEMES } from '$lib/Config'
     import FaShareAlt from '~icons/fa-solid/share-alt'
-    import { projectToSingleSource } from '$lib/projectArchive'
+    import { isSingleSourceProject } from '$lib/projectArchive'
 
     interface Props {
         project: Project
@@ -24,11 +23,10 @@
     let descriptionContent = $state(project.description || '')
     const dispatcher = createEventDispatcher<{
         download: Project
-        /** The Entry file's raw text, for another editor; only offered when nothing is left out. */
-        downloadSource: Project
         share: Project
     }>()
-    const singleSource = $derived(projectToSingleSource(project))
+    /** One File travels as its source text; anything more only survives as the archive. */
+    const singleSource = $derived(isSingleSourceProject(project))
 
     const colors = $derived(
         BUILTIN_THEMES.find((t) => t.id === LANGUAGE_THEMES[project.language]) ?? BUILTIN_THEMES[0]
@@ -94,25 +92,15 @@
             <Button
                 cssVar="secondary"
                 style="width: 2.2rem; height: 2.2rem;"
-                title="Download complete project archive"
+                title={singleSource
+                    ? 'Download this project as a source file'
+                    : 'Download this project as an archive'}
                 onClick={() => dispatcher('download', project)}
             >
                 <Icon>
                     <FaDownload />
                 </Icon>
             </Button>
-            {#if singleSource}
-                <Button
-                    cssVar="secondary"
-                    style="width: 2.2rem; height: 2.2rem;"
-                    title="Download source file for another editor"
-                    onClick={() => dispatcher('downloadSource', project)}
-                >
-                    <Icon>
-                        <FaFileCode />
-                    </Icon>
-                </Button>
-            {/if}
 
             <ButtonLink
                 bg={colors.theme.accent2.color}

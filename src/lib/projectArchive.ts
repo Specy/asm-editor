@@ -6,6 +6,7 @@ import {
     type ProjectData,
     type StoredProject
 } from '$lib/Project.svelte'
+import { LANGUAGE_EXTENSIONS } from '$lib/Config'
 import { serializer } from '$lib/json'
 import {
     cleanFiles,
@@ -67,12 +68,27 @@ export function projectToArchive(project: Project | ProjectData): Uint8Array<Arr
     return zipSync(entries, { level: 6 })
 }
 
-export function projectArchiveName(name: string): string {
+function downloadName(name: string, extension: string): string {
     const withoutControls = Array.from(name.trim() || 'Untitled project', (character) =>
         character.charCodeAt(0) <= 0x1f ? '_' : character
     ).join('')
     const cleaned = withoutControls.replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, '_')
-    return `${cleaned}.asmproj`
+    return `${cleaned}.${extension}`
+}
+
+export function projectArchiveName(name: string): string {
+    return downloadName(name, 'asmproj')
+}
+
+export function projectSourceName(project: Project | ProjectData): string {
+    return downloadName(project.name, LANGUAGE_EXTENSIONS[project.language])
+}
+
+/** Whether a bare source file could hold the whole Project: one plain-text File, and it is the Entry. */
+export function isSingleSourceProject(project: Project | ProjectData): boolean {
+    const paths = Object.keys(project.files)
+    if (paths.length !== 1 || paths[0] !== project.entry) return false
+    return project.files[project.entry]?.encoding === 'plain'
 }
 
 export type SingleSourceExport = {
@@ -83,13 +99,42 @@ export type SingleSourceExport = {
 /** A raw source download for interoperability, available only when nothing would be omitted. */
 export function projectToSingleSource(project: Project | ProjectData): SingleSourceExport | null {
     const snapshot = snapshotOf(project)
-    const paths = Object.keys(snapshot.files)
-    if (paths.length !== 1 || paths[0] !== snapshot.entry) return null
+    if (!isSingleSourceProject(snapshot)) return null
     const file = snapshot.files[snapshot.entry]
-    if (file?.encoding !== 'plain') return null
     return {
         fileName: snapshot.entry.slice(snapshot.entry.lastIndexOf('/') + 1),
         bytes: new Uint8Array(fileBytes(file))
+    }
+}
+
+export type ProjectDownload = {
+    /** `source` is the commented-metadata text file; `archive` the ZIP. */
+    kind: 'source' | 'archive'
+    fileName: string
+    mimeType: string
+    contents: string | Uint8Array<ArrayBuffer>
+}
+
+/**
+ * The single download a Project gets. A one-File Project travels as its source text with the
+ * metadata block appended, which other editors and assemblers still read as a program; anything
+ * with more Files, or with binary ones, only survives as the archive.
+ */
+export function projectDownload(project: Project | ProjectData): ProjectDownload {
+    const snapshot = snapshotOf(project)
+    if (isSingleSourceProject(snapshot)) {
+        return {
+            kind: 'source',
+            fileName: projectSourceName(snapshot),
+            mimeType: 'text/plain;charset=utf-8',
+            contents: makeProject(snapshot).toExternal()
+        }
+    }
+    return {
+        kind: 'archive',
+        fileName: projectArchiveName(snapshot.name),
+        mimeType: 'application/zip',
+        contents: projectToArchive(snapshot)
     }
 }
 
@@ -255,7 +300,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function isLegacyLinkedFileCompatible(project: ProjectData): boolean {
-    return projectToSingleSource(project) !== null
+    return isSingleSourceProject(project)
 }
 
 export type { ProjectManifest }

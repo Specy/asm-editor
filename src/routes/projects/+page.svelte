@@ -23,13 +23,7 @@
     import Row from '$cmp/shared/layout/Row.svelte'
     import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
     import { resolve } from '$app/paths'
-    import {
-        looksLikeZip,
-        makeProjectFromArchive,
-        projectArchiveName,
-        projectToArchive,
-        projectToSingleSource
-    } from '$lib/projectArchive'
+    import { looksLikeZip, makeProjectFromArchive, projectDownload } from '$lib/projectArchive'
 
     let hasFileHandleSupport = false
 
@@ -251,17 +245,19 @@
                                 toast.logPill('Copied to clipboard')
                             }}
                             on:download={(e) => {
-                                //Always the archive: it is the lossless representation, and a
-                                //single-File Project has a name, description, Testcases, Settings
-                                //and a display that a bare source file silently drops. Downloading
-                                //the source alone is a separate, explicit action.
+                                //Whichever form loses nothing: a single-File Project keeps its
+                                //name, description, Testcases, Settings and display in the
+                                //commented metadata block a source file carries, and everything
+                                //else needs the archive.
                                 try {
-                                    const archive = projectToArchive(e.detail)
+                                    const download = projectDownload(e.detail)
+                                    const contents =
+                                        typeof download.contents === 'string'
+                                            ? download.contents
+                                            : new Uint8Array(download.contents).buffer
                                     blobDownloader(
-                                        new Blob([new Uint8Array(archive).buffer], {
-                                            type: 'application/zip'
-                                        }),
-                                        projectArchiveName(e.detail.name)
+                                        new Blob([contents], { type: download.mimeType }),
+                                        download.fileName
                                     )
                                 } catch (error) {
                                     console.error(error)
@@ -269,25 +265,6 @@
                                         error instanceof Error
                                             ? error.message
                                             : 'Failed to export project!'
-                                    )
-                                }
-                            }}
-                            on:downloadSource={(e) => {
-                                try {
-                                    const source = projectToSingleSource(e.detail)
-                                    if (!source) return
-                                    blobDownloader(
-                                        new Blob([source.bytes], {
-                                            type: 'text/plain;charset=utf-8'
-                                        }),
-                                        source.fileName
-                                    )
-                                } catch (error) {
-                                    console.error(error)
-                                    toast.error(
-                                        error instanceof Error
-                                            ? error.message
-                                            : 'Failed to export source file!'
                                     )
                                 }
                             }}

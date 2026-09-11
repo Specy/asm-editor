@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { zipSync } from 'fflate'
-import { makeProject } from '$lib/Project.svelte'
+import { makeProject, makeProjectFromExternal } from '$lib/Project.svelte'
 import {
     looksLikeZip,
     makeProjectFromArchive,
     projectArchiveName,
+    projectDownload,
     projectToArchive,
     projectToSingleSource
 } from '$lib/projectArchive'
@@ -146,6 +147,73 @@ describe('Project archives', () => {
             )
         ).toBeNull()
         expect(projectToSingleSource(makeProject({ files: {}, entry: 'main.m68k' }))).toBeNull()
+    })
+})
+
+describe('the single Project download', () => {
+    it('gives a one-File Project its source with the metadata block, losing nothing', () => {
+        const project = makeProject({
+            name: 'My / Project',
+            description: 'a description',
+            language: 'MIPS',
+            entry: 'main.mips',
+            files: { 'main.mips': { encoding: 'plain', content: 'li $v0, 10\n' } },
+            testcases: [
+                {
+                    input: [],
+                    expectedOutput: 'done\n',
+                    startingRegisters: {},
+                    expectedRegisters: { v0: 12n },
+                    startingMemory: [],
+                    expectedMemory: []
+                }
+            ]
+        })
+        const download = projectDownload(project)
+        expect(download.kind).toBe('source')
+        expect(download.fileName).toBe('My___Project.mips')
+        expect(typeof download.contents).toBe('string')
+
+        const { project: reimported, notice } = makeProjectFromExternal(download.contents as string)
+        expect(notice).toBeUndefined()
+        expect(reimported.name).toBe('My / Project')
+        expect(reimported.description).toBe('a description')
+        expect(reimported.language).toBe('MIPS')
+        expect(reimported.testcases[0]?.expectedRegisters.v0).toBe(12n)
+        //The text format has always trimmed the code's trailing whitespace, since the metadata
+        //block follows it; everything else comes back byte for byte.
+        expect(reimported.code).toBe('li $v0, 10')
+        expect(Object.keys(reimported.files)).toEqual(['main.mips'])
+    })
+
+    it('gives a multi-File Project the archive instead', () => {
+        const project = makeProject({
+            name: 'Multi',
+            language: 'M68K',
+            entry: 'main.m68k',
+            files: {
+                'main.m68k': { encoding: 'plain', content: 'nop\n' },
+                'lib.m68k': { encoding: 'plain', content: 'rts\n' }
+            }
+        })
+        const download = projectDownload(project)
+        expect(download.kind).toBe('archive')
+        expect(download.fileName).toBe('Multi.asmproj')
+        expect(looksLikeZip(download.contents as Uint8Array)).toBe(true)
+        const { project: reimported } = makeProjectFromArchive(download.contents as Uint8Array)
+        expect(reimported.files).toEqual(project.files)
+    })
+
+    it('gives a lone binary File the archive, which a source file could not hold', () => {
+        const download = projectDownload(
+            makeProject({
+                name: 'Binary',
+                entry: 'main.m68k',
+                files: { 'main.m68k': { encoding: 'base64', content: 'AA==' } }
+            })
+        )
+        expect(download.kind).toBe('archive')
+        expect(download.fileName).toBe('Binary.asmproj')
     })
 })
 
