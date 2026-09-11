@@ -133,10 +133,19 @@ const PROGRAMS: Program[] = [
         referenceOnly: true
     },
     {
-        path: 'Bad_Apple.s68k',
+        path: 'm68k/bad-apple.x68',
         language: 'M68K',
         exercises:
             'the repository’s own animation: a video drawn cell by cell (tasks 11, 23, 80, 81, 87)'
+    },
+    {
+        path: 'm68k/flappy-bird.x68',
+        language: 'M68K',
+        //the game reads the keyboard and the mouse every frame and only leaves its title screen
+        //once one of them says flap; with nothing held it measures a still picture
+        exercises:
+            'a whole game: key state (19) and the mouse (61) driving double buffered drawing (92, 94) paced by program time (8, 23)',
+        drive: (emulator) => emulator.peripherals.keyboard.pressKey(KEY_CODES.SPACE)
     },
     {
         path: 'mips/bitmap-tour.asm',
