@@ -73,6 +73,7 @@ export default ts.config(
             '.svelte-kit/',
             'package/',
             'node_modules/',
+            'emulators/',
             'examples/',
             'static/',
             '*.cjs'

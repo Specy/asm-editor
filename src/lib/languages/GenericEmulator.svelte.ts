@@ -6,6 +6,7 @@ import {
 import {
     type BaseEmulatorActions,
     type BaseEmulatorState,
+    type BuildArtifact,
     createMemoryTab,
     type EmulatorSettings,
     InterpreterStatus,
@@ -167,6 +168,7 @@ export abstract class GenericEmulator<T, R extends string>
             line: -1,
             currentFile: this._sources.entry,
             decorations: [],
+            buildArtifacts: [],
             statusRegisters: [],
             compilerDiagnostics: [],
             callStack: [],
@@ -206,11 +208,16 @@ export abstract class GenericEmulator<T, R extends string>
 
     protected abstract getInstance(): T | null
 
+    protected _getBuildArtifacts(): BuildArtifact[] {
+        return []
+    }
+
     protected addDecorations() {
         if (!this.getInstance()) return
         const decorations = this._getCompiledCode()
         this.state.decorations = decorations.decorations
         this.state.compiledCode = decorations.code
+        this.state.buildArtifacts = this._getBuildArtifacts()
     }
 
     protected addError(error: string) {
@@ -518,6 +525,7 @@ export abstract class GenericEmulator<T, R extends string>
             pc: 0n,
             sp: 0n,
             decorations: [],
+            buildArtifacts: [],
             line: -1,
             currentFile: this._sources.entry,
             interrupt: undefined,
@@ -1284,6 +1292,10 @@ export abstract class GenericEmulator<T, R extends string>
 
     get decorations() {
         return this.state.decorations
+    }
+
+    get buildArtifacts() {
+        return this.state.buildArtifacts
     }
 
     get errors() {

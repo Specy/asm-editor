@@ -20,7 +20,7 @@ import {
 
 export const MIPS_TEXT_OPTIONS = {
     comment: '#',
-    sectionPattern: /^\.(?:text|data|ktext|kdata|bss)$/i,
+    sectionPattern: /^\.(?:text|data|ktext|kdata|bss|sbss|rdata|sdata|section)$/i,
     blockPairs: [
         { start: /^\s*\.macro\b/i, end: /^\s*\.(?:end_macro|endmacro)\b/i },
         { start: /^\s*\.(?:if|ifdef|ifndef|ifb|ifnb)\b/i, end: /^\s*\.endif\b/i }

@@ -88,7 +88,20 @@ beforeEach(() => {
 afterEach(() => unregister())
 
 describe('M68K Project providers', () => {
-    it('offers symbols inside an unreachable secondary File', async () => {
+    it('offers labels across an include unit but not inside an unrelated secondary File', async () => {
+        const entryText = '    bra tar'
+        const entryResult = await createM68kProjectCompletionProvider(
+            monacoStub
+        ).provideCompletionItems(
+            model('a.m68k', entryText) as never,
+            { lineNumber: 1, column: entryText.length + 1 } as never,
+            {} as never,
+            {} as never
+        )
+        expect(entryResult?.suggestions).toContainEqual(
+            expect.objectContaining({ label: 'target', insertText: 'target' })
+        )
+
         const text = sources.files['c.m68k'].content
         const result = await createM68kProjectCompletionProvider(monacoStub).provideCompletionItems(
             model('c.m68k', text) as never,
@@ -96,7 +109,7 @@ describe('M68K Project providers', () => {
             {} as never,
             {} as never
         )
-        expect(result?.suggestions).toContainEqual(
+        expect(result?.suggestions).not.toContainEqual(
             expect.objectContaining({ label: 'target', insertText: 'target' })
         )
     })

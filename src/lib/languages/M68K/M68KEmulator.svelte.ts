@@ -22,6 +22,7 @@ import {
     sliceInstructionBudget
 } from '$lib/languages/ExecutionSlice'
 import {
+    type BuildArtifact,
     type Diagnostic,
     type EmulatorDecoration,
     type EmulatorSettings,
@@ -243,6 +244,24 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     _getCompiledCode(): { decorations: EmulatorDecoration[]; code: string } {
         //M68K has no pseudo instructions, so there is nothing to decorate nor any generated code to show
         return { decorations: [], code: '' }
+    }
+
+    protected _getBuildArtifacts(): BuildArtifact[] {
+        const interpreter = this.interpreter
+        const program = this.program
+        if (!interpreter || !program) return []
+        const result: BuildArtifact[] = []
+        const info = program.getInfo()
+        for (const address of m68kInstructionAddresses(program, interpreter, info)) {
+            const instruction = interpreter.getInstructionAt(address)
+            if (!instruction || instruction.size <= 0) continue
+            result.push({
+                file: instruction.location.file,
+                line: instruction.location.line,
+                address: BigInt(address)
+            })
+        }
+        return result
     }
 
     _getFlags(): { name: string; value: number; prev?: number }[] {
@@ -901,6 +920,28 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         if (!this.interpreter) throw new Error('Interpreter not initialized')
         return this.interpreter
     }
+}
+
+function m68kInstructionAddresses(
+    program: Program,
+    interpreter: Interpreter,
+    info: ReturnType<Program['getInfo']>
+): number[] {
+    const native = program as Program & { getInstructionAddresses?: () => number[] }
+    if (native.getInstructionAddresses) return native.getInstructionAddresses()
+
+    // Compatibility with the currently published package. Local/newer Cores expose the compact
+    // address index above; the fallback walks the executable range and stops as soon as it has
+    // found the number of instructions reported by ProgramInfo.
+    const addresses: number[] = []
+    for (
+        let address = info.entryPoint;
+        address < info.endAddress && addresses.length < info.instructionCount;
+        address += 2
+    ) {
+        if (interpreter.getInstructionAt(address)) addresses.push(address)
+    }
+    return addresses
 }
 
 /**

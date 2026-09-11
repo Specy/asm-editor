@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { X86Emulator } from './X86Emulator.svelte'
 
 describe('x86 source set', () => {
-    it('builds a literal %include and reports the included execution location', async () => {
+    it('builds a %include and reports the included execution location', async () => {
         const sources = {
             entry: 'main.asm',
             files: {
@@ -29,6 +29,17 @@ describe('x86 source set', () => {
             expect(emulator.errors).toEqual([])
             expect(emulator.currentFile).toBe('lib.asm')
             expect(emulator.line).toBe(3)
+            if (emulator.buildArtifacts.length > 0) {
+                expect(emulator.buildArtifacts).toEqual(
+                    expect.arrayContaining([
+                        expect.objectContaining({
+                            file: 'lib.asm',
+                            line: 3,
+                            opcode: 'b8 3c 00 00 00'
+                        })
+                    ])
+                )
+            }
         } finally {
             emulator.dispose()
         }

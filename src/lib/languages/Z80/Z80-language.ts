@@ -500,33 +500,6 @@ function formatInstructionHover(name: string, variants: Z80InstructionVariant[])
 }
 
 /**
- * Reads a Z80 numeric literal in any of the syntaxes the assembler accepts, so that hovering a
- * constant can show it in the other bases.
- */
-function parseZ80Number(word: string): number | null {
-    const text = word.toLowerCase()
-    const patterns: [RegExp, number][] = [
-        [/^0x([0-9a-f]+)$/, 16],
-        [/^\$([0-9a-f]+)$/, 16],
-        [/^0b([01]+)$/, 2],
-        [/^%([01]+)$/, 2],
-        [/^0o([0-7]+)$/, 8],
-        [/^([0-9][0-9a-f]*)h$/, 16],
-        [/^([01]+)b$/, 2],
-        [/^([0-7]+)o$/, 8],
-        [/^(\d+)$/, 10]
-    ]
-    for (const [pattern, radix] of patterns) {
-        const match = pattern.exec(text)
-        if (match) {
-            const value = parseInt(match[1], radix)
-            return Number.isNaN(value) ? null : value
-        }
-    }
-    return null
-}
-
-/**
  * The hover. Mnemonics get the table of their variants, everything else gets the one line of
  * documentation the pages would show.
  */
@@ -573,13 +546,6 @@ export function createZ80HoverProvider(monaco: MonacoType): monaco.languages.Hov
                         : ''
                 contents.push({
                     value: `**${directive.primary}** — directive\n\n${directive.description}${also}`
-                })
-            }
-
-            const value = parseZ80Number(word)
-            if (value !== null) {
-                contents.push({
-                    value: `\`${value}\` = \`0x${value.toString(16).toUpperCase()}\` = \`0b${value.toString(2)}\``
                 })
             }
 

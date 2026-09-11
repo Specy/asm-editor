@@ -129,7 +129,7 @@ export function parseAssemblyLine(line: string, options: AssemblyTextOptions): P
         }
     }
     while (cursor < code.length && /\s/.test(code[cursor]!)) cursor++
-    const operationMatch = /^[#.%]?[A-Za-z_][\w.]*/.exec(code.slice(cursor))
+    const operationMatch = /^(?:\.\w|[#%.]?[A-Za-z_])[\w.]*/.exec(code.slice(cursor))
     if (!operationMatch) return { code, comment: split.comment, label, operands: [] }
     const operation = {
         text: operationMatch[0],

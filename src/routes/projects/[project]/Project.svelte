@@ -84,7 +84,7 @@
     } from '$lib/languages/service/uri'
     import { ProjectLanguageSession } from '$lib/languages/service/ProjectLanguageSession'
     import type { ProjectAnalysisSnapshot } from '$lib/languages/service/protocol'
-    import { languageDiagnosticToDiagnostic } from '$lib/languages/service/legacyDiagnostics'
+    import { languageDiagnosticToDiagnostic } from '$lib/languages/service/diagnosticBridge'
     import { registerProjectNavigation } from '$lib/languages/service/navigation'
     import { zeroBasedLineToMonaco } from '$lib/languages/service/monacoConversions'
 
@@ -960,6 +960,11 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                     modelKey={displayedModelKey}
                     modelIdentity={displayedModelIdentity}
                     {retainedModelKeys}
+                    buildArtifacts={sourceView === 'snapshot'
+                        ? emulator.buildArtifacts.filter(
+                              (artifact) => artifact.file === displayedPath
+                          )
+                        : []}
                     viewZones={sourceView === 'snapshot' &&
                     preferencesStore.values.showPseudoInstructions.value
                         ? emulator.decorations
@@ -976,7 +981,12 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                                           md: decoration.md,
                                           note: decoration.note ?? '',
                                           instructions: decoration.instructions,
-                                          currentAddress: emulator.pc
+                                          language: displayedLanguage.toLowerCase(),
+                                          //`emulator.pc` is read inside the callback, not here:
+                                          //reading it while building this array would rebuild
+                                          //every zone on every step, remounting each component
+                                          //and shifting the layout while it re-measures
+                                          isCurrent: (address: bigint) => emulator.pc === address
                                       }
                                   }
                               })

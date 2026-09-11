@@ -63,6 +63,45 @@ export function resolveM68kFile(
     return root in sources.files ? root : null
 }
 
+/** Text source Files reached through `include`, starting from one translation-unit root. */
+export function m68kIncludedSourceFiles(
+    sources: BuildSources,
+    entry: string = sources.entry
+): Set<string> {
+    const included = new Set<string>()
+    const pending = [entry]
+    while (pending.length > 0) {
+        const path = pending.pop()!
+        if (included.has(path)) continue
+        const file = sources.files[path]
+        if (!file || file.encoding !== 'plain') continue
+        included.add(path)
+        for (const line of file.content.split(/\r?\n/)) {
+            const operation = S68k.parseLine(line).operation
+            if (operation?.name.toLowerCase() !== 'include' || !operation.text) continue
+            const target = resolveM68kFile(path, m68kWrittenPath(operation.text.text), sources)
+            if (target) pending.push(target)
+        }
+    }
+    return included
+}
+
+/** Source and binary Files consumed by an M68K Build. */
+export function m68kReachableFiles(sources: BuildSources): Set<string> {
+    const reachable = m68kIncludedSourceFiles(sources)
+    for (const path of [...reachable]) {
+        const file = sources.files[path]
+        if (file?.encoding !== 'plain') continue
+        for (const line of file.content.split(/\r?\n/)) {
+            const operation = S68k.parseLine(line).operation
+            if (operation?.name.toLowerCase() !== 'incbin' || !operation.text) continue
+            const target = resolveM68kFile(path, m68kWrittenPath(operation.text.text), sources)
+            if (target) reachable.add(target)
+        }
+    }
+    return reachable
+}
+
 function joinM68kPath(base: string, written: string): string {
     const parts: string[] = []
     for (const part of [...base.split('/'), ...written.split(/[\\/]/)]) {

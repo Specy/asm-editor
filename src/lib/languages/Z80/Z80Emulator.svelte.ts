@@ -14,6 +14,7 @@ import {
     type Instruction
 } from '$lib/languages/BaseEmulator.svelte'
 import {
+    type BuildArtifact,
     type Diagnostic,
     type EmulatorDecoration,
     type EmulatorSettings,
@@ -45,7 +46,12 @@ import {
     Z80_STARTING_REGISTER_NAMES,
     type Z80RegisterName
 } from '$lib/languages/Z80/Z80-model'
-import { assemblyFiles, type BuildInput, type BuildSources } from '$lib/projectFiles'
+import {
+    assemblyFiles,
+    resolveFilePath,
+    type BuildInput,
+    type BuildSources
+} from '$lib/projectFiles'
 
 /**
  * The `RegisterSet` field behind each register the panel shows. The alternate registers are spelled
@@ -548,6 +554,22 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         return { decorations, code: '' }
     }
 
+    protected _getBuildArtifacts(): BuildArtifact[] {
+        const assembly = this.assembly
+        if (!assembly) return []
+        return assembly.asm.assembledLines
+            .filter(
+                (line): line is AssembledLine & { lineNumber: number } =>
+                    line.lineNumber !== undefined && line.binary.length > 0
+            )
+            .map((line) => ({
+                file: normalizedCorePath(line.fileInfo.pathname),
+                line: line.lineNumber,
+                address: BigInt(line.address),
+                opcode: line.binary.map((byte) => byte.toString(16).padStart(2, '0')).join(' ')
+            }))
+    }
+
     _stringifyError(error: unknown, _line?: number): string {
         return error instanceof Error ? error.message : String(error)
     }
@@ -724,6 +746,14 @@ function coreRegisterKey(register: Z80RegisterName): CoreRegisterKey {
     const key = CORE_REGISTER_BY_NAME[register]
     if (!key) throw new Error(`Unsupported register: ${register}`)
     return key
+}
+
+function normalizedCorePath(path: string): string {
+    try {
+        return resolveFilePath(path)
+    } catch {
+        return path
+    }
 }
 
 /**

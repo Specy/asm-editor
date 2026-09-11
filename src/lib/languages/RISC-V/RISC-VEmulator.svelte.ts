@@ -20,6 +20,7 @@ import {
     type Instruction
 } from '$lib/languages/BaseEmulator.svelte'
 import {
+    type BuildArtifact,
     type Diagnostic,
     type EmulatorDecoration,
     type EmulatorSettings,
@@ -72,19 +73,30 @@ const READ_STRING_QUESTION = 'Enter a string'
 
 /**
  * How many instructions the TeaVM compiled Core runs in a millisecond, used to turn a slice's time
- * budget into a halt limit. Measured in phase 8 on a compute-only loop under node, built with the
- * shipped undo history: about 27, forty times slower than the phase 7 estimate this replaces, which
- * had a slice hold the host for three and a half seconds. RARS records a backstep entry per
- * instruction and that is what costs — the same loop runs at 460 with undo turned off — so the
- * estimate follows the shipped default, where undo is on.
+ * budget into a halt limit. Measured on a compute-only loop under node, built with the shipped undo
+ * history: about 5 400. The earlier estimate of 2 800 was taken while the Core kept the program
+ * counter in a long Register and added one to the cycle and instret counters on every instruction -
+ * TeaVM compiles long arithmetic into BigInt operations, each of which allocates - read the
+ * self-modifying-code setting out of a map on every instruction fetch, fetched through four calls
+ * that re-checked alignment and the text segment, and assembled every aligned word load and store a
+ * byte at a time. The estimate of 25 before that was taken before four faults in RARS were
+ * fixed, each worth several times the throughput of the one before it: `BackStepper.BackStep.assign`
+ * threw an `AddressErrorException` per backstep entry for any loop branching to the first
+ * instruction of the text segment, which is where `main` sits in every example; the cycle, instret
+ * and time counters were resolved by name and recorded an undo entry even when the value did not
+ * change; and a monitor was entered on every register access, every memory table access, every
+ * backstep push and once more around each instruction, which TeaVM compiles to real monitor enter
+ * and exit calls on a Core that is single threaded; and the two counters recorded an undo entry
+ * each, where one entry covers both.
  */
-const RISCV_INSTRUCTIONS_PER_MS = 25
+const RISCV_INSTRUCTIONS_PER_MS = 5_432
 
 /**
  * How much wall time one `simulate*` call aims at, which is also how far a chunk that turns out to
  * sleep can carry the slice past its deadline before the next check (`marsSlice.ts`). Four
- * milliseconds is a hundred instructions of this Core's compute and a dozen calls in a compute
- * slice: the Core spends forty microseconds on each instruction, so a hundred of them hide the call.
+ * milliseconds is about twenty thousand instructions of this Core's compute and a dozen calls in a
+ * compute slice: the Core spends under a fifth of a microsecond on each instruction, so a chunk
+ * that large hides the call.
  */
 const RISCV_CHUNK_TARGET_MS = 4
 
@@ -389,14 +401,25 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
                 note: 'Assembled instructions',
                 belowLine: original.sourceLine,
                 md: `\`\`\`riscv\n${lines.join('\n')}\n\`\`\``,
-                instructions: statements.map((statement) => ({
+                //the same indented text the Markdown form uses, so an expansion lines up with the
+                //source instruction it came from rather than starting at the Editor's left edge
+                instructions: statements.map((statement, index) => ({
                     address: BigInt(statement.address),
-                    code: formatStatement(statement.assemblyStatement)
+                    code: lines[index] ?? formatStatement(statement.assemblyStatement)
                 }))
             })
         }
         //RISC-V has no generated code panel, only the per-line expansion decorations
         return { decorations, code: '' }
+    }
+
+    protected _getBuildArtifacts(): BuildArtifact[] {
+        return (this.riscv?.getCompiledStatements() ?? []).map((statement) => ({
+            file: statement.sourcePath,
+            line: sourceLineToIndex(statement.sourceLine),
+            address: BigInt(statement.address >>> 0),
+            opcode: (statement.binaryStatement >>> 0).toString(16).padStart(8, '0')
+        }))
     }
 
     _getFlags(): { name: string; value: number; prev?: number }[] {
@@ -765,8 +788,11 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
                         size: this._systemSize
                     }
                 }
+            //the cycle and instret counters are bookkeeping the program did not ask for, so the
+            //entry that undoes them is not a mutation the diff should show
             case BackStepAction.CONTROL_AND_STATUS_REGISTER_BACKDOOR:
             case BackStepAction.CONTROL_AND_STATUS_REGISTER_RESTORE:
+            case BackStepAction.CONTROL_AND_STATUS_COUNTERS_DECREMENT:
                 return null
             case BackStepAction.DO_NOTHING:
                 return {
@@ -952,5 +978,6 @@ const backStepActionMap = {
     [BackStepAction.CONTROL_AND_STATUS_REGISTER_RESTORE]: 'Control and status register restore',
     [BackStepAction.CONTROL_AND_STATUS_REGISTER_BACKDOOR]: 'Control and status register backdoor',
     [BackStepAction.FLOATING_POINT_REGISTER_RESTORE]: 'Floating point register restore',
-    [BackStepAction.DO_NOTHING]: 'Do nothing'
+    [BackStepAction.DO_NOTHING]: 'Do nothing',
+    [BackStepAction.CONTROL_AND_STATUS_COUNTERS_DECREMENT]: 'Cycle and instret counters decrement'
 } satisfies Record<BackStepAction, string>

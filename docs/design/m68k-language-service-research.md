@@ -507,12 +507,11 @@ Initial capability declarations should be honest:
   expansion-dependent Local labels, and full instruction source maps until the Core exposes
   occurrences and expansion identity.
 
-Build-only address hints must say that they are simulator/Core addresses. S68k currently models
-every instruction as four bytes rather than producing real 68000 encodings
-([installed README](../../node_modules/@specy/s68k/README.md#L225)), and the app currently reports no
-M68K generated code or pseudo-instruction decoration
-([`M68KEmulator.svelte.ts`](../../src/lib/languages/M68K/M68KEmulator.svelte.ts#L238)). Opcode-byte
-code lenses therefore remain unavailable.
+Build-only address Hover must say that the values are simulator/Core addresses. S68k models every
+instruction as four bytes rather than producing real 68000 encodings
+([installed README](../../node_modules/@specy/s68k/README.md#L225)). Its exported source listing now
+lets the app show an instruction address while hovering its mnemonic, but opcode bytes remain
+unavailable and no Build metadata is rendered inline.
 
 ## Concrete test additions
 

@@ -63,7 +63,7 @@ async function completionLabels(
     return result?.suggestions ?? []
 }
 
-describe('MIPS and RISC-V completion contracts', () => {
+describe('MIPS and RISC-V instruction-provider contracts', () => {
     it('does not throw on a label-only line', async () => {
         await expect(completionLabels(createMIPSCompletion(monacoStub), 'loop:')).resolves.toEqual(
             expect.any(Array)

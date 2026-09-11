@@ -16,9 +16,10 @@
     import type { MonacoType } from '$lib/monaco/Monaco'
     import { Monaco } from '$lib/monaco/Monaco'
     import { generateTheme } from '$lib/monaco/editorTheme'
-    import type { Diagnostic } from '$lib/languages/commonLanguageFeatures.svelte'
+    import type { BuildArtifact, Diagnostic } from '$lib/languages/commonLanguageFeatures.svelte'
     import { projectSourceUri, type ProjectModelIdentity } from '$lib/languages/service/uri'
     import { zeroBasedLineToMonaco } from '$lib/languages/service/monacoConversions'
+    import { setModelBuildArtifacts } from '$lib/monaco/assemblyInsights'
 
     interface Props {
         disabled?: boolean
@@ -43,6 +44,7 @@
             content: Component<ViewZoneProps>
             props: ViewZoneProps
         }[]
+        buildArtifacts?: BuildArtifact[]
     }
 
     let {
@@ -59,7 +61,8 @@
         breakpoints = [],
         breakpointsEditable = true,
         editor = $bindable(),
-        viewZones = []
+        viewZones = [],
+        buildArtifacts = []
     }: Props = $props()
     let mockEditor: HTMLDivElement | null = $state(null)
     let monacoInstance: MonacoType | null = $state.raw(null)
@@ -225,6 +228,12 @@
 
     $effect(() => {
         selectModel(modelKey, codeOverride ?? code)
+    })
+
+    $effect(() => {
+        const model = models.get(modelKey)
+        if (!model || model.isDisposed()) return
+        return setModelBuildArtifacts(model.uri.toString(), buildArtifacts)
     })
 
     $effect(() => {

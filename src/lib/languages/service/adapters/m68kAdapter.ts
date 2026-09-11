@@ -1,9 +1,5 @@
 import { S68k, type Location, type ProgramSymbol } from '@specy/s68k'
-import {
-    m68kAssemblyFiles,
-    m68kWrittenPath,
-    resolveM68kFile
-} from '$lib/languages/M68K/m68kAssemblyFiles'
+import { m68kAssemblyFiles, m68kReachableFiles } from '$lib/languages/M68K/m68kAssemblyFiles'
 import {
     s68kColumnToUtf16,
     s68kDiagnosticToLanguageDiagnostic
@@ -37,28 +33,6 @@ function sourceLocation(sources: BuildSources, location: Location): SourceLocati
             }
         }
     }
-}
-
-function reachableFiles(sources: BuildSources): Set<string> {
-    const reachable = new Set<string>()
-    const pending = [sources.entry]
-    while (pending.length > 0) {
-        const path = pending.pop()!
-        if (reachable.has(path) || !sources.files[path]) continue
-        reachable.add(path)
-        const file = sources.files[path]
-        if (file.encoding !== 'plain') continue
-        for (const line of file.content.split(/\r?\n/)) {
-            const operation = S68k.parseLine(line).operation
-            const name = operation?.name.toLowerCase()
-            if ((name !== 'include' && name !== 'incbin') || !operation?.text) continue
-            const target = resolveM68kFile(path, m68kWrittenPath(operation.text.text), sources)
-            if (!target) continue
-            if (name === 'include') pending.push(target)
-            else reachable.add(target)
-        }
-    }
-    return reachable
 }
 
 function tolerantSymbols(sources: BuildSources): LanguageSymbol[] {
@@ -108,7 +82,7 @@ export function analyzeM68kProject(
     sessionId: string,
     revision: number
 ): M68kAnalysisSnapshot {
-    const reachable = reachableFiles(sources)
+    const reachable = m68kReachableFiles(sources)
     const fileStatus: Record<string, M68kFileAnalysisStatus> = Object.create(null)
     for (const [path, file] of Object.entries(sources.files)) {
         fileStatus[path] =

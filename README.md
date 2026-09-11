@@ -89,6 +89,10 @@ npm run dev # to run the dev server
 # npm run build # to build the app
 ```
 
+The emulator sources are available as Git submodules for local development. Normal installs and
+deployments continue to use the npm packages. See [Working on the emulators](docs/local-emulators.md)
+to opt into local builds.
+
 # Contributing
 
 If you wish to contribute, make a new issue to discuss the changes you want to make (or comment on an existing one).

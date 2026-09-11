@@ -2,6 +2,7 @@ import type { Diagnostic } from '$lib/languages/commonLanguageFeatures.svelte'
 import { fileText, type BuildSources } from '$lib/projectFiles'
 import type { LanguageDiagnostic } from './sourceModel'
 
+/** Converts the neutral Worker diagnostic into the Emulator/UI diagnostic contract. */
 export function languageDiagnosticToDiagnostic(
     diagnostic: LanguageDiagnostic,
     sources: BuildSources

@@ -6,7 +6,15 @@ import { defineConfig } from 'vitest/config'
 //import devtoolsJson from 'vite-plugin-devtools-json';
 export default defineConfig({
     server: {
-        port: 4173
+        port: 4173,
+        fs: {
+            // `npm run emulators:local` points the `@specy/*` packages at their submodule
+            // checkouts, so Vite resolves a linked Core's assets to their real path under
+            // `emulators/` instead of `node_modules/`. Without this the `.wasm` files fall
+            // outside the serving allow list and the 403 page itself reaches
+            // `WebAssembly.instantiate`, which reports a bad magic word.
+            allow: ['emulators']
+        }
     },
     optimizeDeps: {
         exclude: ['@specy/s68k', '@specy/x86', '@battlefieldduck/xterm-svelte']

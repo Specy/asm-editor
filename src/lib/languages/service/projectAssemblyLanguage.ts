@@ -183,6 +183,54 @@ function resolveProjectInclude(
     return null
 }
 
+function sourceIncludeOnLine(line: string, options: ProjectAssemblyLanguageOptions): string | null {
+    const source = lineWithoutComment(line, options)
+    const pattern =
+        options.dialect === 'mars'
+            ? /^\s*\.include\s+(["'])(.*?)\1/i
+            : options.dialect === 'z80'
+              ? /^\s*(?:#include|include)\s+(["'])(.*?)\1/i
+              : options.dialect === 'x86'
+                ? /^\s*%include\s+(["'])(.*?)\1/i
+                : null
+    return pattern?.exec(source)?.[2] ?? null
+}
+
+/** Files that participate in one textual assembly unit. Binary `incbin` inputs add no symbols. */
+function includedSourcePaths(
+    sources: BuildSources,
+    entry: string,
+    options: ProjectAssemblyLanguageOptions
+): Set<string> {
+    const included = new Set<string>()
+    const pending = [entry]
+    while (pending.length > 0) {
+        const path = pending.pop()!
+        if (included.has(path)) continue
+        const file = sources.files[path]
+        if (!file || file.encoding !== 'plain') continue
+        included.add(path)
+        for (const line of file.content.split(/\r?\n/)) {
+            const writtenPath = sourceIncludeOnLine(line, options)
+            if (!writtenPath) continue
+            const target = resolveProjectInclude(path, writtenPath, sources)
+            if (target) pending.push(target)
+        }
+    }
+    return included
+}
+
+function completionSourcePaths(
+    sources: BuildSources,
+    currentPath: string,
+    options: ProjectAssemblyLanguageOptions
+): Set<string> {
+    const entryUnit = includedSourcePaths(sources, sources.entry, options)
+    return entryUnit.has(currentPath)
+        ? entryUnit
+        : includedSourcePaths(sources, currentPath, options)
+}
+
 function relativePath(from: string, to: string): string {
     const fromParts = from.split('/')
     fromParts.pop()
@@ -284,8 +332,14 @@ export function createProjectSymbolCompletionProvider(
             }
             if (!isOperandContext(prefix, options)) return { suggestions: [] }
             const word = model.getWordUntilPosition(position)
+            const visiblePaths = completionSourcePaths(
+                context.sources,
+                context.identity.path,
+                options
+            )
             return {
                 suggestions: sourceSymbols(context.sources, options)
+                    .filter((symbol) => visiblePaths.has(symbol.path))
                     .filter(
                         (symbol) =>
                             !options.excludeCurrentFromCompletion ||

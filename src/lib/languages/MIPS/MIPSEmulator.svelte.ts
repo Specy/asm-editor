@@ -17,6 +17,7 @@ import {
     type Instruction
 } from '$lib/languages/BaseEmulator.svelte'
 import {
+    type BuildArtifact,
     type Diagnostic,
     type EmulatorDecoration,
     type EmulatorSettings,
@@ -73,16 +74,24 @@ const READ_STRING_QUESTION = 'Enter a string'
 
 /**
  * How many instructions the TeaVM compiled Core runs in a millisecond, used to turn a slice's time
- * budget into a halt limit. Measured in phase 8 on a compute-only loop under node, built with the
- * shipped undo history: about 1 100 to 1 200, so the phase 7 estimate stands.
+ * budget into a halt limit. Measured on a compute-only loop under node, built with the shipped undo
+ * history: about 11 000. The earlier estimate of 6 500 was taken while the Core read the
+ * self-modifying-code setting out of a string map on every instruction fetch and the delayed
+ * branching setting on every branch - each a hash lookup and a `Boolean.parseBoolean`, which
+ * lowercases a fresh string - fetched through five calls that re-checked alignment and both text
+ * segments, assembled every aligned word load and store a byte at a time, and found a register by
+ * scanning all thirty-two. The estimate of 1 000 before that was taken while MARS still entered a
+ * monitor on every register access, every memory table access, every backstep push and once more
+ * around each instruction; TeaVM compiles those to real monitor enter and exit calls and this Core
+ * is single threaded, so dropping them made the same loop about five times faster.
  */
-const MIPS_INSTRUCTIONS_PER_MS = 1_000
+const MIPS_INSTRUCTIONS_PER_MS = 11_022
 
 /**
  * How much wall time one `simulate*` call aims at, which is also how far a chunk that turns out to
  * sleep can carry the slice past its deadline before the next check (`marsSlice.ts`). A millisecond
- * is about a thousand instructions of compute and fifty calls in a compute slice, which the call
- * overhead measured there puts at half a percent of throughput.
+ * is about eleven thousand instructions of compute and fifty calls in a compute slice, which the
+ * call overhead measured there puts at half a percent of throughput.
  */
 const MIPS_CHUNK_TARGET_MS = 1
 
@@ -367,14 +376,25 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
                 note: 'Assembled instructions',
                 belowLine: original.sourceLine,
                 md: `\`\`\`mips\n${lines.join('\n')}\n\`\`\``,
-                instructions: statements.map((statement) => ({
+                //the same indented text the Markdown form uses, so an expansion lines up with the
+                //source instruction it came from rather than starting at the Editor's left edge
+                instructions: statements.map((statement, index) => ({
                     address: BigInt(statement.address),
-                    code: formatStatement(statement.assemblyStatement)
+                    code: lines[index] ?? formatStatement(statement.assemblyStatement)
                 }))
             })
         }
         //MIPS has no generated code panel, only the per-line expansion decorations
         return { decorations, code: '' }
+    }
+
+    protected _getBuildArtifacts(): BuildArtifact[] {
+        return (this.mips?.getCompiledStatements() ?? []).map((statement) => ({
+            file: statement.sourcePath,
+            line: statement.sourceLine - 1,
+            address: BigInt(statement.address >>> 0),
+            opcode: (statement.binaryStatement >>> 0).toString(16).padStart(8, '0')
+        }))
     }
 
     _getFlags(): { name: string; value: number; prev?: number }[] {
@@ -655,7 +675,7 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
             readFile: (descriptor, _destination, length) =>
                 (() => {
                     const bytes = this.fileSystemSession!.read(descriptor, length)
-                    return [bytes.length === 0 ? -1 : bytes.length, mipsReadBuffer(bytes)]
+                    return [bytes.length === 0 ? -1 : bytes.length, Array.from(bytes)]
                 })(),
             writeFile: (descriptor, buffer) =>
                 void this.fileSystemSession!.write(descriptor, handlerBytes(buffer)),
@@ -737,12 +757,6 @@ function handlerBytes(buffer: unknown): Uint8Array {
 }
 
 /** @specy/mips 3.0 currently unboxes returned read bytes as TeaVM Byte objects. */
-function mipsReadBuffer(bytes: Uint8Array): number[] {
-    return Array.from(bytes, (byte) => ({
-        $byteValue: () => (byte > 0x7f ? byte - 0x100 : byte)
-    })) as unknown as number[]
-}
-
 function isMIPSNumericRegisterName(register: string): register is RegisterName {
     return MIPSNumericRegisterNames.some((candidate) => candidate === register)
 }

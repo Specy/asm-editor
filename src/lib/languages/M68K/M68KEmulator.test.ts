@@ -84,6 +84,13 @@ describe('M68K Project Files', () => {
         const emulator = M68KEmulator(sources)
         await emulator.compile(0, sources)
         expect(emulator.currentFile).toBe('src/lib/helper.m68k')
+        expect(emulator.buildArtifacts).toEqual([
+            {
+                file: 'src/lib/helper.m68k',
+                line: 0,
+                address: 0x1000n
+            }
+        ])
         await emulator.step()
         expect(registerOf(emulator, 'D0')).toBe(7n)
         emulator.dispose()

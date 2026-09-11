@@ -266,6 +266,15 @@ export type EmulatorDecoration = {
     instructions?: { address: bigint; code: string }[]
 }
 
+export type BuildArtifact = {
+    file: string
+    /** Zero-based source line. */
+    line: number
+    address: bigint
+    /** Emitted instruction bytes or machine word, written in hexadecimal, when the Core exposes it. */
+    opcode?: string
+}
+
 export type EmulatorInterrupt = {
     type: string
     message?: string
@@ -279,6 +288,7 @@ export type BaseEmulatorState = {
     startingRegisterNames: string[]
     hiddenRegisters: string[]
     decorations: EmulatorDecoration[]
+    buildArtifacts: BuildArtifact[]
     statusRegisters: StatusRegister[]
     errors: string[]
     compilerDiagnostics: Diagnostic[]

@@ -1,7 +1,7 @@
 import { S68k } from '@specy/s68k'
 import type monaco from 'monaco-editor'
 import type { MonacoType } from '$lib/monaco/Monaco'
-import { m68kWrittenPath, resolveM68kFile } from './m68kAssemblyFiles'
+import { m68kIncludedSourceFiles, m68kWrittenPath, resolveM68kFile } from './m68kAssemblyFiles'
 import { languageSession, type LanguageSessionView } from '$lib/languages/service/sessionRegistry'
 import {
     parseProjectSourceUri,
@@ -29,6 +29,15 @@ function sessionForModel(model: monaco.editor.ITextModel): {
 
 function liveSymbols(context: ReturnType<typeof sessionForModel>): LanguageSymbol[] {
     return context?.identity.sourceKind === 'live' ? (context.session.snapshot?.symbols ?? []) : []
+}
+
+function completionSymbols(context: NonNullable<ReturnType<typeof sessionForModel>>) {
+    const entryUnit = m68kIncludedSourceFiles(context.sources)
+    const root = entryUnit.has(context.identity.path)
+        ? context.sources.entry
+        : context.identity.path
+    const visiblePaths = m68kIncludedSourceFiles(context.sources, root)
+    return liveSymbols(context).filter((symbol) => visiblePaths.has(symbol.location.path))
 }
 
 function targetUri(monaco: MonacoType, identity: ProjectModelIdentity, path: string): monaco.Uri {
@@ -138,7 +147,7 @@ export function createM68kProjectCompletionProvider(
             }
             if (!parsed.operation) return { suggestions: [] }
             const word = model.getWordUntilPosition(position)
-            const symbols = liveSymbols(context)
+            const symbols = completionSymbols(context)
             return {
                 suggestions: symbols
                     .filter((symbol) => symbol.name.startsWith(word.word))

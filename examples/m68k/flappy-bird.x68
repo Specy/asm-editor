@@ -1,28 +1,3 @@
-*-----------------------------------------------------------------------------
-* FLAPPY 68K: a playable flappy bird, drawn and driven entirely through the
-* EASy68K trap #15 tasks.
-*
-* Click the screen panel first, so it has the keyboard; the ring around it says
-* the editor's own shortcuts are off while it does. Then tap SPACE, W, ENTER or
-* the up arrow, or click on the screen itself, to flap. Fly through the gaps.
-* Touching a pipe or the ground ends the run, and a flap starts the next one.
-*
-* Task 92 mode 17 draws every frame off screen and task 94 shows it finished,
-* so nothing half drawn is ever visible; task 23 paces the animation in program
-* time, which is what keeps it the same speed on a fast host and a slow one;
-* task 19 reads the keys and task 61 the mouse, both without ever waiting, so
-* the game keeps running whether or not anything is pressed. The score is drawn
-* with task 95, straight onto the picture, rather than printed at the text
-* cursor: printed text would also go to the terminal transcript, once a frame.
-*
-* Screen: 640 by 480, the size a program starts with. The tunables are the
-* equates at the bottom, next to the colors.
-*
-* A frame costs about 61 instructions, so the editor's default two million
-* instruction limit is worth something like a quarter of an hour of play before
-* it ends the program with an error. Set "Instruction execution limit" to 0 in
-* the settings to play for as long as you like.
-*-----------------------------------------------------------------------------
     ORG     $1000
 
 start:

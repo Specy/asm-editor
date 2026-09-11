@@ -327,33 +327,87 @@ export const mipsDirectivesMap = {
         description:
             'Declares an **uninitialized data section**, typically used for reserving large blocks of memory.'
     },
-    org: {
-        name: 'org',
-        description:
-            'Sets the **location counter** to a specific address, controlling where subsequent data or code is placed.'
-    },
-    ltorg: {
-        name: 'ltorg',
-        description:
-            'Forces the assembler to place **literal pools** (constants) at the current location.'
-    },
     frame: {
-        name: '.frame',
+        //every other name here is written without the dot, which the page adds itself
+        name: 'frame',
         description:
-            "Defines a function's **stack frame structure**, including base register, stack size, and return register."
+            "Describes a function's **stack frame** for the debugger: base register, stack size and return register. MARS accepts it and does nothing with it, so that compiler output assembles unchanged."
     },
     ent: {
         name: 'ent',
-        description: 'Marks the **start of a function** for debugging or profiling purposes.'
+        description:
+            'Marks the **start of a function** for the debugger. MARS accepts it and does nothing with it, so that compiler output assembles unchanged.'
     },
     end: {
         name: 'end',
-        description: 'Marks the **end of an assembly file** or function.'
+        description:
+            'Marks the **end of a function** for the debugger. MARS accepts it and does nothing with it, so that compiler output assembles unchanged.'
     },
     local: {
         name: 'local',
         description:
-            'Declares a **symbol as local**, meaning it is only accessible within the current file.'
+            'Marks a symbol as **local to this file** for the linker. MARS accepts it and does nothing with it, so that compiler output assembles unchanged.'
+    },
+    section: {
+        name: 'section',
+        description:
+            'Switches to the named section. A read-only or zeroed section becomes part of the data segment here.\n\nExample:\n```mips\n.section .rodata\n```'
+    },
+    rdata: {
+        name: 'rdata',
+        description:
+            'Declares a section for **read-only initialized data**, such as string literals. Read-only data is not stored separately in this simulator, so it joins the data segment.'
+    },
+    sdata: {
+        name: 'sdata',
+        description: 'Alias for `.rdata`.'
+    },
+    sbss: {
+        name: 'sbss',
+        description: 'Alias for `.bss`.'
+    },
+    comm: {
+        name: 'comm',
+        description:
+            'Reserves bytes for an **uninitialized global variable**, the way a C compiler declares one. Takes a symbol, a size in bytes and an optional alignment, and leaves the current section unchanged.\n\nExample:\n```mips\n.comm total, 4, 4\n```'
+    },
+    lcomm: {
+        name: 'lcomm',
+        description:
+            'Like `.comm`, but for a symbol **local to this file**, as a C compiler declares an uninitialized `static` variable.'
+    },
+    zero: {
+        name: 'zero',
+        description: 'Reserves the given number of bytes, which read as zero. Alias for `.space`.'
+    },
+    p2align: {
+        name: 'p2align',
+        description: 'Alias for `.align`: aligns the next item on a 2^n byte boundary.'
+    },
+    balign: {
+        name: 'balign',
+        description:
+            'Aligns the next item on the given byte boundary, written **directly** rather than as a power of two.\n\nExample:\n```mips\n.balign 8\n```'
+    },
+    '2byte': {
+        name: '2byte',
+        description: 'Alias for `.half`.'
+    },
+    '4byte': {
+        name: '4byte',
+        description: 'Alias for `.word`.'
+    },
+    asciz: {
+        name: 'asciz',
+        description: 'Alias for `.asciiz`: stores a null-terminated string.'
+    },
+    string: {
+        name: 'string',
+        description: 'Alias for `.asciiz`: stores a null-terminated string.'
+    },
+    global: {
+        name: 'global',
+        description: 'Alias for `.globl`.'
     }
 } as const
 

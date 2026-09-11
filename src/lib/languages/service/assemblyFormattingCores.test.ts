@@ -75,6 +75,61 @@ describe('assembly formatting against the real cores', () => {
         expect(z80Binary(formatAssemblySource(source, Z80_TEXT_OPTIONS))).toEqual(z80Binary(source))
     })
 
+    // This is the one case that boots a real Core rather than calling an assembler
+    // directly: it starts the x86 WASM emulator and links the program twice. That costs
+    // a few seconds on its own and rather more when the rest of the suite is running in
+    // parallel, so it needs a timeout well above Vitest's 5s default.
+    it('preserves compiler generated MIPS, including its directive spellings', () => {
+        const source = [
+            '\t.rdata',
+            '$LC0:',
+            '\t.ascii\t"sum=\\000"',
+            '\t.data',
+            '\t.4byte\t1',
+            '\t.2byte\t2',
+            '\t.comm\ttotal,4,4',
+            '\t.text',
+            '\t.type\tmain, @function',
+            '\t.ent\tmain',
+            'main:',
+            '\tlui\t$t0,%hi(total) # keep, comment',
+            '\tsw\t$a0,%lo(total)($t0)',
+            '\t.size\tmain, .-main',
+            '\tli\t$v0,10',
+            '\tsyscall'
+        ].join('\n')
+        const formatted = formatAssemblySource(source, MIPS_TEXT_OPTIONS)
+        expect(marsBinary(formatted)).toEqual(marsBinary(source))
+        //a directive whose name begins with a digit is still an operation to indent
+        expect(formatted).toContain('    .4byte 1')
+        expect(formatted).toContain('    lui $t0, %hi(total)')
+    })
+
+    it('preserves compiler generated RISC-V, including its directive spellings', () => {
+        const source = [
+            '\t.section\t.rodata',
+            '.LC0:',
+            '\t.string\t"sum="',
+            '\t.data',
+            '\t.4byte\t1',
+            '\t.8byte\t2',
+            '\t.comm\ttotal,4,4',
+            '\t.text',
+            '\t.type\tmain, @function',
+            'main:',
+            '\tlui\ta5,%hi(total) # keep, comment',
+            '\tsw\ta0,%lo(total)(a5)',
+            '\t.cfi_startproc',
+            '\t.size\tmain, .-main',
+            '\tli\ta7,10',
+            '\tecall'
+        ].join('\n')
+        const formatted = formatAssemblySource(source, RISCV_TEXT_OPTIONS)
+        expect(riscvBinary(formatted)).toEqual(riscvBinary(source))
+        expect(formatted).toContain('    .4byte 1')
+        expect(formatted).toContain('    lui a5, %hi(total)')
+    })
+
     it('preserves the linked x86 executable', async () => {
         const source = [
             'bits 64',
@@ -96,7 +151,7 @@ describe('assembly formatting against the real cores', () => {
         } finally {
             emulator.dispose()
         }
-    })
+    }, 30_000)
 
     it('preserves M68K instructions and initialized memory', () => {
         const source = [

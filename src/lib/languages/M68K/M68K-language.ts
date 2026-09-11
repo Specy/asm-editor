@@ -383,6 +383,18 @@ export function createM68kHoverProvider(monaco: MonacoType): monaco.languages.Ho
     }
 }
 
+/** The UTF-16 range of an instruction or directive name, for composed hover providers. */
+export function m68kOperationSpan(line: string): { start: number; end: number } | undefined {
+    const parsed = S68k.parseLine(line)
+    if (parsed.kind !== 'instruction' && parsed.kind !== 'directive') return undefined
+    const operation = parsed.operation
+    if (!operation) return undefined
+    return {
+        start: s68kColumnToUtf16(line, operation.nameSpan.start),
+        end: s68kColumnToUtf16(line, operation.nameSpan.end)
+    }
+}
+
 function activeM68kParameter(line: string, operandStart: number): number {
     let active = 0
     let depth = 0

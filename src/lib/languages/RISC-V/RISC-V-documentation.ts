@@ -376,6 +376,50 @@ export const riscvDirectivesMap = {
         name: 'section',
         description:
             'Allows specifying sections without .text or .data directives. Included for gcc comparability'
+    },
+    bss: {
+        name: 'bss',
+        description: 'Subsequent items stored in the Data segment, which starts out zeroed'
+    },
+    sbss: {
+        name: 'sbss',
+        description: 'Alias for .bss'
+    },
+    zero: {
+        name: 'zero',
+        description:
+            'Reserve the next specified number of bytes, which read as zero. Alias for .space'
+    },
+    comm: {
+        name: 'comm',
+        description:
+            'Reserve the given number of bytes for a global symbol, the way a C compiler declares an uninitialized global variable. Takes a symbol, a size in bytes and an optional alignment'
+    },
+    lcomm: {
+        name: 'lcomm',
+        description:
+            'Reserve the given number of bytes for a symbol local to this file, the way a C compiler declares an uninitialized static variable'
+    },
+    p2align: {
+        name: 'p2align',
+        description: 'Align next data item on a 2^n byte boundary. Alias for .align'
+    },
+    balign: {
+        name: 'balign',
+        description:
+            'Align next data item on the given byte boundary, written directly rather than as a power of two'
+    },
+    '2byte': {
+        name: '2byte',
+        description: 'Alias for .half'
+    },
+    '4byte': {
+        name: '4byte',
+        description: 'Alias for .word'
+    },
+    '8byte': {
+        name: '8byte',
+        description: 'Alias for .dword'
     }
 }
 

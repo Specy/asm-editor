@@ -4,6 +4,7 @@ import {
     type Instruction
 } from '$lib/languages/BaseEmulator.svelte'
 import {
+    type BuildArtifact,
     type Diagnostic,
     type EmulatorDecoration,
     type EmulatorSettings,
@@ -23,24 +24,29 @@ import type { Testcase } from '$lib/Project.svelte'
 import {
     BlinkState,
     createX86Emulator,
+    locateDiagnosticColumn,
     EmulatorStatus as CoreEmulatorStatus,
     RegisterSize as CoreRegisterSize,
     X86_REGISTER_NAMES,
     type ExecutionStep as CoreExecutionStep,
     type MonacoError as CoreMonacoError,
     type MutationOperation as CoreMutationOperation,
+    type X86CompileResult,
     type X86CompilationDiagnostic,
     type X86Emulator as CoreX86Emulator,
     type X86RegisterName
 } from '@specy/x86'
 import structuredClone from '@ungap/structured-clone'
+import { x86DiagnosticHint } from './X86-diagnostics'
 import { type BuildInput, type BuildSources } from '$lib/projectFiles'
 import {
-    expandX86Project,
-    stageX86ProjectFiles,
+    expandLegacyX86Project,
+    stageLegacyX86ProjectFiles,
+    toX86Project,
     x86GeneratedLinesFor,
     x86SourceLineAt,
     type X86ProjectDiagnostic,
+    type X86ProjectInput,
     type X86SourceLine
 } from './x86Project'
 
@@ -127,17 +133,21 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     async _checkCode(sources: BuildSources): Promise<Diagnostic[]> {
         if (!this.core && !this.diagnosticCore) return []
         const currentCheck = this.checkCodeQueue.then(async () => {
-            const expanded = expandX86Project(sources)
+            const checker = await this.getDiagnosticCore()
+            if (hasNativeProjectApi(checker)) {
+                const errors = await checkNativeProject(checker, toX86Project(sources))
+                return errors.map((error) => mapCoreDiagnosticToProject(sources, error))
+            }
+            const expanded = expandLegacyX86Project(sources)
             if (expanded.diagnostics.length > 0) {
                 return expanded.diagnostics.map((diagnostic) =>
                     projectDiagnosticToDiagnostic(sources, diagnostic)
                 )
             }
-            const checker = await this.getDiagnosticCore()
-            stageX86ProjectFiles(checker.module, expanded)
+            stageLegacyX86ProjectFiles(checker.module, expanded)
             const errors = await checker.checkCode(expanded.code)
             return errors.map((error) =>
-                mapCoreDiagnosticToProject(sources, expanded.lineMap, error)
+                mapCoreDiagnosticToProject(sources, error, expanded.lineMap)
             )
         })
         this.checkCodeQueue = currentCheck.catch(() => undefined).then(() => undefined)
@@ -145,28 +155,17 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     }
 
     async _compile(sources: BuildSources): Promise<CompileResult> {
-        const expanded = expandX86Project(sources)
-        this.buildLineMap = expanded.lineMap
-        if (expanded.diagnostics.length > 0) {
-            return {
-                ok: false,
-                diagnostics: expanded.diagnostics.map((diagnostic) =>
-                    projectDiagnosticToDiagnostic(sources, diagnostic)
-                ),
-                report: 'NASM Project expansion failed'
-            }
-        }
         const core = this.requireCore()
-        stageX86ProjectFiles(core.module, expanded)
-        const result = await core.compile(expanded.code)
-        if (!('errors' in result)) return { ok: true }
-        return {
-            ok: false,
-            diagnostics: result.errors.map((error) =>
-                coreDiagnosticToDiagnostic(sources, expanded.code, expanded.lineMap, error)
-            ),
-            report: result.report
-        }
+        if (!hasNativeProjectApi(core)) return this.compileLegacyProject(core, sources)
+        this.buildLineMap = []
+        const result = await compileNativeProject(core, toX86Project(sources))
+        // Carried on both outcomes: a build that succeeded with warnings is the
+        // case where they are worth reading.
+        const diagnostics = result.diagnostics.map((diagnostic) =>
+            coreDiagnosticToDiagnostic(sources, diagnostic)
+        )
+        if (!('errors' in result)) return { ok: true, diagnostics }
+        return { ok: false, diagnostics, report: result.report }
     }
 
     _initialize(undoSize: number): void {
@@ -186,6 +185,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         const entry = this.buildSources?.entry ?? this._sources.entry
         return (
             this.core?.getCallStack().map((frame) => {
+                const file = coreSourceFile(frame)
+                if (file) return { ...frame, file }
                 const source = x86SourceLineAt(this.buildLineMap, frame.line, entry)
                 return { ...frame, line: source.line, file: source.path }
             }) ?? []
@@ -202,6 +203,25 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         }
     }
 
+    protected _getBuildArtifacts(): BuildArtifact[] {
+        const core = this.core
+        if (!core || !hasCompiledInstructionApi(core)) return []
+        const fallback = this.buildSources?.entry ?? this._sources.entry
+        return core.getCompiledInstructions().flatMap((instruction) => {
+            const file = coreSourceFile(instruction) ?? fallback
+            const bytes = coreInstructionBytes(instruction)
+            if (instruction.lineNumber < 0 || bytes.length === 0) return []
+            return [
+                {
+                    file,
+                    line: instruction.lineNumber,
+                    address: instruction.address,
+                    opcode: [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join(' ')
+                }
+            ]
+        })
+    }
+
     _getFlags(): { name: string; value: number; prev?: number }[] {
         return (
             this.core?.getFlags().map((flag) => ({ ...flag })) ?? structuredClone(DEFAULT_X86_FLAGS)
@@ -211,23 +231,35 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     _getInstructionAt(address: bigint): Instruction | null {
         const instruction = this.core?.getInstructionAt(address)
         if (!instruction) return null
+        const file = coreSourceFile(instruction)
+        if (file) return { ...instruction, file }
         const source = x86SourceLineAt(
             this.buildLineMap,
             instruction.lineNumber,
             this.buildSources?.entry ?? this._sources.entry
         )
-        return { ...instruction, lineNumber: source.line, file: source.path }
+        return {
+            ...instruction,
+            lineNumber: source.line,
+            file: source.path
+        }
     }
 
     _getNextInstruction(): Instruction | null {
         const instruction = this.core?.getNextInstruction()
         if (!instruction) return null
+        const file = coreSourceFile(instruction)
+        if (file) return { ...instruction, file }
         const source = x86SourceLineAt(
             this.buildLineMap,
             instruction.lineNumber,
             this.buildSources?.entry ?? this._sources.entry
         )
-        return { ...instruction, lineNumber: source.line, file: source.path }
+        return {
+            ...instruction,
+            lineNumber: source.line,
+            file: source.path
+        }
     }
 
     _getPc(): bigint {
@@ -270,6 +302,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return (
             this.core?.getUndoHistory(max).map((step) => {
                 const mapped = mapExecutionStep(step)
+                const file = coreSourceFile(step)
+                if (file) return { ...mapped, file }
                 const source = x86SourceLineAt(this.buildLineMap, mapped.line, entry)
                 return { ...mapped, line: source.line, file: source.path }
             }) ?? []
@@ -299,9 +333,11 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
      */
     async _runSlice(request: ExecutionSliceRequest): Promise<ExecutionSlice> {
         const budget = sliceInstructionBudget(request, X86_INSTRUCTIONS_PER_MS)
-        const breakpoints = request.breakpoints.flatMap((breakpoint) =>
-            x86GeneratedLinesFor(this.buildLineMap, breakpoint.file, breakpoint.line)
-        )
+        const breakpoints = hasNativeProjectApi(this.requireCore())
+            ? request.breakpoints.map(({ file, line }) => ({ path: file, line }))
+            : request.breakpoints.flatMap((breakpoint) =>
+                  x86GeneratedLinesFor(this.buildLineMap, breakpoint.file, breakpoint.line)
+              )
         const status = await this.runWithInput(budget, breakpoints)
         if (status === CoreEmulatorStatus.Running) {
             //still runnable: either the budget ran out or a breakpoint stopped it, and `run` does
@@ -362,17 +398,17 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     private async runWithInput(
         limit: number | undefined,
-        breakpoints: number[]
+        breakpoints: Array<number | { path: string; line: number }>
     ): Promise<CoreEmulatorStatus> {
         const core = this.requireCore()
         const execution = this.executionController.capture()
         let status = await this.executionController.waitFor(execution, () =>
-            core.run(limit, breakpoints)
+            runX86Core(core, limit, breakpoints)
         )
         while (status === CoreEmulatorStatus.WaitingForInput) {
             await this.provideProgramInput(execution)
             status = await this.executionController.waitFor(execution, () =>
-                core.run(limit, breakpoints)
+                runX86Core(core, limit, breakpoints)
             )
         }
         return status
@@ -393,6 +429,33 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     private requireCore(): CoreX86Emulator {
         if (!this.core) throw new Error('Interpreter not initialized')
         return this.core
+    }
+
+    private async compileLegacyProject(
+        core: CoreX86Emulator,
+        sources: BuildSources
+    ): Promise<CompileResult> {
+        const expanded = expandLegacyX86Project(sources)
+        this.buildLineMap = expanded.lineMap
+        if (expanded.diagnostics.length > 0) {
+            return {
+                ok: false,
+                diagnostics: expanded.diagnostics.map((diagnostic) =>
+                    projectDiagnosticToDiagnostic(sources, diagnostic)
+                ),
+                report: 'NASM Project expansion failed'
+            }
+        }
+        stageLegacyX86ProjectFiles(core.module, expanded)
+        const result = await core.compile(expanded.code)
+        if (!('errors' in result)) return { ok: true }
+        return {
+            ok: false,
+            diagnostics: result.errors.map((error) =>
+                coreDiagnosticToDiagnostic(sources, error, expanded.code, expanded.lineMap)
+            ),
+            report: result.report
+        }
     }
 
     private updateMemoryAddresses(): void {
@@ -456,52 +519,119 @@ function toLocalStatus(status: CoreEmulatorStatus): EmulatorStatus {
     return EmulatorStatus.Running
 }
 
-//the core only parses its assembler logs when the assembler exits non-zero, and its NASM parser
-//discards the "error:"/"warning:" marker it matched on, so nothing here can identify a warning
-function sourceLine(sources: BuildSources, source: X86SourceLine): string {
+type NativeProjectCore = CoreX86Emulator & {
+    compileProject(project: X86ProjectInput): Promise<X86CompileResult>
+    checkProject(project: X86ProjectInput): Promise<Array<CoreMonacoError & { file?: string }>>
+}
+
+type CompiledInstructionCore = CoreX86Emulator & {
+    getCompiledInstructions(): Array<Instruction & { bytes?: Uint8Array; file?: string }>
+}
+
+function hasNativeProjectApi(core: CoreX86Emulator): boolean {
+    const candidate = core as Partial<NativeProjectCore>
+    return (
+        typeof candidate.compileProject === 'function' &&
+        typeof candidate.checkProject === 'function'
+    )
+}
+
+function compileNativeProject(
+    core: CoreX86Emulator,
+    project: X86ProjectInput
+): Promise<X86CompileResult> {
+    return (core as NativeProjectCore).compileProject(project)
+}
+
+function checkNativeProject(
+    core: CoreX86Emulator,
+    project: X86ProjectInput
+): Promise<Array<CoreMonacoError & { file?: string }>> {
+    return (core as NativeProjectCore).checkProject(project)
+}
+
+function coreSourceFile(value: unknown): string | undefined {
+    if (!value || typeof value !== 'object' || !('file' in value)) return undefined
+    return typeof value.file === 'string' ? value.file : undefined
+}
+
+function hasCompiledInstructionApi(core: CoreX86Emulator): core is CompiledInstructionCore {
+    return typeof (core as Partial<CompiledInstructionCore>).getCompiledInstructions === 'function'
+}
+
+function coreInstructionBytes(value: unknown): Uint8Array {
+    if (!value || typeof value !== 'object' || !('bytes' in value)) return new Uint8Array()
+    return value.bytes instanceof Uint8Array ? value.bytes : new Uint8Array()
+}
+
+function runX86Core(
+    core: CoreX86Emulator,
+    limit: number | undefined,
+    breakpoints: Array<number | { path: string; line: number }>
+): Promise<CoreEmulatorStatus> {
+    return (
+        core.run as (
+            limit?: number,
+            breakpoints?: Array<number | { path: string; line: number }>
+        ) => Promise<CoreEmulatorStatus>
+    )(limit, breakpoints)
+}
+
+function sourceLine(sources: BuildSources, source: { path: string; line: number }): string {
     const file = sources.files[source.path]
     return file?.encoding === 'plain' ? (file.content.split(/\r?\n/)[source.line] ?? '') : ''
 }
 
 function mapCoreDiagnosticToProject(
     sources: BuildSources,
-    lineMap: readonly X86SourceLine[],
-    error: CoreMonacoError
+    error: CoreMonacoError,
+    lineMap: readonly X86SourceLine[] = []
 ): Diagnostic {
-    const source = x86SourceLineAt(lineMap, error.lineIndex, sources.entry)
+    const file = coreSourceFile(error)
+    const source = file
+        ? { path: file, line: error.lineIndex }
+        : x86SourceLineAt(lineMap, error.lineIndex, sources.entry)
     const line = sourceLine(sources, source)
+    const hint = x86DiagnosticHint(error.code)
     return {
-        severity: 'error',
+        severity: error.severity ?? 'error',
         file: source.path,
         lineIndex: source.line,
         column: Math.max(1, error.column),
+        ...(error.code ? { code: error.code } : {}),
         line: { line, line_index: source.line },
         message: error.message,
-        formatted: error.formatted
+        ...(hint ? { hint } : {}),
+        formatted: hint ? `${error.formatted}\n${hint}` : error.formatted
     }
 }
 
 function coreDiagnosticToDiagnostic(
     sources: BuildSources,
-    code: string,
-    lineMap: readonly X86SourceLine[],
-    diagnostic: X86CompilationDiagnostic
+    diagnostic: X86CompilationDiagnostic,
+    code = '',
+    lineMap: readonly X86SourceLine[] = []
 ): Diagnostic {
-    const lines = code.split('\n')
     const generatedLine = Math.max(0, diagnostic.line - 1)
-    const source = x86SourceLineAt(lineMap, generatedLine, sources.entry)
-    const line = sourceLine(sources, source) || lines[generatedLine] || ''
+    const file = coreSourceFile(diagnostic)
+    const source = file
+        ? { path: file, line: generatedLine }
+        : x86SourceLineAt(lineMap, generatedLine, sources.entry)
+    const line = sourceLine(sources, source) || code.split('\n')[generatedLine] || ''
+    const hint = x86DiagnosticHint(diagnostic.warningClass)
     return {
-        severity: 'error',
+        severity: diagnostic.severity ?? 'error',
         file: source.path,
         lineIndex: source.line,
-        column: 1,
+        column: locateDiagnosticColumn(diagnostic.error, line, diagnostic.warningClass),
+        ...(diagnostic.warningClass ? { code: diagnostic.warningClass } : {}),
         line: {
             line,
             line_index: source.line
         },
         message: diagnostic.error,
-        formatted: diagnostic.error
+        ...(hint ? { hint } : {}),
+        formatted: hint ? `${diagnostic.error}\n${hint}` : diagnostic.error
     }
 }
 
@@ -528,7 +658,8 @@ function mapExecutionStep(step: CoreExecutionStep): ExecutionStep {
         pc: step.pc,
         old_ccr: { ...step.old_ccr },
         new_ccr: { ...step.new_ccr },
-        line: step.line
+        line: step.line,
+        file: coreSourceFile(step)
     }
 }
 

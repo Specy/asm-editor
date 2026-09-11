@@ -37,7 +37,8 @@ const sources = normalizeBuildInput({
             content:
                 '.text\n.eqv SIZE 4\n.macro twice reg\n.end_macro\n.include "../lib/util.s"\nmain: nop'
         },
-        'lib/util.s': { encoding: 'plain', content: 'data: .word 1' }
+        'lib/util.s': { encoding: 'plain', content: 'data: .word 1' },
+        'other.s': { encoding: 'plain', content: 'hidden: nop' }
     }
 })
 const options = { comment: '#' as const, dialect: 'mars' as const }
@@ -163,5 +164,95 @@ describe('common Project language features', () => {
         expect(hover?.contents[0]).toEqual(
             expect.objectContaining({ value: expect.stringContaining('constant') })
         )
+    })
+
+    it('completes labels across one include unit without leaking unrelated Project Files', async () => {
+        const complete = async (path: string, prefix: string) => {
+            const word = /[A-Za-z_@$.?][\w@$.?]*$/.exec(prefix)?.[0] ?? ''
+            return createProjectSymbolCompletionProvider(monaco, options).provideCompletionItems(
+                {
+                    ...model(path),
+                    getValueInRange: () => prefix,
+                    getWordUntilPosition: () => ({
+                        word,
+                        startColumn: prefix.length - word.length + 1,
+                        endColumn: prefix.length + 1
+                    })
+                } as never,
+                { lineNumber: 1, column: prefix.length + 1 } as never,
+                {} as never,
+                {} as never
+            )
+        }
+
+        const fromEntry = await complete('src/main.s', '    j da')
+        expect(fromEntry?.suggestions).toContainEqual(expect.objectContaining({ label: 'data' }))
+        expect(fromEntry?.suggestions).not.toContainEqual(
+            expect.objectContaining({ label: 'hidden' })
+        )
+
+        const fromIncludedFile = await complete('lib/util.s', '    j mai')
+        expect(fromIncludedFile?.suggestions).toContainEqual(
+            expect.objectContaining({ label: 'main' })
+        )
+
+        const fromUnrelatedFile = await complete('other.s', '    j da')
+        expect(fromUnrelatedFile?.suggestions).not.toContainEqual(
+            expect.objectContaining({ label: 'data' })
+        )
+    })
+
+    it.each([
+        { dialect: 'z80' as const, comment: ';' as const, include: '#include "lib.asm"' },
+        { dialect: 'x86' as const, comment: ';' as const, include: '%include "lib.asm"' }
+    ])('follows $dialect include scope for cross-File completion', async (dialect) => {
+        const dialectSessionId = `${dialect.dialect}-completion-scope-test`
+        const dialectSources = normalizeBuildInput({
+            entry: 'main.asm',
+            files: {
+                'main.asm': {
+                    encoding: 'plain',
+                    content: `start: nop\n${dialect.include}`
+                },
+                'lib.asm': { encoding: 'plain', content: 'target: nop' },
+                'unrelated.asm': { encoding: 'plain', content: 'hidden: nop' }
+            }
+        })
+        const unregisterDialect = registerLanguageSession({
+            sessionId: dialectSessionId,
+            sources: dialectSources,
+            snapshot: undefined,
+            sourcesFor: () => dialectSources
+        })
+        try {
+            const prefix = '    jp tar'
+            const result = await createProjectSymbolCompletionProvider(
+                monaco,
+                dialect
+            ).provideCompletionItems(
+                {
+                    uri: projectSourceUri(monaco, {
+                        sessionId: dialectSessionId,
+                        sourceKind: 'live',
+                        path: 'main.asm'
+                    }),
+                    getValueInRange: () => prefix,
+                    getWordUntilPosition: () => ({
+                        word: 'tar',
+                        startColumn: prefix.length - 2,
+                        endColumn: prefix.length + 1
+                    })
+                } as never,
+                { lineNumber: 1, column: prefix.length + 1 } as never,
+                {} as never,
+                {} as never
+            )
+            expect(result?.suggestions).toContainEqual(expect.objectContaining({ label: 'target' }))
+            expect(result?.suggestions).not.toContainEqual(
+                expect.objectContaining({ label: 'hidden' })
+            )
+        } finally {
+            unregisterDialect()
+        }
     })
 })

@@ -1,6 +1,11 @@
 import { fileBytes, fileText, resolveFilePath, type BuildSources } from '$lib/projectFiles'
 import { splitAssemblyComment } from '$lib/languages/service/assemblyText'
 
+export type X86ProjectInput = {
+    entry: string
+    files: Readonly<Record<string, string | Uint8Array>>
+}
+
 export type X86SourceLine = { path: string; line: number }
 
 export type X86ProjectDiagnostic = {
@@ -14,7 +19,6 @@ export type ExpandedX86Project = {
     code: string
     lineMap: X86SourceLine[]
     reached: Set<string>
-    /** Absolute WASM paths for literal `incbin` assets referenced by the expanded source. */
     virtualFiles: Map<string, Uint8Array>
     diagnostics: X86ProjectDiagnostic[]
 }
@@ -27,24 +31,35 @@ type X86WasmModule = {
     }
 }
 
-const VIRTUAL_ROOT = '/__asm_editor_project'
+const LEGACY_VIRTUAL_ROOT = '/__asm_editor_project'
 const stagedFiles = new WeakMap<object, Set<string>>()
 const pathEncoder = new TextEncoder()
 
-/** A collision-free ASCII name: Project paths themselves may contain either quote character. */
+/** Converts persisted Project Files into the x86 Core's virtual-Project representation. */
+export function toX86Project(sources: BuildSources): X86ProjectInput {
+    return {
+        entry: sources.entry,
+        files: Object.fromEntries(
+            Object.entries(sources.files).map(([path, file]) => [
+                path,
+                file.encoding === 'plain' ? file.content : fileBytes(file)
+            ])
+        )
+    }
+}
+
 function virtualPath(path: string): string {
     const encoded = [...pathEncoder.encode(path)]
         .map((byte) => byte.toString(16).padStart(2, '0'))
         .join('')
-    return `${VIRTUAL_ROOT}/${encoded}`
+    return `${LEGACY_VIRTUAL_ROOT}/${encoded}`
 }
 
-/**
- * Makes literal `incbin` targets visible to NASM's in-memory filesystem. The package exposes its
- * Emscripten module but has no Project compile API yet, so stale files are explicitly removed when
- * its long-lived diagnostic Core is reused for another Project.
- */
-export function stageX86ProjectFiles(module: X86WasmModule, expanded: ExpandedX86Project): void {
+/** Compatibility staging for released x86 packages that predate the virtual-Project API. */
+export function stageLegacyX86ProjectFiles(
+    module: X86WasmModule,
+    expanded: ExpandedX86Project
+): void {
     const previous = stagedFiles.get(module) ?? new Set<string>()
     const current = new Set(expanded.virtualFiles.keys())
     for (const path of previous) {
@@ -52,10 +67,10 @@ export function stageX86ProjectFiles(module: X86WasmModule, expanded: ExpandedX8
         try {
             module.FS.unlink?.(path)
         } catch {
-            // The Core may have recreated its filesystem; the absent stale path is already correct.
+            // A recreated filesystem or absent stale path is already in the correct state.
         }
     }
-    module.FS.mkdirTree?.(VIRTUAL_ROOT)
+    module.FS.mkdirTree?.(LEGACY_VIRTUAL_ROOT)
     for (const [path, bytes] of expanded.virtualFiles) module.FS.writeFile(path, bytes)
     stagedFiles.set(module, current)
 }
@@ -81,12 +96,11 @@ function resolveInclude(
 }
 
 /**
- * NASM's package API currently accepts one source buffer. `%include` itself is textual, so the
- * Project adapter expands literal source includes before handing that buffer to the Core and keeps
- * an exact line map for diagnostics, execution locations and breakpoints. Macro-computed include
- * names intentionally remain unsupported until the Core accepts a virtual file system.
+ * Compatibility expansion for the currently published single-buffer x86 package. New local Core
+ * builds use `compileProject`/`checkProject`; this fallback keeps npm deployments functional until
+ * that package release is available.
  */
-export function expandX86Project(sources: BuildSources): ExpandedX86Project {
+export function expandLegacyX86Project(sources: BuildSources): ExpandedX86Project {
     const output: string[] = []
     const lineMap: X86SourceLine[] = []
     const reached = new Set<string>()
@@ -97,7 +111,6 @@ export function expandX86Project(sources: BuildSources): ExpandedX86Project {
         output.push(text)
         lineMap.push({ path, line })
     }
-
     const expand = (path: string, stack: string[]) => {
         const file = sources.files[path]
         if (!file) return
@@ -111,68 +124,69 @@ export function expandX86Project(sources: BuildSources): ExpandedX86Project {
             return
         }
         reached.add(path)
-        const lines = fileText(file).split(/\r?\n/)
-        lines.forEach((line, lineIndex) => {
-            const source = splitAssemblyComment(line, ';').code
-            const binaryDirective =
-                /^\s*(?:[A-Za-z_@$.?][\w@$.?]*\s*:\s*)?incbin\s+(["'])(.*?)\1/i.exec(source)
-            if (binaryDirective) {
-                const written = binaryDirective[2] ?? ''
-                // A label can have the same spelling as the File. Locate the captured quoted path,
-                // not the first matching text on the line.
-                const column = Math.max(0, binaryDirective[0].lastIndexOf(written))
+        fileText(file)
+            .split(/\r?\n/)
+            .forEach((line, lineIndex) => {
+                const source = splitAssemblyComment(line, ';').code
+                const binary = /^\s*(?:[A-Za-z_@$.?][\w@$.?]*\s*:\s*)?incbin\s+(["'])(.*?)\1/i.exec(
+                    source
+                )
+                if (binary) {
+                    const written = binary[2] ?? ''
+                    const column = Math.max(0, binary[0].lastIndexOf(written))
+                    const target = resolveInclude(path, written, sources)
+                    if (!target) {
+                        diagnostics.push({
+                            path,
+                            line: lineIndex,
+                            column,
+                            message: `Binary File not found in Project: ${written}`
+                        })
+                        append('', path, lineIndex)
+                        return
+                    }
+                    const targetPath = virtualPath(target)
+                    virtualFiles.set(targetPath, fileBytes(sources.files[target]!))
+                    reached.add(target)
+                    append(
+                        `${line.slice(0, column)}${targetPath}${line.slice(column + written.length)}`,
+                        path,
+                        lineIndex
+                    )
+                    return
+                }
+
+                const directive = /^\s*%include\s+(["'])(.*?)\1/i.exec(source)
+                if (!directive) {
+                    append(line, path, lineIndex)
+                    return
+                }
+                const written = directive[2] ?? ''
+                const column = Math.max(0, line.indexOf(written))
                 const target = resolveInclude(path, written, sources)
                 if (!target) {
                     diagnostics.push({
                         path,
                         line: lineIndex,
                         column,
-                        message: `Binary File not found in Project: ${written}`
+                        message: `Included File not found in Project: ${written}`
                     })
                     append('', path, lineIndex)
                     return
                 }
-                const targetPath = virtualPath(target)
-                virtualFiles.set(targetPath, fileBytes(sources.files[target]!))
-                reached.add(target)
-                append(
-                    `${line.slice(0, column)}${targetPath}${line.slice(column + written.length)}`,
-                    path,
-                    lineIndex
-                )
-                return
-            }
-            const directive = /^\s*%include\s+(["'])(.*?)\1/i.exec(source)
-            if (!directive) {
-                append(line, path, lineIndex)
-                return
-            }
-            const written = directive[2] ?? ''
-            const column = Math.max(0, line.indexOf(written))
-            const target = resolveInclude(path, written, sources)
-            if (!target) {
-                diagnostics.push({
-                    path,
-                    line: lineIndex,
-                    column,
-                    message: `Included File not found in Project: ${written}`
-                })
-                append('', path, lineIndex)
-                return
-            }
-            const cycleStart = stack.indexOf(target)
-            if (cycleStart >= 0) {
-                diagnostics.push({
-                    path,
-                    line: lineIndex,
-                    column,
-                    message: `Include cycle: ${[...stack.slice(cycleStart), target].join(' -> ')}`
-                })
-                append('', path, lineIndex)
-                return
-            }
-            expand(target, [...stack, target])
-        })
+                const cycleStart = stack.indexOf(target)
+                if (cycleStart >= 0) {
+                    diagnostics.push({
+                        path,
+                        line: lineIndex,
+                        column,
+                        message: `Include cycle: ${[...stack.slice(cycleStart), target].join(' -> ')}`
+                    })
+                    append('', path, lineIndex)
+                    return
+                }
+                expand(target, [...stack, target])
+            })
     }
 
     if (!sources.files[sources.entry]) {

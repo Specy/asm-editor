@@ -1,6 +1,6 @@
 # Assembly language service: implementation plan
 
-Written on 2026-09-09 and updated on 2026-09-10. This plan covers the Monaco language support for
+Written on 2026-09-09 and updated on 2026-09-11. This plan covers the Monaco language support for
 M68K, MIPS, RISC-V, RISC-V-64, x86 and Z80. The first implementation slice described below is now
 present in the working tree; the remaining phases are the roadmap for later changes.
 
@@ -28,6 +28,8 @@ Implemented so far:
 - M68K Project completions, signature help, hover, document symbols, definitions and include links.
 - Conservative Project-wide symbol completion, document symbols and definitions for MIPS,
   RISC-V, RISC-V-64, x86 and Z80, plus fixes to the existing completion and grammar providers.
+  Cross-File completion follows each source File's literal include unit, so labels from unrelated
+  Project Files are not offered as though they were in scope.
 - Context-sensitive instruction/operand completion for all Targets, instruction snippets with tab
   stops, and signature help backed by each available instruction catalogue. Completion is suppressed
   in comments and the shared line parser continues through incomplete operands, strings and address
@@ -39,8 +41,8 @@ Implemented so far:
 - Dedicated revisioned diagnostic Workers for MIPS, RISC-V, RISC-V-64, x86 and Z80. MIPS and
   RISC-V preserve Core diagnostics, macro expansion locations, Entry/include reachability and
   `@screen` warnings; their Target modes run in isolated Workers. Z80 uses its Project assembler,
-  while x86 recursively compiles literal NASM `%include` Files, maps Core diagnostics and execution
-  lines back to the originating File, and stages exact Project bytes for literal `incbin` directives.
+  while x86 gives its Core the complete virtual Project so NASM resolves `%include` and `incbin`
+  natively and maps diagnostics and execution lines back to the originating File.
 - Authoritative Z80 cross-File definitions, references and document highlights from Core symbol
   occurrences, plus guarded Project rename when every occurrence maps safely to one physical source
   edit. Ambiguous, generated, changing-value and reserved-name cases are rejected.
@@ -52,17 +54,24 @@ Implemented so far:
   document's LF/CRLF convention and has assembled-output equivalence tests against all five Cores.
 - Provider lifecycle cleanup, source/build isolation, and contract tests for the shared conversion,
   URI, selection, diagnostic and language-provider behavior.
+- Descriptor-driven Monaco registration now installs each Target's declared tokenizer,
+  configuration and provider capabilities through one lifecycle-safe path.
+- The local x86 package now accepts a virtual Project of text and binary Files. NASM resolves native
+  `%include` and `incbin` directives, including macro-computed filenames, while diagnostics, DWARF
+  execution locations and file-qualified breakpoints retain Project paths.
+- Numeric literal hovers are available for every Target, with dialect-aware signed, unsigned,
+  hexadecimal, decimal and binary interpretations. Build-snapshot instruction hovers show source
+  addresses and machine bytes/words when the Core exposes them; S68K shows addresses only because
+  it interprets structured instructions and does not encode opcodes. These details intentionally do
+  not render inline, where they made assembly source noisy and caused vertical displacement.
 
 Still planned:
 
-- Semantic tokens, optional inlay hints/code lenses, diagnostic-backed code actions and the
-  performance/browser-rollout work from the later phases.
+- Semantic tokens, diagnostic-backed code actions and the performance/browser-rollout work from the
+  later phases. Semantic tokens remain deferred by product choice.
 - Replacing the remaining tolerant MIPS/RISC-V/x86 symbol facts with authoritative Core symbol
   identities if those packages expose them. References and rename are intentionally deferred by the
   current product decision.
-- A native x86 virtual-Project API. The app handles literal `%include`/`incbin` paths today, including
-  nesting, missing Files and cycles, but macro-computed include names still require upstream Core
-  support to retain exact File-aware diagnostics and debug locations.
 
 ## Scope
 
@@ -72,8 +81,8 @@ In scope:
 - Live Project Files, including definitions and references across included Files.
 - Read-only language features on a Build snapshot when it is displayed.
 - Monaco diagnostics, completion, signature help, hover, document symbols, definitions,
-  references, document highlights, rename, document links, folding, semantic tokens, code actions,
-  formatting, inlay hints and code lenses where the underlying Target can support them accurately.
+  references, document highlights, rename, document links, folding, semantic tokens, code actions
+  and formatting where the underlying Target can support them accurately.
 - A reusable, Project-aware analysis layer separated from execution.
 - Provider contract tests, architecture fixtures, performance measurements and browser verification.
 
@@ -314,7 +323,7 @@ Diagnostics must never use column zero or an arbitrary end column at the Monaco 
 The index must keep source identity separate from expansion identity. Definition, references and
 rename operate on deduplicated source Locations. Build addresses, variable values and include chains
 may belong to one or more expansion instances of that same source Location; if those instances
-disagree, hover and inlay hints show the alternatives or omit the value rather than choosing one.
+disagree, Hover shows the alternatives or omits the value rather than choosing one.
 
 ## Proposed file layout
 
@@ -497,9 +506,8 @@ Target adapters:
 - MIPS/RISC-V: create a throwaway Core from the complete text source set, pin bitness immediately
   before creation, assemble, and retain tokenized lines and parsed/compiled statements for the
   accepted revision.
-- x86: create one diagnostic Core inside the x86 Worker and serialize its checks. Initially retain
-  Entry-only diagnostics because the Core is Entry-only; report this limitation in the adapter
-  capability set rather than silently ignoring secondary Files.
+- x86: create one diagnostic Core inside the x86 Worker and serialize its checks. The implemented
+  Core virtual-Project API supplies File-aware diagnostics for native NASM includes.
 
 Acceptance:
 
@@ -639,17 +647,17 @@ Acceptance:
   regions. Do not fold one label's body across a containing section/macro boundary.
 - Add selection ranges that grow from token to operand to statement where the tolerant parser knows
   those boundaries.
-- Add optional inlay hints for resolved symbol values/addresses and register aliases. Keep them off
-  in comments, generated text and unresolved code, and cap density so assembly does not become
-  unreadable.
-- Add Build-snapshot code lenses or hints for address, opcode bytes and pseudo/macro expansion where
-  the Core supplies a source map. Live source does not show stale Build addresses.
+- Keep numeric conversions in literal Hover instead of inline hints. This preserves all alternate
+  representations without adding persistent visual noise to source lines.
+- Show Build-snapshot address, opcode-byte and pseudo/macro-expansion details when hovering the
+  instruction mnemonic where the Core supplies a source map. Live source does not show stale Build
+  addresses, and no Build metadata is rendered inline.
 
 M68K presentation starts from `parseLine` spans for labels, operations, operands and comments, then
 adds resolved symbol roles from the snapshot. Do not infer a linear instruction list by walking
-addresses: S68K's JavaScript `Program` exposes an instruction count but not the instruction/source
-listing, and `org`, sections and repeated includes make address guesses unsafe. M68K Build lenses
-wait for an exported instruction/source listing with include-expansion identity.
+addresses: `org`, sections and repeated includes make address guesses unsafe. M68K Build Hover uses
+the Core's exported instruction/source listing with include-expansion identity, and exposes only
+addresses because S68K does not encode real M68000 opcode bytes.
 
 Acceptance:
 

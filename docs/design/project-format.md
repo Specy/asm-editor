@@ -10,7 +10,7 @@ Design record of the interview held on 2026-09-07 for [#72](https://github.com/S
 
 Out of scope, deferred until multi-file editing is built: editing more than one File, a folder or zip export, binary Files, the drive peripheral, `#include` for the Z80 and `%include` for x86 (the Z80 Core already takes an in-memory file map; the x86 wrapper takes one string), inheritance of Settings between projects, per-project workspace layout.
 
-Implementation update on 2026-09-09: the [multiple-file FileSystem design](./multiple-file-compilation.md) now supplies multi-file editing, a custom overlay sidebar, lossless ZIP Project archives, binary persistence, Z80 includes, and the FileSystem Peripheral under the name adopted in the glossary. C compilation, x86 multi-file compilation/runtime access, guest file operations for M68K and Z80, and a permanent horizontal layout remain deferred.
+Implementation update on 2026-09-11: the [multiple-file FileSystem design](./multiple-file-compilation.md) now supplies multi-file editing, a custom overlay sidebar, lossless ZIP Project archives, binary persistence, native Z80 and x86 includes, and the FileSystem Peripheral under the name adopted in the glossary. C compilation, x86 guest runtime file operations, guest file operations for M68K and Z80, and a permanent horizontal layout remain deferred.
 
 ## Agreed decisions
 

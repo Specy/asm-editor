@@ -96,6 +96,20 @@ describe('Z80 source set', () => {
         expect(emulator.errors).toEqual([])
         expect(emulator.registers.find((register) => register.name === 'a')?.value).toBe(7n)
         expect(emulator.currentFile).toBe('lib.asm')
+        expect(emulator.buildArtifacts).toEqual([
+            {
+                file: 'lib.asm',
+                line: 1,
+                address: 0x8000n,
+                opcode: '3e 07'
+            },
+            {
+                file: 'lib.asm',
+                line: 2,
+                address: 0x8002n,
+                opcode: '76'
+            }
+        ])
     })
 
     it('embeds binary Files without transcoding their bytes', async () => {
