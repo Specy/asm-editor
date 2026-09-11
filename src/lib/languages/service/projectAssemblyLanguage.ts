@@ -153,7 +153,9 @@ function includeOnLine(
     const match = pattern?.exec(source)
     if (!match?.[2]) return null
     const quoted = match[0]
-    const startColumn = quoted.indexOf(match[2])
+    // The same spelling may occur in a preceding label (`blob: incbin "blob"`), so the path is
+    // the final occurrence inside this anchored directive match rather than the first one.
+    const startColumn = quoted.lastIndexOf(match[2])
     return { path: match[2], startColumn, endColumn: startColumn + match[2].length }
 }
 

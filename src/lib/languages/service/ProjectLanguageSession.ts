@@ -10,7 +10,7 @@ import type {
 } from './protocol'
 import { registerLanguageSession } from './sessionRegistry'
 
-type SnapshotListener = (snapshot: ProjectAnalysisSnapshot | undefined) => void
+type SnapshotListener = (snapshot: ProjectAnalysisSnapshot | undefined, pending: boolean) => void
 
 function fileChanges(previous: ProjectFiles, next: ProjectFiles): ProjectFileChange[] {
     const changes: ProjectFileChange[] = []
@@ -86,8 +86,10 @@ export class ProjectLanguageSession {
         if (changes.length === 0 && sources.entry === this.currentSources.entry) return
         this.currentSources = sources
         this.revision += 1
-        this.currentSnapshot = undefined
-        for (const listener of this.listeners) listener(undefined)
+        // Keep the last complete answer visible while the Worker analyzes this revision. Monaco's
+        // markers otherwise disappear on every keystroke and flash back when the answer arrives.
+        // `pending` tells the UI that the retained snapshot is stale without destroying it.
+        for (const listener of this.listeners) listener(this.currentSnapshot, true)
         this.connection?.post({
             type: 'update',
             sessionId: this.sessionId,
@@ -99,7 +101,7 @@ export class ProjectLanguageSession {
 
     subscribe(listener: SnapshotListener): () => void {
         this.listeners.add(listener)
-        listener(this.currentSnapshot)
+        listener(this.currentSnapshot, this.pending)
         return () => this.listeners.delete(listener)
     }
 
@@ -141,13 +143,13 @@ export class ProjectLanguageSession {
                     fileStatus
                 }
                 this.currentSnapshot = snapshot
-                for (const listener of this.listeners) listener(snapshot)
+                for (const listener of this.listeners) listener(snapshot, false)
             }
             return
         }
         const snapshot = response.snapshot
         if (snapshot.revision !== this.revision || snapshot.target !== this.target) return
         this.currentSnapshot = snapshot
-        for (const listener of this.listeners) listener(snapshot)
+        for (const listener of this.listeners) listener(snapshot, false)
     }
 }

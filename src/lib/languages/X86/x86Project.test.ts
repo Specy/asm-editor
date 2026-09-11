@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeBuildInput } from '$lib/projectFiles'
 import { analyzeX86Project } from '$lib/languages/service/adapters/x86Adapter'
-import { expandX86Project } from './x86Project'
+import { expandX86Project, x86SourceLineAt } from './x86Project'
 
 describe('x86 Project source expansion', () => {
     it('expands nested relative includes and retains an exact source-line map', () => {
@@ -78,5 +78,25 @@ describe('x86 Project source expansion', () => {
             [1, 2, 3, 4]
         ])
         expect(expanded.reached).toContain('assets/blob.bin')
+    })
+
+    it('rewrites the quoted incbin path when its spelling also occurs in the label', () => {
+        const expanded = expandX86Project(
+            normalizeBuildInput({
+                entry: 'main.asm',
+                files: {
+                    'main.asm': { encoding: 'plain', content: 'blob: incbin "blob"' },
+                    blob: { encoding: 'base64', content: 'AQ==' }
+                }
+            })
+        )
+        expect(expanded.code).toMatch(/^blob: incbin "\/__asm_editor_project\/[0-9a-f]+"$/)
+    })
+
+    it('does not attribute an instruction without debug information to the first source line', () => {
+        expect(x86SourceLineAt([{ path: 'main.asm', line: 0 }], -1, 'main.asm')).toEqual({
+            path: 'main.asm',
+            line: -1
+        })
     })
 })

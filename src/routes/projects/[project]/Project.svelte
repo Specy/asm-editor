@@ -143,6 +143,9 @@
     const languageSessionId = createProjectLanguageSessionId()
     let projectLanguageSession = $state.raw<ProjectLanguageSession>()
     let languageAnalysis = $state.raw<ProjectAnalysisSnapshot>()
+    let liveLanguageDiagnostics = $state.raw<Diagnostic[]>([])
+    let languageAnalysisPending = $state(false)
+    let analysisSpinnerVisible = $state(false)
     const displayedPath = $derived(sourceSelection.path)
     const sourceView = $derived(sourceSelection.sourceKind === 'build' ? 'snapshot' : 'live')
     let fileSidebarOpen = $state(false)
@@ -188,12 +191,6 @@
         )
         return [...liveKeys, ...buildKeys]
     })
-    const liveLanguageDiagnostics = $derived.by<Diagnostic[]>(() => {
-        if (!languageAnalysis || typeof sourceInput === 'string') return []
-        return languageAnalysis.diagnostics.map((diagnostic) =>
-            languageDiagnosticToDiagnostic(diagnostic, sourceInput)
-        )
-    })
     const activeDiagnostics = $derived(
         sourceView === 'live' && hasProjectFiles
             ? liveLanguageDiagnostics
@@ -213,6 +210,10 @@
     )
     const displayedAnalysisStatus = $derived(
         sourceView === 'live' ? languageAnalysis?.fileStatus[displayedPath] : undefined
+    )
+    const languageErrorCount = $derived(
+        languageAnalysis?.diagnostics.filter((diagnostic) => diagnostic.severity === 'error')
+            .length ?? 0
     )
     const diagnosticCounts = $derived.by(() => {
         const counts: Record<string, { errors: number; warnings: number }> = Object.create(null)
@@ -300,13 +301,23 @@
     }
 
     $effect(() => {
-        emulator.setSources(sourceInput)
+        untrack(() => emulator.setSources(sourceInput))
     })
 
     $effect(() => {
         const session = projectLanguageSession
         const sources = sourceInput
         if (session && typeof sources !== 'string') session.update(sources)
+    })
+
+    $effect(() => {
+        const pending = languageAnalysisPending && sourceView === 'live' && hasProjectFiles
+        analysisSpinnerVisible = false
+        if (!pending) return
+        const timer = setTimeout(() => {
+            analysisSpinnerVisible = true
+        }, 500)
+        return () => clearTimeout(timer)
     })
 
     $effect(() => {
@@ -553,8 +564,16 @@
                 language
             )
             projectLanguageSession = session
-            unsubscribeLanguageSession = session.subscribe((snapshot) => {
-                languageAnalysis = snapshot
+            unsubscribeLanguageSession = session.subscribe((snapshot, pending) => {
+                // A pending revision deliberately retains the previous snapshot, so diagnostics
+                // and their Monaco ranges remain stable until their replacements are ready.
+                if (snapshot && !pending && typeof sourceInput !== 'string') {
+                    languageAnalysis = snapshot
+                    liveLanguageDiagnostics = snapshot.diagnostics.map((diagnostic) =>
+                        languageDiagnosticToDiagnostic(diagnostic, sourceInput)
+                    )
+                }
+                languageAnalysisPending = pending
             })
         }
         window.addEventListener('keydown', handleKeyDown)
@@ -876,8 +895,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
         <div
             class="editor-border"
             class:gradientBorder={emulator.canExecute && !emulator.terminated}
-            class:redBorder={emulator.errors.length > 0 ||
-                activeDiagnostics.some((diagnostic) => diagnostic.severity === 'error')}
+            class:redBorder={emulator.errors.length > 0}
         >
             {#key language}
                 {#if hasProjectFiles && files && entry && fileSystem}
@@ -913,9 +931,30 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                         <em title="This File is not analyzed from the current Entry"
                             >Not analyzed from Entry</em
                         >
-                    {:else if sourceView === 'live' && !languageAnalysis}
-                        <em>Analyzing…</em>
                     {/if}
+                    <span class="analysis-slot" aria-live="polite">
+                        {#if sourceView === 'live' && hasProjectFiles}
+                            {#if languageErrorCount > 0}
+                                <span
+                                    class="analysis-error-count"
+                                    title={`${languageErrorCount} analysis error${languageErrorCount === 1 ? '' : 's'}`}
+                                    >{languageErrorCount > 99 ? '99+' : languageErrorCount}</span
+                                >
+                            {:else if analysisSpinnerVisible}
+                                <span
+                                    class="analysis-spinner"
+                                    title="Analyzing"
+                                    aria-label="Analyzing"
+                                ></span>
+                            {:else if languageAnalysis && !languageAnalysisPending}
+                                <span
+                                    class="analysis-ready"
+                                    title="Analysis complete: no errors"
+                                    aria-label="Analysis complete: no errors"
+                                ></span>
+                            {/if}
+                        {/if}
+                    </span>
                 </div>
                 <Editor
                     modelKey={displayedModelKey}
@@ -1233,7 +1272,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                 box-shadow: 0 2px 8px rgb(0 0 0 / 0.2);
                 font-size: 0.72rem;
 
-                span {
+                > span:first-child {
                     flex: none;
                     opacity: 0.65;
                 }
@@ -1248,6 +1287,49 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                     flex: none;
                     color: var(--warning, #d49a30);
                     font-style: normal;
+                }
+
+                .analysis-slot {
+                    display: grid;
+                    flex: 0 0 1.45rem;
+                    place-items: center;
+                    width: 1.45rem;
+                    height: 1rem;
+                    margin-left: auto;
+                }
+
+                .analysis-ready {
+                    width: 0.45rem;
+                    height: 0.45rem;
+                    border-radius: 50%;
+                    background: color-mix(in srgb, var(--secondary-text) 48%, transparent);
+                }
+
+                .analysis-spinner {
+                    width: 0.72rem;
+                    height: 0.72rem;
+                    border: 1.5px solid color-mix(in srgb, var(--secondary-text) 24%, transparent);
+                    border-top-color: color-mix(in srgb, var(--secondary-text) 72%, transparent);
+                    border-radius: 50%;
+                    animation: analysis-spin 650ms linear infinite;
+                }
+
+                .analysis-error-count {
+                    min-width: 1.1rem;
+                    padding: 0 0.22rem;
+                    border-radius: 999px;
+                    color: #fff;
+                    background: #c74444;
+                    font-size: 0.62rem;
+                    font-weight: 700;
+                    line-height: 1rem;
+                    text-align: center;
+                }
+            }
+
+            @keyframes analysis-spin {
+                to {
+                    transform: rotate(360deg);
                 }
             }
 
@@ -1325,7 +1407,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
             width: unset;
             max-height: unset;
             align-items: center;
-            flex-direction: column-reverse;
+            flex-direction: column;
         }
         .registers-column {
             height: unset !important;

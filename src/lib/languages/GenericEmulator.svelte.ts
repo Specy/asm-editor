@@ -60,6 +60,23 @@ import { FileSystem, type FileSystemSession } from '$lib/languages/peripherals/F
  */
 const RUNNING_PANEL_REFRESH_MS = 16
 
+function buildSourcesEqual(left: BuildSources, right: BuildSources): boolean {
+    if (left.entry !== right.entry) return false
+    const leftPaths = Object.keys(left.files)
+    const rightPaths = Object.keys(right.files)
+    if (leftPaths.length !== rightPaths.length) return false
+    return leftPaths.every((path) => {
+        const leftFile = left.files[path]
+        const rightFile = right.files[path]
+        return (
+            leftFile !== undefined &&
+            rightFile !== undefined &&
+            leftFile.encoding === rightFile.encoding &&
+            leftFile.content === rightFile.content
+        )
+    })
+}
+
 export abstract class GenericEmulator<T, R extends string>
     extends BaseEmulator<R>
     implements BaseEmulatorActions, BaseEmulatorState
@@ -870,13 +887,17 @@ export abstract class GenericEmulator<T, R extends string>
     protected debouncer = createDebouncer(500)
 
     setCode(code: string): void {
+        const entry = this._sources.files[this._sources.entry]
+        if (entry?.encoding === 'plain' && entry.content === code) return
         this._sources = updateEntryText(this._sources, code)
         if (this.fileSystemSession || !this._emulatorOptions.automaticChecking) return
         this.debouncer[0](() => void this.semanticCheck())
     }
 
     setSources(sources: BuildInput): void {
-        this._sources = normalizeBuildInput(sources)
+        const normalized = normalizeBuildInput(sources)
+        if (buildSourcesEqual(this._sources, normalized)) return
+        this._sources = normalized
         //A guest may update live source while the debugger still owns a Core built from the old
         //snapshot. MARS and RARS assembly mutates module globals used by that Core, so live checking
         //resumes only after Stop.

@@ -100,6 +100,45 @@ describe('common Project language features', () => {
         )
     })
 
+    it('links the quoted incbin path when its spelling also occurs in a label', async () => {
+        const x86Sources = normalizeBuildInput({
+            entry: 'main.asm',
+            files: {
+                'main.asm': { encoding: 'plain', content: 'blob: incbin "blob"' },
+                blob: { encoding: 'base64', content: 'AQ==' }
+            }
+        })
+        const x86SessionId = 'x86-link-range-test'
+        const unregisterX86 = registerLanguageSession({
+            sessionId: x86SessionId,
+            sources: x86Sources,
+            snapshot: undefined,
+            sourcesFor: () => x86Sources
+        })
+        try {
+            const links = await createProjectDocumentLinkProvider(monaco, {
+                comment: ';',
+                dialect: 'x86'
+            }).provideLinks(
+                {
+                    uri: projectSourceUri(monaco, {
+                        sessionId: x86SessionId,
+                        sourceKind: 'live',
+                        path: 'main.asm'
+                    }),
+                    getLineCount: () => 1,
+                    getLineContent: () => 'blob: incbin "blob"'
+                } as never,
+                {} as never
+            )
+            expect(links?.links[0]?.range).toEqual(
+                expect.objectContaining({ startColumn: 15, endColumn: 19 })
+            )
+        } finally {
+            unregisterX86()
+        }
+    })
+
     it('indexes sections, constants, macros, data and labels and hovers unique symbols', async () => {
         const symbols = await createProjectDocumentSymbolProvider(
             monaco,

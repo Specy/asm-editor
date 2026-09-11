@@ -10,7 +10,7 @@
     import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE, TESTCASE_INSTRUCTION_LIMIT } from '$lib/Config'
     import StatusCodesVisualiser from '$cmp/specific/project/cpu/StatusCodesRenderer.svelte'
     import RegistersVisualiser from '$cmp/specific/project/cpu/RegistersRenderer.svelte'
-    import { onMount, type Snippet } from 'svelte'
+    import { onMount, type Snippet, untrack } from 'svelte'
     import { getM68kErrorMessage } from '$lib/languages/M68K/M68kUtils'
     import type { AvailableLanguages, Testcase, TestcaseResult } from '$lib/Project.svelte'
     import { type Emulator } from '$lib/languages/Emulator'
@@ -113,7 +113,7 @@
     let editor: monaco.editor.IStandaloneCodeEditor | undefined = $state()
 
     $effect(() => {
-        emulator.setCode(code)
+        untrack(() => emulator.setCode(code))
     })
 
     onMount(() => {
@@ -729,7 +729,7 @@
             width: unset;
             max-height: unset;
             align-items: center;
-            flex-direction: column-reverse;
+            flex-direction: column;
         }
 
         .fullscreen-registers-column {

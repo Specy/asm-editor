@@ -445,7 +445,7 @@
         min-height: 0;
         color: var(--secondary-text);
         overflow: hidden;
-        background: color-mix(in srgb, var(--secondary) 96%, transparent);
+        background: color-mix(in srgb, var(--secondary) 82%, transparent);
         border: 1px solid var(--tertiary);
         border-radius: 0.45rem;
         box-shadow: -5px 0 18px rgb(0 0 0 / 0.3);

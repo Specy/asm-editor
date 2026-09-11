@@ -57,6 +57,10 @@ class FakeEmulator extends GenericEmulator<object, FakeRegister> {
         this.state.canExecute = true
     }
 
+    sourceIdentity(): object {
+        return this._sources
+    }
+
     protected getInstance(): object | null {
         return this
     }
@@ -180,6 +184,23 @@ const emptyTestcase: Testcase = {
 
 afterEach(() => {
     vi.restoreAllMocks()
+})
+
+describe('source updates', () => {
+    it('does not rewrite reactive source state when the text is unchanged', () => {
+        const emulator = new FakeEmulator({ automaticChecking: false })
+        const initial = emulator.sourceIdentity()
+
+        emulator.setCode('')
+        emulator.setSources('')
+        expect(emulator.sourceIdentity()).toBe(initial)
+
+        emulator.setCode('nop')
+        const changed = emulator.sourceIdentity()
+        expect(changed).not.toBe(initial)
+        emulator.setSources('nop')
+        expect(emulator.sourceIdentity()).toBe(changed)
+    })
 })
 
 describe('peripheral injection', () => {

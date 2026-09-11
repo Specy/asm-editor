@@ -118,7 +118,9 @@ export function expandX86Project(sources: BuildSources): ExpandedX86Project {
                 /^\s*(?:[A-Za-z_@$.?][\w@$.?]*\s*:\s*)?incbin\s+(["'])(.*?)\1/i.exec(source)
             if (binaryDirective) {
                 const written = binaryDirective[2] ?? ''
-                const column = Math.max(0, line.indexOf(written))
+                // A label can have the same spelling as the File. Locate the captured quoted path,
+                // not the first matching text on the line.
+                const column = Math.max(0, binaryDirective[0].lastIndexOf(written))
                 const target = resolveInclude(path, written, sources)
                 if (!target) {
                     diagnostics.push({
@@ -191,12 +193,10 @@ export function x86SourceLineAt(
     generatedLine: number,
     fallbackPath: string
 ): X86SourceLine {
-    return (
-        lineMap[Math.max(0, generatedLine)] ?? {
-            path: fallbackPath,
-            line: Math.max(0, generatedLine)
-        }
-    )
+    if (!Number.isInteger(generatedLine) || generatedLine < 0) {
+        return { path: fallbackPath, line: -1 }
+    }
+    return lineMap[generatedLine] ?? { path: fallbackPath, line: generatedLine }
 }
 
 export function x86GeneratedLinesFor(
