@@ -401,7 +401,12 @@ export function makeProject(data?: StoredProject) {
      * rather than kept from before.
      */
     function set(data: Partial<StoredProject>) {
-        fileSystem.assertEditable()
+        //Only a merge that actually touches Files or the Entry path is a host file edit. Taking the
+        //lock for every merge meant saving a shared Project after a Build threw instead of saving,
+        //because a Debug session stays open through termination until Stop.
+        if (data.files !== undefined || data.code !== undefined || data.entry !== undefined) {
+            fileSystem.assertEditable()
+        }
         const legacyCode = typeof data.code === 'string' && data.files === undefined
         const merged = normalizeProjectData({
             ...toObject(),

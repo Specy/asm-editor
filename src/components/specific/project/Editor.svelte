@@ -17,7 +17,11 @@
     import { Monaco } from '$lib/monaco/Monaco'
     import { generateTheme } from '$lib/monaco/editorTheme'
     import type { BuildArtifact, Diagnostic } from '$lib/languages/commonLanguageFeatures.svelte'
-    import { projectSourceUri, type ProjectModelIdentity } from '$lib/languages/service/uri'
+    import {
+        parseProjectSourceUri,
+        projectSourceUri,
+        type ProjectModelIdentity
+    } from '$lib/languages/service/uri'
     import { zeroBasedLineToMonaco } from '$lib/languages/service/monacoConversions'
     import { setModelBuildArtifacts } from '$lib/monaco/assemblyInsights'
 
@@ -64,6 +68,13 @@
         viewZones = [],
         buildArtifacts = []
     }: Props = $props()
+    /**
+     * The text the editor shows: the compiled-code override when there is one, otherwise the File's
+     * own source. The test is truthiness, not `??`: every emulator but x86 reports `''` from
+     * `_getCompiledCode` for a program with nothing to expand, so a successful Build would
+     * otherwise replace the program with an empty model.
+     */
+    const displayedValue = $derived(codeOverride || code)
     let mockEditor: HTMLDivElement | null = $state(null)
     let monacoInstance: MonacoType | null = $state.raw(null)
     let activeModelKey = $state('')
@@ -76,6 +87,8 @@
     const toDispose: (monaco.IDisposable | (() => void))[] = []
     const dispatcher = createEventDispatcher<{
         change: string
+        /** A change to any Project File's model, including one the editor is not showing. */
+        fileChange: { path: string; value: string }
         breakpointPress: number
     }>()
     let el: HTMLDivElement | null = $state(null)
@@ -97,7 +110,7 @@
         if (destroyed) return
         const initialModel = createModel(
             loadedMonaco,
-            codeOverride ?? code,
+            displayedValue,
             editorLanguage.toLowerCase(),
             modelIdentity
         )
@@ -193,7 +206,20 @@
         identity: ProjectModelIdentity | undefined
     ): monaco.editor.ITextModel {
         const uri = identity ? projectSourceUri(currentMonaco, identity) : undefined
-        return currentMonaco.editor.createModel(value, modelLanguage, uri)
+        const model = currentMonaco.editor.createModel(value, modelLanguage, uri)
+        //Per model, not per editor: a rename or a code action returns edits for several resources
+        //at once, and Monaco applies them to models the editor is not showing. Listening only on
+        //the active model dropped those edits, and the next time that File was opened its model was
+        //overwritten from the Project, losing them for good.
+        const listener = model.onDidChangeContent(() => {
+            if (disabled || applyingExternalValue) return
+            const changed = parseProjectSourceUri(model.uri)
+            if (changed?.sourceKind === 'live') {
+                dispatcher('fileChange', { path: changed.path, value: model.getValue() })
+            }
+        })
+        toDispose.push(() => listener.dispose())
+        return model
     }
 
     function selectModel(key: string, value: string) {
@@ -227,7 +253,7 @@
     }
 
     $effect(() => {
-        selectModel(modelKey, codeOverride ?? code)
+        selectModel(modelKey, displayedValue)
     })
 
     $effect(() => {

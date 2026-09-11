@@ -18,6 +18,7 @@
     import Header from '$cmp/shared/layout/Header.svelte'
     import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
     import { createShareLink } from '$lib/utils'
+    import { toast } from '$stores/toastStore'
     import Button from '$cmp/shared/button/Button.svelte'
     import FaExternal from '~icons/fa-solid/external-link-alt'
     import Icon from '$cmp/shared/layout/Icon.svelte'
@@ -224,8 +225,14 @@
                                             code,
                                             language: settings.language
                                         })
-                                        const url = createShareLink(project)
-                                        window.open(url, '_blank')
+                                        try {
+                                            window.open(createShareLink(project), '_blank')
+                                        } catch (error) {
+                                            console.error(error)
+                                            toast.error(
+                                                'This program is too large to open in the editor through a link'
+                                            )
+                                        }
                                     }}
                                 >
                                     <Icon>

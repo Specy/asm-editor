@@ -9,7 +9,7 @@
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
     import { scale } from 'svelte/transition'
     import FileImporter from '$cmp/shared/fileImporter/FileImporter.svelte'
-    import { blobDownloader, createShareLink } from '$lib/utils'
+    import { blobDownloader, createShareLink, ShareTooLargeError } from '$lib/utils'
     import FaUpload from '~icons/fa-solid/upload'
     import { toast } from '$stores/toastStore'
     import {
@@ -49,7 +49,7 @@
                     toast.success('Cancelled import')
                     return undefined
                 }
-                ProjectStore.save(project)
+                await ProjectStore.save(project)
                 toast.logPill('Overriden project!')
                 return project
             } else if (existing) {
@@ -98,9 +98,9 @@
                 fileHandle,
                 looksLikeZip(new Uint8Array(data)) ? 'archive' : 'legacy'
             )
-            const proj = await ProjectStore.getProject(id)
-            if (!proj) continue
-            ProjectStore.save(proj) //saves the new metadata to the file
+            //The imported instance, not a re-read by id: the store's array may not have reloaded
+            //yet, and writing back a stale row reverted the import it had just applied.
+            await ProjectStore.save(importedProject) //saves the new metadata to the file
         }
     }
 
@@ -234,28 +234,62 @@
                         <ProjectCard
                             {project}
                             on:share={async (e) => {
-                                const link = createShareLink(e.detail)
+                                let link: string
+                                try {
+                                    link = createShareLink(e.detail)
+                                } catch (error) {
+                                    console.error(error)
+                                    toast.error(
+                                        error instanceof ShareTooLargeError
+                                            ? 'This Project is too big to share as a link. Download the .asmproj archive instead.'
+                                            : 'Could not create a share link for this Project',
+                                        10000
+                                    )
+                                    return
+                                }
                                 await navigator.clipboard.writeText(link)
                                 toast.logPill('Copied to clipboard')
                             }}
                             on:download={(e) => {
-                                const source = projectToSingleSource(e.detail)
-                                if (source) {
+                                //Always the archive: it is the lossless representation, and a
+                                //single-File Project has a name, description, Testcases, Settings
+                                //and a display that a bare source file silently drops. Downloading
+                                //the source alone is a separate, explicit action.
+                                try {
+                                    const archive = projectToArchive(e.detail)
+                                    blobDownloader(
+                                        new Blob([new Uint8Array(archive).buffer], {
+                                            type: 'application/zip'
+                                        }),
+                                        projectArchiveName(e.detail.name)
+                                    )
+                                } catch (error) {
+                                    console.error(error)
+                                    toast.error(
+                                        error instanceof Error
+                                            ? error.message
+                                            : 'Failed to export project!'
+                                    )
+                                }
+                            }}
+                            on:downloadSource={(e) => {
+                                try {
+                                    const source = projectToSingleSource(e.detail)
+                                    if (!source) return
                                     blobDownloader(
                                         new Blob([source.bytes], {
                                             type: 'text/plain;charset=utf-8'
                                         }),
                                         source.fileName
                                     )
-                                    return
+                                } catch (error) {
+                                    console.error(error)
+                                    toast.error(
+                                        error instanceof Error
+                                            ? error.message
+                                            : 'Failed to export source file!'
+                                    )
                                 }
-                                const archive = projectToArchive(e.detail)
-                                blobDownloader(
-                                    new Blob([new Uint8Array(archive).buffer], {
-                                        type: 'application/zip'
-                                    }),
-                                    projectArchiveName(e.detail.name)
-                                )
                             }}
                         />
                     </div>

@@ -98,14 +98,14 @@ rather than appearing to work until the next repaint wipes it.
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | `0x27` command: `PIXEL` … `PRESENT`     | Error naming the command. The program draws by storing bytes                                                  |
 | `0x27` command: `MODE_DRAWING`          | Leaves cell mode; the image stays as it is until something draws                                              |
-| `0x10`, `0x11` pen and fill color       | Work: they choose ink and paper                                                                               |
-| `0x12`–`0x16` pen width and coordinates | Accepted and read back, as today; they are staging registers and affect nothing until a drawing command runs  |
-| `0x18` pixel read                       | Error. A program reads its own video RAM                                                                      |
-| `0x19`, `0x1A` text cursor              | Error. There is no text cursor: printing on this machine _is_ storing a byte                                  |
-| `0x00`–`0x04` console                   | Write to the Terminal transcript only, **not** to the Screen (see below)                                      |
-| `0x20`–`0x23` keyboard                  | Work unchanged, beside the matrix at `0x3800`                                                                 |
-| `0x30`–`0x33` mouse                     | Work unchanged. The machine had no mouse; this is the editor's own extra and conflicts with nothing           |
-| `0x40`–`0x42` time                      | Work unchanged. `TIME_FRAME` is how a program written here paces itself without the machine's timer interrupt |
+| `0x20`, `0x21` pen and fill color       | Work: they choose ink and paper                                                                               |
+| `0x22`–`0x26` pen width and coordinates | Accepted and read back, as today; they are staging registers and affect nothing until a drawing command runs  |
+| `0x28` pixel read                       | Error. A program reads its own video RAM                                                                      |
+| `0x29`, `0x2A` text cursor              | Error. There is no text cursor: printing on this machine _is_ storing a byte                                  |
+| `0x10`–`0x14` console                   | Write to the Terminal transcript only, **not** to the Screen (see below)                                      |
+| `0x30`–`0x33` keyboard                  | Work unchanged, beside the matrix at `0x3800`                                                                 |
+| `0x40`–`0x43` mouse                     | Work unchanged. The machine had no mouse; this is the editor's own extra and conflicts with nothing           |
+| `0x50`–`0x52` time                      | Work unchanged. `TIME_FRAME` is how a program written here paces itself without the machine's timer interrupt |
 
 **Console output stops being drawn on the Screen in cell mode**, and this is the one place where
 [ADR 0003](../adr/0003-preserve-simulator-graphics-conventions.md)'s single output window is honored

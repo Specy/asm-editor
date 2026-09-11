@@ -420,7 +420,8 @@ export type BaseEmulatorActions = {
     clear: () => void
     setTabMemoryAddress: (address: bigint, tabId: number) => void
     toggleBreakpoint: (line: number, file?: string) => void
-    undo: (amount?: number) => void
+    /** Returns how many instructions were actually rolled back, which can be fewer than asked. */
+    undo: (amount?: number) => number
     /**
      * Ends the current Run at its next slice boundary, preserving the program and undo history.
      * Does nothing when no run is in flight.
@@ -441,7 +442,11 @@ export type BaseEmulatorActions = {
      * A new Screen undo budget, applied on the next clear, which is what a Build starts with: a
      * Setting takes effect at the next Build and never resizes anything under a running program.
      */
+    /** The Entry path of the sources currently set. */
+    entry: string
     setScreenHistoryBudgetMb: (megabytes: number) => void
+    /** The same for the FileSystem's Undo budget, likewise read by the next Build's session. */
+    setFileSystemHistoryBudgetMb: (megabytes: number) => void
     /**
      * MIPS and RISC-V only: applies MARS's five bitmap-display parameters, re-syncing the Screen
      * from memory at once as the tool does. Absent on every other Emulator, whose Screen is the

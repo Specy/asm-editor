@@ -96,6 +96,8 @@ export class Screen {
     private _cursorRow = 0
     private _cell: ScreenCellSize
     private _doubleBuffering = false
+    /** The drawing geometry `useCells` replaced, restored when the program leaves cell mode. */
+    private beforeCells: { cell: ScreenCellSize } | null = null
     private _framebuffer: ScreenSize | null = null
     private _cells: ScreenCellGrid | null = null
     /** The glyph sheet cell mode paints with: 256 glyphs of one byte per pixel, non-zero for ink. */
@@ -522,6 +524,13 @@ export class Screen {
         this.history.clear()
         this._framebuffer = null
         this._cells = null
+        //A cell display is memory-backed and has no present step, and the commands that would
+        //present or leave double buffering are refused while it is on, so leaving the flag set
+        //froze the visible image with nothing the program could do about it.
+        this._doubleBuffering = false
+        //Remembered so leaving the mode gives text back a cell the program did not choose and has
+        //no way to change; the image size it can still set for itself with a resize.
+        this.beforeCells = { cell: this._cell }
         this._cell = cell
         this.resize(columns * cell.width, rows * cell.height)
         this.history.clear()
@@ -531,10 +540,15 @@ export class Screen {
 
     /** Leaves framebuffer or cell mode; the image stays as it is until something draws on it. */
     useDrawing(): void {
+        const leavingCells = this._cells !== null
         this._framebuffer = null
         this._cells = null
         this.cellGlyphs = null
         this.discardCompound()
+        //The image is left exactly as it is; only the text cell goes back to what it was, so
+        //console output and input echo are not stuck at the cell height the display imposed.
+        if (leavingCells && this.beforeCells) this._cell = this.beforeCells.cell
+        this.beforeCells = null
         this.history.clear()
     }
 
@@ -644,6 +658,7 @@ export class Screen {
         this._framebuffer = null
         this._cells = null
         this.cellGlyphs = null
+        this.beforeCells = null
         this._width = Math.max(1, Math.trunc(this.options.width))
         this._height = Math.max(1, Math.trunc(this.options.height))
         this._backgroundColor = this.options.backgroundColor ?? BLACK

@@ -314,7 +314,10 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         //the mode the source asked for, in place before the program is even loaded: enabling blanks
         //video RAM the way the ROM's clear does, and a program is allowed to assemble an image
         //straight into those addresses, which the blank would otherwise wipe
-        if (this.cellModeRequested) trs80.enable()
+        if (this.cellModeRequested) {
+            trs80.enable()
+            trs80.clearVideoRam()
+        }
         //throws only for an assembly with errors, which `_compile` already refused
         machine.loadAssembly(assembly)
         //so an assembled-in screen is on the display before the first instruction runs
@@ -437,9 +440,17 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
 
     async _runTestcase(_testcase: Testcase, haltLimit: number): Promise<void> {
         const execution = this.executionController.capture()
-        //the testcase input is served by the terminal's scripted source, swapped in by the caller.
-        //No user breakpoints during a test, but the cliff ones still have to stop the machine.
-        await this.runWithInput(execution, toInstructionLimit(haltLimit), [])
+        try {
+            //the testcase input is served by the terminal's scripted source, swapped in by the
+            //caller. No user breakpoints during a test, but the cliff ones still have to stop the
+            //machine.
+            await this.runWithInput(execution, toInstructionLimit(haltLimit), [])
+        } finally {
+            //A test run has no slice loop to flush the display's dirty range, and the Core the test
+            //leaves behind is still read for the Screen, so without this a TRS-80 program's output
+            //is a blank image in every testcase.
+            this.trs80?.flush()
+        }
     }
 
     async _step(): Promise<{ terminated: boolean }> {

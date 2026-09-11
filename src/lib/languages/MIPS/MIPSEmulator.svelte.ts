@@ -1,3 +1,4 @@
+import { guestFileFailure } from '$lib/languages/peripherals/FileSystem'
 import {
     BackStepAction,
     ConfirmResult,
@@ -192,8 +193,9 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
     _canUndo(): boolean {
         const mips = this.mips
         if (!mips?.canUndo) return false
-        const step = mips.getUndoStack()[0]
-        return !step || (this.fileSystemSession?.canUndoAfter(step.pc) ?? true)
+        //The Core's backstep depth is the execution position the FileSystem journal is keyed by,
+        //and one undo rewinds at least one record, so `depth - 1` is what has to be restorable.
+        return this.fileSystemSession?.canUndoAfter(mips.getUndoStack().length - 1) ?? true
     }
 
     _checkCode(sources: BuildSources): Diagnostic[] {
@@ -515,12 +517,13 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
 
     _undo(): void {
         const mips = this.requireMips()
-        const step = mips.getUndoStack()[0]
-        if (step && !(this.fileSystemSession?.canUndoAfter(step.pc) ?? true)) {
+        if (!(this.fileSystemSession?.canUndoAfter(mips.getUndoStack().length - 1) ?? true)) {
             throw new Error('FileSystem Undo history exhausted')
         }
         mips.undo()
-        if (step) this.fileSystemSession?.undoAfter(step.pc)
+        //Rewinding can pop more than one backstep record, so the position the Core landed on is
+        //read back rather than assumed, and every File operation recorded past it is rolled back.
+        this.fileSystemSession?.undoAfter(mips.getUndoStack().length)
     }
 
     /**
@@ -639,9 +642,10 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         const instructionOperation = <T>(operation: () => T): T => {
             const files = this.fileSystemSession
             if (!files) throw new Error('FileSystem is not running')
-            //MARS advances PC before it invokes a syscall handler; the Core's backstep record is
-            //keyed by the address of the syscall itself.
-            return files.performInstruction(this.requireMips().programCounter - 4, operation)
+            //The Core's backstep depth is an execution position: it grows as the program runs
+            //and shrinks as Undo rewinds, which is what the journal pairs its frames with. An
+            //address would not: one shared syscall instruction serves every call site that reaches it.
+            return files.performInstruction(this.requireMips().getUndoStack().length, operation)
         }
         const handlers: HandlerMapFns = {
             readChar: () => this.readCharacter('ReadChar', READ_CHAR_QUESTION),
@@ -672,19 +676,46 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
             stdOut: (buffer: number[]) => terminal.write(decodeBuffer(buffer)),
             stdErr: (buffer: number[]) => terminal.write(decodeBuffer(buffer)),
 
-            readFile: (descriptor, _destination, length) =>
-                (() => {
+            //MARS reports a failed file operation through the syscall's return value so the
+            //program can branch on it. Letting a FileSystem error reach the Core instead ends the
+            //run at the syscall, which no program can handle. Only `open` and `read` have a value
+            //to carry the failure; a stale `close` is ignored the way MARS ignores it, and a
+            //failed `write` has nowhere to report, so it surfaces as a run error and the program
+            //carries on rather than dying mid-instruction.
+            readFile: (descriptor, _destination, length) => {
+                try {
                     const bytes = this.fileSystemSession!.read(descriptor, length)
-                    return [bytes.length === 0 ? -1 : bytes.length, Array.from(bytes)]
-                })(),
-            writeFile: (descriptor, buffer) =>
-                void this.fileSystemSession!.write(descriptor, handlerBytes(buffer)),
-            openFile: (path, flags, append) =>
-                this.fileSystemSession!.open(
-                    path,
-                    flags === 0 ? 'read' : append ? 'append' : 'write'
-                ),
-            closeFile: (descriptor) => this.fileSystemSession!.close(descriptor),
+                    //0 is end of file; -1 is reserved for a read that failed.
+                    return [bytes.length, Array.from(bytes)]
+                } catch (error) {
+                    return [guestFileFailure(error), []]
+                }
+            },
+            writeFile: (descriptor, buffer) => {
+                try {
+                    this.fileSystemSession!.write(descriptor, handlerBytes(buffer))
+                } catch (error) {
+                    guestFileFailure(error)
+                }
+            },
+            openFile: (path, flags, append) => {
+                try {
+                    return this.fileSystemSession!.open(
+                        path,
+                        flags === 0 ? 'read' : append ? 'append' : 'write'
+                    )
+                } catch (error) {
+                    return guestFileFailure(error)
+                }
+            },
+            closeFile: (descriptor) => {
+                try {
+                    this.fileSystemSession!.close(descriptor)
+                } catch (error) {
+                    //A descriptor the program never had, or closed already: not an error.
+                    guestFileFailure(error)
+                }
+            },
             stdIn: unimplementedHandler('stdIn'),
 
             sleep: (milliseconds: number) => this.sleep(milliseconds),
@@ -772,12 +803,22 @@ function toNumericRegisterName(register: MIPSRegisterName): RegisterName {
     return register
 }
 
+/**
+ * One source line can assemble to several machine statements — a pseudo-instruction like `la`, or a
+ * macro invocation — and every one of them reports that line. Breaking on all of them stopped the
+ * run once per generated instruction, so a single visible breakpoint took several Runs to clear.
+ * Only the first address of the expansion is a breakpoint: it is where the line is entered.
+ */
 function calculateBreakpoints(mips: JsMips, breakpoints: SourceBreakpoint[]): number[] {
-    return breakpoints.flatMap((breakpoint) =>
-        mips
-            .getStatementsAtSourceLocation(breakpoint.file, breakpoint.line + 1)
-            .map((statement) => statement.address)
-    )
+    return breakpoints.flatMap((breakpoint) => {
+        const statements = mips.getStatementsAtSourceLocation(breakpoint.file, breakpoint.line + 1)
+        const entry = statements.reduce<number | undefined>(
+            (lowest, statement) =>
+                lowest === undefined || statement.address < lowest ? statement.address : lowest,
+            undefined
+        )
+        return entry === undefined ? [] : [entry]
+    })
 }
 
 function includedScreenDiagnostics(

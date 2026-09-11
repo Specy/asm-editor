@@ -1,6 +1,11 @@
 import { S68k } from '@specy/s68k'
 import { assemblyFiles, fileBytes, type BuildSources } from '$lib/projectFiles'
 
+/** A line that cannot contain this token cannot be an `incbin` directive. */
+const INCBIN_TOKEN = /\bincbin\b/i
+/** The same for `include`. Both keep `parseLine`, a WASM round trip, off lines that cannot match. */
+const INCLUDE_TOKEN = /\binclude\b/i
+
 /**
  * Prepares the exact source/byte view consumed by S68K. Text Files need a private byte alias when
  * they are read through `incbin`, because the Project's byte contract is UTF-8 while S68K 2.1
@@ -23,9 +28,14 @@ export function m68kAssemblyFiles(sources: BuildSources): Record<string, string 
 
     for (const [sourcePath, contents] of Object.entries(files)) {
         if (typeof contents !== 'string' || sourcePath.startsWith('.asm-editor-incbin/')) continue
+        //`parseLine` is a WASM round trip, and only the handful of lines that mention `incbin` can
+        //be one. Asking the Core about every line of every File cost 2.5 seconds per Build for a
+        //6,600-line example; a line without the token cannot be the directive, so it is left alone.
+        if (!INCBIN_TOKEN.test(contents)) continue
         files[sourcePath] = contents
             .split('\n')
             .map((line) => {
+                if (!INCBIN_TOKEN.test(line)) return line
                 const operation = S68k.parseLine(line).operation
                 const field = operation?.text
                 if (operation?.name.toLowerCase() !== 'incbin' || !field) return line
@@ -76,7 +86,9 @@ export function m68kIncludedSourceFiles(
         const file = sources.files[path]
         if (!file || file.encoding !== 'plain') continue
         included.add(path)
+        if (!INCLUDE_TOKEN.test(file.content)) continue
         for (const line of file.content.split(/\r?\n/)) {
+            if (!INCLUDE_TOKEN.test(line)) continue
             const operation = S68k.parseLine(line).operation
             if (operation?.name.toLowerCase() !== 'include' || !operation.text) continue
             const target = resolveM68kFile(path, m68kWrittenPath(operation.text.text), sources)
@@ -92,7 +104,9 @@ export function m68kReachableFiles(sources: BuildSources): Set<string> {
     for (const path of [...reachable]) {
         const file = sources.files[path]
         if (file?.encoding !== 'plain') continue
+        if (!INCBIN_TOKEN.test(file.content)) continue
         for (const line of file.content.split(/\r?\n/)) {
+            if (!INCBIN_TOKEN.test(line)) continue
             const operation = S68k.parseLine(line).operation
             if (operation?.name.toLowerCase() !== 'incbin' || !operation.text) continue
             const target = resolveM68kFile(path, m68kWrittenPath(operation.text.text), sources)

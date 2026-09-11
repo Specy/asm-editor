@@ -308,7 +308,9 @@ export abstract class GenericEmulator<T, R extends string>
             //explicit callers until Stop instead of silently reporting that the program is clean.
             if (this.fileSystemSession) return this.state.compilerDiagnostics
             const diagnostics = await this._checkCode($state.snapshot(this._sources))
-            if (checkId !== this.semanticCheckId) return diagnostics
+            //Re-checked after the round trip as well as before it: a Build may have started and
+            //taken the FileSystem in the meantime, and its diagnostics describe the Build snapshot.
+            if (checkId !== this.semanticCheckId || this.fileSystemSession) return diagnostics
             this.state.compilerDiagnostics = diagnostics
             this.state.errors = []
             return diagnostics
@@ -466,6 +468,10 @@ export abstract class GenericEmulator<T, R extends string>
         this._emulatorOptions.screenHistoryBudgetMb = megabytes
     }
 
+    setFileSystemHistoryBudgetMb(megabytes: number): void {
+        this._emulatorOptions.fileSystemHistoryBudgetMb = megabytes
+    }
+
     /**
      * The adapter knows which peripheral effects belong to the next CPU undo record and preflights
      * them against the Screen's byte budget. Unrelated CPU instructions remain undoable even if an
@@ -577,6 +583,12 @@ export abstract class GenericEmulator<T, R extends string>
         fileSystem: FileSystem
     ): Promise<void> {
         this.clear()
+        //A Build supersedes live checking the same way a newer check supersedes an older one: the
+        //debounced check is disarmed and any check already in flight fails its id comparison when
+        //it settles, so it cannot overwrite the Build's diagnostics with a separately assembled
+        //opinion — or clear the errors that made the Build fail.
+        this.semanticCheckId += 1
+        this.debouncer[1]()
         const execution = this.executionController.capture()
         let entry = this._sources.entry
         try {
@@ -832,6 +844,34 @@ export abstract class GenericEmulator<T, R extends string>
      * run does this, and so does a pause, which would otherwise leave every panel showing what it
      * held when Run was pressed.
      */
+    /**
+     * The end of a run that threw: the failing instruction is reported, and the panels are brought
+     * up to date. A program that ends on a runtime error is exactly when the registers and memory
+     * that caused it are worth looking at, and the Core's history still holds the instructions that
+     * ran, so Undo is offered rather than left reading as unavailable. Both are guarded: a Core that
+     * just failed may no longer be readable, and that must not replace the error the user needs.
+     */
+    private reportRuntimeFailure(error: unknown): void {
+        console.error(error)
+        let instruction: { file: string; lineNumber: number } | null = null
+        try {
+            //the failing instruction is the last one that was attempted, not the one after it
+            instruction = this._getLastInstruction?.() ?? this._getNextInstruction()
+        } catch (lookupError) {
+            console.error(lookupError)
+        }
+        const line = instruction?.lineNumber ?? -1
+        this.addError(this._stringifyError(error, line >= 0 ? line + 1 : undefined))
+        this.state.terminated = true
+        this.selectInstruction(instruction)
+        try {
+            this.state.canUndo = this.canUndoStep()
+            this.refreshCoreViews()
+        } catch (refreshError) {
+            console.error(refreshError)
+        }
+    }
+
     private refreshVisibleState(terminated: boolean): void {
         try {
             const ins = this._getNextInstruction()
@@ -876,18 +916,7 @@ export abstract class GenericEmulator<T, R extends string>
             if (!this.executionController.isCurrent(execution)) {
                 return InterpreterStatus.Terminated
             }
-            console.error(e)
-            let instruction: { file: string; lineNumber: number } | null = null
-            try {
-                //the failing instruction is the last one that was attempted, not the one after it
-                instruction = this._getLastInstruction?.() ?? this._getNextInstruction()
-            } catch (e) {
-                console.error(e)
-            }
-            const line = instruction?.lineNumber ?? -1
-            this.addError(this._stringifyError(e, line >= 0 ? line + 1 : undefined))
-            this.state.terminated = true
-            this.selectInstruction(instruction)
+            this.reportRuntimeFailure(e)
         }
         return InterpreterStatus.TerminatedWithException
     }
@@ -1127,18 +1156,7 @@ export abstract class GenericEmulator<T, R extends string>
             if (!this.executionController.isCurrent(execution)) {
                 return InterpreterStatus.Terminated
             }
-            console.error(e)
-            let instruction: { file: string; lineNumber: number } | null = null
-            try {
-                //the failing instruction is the last one that was attempted, not the one after it
-                instruction = this._getLastInstruction?.() ?? this._getNextInstruction()
-            } catch (e) {
-                console.error(e)
-            }
-            const line = instruction?.lineNumber ?? -1
-            this.addError(this._stringifyError(e, line >= 0 ? line + 1 : undefined))
-            this.state.terminated = true
-            this.selectInstruction(instruction)
+            this.reportRuntimeFailure(e)
         }
         return InterpreterStatus.TerminatedWithException
     }
@@ -1213,11 +1231,19 @@ export abstract class GenericEmulator<T, R extends string>
         else this.state.breakpoints.splice(index, 1)
     }
 
-    undo(amount?: number): void {
+    /**
+     * Rolls back up to `amount` instructions and returns how many it actually managed. It can be
+     * fewer: the Screen or the FileSystem journal may have dropped the inverses for older
+     * instructions under its budget, and stopping there is the only way to keep what the panels show
+     * consistent with the Files and the image. Callers that asked for a specific number of steps
+     * should say so when they get fewer, rather than leave the user looking at a History panel that
+     * did not move as far as they clicked.
+     */
+    undo(amount?: number): number {
         //Undo is synchronous. An unfinished step/run/input handler still owns the Core.
-        if (this.coreOperations > 0 || !this.state.canExecute) return
+        if (this.coreOperations > 0 || !this.state.canExecute) return 0
         try {
-            if (!this.getInstance()) return
+            if (!this.getInstance()) return 0
             const undoCount = Math.max(0, Math.floor(amount ?? 1))
             let undone = 0
             for (; undone < undoCount && this.canUndoStep(); undone++) {
@@ -1238,6 +1264,7 @@ export abstract class GenericEmulator<T, R extends string>
             this.updateMemory()
             this.updateData()
             this.updateStatusRegisters()
+            return undone
         } catch (e) {
             this.addError(this._stringifyError(e))
             this.state.terminated = true
@@ -1288,6 +1315,11 @@ export abstract class GenericEmulator<T, R extends string>
 
     get buildSources() {
         return this._buildSources
+    }
+
+    /** The Entry path of the sources currently set, which a single-source host never names itself. */
+    get entry() {
+        return this._sources.entry
     }
 
     get decorations() {

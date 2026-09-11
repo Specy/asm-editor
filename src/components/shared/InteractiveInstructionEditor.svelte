@@ -117,7 +117,9 @@
     let editor: monaco.editor.IStandaloneCodeEditor | undefined = $state()
 
     $effect(() => {
-        untrack(() => emulator.setCode(code))
+        //Tracked read outside `untrack`, so editing the playground keeps arming the live check.
+        const source = code
+        untrack(() => emulator.setCode(source))
     })
 
     onMount(() => {
@@ -219,7 +221,10 @@
             bind:code
             codeOverride={emulator.compiledCode}
             breakpoints={emulator.breakpoints
-                .filter((breakpoint) => breakpoint.file === emulator.currentFile)
+                .filter(
+                    (breakpoint) =>
+                        breakpoint.file === (emulator.buildSources?.entry ?? emulator.entry)
+                )
                 .map((breakpoint) => breakpoint.line)}
             diagnostics={emulator.compilerDiagnostics}
             {language}

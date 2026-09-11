@@ -22,7 +22,9 @@ export function x86DiagnosticToLanguageDiagnostic(
         : x86SourceLineAt(lineMap, error.lineIndex, entry)
     const column = Math.max(0, error.column - 1)
     return {
-        severity: 'error',
+        //The Core reports its own severity: a NASM warning is not an error, and painting it red
+        //here contradicted the amber squiggle the same finding gets after a Build.
+        severity: error.severity ?? 'error',
         source: 'nasm',
         location: {
             path: source.path,
@@ -38,6 +40,16 @@ export function x86DiagnosticToLanguageDiagnostic(
 let checker: Awaited<ReturnType<typeof createX86Emulator>> | undefined
 
 /** Runs NASM against the Core's virtual Project filesystem. */
+/** The include closure of the Entry, or `undefined` when the walk could not resolve all of it. */
+function tryReachableX86Files(sources: BuildSources): Set<string> | undefined {
+    try {
+        const walked = expandLegacyX86Project(sources)
+        return walked.diagnostics.length === 0 ? walked.reached : undefined
+    } catch {
+        return undefined
+    }
+}
+
 export async function analyzeX86Project(
     sources: BuildSources,
     sessionId: string,
@@ -52,11 +64,19 @@ export async function analyzeX86Project(
         : expanded!.diagnostics.length === 0
           ? await checker.checkCode(expanded!.code)
           : []
+    //NASM resolves `%include`/`incbin` itself and reports no reached set, so reachability comes from
+    //the project's own include walk even on the native path — used for this and nothing else, with
+    //resolution still left to NASM. A walk that could not follow every include says nothing rather
+    //than marking a File the Core may well have assembled as unreachable.
+    const reachability = native ? tryReachableX86Files(sources) : expanded!.reached
+    const reached = reachability
     const fileStatus: Record<string, ProjectFileAnalysisStatus> = Object.create(null)
     for (const [path, file] of Object.entries(sources.files)) {
         if (file.encoding !== 'plain') fileStatus[path] = 'binary'
-        else
-            fileStatus[path] = native || expanded!.reached.has(path) ? 'assembled' : 'not-reachable'
+        else if (reached) fileStatus[path] = reached.has(path) ? 'assembled' : 'not-reachable'
+        //Nothing walked the includes, so there is no honest claim to make. Saying `assembled` here
+        //told the user a File was part of the program when nothing had checked.
+        else fileStatus[path] = 'unknown'
     }
     return {
         sessionId,

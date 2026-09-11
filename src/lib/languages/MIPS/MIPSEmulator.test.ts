@@ -183,6 +183,53 @@ ${EXIT}`,
         expect(emulator.registers.find((register) => register.name === '$s1')?.value).toBe(101n)
     })
 
+    /**
+     * MARS reports a failed file syscall through the return value so a program can branch on it.
+     * Letting the FileSystem's error reach the Core instead ended the run at the syscall, where no
+     * program could handle it and the error-handling branch every exercise asks for was unreachable.
+     */
+    it('answers a failed guest file operation with -1 instead of ending the run', async () => {
+        const AFTER = '        li      $v0, 4\n        la      $a0, ok\n        syscall\n'
+        const emulator = await run(
+            `
+        .data
+path:   .asciiz "missing.txt"
+ok:     .asciiz "AFTER"
+        .text
+main:
+        li      $v0, 13
+        la      $a0, path
+        li      $a1, 0
+        li      $a2, 0
+        syscall
+        move    $s0, $v0
+${AFTER}${EXIT}`,
+            { fileSystem: new FileSystem() }
+        )
+        expect(emulator.stdOut).toContain('AFTER')
+        expect(emulator.registers.find((register) => register.name === '$s0')?.value).toBe(-1n)
+    })
+
+    it('ignores closing a descriptor the program never opened, as MARS does', async () => {
+        const emulator = await run(
+            `
+        .data
+ok:     .asciiz "AFTER"
+        .text
+main:
+        li      $v0, 16
+        li      $a0, 42
+        syscall
+        li      $v0, 4
+        la      $a0, ok
+        syscall
+${EXIT}`,
+            { fileSystem: new FileSystem() }
+        )
+        expect(emulator.stdOut).toContain('AFTER')
+        expect(emulator.errors).toEqual([])
+    })
+
     it('keeps Testcase file writes isolated and does not leave a resumable Core behind', async () => {
         const fileSystem = new FileSystem()
         const emulator = MIPSEmulator(WRITE_FILE, { peripherals: { fileSystem } })

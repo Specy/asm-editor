@@ -101,6 +101,33 @@ describe('examples/z80', () => {
         expect(cellHasInk(screen, 0, 0)).toBe(false)
     })
 
+    it('paints the same TRS-80 display when the program runs as a testcase', async () => {
+        //A test run has no slice loop to flush the display's dirty range, so its Screen used to be
+        //blank even though the Core it leaves behind is read for the result.
+        const code = load('trs80-text.z80')
+        const emulator = Z80Emulator(code)
+        await emulator.check()
+        const results = await emulator.test(
+            code,
+            [
+                {
+                    input: [],
+                    expectedOutput: '',
+                    startingRegisters: {},
+                    expectedRegisters: {},
+                    startingMemory: [],
+                    expectedMemory: []
+                }
+            ],
+            INSTRUCTION_LIMIT,
+            0
+        )
+        expect(results).toHaveLength(1)
+        const screen = emulator.peripherals.screen
+        expect(screen.cells).toEqual({ columns: 64, rows: 16 })
+        expect(cellHasInk(screen, 2, 16)).toBe(true)
+    })
+
     it('bounces a block through a back buffer copied into video memory', async () => {
         //a frame here is two block copies of a kilobyte each, so this is a handful of frames
         //rather than the few dozen the pixel examples get out of `FRAME_LOOP_LIMIT`

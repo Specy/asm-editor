@@ -37,7 +37,9 @@
         selectedPath: string
         locked?: boolean
         diagnosticCounts?: Readonly<Record<string, { errors: number; warnings: number }>>
-        analysisStatus?: Readonly<Record<string, 'assembled' | 'not-reachable' | 'binary'>>
+        analysisStatus?: Readonly<
+            Record<string, 'assembled' | 'not-reachable' | 'binary' | 'unknown'>
+        >
         open?: boolean
         onSelect: (path: string) => void
         onEntryChange: (path: string) => void

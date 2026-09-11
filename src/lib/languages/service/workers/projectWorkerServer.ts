@@ -12,7 +12,8 @@ type WorkerSession = {
     revision: number
     target: ProjectAnalysisTarget
     entry: string
-    files: Record<string, ProjectFile>
+    /** A Map, so a File named `__proto__` is a key like any other rather than a prototype write. */
+    files: Map<string, ProjectFile>
 }
 
 type AnalyzeProject = (
@@ -52,7 +53,10 @@ export function startProjectWorker(analyze: AnalyzeProject): void {
                     if (!current) continue
                     const revision = current.revision
                     const target = current.target
-                    const sources = { entry: current.entry, files: { ...current.files } }
+                    const sources = {
+                        entry: current.entry,
+                        files: Object.fromEntries(current.files)
+                    }
                     try {
                         const snapshot = await analyze(sources, sessionId, revision, target)
                         workerScope.postMessage({
@@ -87,7 +91,7 @@ export function startProjectWorker(analyze: AnalyzeProject): void {
                 revision: request.revision,
                 target: request.target,
                 entry: request.entry,
-                files: { ...request.files }
+                files: new Map(Object.entries(request.files))
             })
             scheduleAnalysis(request.sessionId)
             return
@@ -97,8 +101,10 @@ export function startProjectWorker(analyze: AnalyzeProject): void {
         session.revision = request.revision
         session.entry = request.entry
         for (const change of request.changes) {
-            if (change.type === 'set') session.files[change.path] = change.file
-            else delete session.files[change.path]
+            //A plain object would route a File named `__proto__` into the prototype instead of the
+            //map, so it would never be analysed and could never be deleted.
+            if (change.type === 'set') session.files.set(change.path, change.file)
+            else session.files.delete(change.path)
         }
         scheduleAnalysis(request.sessionId)
     })

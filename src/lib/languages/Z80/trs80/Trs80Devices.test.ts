@@ -38,13 +38,26 @@ function colorAt(screen: Screen, x: number, y: number): number {
 }
 
 describe('the memory-mapped display', () => {
-    it('turns the Screen into the cell grid and blanks video RAM the way the ROM does', () => {
+    it('turns the Screen into the cell grid without writing any memory', () => {
         const { devices, screen, memory } = makeDevices()
+        memory[TRS80_VIDEO_BEGIN] = 0x41
+        memory[TRS80_VIDEO_END - 1] = 0x42
         expect(devices.isEnabled).toBe(false)
         devices.enable()
         expect(devices.isEnabled).toBe(true)
         expect(screen.getSize()).toEqual({ width: 512, height: 384 })
         expect(screen.cells).toEqual({ columns: 64, rows: 16 })
+        //the video RAM is always mapped: entering the mode shows what is there, it does not clear
+        //it. A running program's `MODE_CELLS` would otherwise destroy a kilobyte behind the Core's
+        //back, which no amount of Undo could restore.
+        expect(memory[TRS80_VIDEO_BEGIN]).toBe(0x41)
+        expect(memory[TRS80_VIDEO_END - 1]).toBe(0x42)
+    })
+
+    it('blanks video RAM the way the ROM does when startup asks it to', () => {
+        const { devices, memory } = makeDevices()
+        devices.enable()
+        devices.clearVideoRam()
         //zeroed RAM would open on 1024 copies of glyph 0 instead of on a blank screen
         expect(memory[TRS80_VIDEO_BEGIN]).toBe(TRS80_BLANK_CELL)
         expect(memory[TRS80_VIDEO_END - 1]).toBe(TRS80_BLANK_CELL)

@@ -147,6 +147,15 @@
     let languageAnalysisPending = $state(false)
     let analysisSpinnerVisible = $state(false)
     const displayedPath = $derived(sourceSelection.path)
+    /**
+     * Which File a breakpoint belongs to. The single-source hosts (exam, embed) have no Files, and
+     * their selection path is `''`, while a Build of that same source names it `main` — so glyphs
+     * placed before a Build were filtered out the moment one happened. There, follow the Emulator's
+     * own entry instead.
+     */
+    const breakpointFile = $derived(
+        hasProjectFiles ? displayedPath : (emulator.buildSources?.entry ?? emulator.entry ?? 'main')
+    )
     const sourceView = $derived(sourceSelection.sourceKind === 'build' ? 'snapshot' : 'live')
     let fileSidebarOpen = $state(false)
     let buildGeneration = $state(0)
@@ -269,9 +278,9 @@
     /** A decision or a reset from the panel; it takes effect at the next Build. */
     function applySettings(next: ProjectSettingsDecisions) {
         settings = next
-        emulator.setScreenHistoryBudgetMb(
-            resolveProjectSettings(language, next).screenHistoryBudgetMb
-        )
+        const resolved = resolveProjectSettings(language, next)
+        emulator.setScreenHistoryBudgetMb(resolved.screenHistoryBudgetMb)
+        emulator.setFileSystemHistoryBudgetMb(resolved.fileSystemHistoryBudgetMb)
         changed()
     }
 
@@ -301,7 +310,11 @@
     }
 
     $effect(() => {
-        untrack(() => emulator.setSources(sourceInput))
+        //`sourceInput` is read here, outside `untrack`, so the effect re-runs on every edit and the
+        //Emulator's live semantic check sees the current text. Only the call is untracked, to keep
+        //the state it writes from re-entering this effect.
+        const sources = sourceInput
+        untrack(() => emulator.setSources(sources))
     })
 
     $effect(() => {
@@ -437,22 +450,34 @@
         }
     }
 
-    function handleDisplayedFileChange(nextCode: string) {
-        if (hasProjectFiles) {
-            if (sourceView !== 'live' || !fileSystem || !displayedFile) return
-            try {
-                fileSystem.writeText(displayedPath, nextCode)
-            } catch (error) {
-                console.error(error)
-                toast.error(getM68kErrorMessage(error))
-            }
-        } else {
-            code = nextCode
+    /**
+     * A change to one Project File's model. Monaco applies a rename or a code action to every
+     * resource it touches, including Files the editor is not showing, so this is driven per model
+     * rather than from the editor's active text.
+     */
+    function handleProjectFileChange(path: string, nextCode: string) {
+        if (!hasProjectFiles || sourceView !== 'live' || !fileSystem) return
+        //A File the Project no longer has is not recreated by typing into a stale model.
+        if (!files || !(path in files)) return
+        try {
+            fileSystem.writeText(path, nextCode)
+        } catch (error) {
+            console.error(error)
+            toast.error(getM68kErrorMessage(error))
         }
         if (emulator.canExecute && emulator.terminated && emulator.line >= 0) {
             emulator.resetSelectedLine()
         }
-        if (!hasProjectFiles && preferencesStore.values.autoSave.value) {
+    }
+
+    /** The single-source hosts (exam, embed) that bind one `code` string instead of Files. */
+    function handleDisplayedFileChange(nextCode: string) {
+        if (hasProjectFiles) return
+        code = nextCode
+        if (emulator.canExecute && emulator.terminated && emulator.line >= 0) {
+            emulator.resetSelectedLine()
+        }
+        if (preferencesStore.values.autoSave.value) {
             debounced(() => dispatcher('save', { silent: true }))
         }
     }
@@ -624,7 +649,13 @@
     })
 
     async function buildCode() {
-        if (readonly || building || running || fileSystemLocked) return
+        if (readonly || building || running) return
+        if (fileSystemLocked) {
+            //The Build button is hidden in this state, but the shortcut is not, and returning here
+            //without a word left the key looking broken.
+            toast.warn('Stop the current Debug session before building again')
+            return
+        }
         try {
             running = false
             building = true
@@ -864,7 +895,15 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
         statusRegisterNames={emulator.statusRegisters.map((r) => r.name)}
         on:undo={(e) => {
             const amount = e.detail
-            emulator.undo(amount)
+            const undone = emulator.undo(amount)
+            if (undone < amount) {
+                //The Screen or FileSystem journal ran out before the Core did. Saying so beats a
+                //History panel that silently stops part way back.
+                toast.warn(
+                    `Undid ${undone} of ${amount} instructions: the history for the ones before that has been discarded`,
+                    6000
+                )
+            }
             revealCurrentInstruction()
         }}
         on:highlight={(e) => {
@@ -992,8 +1031,10 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                               })
                         : []}
                     on:change={(event) => handleDisplayedFileChange(event.detail)}
+                    on:fileChange={(event) =>
+                        handleProjectFileChange(event.detail.path, event.detail.value)}
                     on:breakpointPress={(event) => {
-                        emulator.toggleBreakpoint(event.detail - 1, displayedPath)
+                        emulator.toggleBreakpoint(event.detail - 1, breakpointFile)
                     }}
                     bind:editor
                     code={displayedCode}
@@ -1002,7 +1043,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                         ? emulator.breakpoints
                         : []
                     )
-                        .filter((breakpoint) => breakpoint.file === displayedPath)
+                        .filter((breakpoint) => breakpoint.file === breakpointFile)
                         .map((breakpoint) => breakpoint.line)}
                     breakpointsEditable={canEditProjectBreakpoints(sourceSelection, {
                         readonly,

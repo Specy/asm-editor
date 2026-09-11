@@ -80,8 +80,12 @@ export class Trs80Devices {
     }
 
     /**
-     * Turns the display on: the Screen becomes a 64 by 16 grid of cells, and video RAM is filled
-     * with the blank the ROM's own clear uses, since zeroed RAM would show 1024 copies of glyph 0.
+     * Turns the display on: the Screen becomes a 64 by 16 grid of cells showing the kilobyte at
+     * 0x3C00, one byte per cell. It writes no memory of its own. On the machine the video RAM is
+     * always mapped and clearing it is a separate ROM routine, and a `MODE_CELLS` command issued by
+     * a running program used to blank a kilobyte behind the Core's back — memory no amount of Undo
+     * could bring back, breaking the invariant [ADR 0020](../../../../../docs/adr/0020-mirror-the-trs80-display-in-guest-memory.md)
+     * rests on. Startup clears it explicitly with `clearVideoRam`.
      */
     enable(): void {
         if (this.enabled) return
@@ -91,6 +95,15 @@ export class Trs80Devices {
             TRS80_CELL,
             glyphSheet()
         )
+        this.resync()
+    }
+
+    /**
+     * Fills video RAM with the blank the ROM's own clear uses, since zeroed RAM would show 1024
+     * copies of glyph 0. Only for the reset path, before a program runs: it writes memory directly,
+     * bypassing the Core's hooks and journal, so it must never run under a program.
+     */
+    clearVideoRam(): void {
         this.blankVideoRam()
     }
 

@@ -114,7 +114,9 @@ export class ProjectLanguageSession {
 
     private receive(response: ProjectWorkerResponse): void {
         if (response.type === 'failure') {
-            if (response.revision === this.revision) {
+            //`<=`, not `==`: a failure carrying an older revision is still a failure, and the Worker
+            //that reported it will not be answering the newer request either.
+            if (response.revision <= this.revision) {
                 console.error(`${this.target} analysis failed: ${response.message}`)
                 const fileStatus: Record<string, ProjectFileAnalysisStatus> = Object.create(null)
                 for (const [path, file] of Object.entries(this.currentSources.files)) {

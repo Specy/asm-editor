@@ -109,4 +109,52 @@ describe('FileSystem', () => {
         run.undo(2)
         expect(fileChanges).toBe(2)
     })
+
+    it('rewinds to a position rather than matching one frame, so a Core step pairs either way', () => {
+        const fs = new FileSystem()
+        const run = fs.beginSession()
+        //Three operations at three execution positions; the middle one touches no File.
+        run.performInstruction(10, () => run.open('log', 'write'))
+        run.performInstruction(20, () => run.write(0 + 3, new TextEncoder().encode('one')))
+        run.performInstruction(30, () => undefined)
+        run.performInstruction(40, () => run.write(3, new TextEncoder().encode('two')))
+        expect(fs.readText('log')).toBe('onetwo')
+        //Rewinding past position 40 undoes only the last write, even though the step in between
+        //recorded nothing: the journal answers "what happened after here", not "whose frame is on
+        //top". Matching by name is what let a repeated address consume an unrelated frame.
+        run.undoAfter(35)
+        expect(fs.readText('log')).toBe('one')
+        //And a rewind that skips several positions at once rolls back everything past it.
+        run.undoAfter(5)
+        expect(fs.files.log).toBeUndefined()
+    })
+    it('refuses a position that moves backwards, which is what a program counter would do', () => {
+        const fs = new FileSystem()
+        const run = fs.beginSession()
+        run.performInstruction(100, () => run.open('log', 'write'))
+        //A loop revisiting the same address hands back a position it has already passed. Equal is
+        //allowed (a Core step that records nothing leaves the position alone); going back is not.
+        expect(() => run.beginInstruction(100)).not.toThrow()
+        run.endInstruction()
+        expect(() => run.beginInstruction(40)).toThrow('backwards')
+    })
+    it('charges closing a descriptor by what it retains, not by the size of the File', () => {
+        const big = 'x'.repeat(64 * 1024)
+        const fs = new FileSystem({ data: { encoding: 'plain', content: big } })
+        //A budget far smaller than the File: open/close pairs used to be charged its whole length,
+        //so a loop of them evicted the frames holding real byte diffs.
+        const run = fs.beginSession(16 * 1024, 1000)
+        let position = 0
+        run.performInstruction(position++, () =>
+            run.write(run.open('out', 'write'), new TextEncoder().encode('kept'))
+        )
+        for (let i = 0; i < 40; i++) {
+            const fd = run.performInstruction(position++, () => run.open('data', 'read'))
+            run.performInstruction(position++, () => run.close(fd))
+        }
+        //Everything, including the very first frame: if close() had been billed the File's length
+        //that frame would have been evicted and this rewind would leave 'kept' behind.
+        run.undoAfter(-1)
+        expect(fs.files.out).toBeUndefined()
+    })
 })

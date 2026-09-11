@@ -189,6 +189,10 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     }
 
     _compile(sources: BuildSources): CompileResult {
+        //Both hold WebAssembly memory the host never reclaims on its own, so the Interpreter is
+        //disposed here as well as in `_dispose`: a Build replaces it, and the edit/Build loop would
+        //otherwise abandon one interpreter's linear memory per Build.
+        this.interpreter?.dispose()
         this.program?.dispose()
         this.program = null
         this.interpreter = null
@@ -466,6 +470,11 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         const execution = this.executionController.capture()
         while (!interpreter.hasTerminated()) {
             interpreter.runWithLimit(limit)
+            //`simhalt` pauses rather than terminating, and that is where an interactive Run stops.
+            //A Testcase has to observe the same state: resuming past it ran whatever follows the
+            //halt — a subroutine in the usual EASy68K layout — and asserted against registers the
+            //program never produced.
+            if (interpreter.getStatus() === CoreInterpreterStatus.Paused) return
             //a testcase runs unsliced, so a wait is awaited here; its clock is the virtual one, on
             //which waits complete at once (ADR 0010)
             const wait = await this.handleInterpreterInterruption(interpreter, execution)

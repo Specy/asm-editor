@@ -53,13 +53,19 @@ export function fileBytes(file: ProjectFile): Uint8Array {
             throw new ProjectFormatError('Text contains an unpaired surrogate')
         return bytes
     }
-    if (
-        file.encoding !== 'base64' ||
-        !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(file.content)
-    ) {
+    if (file.encoding !== 'base64') {
         throw new ProjectFormatError('Invalid file encoding or base64 content')
     }
-    const raw = atob(file.content)
+    //Decoding is the validation. A structural regex over the whole string is not an option here:
+    //`(?:[A-Za-z0-9+/]{4})*` overflows V8's backtrack arena above roughly 4.5 million characters,
+    //so any File past about 3.3 MiB threw a RangeError well inside the 16 MiB limit. `atob` rejects
+    //an invalid alphabet and the round trip below rejects everything else, both in linear time.
+    let raw: string
+    try {
+        raw = atob(file.content)
+    } catch {
+        throw new ProjectFormatError('Invalid file encoding or base64 content')
+    }
     if (btoa(raw) !== file.content) throw new ProjectFormatError('Noncanonical base64 content')
     return Uint8Array.from(raw, (character) => character.charCodeAt(0))
 }

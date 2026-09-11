@@ -8,7 +8,7 @@ import {
     projectToArchive,
     projectToSingleSource
 } from '$lib/projectArchive'
-import { fileBytes, ProjectFormatError } from '$lib/projectFiles'
+import { bytesFile, fileBytes, ProjectFormatError } from '$lib/projectFiles'
 
 const encoder = new TextEncoder()
 
@@ -146,5 +146,33 @@ describe('Project archives', () => {
             )
         ).toBeNull()
         expect(projectToSingleSource(makeProject({ files: {}, entry: 'main.m68k' }))).toBeNull()
+    })
+})
+
+describe('large binary Files', () => {
+    /**
+     * The base64 validator used to be a regex with a starred group over the whole string, which
+     * overflowed V8's backtrack arena above roughly 4.5 million characters. Any binary File past
+     * about 3.3 MiB therefore failed with a raw RangeError — a fifth of the documented 16 MiB limit,
+     * and not even a ProjectFormatError the UI could report.
+     */
+    it('round-trips a binary File far larger than the old regex ceiling', () => {
+        const bytes = new Uint8Array(4 * 1024 * 1024)
+        for (let i = 0; i < bytes.length; i++) bytes[i] = (i * 31) & 0xff
+        const file = bytesFile(bytes)
+        expect(file.encoding).toBe('base64')
+        const back = fileBytes(file)
+        //Compared by hand: a deep-equality assertion over four million elements is the slow part.
+        expect(back.length).toBe(bytes.length)
+        let differences = 0
+        for (let i = 0; i < bytes.length; i++) if (back[i] !== bytes[i]) differences++
+        expect(differences).toBe(0)
+    })
+
+    it('still rejects content that is not canonical base64', () => {
+        expect(() => fileBytes({ encoding: 'base64', content: 'not base64!!' })).toThrow(
+            ProjectFormatError
+        )
+        expect(() => fileBytes({ encoding: 'base64', content: 'QQ' })).toThrow(ProjectFormatError)
     })
 })

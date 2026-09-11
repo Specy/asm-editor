@@ -6,7 +6,12 @@ export type ProjectAnalysisTarget = 'M68K' | 'MIPS' | 'RISC-V' | 'RISC-V-64' | '
 export type ProjectFileChange =
     { type: 'set'; path: string; file: ProjectFile } | { type: 'delete'; path: string }
 
-export type ProjectFileAnalysisStatus = 'assembled' | 'not-reachable' | 'binary'
+/**
+ * `unknown` is for a Core that assembles the whole Project itself and does not report which Files it
+ * reached — claiming `assembled` there would tell the user a File is in the program when nothing
+ * checked, and claiming `not-reachable` would be worse.
+ */
+export type ProjectFileAnalysisStatus = 'assembled' | 'not-reachable' | 'binary' | 'unknown'
 
 export type LanguageSymbol = {
     id: string

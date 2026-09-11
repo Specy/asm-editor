@@ -20,7 +20,7 @@
     import { DEFAULT_THEME, ThemeStore } from '$stores/themeStore.svelte'
     import { LANGUAGE_THEMES } from '$lib/Config'
     import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
-    import { blobDownloader, createShareLink } from '$lib/utils'
+    import { blobDownloader, createShareLink, ShareTooLargeError } from '$lib/utils'
     import { serializer } from '$lib/json'
     import { createExamSessionLink, parseLegacyProjectExamPayload } from '$lib/exam'
     import { resolveProjectSettings } from '$lib/projectSettings'
@@ -124,6 +124,13 @@
             goto(resolve('/projects/[project]', { project: project.id }))
         } else {
             const result = await ProjectStore.save(project)
+            if (result.local === 'failed') {
+                //Not silenced by autosave: nothing was stored, so the user has to know now.
+                toast.error(
+                    'Could not save this project in the browser — your changes are not stored.',
+                    10000
+                )
+            }
             if (result.linked === 'failed') {
                 toast.error(
                     'Project saved in the browser, but its linked disk file could not be updated.'
@@ -150,8 +157,8 @@
             'This Project no longer fits its linked source file. Save a complete .asmproj archive instead?'
         )
         if (!saveArchive) return
-        const archive = projectToArchive(project)
         try {
+            const archive = projectToArchive(project)
             if ('showSaveFilePicker' in window) {
                 const handle: FileSystemFileHandle = await window.showSaveFilePicker({
                     suggestedName: projectArchiveName(project.name),
@@ -188,7 +195,19 @@
 
     async function share(pr: Project) {
         if (!pr) return
-        const url = createShareLink(pr)
+        let url: string
+        try {
+            url = createShareLink(pr)
+        } catch (error) {
+            console.error(error)
+            toast.error(
+                error instanceof ShareTooLargeError
+                    ? 'This Project is too big to share as a link. Export an .asmproj archive instead.'
+                    : 'Could not create a share link for this Project',
+                10000
+            )
+            return
+        }
         await navigator.clipboard.writeText(url)
         toast.logPill('Copied to clipboard')
     }

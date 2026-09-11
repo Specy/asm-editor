@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { M68KEmulator } from '$lib/languages/M68K/M68KEmulator.svelte'
+import type { Testcase } from '$lib/Project.svelte'
 import { M68K_TRAP_DOCS, screenColorOf } from '$lib/languages/M68K/M68K-traps'
 import { Keyboard } from '$lib/languages/peripherals/Keyboard'
 import { KEY_CODES, letterKeyCode } from '$lib/languages/peripherals/keyCodes'
@@ -784,5 +785,35 @@ describe('examples/m68k', () => {
         expectStoppedAtLimit(emulator)
         //a disc of the brush radius around the pointer, in the aqua the program picks
         expect(pixelAt(emulator, 200, 150)).toBe(0x00ffff)
+    })
+})
+
+describe('M68K testcases', () => {
+    /**
+     * `simhalt` pauses the Core rather than terminating it, and an interactive Run stops there. A
+     * Testcase used to resume past it and assert against whatever followed — which in the usual
+     * EASy68K layout is the program's subroutines.
+     */
+    it('stops at simhalt instead of running into the code after it', async () => {
+        const code = `${ORG}start:
+    move.w #1,d0
+    simhalt
+after:
+    move.w #99,d1
+    simhalt
+`
+        const testcase: Testcase = {
+            input: [],
+            expectedOutput: '',
+            startingRegisters: {},
+            expectedRegisters: { D0: 1n, D1: 0n },
+            startingMemory: [],
+            expectedMemory: []
+        }
+        const emulator = M68KEmulator(code)
+        await emulator.check()
+        const [result] = await emulator.test(code, [testcase], INSTRUCTION_LIMIT, 100)
+        expect(result.errors).toEqual([])
+        expect(result.passed).toBe(true)
     })
 })
