@@ -92,7 +92,19 @@
     )
     let mockEditor: HTMLDivElement | null = $state(null)
     let monacoInstance: MonacoType | null = $state.raw(null)
-    let activeModelKey = ''
+    /**
+     * Which model is attached to the editor. Reactive, because the decoration, marker, view-zone
+     * and highlight effects below all key off it: with a plain variable each of them read `''` on
+     * its first run, returned before reading anything tracked, and so registered no dependencies at
+     * all and never ran again — leaving Monaco without a decorations collection or a single marker.
+     */
+    let activeModelKey = $state('')
+    /**
+     * The same key, untracked, for saving the outgoing model's view state inside `selectModel`.
+     * Reading `activeModelKey` there would make the effect that calls `selectModel` depend on a
+     * value that same call writes, so it would re-run itself on every model switch.
+     */
+    let viewStateKey = ''
     let hoveredGliphen: number | null = $state(null)
     let destroyed = false
     let applyingExternalValue = false
@@ -136,6 +148,7 @@
         )
         initialModel.setEOL(0)
         models.set(mounted.key, initialModel)
+        viewStateKey = mounted.key
         activeModelKey = mounted.key
         overflowWidgets = document.createElement('div')
         //Keep Monaco's widget styles/theme while escaping the editor's local stacking context.
@@ -146,6 +159,11 @@
         const mountedEditor = loadedMonaco.editor.create(editorElement, {
             model: initialModel,
             theme: 'custom-theme',
+            //Monaco's default is 'editable', which means it hides every validation decoration while
+            //the editor is read-only — and this editor is read-only in exactly the states where the
+            //diagnostics still matter: a Debug session, a Build snapshot, an exam. The error pill
+            //and the console list keep reporting them there, so the squiggles must agree.
+            renderValidationDecorations: 'on',
             fixedOverflowWidgets: true,
             overflowWidgetsDomNode: overflowWidgets,
             minimap: { enabled: false },
@@ -273,7 +291,7 @@
         if (!currentEditor || !currentMonaco) return
         const model = resolveEditorModel(modelStore(currentMonaco), next)
         if (currentEditor.getModel() !== model) {
-            if (activeModelKey) modelViewStates.set(activeModelKey, currentEditor.saveViewState())
+            if (viewStateKey) modelViewStates.set(viewStateKey, currentEditor.saveViewState())
             applyingExternalValue = true
             try {
                 currentEditor.setModel(model)
@@ -283,6 +301,7 @@
                 applyingExternalValue = false
             }
         }
+        viewStateKey = next.key
         activeModelKey = next.key
     }
 
@@ -453,11 +472,18 @@
                 diagnostics.map((e) => {
                     const lineNumber = Math.min(Math.max(e.lineIndex + 1, 1), model.getLineCount())
                     const maxColumn = model.getLineMaxColumn(lineNumber)
-                    const startColumn = Math.min(Math.max(e.column, 1), maxColumn)
-                    const endColumn = Math.min(
+                    let startColumn = Math.min(Math.max(e.column, 1), maxColumn)
+                    let endColumn = Math.min(
                         Math.max(e.endColumn ?? startColumn + 1, startColumn),
                         maxColumn
                     )
+                    //An empty range draws nothing. A Core that reports a point, or one that points
+                    //at the end of the line — "expected an operand" — clamps to exactly that, so
+                    //widen it over the character beside it rather than leave an invisible marker.
+                    if (startColumn === endColumn) {
+                        if (endColumn < maxColumn) endColumn += 1
+                        else if (startColumn > 1) startColumn -= 1
+                    }
                     return {
                         severity: markerSeverities[e.severity],
                         message: e.formatted,
