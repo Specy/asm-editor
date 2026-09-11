@@ -108,4 +108,10 @@ export function startProjectWorker(analyze: AnalyzeProject): void {
         }
         scheduleAnalysis(request.sessionId)
     })
+
+    //Announced only once the listener above exists. Everything this module imports — a Core and its
+    //WebAssembly — is evaluated before this function runs, and a request that arrives during that
+    //window has nothing listening for it and is lost, leaving the session waiting for an analysis
+    //that will never come.
+    workerScope.postMessage({ type: 'ready' } satisfies ProjectWorkerResponse)
 }

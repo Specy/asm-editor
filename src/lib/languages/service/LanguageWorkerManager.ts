@@ -10,6 +10,10 @@ type WorkerState = {
     worker: Worker
     listeners: Map<string, Listener>
     idleTimer?: ReturnType<typeof setTimeout>
+    /** Whether the Worker has announced that its message listener exists. */
+    ready: boolean
+    /** Requests made before that, replayed in order once it has. */
+    queued: ProjectWorkerRequest[]
 }
 
 const IDLE_TERMINATION_MS = 30_000
@@ -41,8 +45,15 @@ class LanguageWorkerManager {
         }
         state.listeners.set(sessionId, listener)
         this.failureListeners.set(sessionId, listener)
+        const current = state
         return {
-            post: (request: ProjectWorkerRequest) => state.worker.postMessage(request),
+            post: (request: ProjectWorkerRequest) => {
+                //Held rather than posted while the Worker is still evaluating its imports: until it
+                //has attached its listener there is nothing to receive the message, and a dropped
+                //`open` leaves the session waiting for an analysis that never arrives.
+                if (current.ready) current.worker.postMessage(request)
+                else current.queued.push(request)
+            },
             dispose: () => this.release(target, sessionId)
         }
     }
@@ -50,9 +61,16 @@ class LanguageWorkerManager {
     private createWorker(target: ProjectAnalysisTarget): WorkerState {
         const WorkerClass = WORKER_BY_TARGET[target]
         const worker = new WorkerClass()
-        const state: WorkerState = { worker, listeners: new Map() }
+        const state: WorkerState = { worker, listeners: new Map(), ready: false, queued: [] }
         worker.addEventListener('message', (event: MessageEvent<ProjectWorkerResponse>) => {
             const response = event.data
+            if (response.type === 'ready') {
+                state.ready = true
+                const held = state.queued
+                state.queued = []
+                for (const request of held) worker.postMessage(request)
+                return
+            }
             const sessionId =
                 response.type === 'analysis' ? response.snapshot.sessionId : response.sessionId
             state.listeners.get(sessionId)?.(response)
@@ -67,6 +85,7 @@ class LanguageWorkerManager {
             const waiting = [...state.listeners.keys()]
             if (this.states.get(target) === state) this.states.delete(target)
             state.listeners.clear()
+            state.queued = []
             if (state.idleTimer !== undefined) clearTimeout(state.idleTimer)
             state.worker.terminate()
             for (const sessionId of waiting) {
@@ -95,7 +114,9 @@ class LanguageWorkerManager {
     private release(target: ProjectAnalysisTarget, sessionId: string) {
         const state = this.states.get(target)
         if (!state) return
-        state.worker.postMessage({ type: 'dispose', sessionId } satisfies ProjectWorkerRequest)
+        const dispose = { type: 'dispose', sessionId } satisfies ProjectWorkerRequest
+        if (state.ready) state.worker.postMessage(dispose)
+        else state.queued.push(dispose)
         state.listeners.delete(sessionId)
         this.failureListeners.delete(sessionId)
         if (state.listeners.size > 0) return

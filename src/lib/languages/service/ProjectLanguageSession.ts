@@ -113,6 +113,8 @@ export class ProjectLanguageSession {
     }
 
     private receive(response: ProjectWorkerResponse): void {
+        //The Worker's readiness handshake is the manager's business, not a session's.
+        if (response.type === 'ready') return
         if (response.type === 'failure') {
             //`<=`, not `==`: a failure carrying an older revision is still a failure, and the Worker
             //that reported it will not be answering the newer request either.

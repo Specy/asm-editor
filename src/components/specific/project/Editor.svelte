@@ -7,7 +7,6 @@
         onMount,
         unmount
     } from 'svelte'
-    import { SvelteMap } from 'svelte/reactivity'
     import type monaco from 'monaco-editor'
     import type {
         AvailableLanguages,
@@ -22,13 +21,25 @@
         projectSourceUri,
         type ProjectModelIdentity
     } from '$lib/languages/service/uri'
+    import { resolveEditorModel, type EditorModelStore, type EditorSource } from './editorSource'
     import { zeroBasedLineToMonaco } from '$lib/languages/service/monacoConversions'
     import { setModelBuildArtifacts } from '$lib/monaco/assemblyInsights'
 
     interface Props {
         disabled?: boolean
+        /**
+         * The single-source contract: one File, bound two ways. Hosts that bind it (a lesson
+         * playground, an exam answer) both supply the text and receive the user's edits through it.
+         * A multi-File host passes `source` instead and this is never written.
+         */
         code: string
         codeOverride?: string
+        /**
+         * The multi-File contract. The key and the text travel together so they cannot disagree:
+         * passing them as separate props let an effect run with the new File's key and the previous
+         * File's text, which created that File's model holding the other one's source.
+         */
+        source?: EditorSource
         /** Keeps each Project File on its own Monaco model and therefore its own text Undo stack. */
         modelKey?: string
         /** Gives a Project File a stable URI that providers can route back to its Project session. */
@@ -55,6 +66,7 @@
         disabled = false,
         code = $bindable(),
         codeOverride,
+        source,
         modelKey = 'default',
         modelIdentity,
         retainedModelKeys,
@@ -69,21 +81,28 @@
         buildArtifacts = []
     }: Props = $props()
     /**
-     * The text the editor shows: the compiled-code override when there is one, otherwise the File's
-     * own source. The test is truthiness, not `??`: every emulator but x86 reports `''` from
+     * Which model to show and what it should hold, as one value. A multi-File host supplies both
+     * together; a single-source host's text is its `code` prop, or the compiled-code override when
+     * there is one. That test is truthiness, not `??`: every emulator but x86 reports `''` from
      * `_getCompiledCode` for a program with nothing to expand, so a successful Build would
      * otherwise replace the program with an empty model.
      */
-    const displayedValue = $derived(codeOverride || code)
+    const activeSource = $derived<EditorSource>(
+        source ?? { key: modelKey, value: codeOverride || code, identity: modelIdentity }
+    )
     let mockEditor: HTMLDivElement | null = $state(null)
     let monacoInstance: MonacoType | null = $state.raw(null)
-    let activeModelKey = $state('')
+    let activeModelKey = ''
     let hoveredGliphen: number | null = $state(null)
     let destroyed = false
     let applyingExternalValue = false
     let overflowWidgets: HTMLDivElement | null = null
-    const models = new SvelteMap<string, monaco.editor.ITextModel>()
-    const modelViewStates = new SvelteMap<string, monaco.editor.ICodeEditorViewState | null>()
+    //Plain Maps, not reactive ones: nothing renders from them, and the effect that reconciles the
+    //models both reads and writes them, which with reactive maps made it re-run on its own writes.
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- see above; no tracked consumer.
+    const models = new Map<string, monaco.editor.ITextModel>()
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- see above; no tracked consumer.
+    const modelViewStates = new Map<string, monaco.editor.ICodeEditorViewState | null>()
     const toDispose: (monaco.IDisposable | (() => void))[] = []
     const dispatcher = createEventDispatcher<{
         change: string
@@ -108,15 +127,16 @@
         const editorLanguage = language
         await Monaco.registerLanguage(editorLanguage)
         if (destroyed) return
+        const mounted = activeSource
         const initialModel = createModel(
             loadedMonaco,
-            displayedValue,
+            mounted.value,
             editorLanguage.toLowerCase(),
-            modelIdentity
+            mounted.identity
         )
         initialModel.setEOL(0)
-        models.set(modelKey, initialModel)
-        activeModelKey = modelKey
+        models.set(mounted.key, initialModel)
+        activeModelKey = mounted.key
         overflowWidgets = document.createElement('div')
         //Keep Monaco's widget styles/theme while escaping the editor's local stacking context.
         overflowWidgets.className = 'monaco-overflow-widgets monaco-editor'
@@ -181,8 +201,12 @@
         toDispose.push(
             mountedEditor.onDidChangeModelContent(() => {
                 if (disabled || applyingExternalValue) return
-                code = mountedEditor.getValue()
-                dispatcher('change', code)
+                const value = mountedEditor.getValue()
+                //A multi-File host owns its Files and receives edits through `fileChange`; writing
+                //`code` there would make this component a second writer of a prop the host is also
+                //deriving, and whichever wrote last in a tick would win.
+                if (!source) code = value
+                dispatcher('change', value)
             })
         )
     })
@@ -222,42 +246,52 @@
         return model
     }
 
-    function selectModel(key: string, value: string) {
+    function modelStore(currentMonaco: MonacoType): EditorModelStore<monaco.editor.ITextModel> {
+        return {
+            get: (key) => models.get(key),
+            set: (key, model) => void models.set(key, model),
+            delete: (key) => void models.delete(key),
+            isDisposed: (model) => model.isDisposed(),
+            create: (source) => {
+                const model = createModel(
+                    currentMonaco,
+                    source.value,
+                    language.toLowerCase(),
+                    source.identity
+                )
+                model.setEOL(0)
+                return model
+            },
+            setValue: setModelValue
+        }
+    }
+
+    /** `next`, not `source`: shadowing the prop here is how the two could quietly diverge again. */
+    function selectModel(next: EditorSource) {
         const currentEditor = editor
         const currentMonaco = monacoInstance
         if (!currentEditor || !currentMonaco) return
-        let model = models.get(key)
-        if (model?.isDisposed()) {
-            models.delete(key)
-            model = undefined
-        }
-        if (!model) {
-            model = createModel(currentMonaco, value, language.toLowerCase(), modelIdentity)
-            model.setEOL(0)
-            models.set(key, model)
-        } else {
-            setModelValue(model, value)
-        }
+        const model = resolveEditorModel(modelStore(currentMonaco), next)
         if (currentEditor.getModel() !== model) {
             if (activeModelKey) modelViewStates.set(activeModelKey, currentEditor.saveViewState())
             applyingExternalValue = true
             try {
                 currentEditor.setModel(model)
-                const viewState = modelViewStates.get(key)
+                const viewState = modelViewStates.get(next.key)
                 if (viewState) currentEditor.restoreViewState(viewState)
             } finally {
                 applyingExternalValue = false
             }
         }
-        activeModelKey = key
+        activeModelKey = next.key
     }
 
     $effect(() => {
-        selectModel(modelKey, displayedValue)
+        selectModel(activeSource)
     })
 
     $effect(() => {
-        const model = models.get(modelKey)
+        const model = models.get(activeSource.key)
         if (!model || model.isDisposed()) return
         return setModelBuildArtifacts(model.uri.toString(), buildArtifacts)
     })
@@ -265,8 +299,9 @@
     $effect(() => {
         if (!retainedModelKeys) return
         const retained = new Set(retainedModelKeys)
+        const current = activeSource.key
         for (const [key, model] of models) {
-            if (key === modelKey || retained.has(key)) continue
+            if (key === current || retained.has(key)) continue
             model.dispose()
             models.delete(key)
             modelViewStates.delete(key)

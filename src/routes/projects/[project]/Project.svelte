@@ -996,6 +996,13 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                     </span>
                 </div>
                 <Editor
+                    source={hasProjectFiles
+                        ? {
+                              key: displayedModelKey,
+                              value: displayedCode,
+                              identity: displayedModelIdentity
+                          }
+                        : undefined}
                     modelKey={displayedModelKey}
                     modelIdentity={displayedModelIdentity}
                     {retainedModelKeys}

@@ -54,6 +54,12 @@ export type ProjectWorkerRequest =
 export type ProjectWorkerResponse =
     | { type: 'analysis'; snapshot: ProjectAnalysisSnapshot }
     | { type: 'failure'; sessionId: string; revision: number; message: string }
+    /**
+     * The Worker's first message, sent once its listener is attached. A request posted before this
+     * arrives has nothing listening for it yet and is dropped by the browser, so the host holds
+     * requests until it has seen this.
+     */
+    | { type: 'ready' }
 
 /** Kept as aliases while the M68K adapter/provider names remain Target-specific. */
 export type M68kAnalysisSnapshot = ProjectAnalysisSnapshot
