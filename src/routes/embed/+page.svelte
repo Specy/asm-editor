@@ -33,6 +33,7 @@
         showRegisters: boolean
         showFlags: boolean
         showScreen: boolean
+        openScreen: boolean
         openButton: boolean
     }
 
@@ -54,6 +55,7 @@
         showRegisters: true,
         showFlags: false,
         showScreen: false,
+        openScreen: false,
         openButton: false
     })
     let inIframe = $state(true)
@@ -101,7 +103,9 @@
         const showPc = searchParams.get('showPc') === 'true'
         const showRegisters = searchParams.get('showRegisters') !== 'false'
         const showFlags = searchParams.get('showFlags') === 'true'
-        const showScreen = searchParams.get('showScreen') === 'true'
+        const openScreen = searchParams.get('openScreen') === 'true'
+        //asking for the Screen open is asking for one, so a link needs only the one parameter
+        const showScreen = openScreen || searchParams.get('showScreen') === 'true'
         const openButton = searchParams.get('openButton') === 'true'
 
         return {
@@ -113,6 +117,7 @@
             showRegisters,
             showFlags,
             showScreen,
+            openScreen,
             openButton
         } satisfies Settings
     }
@@ -127,6 +132,7 @@
             : 'showRegisters=false&'
         const showFlags = settings.showFlags ? 'showFlags=true&' : 'showFlags=false&'
         const showScreen = settings.showScreen ? 'showScreen=true&' : ''
+        const openScreen = settings.openScreen ? 'openScreen=true&' : ''
         const openButton = settings.openButton ? 'openButton=true&' : ''
         const props = [
             showMemory,
@@ -136,6 +142,7 @@
             showRegisters,
             showFlags,
             showScreen,
+            openScreen,
             openButton
         ].join('')
         const lang = `language=${settings.language}&`
@@ -203,6 +210,7 @@
                         showRegisters={settings.showRegisters}
                         showFlags={settings.showFlags}
                         showScreen={settings.showScreen && languageHasScreen(settings.language)}
+                        openScreen={settings.openScreen}
                         language={settings.language}
                         forceMemoryRight={true}
                     >
@@ -266,6 +274,10 @@
                 <div class="share-settings">
                     <span>Show screen</span>
                     <input type="checkbox" bind:checked={settings.showScreen} />
+                </div>
+                <div class="share-settings">
+                    <span>Screen open</span>
+                    <input type="checkbox" bind:checked={settings.openScreen} />
                 </div>
                 <div class="share-settings">
                     <span>Open in editor button</span>

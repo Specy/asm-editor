@@ -30,7 +30,6 @@ const emulators = {
     },
     z80: {
         packageName: '@specy/z80',
-        localPackageNames: ['@specy/z80', 'z80-machine'],
         packageRoot: 'emulators/z80/packages/z80-machine',
         entrypoint: 'dist/index.js'
     }
@@ -155,10 +154,9 @@ function validateLocalPackage(name, emulator) {
     }
 
     const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'))
-    const acceptedNames = emulator.localPackageNames ?? [emulator.packageName]
-    if (!acceptedNames.includes(packageJson.name)) {
+    if (packageJson.name !== emulator.packageName) {
         fail(
-            `${emulator.packageRoot} contains package ${packageJson.name}, expected ${acceptedNames.join(' or ')}.`
+            `${emulator.packageRoot} contains package ${packageJson.name}, expected ${emulator.packageName}.`
         )
     }
 

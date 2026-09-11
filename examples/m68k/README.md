@@ -19,6 +19,8 @@ Programs for the manual verification matrix in [`docs/manual-verification.md`](.
 
 It runs until you press Stop. A frame costs about 61 instructions, so the default two million instruction limit ends it after roughly a quarter of an hour; set "Instruction execution limit" to 0 in the settings to play longer than that.
 
+The M68K course's [Flappy bird](../../src/content/m68k/examples/flappy-bird/index.md) Example page carries the same program in its playground, so a change here belongs there too.
+
 ## `easy68k/`: the reference programs
 
 `easy68k/` holds three of EASy68K's own example programs, unchanged apart from their line endings. They are the compatibility reference of [ADR 0003](../../docs/adr/0003-preserve-simulator-graphics-conventions.md): what a task draws here is compared against what these draw in EASy68K itself.

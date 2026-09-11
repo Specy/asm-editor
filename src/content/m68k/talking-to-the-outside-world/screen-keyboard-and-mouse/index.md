@@ -24,7 +24,7 @@ EASy68K's order and backwards from the `#RRGGBB` you write in CSS.
 
 Press Run on this one and watch the Screen panel next to it.
 
-```m68k|playground|screen|no-registers|no-flags
+```m68k|playground|open-screen|no-registers|no-flags
 WHITE   equ $00FFFFFF
 RED     equ $000000FF
 BLUE    equ $00FF0000
@@ -139,7 +139,7 @@ whole frames.
 
 This one runs until you press Stop.
 
-```m68k|playground|screen|no-registers|no-flags
+```m68k|playground|open-screen|no-registers|no-flags
 SIZE    equ 48
 LIMITX  equ 640-48
 YELLOW  equ $0000FFFF
@@ -229,7 +229,7 @@ The rest, and there are thirty of them, are on the
 **Click the Screen panel before you press a key**: the screen only gets the keyboard when it has the
 focus, and a ring around it says so while it does.
 
-```m68k|playground|screen|no-registers|no-flags
+```m68k|playground|open-screen|no-registers|no-flags
 SIZE    equ 40
 STEP    equ 8
 LIMITX  equ 640-40
@@ -341,7 +341,7 @@ answer comes back in two registers:
 The last press and the last release stay until the next one, so a program that polls slowly still
 sees every click.
 
-```m68k|playground|screen|no-registers|no-flags
+```m68k|playground|open-screen|no-registers|no-flags
 BRUSH   equ 6
 AQUA    equ $00FFFF00
 RED     equ $000000FF
@@ -424,7 +424,7 @@ to a few dozen traps, and let task 23 set the pace.
 Fill a red rectangle over the box from (10, 10) to (100, 100), then read the colour of the pixel at
 (50, 50) back with task 83 and leave it in `d0`. Red is `$000000FF`, so `d0` comes out at 255.
 
-```m68k|playground|screen|exercise
+```m68k|playground|open-screen|exercise
 * your code here
 ```
 
@@ -437,7 +437,7 @@ Fill a red rectangle over the box from (10, 10) to (100, 100), then read the col
 <details>
 <summary>Show solution</summary>
 
-```m68k|playground|screen|solution
+```m68k|playground|open-screen|solution
 RED equ $000000FF
 
     move.l #RED, d1
@@ -466,7 +466,7 @@ The second one asks the screen how big it is with task 33 and takes the packed a
 width in `d1` and the height in `d2`, each on its own. A program that has not resized the screen gets
 640 and 480.
 
-```m68k|playground|screen|exercise
+```m68k|playground|open-screen|exercise
 * your code here
 ```
 
@@ -479,7 +479,7 @@ width in `d1` and the height in `d2`, each on its own. A program that has not re
 <details>
 <summary>Show solution</summary>
 
-```m68k|playground|screen|solution
+```m68k|playground|open-screen|solution
     move.b #33, d0
     move.l #0, d1       ; 0 asks instead of setting
     trap #15            ; d1 = width in the high word, height in the low

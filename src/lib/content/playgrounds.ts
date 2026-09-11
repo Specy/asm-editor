@@ -24,6 +24,8 @@ export type PlaygroundSettings = {
     showRegisters: boolean
     showFlags: boolean
     showScreen: boolean
+    /** Whether the Screen panel starts unfolded instead of behind its "Show screen" bar. */
+    openScreen: boolean
     openButton: boolean
 }
 
@@ -92,7 +94,9 @@ export function parsePlaygroundFence(info: string): PlaygroundFence | undefined 
     const language = parsePlaygroundLanguage(entries[0])
     if (!language) return undefined
     const showMemory = entries.includes('memory')
-    const showScreen = entries.includes('screen')
+    //a fence that asks for the Screen open has one, so `open-screen` on its own is enough
+    const openScreen = entries.includes('open-screen')
+    const showScreen = openScreen || entries.includes('screen')
     const isExercise = entries.includes('exercise')
     return {
         settings: {
@@ -105,6 +109,7 @@ export function parsePlaygroundFence(info: string): PlaygroundFence | undefined 
             showRegisters: !entries.includes('no-registers'),
             showFlags: !entries.includes('no-flags'),
             showScreen,
+            openScreen,
             openButton: entries.includes('allow-open')
         },
         large: entries.includes('large') || showMemory || showScreen,

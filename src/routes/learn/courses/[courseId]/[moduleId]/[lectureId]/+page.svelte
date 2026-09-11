@@ -103,13 +103,10 @@
 {/snippet}
 
 <Page cropped="110ch" style="padding: 1rem;" contentStyle="gap: 1rem;">
-    <Card padding="1.5rem 0 0 0" gap="1rem">
+    <Card padding="1.5rem 0" gap="1rem">
         <Header noMargin style="width: min(100%, 46rem); margin: 0 auto">
             {data.lecture.name}
         </Header>
-        <p class="description">
-            {data.lecture.description}
-        </p>
     </Card>
     {#if topicLinks && !inGeneralCourse}
         <p class="topic-links">
@@ -276,17 +273,6 @@ When the user asks a question about the lecture topic or for a demonstration of 
 
     .topic-links a {
         color: var(--accent);
-    }
-
-    .description {
-        white-space: pre-line;
-        color: var(--background-text-muted);
-        line-height: 1.5;
-        font-family: 'Noto Serif', Rubik, sans-serif;
-        font-weight: 500;
-        width: min(100%, 70ch);
-        font-size: 1.1rem;
-        margin: 0 auto;
     }
 
     .editor-section {

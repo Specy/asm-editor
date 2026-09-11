@@ -30,7 +30,7 @@
         "emulators:build:x86": "npm --prefix emulators/x86/blink-js ci && npm --prefix emulators/x86/blink-js run build",
         "emulators:build:x86:wasm": "npm --prefix emulators/x86/blink-js ci && npm --prefix emulators/x86/blink-js run build:wasm && npm run emulators:build:x86",
         "emulators:build:x86:nasm": "emulators/x86/compile_wasm_nasm.sh && npm run emulators:build:x86",
-        "emulators:build:z80": "npm --prefix emulators/z80 ci && npm --prefix emulators/z80 run build -- --scope z80-machine --include-dependencies"
+        "emulators:build:z80": "npm --prefix emulators/z80 ci && npm --prefix emulators/z80 run build -- --scope @specy/z80 --include-dependencies"
     },
     "dependencies": {
         "@battlefieldduck/xterm-svelte": "^2.3.0",
@@ -43,7 +43,7 @@
         "@specy/risc-v": "3.3.0",
         "@specy/s68k": "2.2.1",
         "@specy/x86": "^2.2.1",
-        "@specy/z80": "^1.0.0",
+        "@specy/z80": "1.0.1",
         "@ungap/structured-clone": "^1.4.0",
         "@xterm/xterm": "^6.0.0",
         "carta-md": "^4.11.2",

@@ -48,6 +48,8 @@
         showRegisters?: boolean
         showFlags?: boolean
         showScreen?: boolean
+        /** Whether the Screen panel starts unfolded; the small layout folds it away by default. */
+        openScreen?: boolean
         embedded?: boolean
         language?: AvailableLanguages
         emulator: Emulator
@@ -67,6 +69,7 @@
         showTestcases: showTestcasesProp,
         showPc: showPcProp,
         showScreen: showScreenProp,
+        openScreen = false,
         testcases = $bindable([]),
         embedded = false,
         emulator = $bindable(),
@@ -106,7 +109,8 @@
         if (configured.origin === 'directive') display = configured.display
     }
     //the small layout has no room to spare, so the Screen starts folded away behind its toggle
-    let screenOpen = $state(false)
+    //unless the caller asked for it open: a lecture whose program draws wants the drawing visible
+    let screenOpen = $state(openScreen)
     let groupSize = $state(RegisterSize.Word)
     let testcasesVisible = $state(false)
     let testcasesResult: TestcaseResult[] = $state([])

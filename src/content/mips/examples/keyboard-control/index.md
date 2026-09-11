@@ -10,7 +10,7 @@ whether anything has been typed, and the answer changes what every frame after i
 registers" lecture. What is new here is the two receiver registers at `0xffff0000`, one whose bit 0
 says a character is waiting and one that hands it over.
 
-```mips|playground|screen|no-registers|allow-open
+```mips|playground|open-screen|no-registers|allow-open
 # @screen unit=8 width=256 height=256 base=display
 .eqv MMIO 0xffff0000
 .eqv SIDE 32                # words across and down
