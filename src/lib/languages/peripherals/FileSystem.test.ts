@@ -110,34 +110,38 @@ describe('FileSystem', () => {
         expect(fileChanges).toBe(2)
     })
 
-    it('rewinds to a position rather than matching one frame, so a Core step pairs either way', () => {
+    it('rolls back only the Core step being undone, even when steps repeat an address', () => {
         const fs = new FileSystem()
         const run = fs.beginSession()
-        //Three operations at three execution positions; the middle one touches no File.
-        run.performInstruction(10, () => run.open('log', 'write'))
-        run.performInstruction(20, () => run.write(0 + 3, new TextEncoder().encode('one')))
-        run.performInstruction(30, () => undefined)
-        run.performInstruction(40, () => run.write(3, new TextEncoder().encode('two')))
+        //A loop revisits the same syscall address, so ids repeat. Every dispatched handler opens a
+        //frame — including the ones that touch no File — which is what keeps frames and steps
+        //one-to-one and lets Undo pop exactly the frame the step being rewound created.
+        run.performInstruction(0x400048, () => run.open('log', 'write'))
+        const fd = 3
+        run.performInstruction(0x400048, () => run.write(fd, new TextEncoder().encode('one')))
+        run.performInstruction(0x400048, () => undefined)
+        run.performInstruction(0x400048, () => run.write(fd, new TextEncoder().encode('two')))
         expect(fs.readText('log')).toBe('onetwo')
-        //Rewinding past position 40 undoes only the last write, even though the step in between
-        //recorded nothing: the journal answers "what happened after here", not "whose frame is on
-        //top". Matching by name is what let a repeated address consume an unrelated frame.
-        run.undoAfter(35)
+        //undoing the last step rolls back its write and nothing else
+        run.undoAfter(0x400048)
         expect(fs.readText('log')).toBe('one')
-        //And a rewind that skips several positions at once rolls back everything past it.
-        run.undoAfter(5)
-        expect(fs.files.log).toBeUndefined()
+        //the step that recorded nothing rolls back nothing
+        run.undoAfter(0x400048)
+        expect(fs.readText('log')).toBe('one')
+        run.undoAfter(0x400048)
+        expect(fs.readText('log')).toBe('')
     })
-    it('refuses a position that moves backwards, which is what a program counter would do', () => {
+
+    it('leaves a Core step alone when the top frame belongs to a different one', () => {
         const fs = new FileSystem()
         const run = fs.beginSession()
-        run.performInstruction(100, () => run.open('log', 'write'))
-        //A loop revisiting the same address hands back a position it has already passed. Equal is
-        //allowed (a Core step that records nothing leaves the position alone); going back is not.
-        expect(() => run.beginInstruction(100)).not.toThrow()
-        run.endInstruction()
-        expect(() => run.beginInstruction(40)).toThrow('backwards')
+        run.performInstruction(10, () => run.open('log', 'write'))
+        expect(run.canUndoAfter(99)).toBe(true)
+        run.undoAfter(99)
+        //nothing was rolled back: the frame belongs to step 10, not 99
+        expect(fs.files.log).toBeDefined()
     })
+
     it('charges closing a descriptor by what it retains, not by the size of the File', () => {
         const big = 'x'.repeat(64 * 1024)
         const fs = new FileSystem({ data: { encoding: 'plain', content: big } })
@@ -152,9 +156,13 @@ describe('FileSystem', () => {
             const fd = run.performInstruction(position++, () => run.open('data', 'read'))
             run.performInstruction(position++, () => run.close(fd))
         }
-        //Everything, including the very first frame: if close() had been billed the File's length
-        //that frame would have been evicted and this rewind would leave 'kept' behind.
-        run.undoAfter(-1)
+        //The first frame must still be undoable: if close() had been billed the File's length it
+        //would have been evicted under this budget, and its write could never be rolled back.
+        while (position > 1) {
+            position -= 1
+            run.undoAfter(position)
+        }
+        run.undoAfter(0)
         expect(fs.files.out).toBeUndefined()
     })
 })

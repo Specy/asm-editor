@@ -54,6 +54,22 @@ describe('the memory-mapped display', () => {
         expect(memory[TRS80_VIDEO_END - 1]).toBe(0x42)
     })
 
+    it('shows what is drawn after entering cell mode twice at the same size', () => {
+        const { devices, screen, memory } = makeDevices()
+        //Entering cell mode turns double buffering off. Doing so by assigning the flag left the
+        //drawing and visible images as two separate arrays whenever the size did not change, so
+        //everything drawn afterwards went to a buffer nobody ever saw.
+        screen.setDoubleBuffering(true)
+        devices.enable()
+        devices.disable()
+        screen.setDoubleBuffering(true)
+        devices.enable()
+        expect(screen.doubleBuffering).toBe(false)
+        store(devices, memory, TRS80_VIDEO_BEGIN, 0xbf)
+        devices.flush()
+        expect(colorAt(screen, 0, 0)).toBe(WHITE)
+    })
+
     it('blanks video RAM the way the ROM does when startup asks it to', () => {
         const { devices, memory } = makeDevices()
         devices.enable()

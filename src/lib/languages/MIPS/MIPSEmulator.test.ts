@@ -230,6 +230,52 @@ ${EXIT}`,
         expect(emulator.errors).toEqual([])
     })
 
+    /**
+     * One Undo rolls back one Core step's file operations, and no more. The Core's backstep stack is
+     * capped by the history Setting, so anything keyed to its depth collapses many steps onto one
+     * value once it saturates — a single Undo then reversed every write the program had made.
+     */
+    it('rolls back one write per Undo even when the Core history is small', async () => {
+        const fileSystem = new FileSystem()
+        const code = `
+        .data
+path:   .asciiz "log.txt"
+byte:   .asciiz "x"
+        .text
+main:
+        li      $v0, 13
+        la      $a0, path
+        li      $a1, 1
+        li      $a2, 0
+        syscall
+        move    $s0, $v0
+        li      $s1, 0
+loop:
+        li      $v0, 15
+        move    $a0, $s0
+        la      $a1, byte
+        li      $a2, 1
+        syscall
+        addi    $s1, $s1, 1
+        blt     $s1, 10, loop
+${EXIT}`
+        const emulator = MIPSEmulator(code, { peripherals: { fileSystem } })
+        await emulator.check()
+        //a history far shorter than the number of file operations the program performs
+        await emulator.compile(8, code)
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(fileSystem.readText('log.txt')).toBe('x'.repeat(10))
+
+        const lengths = [10]
+        for (let step = 0; step < 40 && emulator.canUndo; step++) {
+            emulator.undo(1)
+            lengths.push(fileSystem.readText('log.txt').length)
+        }
+        const drops = lengths.slice(1).map((length, i) => lengths[i] - length)
+        //every Undo either rolls back a single write or none at all; never a batch of them
+        expect(drops.every((drop) => drop === 0 || drop === 1)).toBe(true)
+    })
+
     it('keeps Testcase file writes isolated and does not leave a resumable Core behind', async () => {
         const fileSystem = new FileSystem()
         const emulator = MIPSEmulator(WRITE_FILE, { peripherals: { fileSystem } })

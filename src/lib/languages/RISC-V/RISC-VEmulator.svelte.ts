@@ -209,9 +209,8 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
     _canUndo(): boolean {
         const riscv = this.riscv
         if (!riscv?.canUndo) return false
-        //The Core's backstep depth is the execution position the FileSystem journal is keyed by,
-        //and one undo rewinds at least one record, so `depth - 1` is what has to be restorable.
-        return this.fileSystemSession?.canUndoAfter(riscv.getUndoStack().length - 1) ?? true
+        const step = riscv.getUndoStack()[0]
+        return !step || (this.fileSystemSession?.canUndoAfter(step.pc) ?? true)
     }
 
     _checkCode(sources: BuildSources): Diagnostic[] {
@@ -573,13 +572,12 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
 
     _undo(): void {
         const riscv = this.requireRiscV()
-        if (!(this.fileSystemSession?.canUndoAfter(riscv.getUndoStack().length - 1) ?? true)) {
+        const step = riscv.getUndoStack()[0]
+        if (step && !(this.fileSystemSession?.canUndoAfter(step.pc) ?? true)) {
             throw new Error('FileSystem Undo history exhausted')
         }
         riscv.undo()
-        //Rewinding can pop more than one backstep record, so the position the Core landed on is
-        //read back rather than assumed, and every File operation recorded past it is rolled back.
-        this.fileSystemSession?.undoAfter(riscv.getUndoStack().length)
+        if (step) this.fileSystemSession?.undoAfter(step.pc)
     }
 
     /**
@@ -689,10 +687,10 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         const instructionOperation = <T>(operation: () => T): T => {
             const files = this.fileSystemSession
             if (!files) throw new Error('FileSystem is not running')
-            //The Core's backstep depth is an execution position: it grows as the program runs
-            //and shrinks as Undo rewinds, which is what the journal pairs its frames with. An
-            //address would not: one shared ecall instruction serves every call site that reaches it.
-            return files.performInstruction(this.requireRiscV().getUndoStack().length, operation)
+            //RARS advances PC before it invokes an ecall handler; the Core's backstep record is
+            //keyed by the address of the ecall itself. Every handler is wrapped, not just the ones
+            //that touch a File, so a frame exists for each step that could have created one.
+            return files.performInstruction(this.requireRiscV().programCounter - 4, operation)
         }
         const handlers: HandlerMapFns = {
             readChar: () => this.readCharacter('ReadChar', READ_CHAR_QUESTION),

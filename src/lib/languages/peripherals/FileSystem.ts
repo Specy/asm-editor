@@ -29,7 +29,7 @@ type Node = { bytes: Uint8Array; file?: ProjectFile }
 type Handle = { node: Node; offset: number; readable: boolean; writable: boolean; append: boolean }
 type Inverse = { bytes: number; filesChanged?: true; restore: () => void }
 type Frame = {
-    position: number
+    id: number
     changes: Inverse[]
     bytes: number
     available: boolean
@@ -212,25 +212,18 @@ export class FileSystemSession {
         if (change.filesChanged) this.frame.filesChanged = true
     }
     /**
-     * Opens the journal frame for one Core step. `position` says where that step sits in execution
-     * order, the same contract `ScreenInstructionHistory` uses: it only has to grow as the program
-     * runs, and Undo rolls back everything recorded past a position rather than matching one frame
-     * by name. A position that moves backwards means the caller passed something that is not an
-     * execution position at all (a program counter, say), which would silently pair a frame with
-     * the wrong step, so it is refused here rather than corrupting Files later. Equal positions are
-     * allowed: a Core step that records no history of its own leaves the position where it was.
+     * Opens the journal frame for one Core step, identified the way that Core identifies the step
+     * it will roll back. The adapters open a frame for *every* dispatched handler, not only the
+     * ones that touch a File, so frames stand one-to-one with the steps that can create them and
+     * Undo pops them in the order the Core rewinds.
      */
-    beginInstruction(position: number) {
+    beginInstruction(id: number) {
         this.ensureActive()
         if (this.frame) throw new Error('FileSystem instruction already active')
-        const latest = this.history[this.history.length - 1]
-        if (latest && position < latest.position) {
-            throw new Error('FileSystem instruction positions must not move backwards')
-        }
-        this.frame = { position, changes: [], bytes: 0, available: true, filesChanged: false }
+        this.frame = { id, changes: [], bytes: 0, available: true, filesChanged: false }
     }
-    performInstruction<T>(position: number, operation: () => T): T {
-        this.beginInstruction(position)
+    performInstruction<T>(id: number, operation: () => T): T {
+        this.beginInstruction(id)
         try {
             return operation()
         } finally {
@@ -259,34 +252,20 @@ export class FileSystemSession {
             this.retained -= oldest.bytes
         }
     }
-    canUndo(position: number) {
+    canUndo(id: number) {
         const latest = this.history[this.history.length - 1]
-        return !this.stopped && !this.frame && latest?.position === position && latest.available
+        return !this.stopped && !this.frame && latest?.id === id && latest.available
     }
-    /** The frames a rewind to `position` has to roll back, oldest first. */
-    private framesAfter(position: number): Frame[] {
-        let index = this.history.length
-        while (index > 0 && this.history[index - 1].position > position) index--
-        return this.history.slice(index)
+    /** Whether the Core step `id` can be rolled back, which is vacuously true if it recorded none. */
+    canUndoAfter(id: number) {
+        const latest = this.history[this.history.length - 1]
+        return !latest || latest.id !== id || this.canUndo(id)
     }
-    /** Whether rewinding execution to `position` can restore every File operation recorded after it. */
-    canUndoAfter(position: number) {
-        const frames = this.framesAfter(position)
-        if (frames.length === 0) return true
-        return !this.stopped && !this.frame && frames.every((frame) => frame.available)
+    undoAfter(id: number) {
+        if (this.history[this.history.length - 1]?.id === id) this.undo(id)
     }
-    undoAfter(position: number) {
-        const frames = this.framesAfter(position)
-        if (frames.length === 0) return
-        //Checked in full before anything is restored: a partial rollback would leave the Files
-        //describing a point in execution the Core has already left.
-        if (!this.canUndoAfter(position)) throw new Error('FileSystem Undo history exhausted')
-        let changed = false
-        for (let index = 0; index < frames.length; index++) changed = this.rollBack() || changed
-        if (changed) this.flush()
-    }
-    undo(position: number) {
-        if (!this.canUndo(position)) throw new Error('FileSystem Undo history exhausted')
+    undo(id: number) {
+        if (!this.canUndo(id)) throw new Error('FileSystem Undo history exhausted')
         if (this.rollBack()) this.flush()
     }
     /** Pops the newest frame and applies its inverses in reverse. Returns whether Files changed. */

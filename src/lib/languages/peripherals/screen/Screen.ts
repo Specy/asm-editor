@@ -526,8 +526,10 @@ export class Screen {
         this._cells = null
         //A cell display is memory-backed and has no present step, and the commands that would
         //present or leave double buffering are refused while it is on, so leaving the flag set
-        //froze the visible image with nothing the program could do about it.
-        this._doubleBuffering = false
+        //froze the visible image with nothing the program could do about it. Through the setter,
+        //not the field: it is what re-points `drawing` at `visible`, and the `resize` below only
+        //rebuilds them when the size actually changes.
+        this.setDoubleBuffering(false)
         //Remembered so leaving the mode gives text back a cell the program did not choose and has
         //no way to change; the image size it can still set for itself with a resize.
         this.beforeCells = { cell: this._cell }
