@@ -37,6 +37,12 @@ export type ScreenSize = {
     height: number
 }
 
+/** The shape of a cell-mapped display: how many character cells the mirrored memory holds. */
+export type ScreenCellGrid = {
+    columns: number
+    rows: number
+}
+
 export type ScreenOptions = {
     width: number
     height: number
@@ -91,6 +97,9 @@ export class Screen {
     private _cell: ScreenCellSize
     private _doubleBuffering = false
     private _framebuffer: ScreenSize | null = null
+    private _cells: ScreenCellGrid | null = null
+    /** The glyph sheet cell mode paints with: 256 glyphs of one byte per pixel, non-zero for ink. */
+    private cellGlyphs: Uint8Array | null = null
 
     private _version = 0
     private _dirty = true
@@ -180,6 +189,20 @@ export class Screen {
     /** The framebuffer this Screen mirrors, or null when programs draw with the operations below. */
     get framebuffer(): ScreenSize | null {
         return this._framebuffer
+    }
+
+    /** The cell grid this Screen mirrors, or null when it is not in cell mode. */
+    get cells(): ScreenCellGrid | null {
+        return this._cells
+    }
+
+    /**
+     * Whether the image comes from Core memory rather than from drawing operations. Both memory
+     * modes journal nothing and are restored by re-reading that memory after the Core's own
+     * rollback ([ADR 0005](../../../../../docs/adr/0005-restore-screen-state-on-undo.md)).
+     */
+    get memoryBacked(): boolean {
+        return this._framebuffer !== null || this._cells !== null
     }
 
     /** The pixels the renderer paints, RGBA, `width * height * 4` bytes. */
@@ -477,16 +500,72 @@ export class Screen {
         this.discardCompound()
         this.history.clear()
         this._framebuffer = null
+        this._cells = null
+        this.cellGlyphs = null
         this.resize(width, height)
         this.history.clear()
         this._framebuffer = { width: this._width, height: this._height }
     }
 
-    /** Leaves framebuffer mode; the image stays as it is until something draws on it. */
-    useDrawing(): void {
-        this._framebuffer = null
+    /**
+     * Switches to a cell-mapped display, where one byte of Core memory is one character cell drawn
+     * from `glyphs`: the TRS-80's memory-mapped screen
+     * ([ADR 0020](../../../../../docs/adr/0020-mirror-the-trs80-display-in-guest-memory.md)). Like
+     * the framebuffer it is memory-backed, so it journals nothing and Undo re-reads the memory.
+     *
+     * `glyphs` holds 256 glyphs of `cell.width * cell.height` bytes, non-zero for ink.
+     */
+    useCells(grid: ScreenCellGrid, cell: ScreenCellSize, glyphs: Uint8Array): void {
+        const columns = Math.max(1, Math.trunc(grid.columns))
+        const rows = Math.max(1, Math.trunc(grid.rows))
         this.discardCompound()
         this.history.clear()
+        this._framebuffer = null
+        this._cells = null
+        this._cell = cell
+        this.resize(columns * cell.width, rows * cell.height)
+        this.history.clear()
+        this.cellGlyphs = glyphs
+        this._cells = { columns, rows }
+    }
+
+    /** Leaves framebuffer or cell mode; the image stays as it is until something draws on it. */
+    useDrawing(): void {
+        this._framebuffer = null
+        this._cells = null
+        this.cellGlyphs = null
+        this.discardCompound()
+        this.history.clear()
+    }
+
+    /**
+     * Paints cell codes into the image, all of them or the range `[from, to)` that a memory hook
+     * reported dirty. Ink is the pen color and paper is the background color: the display is
+     * monochrome, as the machine's was, and those two ports are how a program chooses its phosphor.
+     */
+    syncCells(codes: ArrayLike<number>, from = 0, to = codes.length): void {
+        const grid = this._cells
+        const glyphs = this.cellGlyphs
+        if (grid === null || glyphs === null) return
+        const { width: cellWidth, height: cellHeight } = this._cell
+        const glyphSize = cellWidth * cellHeight
+        const ink = packColor(this._penColor)
+        const paper = packColor(this._backgroundColor)
+        const image = imageWords(this.drawing)
+        const last = Math.min(to, codes.length, grid.columns * grid.rows)
+        for (let index = Math.max(0, from); index < last; index++) {
+            const left = (index % grid.columns) * cellWidth
+            const top = Math.floor(index / grid.columns) * cellHeight
+            const glyph = (codes[index] & 0xff) * glyphSize
+            for (let row = 0; row < cellHeight; row++) {
+                let target = (top + row) * this._width + left
+                const source = glyph + row * cellWidth
+                for (let column = 0; column < cellWidth; column++) {
+                    image[target++] = glyphs[source + column] === 0 ? paper : ink
+                }
+            }
+        }
+        this.markDrawn()
     }
 
     /**
@@ -563,6 +642,8 @@ export class Screen {
         this.discardCompound()
         this.history.clear()
         this._framebuffer = null
+        this._cells = null
+        this.cellGlyphs = null
         this._width = Math.max(1, Math.trunc(this.options.width))
         this._height = Math.max(1, Math.trunc(this.options.height))
         this._backgroundColor = this.options.backgroundColor ?? BLACK
@@ -801,8 +882,8 @@ export class Screen {
 
     private journal(pixels: ScreenPixelRecord): void {
         //a memory-backed image is restored by re-reading Core memory after the Core's own rollback,
-        //so framebuffer mode journals nothing (ADR 0005)
-        if (this._framebuffer !== null) return
+        //so neither memory mode journals anything (ADR 0005)
+        if (this.memoryBacked) return
         const record: ScreenRecord = { state: this.captureState(), pixels }
         if (this.compoundDepth > 0) this.compoundRecords.push(record)
         else this.history.push(record)
@@ -814,7 +895,7 @@ export class Screen {
     }
 
     private journalPatch(target: 'drawing' | 'visible', rect: Rect | null): void {
-        if (this._framebuffer !== null) return
+        if (this.memoryBacked) return
         const clipped = rect === null ? null : this.clip(rect)
         if (clipped === null) {
             this.journal({ kind: 'none' })
@@ -825,7 +906,7 @@ export class Screen {
     }
 
     private journalImages(): void {
-        if (this._framebuffer !== null) return
+        if (this.memoryBacked) return
         this.journal({
             kind: 'images',
             drawing: new Uint8ClampedArray(this.drawing),

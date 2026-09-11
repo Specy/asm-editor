@@ -36,6 +36,8 @@ import {
 import type { ExecutionGeneration } from '$lib/languages/ExecutionController'
 import type { Testcase } from '$lib/Project.svelte'
 import { Z80Device } from '$lib/languages/Z80/Z80Device'
+import { Trs80Devices } from '$lib/languages/Z80/trs80/Trs80Devices'
+import { parseZ80ScreenDirective } from '$lib/languages/Z80/trs80/z80ScreenDirective'
 import { ScreenInstructionHistory } from '$lib/languages/peripherals/screen/ScreenInstructionHistory'
 import {
     Z80_DEFAULT_ORG,
@@ -49,6 +51,7 @@ import {
 import {
     assemblyFiles,
     resolveFilePath,
+    sourceText,
     type BuildInput,
     type BuildSources
 } from '$lib/projectFiles'
@@ -100,6 +103,14 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
     private assembly: AssemblyResult | null = null
     private sourceMap: SourceMap | null = null
     private device: Z80Device | null = null
+    /** The memory-mapped TRS-80 display and keyboard matrix (ADR 0020), built with the machine. */
+    private trs80: Trs80Devices | null = null
+    /**
+     * Whether the source asked for the memory-mapped display with a `; @screen trs80` comment. Read
+     * at compile time so the Screen is in the right mode before the first instruction, including
+     * during a testcase run, rather than part way through.
+     */
+    private cellModeRequested = false
     private screenInstructions: ScreenInstructionHistory | null = null
     /** Echo is drawn while an IN is suspended; commit it with that IN when it succeeds. */
     private pendingEchoBefore: number | null = null
@@ -151,6 +162,10 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         this.device?.reset()
         this.screenInstructions?.clear()
         this.pendingEchoBefore = null
+        //`resetPeripherals` has just taken the Screen out of whatever mode it was in, so the device
+        //must not go on believing it owns it. A Build replaces this object anyway; this keeps Stop
+        //from leaving one behind that disagrees with the Screen in front of it
+        this.trs80?.disable()
     }
 
     protected positionStackTabOnCompile(): void {
@@ -182,7 +197,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         //`check()` would do, but the macro attribution below needs the assembled lines, and the
         //assembler does the same work either way
         const result = assemble(assemblyFiles(sources), { entryPathname: sources.entry })
-        return toDiagnostics(result, sourceLinesOf(sources))
+        return [...toDiagnostics(result, sourceLinesOf(sources)), ...this.screenDirective(sources)]
     }
 
     _compile(sources: BuildSources): CompileResult {
@@ -193,7 +208,8 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         this.cliffBreakpoints = []
         this.sourceLines = sourceLinesOf(sources)
         const result = assemble(assemblyFiles(sources), { entryPathname: sources.entry })
-        const diagnostics = toDiagnostics(result, this.sourceLines)
+        const directive = this.screenDirective(sources)
+        const diagnostics = [...toDiagnostics(result, this.sourceLines), ...directive]
         //the assembler has no warning concept: every diagnostic it produces is an error
         if (result.hasErrors()) {
             return {
@@ -207,13 +223,28 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         this.cliffBreakpoints = result
             .segments()
             .map((segment) => segment.address + segment.bytes.length)
-        return { ok: true }
+        return { ok: true, diagnostics }
+    }
+
+    /**
+     * The Screen mode the program's `; @screen` comment asks for, remembered for `_initialize`, and
+     * the warnings the directive earned. A source with no directive draws with the port commands,
+     * which is what every Z80 program did before ADR 0020.
+     */
+    private screenDirective(sources: BuildSources): Diagnostic[] {
+        const { mode, diagnostics } = parseZ80ScreenDirective(sourceText(sources))
+        this.cellModeRequested = mode === 'cells'
+        return diagnostics.map((diagnostic) => ({ ...diagnostic, file: sources.entry }))
     }
 
     _initialize(undoSize: number): void {
         const assembly = this.assembly
         if (!assembly) throw new Error(NOT_INITIALIZED_ERROR)
         const peripherals = this._peripherals
+        const trs80 = new Trs80Devices({
+            screen: peripherals.screen,
+            keyboard: peripherals.keyboard
+        })
         const device = new Z80Device({
             write: (text) => peripherals.terminal.write(text),
             hasInput: () => peripherals.terminal.hasPendingInput(),
@@ -222,6 +253,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
             screen: peripherals.screen,
             keyboard: peripherals.keyboard,
             mouse: peripherals.mouse,
+            cells: trs80,
             onGraphicalUse: () =>
                 peripherals.terminal.useKeyboardInput(peripherals.keyboard, (text) =>
                     device.echo(text)
@@ -269,17 +301,34 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
                     before,
                     changed ? () => device.restoreDrawingState(state) : undefined
                 )
-            }
+            },
+            //false, never true: the Core stores and journals a write it performed itself, and
+            //claiming the write here would leave Undo unable to roll the display back (ADR 0020)
+            onMemoryWrite: (address, value) => trs80.noteWrite(address, value),
+            onMemoryRead: (address) => trs80.readMemory(address),
+            //the memory panel and the disassembler read constantly; without this every repaint
+            //would poll the keyboard matrix and eat the program's keystrokes
+            onDebugRead: () => undefined
         })
+        trs80.attach(machine.memory)
+        //the mode the source asked for, in place before the program is even loaded: enabling blanks
+        //video RAM the way the ROM's clear does, and a program is allowed to assemble an image
+        //straight into those addresses, which the blank would otherwise wipe
+        if (this.cellModeRequested) trs80.enable()
         //throws only for an assembly with errors, which `_compile` already refused
         machine.loadAssembly(assembly)
+        //so an assembled-in screen is on the display before the first instruction runs
+        trs80.resync()
         this.device = device
+        this.trs80 = trs80
         this.machine = machine
         this.screenInstructions = screenInstructions
         this.lastInstructionAddress = null
     }
 
     _dispose(): void {
+        this.trs80?.detach()
+        this.trs80 = null
         this.machine = null
         this.assembly = null
         this.sourceMap = null
@@ -302,6 +351,15 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         //would keep naming the instruction that was just undone. The newest surviving record is
         //the one that ran last, and there always is one while the machine could undo at all.
         this.lastInstructionAddress = machine.getHistory(1)[0]?.address ?? null
+    }
+
+    /**
+     * Repaints the memory-mapped display after the Core rolled its memory back: cell mode journals
+     * nothing, so the image comes from the bytes the Core has just restored
+     * ([ADR 0005](../../../../docs/adr/0005-restore-screen-state-on-undo.md)).
+     */
+    _resyncScreenFromMemory(): void {
+        this.trs80?.resync()
     }
 
     _getStatus(): EmulatorStatus {
@@ -345,6 +403,9 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
                 maxInstructions: Math.min(chunk, budget - instructions),
                 breakpoints: stops
             })
+            //the cells the chunk wrote, painted once rather than one store at a time; inside the
+            //measurement, because it is part of what the chunk cost the host
+            this.trs80?.flush()
             const spentMs = performance.now() - startedAt
             this.trackLastInstruction(result.instructions > 0, result.reason)
             instructions += result.instructions
@@ -385,11 +446,13 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         const machine = this.requireMachine()
         const execution = this.executionController.capture()
         let reason = machine.step()
+        this.trs80?.flush()
         if (reason === StopReason.WAITING_FOR_INPUT) {
             //the `in` was rolled back, so nothing has executed yet: feed the device (or let the
             //wait it asked for elapse) and retry it
             await this.serveInputStop(execution)
             reason = machine.step()
+            this.trs80?.flush()
         }
         this.executionController.ensureCurrent(execution)
         this.trackLastInstruction(reason !== StopReason.WAITING_FOR_INPUT, reason)

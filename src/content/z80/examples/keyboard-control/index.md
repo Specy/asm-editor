@@ -6,20 +6,20 @@ A bouncing ball drew a picture that changed on its own. This one asks the keyboa
 what is being held down right now, and the answer changes what the next frame will look like.
 
 **You need to know:** the "A bouncing ball" Example and the "The screen, keyboard and mouse through
-ports" lecture. What is new here is port `0x21`, which answers 1 while the key whose code is in `b`
+ports" lecture. What is new here is port `0x31`, which answers 1 while the key whose code is in `b`
 is held down, and consumes nothing, so a key held for a second answers 1 every frame.
 
-```z80|playground|screen|no-registers|no-flags|allow-open
-P_CHAR  equ 0x00
-P_PEN   equ 0x10
-P_FILL  equ 0x11
-P_X     equ 0x13
-P_Y     equ 0x14
-P_X2    equ 0x15
-P_Y2    equ 0x16
-P_CMD   equ 0x17
-P_KEY   equ 0x21        ; 1 while the key whose code is in b is held down
-P_FRAME equ 0x41
+```z80|playground|open-screen|no-registers|no-flags|allow-open
+P_CHAR  equ 0x10
+P_PEN   equ 0x20
+P_FILL  equ 0x21
+P_X     equ 0x23
+P_Y     equ 0x24
+P_X2    equ 0x25
+P_Y2    equ 0x26
+P_CMD   equ 0x27
+P_KEY   equ 0x31        ; 1 while the key whose code is in b is held down
+P_FRAME equ 0x51
 
 C_RECT    equ 4
 C_CLEAR   equ 9
@@ -209,9 +209,9 @@ before double buffering is turned on and then never touched again. Command 11 ma
 image start as a copy of what is on screen, and every frame clears only the rectangle below the
 title, so those two rows survive for as long as the program runs.
 
-Polling every frame is enough for keys held down. What port `0x21` does not tell you is that a key
+Polling every frame is enough for keys held down. What port `0x31` does not tell you is that a key
 was pressed **again**, which is why a game that wants one action per press keeps the last answer and
-compares, or reads port `0x22`, the code of the last key pressed.
+compares, or reads port `0x32`, the code of the last key pressed.
 
 Try changing the `xor a` under `off_right` to `ld a, RIGHT`. The square stops against the right edge
 instead of coming back in at the left, which is the same one instruction doing clamping instead of

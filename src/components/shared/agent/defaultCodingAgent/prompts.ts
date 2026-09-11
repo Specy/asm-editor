@@ -9,6 +9,7 @@ import {
     Z80_PORT_GROUP_DOCS,
     Z80_SCREEN_COMMAND_DOCS
 } from '$lib/languages/Z80/Z80-model'
+import { TRS80_KEY_ROW_DOCS, TRS80_MEMORY_DOCS } from '$lib/languages/Z80/trs80/trs80Display'
 import {
     DEFAULT_PROJECT_DISPLAY,
     formatMarsBaseAddress,
@@ -286,8 +287,21 @@ const Z80_SCREEN_COMMAND_INFORMATION = Z80_SCREEN_COMMAND_DOCS.map(
     (command) => `- ${command.command}: ${command.description}`
 ).join('\n')
 
+/**
+ * The TRS-80's memory-mapped display, which has no ports at all: generated from the same tables the
+ * documentation page renders, so the agent writes stores rather than reaching for a drawing command
+ * that this mode rejects (ADR 0020).
+ */
+const Z80_TRS80_INFORMATION = [
+    ...TRS80_MEMORY_DOCS.map((row) => `- ${row.range} (${row.title}): ${row.description}`),
+    `- Keyboard rows, in order: ${TRS80_KEY_ROW_DOCS.map((keys, row) => `row ${row} is ${keys}`).join('; ')}.`,
+    '- Characters 0x20 to 0x7F are text; 128 to 191 are 2 by 3 blocks of chunky pixels, the low six bits being the blocks, bit 0 top-left then across and down. 191 is solid, 128 is blank.',
+    '- The drawing commands and the text cursor are not available in this mode and stop the program with an error; console output goes to the terminal only. Animate by composing a frame in RAM and copying it in with one `ldir`, which is what this machine does instead of double buffering.',
+    "- Port 0x00 is the machine's joystick and is deliberately not in the editor's port map, so a poll of it reads an empty bus: 0xFF, none attached, which is what the machine answers. Everything else the machine decodes is at 0x75 or above, clear of the ports listed here."
+].join('\n')
+
 function toPortNumber(port: number): string {
-    //the ports are written in hexadecimal everywhere else, and a program writes `out (0x17), a`
+    //the ports are written in hexadecimal everywhere else, and a program writes `out (0x27), a`
     return `0x${port.toString(16).padStart(2, '0').toUpperCase()}`
 }
 
@@ -342,8 +356,12 @@ ${MARS_SCREEN_INFORMATION('a7', 'a0')}
 - Ports outside the map are an empty bus: writes are dropped and reads answer 0xFF.
 ${Z80_PORT_INFORMATION}
 
-### Screen commands, written to port 0x17
-${Z80_SCREEN_COMMAND_INFORMATION}`
+### Screen commands, written to port 0x27
+${Z80_SCREEN_COMMAND_INFORMATION}
+
+### The TRS-80 memory-mapped display
+Reached with screen command 14, or before the program starts with a "; @screen trs80" comment line. This is the real machine's interface, so a program written for a TRS-80 elsewhere runs here; use it when the user asks for that machine, and use the ports above otherwise.
+${Z80_TRS80_INFORMATION}`
 
 export function buildDefaultCodingAgentPrompt({
     enabledToolNames,

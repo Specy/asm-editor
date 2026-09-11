@@ -11,8 +11,8 @@ lecture. What is new here is the whole shape of a request, `out (n), a` writes t
 port `n`, and the port number is the only thing that says what is meant to happen to it.
 
 ```z80|playground|console|no-registers|no-flags|allow-open
-P_CHAR  equ 0x00        ; writing a byte here prints it as a character
-P_NUM   equ 0x01        ; and here as an unsigned decimal number
+P_CHAR  equ 0x10        ; writing a byte here prints it as a character
+P_NUM   equ 0x11        ; and here as an unsigned decimal number
 
     .org 0x8000
     ld hl, greeting
@@ -50,8 +50,8 @@ address to task 13 and gets the loop for nothing.
 `ret z` ends the loop and the subroutine in one instruction: `or a` sets `Z` from the byte that was
 read, and the terminator is the only byte that sets it.
 
-Sending 42 to port `0x00` would print `*`, which is the character whose code is 42. Sending it to
-port `0x01` prints `42`, two characters, because that port reads the byte as an unsigned number and
+Sending 42 to port `0x10` would print `*`, which is the character whose code is 42. Sending it to
+port `0x11` prints `42`, two characters, because that port reads the byte as an unsigned number and
 does the work of turning it into digits. One byte, two ports, two answers, and choosing the port is
 choosing how the bits are read.
 
@@ -59,5 +59,5 @@ The newline is a byte you write yourself, `ld a, 10` and an `out` to the charact
 port adds one for you. It can also go inside the string: `.db "Hello", 10, 0` is one string of seven
 bytes whose sixth is the line break, and `.asciz` is the same directive with the zero added for you.
 
-Try changing `out (P_NUM), a` to `out (0x03), a`, the hexadecimal port. The console reads
+Try changing `out (P_NUM), a` to `out (0x13), a`, the hexadecimal port. The console reads
 `The answer is 2A`, which is 42 written in base 16, from exactly the same byte.

@@ -1,5 +1,5 @@
 48879 printed three times, as `BEEF`, as `48879` and as `1011111011101111`, by a subroutine that
-turns a number into characters itself. Port `0x01` does the same job for a byte in one instruction;
+turns a number into characters itself. Port `0x11` does the same job for a byte in one instruction;
 this is what it does inside, and it is the program every language writes once and then hides in a
 library.
 
@@ -12,7 +12,7 @@ out" lecture. What is new here is that the digits come out backwards, the lowest
 buffer is filled from its end towards its front.
 
 ```z80|playground|console|no-flags|allow-open
-P_CHAR  equ 0x00
+P_CHAR  equ 0x10
 
     .org 0x8000
     ld hl, 48879        ; n = 48879

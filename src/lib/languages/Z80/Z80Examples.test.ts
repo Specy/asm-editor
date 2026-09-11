@@ -89,7 +89,60 @@ describe('examples/z80', () => {
         expect(visibleColorAt(screen, 102, 62)).toBe(0xffffff)
         expect(visibleColorAt(screen, 10, 10)).toBe(BLACK)
     })
+
+    it('writes text and blocks into the TRS-80 display’s memory', async () => {
+        const emulator = await runProgram(load('trs80-text.z80'))
+        expect(emulator.errors).toEqual([])
+        const screen = emulator.peripherals.screen
+        expect(screen.cells).toEqual({ columns: 64, rows: 16 })
+        //the title's first letter, the solid bar under it, and a cell neither of them reached
+        expect(cellHasInk(screen, 2, 16)).toBe(true)
+        expect(cellIsSolid(screen, 4, 16)).toBe(true)
+        expect(cellHasInk(screen, 0, 0)).toBe(false)
+    })
+
+    it('bounces a block through a back buffer copied into video memory', async () => {
+        //a frame here is two block copies of a kilobyte each, so this is a handful of frames
+        //rather than the few dozen the pixel examples get out of `FRAME_LOOP_LIMIT`
+        const emulator = await runProgram(load('trs80-bounce.z80'), { limit: 20_000 })
+        expect(emulator.errors).toEqual([])
+        const screen = emulator.peripherals.screen
+        //one solid cell, wherever the animation had got to: a frame is one `ldir`, so the display
+        //never holds a half-copied buffer
+        const solid = solidCells(screen)
+        expect(solid).toHaveLength(1)
+    })
 })
+
+/** Whether any pixel of a cell is lit. */
+function cellHasInk(screen: VisibleScreen, row: number, column: number): boolean {
+    return inkInCell(screen, row, column) > 0
+}
+
+/** Whether every pixel of a cell is lit, which is what character 191 draws. */
+function cellIsSolid(screen: VisibleScreen, row: number, column: number): boolean {
+    return inkInCell(screen, row, column) === 8 * 24
+}
+
+function inkInCell(screen: VisibleScreen, row: number, column: number): number {
+    let ink = 0
+    for (let y = 0; y < 24; y++) {
+        for (let x = 0; x < 8; x++) {
+            if (visibleColorAt(screen, column * 8 + x, row * 24 + y) !== BLACK) ink++
+        }
+    }
+    return ink
+}
+
+function solidCells(screen: VisibleScreen): { row: number; column: number }[] {
+    const solid: { row: number; column: number }[] = []
+    for (let row = 0; row < 16; row++) {
+        for (let column = 0; column < 64; column++) {
+            if (cellIsSolid(screen, row, column)) solid.push({ row, column })
+        }
+    }
+    return solid
+}
 
 /** The 24 bit colors of an RGBA image, for a test that only cares whether anything was drawn. */
 function pixelsOf(image: Uint8ClampedArray): number[] {

@@ -17,8 +17,8 @@ const INFINITE_LOOP = ['    org $8000', 'loop:', '    jp loop'].join('\n')
  * instruction budget says nothing about how long the host will be held.
  */
 const DRAWING_LOOP = [
-    'P_FILL  equ 0x11',
-    'P_CMD   equ 0x17',
+    'P_FILL  equ 0x21',
+    'P_CMD   equ 0x27',
     '        org $8000',
     'start:  ld a, 11',
     '        out (P_CMD), a      ; draw off screen',
@@ -40,21 +40,21 @@ const DRAWING_LOOP = [
 const DRAWING_TESTCASE_PROGRAM = [
     '        org $8000',
     '        ld a, 0xFF',
-    '        out (0x10), a       ; white pen',
+    '        out (0x20), a       ; white pen',
     '        ld a, 100',
-    '        out (0x13), a',
-    '        out (0x14), a',
+    '        out (0x23), a',
+    '        out (0x24), a',
     '        ld a, 0',
-    '        out (0x17), a       ; draw the pixel at (100, 100), clear of the text cursor',
-    '        ld c, 0x40',
+    '        out (0x27), a       ; draw the pixel at (100, 100), clear of the text cursor',
+    '        ld c, 0x50',
     '        ld b, 10',
     '        in a, (c)           ; a tenth of a second of program time',
-    '        ld c, 0x42',
+    '        ld c, 0x52',
     '        ld b, 0',
     '        in a, (c)           ; the lowest byte of the elapsed hundredths',
-    '        out (0x01), a       ; printed as an unsigned number',
-    '        in a, (0x00)        ; a character of the testcase input',
-    '        out (0x00), a       ; echoed back',
+    '        out (0x11), a       ; printed as an unsigned number',
+    '        in a, (0x10)        ; a character of the testcase input',
+    '        out (0x10), a       ; echoed back',
     '        halt'
 ].join('\n')
 
@@ -67,14 +67,14 @@ const DRAWING_TESTCASE_PROGRAM = [
 const READ_LINE_PROGRAM = [
     '        org $8000',
     '        ld a, 0xFF',
-    '        out (0x10), a       ; white pen',
+    '        out (0x20), a       ; white pen',
     '        ld a, 50',
-    '        out (0x13), a',
-    '        out (0x14), a',
+    '        out (0x23), a',
+    '        out (0x24), a',
     '        ld a, 0',
-    '        out (0x17), a       ; the pixel at (50, 50)',
-    '        in a, (0x01)        ; a decimal number, typed and echoed at the text cursor',
-    '        out (0x01), a       ; printed back',
+    '        out (0x27), a       ; the pixel at (50, 50)',
+    '        in a, (0x11)        ; a decimal number, typed and echoed at the text cursor',
+    '        out (0x11), a       ; printed back',
     '        halt'
 ].join('\n')
 
@@ -210,7 +210,7 @@ describe('Z80 emulator slices', () => {
             '    ld b, 3',
             'loop:',
             "    ld a, 'x'",
-            '    out ($01), a',
+            '    out ($11), a',
             '    djnz loop',
             '    halt'
         ].join('\n')

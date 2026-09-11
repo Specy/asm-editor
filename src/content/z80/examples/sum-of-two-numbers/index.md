@@ -7,13 +7,13 @@ instruction until somebody answers it, and what comes back is a number in a regi
 text you have to make sense of.
 
 **You need to know:** the "Print a string" Example and the "Ports: in and out" lecture. What is new
-here is a port that is read, `in a, (1)` asks for a whole line and parses it as a decimal number, so
+here is a port that is read, `in a, (0x11)` asks for a whole line and parses it as a decimal number, so
 the register the program reads next is the one the environment wrote.
 
 ```z80|playground|console|no-flags|allow-open
-P_CHAR  equ 0x00
-P_NUM   equ 0x01        ; reading it asks for a line and parses it as decimal
-P_WORD  equ 0x04        ; writing it prints a 16 bit number, high byte in b
+P_CHAR  equ 0x10
+P_NUM   equ 0x11        ; reading it asks for a line and parses it as decimal
+P_WORD  equ 0x14        ; writing it prints a 16 bit number, high byte in b
 
     .org 0x8000
     ld hl, first
@@ -65,7 +65,7 @@ all the port can hand back.
 
 Two bytes add up to as much as 510, which no byte holds, so the sum is worked out in sixteen bits:
 each number is widened with an `ld h, 0` or an `ld d, 0` as it arrives, and `add hl, de` adds the
-two pairs. Printing it takes the last port of the console set. Port `0x04` prints a 16 bit number
+two pairs. Printing it takes the last port of the console set. Port `0x14` prints a 16 bit number
 whose low byte is what the `out` writes and whose **high byte is the high byte of the address bus**,
 and in the `out (c), r` form the address bus carries `b`, so `ld b, h` and `ld c, 4` and
 `out (c), l` print the whole of `hl`.

@@ -12,23 +12,23 @@ write **one command** to the command port, which runs one operation on whatever 
 
 | port   | what it holds                                                   |
 | ------ | --------------------------------------------------------------- |
-| `0x10` | pen colour: lines, outlines, single pixels and text             |
-| `0x11` | fill colour: the inside of shapes, the flood fill and the clear |
-| `0x12` | pen width in pixels, at least 1                                 |
-| `0x13` | X, the first coordinate                                         |
-| `0x14` | Y                                                               |
-| `0x15` | X2, the second coordinate: the end of a line, the far corner    |
-| `0x16` | Y2                                                              |
-| `0x17` | the command port: one write runs one drawing operation          |
-| `0x18` | reading it gives the colour of the pixel at (X, Y)              |
-| `0x19` | the text cursor's column, in 8 by 8 character cells             |
-| `0x1A` | the text cursor's row                                           |
+| `0x20` | pen colour: lines, outlines, single pixels and text             |
+| `0x21` | fill colour: the inside of shapes, the flood fill and the clear |
+| `0x22` | pen width in pixels, at least 1                                 |
+| `0x23` | X, the first coordinate                                         |
+| `0x24` | Y                                                               |
+| `0x25` | X2, the second coordinate: the end of a line, the far corner    |
+| `0x26` | Y2                                                              |
+| `0x27` | the command port: one write runs one drawing operation          |
+| `0x28` | reading it gives the colour of the pixel at (X, Y)              |
+| `0x29` | the text cursor's column, in 8 by 8 character cells             |
+| `0x2A` | the text cursor's row                                           |
 
 Every one of those is a byte, which is why **the Screen is at most 256 by 256 pixels**, and it is 256
 by 192 until a program resizes it. The origin is the top left, `x` grows right and `y` grows down,
 and drawing outside the Screen is quietly ignored.
 
-The commands are numbers written to `0x17`:
+The commands are numbers written to `0x27`:
 
 | command | what it draws                                                |
 | ------: | ------------------------------------------------------------ |
@@ -66,17 +66,17 @@ are not exactly neutral.
 
 Press Run on this one and watch the Screen panel next to it.
 
-```z80|playground|screen|no-registers|no-flags
-P_PEN   equ 0x10
-P_FILL  equ 0x11
-P_WIDTH equ 0x12
-P_X     equ 0x13
-P_Y     equ 0x14
-P_X2    equ 0x15
-P_Y2    equ 0x16
-P_CMD   equ 0x17
-P_COL   equ 0x19
-P_ROW   equ 0x1A
+```z80|playground|open-screen|no-registers|no-flags
+P_PEN   equ 0x20
+P_FILL  equ 0x21
+P_WIDTH equ 0x22
+P_X     equ 0x23
+P_Y     equ 0x24
+P_X2    equ 0x25
+P_Y2    equ 0x26
+P_CMD   equ 0x27
+P_COL   equ 0x29
+P_ROW   equ 0x2A
 
 C_LINE  equ 1
 C_RECT  equ 4
@@ -145,7 +145,7 @@ print:
     ld a, (hl)
     or a
     jr z, done
-    out (0), a          ; the console character port draws at the cursor
+    out (0x10), a          ; the console character port draws at the cursor
     inc hl
     jr print
 done:
@@ -169,20 +169,20 @@ Drawing a moving picture straight onto the visible Screen shows every half finis
 11** sends the drawing to an off-screen copy instead and **command 13** shows it, so the reader only
 ever sees whole frames.
 
-Pacing is port `0x41`: reading it waits for the next animation frame and gives back 0. One read per
+Pacing is port `0x51`: reading it waits for the next animation frame and gives back 0. One read per
 frame is how an animation runs at the display's pace instead of as fast as the host can go.
 
 This one runs until you press Stop.
 
-```z80|playground|screen|no-registers|no-flags
-P_PEN   equ 0x10
-P_FILL  equ 0x11
-P_X     equ 0x13
-P_Y     equ 0x14
-P_X2    equ 0x15
-P_Y2    equ 0x16
-P_CMD   equ 0x17
-P_FRAME equ 0x41
+```z80|playground|open-screen|no-registers|no-flags
+P_PEN   equ 0x20
+P_FILL  equ 0x21
+P_X     equ 0x23
+P_Y     equ 0x24
+P_X2    equ 0x25
+P_Y2    equ 0x26
+P_CMD   equ 0x27
+P_FRAME equ 0x51
 
 C_ELL     equ 6
 C_CLEAR   equ 9
@@ -262,8 +262,8 @@ wraps it round past 250, which is above the limit as well.
 Try changing `ld a, C_BUF_ON` to `ld a, 12`, which turns double buffering off. The ball still moves
 and now it flickers, because you are watching the clear and the draw happen.
 
-Port `0x40` is the other way to pace a program: put a number of hundredths of a second in `b` and read
-it, and the program waits that long. Port `0x42` reads one byte of the hundredths since the run
+Port `0x50` is the other way to pace a program: put a number of hundredths of a second in `b` and read
+it, and the program waits that long. Port `0x52` reads one byte of the hundredths since the run
 started, with `b` choosing which byte. All three of these suspend the program without freezing the
 editor, so Stop still answers and the Screen still repaints.
 
@@ -273,12 +273,12 @@ Four ports, and they are all reads:
 
 | port   | reading gives                                                     |
 | ------ | ----------------------------------------------------------------- |
-| `0x20` | 1 when a typed character is waiting on the character port, else 0 |
-| `0x21` | 1 while the key whose code is in **`b`** is held down, else 0     |
-| `0x22` | the code of the last key pressed, 0 before the first press        |
-| `0x23` | the code of the last key released                                 |
+| `0x30` | 1 when a typed character is waiting on the character port, else 0 |
+| `0x31` | 1 while the key whose code is in **`b`** is held down, else 0     |
+| `0x32` | the code of the last key pressed, 0 before the first press        |
+| `0x33` | the code of the last key released                                 |
 
-Port `0x21` is what a game reads: it consumes nothing, so a key held down answers 1 every time round
+Port `0x31` is what a game reads: it consumes nothing, so a key held down answers 1 every time round
 the loop, and it needs the `in r,(c)` form because the key code travels in `b`.
 
 The key codes are EASy68K's, the same table every language in this editor uses. A letter is the
@@ -288,17 +288,17 @@ code; and the arrows are left `0x25`, up `0x26`, right `0x27`, down `0x28`.
 **Click the Screen panel before you press a key**: the Screen only gets the keyboard when it has the
 focus, and a ring around it says so while it does.
 
-```z80|playground|screen|no-registers|no-flags
-P_CHAR  equ 0x00
-P_PEN   equ 0x10
-P_FILL  equ 0x11
-P_X     equ 0x13
-P_Y     equ 0x14
-P_X2    equ 0x15
-P_Y2    equ 0x16
-P_CMD   equ 0x17
-P_KEY   equ 0x21        ; 1 while the key whose code is in b is held
-P_FRAME equ 0x41
+```z80|playground|open-screen|no-registers|no-flags
+P_CHAR  equ 0x10
+P_PEN   equ 0x20
+P_FILL  equ 0x21
+P_X     equ 0x23
+P_Y     equ 0x24
+P_X2    equ 0x25
+P_Y2    equ 0x26
+P_CMD   equ 0x27
+P_KEY   equ 0x31        ; 1 while the key whose code is in b is held
+P_FRAME equ 0x51
 
 C_RECT    equ 4
 C_BUF_ON  equ 11
@@ -420,8 +420,8 @@ title:  .asciz "ARROW KEYS MOVE", 10
 Click the Screen, hold an arrow key and the square moves. The four reads all use the same `c`, since
 the port never changes, and only `b` is reloaded between them.
 
-The typed characters and the key state are two different things. Port `0x20` and the character port
-`0x00` are the ones that answer "what did they type", one keystroke at a time; port `0x21` answers
+The typed characters and the key state are two different things. Port `0x30` and the character port
+`0x10` are the ones that answer "what did they type", one keystroke at a time; port `0x31` answers
 "is this key down now" and consumes nothing, which is what a game wants.
 
 ## The mouse
@@ -433,26 +433,26 @@ every click.
 
 | port   | reading gives                                          |
 | ------ | ------------------------------------------------------ |
-| `0x30` | the pointer's X in the selected view, in Screen pixels |
-| `0x31` | its Y                                                  |
-| `0x32` | the buttons and modifiers of that view                 |
-| `0x33` | the mouse event count, a byte that wraps               |
+| `0x40` | the pointer's X in the selected view, in Screen pixels |
+| `0x41` | its Y                                                  |
+| `0x42` | the buttons and modifiers of that view                 |
+| `0x43` | the mouse event count, a byte that wraps               |
 
 The buttons byte is one bit each: bit 0 left, bit 1 right, bit 2 middle, bit 3 the double-click flag
 (only in the last-press view), bit 4 Shift, bit 5 Alt, bit 6 Ctrl.
 
-```z80|playground|screen|no-registers|no-flags
-P_PEN   equ 0x10
-P_FILL  equ 0x11
-P_X     equ 0x13
-P_Y     equ 0x14
-P_X2    equ 0x15
-P_Y2    equ 0x16
-P_CMD   equ 0x17
-P_MX    equ 0x30
-P_MY    equ 0x31
-P_BTN   equ 0x32
-P_FRAME equ 0x41
+```z80|playground|open-screen|no-registers|no-flags
+P_PEN   equ 0x20
+P_FILL  equ 0x21
+P_X     equ 0x23
+P_Y     equ 0x24
+P_X2    equ 0x25
+P_Y2    equ 0x26
+P_CMD   equ 0x27
+P_MX    equ 0x40
+P_MY    equ 0x41
+P_BTN   equ 0x42
+P_FRAME equ 0x51
 
 C_ELL   equ 6
 C_CLEAR equ 9
@@ -517,7 +517,7 @@ Click the Screen, then drag with the left button held: a cyan disc follows the p
 it red and the right button clears. `bit 0, e` and `bit 1, e` are the bit test from the arithmetic
 lecture, reading two bits of the one byte the port answered with.
 
-Port `0x33` is how a program tells a **new** click from one it has already handled: read the count,
+Port `0x43` is how a program tells a **new** click from one it has already handled: read the count,
 compare it with the count you saw last time, and act only when it has changed. Polling the buttons
 alone cannot do that, since a button held for half a second reads as down every frame.
 
@@ -527,7 +527,7 @@ Fill a red rectangle over the box from (10, 10) to (100, 100), then read the col
 (50, 50) back and leave it in `a`. Red is `0xE0`, so `a` comes out at `E0`. The pen and the fill both
 have to be red, or the pixel you read might be on the outline.
 
-```z80|playground|screen|exercise
+```z80|playground|open-screen|exercise
     .org 0x8000
     ; your code here
     halt
@@ -542,26 +542,26 @@ have to be red, or the pixel you read might be on the outline.
 <details>
 <summary>Show solution</summary>
 
-```z80|playground|screen|solution
+```z80|playground|open-screen|solution
 RED     equ 0xE0
 
     .org 0x8000
     ld a, RED
-    out (0x11), a   ; the fill colour
-    out (0x10), a   ; and the pen, so the outline is red too
+    out (0x21), a   ; the fill colour
+    out (0x20), a   ; and the pen, so the outline is red too
     ld a, 10
-    out (0x13), a
-    out (0x14), a   ; from (10, 10)
+    out (0x23), a
+    out (0x24), a   ; from (10, 10)
     ld a, 100
-    out (0x15), a
-    out (0x16), a   ; to (100, 100)
+    out (0x25), a
+    out (0x26), a   ; to (100, 100)
     ld a, 4
-    out (0x17), a   ; command 4: a filled rectangle
+    out (0x27), a   ; command 4: a filled rectangle
 
     ld a, 50
-    out (0x13), a
-    out (0x14), a   ; the pixel to read
-    in a, (0x18)    ; and its colour comes back in a
+    out (0x23), a
+    out (0x24), a   ; the pixel to read
+    in a, (0x28)    ; and its colour comes back in a
     halt
 ```
 
@@ -571,7 +571,7 @@ The second one uses the text cursor. Put it at column 5 and row 3, print `HI` th
 the two cursor ports back into `b` and `c`. The cursor moves as it prints, so `b` comes out at 7,
 two cells further right, and `c` at 3.
 
-```z80|playground|screen|console|exercise
+```z80|playground|open-screen|console|exercise
     .org 0x8000
     ; your code here
     halt
@@ -587,19 +587,19 @@ two cells further right, and `c` at 3.
 <details>
 <summary>Show solution</summary>
 
-```z80|playground|screen|console|solution
+```z80|playground|open-screen|console|solution
     .org 0x8000
     ld a, 5
-    out (0x19), a   ; the column
+    out (0x29), a   ; the column
     ld a, 3
-    out (0x1A), a   ; the row
+    out (0x2A), a   ; the row
     ld a, 'H'
-    out (0), a
+    out (0x10), a
     ld a, 'I'
-    out (0), a
-    in a, (0x19)    ; where the cursor ended up
+    out (0x10), a
+    in a, (0x29)    ; where the cursor ended up
     ld b, a
-    in a, (0x1A)
+    in a, (0x2A)
     ld c, a
     halt
 ```

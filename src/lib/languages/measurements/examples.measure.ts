@@ -85,6 +85,17 @@ const PROGRAMS: Program[] = [
         exercises: 'mouse polling, its views and flags',
         drive: (emulator) => emulator.peripherals.mouse.buttonDown('left', 100, 60)
     },
+    {
+        path: 'z80/trs80-text.z80',
+        language: 'Z80',
+        exercises: 'the memory-mapped display: text and block graphics stored at 0x3C00'
+    },
+    {
+        path: 'z80/trs80-bounce.z80',
+        language: 'Z80',
+        exercises: 'a back buffer blitted with ldir, and the keyboard matrix at 0x3800',
+        drive: (emulator) => emulator.peripherals.keyboard.pressKey(KEY_CODES.RIGHT_ARROW)
+    },
     { path: 'm68k/graphics-tour.x68', language: 'M68K', exercises: 'every drawing task, 80 to 96' },
     {
         path: 'm68k/bouncing-ball.x68',

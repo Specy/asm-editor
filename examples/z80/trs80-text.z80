@@ -1,0 +1,79 @@
+; The TRS-80's memory-mapped display: text and block graphics, written straight into video RAM.
+;
+; This is the one Z80 screen in this editor that is not its own invention. It is the display of the
+; machine the Z80 core here descends from, so a program written for that machine draws the same
+; picture. There are no ports: the screen is 1 KB of memory at 0x3C00, 64 columns by 16 rows, one
+; byte per character cell. Store a byte, see a character.
+;
+; Characters 0x20 to 0x7F are text. Characters 128 to 191 are 2 by 3 blocks of chunky pixels: the
+; low six bits are the blocks themselves, bit 0 top-left, then across and down, so the whole screen
+; is also a 128 by 48 pixel grid.
+;
+; The `; @screen trs80` comment on the next line is what asks for the mode. It is a comment, so this
+; file still assembles anywhere else.
+
+; @screen trs80
+
+VIDEO   equ 0x3C00      ; the top left cell
+COLS    equ 64
+BLANK   equ 0x20        ; a space, which is what the machine's ROM clears the screen to
+
+BLOCK   equ 128         ; the empty block; add the bits you want lit
+TOPL    equ 1           ; bit 0: top left
+TOPR    equ 2           ; bit 1: top right
+MIDL    equ 4           ; bit 2: middle left
+MIDR    equ 8           ; bit 3: middle right
+BOTL    equ 16          ; bit 4: bottom left
+BOTR    equ 32          ; bit 5: bottom right
+FULL    equ BLOCK+63    ; every sub-cell lit
+
+        .org 0x8000
+
+start:  ld hl, VIDEO+COLS*2+16
+        ld de, title
+        call puts
+
+        ; a row of solid blocks under the title, drawn as a run of one character
+        ld hl, VIDEO+COLS*4+16
+        ld b, 24
+        ld a, FULL
+bar:    ld (hl), a
+        inc hl
+        djnz bar
+
+        ; a staircase: one lit sub-cell per step, walking down the 2 by 3 grid of each cell
+        ld hl, VIDEO+COLS*7+20
+        ld a, BLOCK+TOPL
+        ld (hl), a
+        ld a, BLOCK+TOPR
+        inc hl
+        ld (hl), a
+        ld a, BLOCK+MIDL
+        inc hl
+        ld (hl), a
+        ld a, BLOCK+MIDR
+        inc hl
+        ld (hl), a
+        ld a, BLOCK+BOTL
+        inc hl
+        ld (hl), a
+        ld a, BLOCK+BOTR
+        inc hl
+        ld (hl), a
+
+        ld hl, VIDEO+COLS*10+12
+        ld de, hint
+        call puts
+        halt
+
+; Copies the zero terminated string at DE to the cells at HL.
+puts:   ld a, (de)
+        or a
+        ret z
+        ld (hl), a
+        inc hl
+        inc de
+        jr puts
+
+title:  .asciz "TRS-80 VIDEO RAM"
+hint:   .asciz "64 X 16 CELLS AT 0X3C00"

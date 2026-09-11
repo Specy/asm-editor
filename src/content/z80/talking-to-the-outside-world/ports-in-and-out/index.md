@@ -43,11 +43,11 @@ exactly one byte of payload and the port number is the only other thing the inst
 
 | port   | writing prints                                      | reading gives                        |
 | ------ | --------------------------------------------------- | ------------------------------------ |
-| `0x00` | the byte as a character                             | the next character of the input line |
-| `0x01` | the byte as an unsigned number, 0 to 255            | a line parsed as a decimal number    |
-| `0x02` | the byte as a signed number, -128 to 127            | the same as `0x01`                   |
-| `0x03` | the byte as two upper case hexadecimal digits       | a line parsed as hexadecimal         |
-| `0x04` | a 16 bit number, the high byte from the address bus | the same as `0x01`                   |
+| `0x10` | the byte as a character                             | the next character of the input line |
+| `0x11` | the byte as an unsigned number, 0 to 255            | a line parsed as a decimal number    |
+| `0x12` | the byte as a signed number, -128 to 127            | the same as `0x11`                   |
+| `0x13` | the byte as two upper case hexadecimal digits       | a line parsed as hexadecimal         |
+| `0x14` | a 16 bit number, the high byte from the address bus | the same as `0x11`                   |
 
 The whole table, with a runnable example for every port, is on the
 [Z80 I/O documentation page](/documentation/z80/io).
@@ -64,7 +64,7 @@ print:
     ld a, (hl)      ; c = *p
     or a            ; the terminator?
     jr z, done
-    out (0), a      ; putchar(c)
+    out (0x10), a      ; putchar(c)
     inc hl          ; p++
     jr print
 done:
@@ -88,24 +88,24 @@ The same byte written to four different ports prints four different things.
 ```z80|playground|console|no-flags
     .org 0x8000
     ld a, 200
-    out (1), a      ; unsigned: 200
+    out (0x11), a      ; unsigned: 200
     ld a, ' '
-    out (0), a
+    out (0x10), a
     ld a, 200
-    out (2), a      ; signed: the same bits read as -56
+    out (0x12), a      ; signed: the same bits read as -56
     ld a, ' '
-    out (0), a
+    out (0x10), a
     ld a, 200
-    out (3), a      ; hexadecimal: C8
+    out (0x13), a      ; hexadecimal: C8
     ld a, ' '
-    out (0), a
+    out (0x10), a
 
     ld hl, 1000     ; a number no byte can hold
     ld b, h         ; the high byte goes on the address bus
     ld c, 4         ; the port number
     out (c), l      ; and the low byte is the payload
     ld a, 10
-    out (0), a      ; a newline
+    out (0x10), a      ; a newline
     halt
 ```
 
@@ -116,26 +116,26 @@ choosing how the bits are read, which is the same choice the numbers lecture mad
 Try changing the three `ld a, 200` to `ld a, 100` and the second one prints `100` as well, because
 100 has its top bit clear and reads the same either way.
 
-The last four instructions are port `0x04`, which is where the high byte of the address bus earns its
+The last four instructions are port `0x14`, which is where the high byte of the address bus earns its
 keep. In the `out (c), r` form the address bus carries `b` on the high half, so `b` and the byte
 written are the two halves of one 16 bit number, and three instructions and one `out` print anything
 up to 65535. It is the only port that reads the high byte of the address.
 
 ## Reading
 
-`in a, (1)` asks for a whole line, parses it as a decimal number and gives back its low byte. When no
+`in a, (0x11)` asks for a whole line, parses it as a decimal number and gives back its low byte. When no
 input is waiting the program **stops inside the `in`** and waits: press Run, type a number in the box
 under the console, press Enter, and the run carries on inside that one instruction.
 
 ```z80|playground|console|no-flags
     .org 0x8000
-    in a, (1)       ; x = readNumber()
+    in a, (0x11)       ; x = readNumber()
     ld b, a
-    in a, (1)       ; y = readNumber()
+    in a, (0x11)       ; y = readNumber()
     add a, b        ; x + y
-    out (1), a
+    out (0x11), a
     ld a, 10
-    out (0), a
+    out (0x10), a
     halt
 ```
 
@@ -155,16 +155,16 @@ line ends with a newline character, `0x0A`, so a program reads until it sees one
     .org 0x8000
     ld b, 0         ; n = 0
 read:
-    in a, (0)       ; c = getchar()
+    in a, (0x10)       ; c = getchar()
     cp 10           ; the newline at the end of the line
     jr z, done
     inc b           ; n++
     jr read
 done:
     ld a, b
-    out (1), a      ; print how many characters were typed
+    out (0x11), a      ; print how many characters were typed
     ld a, 10
-    out (0), a
+    out (0x10), a
     halt
 ```
 
@@ -183,7 +183,7 @@ that is what an undriven bus reads as.
 ```z80|playground|console|no-flags
     .org 0x8000
     in a, (0x77)    ; nothing is behind port 0x77
-    out (3), a      ; print what came back
+    out (0x13), a      ; print what came back
     halt
 ```
 
@@ -227,12 +227,12 @@ print:
     ld a, (hl)
     or a
     jr z, number
-    out (0), a      ; one character
+    out (0x10), a      ; one character
     inc hl
     jr print
 number:
     ld a, 42
-    out (1), a      ; the number, as an unsigned decimal
+    out (0x11), a      ; the number, as an unsigned decimal
     halt
 
     .org 0x9000
@@ -262,8 +262,8 @@ test types 255, so the console reads `FF`.
 
 ```z80|playground|console|solution
     .org 0x8000
-    in a, (1)       ; a line, parsed as decimal
-    out (3), a      ; the same byte, printed as hexadecimal
+    in a, (0x11)       ; a line, parsed as decimal
+    out (0x13), a      ; the same byte, printed as hexadecimal
     halt
 ```
 
