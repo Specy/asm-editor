@@ -55,10 +55,15 @@ const sessionId = 'provider-test'
 const snapshot = analyzeM68kProject(sources, sessionId, 1)
 let unregister: () => void
 
-function model(path: string, text: string) {
+function model(path: string, text: string, buildGeneration?: number) {
     const lines = text.split('\n')
     return {
-        uri: projectSourceUri(monacoStub, { sessionId, sourceKind: 'live', path }),
+        uri: projectSourceUri(
+            monacoStub,
+            buildGeneration === undefined
+                ? { sessionId, sourceKind: 'live', path }
+                : { sessionId, sourceKind: 'build', buildGeneration, path }
+        ),
         getValue: () => text,
         getLineCount: () => lines.length,
         getLineContent: (lineNumber: number) => lines[lineNumber - 1] ?? '',
@@ -134,6 +139,59 @@ describe('M68K Project providers', () => {
                 range: expect.objectContaining({ startLineNumber: 1, startColumn: 1, endColumn: 7 })
             })
         )
+    })
+
+    /**
+     * A Build switches the editor to the snapshot view, and only the live Files are analysed. While
+     * a File still reads the way the analysis read it — which, right after a Build, is always —
+     * navigation has to keep working there rather than silently going dead.
+     */
+    it('resolves a definition in the Build snapshot view', async () => {
+        const text = sources.files['c.m68k'].content
+        const definition = await createM68kDefinitionProvider(monacoStub).provideDefinition(
+            model('c.m68k', text, 3) as never,
+            { lineNumber: 1, column: text.indexOf('target') + 2 } as never,
+            {} as never
+        )
+        expect(definition).toEqual(
+            expect.objectContaining({
+                uri: expect.objectContaining({ path: '/build-3/lib/b.m68k' })
+            })
+        )
+    })
+
+    it('drops symbols from a File the program changed after the Build', async () => {
+        const changed = normalizeBuildInput({
+            entry: sources.entry,
+            files: {
+                ...sources.files,
+                'lib/b.m68k': { encoding: 'plain', content: 'other: dc.w 2' }
+            }
+        })
+        const scoped = registerLanguageSession({
+            sessionId: 'changed-since-build',
+            sources: changed,
+            snapshot: analyzeM68kProject(changed, 'changed-since-build', 1),
+            //the Build snapshot still holds the original text of every File
+            sourcesFor: (sourceKind) => (sourceKind === 'live' ? changed : sources)
+        })
+        const text = sources.files['c.m68k'].content
+        const definition = await createM68kDefinitionProvider(monacoStub).provideDefinition(
+            {
+                ...model('c.m68k', text, 1),
+                uri: projectSourceUri(monacoStub, {
+                    sessionId: 'changed-since-build',
+                    sourceKind: 'build',
+                    buildGeneration: 1,
+                    path: 'c.m68k'
+                })
+            } as never,
+            { lineNumber: 1, column: text.indexOf('target') + 2 } as never,
+            {} as never
+        )
+        //`lib/b.m68k` no longer reads the way the analysis read it, so its ranges are not offered
+        expect(definition).toBeNull()
+        scoped()
     })
 
     it('completes and links include paths using Project resolution rules', async () => {

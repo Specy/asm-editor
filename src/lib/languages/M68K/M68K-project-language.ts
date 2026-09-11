@@ -2,7 +2,11 @@ import { S68k } from '@specy/s68k'
 import type monaco from 'monaco-editor'
 import type { MonacoType } from '$lib/monaco/Monaco'
 import { m68kIncludedSourceFiles, m68kWrittenPath, resolveM68kFile } from './m68kAssemblyFiles'
-import { languageSession, type LanguageSessionView } from '$lib/languages/service/sessionRegistry'
+import {
+    analysisForModel,
+    languageSession,
+    type LanguageSessionView
+} from '$lib/languages/service/sessionRegistry'
 import {
     parseProjectSourceUri,
     projectSourceUri,
@@ -27,8 +31,10 @@ function sessionForModel(model: monaco.editor.ITextModel): {
     return session && sources ? { identity, session, sources } : null
 }
 
+/** The symbols that describe this model, which a Build snapshot has for its unchanged Files too. */
 function liveSymbols(context: ReturnType<typeof sessionForModel>): LanguageSymbol[] {
-    return context?.identity.sourceKind === 'live' ? (context.session.snapshot?.symbols ?? []) : []
+    if (!context) return []
+    return analysisForModel(context.session, context.identity, context.sources)?.symbols ?? []
 }
 
 function completionSymbols(context: NonNullable<ReturnType<typeof sessionForModel>>) {

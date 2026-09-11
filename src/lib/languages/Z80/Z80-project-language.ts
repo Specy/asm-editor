@@ -1,6 +1,6 @@
 import type monaco from 'monaco-editor'
 import type { MonacoType } from '$lib/monaco/Monaco'
-import { languageSession } from '$lib/languages/service/sessionRegistry'
+import { analysisForModel, languageSession } from '$lib/languages/service/sessionRegistry'
 import {
     createProjectDefinitionProvider,
     createProjectDocumentSymbolProvider
@@ -34,7 +34,11 @@ function contextForModel(model: monaco.editor.ITextModel) {
     const identity = parseProjectSourceUri(model.uri)
     if (!identity) return null
     const session = languageSession(identity.sessionId)
-    const snapshot = identity.sourceKind === 'live' ? session?.snapshot : undefined
+    const sources = session?.sourcesFor(
+        identity.sourceKind,
+        identity.sourceKind === 'build' ? identity.buildGeneration : undefined
+    )
+    const snapshot = sources && analysisForModel(session, identity, sources)
     return session && snapshot?.target === 'Z80' ? { identity, snapshot } : null
 }
 

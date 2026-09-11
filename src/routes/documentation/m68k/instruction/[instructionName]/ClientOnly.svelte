@@ -45,9 +45,7 @@
             code
         })
         const target = resolve('/projects/[project]', { project: 'share' })
-        // The route IS resolved, on the line above; resolve() has no query-string form, so
-        // the rule cannot see through the interpolation needed to attach ?project=.
-        // eslint-disable-next-line svelte/no-navigation-without-resolve
+        // The route IS resolved, on the line above.
         goto(`${target}?project=${createSharePayload(project)}`)
     }
 </script>

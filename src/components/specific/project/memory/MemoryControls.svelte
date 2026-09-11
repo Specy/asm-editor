@@ -24,6 +24,7 @@
         bytesPerPage,
         memorySize,
         hideLabel = false,
+        inputStyle = '',
         style = '',
         systemSize,
         onAddressChange
@@ -50,6 +51,7 @@
     <div class="address-search">
         <div
             class="hex-address"
+            style={inputStyle}
             onclick={() => {
                 inputRef?.focus()
             }}

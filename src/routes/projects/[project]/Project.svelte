@@ -964,7 +964,9 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                     />
                 {/if}
                 <div class="source-identity" title={displayedPath}>
-                    <span>{sourceView === 'snapshot' ? 'Build snapshot' : 'Live file'}</span>
+                    {#if sourceView === 'snapshot'}
+                        <span>Build snapshot</span>
+                    {/if}
                     <strong>{displayedPath || '(no file)'}</strong>
                     {#if displayedAnalysisStatus === 'not-reachable'}
                         <em title="This File is not analyzed from the current Entry"
@@ -1321,6 +1323,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                 right: 0.9rem;
                 bottom: 0.7rem;
                 display: flex;
+                align-items: center;
                 max-width: calc(100% - 4.5rem);
                 gap: 0.45rem;
                 padding: 0.25rem 0.45rem;

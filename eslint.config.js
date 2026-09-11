@@ -22,7 +22,9 @@ export default ts.config(
             parserOptions: {
                 parser: ts.parser,
                 extraFileExtensions: ['.svelte'],
-                svelteConfig
+                svelteConfig,
+                projectService: true,
+                tsconfigRootDir: import.meta.dirname
             }
         },
         rules: {
@@ -52,8 +54,7 @@ export default ts.config(
             '@typescript-eslint/no-explicit-any': 'error',
             '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
 
-            // Generic/external URLs need API changes, and resolve changes prerendered hrefs.
-            'svelte/no-navigation-without-resolve': 'warn',
+            'svelte/no-navigation-without-resolve': 'error',
             // Keys change reconciliation, and several lists have no stable unique ID.
             'svelte/require-each-key': 'warn',
 

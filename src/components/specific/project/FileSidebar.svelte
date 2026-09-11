@@ -442,7 +442,7 @@
         inset: 0 0 0 auto;
         display: flex;
         flex-direction: column;
-        width: min(19rem, calc(100% - 0.75rem));
+        width: min(14rem, calc(100% - 0.75rem));
         height: 100%;
         min-height: 0;
         color: var(--secondary-text);
