@@ -6,7 +6,6 @@ import { delay } from '$lib/utils'
 import { defaultEntryPath } from '$lib/Project.svelte'
 import { fileText, type ProjectFile } from '$lib/projectFiles'
 import {
-    DEFAULT_CODING_AGENT_TOOL_NAMES,
     DEFAULT_TAKE_LINES,
     MAX_TAKE_LINES,
     SUPPORTED_LANGUAGES,
@@ -20,16 +19,12 @@ import {
     formatSourceLine,
     formatNumber
 } from './formatting'
-import { runAgentTool, stringifyToolError } from './toolResults'
+import { runAgentTool, stringifyToolError, type ToolRunContext } from './toolResults'
 
 type ExecutionBlocker = {
     error: string
     retryable: boolean
     nextAction: string
-}
-
-function getLineCount(code: string) {
-    return code.length === 0 ? 1 : code.split('\n').length
 }
 
 function statusName(status: InterpreterStatus) {
@@ -317,7 +312,7 @@ async function handleCodeWrite(
     languageChanged: boolean,
     previousLanguage: string | null,
     previewLine = 1,
-    toolRun: any,
+    toolRun: ToolRunContext,
     previousEmulator: Emulator | null = null
 ) {
     setFile(context, targetPath, newContent)
@@ -647,37 +642,14 @@ function createListBreakpointsTool(context: DefaultCodingAgentToolContext) {
                     const content = fileObj?.content ?? ''
                     const lines = content.length === 0 ? [''] : content.split('\n')
                     const lineNum = breakpoint.line + 1
-                    const totalLines = lines.length
 
-                    const startContextLine = Math.max(1, lineNum - 3)
-                    const endContextLine = Math.min(totalLines, lineNum + 3)
-
-                    const contextLines: Array<{
-                        line: number
-                        text: string
-                        isBreakpoint: boolean
-                    }> = []
-                    const snippetLines: string[] = []
-
-                    for (let l = startContextLine; l <= endContextLine; l++) {
-                        const text = lines[l - 1] ?? ''
-                        const isBp = l === lineNum
-                        contextLines.push({
-                            line: l,
-                            text,
-                            isBreakpoint: isBp
-                        })
-                        const prefix = isBp ? '=> ' : '   '
-                        const suffix = isBp ? '  <-- [BREAKPOINT]' : ''
-                        snippetLines.push(`${prefix}${String(l).padStart(4)} | ${text}${suffix}`)
-                    }
-
+                    const snippetInfo = formatBreakpointSnippet(lines, lineNum)
                     return {
                         file: bpFile,
                         line: lineNum,
-                        isOutOfBounds: lineNum > totalLines || lineNum < 1,
-                        snippet: snippetLines.join('\n'),
-                        context: contextLines
+                        isOutOfBounds: snippetInfo.isOutOfBounds,
+                        snippet: snippetInfo.snippet,
+                        context: snippetInfo.context
                     }
                 })
 
@@ -690,11 +662,415 @@ function createListBreakpointsTool(context: DefaultCodingAgentToolContext) {
     })
 }
 
+function formatBreakpointSnippet(
+    lines: string[],
+    lineNum: number
+): {
+    snippet: string
+    context: Array<{ line: number; text: string; isBreakpoint: boolean }>
+    isOutOfBounds: boolean
+} {
+    const totalLines = lines.length
+    const startContextLine = Math.max(1, lineNum - 3)
+    const endContextLine = Math.min(totalLines, lineNum + 3)
+
+    const contextLines: Array<{
+        line: number
+        text: string
+        isBreakpoint: boolean
+    }> = []
+    const snippetLines: string[] = []
+
+    for (let l = startContextLine; l <= endContextLine; l++) {
+        const text = lines[l - 1] ?? ''
+        const isBp = l === lineNum
+        contextLines.push({
+            line: l,
+            text,
+            isBreakpoint: isBp
+        })
+        const prefix = isBp ? '=> ' : '   '
+        const suffix = isBp ? '  <-- [BREAKPOINT]' : ''
+        snippetLines.push(`${prefix}${String(l).padStart(4)} | ${text}${suffix}`)
+    }
+
+    return {
+        snippet: snippetLines.join('\n'),
+        context: contextLines,
+        isOutOfBounds: lineNum > totalLines || lineNum < 1
+    }
+}
+
+function resolveBreakpointLocation(
+    context: DefaultCodingAgentToolContext,
+    emulator: Emulator,
+    params: {
+        path?: string
+        instruction?: string
+        address?: string
+        line?: number
+    }
+):
+    | {
+          success: true
+          targetPath: string
+          lineNum: number
+          lines: string[]
+      }
+    | {
+          success: false
+          error: string
+      } {
+    const { path, instruction, address, line } = params
+
+    if (!instruction && !address && line === undefined) {
+        return {
+            success: false,
+            error: 'Must specify at least one locator: "instruction", "address", or "line".'
+        }
+    }
+
+    // 1. Address resolution
+    if (address !== undefined) {
+        const parsedAddress = parseHexAddress(address)
+        if (parsedAddress === null) {
+            return {
+                success: false,
+                error: `Invalid address format: "${address}". Expected hex string like "0x1000".`
+            }
+        }
+
+        const sourceLoc = emulator.getSourceLocationFromAddress
+            ? emulator.getSourceLocationFromAddress(parsedAddress)
+            : null
+
+        const entry = getEffectiveEntry(context)
+        let resolvedFile = path ?? sourceLoc?.file ?? emulator.currentFile ?? entry
+        let resolvedLine: number | null = null
+
+        if (sourceLoc && sourceLoc.line >= 0) {
+            resolvedLine = sourceLoc.line + 1
+            if (sourceLoc.file) resolvedFile = sourceLoc.file
+        } else if (emulator.getLineFromAddress) {
+            const l = emulator.getLineFromAddress(parsedAddress)
+            if (l >= 0) resolvedLine = l + 1
+        }
+
+        if (resolvedLine === null) {
+            return {
+                success: false,
+                error: `Could not resolve address "${address}" to a source line in the program.`
+            }
+        }
+
+        const fileObj = getFile(context, resolvedFile)
+        if (!fileObj) {
+            return {
+                success: false,
+                error: `File "${resolvedFile}" not found in project.`
+            }
+        }
+
+        const lines = fileObj.content.length === 0 ? [''] : fileObj.content.split('\n')
+        return {
+            success: true,
+            targetPath: resolvedFile,
+            lineNum: resolvedLine,
+            lines
+        }
+    }
+
+    // Determine target file
+    const allFiles = getAllProjectFiles(context)
+    const targetPath =
+        path ?? context.getActivePath?.() ?? emulator.currentFile ?? getEffectiveEntry(context)
+    const fileObj = getFile(context, targetPath)
+    if (!fileObj) {
+        return {
+            success: false,
+            error: `File "${targetPath}" not found in project. Available files: ${Object.keys(allFiles).join(', ')}`
+        }
+    }
+
+    const lines = fileObj.content.length === 0 ? [''] : fileObj.content.split('\n')
+
+    // 2. Instruction matching
+    if (instruction !== undefined) {
+        const needle = instruction.trim()
+        if (needle.length === 0) {
+            return {
+                success: false,
+                error: 'instruction cannot be empty.'
+            }
+        }
+
+        // Substring occurrences in content
+        const occurrences: number[] = []
+        let pos = fileObj.content.indexOf(needle)
+        while (pos !== -1) {
+            const lineNum = fileObj.content.slice(0, pos).split('\n').length
+            occurrences.push(lineNum)
+            pos = fileObj.content.indexOf(needle, pos + 1)
+        }
+
+        if (occurrences.length === 1) {
+            return {
+                success: true,
+                targetPath,
+                lineNum: occurrences[0],
+                lines
+            }
+        }
+
+        if (occurrences.length > 1) {
+            return {
+                success: false,
+                error: `instruction "${needle}" matches ${occurrences.length} times in "${targetPath}" at line(s): ${occurrences.join(', ')}. Please provide more surrounding text or specify "line" to disambiguate.`
+            }
+        }
+
+        // Fallback: check trimmed line matching
+        const trimmedMatches: number[] = []
+        lines.forEach((l, idx) => {
+            const trimmed = l.trim()
+            if (trimmed === needle || trimmed.startsWith(needle)) {
+                trimmedMatches.push(idx + 1)
+            }
+        })
+
+        if (trimmedMatches.length === 1) {
+            return {
+                success: true,
+                targetPath,
+                lineNum: trimmedMatches[0],
+                lines
+            }
+        }
+
+        if (trimmedMatches.length > 1) {
+            return {
+                success: false,
+                error: `instruction "${needle}" matches ${trimmedMatches.length} lines in "${targetPath}" at line(s): ${trimmedMatches.join(', ')}. Please provide more surrounding text or specify "line" to disambiguate.`
+            }
+        }
+
+        return {
+            success: false,
+            error: `instruction "${needle}" was not found in file "${targetPath}".`
+        }
+    }
+
+    // 3. Line number validation
+    if (line !== undefined) {
+        if (line < 1 || line > lines.length) {
+            return {
+                success: false,
+                error: `Line ${line} is out of bounds for "${targetPath}" (${lines.length} lines).`
+            }
+        }
+        return {
+            success: true,
+            targetPath,
+            lineNum: line,
+            lines
+        }
+    }
+
+    return {
+        success: false,
+        error: 'Must specify at least one locator: "instruction", "address", or "line".'
+    }
+}
+
+function createSetBreakpointTool(context: DefaultCodingAgentToolContext) {
+    return tool({
+        name: 'set_breakpoint',
+        description:
+            'Sets an active breakpoint by instruction text, address, or 1-based line number. The emulator stops before executing that instruction. Returns the resolved location and a snippet of surrounding code.',
+        schema: z.object({
+            path: z
+                .string()
+                .optional()
+                .describe(
+                    'The file path to set the breakpoint in (e.g. "main.s"). Defaults to active or entry file.'
+                ),
+            instruction: z
+                .string()
+                .optional()
+                .describe(
+                    'Instruction text or code snippet to break at (e.g. "bne $t1, $t2, loop", "syscall", "rts").'
+                ),
+            address: z
+                .string()
+                .optional()
+                .describe('Hex address to break at (e.g. "0x1000", "0x00400020").'),
+            line: z
+                .number()
+                .int()
+                .min(1)
+                .optional()
+                .describe('1-based line number to break at (optional fallback).')
+        }),
+        execute: async ({ path, instruction, address, line }) =>
+            runAgentTool(async (toolRun) => {
+                const emulator = context.getEmulator()
+                if (!emulator) {
+                    return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
+                        retryable: true,
+                        nextAction:
+                            'Wait for the editor language to load before setting breakpoints.'
+                    })
+                }
+
+                const resolution = resolveBreakpointLocation(context, emulator, {
+                    path,
+                    instruction,
+                    address,
+                    line
+                })
+                if (!resolution.success) {
+                    return toolRun.failure('invalid_input', resolution.error, {
+                        retryable: true,
+                        nextAction:
+                            'Call view_file or list_breakpoints to check the instructions and file names.'
+                    })
+                }
+
+                const { targetPath, lineNum, lines } = resolution
+                const lineIndex = lineNum - 1
+
+                const alreadySet = (emulator.breakpoints ?? []).some(
+                    (b) =>
+                        (b.file ?? getEffectiveEntry(context)) === targetPath &&
+                        b.line === lineIndex
+                )
+
+                if (!alreadySet) {
+                    emulator.toggleBreakpoint(lineIndex, targetPath)
+                }
+
+                const snippetInfo = formatBreakpointSnippet(lines, lineNum)
+
+                return toolRun.success({
+                    file: targetPath,
+                    line: lineNum,
+                    alreadySet,
+                    snippet: snippetInfo.snippet,
+                    context: snippetInfo.context,
+                    totalBreakpoints: emulator.breakpoints.length
+                })
+            })
+    })
+}
+
+function createRemoveBreakpointTool(context: DefaultCodingAgentToolContext) {
+    return tool({
+        name: 'remove_breakpoint',
+        description:
+            'Removes an active breakpoint by instruction text, address, line number, or removes all breakpoints if all: true.',
+        schema: z.object({
+            path: z
+                .string()
+                .optional()
+                .describe(
+                    'The file path to remove breakpoints from. If omitted and all: true, clears all breakpoints in the project.'
+                ),
+            instruction: z
+                .string()
+                .optional()
+                .describe(
+                    'Instruction text or code snippet of the breakpoint to remove (e.g. "bne $t1, $t2, loop").'
+                ),
+            address: z
+                .string()
+                .optional()
+                .describe('Hex address of the breakpoint to remove (e.g. "0x1000").'),
+            line: z
+                .number()
+                .int()
+                .min(1)
+                .optional()
+                .describe('1-based line number of the breakpoint to remove.'),
+            all: z
+                .boolean()
+                .optional()
+                .describe(
+                    'If true, removes all breakpoints in the file (or across all files if path is omitted).'
+                )
+        }),
+        execute: async ({ path, instruction, address, line, all }) =>
+            runAgentTool(async (toolRun) => {
+                const emulator = context.getEmulator()
+                if (!emulator) {
+                    return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
+                        retryable: true,
+                        nextAction:
+                            'Wait for the editor language to load before removing breakpoints.'
+                    })
+                }
+
+                const entry = getEffectiveEntry(context)
+
+                if (all) {
+                    const toRemove = [...emulator.breakpoints].filter((b) => {
+                        if (!path) return true
+                        const bFile = b.file ?? entry
+                        return bFile === path
+                    })
+
+                    for (const b of toRemove) {
+                        emulator.toggleBreakpoint(b.line, b.file ?? entry)
+                    }
+
+                    return toolRun.success({
+                        all: true,
+                        path: path ?? null,
+                        removedCount: toRemove.length,
+                        remainingBreakpoints: emulator.breakpoints.length
+                    })
+                }
+
+                const resolution = resolveBreakpointLocation(context, emulator, {
+                    path,
+                    instruction,
+                    address,
+                    line
+                })
+                if (!resolution.success) {
+                    return toolRun.failure('invalid_input', resolution.error, {
+                        retryable: true,
+                        nextAction: 'Call list_breakpoints to see active breakpoints.'
+                    })
+                }
+
+                const { targetPath, lineNum } = resolution
+                const lineIndex = lineNum - 1
+
+                const isSet = (emulator.breakpoints ?? []).some(
+                    (b) => (b.file ?? entry) === targetPath && b.line === lineIndex
+                )
+
+                if (isSet) {
+                    emulator.toggleBreakpoint(lineIndex, targetPath)
+                }
+
+                return toolRun.success({
+                    file: targetPath,
+                    line: lineNum,
+                    removed: isSet,
+                    remainingBreakpoints: emulator.breakpoints.length
+                })
+            })
+    })
+}
+
 export function createDefaultCodingAgentTools(context: DefaultCodingAgentToolContext) {
     const viewFileTool = createViewFileTool(context)
     const replaceFileContentTool = createReplaceFileContentTool(context)
     const writeToFileTool = createWriteToFileTool(context)
     const listBreakpointsTool = createListBreakpointsTool(context)
+    const setBreakpointTool = createSetBreakpointTool(context)
+    const removeBreakpointTool = createRemoveBreakpointTool(context)
 
     return {
         view_file: viewFileTool,
@@ -778,6 +1154,8 @@ export function createDefaultCodingAgentTools(context: DefaultCodingAgentToolCon
                 })
         }),
         list_breakpoints: listBreakpointsTool,
+        set_breakpoint: setBreakpointTool,
+        remove_breakpoint: removeBreakpointTool,
         get_emulator_state: tool({
             name: 'get_emulator_state',
             description: `Returns the full emulator execution state.
@@ -968,96 +1346,6 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                             details: executionDetails(context, emulator)
                         })
                     }
-                })
-        }),
-        update_breakpoints: tool({
-            name: 'update_breakpoints',
-            description:
-                'Adds and/or removes breakpoints on 1-based source line numbers in a specific file. The emulator stops on the breakpoint line before executing that instruction.',
-            schema: z.object({
-                path: z
-                    .string()
-                    .optional()
-                    .describe(
-                        'The file path to update breakpoints for. Defaults to current execution file or entry file.'
-                    ),
-                add: z
-                    .array(z.number().int().min(1))
-                    .optional()
-                    .describe('1-based line numbers to add breakpoints on'),
-                remove: z
-                    .array(z.number().int().min(1))
-                    .optional()
-                    .describe('1-based line numbers to remove breakpoints from')
-            }),
-            execute: async ({ path, add = [], remove = [] }) =>
-                runAgentTool(async (toolRun) => {
-                    const emulator = context.getEmulator()
-                    if (!emulator) {
-                        return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
-                            retryable: true,
-                            nextAction:
-                                'Wait for the editor language to load before changing breakpoints.'
-                        })
-                    }
-
-                    const targetPath = path ?? emulator.currentFile ?? getEffectiveEntry(context)
-                    const targetFile = getFile(context, targetPath)
-                    const lineCount = targetFile ? getLineCount(targetFile.content) : 1000
-
-                    const current = new Set(
-                        emulator.breakpoints
-                            .filter(
-                                (breakpoint) => !breakpoint.file || breakpoint.file === targetPath
-                            )
-                            .map((breakpoint) => breakpoint.line)
-                    )
-                    const added: number[] = []
-                    const removed: number[] = []
-                    const ignored: number[] = []
-
-                    for (const line of add) {
-                        const lineIndex = line - 1
-                        if (line > lineCount) {
-                            ignored.push(line)
-                            continue
-                        }
-                        if (!current.has(lineIndex)) {
-                            emulator.toggleBreakpoint(lineIndex, targetPath)
-                            current.add(lineIndex)
-                            added.push(line)
-                        }
-                    }
-
-                    for (const line of remove) {
-                        const lineIndex = line - 1
-                        if (line > lineCount) {
-                            ignored.push(line)
-                            continue
-                        }
-                        if (current.has(lineIndex)) {
-                            emulator.toggleBreakpoint(lineIndex, targetPath)
-                            current.delete(lineIndex)
-                            removed.push(line)
-                        }
-                    }
-
-                    const fileBreakpoints = emulator.breakpoints
-                        .filter((breakpoint) => !breakpoint.file || breakpoint.file === targetPath)
-                        .map((breakpoint) => breakpoint.line + 1)
-
-                    return toolRun.success({
-                        path: targetPath,
-                        breakpoints: fileBreakpoints,
-                        allBreakpoints: emulator.breakpoints.map((b) => ({
-                            file: b.file,
-                            line: b.line + 1
-                        })),
-                        added,
-                        removed,
-                        ignored,
-                        lineCount
-                    })
                 })
         }),
         get_line_from_address: tool({

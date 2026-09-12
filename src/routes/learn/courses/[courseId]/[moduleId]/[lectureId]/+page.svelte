@@ -231,7 +231,9 @@
             requiredTools: [
                 'view_file',
                 'compile',
-                'update_breakpoints',
+                'list_breakpoints',
+                'set_breakpoint',
+                'remove_breakpoint',
                 'run_to_completion',
                 'step',
                 'get_emulator_state',

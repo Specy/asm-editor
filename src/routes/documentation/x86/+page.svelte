@@ -22,16 +22,18 @@
         everything of around 2600 mnemonics.
     </p>
     <p class="intro">
-        Programs in asm-editor are written in <a href="https://www.nasm.us/" target="_blank" rel="noreferrer"
-            >NASM</a
+        Programs in asm-editor are written in <a
+            href="https://www.nasm.us/"
+            target="_blank"
+            rel="noreferrer">NASM</a
         >
         syntax, assembled by the NASM assembler, and run by
         <a href="https://github.com/jart/blink" target="_blank" rel="noreferrer">blink</a>, which
         emulates a Linux program. So a program starts at
         <code>_start</code>, its code goes in <code>section .text</code> and its data in
         <code>section .data</code>, and it reaches the outside world through the
-        <code>syscall</code> instruction. It ends by calling syscall 60. A program that runs off the
-        end of its own code executes whatever bytes follow in memory.
+        <code>syscall</code> instruction. It ends by calling syscall 60. A program that runs off the end
+        of its own code executes whatever bytes follow in memory.
     </p>
     <div class="links">
         <NavigationLinkButton href="/documentation/x86/instruction">

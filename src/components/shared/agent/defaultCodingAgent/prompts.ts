@@ -41,7 +41,8 @@ export const DEFAULT_CODING_AGENT_WORKFLOW_DEFINITIONS = {
             'view_file',
             'compile',
             'list_breakpoints',
-            'update_breakpoints',
+            'set_breakpoint',
+            'remove_breakpoint',
             'run_to_completion',
             'step',
             'get_emulator_state',
@@ -210,7 +211,8 @@ function renderCorePrinciples(enabledToolNames: DefaultCodingAgentToolName[]) {
         hasTool(enabledToolNames, 'replace_file_content') ||
         hasTool(enabledToolNames, 'write_to_file')
     const canManageBreakpoints =
-        hasTool(enabledToolNames, 'update_breakpoints') ||
+        hasTool(enabledToolNames, 'set_breakpoint') ||
+        hasTool(enabledToolNames, 'remove_breakpoint') ||
         hasTool(enabledToolNames, 'list_breakpoints')
 
     return [
@@ -224,7 +226,7 @@ function renderCorePrinciples(enabledToolNames: DefaultCodingAgentToolName[]) {
         '- Tool results are authoritative. Do not say the editor changed, the code compiles, or the bug is fixed unless a tool result confirms it.',
         '- Follow tool errorKind and nextAction fields. A compile_error means fix assembler errors; execution_state usually means compile/reset first; emulator_unavailable means wait or explain that the emulator is still loading.',
         canManageBreakpoints
-            ? '- Use breakpoints as inspection points. Manage breakpoints with update_breakpoints and inspect active breakpoints with list_breakpoints (which shows surrounding instructions). The emulator stops at the breakpoint line before executing that instruction. Specify the file path when working with multiple files.'
+            ? '- Use breakpoints as inspection points. Set breakpoints with set_breakpoint (by instruction, address, or line) and remove them with remove_breakpoint. Inspect active breakpoints with list_breakpoints (which shows surrounding instructions). The emulator stops at the breakpoint line before executing that instruction. Specify the file path when working with multiple files.'
             : ''
     ]
         .filter(Boolean)
@@ -248,8 +250,11 @@ function renderToolSelectionTips(enabledToolNames: DefaultCodingAgentToolName[])
         hasTool(enabledToolNames, 'list_breakpoints')
             ? '- Use list_breakpoints to see all active breakpoints and the surrounding code (previous and next 3 instructions), clearly marking the breakpoint line.'
             : '',
-        hasTool(enabledToolNames, 'update_breakpoints')
-            ? '- Use update_breakpoints to add or remove breakpoints by 1-based line number in a file.'
+        hasTool(enabledToolNames, 'set_breakpoint')
+            ? '- Use set_breakpoint to set breakpoints by instruction text, address, or line number without manual counting.'
+            : '',
+        hasTool(enabledToolNames, 'remove_breakpoint')
+            ? '- Use remove_breakpoint to remove a breakpoint by instruction, address, line, or pass all: true to clear all breakpoints.'
             : '',
         hasTool(enabledToolNames, 'step') && hasTool(enabledToolNames, 'run_to_completion')
             ? '- step and run_to_completion already return registers, pc, sp, status registers, stdout, current line, and latestSteps. Call get_emulator_state after them only when you need callStack, breakpoints, canUndo, currentInterrupt, or a full refresh.'
@@ -258,7 +263,8 @@ function renderToolSelectionTips(enabledToolNames: DefaultCodingAgentToolName[])
             ? '- Use read_memory only when register/stdout state is insufficient, such as inspecting arrays, strings, the stack, or data sections.'
             : '',
         hasTool(enabledToolNames, 'run_to_completion') &&
-        hasTool(enabledToolNames, 'update_breakpoints')
+        (hasTool(enabledToolNames, 'set_breakpoint') ||
+            hasTool(enabledToolNames, 'list_breakpoints'))
             ? '- run_to_completion respects breakpoints and halts before executing the instruction on the breakpoint line. Set breakpoints on real instruction lines, not comments or blank lines.'
             : '',
         hasTool(enabledToolNames, 'step') && hasTool(enabledToolNames, 'undo')

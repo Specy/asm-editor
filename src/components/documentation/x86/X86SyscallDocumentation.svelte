@@ -64,8 +64,9 @@
 
     <h2 class="section-title" id="all">Everything this emulator implements</h2>
     <p class="note">
-        Those syscalls are what the emulator implements, anything
-        missing returns <code>-ENOSYS</code>.
+        Those syscalls are what the emulator implements, anything missing returns <code
+            >-ENOSYS</code
+        >.
     </p>
     <div class="table-scroll">
         <table>

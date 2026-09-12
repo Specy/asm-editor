@@ -3,17 +3,49 @@ import { AssemblyCodingHarness } from './harness'
 import type { Emulator } from '$lib/languages/Emulator'
 import { InterpreterStatus } from '$lib/languages/commonLanguageFeatures.svelte'
 
-function createMockEmulator(initialCode = ''): Emulator {
-    let code = initialCode
-    let sources: any = {
-        files: { 'main.s': { encoding: 'plain', content: initialCode } },
-        entry: 'main.s'
-    }
+interface ToolExecutionResult {
+    success?: boolean
+    error?: string
+    errorKind?: string
+    path?: string
+    file?: string
+    line?: number
+    lineCount?: number
+    startLine?: number
+    endLine?: number
+    returnedLines?: number
+    hasMore?: boolean
+    nextStartLine?: number | null
+    code?: string
+    files?: Array<{ path: string; isEntry?: boolean }>
+    count?: number
+    breakpoints?: Array<{
+        file: string
+        line: number
+        isOutOfBounds?: boolean
+        snippet: string
+        context: Array<{ line: number; text: string; isBreakpoint: boolean }>
+    }>
+    snippet?: string
+    context?: Array<{ line: number; text: string; isBreakpoint: boolean }>
+    alreadySet?: boolean
+    removed?: boolean
+    removedCount?: number
+    totalBreakpoints?: number
+    added?: number[]
+    deleted?: string
+    address?: string
+    lineNumber?: number
+    stepsRequested?: number
+    [key: string]: unknown
+}
+
+function createMockEmulator(_initialCode = ''): Emulator {
     let line = 0
     let pc = 0x1000n
-    let sp = 0x2000n
+    const sp = 0x2000n
     let canExecute = true
-    let terminated = false
+    const terminated = false
     const breakpoints: { file: string; line: number }[] = []
 
     return {
@@ -36,17 +68,13 @@ function createMockEmulator(initialCode = ''): Emulator {
         registers: [],
         latestSteps: [],
         executionTime: 0,
-        systemSize: 4 as any,
-        peripherals: {} as any,
+        systemSize: 4 as Emulator['systemSize'],
+        peripherals: {} as Emulator['peripherals'],
         clear: vi.fn(() => {
             breakpoints.length = 0
         }),
-        setCode: vi.fn((newCode: string) => {
-            code = newCode
-        }),
-        setSources: vi.fn((newSources: any) => {
-            sources = newSources
-        }),
+        setCode: vi.fn((_newCode: string) => {}),
+        setSources: vi.fn((_newSources: unknown) => {}),
         check: vi.fn(async () => []),
         compile: vi.fn(async () => {
             canExecute = true
@@ -63,7 +91,7 @@ function createMockEmulator(initialCode = ''): Emulator {
         dispose: vi.fn(),
         test: vi.fn(async () => []),
         getLineFromAddress: vi.fn(() => 0),
-        getSourceLocationFromAddress: vi.fn((addr: bigint) => ({ file: 'main.s', line: 0 })),
+        getSourceLocationFromAddress: vi.fn((_addr: bigint) => ({ file: 'main.s', line: 0 })),
         readMemoryBytes: vi.fn(() => new Uint8Array([0x12, 0x34])),
         setGlobalMemoryAddress: vi.fn(),
         setTabMemoryAddress: vi.fn(),
@@ -160,7 +188,7 @@ describe('AssemblyCodingHarness', () => {
             path: 'main.s',
             start_line: 2,
             end_line: 3
-        })) as any
+        })) as unknown as ToolExecutionResult
 
         expect(viewResult.success).toBe(true)
         expect(viewResult.startLine).toBe(2)
@@ -173,7 +201,7 @@ describe('AssemblyCodingHarness', () => {
             path: 'main.s',
             target_content: 'line 2',
             replacement_content: 'modified line 2'
-        })) as any
+        })) as unknown as ToolExecutionResult
         expect(replaceResult.success).toBe(true)
         expect(harness.getFile('main.s')).toBe('line 1\nmodified line 2\nline 3')
 
@@ -181,25 +209,48 @@ describe('AssemblyCodingHarness', () => {
         const writeResult = (await harness.executeTool('write_to_file', {
             path: 'new_module.s',
             code: 'module_entry:\n    rts'
-        })) as any
+        })) as unknown as ToolExecutionResult
         expect(writeResult.success).toBe(true)
         expect(harness.getFile('new_module.s')).toBe('module_entry:\n    rts')
 
         // list_files
-        const listResult = (await harness.executeTool('list_files', {})) as any
+        const listResult = (await harness.executeTool(
+            'list_files',
+            {}
+        )) as unknown as ToolExecutionResult
         expect(listResult.success).toBe(true)
         expect(listResult.files).toHaveLength(2)
-        expect(listResult.files.map((f: any) => f.path)).toContain('main.s')
-        expect(listResult.files.map((f: any) => f.path)).toContain('new_module.s')
+        expect(listResult.files?.map((f) => f.path)).toContain('main.s')
+        expect(listResult.files?.map((f) => f.path)).toContain('new_module.s')
 
         // list_breakpoints
         mockEmulator.toggleBreakpoint(1, 'main.s')
-        const bpResult = (await harness.executeTool('list_breakpoints', {})) as any
+        const bpResult = (await harness.executeTool(
+            'list_breakpoints',
+            {}
+        )) as unknown as ToolExecutionResult
         expect(bpResult.success).toBe(true)
         expect(bpResult.count).toBe(1)
-        expect(bpResult.breakpoints[0].line).toBe(2)
-        expect(bpResult.breakpoints[0].snippet).toContain(
+        expect(bpResult.breakpoints?.[0]?.line).toBe(2)
+        expect(bpResult.breakpoints?.[0]?.snippet).toContain(
             '=>    2 | modified line 2  <-- [BREAKPOINT]'
         )
+
+        // set_breakpoint by instruction
+        const setBpResult = (await harness.executeTool('set_breakpoint', {
+            path: 'main.s',
+            instruction: 'line 3'
+        })) as unknown as ToolExecutionResult
+        expect(setBpResult.success).toBe(true)
+        expect(setBpResult.line).toBe(3)
+        expect(setBpResult.snippet).toContain('=>    3 | line 3  <-- [BREAKPOINT]')
+
+        // remove_breakpoint by instruction
+        const remBpResult = (await harness.executeTool('remove_breakpoint', {
+            path: 'main.s',
+            instruction: 'line 3'
+        })) as unknown as ToolExecutionResult
+        expect(remBpResult.success).toBe(true)
+        expect(remBpResult.removed).toBe(true)
     })
 })

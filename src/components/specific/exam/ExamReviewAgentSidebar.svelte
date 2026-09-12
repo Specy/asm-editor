@@ -391,7 +391,7 @@ When the professor asks whether the submitted assembly works, why it fails, or h
 2. Continue only if get_current_exam_result says the current visible exercise is assembly coding and canUseAssemblyDebugTools is true. If not, do not use emulator tools.
 3. If canRunExamTestcases is true, call run_exam_testcases first and summarize pass/fail evidence.
 4. Compile first before any run_to_completion or step call.
-5. Use compile, run_to_completion, update_breakpoints, step, get_emulator_state, read_memory, and get_line_from_address to observe actual behavior.
+5. Use compile, run_to_completion, list_breakpoints, set_breakpoint, remove_breakpoint, step, get_emulator_state, read_memory, and get_line_from_address to observe actual behavior.
 6. Ground conclusions in observed stdout, registers, flags, memory, and source lines.
 7. Do not edit the code; code editing tools are not available in review mode. Do not provide fixes, corrected code, implementation hints, or recommendations.
 `
@@ -415,7 +415,9 @@ When the professor asks whether the submitted assembly works, why it fails, or h
         'step',
         'run_to_completion',
         'undo',
-        'update_breakpoints',
+        'list_breakpoints',
+        'set_breakpoint',
+        'remove_breakpoint',
         'get_line_from_address',
         'compile',
         'read_memory'

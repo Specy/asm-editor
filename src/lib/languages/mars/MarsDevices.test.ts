@@ -232,7 +232,13 @@ describe('the MARS bitmap display flush', () => {
     it('collapses to one span when the stores are scattered over more runs than the cap', () => {
         //a grid with more blocks than the cap, so alternating blocks make too many runs to be
         //worth a call each
-        const many = { ...DEFAULT_PROJECT_DISPLAY, width: 256, height: 40, unitWidth: 1, unitHeight: 1 }
+        const many = {
+            ...DEFAULT_PROJECT_DISPLAY,
+            width: 256,
+            height: 40,
+            unitWidth: 1,
+            unitHeight: 1
+        }
         const { store, reads, devices } = makeFramebuffer(many)
         for (let block = 0; block < 40; block += 2) store(block * BLOCK, 0x111111)
         devices.flush()

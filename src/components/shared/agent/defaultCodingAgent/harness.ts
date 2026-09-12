@@ -4,7 +4,6 @@ import type { FileSystem } from '$lib/languages/peripherals/FileSystem'
 import { fileText, type ProjectFiles, type ProjectFile } from '$lib/projectFiles'
 import { defaultEntryPath } from '$lib/Project.svelte'
 import {
-    DEFAULT_CODING_AGENT_TOOL_NAMES,
     type AgentToolAllowList,
     type DefaultCodingAgentToolContext,
     type DefaultCodingAgentToolName,
