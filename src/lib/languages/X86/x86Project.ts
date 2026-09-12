@@ -75,6 +75,30 @@ export function stageLegacyX86ProjectFiles(
     stagedFiles.set(module, current)
 }
 
+/**
+ * Extensions that make a File assembler input in its own right, mirroring the rule the Core
+ * applies when it decides what to assemble. `.inc` is absent from both: it is what an include
+ * fragment is conventionally called, and a fragment is assembled as part of whatever includes it.
+ */
+const SOURCE_EXTENSIONS = ['.asm', '.s', '.nasm']
+
+/**
+ * The Files the Core assembles separately and links together, which is what makes `global` in one
+ * File resolve an `extern` in another. This is the editor's own view of the build, for telling
+ * someone which Files are part of their program; NASM still decides what it reads and `ld` still
+ * decides what links.
+ */
+export function x86TranslationUnits(sources: BuildSources): string[] {
+    const others = Object.keys(sources.files)
+        .filter((path) => path !== sources.entry)
+        .filter((path) => sources.files[path]?.encoding === 'plain')
+        .filter((path) =>
+            SOURCE_EXTENSIONS.some((extension) => path.toLowerCase().endsWith(extension))
+        )
+        .sort()
+    return [sources.entry, ...others]
+}
+
 function resolveInclude(
     containingPath: string,
     writtenPath: string,

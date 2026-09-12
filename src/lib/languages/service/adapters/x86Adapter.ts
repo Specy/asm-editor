@@ -5,6 +5,7 @@ import {
     stageLegacyX86ProjectFiles,
     toX86Project,
     x86SourceLineAt,
+    x86TranslationUnits,
     type X86ProjectInput,
     type X86SourceLine
 } from '$lib/languages/X86/x86Project'
@@ -40,11 +41,26 @@ export function x86DiagnosticToLanguageDiagnostic(
 let checker: Awaited<ReturnType<typeof createX86Emulator>> | undefined
 
 /** Runs NASM against the Core's virtual Project filesystem. */
-/** The include closure of the Entry, or `undefined` when the walk could not resolve all of it. */
+/**
+ * The Files the build assembles: every translation unit, plus everything each of them includes.
+ * `undefined` when the Entry's own walk could not resolve all of it, which is the case where
+ * nothing honest can be said about the rest.
+ *
+ * Only the Entry's walk decides that. The other units are assembled whether or not the editor can
+ * follow their includes, so their walks can only add Files, never take the answer away.
+ */
 function tryReachableX86Files(sources: BuildSources): Set<string> | undefined {
     try {
-        const walked = expandLegacyX86Project(sources)
-        return walked.diagnostics.length === 0 ? walked.reached : undefined
+        const entryWalk = expandLegacyX86Project(sources)
+        if (entryWalk.diagnostics.length) return undefined
+        const reached = new Set(entryWalk.reached)
+        for (const path of x86TranslationUnits(sources)) {
+            if (reached.has(path)) continue
+            for (const file of expandLegacyX86Project({ ...sources, entry: path }).reached) {
+                reached.add(file)
+            }
+        }
+        return reached
     } catch {
         return undefined
     }

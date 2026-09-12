@@ -42,7 +42,7 @@
         "@specy/mips": "3.3.0",
         "@specy/risc-v": "3.3.0",
         "@specy/s68k": "2.2.1",
-        "@specy/x86": "^2.2.1",
+        "@specy/x86": "^2.3.0",
         "@specy/z80": "1.0.1",
         "@ungap/structured-clone": "^1.4.0",
         "@xterm/xterm": "^6.0.0",
