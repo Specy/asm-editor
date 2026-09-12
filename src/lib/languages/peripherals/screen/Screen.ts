@@ -419,19 +419,56 @@ export class Screen {
             return
         }
         this.journalPatch('drawing', this.fullRect())
-        const pending = [startX + startY * this._width]
-        while (pending.length > 0) {
-            const offset = pending.pop() as number
-            const px = offset % this._width
-            const py = (offset - px) / this._width
-            if (this.getPixel(px, py) !== target) continue
-            this.paint(this.drawing, px, py, this._fillColor)
-            if (px > 0) pending.push(offset - 1)
-            if (px < this._width - 1) pending.push(offset + 1)
-            if (py > 0) pending.push(offset - this._width)
-            if (py < this._height - 1) pending.push(offset + this._width)
+        //a run at a time rather than a pixel at a time: the region is the same four-way connected
+        //one, but each row of it is filled as words and only one seed per run of the rows above and
+        //below goes on the stack, instead of four neighbours for every pixel visited. Comparing
+        //packed words is comparing colors because every write to an image is opaque — `paint`,
+        //`fillImage`, `fillRegion` and `syncFramebuffer` all set alpha to 255
+        const words = imageWords(this.drawing)
+        const width = this._width
+        const height = this._height
+        const targetWord = words[startY * width + startX]
+        const fillWord = packColor(this._fillColor)
+        const stack: number[] = [startX, startY]
+        while (stack.length > 0) {
+            const y = stack.pop() as number
+            const x = stack.pop() as number
+            const row = y * width
+            if (words[row + x] !== targetWord) continue
+            let from = x
+            while (from > 0 && words[row + from - 1] === targetWord) from--
+            let to = x
+            while (to < width - 1 && words[row + to + 1] === targetWord) to++
+            words.fill(fillWord, row + from, row + to + 1)
+            if (y > 0) this.seedRun(words, stack, y - 1, from, to, targetWord)
+            if (y < height - 1) this.seedRun(words, stack, y + 1, from, to, targetWord)
         }
         this.markDrawn()
+    }
+
+    /**
+     * Puts one seed on the flood fill's stack per run of `targetWord` in `[from, to]` of row `y`.
+     * One per run rather than one per pixel is the whole difference: a row of a thousand pixels
+     * still to fill costs one stack entry.
+     */
+    private seedRun(
+        words: Uint32Array,
+        stack: number[],
+        y: number,
+        from: number,
+        to: number,
+        targetWord: number
+    ): void {
+        const row = y * this._width
+        let x = from
+        while (x <= to) {
+            if (words[row + x] !== targetWord) {
+                x++
+                continue
+            }
+            stack.push(x, y)
+            while (x <= to && words[row + x] === targetWord) x++
+        }
     }
 
     /**
@@ -521,8 +558,10 @@ export class Screen {
         const width = this._cell.width * [...text].length
         this.journalPatch('drawing', { x: left, y: top, width, height: this._cell.height })
         let cellX = left
+        //one word view for the whole label, not one a glyph
+        const words = imageWords(this.drawing)
         for (const character of text) {
-            this.paintGlyph(cellX, top, character.codePointAt(0) ?? 0, false)
+            this.paintGlyph(words, cellX, top, character.codePointAt(0) ?? 0, false)
             cellX += this._cell.width
         }
         this.markDrawn()
@@ -780,14 +819,73 @@ export class Screen {
             const dy = (y + 0.5 - centerY) / radiusY
             return dx * dx + dy * dy <= 1
         }
+        /**
+         * The inside pixels of one row, which for an ellipse are always one interval. Solving for
+         * the interval instead of testing every pixel of the bounding box is what lets the interior
+         * be a word fill; the square root can land a boundary pixel on the wrong side, so the ends
+         * are walked out against `inside` itself and the shape is the predicate's, not the solver's.
+         */
+        const span = (y: number): [number, number] | null => {
+            if (y < top || y >= bottom) return null
+            const dy = (y + 0.5 - centerY) / radiusY
+            const remaining = 1 - dy * dy
+            if (remaining < 0) return null
+            const half = radiusX * Math.sqrt(remaining)
+            let from = Math.max(left, Math.ceil(centerX - half - 0.5))
+            let to = Math.min(right - 1, Math.floor(centerX + half - 0.5))
+            while (from > left && inside(from - 1, y)) from--
+            while (from <= to && !inside(from, y)) from++
+            while (to < right - 1 && inside(to + 1, y)) to++
+            while (to >= from && !inside(to, y)) to--
+            return to < from ? null : [from, to]
+        }
+        let previous = span(top - 1)
+        let current = span(top)
         for (let y = top; y < bottom; y++) {
-            for (let x = left; x < right; x++) {
-                if (!inside(x, y)) continue
-                if (filled) this.paint(this.drawing, x, y, this._fillColor)
-                const border =
-                    !inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || !inside(x, y + 1)
-                if (border) this.stampPen(x, y)
+            const next = span(y + 1)
+            if (current !== null) {
+                const [from, to] = current
+                //a pixel is border when one of its four neighbours is outside: within the row that
+                //is the two ends, and vertically it is whatever the rows above and below leave
+                //uncovered, which is the same set the four-neighbour test picked out
+                const coveredFrom = Math.max(
+                    previous === null ? Infinity : previous[0],
+                    next === null ? Infinity : next[0]
+                )
+                const coveredTo = Math.min(
+                    previous === null ? -Infinity : previous[1],
+                    next === null ? -Infinity : next[1]
+                )
+                if (filled && this._penWidth > 1) {
+                    //a pen wider than one pixel reaches its neighbours, and then the order the two
+                    //colors go down in is visible: GDI fills a pixel and stamps it before moving on,
+                    //so a stamp survives on the pixel to its right only until that one is filled.
+                    //The row is still only its inside pixels, and the border test is still the
+                    //spans, so this is the old order without the old bounding-box walk
+                    for (let x = from; x <= to; x++) {
+                        this.paint(this.drawing, x, y, this._fillColor)
+                        if (x === from || x === to || x < coveredFrom || x > coveredTo) {
+                            this.stampPen(x, y)
+                        }
+                    }
+                } else {
+                    if (filled) {
+                        this.fillRegion(
+                            { x: from, y, width: to - from + 1, height: 1 },
+                            this._fillColor
+                        )
+                    }
+                    const leftRun = Math.min(to, coveredFrom - 1)
+                    for (let x = from; x <= leftRun; x++) this.stampPen(x, y)
+                    const rightRun = Math.max(from, coveredTo + 1)
+                    for (let x = Math.max(rightRun, leftRun + 1); x <= to; x++) this.stampPen(x, y)
+                    //the ends themselves, when neither run reached them
+                    if (from > leftRun) this.stampPen(from, y)
+                    if (to < rightRun) this.stampPen(to, y)
+                }
             }
+            previous = current
+            current = next
         }
         this.markDrawn()
     }
@@ -868,6 +966,7 @@ export class Screen {
         let column = this._cursorColumn
         let row = this._cursorRow
         let scrolled = false
+        let words: Uint32Array | null = null
         let minColumn = Number.POSITIVE_INFINITY
         let minRow = Number.POSITIVE_INFINITY
         let maxColumn = Number.NEGATIVE_INFINITY
@@ -891,7 +990,15 @@ export class Screen {
                 continue
             }
             if (commit) {
-                this.paintGlyph(column * this._cell.width, row * this._cell.height, code, true)
+                //`scrollUp` moves the image inside the same buffer, so the view stays this one's
+                words ??= imageWords(this.drawing)
+                this.paintGlyph(
+                    words,
+                    column * this._cell.width,
+                    row * this._cell.height,
+                    code,
+                    true
+                )
             }
             minColumn = Math.min(minColumn, column)
             maxColumn = Math.max(maxColumn, column)
@@ -923,15 +1030,34 @@ export class Screen {
      * background first, the way a terminal cell is opaque, so scrolled rows leave nothing behind;
      * text at a pixel position draws only the glyph, so a label can sit on a drawing.
      */
-    private paintGlyph(x: number, y: number, code: number, opaque: boolean): void {
+    private paintGlyph(
+        words: Uint32Array,
+        x: number,
+        y: number,
+        code: number,
+        opaque: boolean
+    ): void {
         const rows = glyphRows(code, this._cell.height)
-        for (let row = 0; row < rows.length; row++) {
-            for (let column = 0; column < this._cell.width; column++) {
-                const lit = (rows[row] & (1 << column)) !== 0
-                if (lit) this.paint(this.drawing, x + column, y + row, this._penColor)
-                else if (opaque) {
-                    this.paint(this.drawing, x + column, y + row, this._backgroundColor)
-                }
+        //the cell is clipped once and then written as words, rather than clipping and storing four
+        //bytes per pixel: a cell is a hundred and twenty-eight pixels and a run of text is one per
+        //character. The word view is the caller's, so a line of text builds one instead of one a
+        //glyph — the array it views cannot be replaced inside a text run, since a scroll moves the
+        //image within the same buffer
+        const clipped = this.clip({ x, y, width: this._cell.width, height: rows.length })
+        if (clipped === null) return
+        const penWord = packColor(this._penColor)
+        const paperWord = packColor(this._backgroundColor)
+        const firstColumn = clipped.x - x
+        const lastColumn = firstColumn + clipped.width
+        const firstRow = clipped.y - y
+        const lastRow = firstRow + clipped.height
+        for (let row = firstRow; row < lastRow; row++) {
+            const bits = rows[row]
+            if (bits === 0 && !opaque) continue
+            const base = (y + row) * this._width + x
+            for (let column = firstColumn; column < lastColumn; column++) {
+                if ((bits & (1 << column)) !== 0) words[base + column] = penWord
+                else if (opaque) words[base + column] = paperWord
             }
         }
     }

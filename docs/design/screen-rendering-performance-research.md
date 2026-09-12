@@ -545,3 +545,76 @@ rectangle, which takes the word path. A span-based filled ellipse was prototyped
 pixel-identical across 270 shapes: 3.4× at 40 × 40, 42.7× at 300 × 300 and **98.7× at 600 × 600**,
 where it is 17.0 ms against 172 µs. `floodFill` wants the same treatment as a scanline fill, and
 `paintGlyph` paints a cell's opaque background a byte at a time.
+
+# The pixel runs, 2026-09-12
+
+The fourth round, and the last item the third one left open: three operations that write contiguous
+runs of pixels but went through `paint` — a bounds check and four byte stores — for each one. The
+second round had converted bulk fills to the `Uint32Array` word path and explicitly left single
+pixels alone, having measured that routing _scattered_ pixels through it is only 1.13× because the
+bounds check dominates. That is true, and it does not apply to a run, where the clipping is settled
+once for the whole thing.
+
+## What was changed
+
+**The filled ellipse now solves each row instead of testing every pixel of the bounding box.** The
+inside pixels of a row of an ellipse are always one interval, so `1 - dy²` gives its half-width and
+the interior is a `words.fill`. Two details make it exact rather than approximately right:
+
+- The square root can land a boundary pixel on the wrong side, so each end of the interval is walked
+  out against the original `inside` predicate. The shape is the predicate's, not the solver's.
+- The border is still "an inside pixel with an outside neighbour", but read off the spans: within
+  the row that is the two ends, and vertically it is whatever the rows above and below leave
+  uncovered — `[from, max(prevFrom, nextFrom) - 1]` and `[min(prevTo, nextTo) + 1, to]`.
+
+**A pen wider than one pixel keeps the old loop**, and this is the part worth knowing about. GDI
+fills a pixel and stamps it before moving to the next, so a stamp survives on the pixel to its right
+only until that pixel is filled. Filling the whole row first and stamping afterwards leaves those
+pixels pen instead of fill — two of them on a 16 × 12 test ellipse, which is what the differential
+run caught. The wide-pen path still gets the spans, so it walks the ellipse rather than its bounding
+box; it just keeps the interleave.
+
+**`floodFill` is a scanline fill.** It walked one pixel at a time, pushing four neighbours per
+visited pixel onto a JavaScript array and reassembling a color through `getPixel` per pop. It now
+fills a run at a time as words and seeds one entry per run of the rows above and below. Comparing
+packed words is comparing colors because every write to an image is opaque.
+
+**A glyph cell is clipped once and written as words.** `paintGlyph` clipped and stored four bytes
+per pixel, a hundred and twenty-eight times a character. The word view is now the caller's, built
+once per text run rather than once per glyph — a scroll moves the image inside the same buffer, so
+the view stays valid for the whole run. The first attempt at this, filling the cell background
+through `fillRegion` and painting only the lit pixels, measured **1.0×**: it built a word view per
+character, and that allocation ate the win.
+
+## Measured, node v24.18.1, 640 × 480, journal off
+
+| Operation                               |    before |    after |       |
+| --------------------------------------- | --------: | -------: | ----: |
+| `floodFill` over the whole image        | 29.116 ms | 2.049 ms | 14.2× |
+| `floodFill` inside a 300 × 300 box      |  7.375 ms | 423.9 µs | 17.4× |
+| filled ellipse inscribed in the image   | 10.283 ms | 282.0 µs | 36.5× |
+| filled ellipse 300 × 300                |  3.002 ms | 107.0 µs | 28.1× |
+| filled ellipse 100 × 100                |  302.5 µs |  29.5 µs | 10.2× |
+| filled ellipse 40 × 40 (the ball)       |   39.3 µs |  11.0 µs |  3.6× |
+| unfilled ellipse 300 × 300              |  1.833 ms |  33.7 µs | 54.5× |
+| filled ellipse 300 × 300, pen 3         |  2.199 ms | 565.0 µs |  3.9× |
+| a 4000-character text run               |  5.133 ms | 3.432 ms |  1.5× |
+| a 200-character text run                |  267.0 µs | 168.7 µs |  1.6× |
+| `drawText`, 40 characters at a position |   18.5 µs |  10.8 µs |  1.7× |
+
+A filled ellipse the size of the Screen was two frame budgets and is now a sixtieth of one.
+
+## Pixel output is unchanged
+
+406 scripts run through the Screen as it was and the Screen as it is, comparing every byte of both
+images and the pen and cursor position after each: ellipses from 2 to 60 pixels square and from
+1 × 1 to 40 × 33, filled and unfilled, pen widths 1 to 8, clipped off all four edges and degenerate;
+flood fills bounded by a border, around an obstacle, through a U that has to come back up, through a
+one-pixel channel, through a comb of columns, from a corner, outside the Screen and onto its own
+color; text that wraps, scrolls and clips at each edge, every glyph in the font, two cell sizes; and
+a scene using all three. **406/406 identical.**
+
+Three repository tests were added for the cases a differential run cannot be kept for: the two
+pixels that distinguish the wide-pen order, a U-shaped flood fill that only a seeded row above can
+finish, and a glyph clipped at each of the four edges. Each was checked by mutation — bypassing the
+wide-pen interleave, seeding only the row below, and ignoring the glyph clip each fail exactly one.
