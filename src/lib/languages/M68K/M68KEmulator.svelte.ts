@@ -2,12 +2,12 @@ import {
     ccrToFlagsArray,
     type ExecutionStep as CoreExecutionStep,
     type InstructionLine,
-    type Interpreter,
+    Interpreter,
     InterpreterStatus as CoreInterpreterStatus,
     type Interrupt,
     type RegisterOperand,
+    type Program,
     S68k,
-    type SemanticError,
     Size
 } from '@specy/s68k'
 import {
@@ -22,6 +22,7 @@ import {
     sliceInstructionBudget
 } from '$lib/languages/ExecutionSlice'
 import {
+    type BuildArtifact,
     type Diagnostic,
     type EmulatorDecoration,
     type EmulatorSettings,
@@ -49,6 +50,9 @@ import { echoToScreen } from '$lib/languages/peripherals/screen/textEcho'
 import { ScreenInstructionHistory } from '$lib/languages/peripherals/screen/ScreenInstructionHistory'
 import type { Testcase } from '$lib/Project.svelte'
 import { preferencesStore } from '$stores/preferencesStore.svelte'
+import type { BuildInput, BuildSources } from '$lib/projectFiles'
+import { m68kAssemblyFiles } from './m68kAssemblyFiles'
+import { s68kDiagnosticToDiagnostic } from './m68kDiagnostics'
 
 export const registerName = [
     'D0',
@@ -98,12 +102,12 @@ const sizeMap = {
     [Size.Long]: RegisterSize.Long
 } satisfies Record<Size, RegisterSize>
 
-export function M68KEmulator(baseCode: string, options: EmulatorSettings = {}) {
-    return new AsmEditorM68KEmulator(baseCode, options)
+export function M68KEmulator(source: BuildInput, options: EmulatorSettings = {}) {
+    return new AsmEditorM68KEmulator(source, options)
 }
 
 class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterName> {
-    private s68k: S68k | null = null
+    private program: Program | null = null
     private interpreter: Interpreter | null = null
     private screenInstructions: ScreenInstructionHistory | null = null
     /**
@@ -119,9 +123,9 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
      */
     private graphical = false
 
-    constructor(code: string, options: EmulatorSettings) {
+    constructor(source: BuildInput, options: EmulatorSettings) {
         super(
-            code,
+            source,
             {
                 systemSize: RegisterSize.Long,
                 registerNames: [...registerName],
@@ -176,33 +180,44 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         )
     }
 
-    _checkCode(code: string): Diagnostic[] {
-        return S68k.semanticCheck(code).map(semanticErrorToDiagnostic)
+    _checkCode(sources: BuildSources): Diagnostic[] {
+        const result = S68k.assemble({ files: m68kAssemblyFiles(sources), entry: sources.entry })
+        result.program?.dispose()
+        return result.diagnostics.map((diagnostic) =>
+            s68kDiagnosticToDiagnostic(diagnostic, sources)
+        )
     }
 
-    _compile(code: string): CompileResult {
-        this.s68k = null
+    _compile(sources: BuildSources): CompileResult {
+        //Both hold WebAssembly memory the host never reclaims on its own, so the Interpreter is
+        //disposed here as well as in `_dispose`: a Build replaces it, and the edit/Build loop would
+        //otherwise abandon one interpreter's linear memory per Build.
+        this.interpreter?.dispose()
+        this.program?.dispose()
+        this.program = null
         this.interpreter = null
-        const s68k = new S68k(code)
-        const diagnostics = s68k.semanticCheck().map(semanticErrorToDiagnostic)
-        if (diagnostics.length > 0) {
+        const result = S68k.assemble({ files: m68kAssemblyFiles(sources), entry: sources.entry })
+        const diagnostics = result.diagnostics.map((diagnostic) =>
+            s68kDiagnosticToDiagnostic(diagnostic, sources)
+        )
+        if (!result.program) {
             return {
                 ok: false,
                 diagnostics,
                 report: diagnostics.map((diagnostic) => diagnostic.formatted).join('\n')
             }
         }
-        this.s68k = s68k
-        return { ok: true }
+        this.program = result.program
+        return { ok: true, diagnostics }
     }
 
     _initialize(undoSize: number): void {
-        const s68k = this.s68k
-        if (!s68k) throw new Error('Interpreter not initialized')
+        const program = this.program
+        if (!program) throw new Error('Interpreter not initialized')
         //a run starts with the input prompt every M68K program has always had; the first graphics,
         //keyboard or mouse task moves input to the focused Screen instead (see `useScreenInput`)
         this._peripherals.terminal.usePromptInput()
-        this.interpreter = s68k.createInterpreter({
+        this.interpreter = new Interpreter(program, {
             history_size: undoSize,
             keep_history: undoSize > 0
         })
@@ -210,8 +225,10 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     }
 
     _dispose(): void {
+        this.interpreter?.dispose()
+        this.program?.dispose()
         this.interpreter = null
-        this.s68k = null
+        this.program = null
     }
 
     _getCallStack(): StackFrame[] {
@@ -219,7 +236,8 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             this.interpreter?.getCallStack().map((frame, i) => ({
                 address: BigInt(frame.address),
                 name: frame.label_name,
-                line: frame.label_line,
+                line: frame.label_location?.line ?? -1,
+                file: frame.label_location?.file,
                 sp: BigInt(frame.registers[15]),
                 destination: BigInt(frame.source_address),
                 color: makeLabelColor(i, frame.address)
@@ -230,6 +248,24 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     _getCompiledCode(): { decorations: EmulatorDecoration[]; code: string } {
         //M68K has no pseudo instructions, so there is nothing to decorate nor any generated code to show
         return { decorations: [], code: '' }
+    }
+
+    protected _getBuildArtifacts(): BuildArtifact[] {
+        const interpreter = this.interpreter
+        const program = this.program
+        if (!interpreter || !program) return []
+        const result: BuildArtifact[] = []
+        const info = program.getInfo()
+        for (const address of m68kInstructionAddresses(program, interpreter, info)) {
+            const instruction = interpreter.getInstructionAt(address)
+            if (!instruction || instruction.size <= 0) continue
+            result.push({
+                file: instruction.location.file,
+                line: instruction.location.line,
+                address: BigInt(address)
+            })
+        }
+        return result
     }
 
     _getFlags(): { name: string; value: number; prev?: number }[] {
@@ -311,6 +347,8 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         return (
             this.interpreter?.getUndoHistory(max).map((step) => ({
                 ...step,
+                line: step.location?.line ?? -1,
+                file: step.location?.file,
                 mutations: step.mutations.map(convertMutation)
             })) ?? []
         )
@@ -377,7 +415,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         const interpreter = this.requireInterpreter()
         const budget = sliceInstructionBudget(request, M68K_INSTRUCTIONS_PER_MS)
         const isLastSlice = budget >= request.instructionBudget
-        const parsedBreakpoints = new Uint32Array(request.breakpoints)
+        const parsedBreakpoints = request.breakpoints
         const hasBreakpoints = parsedBreakpoints.length > 0
         const execution = this.executionController.capture()
         //a trap is one instruction of progress but can be a whole screen of work, so the budget says
@@ -413,6 +451,11 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             //an interrupt is one instruction of progress: without it a program that does nothing but
             //trap would never reach the run's limit, which is what the old unaccounted loop did
             instructions += 1
+            //`simhalt` is a resumable program pause. End this Run here; the Core advances past the
+            //directive before pausing, so a later Run or Step continues with the next instruction.
+            if (interpreter.getStatus() === CoreInterpreterStatus.Paused) {
+                return { reason: 'paused', instructions }
+            }
             const wait = await this.handleInterpreterInterruption(interpreter, execution)
             //a Delay is program time, not execution: the scheduler awaits it between slices, so the
             //GUI keeps repainting and Stop still answers while it runs (ADR 0007, ADR 0010)
@@ -427,6 +470,11 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         const execution = this.executionController.capture()
         while (!interpreter.hasTerminated()) {
             interpreter.runWithLimit(limit)
+            //`simhalt` pauses rather than terminating, and that is where an interactive Run stops.
+            //A Testcase has to observe the same state: resuming past it ran whatever follows the
+            //halt — a subroutine in the usual EASy68K layout — and asserted against registers the
+            //program never produced.
+            if (interpreter.getStatus() === CoreInterpreterStatus.Paused) return
             //a testcase runs unsliced, so a wait is awaited here; its clock is the virtual one, on
             //which waits complete at once (ADR 0010)
             const wait = await this.handleInterpreterInterruption(interpreter, execution)
@@ -446,13 +494,15 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             case CoreInterpreterStatus.Terminated: {
                 const ins = interpreter.getLastInstruction()
                 this.state.terminated = true
-                this.state.line = ins?.parsed_line?.line_index ?? -1
+                this.state.line = ins?.location.line ?? -1
+                if (ins) this.state.currentFile = ins.location.file
                 break
             }
             case CoreInterpreterStatus.TerminatedWithException: {
                 const ins = interpreter.getLastInstruction()
                 this.state.terminated = true
-                this.state.line = ins?.parsed_line?.line_index ?? -1
+                this.state.line = ins?.location.line ?? -1
+                if (ins) this.state.currentFile = ins.location.file
                 this.state.canUndo = false
                 this.addError('Program terminated with errors')
                 break
@@ -460,7 +510,8 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             case CoreInterpreterStatus.Interrupt: {
                 if (this.state.terminated || !this.state.canExecute) break
                 const ins = interpreter.getLastInstruction()
-                this.state.line = ins?.parsed_line?.line_index ?? -1
+                this.state.line = ins?.location.line ?? -1
+                if (ins) this.state.currentFile = ins.location.file
                 const interrupt = interpreter.getCurrentInterrupt()
                 //a trap is not a display frame: a graphical program reaches this a few hundred
                 //times a second and the panels can only be seen sixty times a second. The traps
@@ -880,6 +931,28 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     }
 }
 
+function m68kInstructionAddresses(
+    program: Program,
+    interpreter: Interpreter,
+    info: ReturnType<Program['getInfo']>
+): number[] {
+    const native = program as Program & { getInstructionAddresses?: () => number[] }
+    if (native.getInstructionAddresses) return native.getInstructionAddresses()
+
+    // Compatibility with the currently published package. Local/newer Cores expose the compact
+    // address index above; the fallback walks the executable range and stops as soon as it has
+    // found the number of instructions reported by ProgramInfo.
+    const addresses: number[] = []
+    for (
+        let address = info.entryPoint;
+        address < info.endAddress && addresses.length < info.instructionCount;
+        address += 2
+    ) {
+        if (interpreter.getInstructionAt(address)) addresses.push(address)
+    }
+    return addresses
+}
+
 /**
  * The Core knows a task it cannot decode only as a number, and says so; this says which task it was
  * and, for the ones this editor deliberately does not support, why. Anything else is passed through
@@ -933,24 +1006,12 @@ function toCoreSize(size: RegisterSize | undefined): Size {
 }
 
 function toInstruction(instruction: InstructionLine | null | undefined): Instruction | null {
-    if (!instruction?.parsed_line) return null
+    if (!instruction) return null
     return {
         address: BigInt(instruction.address),
-        lineNumber: instruction.parsed_line.line_index,
-        code: instruction.parsed_line.line
-    }
-}
-
-//s68k has no warnings concept, every semantic check finding is a hard error
-function semanticErrorToDiagnostic(error: SemanticError): Diagnostic {
-    const line = error.getLine()
-    return {
-        severity: 'error',
-        line,
-        column: line.line.length - line.line.trimStart().length + 1,
-        lineIndex: error.getLineIndex(),
-        message: error.getError(),
-        formatted: error.getMessage()
+        lineNumber: instruction.location.line,
+        file: instruction.location.file,
+        code: instruction.source
     }
 }
 

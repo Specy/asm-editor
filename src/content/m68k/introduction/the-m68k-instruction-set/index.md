@@ -26,19 +26,20 @@ overwritten unless you say so; on the M68K one of the two operands always is.
 
 ## The families
 
-About fifty mnemonics, in eight groups. You will use the first two lines of this table for most of
+About fifty base mnemonics, in nine groups. You will use the first two lines of this table for most of
 what you write.
 
-| what it does           | the instructions                                                      |
-| ---------------------- | --------------------------------------------------------------------- |
-| move data              | `move`, `movea`, `moveq`, `movem`, `lea`, `pea`, `exg`, `swap`, `clr` |
-| arithmetic             | `add`, `sub`, `muls`, `mulu`, `divs`, `divu`, `neg`, `ext`            |
-| logic                  | `and`, `or`, `eor`, `not`                                             |
-| shifts and rotates     | `lsl`, `lsr`, `asl`, `asr`, `rol`, `ror`                              |
-| single bits            | `btst`, `bset`, `bclr`, `bchg`                                        |
-| compare and test       | `cmp`, `cmpa`, `cmpi`, `cmpm`, `tst`                                  |
-| go somewhere else      | `bra`, `b<cc>`, `db<cc>`, `dbra`, `s<cc>`, `jmp`, `jsr`, `bsr`, `rts` |
-| stack frames and other | `link`, `unlk`, `trap`, `nop`                                         |
+| what it does         | the instructions                                                                           |
+| -------------------- | ------------------------------------------------------------------------------------------ |
+| move data            | `move`, `movea`, `moveq`, `movem`, `movep`, `lea`, `pea`, `exg`, `swap`, `clr`             |
+| arithmetic           | `add`, `sub`, `addx`, `subx`, `muls`, `mulu`, `divs`, `divu`, `neg`, `negx`, `ext`, `extb` |
+| decimal arithmetic   | `abcd`, `sbcd`, `nbcd`                                                                     |
+| logic                | `and`, `or`, `eor`, `not`                                                                  |
+| shifts and rotates   | `lsl`, `lsr`, `asl`, `asr`, `rol`, `ror`, `roxl`, `roxr`                                   |
+| single bits          | `btst`, `bset`, `bclr`, `bchg`, `tas`                                                      |
+| compare and test     | `cmp`, `cmpa`, `cmpi`, `cmpm`, `tst`, `chk`                                                |
+| go somewhere else    | `bra`, `b<cc>`, `db<cc>`, `dbra`, `s<cc>`, `jmp`, `jsr`, `bsr`, `rts`, `rtr`               |
+| exceptions and other | `trap`, `trapv`, `illegal`, `link`, `unlk`, `nop`                                          |
 
 The whole list, with the addressing modes and sizes each one takes and the flags it writes, is on the
 [M68K documentation pages](/documentation/m68k), and every instruction there has a program you can
@@ -55,7 +56,7 @@ want. Learn the five and a name you have never seen becomes readable.
 - **`i`, immediate.** `addi`, `subi`, `andi`, `ori`, `eori`, `cmpi` take a plain number as their
   source. `add` takes one too, so `add.l #5, d0` and `addi.l #5, d0` are the same thing written twice.
 - **`q`, quick.** `addq` and `subq` take a source between 1 and 8 and fit in a shorter encoding;
-  `moveq` takes one between -128 and 127.
+  `moveq` takes one between -128 and 255 (128 through 255 are unsigned spellings of negative bytes).
 - **`m`, memory.** `cmpm` compares two memory operands, which the plain `cmp` cannot.
 - **`s` and `u`, signed and unsigned.** `muls` against `mulu`, `divs` against `divu`.
 

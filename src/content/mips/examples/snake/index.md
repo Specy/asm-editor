@@ -12,7 +12,7 @@ Move a square with the keyboard polls it, and only what changed is redrawn the w
 does it. What is new is the board kept as **cells**, one byte for the column and one for the row
 packed into a word, which becomes an address only at the moment something is drawn.
 
-```mips|playground|screen|console|no-registers|allow-open
+```mips|playground|open-screen|console|no-registers|allow-open
 # @screen unit=16 width=512 height=512 base=display
 .eqv MMIO 0xffff0000
 .eqv SIDE 32                # the board, in cells

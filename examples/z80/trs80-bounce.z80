@@ -1,0 +1,144 @@
+; A game loop on the TRS-80's memory-mapped display: a block bouncing around a back buffer that is
+; copied into video RAM with one `ldir`.
+;
+; This is how a program animates on this machine, and why it needs no double buffering command: the
+; frame is composed in ordinary RAM where nobody can see it, and one block copy of 1024 bytes puts
+; the whole screen up at once. The arrow keys steer, read from the keyboard matrix at 0x3800.
+;
+; Press Stop to end it.
+
+; @screen trs80
+
+VIDEO   equ 0x3C00
+COLS    equ 64
+ROWS    equ 16
+CELLS   equ COLS*ROWS
+BLANK   equ 0x20
+FULL    equ 191         ; the block with all six sub-cells lit
+
+KEYROW6 equ 0x3840      ; Enter, Clear, Break, up, down, left, right, space
+KUP     equ 8           ; bit 3
+KDOWN   equ 16          ; bit 4
+KLEFT   equ 32          ; bit 5
+KRIGHT  equ 64          ; bit 6
+
+P_FRAME equ 0x51        ; waits for the next animation frame
+
+        .org 0x8000
+
+start:  ld a, 20
+        ld (posx), a
+        ld a, 6
+        ld (posy), a
+        ld a, 1
+        ld (dx), a
+        ld (dy), a
+
+frame:  call clear
+        call steer
+        call move
+        call plot
+        call present
+        ld c, P_FRAME
+        in a, (c)       ; let the display set the pace, not the host
+        jr frame
+
+; --- the back buffer ---------------------------------------------------------
+
+clear:  ld hl, buffer
+        ld de, buffer+1
+        ld bc, CELLS-1
+        ld a, BLANK
+        ld (hl), a
+        ldir            ; one byte spread over the whole buffer
+        ret
+
+; Puts the block into the buffer at (posx, posy): the cell index is y*64 + x.
+plot:   ld a, (posy)
+        ld l, a
+        ld h, 0
+        add hl, hl      ; x2
+        add hl, hl      ; x4
+        add hl, hl      ; x8
+        add hl, hl      ; x16
+        add hl, hl      ; x32
+        add hl, hl      ; x64
+        ld a, (posx)
+        ld e, a
+        ld d, 0
+        add hl, de
+        ld de, buffer
+        add hl, de
+        ld (hl), FULL
+        ret
+
+; The whole screen in one instruction.
+present:
+        ld hl, buffer
+        ld de, VIDEO
+        ld bc, CELLS
+        ldir
+        ret
+
+; --- movement ----------------------------------------------------------------
+
+; An arrow key sets the direction; with nothing held the block keeps going.
+steer:  ld a, (KEYROW6)
+        ld b, a
+        and KLEFT
+        jr z, notleft
+        ld a, -1
+        ld (dx), a
+notleft:
+        ld a, b
+        and KRIGHT
+        jr z, notright
+        ld a, 1
+        ld (dx), a
+notright:
+        ld a, b
+        and KUP
+        jr z, notup
+        ld a, -1
+        ld (dy), a
+notup:  ld a, b
+        and KDOWN
+        jr z, notdown
+        ld a, 1
+        ld (dy), a
+notdown:
+        ret
+
+; A step that would leave the screen reverses the direction and is taken the other way instead.
+; The comparison is unsigned, so -1 wraps to 255 and falls out of range with 64.
+move:   ld a, (posx)
+        ld b, a         ; the position before the step
+        ld a, (dx)
+        add a, b
+        cp COLS
+        jr c, xok
+        ld a, (dx)
+        neg
+        ld (dx), a
+        add a, b
+xok:    ld (posx), a
+
+        ld a, (posy)
+        ld b, a
+        ld a, (dy)
+        add a, b
+        cp ROWS
+        jr c, yok
+        ld a, (dy)
+        neg
+        ld (dy), a
+        add a, b
+yok:    ld (posy), a
+        ret
+
+posx:   .byte 0
+posy:   .byte 0
+dx:     .byte 0
+dy:     .byte 0
+
+buffer: .ds CELLS, BLANK

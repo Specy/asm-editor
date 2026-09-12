@@ -1,0 +1,6 @@
+{
+    "name": "Flappy bird",
+    "description": "A game with a state machine in it: three states, gravity counted in sixteenths of a row, every character in the queue read once a frame, and a grid where only the columns that changed are painted again.",
+    "order": 24,
+    "topic": "flappy-bird"
+}

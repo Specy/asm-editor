@@ -11,7 +11,7 @@ keyboard registers" lecture. What is new here is the two clock services, service
 milliseconds since the run started and service 32 lets that many pass, and a wait costs no
 instructions.
 
-```mips|playground|screen|no-registers|allow-open
+```mips|playground|open-screen|no-registers|allow-open
 # @screen unit=8 width=256 height=256 base=display
 .eqv SIDE 32                # words across and down
 .eqv BALL 4                 # the ball, in words

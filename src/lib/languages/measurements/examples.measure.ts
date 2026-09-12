@@ -85,6 +85,17 @@ const PROGRAMS: Program[] = [
         exercises: 'mouse polling, its views and flags',
         drive: (emulator) => emulator.peripherals.mouse.buttonDown('left', 100, 60)
     },
+    {
+        path: 'z80/trs80-text.z80',
+        language: 'Z80',
+        exercises: 'the memory-mapped display: text and block graphics stored at 0x3C00'
+    },
+    {
+        path: 'z80/trs80-bounce.z80',
+        language: 'Z80',
+        exercises: 'a back buffer blitted with ldir, and the keyboard matrix at 0x3800',
+        drive: (emulator) => emulator.peripherals.keyboard.pressKey(KEY_CODES.RIGHT_ARROW)
+    },
     { path: 'm68k/graphics-tour.x68', language: 'M68K', exercises: 'every drawing task, 80 to 96' },
     {
         path: 'm68k/bouncing-ball.x68',
@@ -122,10 +133,19 @@ const PROGRAMS: Program[] = [
         referenceOnly: true
     },
     {
-        path: 'Bad_Apple.s68k',
+        path: 'm68k/bad-apple.x68',
         language: 'M68K',
         exercises:
             'the repository’s own animation: a video drawn cell by cell (tasks 11, 23, 80, 81, 87)'
+    },
+    {
+        path: 'm68k/flappy-bird.x68',
+        language: 'M68K',
+        //the game reads the keyboard and the mouse every frame and only leaves its title screen
+        //once one of them says flap; with nothing held it measures a still picture
+        exercises:
+            'a whole game: key state (19) and the mouse (61) driving double buffered drawing (92, 94) paced by program time (8, 23)',
+        drive: (emulator) => emulator.peripherals.keyboard.pressKey(KEY_CODES.SPACE)
     },
     {
         path: 'mips/bitmap-tour.asm',

@@ -6,6 +6,7 @@ import type {
     EmulatorSettings
 } from './commonLanguageFeatures.svelte'
 import type { EmulatorPeripherals } from './peripherals/peripheralSet'
+import type { BuildInput } from '$lib/projectFiles'
 import type { M68KEmulator } from './M68K/M68KEmulator.svelte'
 import type { MIPSEmulator } from './MIPS/MIPSEmulator.svelte'
 import type { X86Emulator } from './X86/X86Emulator.svelte'
@@ -59,11 +60,11 @@ export type Emulator = BaseEmulatorActions &
 
 export async function createEmulator<T extends AvailableLanguages>(
     type: T,
-    baseCode: string,
+    source: BuildInput,
     options?: EmulatorSettings
 ): Promise<Emulator> {
     const emulator = await loadEmulator(type)
-    return emulator!(baseCode, options)
+    return emulator!(source, options)
 }
 
 export function preloadAllEmulators() {

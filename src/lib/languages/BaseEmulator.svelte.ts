@@ -7,6 +7,7 @@ import {
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import type { ExecutionSlice, ExecutionSliceRequest } from '$lib/languages/ExecutionSlice'
 import type { Testcase } from '$lib/Project.svelte'
+import type { BuildSources } from '$lib/projectFiles'
 
 type MaybePromise<T> = T | PromiseLike<T>
 
@@ -47,6 +48,7 @@ export enum EmulatorStatus {
 export type Instruction = {
     address: bigint
     lineNumber: number
+    file: string
     code: string
 }
 
@@ -96,9 +98,9 @@ export abstract class BaseEmulator<R extends string> {
      * assembly and therefore have to be told the depth *before* the code is assembled (MIPS).
      * Languages whose core does not care can ignore the parameter.
      */
-    abstract _compile(code: string, undoSize: number): MaybePromise<CompileResult>
+    abstract _compile(sources: BuildSources, undoSize: number): MaybePromise<CompileResult>
 
-    abstract _checkCode(code: string): MaybePromise<Diagnostic[]>
+    abstract _checkCode(sources: BuildSources): MaybePromise<Diagnostic[]>
 
     /** Restores one CPU instruction and its associated peripheral effects. */
     abstract _undo(): void

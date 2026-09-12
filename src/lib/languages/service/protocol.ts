@@ -1,0 +1,68 @@
+import type { ProjectFile, ProjectFiles } from '$lib/projectFiles'
+import type { LanguageDiagnostic, SourceLocation, SymbolKind } from './sourceModel'
+
+export type ProjectAnalysisTarget = 'M68K' | 'MIPS' | 'RISC-V' | 'RISC-V-64' | 'X86' | 'Z80'
+
+export type ProjectFileChange =
+    { type: 'set'; path: string; file: ProjectFile } | { type: 'delete'; path: string }
+
+/**
+ * `unknown` is for a Core that assembles the whole Project itself and does not report which Files it
+ * reached — claiming `assembled` there would tell the user a File is in the program when nothing
+ * checked, and claiming `not-reachable` would be worse.
+ */
+export type ProjectFileAnalysisStatus = 'assembled' | 'not-reachable' | 'binary' | 'unknown'
+
+export type LanguageSymbol = {
+    id: string
+    name: string
+    kind: SymbolKind
+    value?: number
+    /** False when the Core reports position-dependent definitions or another rename hazard. */
+    renameable?: boolean
+    location: SourceLocation
+}
+
+export type ProjectAnalysisSnapshot = {
+    sessionId: string
+    revision: number
+    target: ProjectAnalysisTarget
+    diagnostics: LanguageDiagnostic[]
+    symbols: LanguageSymbol[]
+    occurrences: import('./sourceModel').SymbolOccurrence[]
+    fileStatus: Record<string, ProjectFileAnalysisStatus>
+}
+
+export type ProjectWorkerRequest =
+    | {
+          type: 'open'
+          sessionId: string
+          revision: number
+          target: ProjectAnalysisTarget
+          entry: string
+          files: ProjectFiles
+      }
+    | {
+          type: 'update'
+          sessionId: string
+          revision: number
+          entry: string
+          changes: ProjectFileChange[]
+      }
+    | { type: 'dispose'; sessionId: string }
+
+export type ProjectWorkerResponse =
+    | { type: 'analysis'; snapshot: ProjectAnalysisSnapshot }
+    | { type: 'failure'; sessionId: string; revision: number; message: string }
+    /**
+     * The Worker's first message, sent once its listener is attached. A request posted before this
+     * arrives has nothing listening for it yet and is dropped by the browser, so the host holds
+     * requests until it has seen this.
+     */
+    | { type: 'ready' }
+
+/** Kept as aliases while the M68K adapter/provider names remain Target-specific. */
+export type M68kAnalysisSnapshot = ProjectAnalysisSnapshot
+export type M68kFileAnalysisStatus = ProjectFileAnalysisStatus
+export type M68kWorkerRequest = ProjectWorkerRequest
+export type M68kWorkerResponse = ProjectWorkerResponse

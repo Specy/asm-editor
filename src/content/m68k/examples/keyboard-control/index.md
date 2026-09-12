@@ -9,7 +9,7 @@ what is being held down right now, and the answer changes what the next frame wi
 traps" lecture. What is new here is task 19, which takes four key codes packed into `d1.l` and
 answers with four bytes saying which of them are down at this instant.
 
-```m68k|playground|screen|no-registers|no-flags|allow-open
+```m68k|playground|open-screen|no-registers|no-flags|allow-open
 CELL    equ 40
 STEP    equ 8
 RIGHT   equ 640-40

@@ -10,7 +10,7 @@ program writes.
 array" Example. What is new here is a shape as a subroutine: `fill_rect` and `fill_disc` are the two
 the rest of the program calls, because nothing in the machine draws anything.
 
-```riscv|playground|screen|no-registers|allow-open
+```riscv|playground|open-screen|no-registers|allow-open
 # @screen unit=8 width=256 height=256 base=display
 .eqv SIDE, 32               # words across and down
 .eqv SKY, 0x0070B0E0

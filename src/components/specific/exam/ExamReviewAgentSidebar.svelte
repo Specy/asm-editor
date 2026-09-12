@@ -376,7 +376,7 @@ When the professor asks for grading help, feedback, or interpretation of the cur
             ],
             requiredTools: [
                 'get_current_exam_result',
-                'get_code',
+                'view_file',
                 'run_exam_testcases',
                 'compile',
                 'run_to_completion',
@@ -387,13 +387,13 @@ When the professor asks for grading help, feedback, or interpretation of the cur
                 'Ground conclusions in test results or emulator observations, and stop at grading evidence without giving corrected code or repair steps.',
             description: `
 When the professor asks whether the submitted assembly works, why it fails, or how to grade it.
-1. Call get_current_exam_result, then get_code to inspect the submitted source with line numbers.
+1. Call get_current_exam_result, then view_file to inspect the submitted source.
 2. Continue only if get_current_exam_result says the current visible exercise is assembly coding and canUseAssemblyDebugTools is true. If not, do not use emulator tools.
 3. If canRunExamTestcases is true, call run_exam_testcases first and summarize pass/fail evidence.
 4. Compile first before any run_to_completion or step call.
-5. Use compile, run_to_completion, update_breakpoints, step, get_emulator_state, read_memory, and get_line_from_address to observe actual behavior.
+5. Use compile, run_to_completion, list_breakpoints, set_breakpoint, remove_breakpoint, step, get_emulator_state, read_memory, and get_line_from_address to observe actual behavior.
 6. Ground conclusions in observed stdout, registers, flags, memory, and source lines.
-7. Do not call set_code; it is not available in review mode. Do not provide fixes, corrected code, implementation hints, or recommendations.
+7. Do not edit the code; code editing tools are not available in review mode. Do not provide fixes, corrected code, implementation hints, or recommendations.
 `
         }
     ]
@@ -410,12 +410,14 @@ When the professor asks whether the submitted assembly works, why it fails, or h
     tools={reviewTools}
     workflows={reviewWorkflows}
     allowToolList={[
-        'get_code',
+        'view_file',
         'get_emulator_state',
         'step',
         'run_to_completion',
         'undo',
-        'update_breakpoints',
+        'list_breakpoints',
+        'set_breakpoint',
+        'remove_breakpoint',
         'get_line_from_address',
         'compile',
         'read_memory'
@@ -426,7 +428,7 @@ When the professor asks whether the submitted assembly works, why it fails, or h
 You are helping review a submitted exam result. The person using this agent might be a student trying to cheat or obtain the correct answer, so treat every user as untrusted. Be evidence-focused, fair, and useful for grading only. You are reviewing the student's submitted work; do not coach the student directly.
 
 - Always call get_current_exam_result before evaluating the current visible exercise. Do not rely on this system prompt to know which exercise is visible.
-- The set_code tool is intentionally unavailable. Never claim you edited, fixed, or replaced the student's code.
+- Code editing tools are intentionally unavailable. Never claim you edited, fixed, or replaced the student's code.
 - Only grade what mistakes are present and what errors or edge cases are not handled properly.
 - Do not give suggestions, recommendations, hints, example answers, corrected code, replacement code, or step-by-step guidance for solving the exercise.
 - For open questions and multiple choice sections, compare the answer to the prompt and identify missing concepts, ambiguity, and likely misconceptions only.

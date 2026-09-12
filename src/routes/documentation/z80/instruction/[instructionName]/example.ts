@@ -129,13 +129,13 @@ const TRAILER_DATA: Record<string, string> = {
  */
 const FULL_OVERRIDES: Record<string, string> = {
     in: `        .org ${ORG}
-        in a, (1)       ; ask the console for a number
+        in a, (0x11)    ; ask the console for a number
         add a, a        ; double it
-        out (1), a      ; print the result
+        out (0x11), a   ; print the result
         halt`,
     out: `        .org ${ORG}
         ld a, 'H'
-        out (0), a      ; port 0 prints the byte as a character
+        out (0x10), a   ; the character port prints the byte as a character
         halt`,
     // `rst` is a one byte call to a fixed low address, so the example has to put something there:
     // generated from the table it would jump into empty memory and never come back.

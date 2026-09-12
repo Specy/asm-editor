@@ -7,15 +7,24 @@ type Version = {
 }
 export const versions: Version[] = [
     {
+        version: '10.0.0',
+        title: 'Graphics and simulators overhaul',
+        date: new Date('2026-09-15'),
+        changes: [
+            'MIPS, RISC-V and M68K simulators now implement more instructions and directives',
+            "Improved M68K's assembler so that it gives better error messages and warnings",
+            'Stabilized X86 simulator to NASM syntax. Assembling and checking now runs quickly. Added instruction documentation and autocomplete.',
+            'Added Graphics, Mouse and Keyboard support to MIPS, RISC-V, M68K and Z80 simulators'
+        ],
+        notes: []
+    },
+    {
         version: '9.1.0',
         title: 'Project settings and files',
         date: new Date('2026-09-07'),
         changes: [
-            'Settings that change what the emulator does (maximum undo steps, screen undo budget) now belong to each project, with a reset to the default for each; view settings stay global as preferences',
-            'A project is now made of files with an entry file, main.<ext> today, so a project can hold several source files in a later version',
-            'Changing a setting, a testcase or the screen configuration follows the same rule as the code: saved at once with auto save on, otherwise with Save, and the editor asks before leaving unsaved changes of any kind',
-            'On MIPS and RISC-V, choosing a display configuration beside the screen rewrites the @screen comment of the program, so the two never disagree',
-            'Exported M68K projects use the .m68k extension; files exported before, .s68k included, still import'
+            'Added project wide settings instead of global preferences',
+            'A project is now made of multiple files with an entry file called main.<ext>. You can now write multi file projects'
         ],
         notes: [
             'Existing projects start from the default settings; the values set before this version are not carried over'

@@ -36,6 +36,7 @@
             : 'showRegisters=false&'
         const showFlags = settings.showFlags ? 'showFlags=true&' : 'showFlags=false&'
         const showScreen = settings.showScreen ? 'showScreen=true&' : ''
+        const openScreen = settings.openScreen ? 'openScreen=true&' : ''
         const showOpenButton = settings.openButton ? 'openButton=true&' : ''
         const props = [
             showMemory,
@@ -45,6 +46,7 @@
             showRegisters,
             showFlags,
             showScreen,
+            openScreen,
             showOpenButton
         ].join('')
         const lang = `language=${settings.language}&`

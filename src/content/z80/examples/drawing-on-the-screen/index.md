@@ -11,18 +11,18 @@ runs one operation on whatever is currently set.
 strings and ix" lecture. What is new here is that the picture is a table: one shape is a record of
 seven bytes, and the whole program is `ix` walking it.
 
-```z80|playground|screen|no-registers|no-flags|allow-open
-P_CHAR  equ 0x00        ; the console character port draws at the text cursor
-P_PEN   equ 0x10        ; lines, outlines and text
-P_FILL  equ 0x11        ; the inside of a shape, and the clear
-P_WIDTH equ 0x12
-P_X     equ 0x13
-P_Y     equ 0x14
-P_X2    equ 0x15
-P_Y2    equ 0x16
-P_CMD   equ 0x17        ; one write here runs one drawing operation
-P_COL   equ 0x19        ; the text cursor, in 8 by 8 cells
-P_ROW   equ 0x1A
+```z80|playground|open-screen|no-registers|no-flags|allow-open
+P_CHAR  equ 0x10        ; the console character port draws at the text cursor
+P_PEN   equ 0x20        ; lines, outlines and text
+P_FILL  equ 0x21        ; the inside of a shape, and the clear
+P_WIDTH equ 0x22
+P_X     equ 0x23
+P_Y     equ 0x24
+P_X2    equ 0x25
+P_Y2    equ 0x26
+P_CMD   equ 0x27        ; one write here runs one drawing operation
+P_COL   equ 0x29        ; the text cursor, in 8 by 8 cells
+P_ROW   equ 0x2A
 
 C_LINE_TO equ 2
 C_MOVE_TO equ 3

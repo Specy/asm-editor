@@ -2,7 +2,7 @@
 
 ## Emulator
 
-The UI-facing object a project interacts with: it holds reactive state (registers, memory tabs, stdout, errors, breakpoints…) and exposes the actions (compile, run, step, undo, test…). One per open project, created per language. Not the underlying language engine — see **Core**.
+The UI-facing object a **Project** interacts with to build, execute, debug, and test its programs. Each open Project has one Emulator for its **Target**, distinct from the underlying **Core**.
 
 ## Core
 
@@ -10,7 +10,11 @@ The language-specific engine that actually assembles and executes code (s68k's `
 
 ## Diagnostic
 
-A compile/check-time finding about the program's source, tagged `error`, `warning` or `suggestion`. Only `error`-severity diagnostics block compilation and disable Build; the others are reported (amber/info squiggles, listed above stdout) while the program still builds and runs. Distinct from the Emulator's runtime **errors**, which are strings produced while executing. Producers today: the MIPS and RISC-V Cores emit warnings alongside errors in one collection; M68K, x86 and Z80 report errors only (s68k has no warnings concept, the x86 Core only parses its assembler logs when the assembler exits non-zero, discarding the severity marker it matched on, and `@specy/z80` returns one flat diagnostic list with no severity field, so every entry is an error). `suggestion` has no producer yet — the variant exists so one can be added without another type change.
+A compile/check-time finding about the program's source, tagged `error`, `warning` or `suggestion`. Only `error`-severity diagnostics block compilation and disable Build; the others are reported (amber/info squiggles, listed above stdout) while the program still builds and runs. A Core may supply a **Hint**, which is shown directly with the finding. Distinct from the Emulator's runtime **errors**, which are strings produced while executing. Producers today: s68k, MIPS and RISC-V preserve their Core-supplied severity; x86 and Z80 report errors only (the x86 Core only parses its assembler logs when the assembler exits non-zero, discarding the severity marker it matched on, and `@specy/z80` returns one flat diagnostic list with no severity field).
+
+## Hint
+
+Actionable help supplied with a **Diagnostic** so the learner knows how to correct the source or investigate it further. It is displayed directly after the finding rather than hidden behind another interaction.
 
 ## Interrupt
 
@@ -18,11 +22,11 @@ The generic state "the Emulator is paused mid-execution waiting on the user" (e.
 
 ## Pause
 
-A run parked between two instruction slices at the user's request, keeping everything it had: its place in the program, its remaining instruction limit, its breakpoints and what the scheduler learned about its speed. The Run button is Pause while a program runs and Resume once it is parked. Distinct from an **Interrupt**, which the program itself causes by asking for input, and from Stop, which is `clear()` and throws the program away.
+A user-requested suspension of forward execution within a **Debug session**, retaining the program for inspection, Step, instruction Undo, and Resume. Distinct from an **Interrupt**, which the program causes by requesting input, and from Stop, which ends the Debug session.
 
 ## Peripheral
 
-A device owned by an Emulator that programs interact with through the Core: Cores write to it and read from it (via the adapter), the UI presents its output or supplies its input. Peripherals are part of the Emulator, not siblings of it. First peripheral: the **Terminal**. Planned: **Screen**, **Keyboard**, **Mouse**.
+A device owned by an Emulator that programs interact with through the Core: Cores write to it and read from it (via the adapter), the UI presents its output or supplies its input. Peripherals are part of the Emulator, not siblings of it. The shared set includes the **Terminal**, **Screen**, **Keyboard**, **Mouse**, and **FileSystem**; an architecture exposes the devices its adapter can connect to the Core.
 
 ## Screen
 
@@ -39,6 +43,11 @@ The Peripheral representing pointing input for a program interacting with the **
 ## Terminal
 
 The Peripheral owning program output (stdout) and user input requests. Cores reach it in their own dialect: syscalls for M68K, MIPS, RISC-V and x86, **Console port** reads and writes for the Z80. Input requests go through its current **Input Source**; output accumulates as the text the UI displays. Interactive answers are echoed into the output like a tty; scripted answers are not, like piped stdin.
+
+## FileSystem
+
+The **Peripheral** through which an **Emulator** accesses its **Files**, shared with the editor for an interactive **Project** or isolated for a **Testcase**. These are the files available to assembly and to the running program.
+_Avoid_: drive peripheral
 
 ## Input Source
 
@@ -62,22 +71,58 @@ The **Port map**'s group for the **Terminal**. A Z80 has no system calls: progra
 
 ## Project
 
-The unit of work the editor saves, opens and shares: one language, its **Files**, its **Settings**, its **Testcases**, its **Display configuration**, a name and a description. A record with those parts, not a folder: only its Files are visible to the assembler and the program.
+The unit of work the editor saves, opens and shares: one **Target**, its **Files**, its **Settings**, its **Testcases**, its **Display configuration**, a name and a description. A record with those parts, not a folder: only its Files are visible to the assembler and the program.
 _Avoid_: workspace, folder, program
+
+## Target
+
+The architecture and supported assembler/runtime environment selected for a **Project**, determining the machine its programs run on. Distinct from the **File language** of its individual Files.
+
+## File language
+
+The language of a text **File**, such as target-specific assembly, C, or plain text, used to interpret and present its source. It is independent of the Project's **Target** and the File's storage encoding; selecting a language does not make a compiler for it available.
+
+## Project archive
+
+A portable copy of a **Project**, containing all its named **Files**, its **Entry path**, and its configuration and metadata. Distinct from downloading an individual File; it does not contain a running **Debug session**.
 
 ## File
 
-A named entry of a **Project**'s files: a relative path with an extension, and content stored as a string together with the encoding that turns the string back into text or bytes. Files are what the assembler and the program can see; Settings and Testcases are not Files.
+Content available to the assembler or running program through the **FileSystem**, as bytes or valid UTF-8 text, normally named by a **Project**-relative path with or without an extension. Its purpose is independent of storage encoding, and an open handle can retain it after its path is removed.
 _Avoid_: document, asset, source file (when the **Entry file** is meant)
+
+## Project root
+
+The top of a **Project**'s file hierarchy and the base for runtime file paths, independent of the **Entry path**'s directory.
+
+## Directory
+
+A grouping of a **Project**'s **Files** under a shared path prefix. It exists while it contains Files, directly or through subdirectories, and cannot also be a File.
+
+## Entry path
+
+The **Project**'s configured path from which a Build begins, `main.<ext>` by default. It can temporarily name a missing File; choosing another Entry path is separate from choosing which File the editor shows.
 
 ## Entry file
 
-The **File** a Build assembles first; every other File is reached from it, through an include, or is not built at all. A Project has exactly one, `main.<ext>` by default. Choosing another is a different act from choosing which File the editor shows.
+The **File** found at a Project's **Entry path**, when it exists, which a Build assembles first. Other Files are reached from it through includes or are not built at all.
 _Avoid_: main file, active file, selected file, open file
+
+## Displayed file
+
+The **File** currently shown in the editor, chosen independently of the **Entry path**. Its displayed version is either the live Project content selected through file browsing or the **Build snapshot** source selected through debugger navigation.
+
+## Build snapshot
+
+The fixed versions of the **Files** and **Entry path** used by one Build, identifying the source of its running program. Later **FileSystem** changes belong to the current Project Files and affect subsequent Builds.
+
+## Debug session
+
+The lifetime of a built program retained for execution, inspection, and instruction Undo, from a successful Build until Stop or disposal. Program exit does not itself end the session or return host editing access to the **Files**.
 
 ## Settings
 
-Per-Project configuration that changes what the **Emulator** or the program does: the undo history size, the **Screen** undo budget. They belong to one **Project**, are edited through the editor's GUI and are never a file the program can see. A Project records only the Settings decided for it; anything undecided follows the app's default for its language. The MARS bitmap display is not a Setting, see **Display configuration**.
+Per-Project configuration that changes what the **Emulator** or the program does: the undo history size and the separate **Screen** and **FileSystem** undo budgets. They belong to one **Project**, are edited through the editor's GUI and are never a file the program can see. A Project records only the Settings decided for it; anything undecided follows the app's default for its language. The MARS bitmap display is not a Setting, see **Display configuration**.
 _Avoid_: preferences, options, config, global settings
 
 ## Preferences
@@ -87,7 +132,7 @@ _Avoid_: settings, global settings, user settings
 
 ## Display configuration
 
-The MARS and RARS bitmap display parameters of a MIPS or RISC-V **Project**: unit size, display size and base address. The program states them in an `@screen` comment, read at Build, or the user chooses them beside the **Screen**; a choice beside the Screen rewrites the comment when the program has one, and is only saved with the Project when it has none. Not a **Setting**.
+The MARS and RARS bitmap display parameters of a MIPS or RISC-V **Project**: unit size, display size and base address, distinct from **Settings**. The **Entry file**'s `@screen` comment supplies the parameters it names over the Project's chosen display; included Files do not supply display configuration.
 _Avoid_: display settings, screen settings, screen config
 
 ## Exam
@@ -96,7 +141,7 @@ A Project handed to a student under a track, a password and a time limit, with a
 
 ## Testcase
 
-A declarative check run against a program: starting registers/memory/input, expected registers/memory/output. Language-independent; endianness of memory expectations follows the Emulator's endianness. Its run uses a scripted **Input Source** and a virtual **Time Source**.
+A declarative check run against a program: starting registers/memory/input and expected registers/memory/output, with memory expectations interpreted in the Emulator's endianness. Each Testcase runs independently with a scripted **Input Source**, a virtual **Time Source**, and its own writable **FileSystem** initialized from the same starting Files as the other cases in that test run.
 
 ## Course
 

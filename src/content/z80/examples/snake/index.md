@@ -12,20 +12,20 @@ shown the way A bouncing ball does, and the keys are polled the way Move a squar
 does. What is new is the board kept as **cells**, one byte for the whole of a position, which
 becomes pixels only at the moment something is drawn.
 
-```z80|playground|screen|console|no-registers|no-flags|allow-open
-P_CHAR  equ 0x00        ; a character, on the Screen and in the transcript
-P_NUM   equ 0x01        ; a byte as an unsigned decimal number
-P_PEN   equ 0x10
-P_FILL  equ 0x11
-P_X     equ 0x13
-P_Y     equ 0x14
-P_X2    equ 0x15
-P_Y2    equ 0x16
-P_CMD   equ 0x17
-P_COL   equ 0x19        ; the text cursor, in 8 by 8 cells
-P_ROW   equ 0x1A
-P_KEY   equ 0x21        ; 1 while the key whose code is in b is held down
-P_WAIT  equ 0x40        ; reading it waits for b hundredths of a second
+```z80|playground|open-screen|console|no-registers|no-flags|allow-open
+P_CHAR  equ 0x10        ; a character, on the Screen and in the transcript
+P_NUM   equ 0x11        ; a byte as an unsigned decimal number
+P_PEN   equ 0x20
+P_FILL  equ 0x21
+P_X     equ 0x23
+P_Y     equ 0x24
+P_X2    equ 0x25
+P_Y2    equ 0x26
+P_CMD   equ 0x27
+P_COL   equ 0x29        ; the text cursor, in 8 by 8 cells
+P_ROW   equ 0x2A
+P_KEY   equ 0x31        ; 1 while the key whose code is in b is held down
+P_WAIT  equ 0x50        ; reading it waits for b hundredths of a second
 
 C_RECT    equ 4
 C_CLEAR   equ 9
@@ -422,7 +422,7 @@ would wipe the whole image, is used once at the very start. `draw_score` runs on
 once per point, and the transcript ends up with one line per score.
 
 A frame is the polls, the move, the collisions, the food, then a clear, one square per segment, the
-score row left alone and command 13 to show the lot. Port `0x40` sets the pace: put a number of
+score row left alone and command 13 to show the lot. Port `0x50` sets the pace: put a number of
 hundredths in `b`, read the port, and the program waits that long without freezing the editor, so
 Stop still answers while the snake is between cells.
 

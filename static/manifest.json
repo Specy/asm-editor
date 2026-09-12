@@ -17,9 +17,10 @@
     "file_handlers": [
         {
             "action": "/projects",
-            "name": "Import M68k project",
+            "name": "Import ASM Editor project",
             "accept": {
-                "text/*": [".s68k", ".asm", ".x68", ".mips"]
+                "application/zip": [".asmproj", ".zip"],
+                "text/*": [".s68k", ".asm", ".x68", ".mips", ".riscv", ".z80"]
             },
             "icons": [
                 {

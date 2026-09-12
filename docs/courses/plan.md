@@ -217,7 +217,10 @@ declare how many instructions the verification test runs them for.
 Playground fence, today: ` ```<lang>|playground|<flags> ` where `<lang>` is `m68k`, `mips`, `riscv`,
 `riscv64`, `z80`, `x86` and the flags are `memory`, `console`, `tests`, `pc`, `no-registers`,
 `no-flags`, `large`, `tall`, `allow-open`. Added by this plan: `screen` (shows the Screen panel, off
-unless present).
+unless present) and `open-screen` (the same panel, already unfolded instead of behind its "Show
+screen" bar; it implies `screen`). Every page in `src/content` that draws uses `open-screen`, decided
+on 2026-09-11: a reader whose program draws wants the drawing in front of them, and the bar is still
+there to fold it away.
 
 Exercise, to be supported by the renderer and the verification test:
 

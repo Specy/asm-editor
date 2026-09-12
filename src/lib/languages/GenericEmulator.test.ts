@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { GenericEmulator } from '$lib/languages/GenericEmulator.svelte'
+import {
+    ANIMATING_PANEL_REFRESH_MS,
+    GenericEmulator,
+    RUNNING_PANEL_REFRESH_MS
+} from '$lib/languages/GenericEmulator.svelte'
 import {
     EmulatorStatus,
     type CompileResult,
@@ -52,6 +56,13 @@ class FakeEmulator extends GenericEmulator<object, FakeRegister> {
 
     constructor(options: EmulatorSettings = {}) {
         super('', { systemSize: RegisterSize.Long, registerNames: ['R0'] }, options)
+        // Scheduler tests exercise an already-built fake Core without paying the unrelated compile
+        // setup cost. Real adapters acquire this capability only after a successful Build.
+        this.state.canExecute = true
+    }
+
+    sourceIdentity(): object {
+        return this._sources
     }
 
     protected getInstance(): object | null {
@@ -177,6 +188,23 @@ const emptyTestcase: Testcase = {
 
 afterEach(() => {
     vi.restoreAllMocks()
+})
+
+describe('source updates', () => {
+    it('does not rewrite reactive source state when the text is unchanged', () => {
+        const emulator = new FakeEmulator({ automaticChecking: false })
+        const initial = emulator.sourceIdentity()
+
+        emulator.setCode('')
+        emulator.setSources('')
+        expect(emulator.sourceIdentity()).toBe(initial)
+
+        emulator.setCode('nop')
+        const changed = emulator.sourceIdentity()
+        expect(changed).not.toBe(initial)
+        emulator.setSources('nop')
+        expect(emulator.sourceIdentity()).toBe(changed)
+    })
 })
 
 describe('peripheral injection', () => {
@@ -308,6 +336,36 @@ describe('slice scheduling', () => {
         expect(emulator.memoryReads).toBeGreaterThan(afterFirst)
     })
 
+    it('reads them far less often while a program is drawing on a watched Screen', async () => {
+        //reading the panels republishes `pc`, which re-renders the editor's zones and makes Monaco
+        //re-measure; while a Screen is being animated that is competing with the frames the user
+        //is actually watching
+        const emulator = new FakeEmulator()
+        emulator.peripherals.screen.watch()
+        emulator.refreshPanels(false)
+        const afterFirst = emulator.memoryReads
+        emulator.peripherals.screen.drawPixel(1, 1)
+        await new Promise((resolve) => setTimeout(resolve, RUNNING_PANEL_REFRESH_MS * 2))
+        //a display frame has passed, which would have been enough without a Screen being drawn on
+        for (let index = 0; index < 20; index++) emulator.refreshPanels(false)
+        expect(emulator.memoryReads).toBe(afterFirst)
+        await new Promise((resolve) => setTimeout(resolve, ANIMATING_PANEL_REFRESH_MS))
+        emulator.refreshPanels(false)
+        expect(emulator.memoryReads).toBeGreaterThan(afterFirst)
+    })
+
+    it('goes back to a refresh a frame once the drawing stops', async () => {
+        const emulator = new FakeEmulator()
+        emulator.peripherals.screen.watch()
+        emulator.peripherals.screen.drawPixel(1, 1)
+        emulator.refreshPanels(false)
+        const afterFirst = emulator.memoryReads
+        //nothing draws again, so the activity window runs out and the panels are live again
+        await new Promise((resolve) => setTimeout(resolve, SCREEN_ACTIVITY_MS))
+        emulator.refreshPanels(false)
+        expect(emulator.memoryReads).toBeGreaterThan(afterFirst)
+    })
+
     it('runs a long budget when no renderer is painting the Screen', async () => {
         //x86 has a Screen for shape and no panel, and any surface can have its Screen toggle closed:
         //nothing ever paints those, so `dirty` stays set and must not shorten every slice
@@ -372,7 +430,7 @@ describe('slice scheduling', () => {
         expect(emulator.requests.map((r) => r.speedCorrection)).toEqual([1, 1, 1])
     })
 
-    it('starts again from the adapters’ own estimates after a clear', async () => {
+    it('starts again from the adapters’ own estimates after a new Build', async () => {
         const time = controlledPerformanceTime()
         const emulator = new FakeEmulator()
         emulator.peripherals.screen.markPainted()
@@ -383,7 +441,7 @@ describe('slice scheduling', () => {
         }
         await emulator.run(1_000_000)
         expect(emulator.requests[1].speedCorrection).toBe(4)
-        emulator.clear()
+        await emulator.compile(0, '')
         emulator.behavior = () => ({ reason: 'terminated', instructions: 1 })
         await emulator.run(1_000_000)
         expect(emulator.requests[emulator.requests.length - 1].speedCorrection).toBe(1)
@@ -470,7 +528,11 @@ describe('pause', () => {
         }
         await emulator.run(1_000_000)
         await emulator.run(1_000_000)
-        expect(emulator.requests.map((r) => r.breakpoints)).toEqual([[7], [7], [7]])
+        expect(emulator.requests.map((r) => r.breakpoints)).toEqual([
+            [{ file: 'main', line: 7 }],
+            [{ file: 'main', line: 7 }],
+            [{ file: 'main', line: 7 }]
+        ])
         expect(emulator.requests.map((r) => r.speedCorrection)).toEqual([1, 4, 16])
     })
 

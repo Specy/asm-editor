@@ -24,7 +24,7 @@ each word is drawn:
 
 Press Run on this one and watch the Screen panel next to it.
 
-```mips|playground|screen|memory
+```mips|playground|open-screen|memory
 # @screen unit=16 width=256 height=256 base=display
 .data
 display: .space 1024        # 16 * 16 words, four bytes each
@@ -84,7 +84,7 @@ base + (y * columns + x) * 4
 which is the two dimensional array of "Arrays and strings" with an element size of 4. When the number
 of columns is a power of two, both multiplications are shifts.
 
-```mips|playground|screen|memory
+```mips|playground|open-screen|memory
 # @screen unit=16 width=256 height=256 base=display
 .eqv SIDE 16
 .data
@@ -130,7 +130,7 @@ Playground's budget is spent on drawing rather than on counting.
 
 This one runs until you press Stop.
 
-```mips|playground|screen
+```mips|playground|open-screen
 # @screen unit=16 width=256 height=256 base=display
 .eqv SIDE 16
 .eqv BACKGROUND 0x00101820
@@ -232,7 +232,7 @@ takes the character and makes room for the next one. That loop is **polling**.
 **Click the Screen panel before you type**: the screen only gets the keyboard when it has the focus,
 and a ring around it says so while it does.
 
-```mips|playground|screen|console|no-registers
+```mips|playground|open-screen|console|no-registers
 .eqv MMIO 0xffff0000
 .data
 banner: .asciiz "Click the screen, then type. q ends the program.\n"
@@ -311,7 +311,7 @@ The grid is 16 by 16 words at `display`. Paint the pixel at column 5, row 3 whit
 `0x00FFFFFF`, working the address out from the two coordinates rather than counting the bytes
 yourself. Row 3 column 5 is word `3 * 16 + 5`, which is 53, so the store lands at `0x10010000` plus 212.
 
-```mips|playground|screen|memory|exercise
+```mips|playground|open-screen|memory|exercise
 # @screen unit=16 width=256 height=256 base=display
 .eqv SIDE 16
 .data
@@ -336,7 +336,7 @@ main:
 <details>
 <summary>Show solution</summary>
 
-```mips|playground|screen|memory|solution
+```mips|playground|open-screen|memory|solution
 # @screen unit=16 width=256 height=256 base=display
 .eqv SIDE 16
 .data

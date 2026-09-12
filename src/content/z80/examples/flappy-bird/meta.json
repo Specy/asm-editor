@@ -1,0 +1,6 @@
+{
+    "name": "Flappy bird",
+    "description": "A game with a state machine in it: three states, gravity counted in sixteenths of a pixel, a press that only counts on the frame it began, and pipes clipped by hand because a coordinate is one byte.",
+    "order": 24,
+    "topic": "flappy-bird"
+}

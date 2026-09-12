@@ -63,9 +63,9 @@ Three words for causes that go through this machinery:
 
 None of the above happens here. Five things are different, and each of them changes what you write.
 
-**The only trap that assembles is `trap #15`.** `trap #14` fails to build with "Only implemented TRAP
-is 15 for IO, received 14". There are no trap vectors, so there is nothing for the other fifteen to
-point at.
+**The only trap with a simulator service is `trap #15`.** All sixteen encodings assemble, but running
+`trap #0` through `trap #14` ends the run with an unknown-trap error. There are no trap vectors, so
+there is nothing for those fifteen to point at.
 
 **There is no vector table.** The bottom of memory is memory like the rest of it, and writing there
 changes nothing about how the simulator behaves.
@@ -81,9 +81,12 @@ changes nothing about how the simulator behaves.
 bytes sitting there. On a 68000 you would have just set the reset stack pointer and the reset program
 counter.
 
-**`rte` does not exist here**, and neither do `stop`, `chk` or `trapv`: all four are build errors
-saying the instruction is unknown. There is no supervisor mode either, so there is nothing for a
-privilege violation to be violated.
+**There are no exception handlers here.** `rte`, `stop` and `reset` are recognised but fail to build
+with a reason specific to each instruction. `chk`, `trapv` and `illegal` do run, and end the run with
+their corresponding exception instead of jumping through a vector. `rtr` is available because it
+only restores the condition codes and a return address from the ordinary stack. The status register
+starts at `$2700` and can be read and written, but the simulator always runs as supervisor and its
+high byte has no effect.
 
 **A fault ends the run and puts a message under the editor.** These are the ones you will meet:
 
@@ -92,6 +95,9 @@ privilege violation to be violated.
 | `divu` or `divs` by zero              | `Division by zero`                                                  |
 | a word or long at an odd address      | `Address error: Tried to read/write to an odd memory address "..."` |
 | read past the end of the 16 megabytes | `Memory read out of bounds: ... maximum: 0x1000000`                 |
+| `chk` with a value outside its bounds | `CHK exception: ... is outside 0.....`                              |
+| `trapv` while V is set                | `Overflow exception: TRAPV ran while the overflow flag was set`     |
+| run `illegal`                         | `Illegal instruction exception`                                     |
 | a loop that never ends                | `Execution limit of 2000000 instructions reached`                   |
 
 Each of them names the line, and each of them stops the program where a real 68000 would have jumped

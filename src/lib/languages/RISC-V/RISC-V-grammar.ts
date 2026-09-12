@@ -3,10 +3,7 @@
 import type { languages } from 'monaco-editor'
 import { riscvDirectivesMap, riscvInstructionNames } from './RISC-V-documentation'
 
-import { ALTERNATIVE_RISCVRegister_NAMES } from './RISC-VEmulator.svelte'
-import { RISCV_REGISTERS } from '@specy/risc-v'
-
-const RISCVRegisterNames = [...RISCV_REGISTERS, ...ALTERNATIVE_RISCVRegister_NAMES]
+import { RISCVLanguageRegisterNames as RISCVRegisterNames } from './RISC-V-registers'
 
 export const RISCVLanguageConfiguration: languages.LanguageConfiguration = {
     wordPattern:
@@ -25,7 +22,7 @@ export const RISCVLanguageConfiguration: languages.LanguageConfiguration = {
 
 export const RISCVLanguage = <languages.IMonarchLanguage>{
     defaultToken: '',
-    ignoreCase: false,
+    ignoreCase: true,
     tokenPostfix: '.riscv',
 
     regEx: /\/(?!\/\/)(?:[^\/\\]|\\.)*\/[igm]*/,
@@ -43,7 +40,12 @@ export const RISCVLanguage = <languages.IMonarchLanguage>{
     tokenizer: {
         root: [
             // identifiers and keywords
-            [new RegExp(`(${RISCVRegisterNames.join('|')})`), 'variable.predefined'],
+            [
+                new RegExp(
+                    `\\b(?:${[...RISCVRegisterNames].sort((a, b) => b.length - a.length).join('|')})\\b`
+                ),
+                'variable.predefined'
+            ],
             [
                 /[.a-zA-Z_]\w*/,
                 {

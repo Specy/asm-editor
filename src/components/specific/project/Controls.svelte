@@ -17,6 +17,7 @@
 
     interface Props {
         executionDisabled: boolean
+        undoDisabled?: boolean
         hasTests: boolean
         canEditTests: boolean
         hasErrorsInTests?: boolean
@@ -31,6 +32,7 @@
 
     let {
         executionDisabled,
+        undoDisabled = executionDisabled,
         hasTests,
         canEditTests,
         hasErrorsInTests = false,
@@ -108,7 +110,7 @@
         </Button>
         <Button
             style="max-width: 5.5rem; flex:1; padding: 0.5rem 0.3rem"
-            disabled={executionDisabled || running || !canUndo}
+            disabled={undoDisabled || running || !canUndo}
             onClick={() => dispatch('undo')}
         >
             <Icon size={1} style="margin-right: 0.4rem;">

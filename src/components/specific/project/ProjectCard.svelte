@@ -12,6 +12,7 @@
     import { BUILTIN_THEMES, ThemeStore } from '$stores/themeStore.svelte'
     import { LANGUAGE_THEMES } from '$lib/Config'
     import FaShareAlt from '~icons/fa-solid/share-alt'
+    import { isSingleSourceProject } from '$lib/projectArchive'
 
     interface Props {
         project: Project
@@ -20,7 +21,12 @@
     let { project = $bindable() }: Props = $props()
     let textContent = $state(project.name || 'Unnamed')
     let descriptionContent = $state(project.description || '')
-    const dispatcher = createEventDispatcher<{ download: Project; share: Project }>()
+    const dispatcher = createEventDispatcher<{
+        download: Project
+        share: Project
+    }>()
+    /** One File travels as its source text; anything more only survives as the archive. */
+    const singleSource = $derived(isSingleSourceProject(project))
 
     const colors = $derived(
         BUILTIN_THEMES.find((t) => t.id === LANGUAGE_THEMES[project.language]) ?? BUILTIN_THEMES[0]
@@ -86,7 +92,9 @@
             <Button
                 cssVar="secondary"
                 style="width: 2.2rem; height: 2.2rem;"
-                title="Download this project"
+                title={singleSource
+                    ? 'Download this project as a source file'
+                    : 'Download this project as an archive'}
                 onClick={() => dispatcher('download', project)}
             >
                 <Icon>

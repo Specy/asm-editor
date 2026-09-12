@@ -12,7 +12,7 @@ way Print a number in any base without help does it, and the frame is drawn off 
 way A bouncing ball does. What is new is the board kept as **cells**, one byte for the column and
 one for the row packed into a word, which becomes pixels only at the moment something is drawn.
 
-```m68k|playground|screen|console|no-registers|no-flags|allow-open
+```m68k|playground|open-screen|console|no-registers|no-flags|allow-open
 COLS    equ 32              ; the board in cells
 ROWS    equ 24
 CELL    equ 20              ; and one cell in pixels

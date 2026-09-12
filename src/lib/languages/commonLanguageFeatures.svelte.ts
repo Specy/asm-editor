@@ -3,6 +3,7 @@ import type { MarsDisplayConfiguration, ProjectDisplay } from '$lib/languages/ma
 import type { InjectedPeripheralOptions } from '$lib/languages/peripherals/peripheralSet'
 import type { AvailableLanguages, Testcase, TestcaseResult } from '$lib/Project.svelte'
 import { unsignedBigIntToSigned } from '$lib/utils'
+import type { BuildInput, BuildSources } from '$lib/projectFiles'
 
 export type StatusRegister = {
     name: string
@@ -10,15 +11,31 @@ export type StatusRegister = {
     prev: number
 }
 export type DiagnosticSeverity = 'error' | 'warning' | 'suggestion'
+export type SourceBreakpoint = { file: string; line: number }
 
 type DiagnosticBase = {
+    file?: string
     lineIndex: number
+    /** One-based UTF-16 column, matching Monaco. */
     column: number
+    /** One-based, exclusive UTF-16 column. */
+    endColumn?: number
+    source?: string
+    code?: string
+    related?: {
+        file: string
+        lineIndex: number
+        column: number
+        endColumn: number
+        message: string
+    }[]
     line: {
         line: string
         line_index: number
     }
     message: string
+    /** Actionable help supplied by the Core, shown directly after the message when present. */
+    hint?: string
     formatted: string
 }
 
@@ -37,6 +54,7 @@ export type StackFrame = {
     destination: bigint
     sp: bigint
     line: number
+    file?: string
     color: string
 }
 
@@ -190,6 +208,7 @@ export type ExecutionStep = {
         bits: number
     }
     line: number
+    file?: string
 }
 
 export type MutationOperation =
@@ -241,7 +260,19 @@ export type EmulatorDecoration = {
     type: 'below-line'
     note?: string
     belowLine: number
+    file?: string
     md: string
+    /** Generated instructions shown below one original source line, in assembly-address order. */
+    instructions?: { address: bigint; code: string }[]
+}
+
+export type BuildArtifact = {
+    file: string
+    /** Zero-based source line. */
+    line: number
+    address: bigint
+    /** Emitted instruction bytes or machine word, written in hexadecimal, when the Core exposes it. */
+    opcode?: string
 }
 
 export type EmulatorInterrupt = {
@@ -257,6 +288,7 @@ export type BaseEmulatorState = {
     startingRegisterNames: string[]
     hiddenRegisters: string[]
     decorations: EmulatorDecoration[]
+    buildArtifacts: BuildArtifact[]
     statusRegisters: StatusRegister[]
     errors: string[]
     compilerDiagnostics: Diagnostic[]
@@ -264,6 +296,7 @@ export type BaseEmulatorState = {
     latestSteps: ExecutionStep[]
     callStack: StackFrame[]
     line: number
+    currentFile: string
     executionTime: number
     sp: bigint
     pc: bigint
@@ -275,7 +308,7 @@ export type BaseEmulatorState = {
      * for Step, Undo or another Run, as after a breakpoint.
      */
     paused: boolean
-    breakpoints: number[]
+    breakpoints: SourceBreakpoint[]
     interrupt?: EmulatorInterrupt
     memory: {
         global: MemoryTab
@@ -290,6 +323,8 @@ export type BaseEmulatorState = {
  */
 export type BaseEmulatorDerivedState = {
     readonly compilerErrors: Diagnostic[]
+    /** Immutable Files and Entry used by the current executable, retained until Stop. */
+    readonly buildSources?: BuildSources
 }
 
 export enum InterpreterStatus {
@@ -344,6 +379,8 @@ export type ColorizedLabel = {
 
 export type EmulatorSettings = {
     language?: AvailableLanguages
+    /** False when a Project-scoped Worker owns live diagnostics for this Emulator. */
+    automaticChecking?: boolean
     globalPageSize?: number
     globalPageElementsPerRow?: number
     baseAddress?: bigint
@@ -368,19 +405,23 @@ export type EmulatorSettings = {
      * default when left out. Changed later with `setScreenHistoryBudgetMb`.
      */
     screenHistoryBudgetMb?: number
+    /** FileSystem inverse-history budget in megabytes, applied at Build. */
+    fileSystemHistoryBudgetMb?: number
 }
 
 export type BaseEmulatorActions = {
-    compile: (historySize: number, codeOverride?: string) => Promise<void>
+    compile: (historySize: number, sourceOverride?: BuildInput) => Promise<void>
     step: () => Promise<boolean>
     run: (haltLimit: number) => Promise<InterpreterStatus>
     setGlobalMemoryAddress: (address: bigint) => void
     setCode: (code: string) => void
+    setSources: (sources: BuildInput) => void
     check: () => Promise<Diagnostic[]>
     clear: () => void
     setTabMemoryAddress: (address: bigint, tabId: number) => void
-    toggleBreakpoint: (line: number) => void
-    undo: (amount?: number) => void
+    toggleBreakpoint: (line: number, file?: string) => void
+    /** Returns how many instructions were actually rolled back, which can be fewer than asked. */
+    undo: (amount?: number) => number
     /**
      * Ends the current Run at its next slice boundary, preserving the program and undo history.
      * Does nothing when no run is in flight.
@@ -389,18 +430,23 @@ export type BaseEmulatorActions = {
     resetSelectedLine: () => void
     dispose: () => void
     test: (
-        code: string,
+        sources: BuildInput,
         testcases: Testcase[],
         haltLimit: number,
         historySize?: number
     ) => Promise<TestcaseResult[]>
     getLineFromAddress: (address: bigint) => number
+    getSourceLocationFromAddress: (address: bigint) => { file: string; line: number } | null
     readMemoryBytes: (address: bigint, length: number) => Uint8Array
     /**
      * A new Screen undo budget, applied on the next clear, which is what a Build starts with: a
      * Setting takes effect at the next Build and never resizes anything under a running program.
      */
+    /** The Entry path of the sources currently set. */
+    entry: string
     setScreenHistoryBudgetMb: (megabytes: number) => void
+    /** The same for the FileSystem's Undo budget, likewise read by the next Build's session. */
+    setFileSystemHistoryBudgetMb: (megabytes: number) => void
     /**
      * MIPS and RISC-V only: applies MARS's five bitmap-display parameters, re-syncing the Screen
      * from memory at once as the tool does. Absent on every other Emulator, whose Screen is the

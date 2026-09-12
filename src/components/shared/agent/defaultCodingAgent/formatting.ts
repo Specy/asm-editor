@@ -71,15 +71,21 @@ export function formatSize(size: RegisterSize) {
     return SIZE_NAMES[size] ?? String(size)
 }
 
-export function formatSourceLine(editorCode: string, lineIndex: number) {
+export function formatSourceLine(editorCode: string, lineIndex: number, file?: string) {
     if (lineIndex < 0) {
-        return { lineNumber: null, lineText: null, line: 'No current source line' }
+        return {
+            lineNumber: null,
+            lineText: null,
+            file: file ?? null,
+            line: 'No current source line'
+        }
     }
 
     const lineNumber = lineIndex + 1
     const lines = editorCode.split('\n')
     const lineText = lineNumber <= lines.length ? lines[lineNumber - 1] : null
-    return { lineNumber, lineText, line: `${lineNumber} | ${lineText ?? ''}` }
+    const prefix = file ? `${file}:${lineNumber}` : `${lineNumber}`
+    return { lineNumber, lineText, file: file ?? null, line: `${prefix} | ${lineText ?? ''}` }
 }
 
 export function formatDiagnostics(diagnostics: Diagnostic[]) {
@@ -92,15 +98,15 @@ export function formatDiagnostics(diagnostics: Diagnostic[]) {
  */
 export function collectEmulatorDiagnostics(
     emulator: Emulator,
-    checkDiagnostics: Diagnostic[] = []
+    checkDiagnostics: (Diagnostic | string)[] = []
 ) {
     return Array.from(
         new Set(
             [
-                ...formatDiagnostics(checkDiagnostics),
+                ...checkDiagnostics.map((d) => (typeof d === 'string' ? d : formatDiagnostic(d))),
                 ...formatDiagnostics(emulator.compilerDiagnostics),
                 ...emulator.errors
-            ].filter(Boolean)
+            ].filter((x): x is string => Boolean(x))
         )
     )
 }
@@ -109,56 +115,70 @@ export function collectEmulatorDiagnostics(
  * The subset that means "this did not work": error-severity diagnostics plus runtime errors.
  * Warnings and suggestions must never turn a successful compile or run into a tool failure.
  */
-export function collectEmulatorErrors(emulator: Emulator, checkDiagnostics: Diagnostic[] = []) {
+export function collectEmulatorErrors(
+    emulator: Emulator,
+    checkDiagnostics: (Diagnostic | string)[] = []
+) {
     return Array.from(
         new Set(
             [
-                ...formatDiagnostics(checkDiagnostics.filter((d) => d.severity === 'error')),
+                ...checkDiagnostics.map((d) =>
+                    typeof d === 'string' ? d : d.severity === 'error' ? formatDiagnostic(d) : null
+                ),
                 ...formatDiagnostics(emulator.compilerErrors),
                 ...emulator.errors
-            ].filter(Boolean)
+            ].filter((x): x is string => Boolean(x))
         )
     )
 }
 
-export function formatLatestSteps(editorCode: string, steps: ExecutionStep[], max = 10) {
-    return steps.slice(-max).map((step) => ({
-        line: formatSourceLine(editorCode, step.line).line,
-        pc: formatNumber(step.pc),
-        mutations: step.mutations.map((mutation) => {
-            switch (mutation.type) {
-                case 'WriteRegister':
-                    return {
-                        type: mutation.type,
-                        register: mutation.value.register,
-                        old: formatNumber(mutation.value.old, mutation.value.size),
-                        size: formatSize(mutation.value.size)
-                    }
-                case 'WriteMemory':
-                    return {
-                        type: mutation.type,
-                        address: formatNumber(mutation.value.address),
-                        old: formatNumber(mutation.value.old, mutation.value.size),
-                        size: formatSize(mutation.value.size)
-                    }
-                case 'WriteMemoryBytes':
-                    return {
-                        type: mutation.type,
-                        address: formatNumber(mutation.value.address),
-                        old: mutation.value.old
-                    }
-                case 'PushCallStack':
-                case 'PopCallStack':
-                    return {
-                        type: mutation.type,
-                        from: formatNumber(mutation.value.from),
-                        to: formatNumber(mutation.value.to)
-                    }
-                case 'Other':
-                    return { type: mutation.type, value: mutation.value }
-            }
-        })
-    }))
+export function formatLatestSteps(
+    codeOrResolver: string | ((file?: string) => string),
+    steps: ExecutionStep[],
+    max = 10
+) {
+    const resolve = typeof codeOrResolver === 'function' ? codeOrResolver : () => codeOrResolver
+    return steps.slice(-max).map((step) => {
+        const code = resolve(step.file)
+        return {
+            file: step.file ?? null,
+            line: formatSourceLine(code, step.line, step.file).line,
+            pc: formatNumber(step.pc),
+            mutations: step.mutations.map((mutation) => {
+                switch (mutation.type) {
+                    case 'WriteRegister':
+                        return {
+                            type: mutation.type,
+                            register: mutation.value.register,
+                            old: formatNumber(mutation.value.old, mutation.value.size),
+                            size: formatSize(mutation.value.size)
+                        }
+                    case 'WriteMemory':
+                        return {
+                            type: mutation.type,
+                            address: formatNumber(mutation.value.address),
+                            old: formatNumber(mutation.value.old, mutation.value.size),
+                            size: formatSize(mutation.value.size)
+                        }
+                    case 'WriteMemoryBytes':
+                        return {
+                            type: mutation.type,
+                            address: formatNumber(mutation.value.address),
+                            old: mutation.value.old
+                        }
+                    case 'PushCallStack':
+                    case 'PopCallStack':
+                        return {
+                            type: mutation.type,
+                            from: formatNumber(mutation.value.from),
+                            to: formatNumber(mutation.value.to)
+                        }
+                    case 'Other':
+                        return { type: mutation.type, value: mutation.value }
+                }
+            })
+        }
+    })
 }
 
 export function formatRegisters(emulator: Emulator) {
@@ -168,27 +188,47 @@ export function formatRegisters(emulator: Emulator) {
     }))
 }
 
-export function formatEmulatorState(editorCode: string, emulator: Emulator) {
+export function formatEmulatorState(
+    codeOrResolver: string | ((file?: string) => string),
+    emulator: Emulator
+) {
+    const resolve = typeof codeOrResolver === 'function' ? codeOrResolver : () => codeOrResolver
+    const currentFile = emulator.currentFile ?? emulator.entry ?? ''
+    const currentCode = resolve(currentFile)
+
+    const rawStdout = emulator.stdOut ?? ''
+    const stdoutLines = rawStdout.split('\n')
+    const maxStdoutLines = 100
+    const formattedStdout =
+        stdoutLines.length > maxStdoutLines
+            ? `[...${stdoutLines.length - maxStdoutLines} lines omitted...]\n` +
+              stdoutLines.slice(-maxStdoutLines).join('\n')
+            : rawStdout
+
     return {
         terminated: emulator.terminated,
         currentInterrupt: emulator.interrupt,
-        stdOut: emulator.stdOut,
-        breakpoints: emulator.breakpoints.map((breakpoint: number) => breakpoint + 1),
+        currentFile: currentFile || undefined,
+        stdOut: formattedStdout,
+        breakpoints: emulator.breakpoints
+            .filter((breakpoint) => !breakpoint.file || breakpoint.file === currentFile)
+            .map((breakpoint) => breakpoint.line + 1),
         canExecute: emulator.canExecute,
         canUndo: emulator.canUndo,
         callStack: emulator.callStack.map((frame) => ({
             address: formatNumber(frame.address),
             name: frame.name,
+            file: frame.file,
             line: frame.line + 1,
             color: frame.color,
             destinationAddress: formatNumber(frame.destination),
             stackPointer: formatNumber(frame.sp)
         })),
-        currentLine: formatSourceLine(editorCode, emulator.line).line,
+        currentLine: formatSourceLine(currentCode, emulator.line, currentFile).line,
         stackPointer: formatNumber(emulator.sp),
         programCounter: formatNumber(emulator.pc),
         statusRegisters: emulator.statusRegisters,
         registers: formatRegisters(emulator),
-        latestSteps: formatLatestSteps(editorCode, emulator.latestSteps)
+        latestSteps: formatLatestSteps(codeOrResolver, emulator.latestSteps)
     }
 }
