@@ -4,8 +4,8 @@ import type { ProjectFiles } from '$lib/projectFiles'
 export const SUPPORTED_LANGUAGES = ['M68K', 'MIPS', 'X86', 'RISC-V', 'RISC-V-64', 'Z80'] as const
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number]
 
-export const DEFAULT_TAKE_LINES = 100
-export const MAX_TAKE_LINES = 150
+export const DEFAULT_TAKE_LINES = 400
+export const MAX_TAKE_LINES = 800
 
 export const DEFAULT_CODING_AGENT_TOOL_NAMES = [
     'view_file',
