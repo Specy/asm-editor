@@ -360,3 +360,188 @@ histories can share, so sparse Screen records rewind ahead of intervening non-dr
 re-converge at the next drawing step. The performance change did not alter that behavior. Pause
 froze the image and Resume moved it again; Stop cleared the Screen to a canvas with no non-zero byte
 in it.
+
+# The journal, 2026-09-12
+
+A second round, six days after the first. The first round found that canvas submission is a
+rounding error and that what cost delivered frames was the yield between two slices; it left
+`copyRegion` in the profile at 94 ms/s on the no-wait drawing loop and decided a snapshot pool was
+not worth its correctness risk. Re-profiled on the branch as it stands, **`copyRegion` is 304 ms/s
+on that workload — 30% of the wall clock, more than the M68K Core itself at 27%** — so the decision
+was worth revisiting. `putImageData` is still under 1%.
+
+Same method as the first round: `npm run build`, `vite preview`, the Playwright
+`chrome-headless-shell`, one workload per fresh tab, 3 s warm-up and 10 s measured. This machine
+was doing other work throughout, so the fps numbers move a few percent between runs; the profile
+shares are the stable part, and the node measurements below are the ones to compare across the
+change.
+
+## Where the journal was spending it
+
+Three things, all in [`Screen.ts`](../../src/lib/languages/peripherals/screen/Screen.ts):
+
+- **`clear` and `present` copied a whole image to record it.** A 640 × 480 double-buffered frame
+  allocated and copied 2.4 MB before it drew anything, on top of the 1.2 MB fill and the 1.2 MB
+  present copy it actually needed.
+- **`drawPixel` journaled a 1 × 1 `patch`**: a four-byte `Uint8ClampedArray`, a patch object, a
+  record and a thirteen-field state snapshot, per pixel. `RECORD_OVERHEAD_BYTES` accounts that at
+  64 bytes; 800 000 plotted pixels accounted as 54 MB and cost **651 MB of real heap**, so the
+  budget did not bound what it claims to bound.
+- **A history budget of zero bought nothing.** `journal` built the record, `copyRegion` included,
+  and `ScreenHistory.push` evicted it on arrival.
+
+## What was changed
+
+- **Whole-image operations journal by transfer.** `clear` and `present` hand the journal the image
+  they are replacing and take a new one, instead of copying. Safe because `apply` reads a `patch`
+  record through `pasteRegion`, which copies out — an `images` record, whose arrays `apply` adopts,
+  is left alone.
+- **The images the budget drops are recycled.** `ScreenHistory` now takes an `onEvicted` callback,
+  and the Screen keeps up to `MAX_SPARE_IMAGES` full-size buffers from it. Only evicted records
+  are offered: a record `pop` returns is being undone and its pixels are still being read. Without
+  this the transfer was a wash in the browser — a fresh 1.2 MB allocation has to be zeroed, which
+  measured as expensive as the copy it replaced, `newImage` taking 145 ms/s on the no-wait loop.
+- **A single pixel is journaled as a packed number**, a new `pixel` record kind.
+- **The state snapshot is shared between records while nothing scalar has changed**, decided by
+  comparing the fields rather than by invalidating from each setter, so a scalar that grows a new
+  way of changing cannot leave a record holding a state the Screen was never in.
+- **A budget of zero skips the pixels**, journaling a `none` instead. The record is still pushed:
+  `sequence` and `depth` are what `ScreenInstructionHistory` reads to decide the Screen cannot be
+  rolled back, and a Screen that stopped counting would let a CPU Undo run against an image that
+  stayed where it was.
+
+## Measured, node v24.18.1
+
+A 640 × 480 double-buffered frame, `clear` + filled ellipse + `present`, 400 frames after 40 warm-up:
+
+| Frame                            |         mean |      p50 |          p95 |
+| -------------------------------- | -----------: | -------: | -----------: |
+| before                           |     1.265 ms | 1.019 ms |     3.323 ms |
+| journalling by transfer          |     0.659 ms | 0.484 ms |     1.673 ms |
+| and recycling the evicted images | **0.318 ms** | 0.306 ms | **0.400 ms** |
+| the same, journal budget 0       |     0.163 ms | 0.173 ms |     0.224 ms |
+| before, journal budget 0         |     1.067 ms | 0.989 ms |     1.789 ms |
+
+4.0× on the mean and **8.3× on the p95**: the tail was garbage collection, and recycling removes it.
+
+`drawPixel`, 640 × 480, the count run in one loop:
+
+| Pixels  | before                   | after                        |
+| ------- | ------------------------ | ---------------------------- |
+| 400 000 | 0.65 Mpx/s, heap +226 MB | 3.15–4.48 Mpx/s, heap +67 MB |
+| 800 000 | 0.97 Mpx/s, heap 651 MB  | 4.82 Mpx/s, heap 229 MB      |
+
+Taken apart on 400 000 pixels: the packed pixel record alone is 0.65 → 3.46 Mpx/s, the shared state
+snapshot alone 0.65 → 1.11, and together 4.81 — against 4.72 for the same loop with journalling
+stubbed out entirely. The two together give back the whole of it.
+
+## Measured, the built app
+
+| Workload                   | Screen fps  | Main thread | The Screen in the profile                                |
+| -------------------------- | ----------- | ----------- | -------------------------------------------------------- |
+| m68k bouncing ball         | 41.2 → 44.3 | 42% → 34%   | `copyRegion` 47 ms/s → `present` 4.8; GC 11 → 3.8        |
+| m68k drawing loop, no wait | 39.6 → 39.5 | 105% → 107% | 365 ms/s → 241 ms/s; GC 44 ms/s → out of the top sixteen |
+| z80 bouncing ball          | 60.5 → 60.5 | 10% → 9%    | —                                                        |
+| mips bouncing ball         | 60.5 → 59.8 | 11% → 7%    | —                                                        |
+
+The bouncing ball is paced by a 20 ms guest wait, so about 50 frames a second is its ceiling; it
+moved 3 frames closer to it and gave back an eighth of the main thread. The no-wait loop is
+scheduler-bound, exactly as the first round found — its frame rate does not move, and what the
+change buys is 124 ms/s of main thread and the collector falling out of the profile. What is left
+in it is not bookkeeping any more: `newImage` is the clear's fill and `present` is the copy to the
+visible image, both of which are the pixels the program asked for.
+
+## Still open
+
+Unchanged from the first round, and still the next thing worth doing: `MarsDevices` keeps one
+minimum/maximum dirty word interval, so a program writing two scattered framebuffer words re-reads
+the whole grid. Measured then at 29 delivered frames a second against a possible 60, with 47% of
+the wall clock in the Core's memory-read glue.
+
+New, and not a Screen change at all: `getBoundingClientRect` and `getClientRects` are 23 ms/s on the
+bouncing ball with nothing in the editor changing. The callers are Monaco's `readClientRects` and
+`prepareRenderText`, about 73 layout queries a second, because `RUNNING_PANEL_REFRESH_MS` is 16 and
+republishes `emulator.pc` every display frame. While a Screen is inside its activity window the user
+is watching pixels rather than registers, and a longer panel interval there would give most of that
+back.
+
+# The panels and the framebuffer bridge, 2026-09-12
+
+A third round the same day, taking the two items the second one left open, and re-testing one
+candidate it had proposed.
+
+Measurement note that cost an afternoon: this repository's `vite.config.ts` puts the dev server on
+**4173**, which is the port the earlier rounds also pointed `vite preview` at. With a dev server
+already running, preview silently falls back to 4174 and the harness measures whatever is on 4173.
+Measure on a port nothing else claims (`--strictPort` so a clash fails loudly), and check
+`/@vite/client` returns 404 before trusting a number. A second harness bug hid in the same place:
+wrapping `requestAnimationFrame` as `raf.call(this, …)` throws for a bare `requestAnimationFrame(…)`
+in strict module code, which is how `ScreenRenderer` calls it, so the paint loop died and the
+workload reported zero delivered frames while still reporting browser frames.
+
+## The panels, while a Screen is being drawn on
+
+`refreshRunningPanels` was rate limited to one display frame. The reads themselves are not the whole
+cost: `pc` moving republishes the editor's pseudo-instruction view zones, and Monaco re-measures
+them. Traced with `getBoundingClientRect` and `getClientRects` wrapped in the page, the bouncing
+ball was making about **73 layout queries a second with nothing in the editor changing**, through
+Monaco's `readClientRects` and `prepareRenderText`.
+
+**Adopted:** `ANIMATING_PANEL_REFRESH_MS`, 100 ms, used whenever `screenIsAnimating()` — the same
+`SCREEN_ACTIVITY_MS` window the slice budget already keeps, factored out so both ask one question.
+Outside that window the panels go straight back to a refresh a frame, and `force` is untouched, so an
+input prompt still shows current panels beside it.
+
+## The framebuffer bridge
+
+Implemented as the first round sketched it: a dirty map of `DIRTY_BLOCK_WORDS` (256) blocks instead
+of one minimum-to-maximum interval, flushed as contiguous runs, collapsing to a single span past
+`MAX_DIRTY_RUNS` (8) runs. A program writing its whole grid still flushes as one run, which is the
+case the old behaviour was right for.
+
+## Measured, the built app
+
+Same machine, one workload per process, `vite preview` on its own port. `mips sparse framebuffer` is
+two words a frame at opposite ends of a 256 × 256 word grid with a 16 ms sleep — the program the
+first round wrote to expose the case.
+
+| Workload                | Screen fps      | Main thread   |
+| ----------------------- | --------------- | ------------- |
+| mips sparse framebuffer | 46.7 → **59.2** | 28% → **8%**  |
+| m68k bouncing ball      | 43.0 → **45.1** | 34% → **20%** |
+| mips bouncing ball      | 59.7 → 59.4     | 9% → 9%       |
+
+The sparse framebuffer now reaches the display's rate. The bouncing ball gives back two fifths of
+the main thread it was using: in its profile the Svelte runtime falls from about 32 ms/s to 6, the
+memory grid's `currentAddress` leaves the top sixteen entirely, and `getBoundingClientRect` drops
+from 23.5 to 17.2 ms/s. The MIPS bouncing ball is unchanged, as expected — it erases and redraws
+adjacent cells, so its writes were always one run.
+
+## Measured and rejected: `present` as a page flip
+
+Proposed after the second round on the strength of a prototype that measured 0.330 → 0.171 ms a
+frame. **That prototype was wrong**: it handed the drawing array to `visible` and gave the drawing
+buffer a recycled one, so the `clear` that followed journaled a buffer whose contents were not the
+frame it claimed. `present`'s contract is that the drawing buffer keeps the presented image, so a
+flip does not remove the copy — it moves it into the next `clear`, which then has to copy the frame
+out of the visible image to journal it. With that copy put back:
+
+| Frame                          |     mean |      p95 |
+| ------------------------------ | -------: | -------: |
+| as it stands, 64 MiB journal   | 0.358 ms | 0.781 ms |
+| page flip, 64 MiB journal      | 0.293 ms | 0.517 ms |
+| as it stands, journal budget 0 | 0.118 ms | 0.169 ms |
+| page flip, journal budget 0    | 0.213 ms | 0.523 ms |
+
+A fifth faster in one case, nearly twice as slow in the other, for a change that would have to make
+36 `this.drawing` sites resolve a deferred copy correctly. Not worth it.
+
+## Still open
+
+The operations that still write a pixel at a time where they write contiguous runs, measured at
+640 × 480 with the journal off: `floodFill` over the whole image **31.4 ms**, a filled ellipse
+inscribed in it **11.1 ms**, a 4000-character text run **5.4 ms** — against 0.119 ms for a filled
+rectangle, which takes the word path. A span-based filled ellipse was prototyped and verified
+pixel-identical across 270 shapes: 3.4× at 40 × 40, 42.7× at 300 × 300 and **98.7× at 600 × 600**,
+where it is 17.0 ms against 172 µs. `floodFill` wants the same treatment as a scanline fill, and
+`paintGlyph` paints a cell's opaque background a byte at a time.

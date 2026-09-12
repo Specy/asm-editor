@@ -47,6 +47,17 @@ export type ScreenPixelRecord =
           height: number
           pixels: Uint8ClampedArray
       }
+    /**
+     * The one pixel a `drawPixel` overwrote, packed into a number rather than kept as a four-byte
+     * image. A pixel is what a plotting loop journals hundreds of thousands of times, and the
+     * typed array a `patch` would hold costs about thirty times the four bytes in it: measured on
+     * its own, routing single pixels through here took `drawPixel` from 0.65 to 3.46 million
+     * pixels a second, and with the shared state snapshot of `Screen.captureState` to 4.8 — the
+     * speed of the same loop with no journal at all.
+     *
+     * `value` holds the RGBA bytes in image order, red in the high byte.
+     */
+    | { kind: 'pixel'; target: 'drawing' | 'visible'; x: number; y: number; value: number }
     /** Both images, for the operations that replace them: resize and the buffering mode. A null
      * visible image means the two were the same array, which is how direct drawing is represented. */
     | { kind: 'images'; drawing: Uint8ClampedArray; visible: Uint8ClampedArray | null }
@@ -102,9 +113,21 @@ export class ScreenHistory {
     private _bytes = 0
     private _sequence = 0
     private _byteBudget: number
+    private readonly onEvicted: ((record: ScreenRecord) => void) | undefined
 
-    constructor(byteBudget: number = DEFAULT_SCREEN_HISTORY_BYTES) {
+    /**
+     * `onEvicted` is told about each record the budget drops, and only about those: a record the
+     * budget drops is unreachable, where a record `pop` hands back is being undone and its pixels
+     * are still being read. It is how the Screen gets its images back to draw on again — a
+     * double-buffered frame journals two whole images and drops two, 2.4 MB of them at 640 by 480
+     * — and nothing else may hold on to what it is handed.
+     */
+    constructor(
+        byteBudget: number = DEFAULT_SCREEN_HISTORY_BYTES,
+        onEvicted?: (record: ScreenRecord) => void
+    ) {
         this._byteBudget = Math.max(0, byteBudget)
+        this.onEvicted = onEvicted
     }
 
     /** How many bytes of pixels and bookkeeping the retained records hold. */
@@ -166,8 +189,9 @@ export class ScreenHistory {
 
     private evict(): void {
         while (this._bytes > this._byteBudget && this.records.length > 0) {
-            this.records.shift()
+            const dropped = this.records.shift()
             this._bytes -= this.costs.shift() ?? 0
+            if (dropped !== undefined) this.onEvicted?.(dropped)
         }
     }
 }

@@ -206,8 +206,8 @@
 
         This context is primarily the *Teach with a runnable example (course lecture)* workflow:
         - Ground every explanation in the lecture content below. Stay on-topic for this specific lecture; don't drift into unrelated material.
-        - Match the lecture's assembly language when writing examples. You may switch the editor language via set_code if the lecture calls for it.
-        - The editor below the lecture exists for demonstrations, so you are free to use set_code to load examples there.
+        - Match the lecture's assembly language when writing examples. You may switch the editor language via write_to_file if the lecture calls for it.
+        - The editor below the lecture exists for demonstrations, so you are free to use write_to_file to load examples there.
 
         Here is the lecture content for reference:
         <lecture_content>
@@ -229,22 +229,23 @@
                 'run an example from the lesson'
             ],
             requiredTools: [
-                'get_code',
+                'view_file',
                 'compile',
                 'update_breakpoints',
                 'run_to_completion',
                 'step',
                 'get_emulator_state',
-                'set_code'
+                'write_to_file',
+                'replace_file_content'
             ],
             verification:
                 'Tie each explanation to lecture content and compile results; do not execute examples unless the user explicitly asks for execution.',
             description: `
 When the user asks a question about the lecture topic or for a demonstration of the concept being taught.
-1. Put a small focused example in the editor via set_code so the user can see it next to the lecture content. A markdown code block in chat is not enough — the editor lets them run and modify it.
+1. Put a small focused example in the editor via write_to_file so the user can see it next to the lecture content. A markdown code block in chat is not enough — the editor lets them run and modify it.
 2. Compile the example and report whether it is valid.
 3. Do not call run_to_completion or step unless the user explicitly asks to execute/debug the example.
-4. If the user asks a follow-up, modify the example in-place via set_code and compile again.
+4. If the user asks a follow-up, modify the example in-place via replace_file_content and compile again.
 `
         }
     ]}

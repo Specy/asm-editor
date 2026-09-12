@@ -3,6 +3,7 @@
     import Button from '$cmp/shared/button/Button.svelte'
     import MemoryVisualiser from '$cmp/specific/project/memory/MemoryRenderer.svelte'
     import FaAngleLeft from '~icons/fa-solid/angle-left'
+    import FaSpinner from '~icons/fa-solid/spinner'
     import { createEventDispatcher, onMount, tick, type Snippet, untrack } from 'svelte'
     import FaKeyboard from '~icons/fa-solid/keyboard'
     import type {
@@ -40,6 +41,7 @@
     import MutationsViewer from '$cmp/specific/project/user-tools/MutationsRenderer.svelte'
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
     import FaDonate from '~icons/fa-solid/heart'
+    import FaCheck from '~icons/fa-solid/check'
     import { getM68kErrorMessage } from '$lib/languages/M68K/M68kUtils'
     import Row from '$cmp/shared/layout/Row.svelte'
     import TestcasesEditor from '$cmp/specific/project/testcases/TestcasesEditor.svelte'
@@ -824,6 +826,10 @@
         verticalOffset="3.2rem"
         editorLanguage={language}
         bind:editorCode={code}
+        bind:files
+        bind:entry
+        {fileSystem}
+        activePath={displayedPath}
         emulatorInstance={emulator}
         canUpdateLanguage={false}
         additionalInstructions={`
@@ -831,10 +837,10 @@
             The project editor has a code editor, registers view, memory view, execution controls, and breakpoints.
 
             This context is primarily the *Modify or extend existing code* and *Debug broken code* workflows:
-            - Always call get_code before editing. The user's existing code, labels, comments, and breakpoints are their work — preserve them.
-            - NEVER completely override the code unless the user explicitly asks for a rewrite. Make minimal, targeted changes via set_code.
+            - Always call view_file before editing. The user's existing code, labels, comments, and breakpoints are their work — preserve them.
+            - NEVER completely override the code unless the user explicitly asks for a rewrite. Make minimal, targeted changes via replace_file_content.
             - When the user reports something isn't working, follow the *Debug broken code* workflow: run the code, set breakpoints on the suspected region, step through, and report findings based on observed register/memory values rather than speculation.
-            - When the user asks a conceptual question ("how does X work"), follow the *Explain a concept (project-safe)* workflow. Do NOT call set_code to drop an example into the editor unsolicited — it would destroy the user's work.
+            - When the user asks a conceptual question ("how does X work"), follow the *Explain a concept (project-safe)* workflow. Do NOT call write_to_file or replace_file_content to drop an example into the editor unsolicited — it would modify the user's work.
         `}
         workflows={[
             {
@@ -851,15 +857,15 @@
                     'memory question',
                     'do not change my code'
                 ],
-                requiredTools: ['get_code'],
+                requiredTools: ['view_file'],
                 verification:
                     'Keep examples in chat unless the user explicitly confirms replacing or applying changes to the project code.',
                 description: `
 When the user asks a conceptual question ("how does X work", "show me Y") while working on their project. The editor already holds the user's code, so you must NOT overwrite it with an unrelated example.
 1. Answer the conceptual question in chat.
-2. If code would help illustrate it, put the example in a markdown code block in chat — do NOT call set_code.
+2. If code would help illustrate it, put the example in a markdown code block in chat — do NOT call replace_file_content or write_to_file.
 3. At the end of your message, ask the user whether they'd like you to load the example into the editor (which will replace their current code) or apply it to their existing code instead.
-4. Only call set_code after the user confirms, and after you've used get_code to understand what you're about to change.
+4. Only call replace_file_content or write_to_file after the user confirms, and after you've used view_file to understand what you're about to change.
 `
             }
         ]}
@@ -986,13 +992,17 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                                     class="analysis-spinner"
                                     title="Analyzing"
                                     aria-label="Analyzing"
-                                ></span>
+                                >
+                                    <FaSpinner />
+                                </span>
                             {:else if languageAnalysis && !languageAnalysisPending}
                                 <span
                                     class="analysis-ready"
                                     title="Analysis complete: no errors"
                                     aria-label="Analysis complete: no errors"
-                                ></span>
+                                >
+                                    <FaCheck />
+                                </span>
                             {/if}
                         {/if}
                     </span>
@@ -1320,16 +1330,16 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
             .source-identity {
                 position: absolute;
                 z-index: 3;
-                right: 0.9rem;
+                right: 0.7rem;
                 bottom: 0.7rem;
                 display: flex;
                 align-items: center;
                 max-width: calc(100% - 4.5rem);
                 gap: 0.45rem;
-                padding: 0.25rem 0.45rem;
+                padding: 0.25rem 0.25rem 0.25rem 0.5rem;
                 border-radius: 0.3rem;
-                color: var(--secondary-text);
-                background: color-mix(in srgb, var(--secondary) 92%, transparent);
+                color: var(--primary-text);
+                background: color-mix(in srgb, var(--primary) 80%, transparent);
                 box-shadow: 0 2px 8px rgb(0 0 0 / 0.2);
                 font-size: 0.72rem;
 
@@ -1360,17 +1370,14 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                 }
 
                 .analysis-ready {
-                    width: 0.45rem;
-                    height: 0.45rem;
-                    border-radius: 50%;
-                    background: color-mix(in srgb, var(--secondary-text) 48%, transparent);
+                    width: 0.6rem;
+                    height: 0.6rem;
+                    color: var(--green);
                 }
 
                 .analysis-spinner {
                     width: 0.72rem;
                     height: 0.72rem;
-                    border: 1.5px solid color-mix(in srgb, var(--secondary-text) 24%, transparent);
-                    border-top-color: color-mix(in srgb, var(--secondary-text) 72%, transparent);
                     border-radius: 50%;
                     animation: analysis-spin 650ms linear infinite;
                 }

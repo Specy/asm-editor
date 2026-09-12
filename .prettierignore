@@ -5,3 +5,7 @@ package-lock.json
 static/native-apps/
 /examples/
 /emulators/
+
+# Generated instruction tables: 1.2 MB of one-line records that Prettier would explode
+# into hundreds of thousands of lines. `scripts/x86-docs-generate.mjs` writes them formatted.
+src/lib/languages/X86/generated/

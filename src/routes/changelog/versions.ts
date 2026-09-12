@@ -13,7 +13,7 @@ export const versions: Version[] = [
         changes: [
             'MIPS, RISC-V and M68K simulators now implement more instructions and directives',
             "Improved M68K's assembler so that it gives better error messages and warnings",
-            'Stabilized X86 simulator to NASM syntax. Assembling and checking now runs quickly',
+            'Stabilized X86 simulator to NASM syntax. Assembling and checking now runs quickly. Added instruction documentation and autocomplete.',
             'Added Graphics, Mouse and Keyboard support to MIPS, RISC-V, M68K and Z80 simulators'
         ],
         notes: []

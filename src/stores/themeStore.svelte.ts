@@ -282,6 +282,75 @@ export const DEFAULT_Z80_THEME = {
     }
 } as const
 
+export const DEFAULT_X86_THEME = {
+    version: 1,
+    id: LANGUAGE_THEMES.X86,
+    extends: LANGUAGE_THEMES.X86,
+    name: 'Default x86',
+    editable: false,
+    theme: {
+        background: {
+            color: '#0a121a',
+            name: 'background',
+            prop: 'background'
+        },
+        primary: {
+            color: '#0a121a',
+            name: 'primary',
+            prop: 'primary'
+        },
+        secondary: {
+            color: '#111c26',
+            name: 'secondary',
+            prop: 'secondary'
+        },
+        tertiary: {
+            color: '#1a2c3a',
+            name: 'tertiary',
+            prop: 'tertiary'
+        },
+        accent: {
+            color: '#0f86dd',
+            name: 'accent',
+            prop: 'accent'
+        },
+        accent2: {
+            color: '#1d4a6b',
+            name: 'accent2',
+            prop: 'accent2'
+        },
+        hint: {
+            color: '#939393',
+            name: 'hint',
+            prop: 'hint',
+            readonly: true
+        },
+        textDarker: {
+            color: '#c1c1c1',
+            name: 'text-layered',
+            prop: 'textDarker',
+            readonly: true
+        },
+        scrollbar: {
+            color: '#2a5c80',
+            name: 'scrollbar',
+            prop: 'scrollbar'
+        },
+        red: {
+            color: '#ed4f4f',
+            name: 'red', //TODO rename to warn
+            prop: 'red',
+            readonly: true
+        },
+        green: {
+            color: '#356a59', //TODO rename to success
+            name: 'green',
+            prop: 'green',
+            readonly: true
+        }
+    }
+} as const
+
 export type ThemeKeys = keyof (typeof DEFAULT_THEME)['theme']
 export type ThemeProp<T = ThemeKeys> = {
     name: string
@@ -303,7 +372,8 @@ export const BUILTIN_THEMES: StoredTheme<ThemeKeys>[] = [
     DEFAULT_THEME,
     DEFAULT_MIPS_THEME,
     DEFAULT_RISCV_THEME,
-    DEFAULT_Z80_THEME
+    DEFAULT_Z80_THEME,
+    DEFAULT_X86_THEME
 ]
 
 function makeThemeStore(_theme: StoredTheme<ThemeKeys>) {

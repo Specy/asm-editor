@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { GenericEmulator } from '$lib/languages/GenericEmulator.svelte'
+import {
+    ANIMATING_PANEL_REFRESH_MS,
+    GenericEmulator,
+    RUNNING_PANEL_REFRESH_MS
+} from '$lib/languages/GenericEmulator.svelte'
 import {
     EmulatorStatus,
     type CompileResult,
@@ -329,6 +333,36 @@ describe('slice scheduling', () => {
         expect(emulator.memoryReads).toBe(afterFirst)
         //a trap that stops to ask the user something shows the panels beside the prompt
         emulator.refreshPanels(true)
+        expect(emulator.memoryReads).toBeGreaterThan(afterFirst)
+    })
+
+    it('reads them far less often while a program is drawing on a watched Screen', async () => {
+        //reading the panels republishes `pc`, which re-renders the editor's zones and makes Monaco
+        //re-measure; while a Screen is being animated that is competing with the frames the user
+        //is actually watching
+        const emulator = new FakeEmulator()
+        emulator.peripherals.screen.watch()
+        emulator.refreshPanels(false)
+        const afterFirst = emulator.memoryReads
+        emulator.peripherals.screen.drawPixel(1, 1)
+        await new Promise((resolve) => setTimeout(resolve, RUNNING_PANEL_REFRESH_MS * 2))
+        //a display frame has passed, which would have been enough without a Screen being drawn on
+        for (let index = 0; index < 20; index++) emulator.refreshPanels(false)
+        expect(emulator.memoryReads).toBe(afterFirst)
+        await new Promise((resolve) => setTimeout(resolve, ANIMATING_PANEL_REFRESH_MS))
+        emulator.refreshPanels(false)
+        expect(emulator.memoryReads).toBeGreaterThan(afterFirst)
+    })
+
+    it('goes back to a refresh a frame once the drawing stops', async () => {
+        const emulator = new FakeEmulator()
+        emulator.peripherals.screen.watch()
+        emulator.peripherals.screen.drawPixel(1, 1)
+        emulator.refreshPanels(false)
+        const afterFirst = emulator.memoryReads
+        //nothing draws again, so the activity window runs out and the panels are live again
+        await new Promise((resolve) => setTimeout(resolve, SCREEN_ACTIVITY_MS))
+        emulator.refreshPanels(false)
         expect(emulator.memoryReads).toBeGreaterThan(afterFirst)
     })
 

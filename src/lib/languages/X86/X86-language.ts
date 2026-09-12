@@ -8,6 +8,14 @@ import {
     type AssemblyTextOptions
 } from '$lib/languages/service/assemblyText'
 import { X86Directives, X86Instructions, X86Registers, X86SizeSpecifiers } from './X86-grammar'
+import {
+    describeX86Instruction,
+    formatX86Cpu,
+    formatX86Form,
+    hasX86InstructionPage,
+    x86InstructionMap,
+    type X86Instruction
+} from './X86-documentation'
 
 const instructionSet = new Set(X86Instructions.map((instruction) => instruction.toLowerCase()))
 const registerSet = new Set(X86Registers.map((register) => register.toLowerCase()))
@@ -31,91 +39,53 @@ export const X86_TEXT_OPTIONS = {
 
 type X86Form = { operands: string[]; description: string }
 
-/** High-confidence NASM forms used by signature help and snippets. */
-export const X86_SIGNATURES = new Map<string, X86Form[]>([
-    ['mov', [{ operands: ['destination', 'source'], description: 'Copy source to destination.' }]],
-    ['lea', [{ operands: ['register', '[address]'], description: 'Load an effective address.' }]],
-    ['xchg', [{ operands: ['left', 'right'], description: 'Exchange two operands.' }]],
-    ['push', [{ operands: ['source'], description: 'Push a value onto the stack.' }]],
-    ['pop', [{ operands: ['destination'], description: 'Pop a value from the stack.' }]],
-    ['call', [{ operands: ['target'], description: 'Call a procedure.' }]],
-    ['jmp', [{ operands: ['target'], description: 'Jump unconditionally.' }]],
-    [
-        'ret',
-        [
-            { operands: [], description: 'Return from a procedure.' },
-            { operands: ['bytes'], description: 'Return and discard stack arguments.' }
-        ]
-    ],
-    ['add', [{ operands: ['destination', 'source'], description: 'Add source to destination.' }]],
-    ['adc', [{ operands: ['destination', 'source'], description: 'Add with carry.' }]],
-    [
-        'sub',
-        [{ operands: ['destination', 'source'], description: 'Subtract source from destination.' }]
-    ],
-    ['sbb', [{ operands: ['destination', 'source'], description: 'Subtract with borrow.' }]],
-    ['cmp', [{ operands: ['left', 'right'], description: 'Compare two operands.' }]],
-    [
-        'test',
-        [{ operands: ['left', 'right'], description: 'Test bits without storing the result.' }]
-    ],
-    ['and', [{ operands: ['destination', 'source'], description: 'Bitwise AND.' }]],
-    ['or', [{ operands: ['destination', 'source'], description: 'Bitwise OR.' }]],
-    ['xor', [{ operands: ['destination', 'source'], description: 'Bitwise XOR.' }]],
-    ['inc', [{ operands: ['destination'], description: 'Increment an operand.' }]],
-    ['dec', [{ operands: ['destination'], description: 'Decrement an operand.' }]],
-    ['neg', [{ operands: ['destination'], description: 'Two’s-complement negation.' }]],
-    ['not', [{ operands: ['destination'], description: 'Invert every bit.' }]],
-    ['mul', [{ operands: ['source'], description: 'Unsigned multiply by the accumulator.' }]],
-    [
-        'imul',
-        [
-            { operands: ['source'], description: 'Signed multiply by the accumulator.' },
-            { operands: ['destination', 'source'], description: 'Signed two-operand multiply.' },
-            {
-                operands: ['destination', 'source', 'immediate'],
-                description: 'Signed multiply by an immediate.'
-            }
-        ]
-    ],
-    ['div', [{ operands: ['source'], description: 'Unsigned divide the accumulator.' }]],
-    ['idiv', [{ operands: ['source'], description: 'Signed divide the accumulator.' }]],
-    ['shl', [{ operands: ['destination', 'count'], description: 'Shift left.' }]],
-    ['shr', [{ operands: ['destination', 'count'], description: 'Logical shift right.' }]],
-    ['sar', [{ operands: ['destination', 'count'], description: 'Arithmetic shift right.' }]],
-    ['rol', [{ operands: ['destination', 'count'], description: 'Rotate left.' }]],
-    ['ror', [{ operands: ['destination', 'count'], description: 'Rotate right.' }]],
-    ['int', [{ operands: ['vector'], description: 'Invoke a software interrupt.' }]],
-    ['syscall', [{ operands: [], description: 'Enter the operating-system syscall handler.' }]],
-    ['nop', [{ operands: [], description: 'Perform no operation.' }]]
-])
+/**
+ * `mov` has 66 operand shapes and a signature picker cannot show 66 of anything, so the popup gets
+ * the widest few: this is a 64 bit editor, and a reader writing `mov rax, ` wants the 64 bit form
+ * first rather than the 8 bit one NASM's table happens to list first.
+ */
+const SIGNATURE_LIMIT = 6
 
-for (const instruction of X86Instructions) {
-    const lower = instruction.toLowerCase()
-    if (/^j(?!mp)[a-z]+$/.test(lower) && !X86_SIGNATURES.has(lower)) {
-        X86_SIGNATURES.set(lower, [
-            { operands: ['target'], description: 'Jump when the condition is true.' }
-        ])
-    }
-    if (/^set[a-z]+$/.test(lower) && !X86_SIGNATURES.has(lower)) {
-        X86_SIGNATURES.set(lower, [
-            { operands: ['destination'], description: 'Set a byte from a condition.' }
-        ])
-    }
-    if (/^cmov[a-z]+$/.test(lower) && !X86_SIGNATURES.has(lower)) {
-        X86_SIGNATURES.set(lower, [
-            {
-                operands: ['destination', 'source'],
-                description: 'Move when the condition is true.'
-            }
-        ])
-    }
+function widthOf(operands: string[]): number {
+    return operands.reduce((widest, operand) => {
+        const width = /(?:r\/m|reg|imm|mem)(\d+)/.exec(operand)
+        return Math.max(widest, width ? Number(width[1]) : 0)
+    }, 0)
 }
 
+/** The forms signature help and the snippets offer, widest first and without repeats. */
+function formsOf(instruction: X86Instruction): X86Form[] {
+    const seen = new Set<string>()
+    return [...instruction.forms]
+        .sort((left, right) => widthOf(right.operands) - widthOf(left.operands))
+        .filter((form) => {
+            const key = form.operands.join(',')
+            if (seen.has(key)) return false
+            seen.add(key)
+            return true
+        })
+        .slice(0, SIGNATURE_LIMIT)
+        .map((form) => ({
+            operands: form.operands,
+            description: instruction.summary || formatX86Form(instruction.name, form)
+        }))
+}
+
+/** Built once: the editor asks for these on every keystroke. */
+export const X86_SIGNATURES = new Map<string, X86Form[]>(
+    X86Instructions.map((name) => [name, formsOf(x86InstructionMap.get(name)!)])
+)
+
+/**
+ * The instructions whose operand is a label, so that completion offers the labels of the file
+ * instead of registers. Taken from NASM's own sections rather than from the spelling of the name:
+ * `jmp` and `jz` are jumps, `jecxz` is too, and `js` is not a store.
+ */
 const branchInstructions = new Set(
-    [...X86_SIGNATURES.keys()].filter(
-        (name) => name === 'call' || name === 'jmp' || /^j/.test(name)
-    )
+    X86Instructions.filter((name) => {
+        const section = x86InstructionMap.get(name)?.section
+        return section === 'Jumps' || section === 'Call and return'
+    })
 )
 
 function replacementAt(prefix: string): { word: string; startColumn: number; endColumn: number } {
@@ -190,7 +160,7 @@ export function createX86CompletionProvider(
                             item(
                                 instruction,
                                 monacoInstance.languages.CompletionItemKind.Function,
-                                'NASM instruction',
+                                x86InstructionMap.get(instruction)?.summary || 'NASM instruction',
                                 `010${instruction}`
                             )
                         )
@@ -367,17 +337,35 @@ export function createX86HoverProvider(monacoInstance: MonacoType): monaco.langu
             const original = wordInfo.word
             const word = original.toLowerCase()
             const contents: monaco.IMarkdownString[] = []
-            const forms = X86_SIGNATURES.get(word)
-            if (instructionSet.has(word)) {
-                const signatures = forms
-                    ?.map(
+            const instruction = x86InstructionMap.get(word)
+            if (instruction) {
+                const forms = X86_SIGNATURES.get(word) ?? []
+                const shapes = forms
+                    .map(
                         (form) =>
                             `\`${word}${form.operands.length ? ` ${form.operands.join(', ')}` : ''}\``
                     )
                     .join('  \n')
-                contents.push({
-                    value: `**NASM instruction:** \`${original}\`${signatures ? `\n\n${signatures}` : ''}`
-                })
+                const heading = instruction.summary
+                    ? `**${original}** ${instruction.summary}`
+                    : `**${original}**`
+                const since = instruction.cpu ? `${formatX86Cpu(instruction.cpu)} and later` : ''
+                const extensions = instruction.features.length
+                    ? `, ${instruction.features.join(', ')}`
+                    : ''
+                contents.push({ value: `${heading}${since ? `\n\n*${since}${extensions}*` : ''}` })
+                if (shapes) contents.push({ value: shapes })
+                // The first paragraph only: a hover is a reminder, and the page it links to is the
+                // place for the rest.
+                const description = describeX86Instruction(word).split('\n\n')[0]
+                if (description && description !== instruction.summary) {
+                    contents.push({ value: description })
+                }
+                if (hasX86InstructionPage(word)) {
+                    contents.push({
+                        value: `[Documentation](/documentation/x86/instruction/${word})`
+                    })
+                }
             } else if (registerSet.has(word)) {
                 contents.push({ value: `**Register:** \`${original}\`` })
             } else if (directiveSet.has(word) || directiveSet.has(`%${word}`)) {

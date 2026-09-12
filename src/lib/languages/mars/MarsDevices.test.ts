@@ -98,3 +98,144 @@ describe('the MARS receiver register', () => {
         expect(wordAt(MARS_RECEIVER_CONTROL)).toBe(MARS_READY_BIT)
     })
 })
+
+/**
+ * The bitmap display's flush. The grid is mirrored host-side and re-read from the Core between
+ * slices, and what a flush asks the Core for is the thing worth pinning: reading the whole grid
+ * because two scattered words changed is what cost this 47% of the wall clock before the dirty map.
+ */
+
+/** 256 words across and 4 down, so the grid is exactly four `DIRTY_BLOCK_WORDS` blocks. */
+const FOUR_BLOCKS = {
+    ...DEFAULT_PROJECT_DISPLAY,
+    width: 256,
+    height: 4,
+    unitWidth: 1,
+    unitHeight: 1
+}
+const BLOCK = 256
+const BASE = DEFAULT_PROJECT_DISPLAY.baseAddress
+
+function makeFramebuffer(display = FOUR_BLOCKS) {
+    type WriteObserver = (address: number, length: number, value: number) => void
+    let onWrite: WriteObserver | null = null
+    /** Every `readMemoryBytes` a flush made, as word ranges. */
+    const reads: { from: number; length: number }[] = []
+    /** What the Core "holds", so a read can answer with something a test can recognize. */
+    const memory = new Map<number, number>()
+    let nextHandle = 1
+    const core: MarsCore = {
+        readMemoryBytes: (address, length) => {
+            const from = ((address >>> 0) - BASE) >>> 2
+            reads.push({ from, length: length / 4 })
+            const bytes: number[] = []
+            for (let index = 0; index < length / 4; index++) {
+                const word = memory.get(from + index) ?? 0
+                bytes.push(word & 0xff, (word >> 8) & 0xff, (word >> 16) & 0xff, 0)
+            }
+            return bytes
+        },
+        setPeripheralWord: () => {},
+        addMemoryWriteObserver: (_start, _end, handler) => {
+            onWrite = handler
+            return nextHandle++
+        },
+        addMemoryAccessObserver: () => nextHandle++,
+        removeMemoryObserver: () => {}
+    }
+    const screen = new Screen({ width: 64, height: 64 })
+    const devices = new MarsDevices({
+        screen,
+        keyboard: new Keyboard({ holdIntervalMs: 0 }),
+        terminal: {
+            inputSource: 'interactive' as const,
+            write() {},
+            clear() {}
+        }
+    })
+    devices.attach(core, display)
+    reads.length = 0
+    return {
+        devices,
+        screen,
+        reads,
+        /** A program storing `value` at word `index` of the grid. */
+        store(index: number, value: number) {
+            memory.set(index, value)
+            onWrite?.(((BASE + index * 4) >>> 0) | 0, 4, value)
+        }
+    }
+}
+
+describe('the MARS bitmap display flush', () => {
+    it('reads only the blocks a scattered pair of stores touched', () => {
+        const { store, reads, devices } = makeFramebuffer()
+        //the worst case for a single minimum-to-maximum interval: opposite ends of the grid
+        store(0, 0xff0000)
+        store(4 * BLOCK - 1, 0x0000ff)
+        devices.flush()
+        expect(reads).toEqual([
+            { from: 0, length: BLOCK },
+            { from: 3 * BLOCK, length: BLOCK }
+        ])
+    })
+
+    it('shows those stores on the Screen all the same', () => {
+        const { store, devices, screen } = makeFramebuffer()
+        store(0, 0xff0000)
+        store(4 * BLOCK - 1, 0x0000ff)
+        devices.flush()
+        expect(screen.getPixel(0, 0)).toBe(0xff0000)
+        //the grid is 256 wide, so the last word of the last block is the last pixel of row 3
+        expect(screen.getPixel(255, 3)).toBe(0x0000ff)
+    })
+
+    it('reads one range for stores inside the same block', () => {
+        const { store, reads, devices } = makeFramebuffer()
+        store(1, 0x111111)
+        store(2, 0x222222)
+        store(BLOCK - 1, 0x333333)
+        devices.flush()
+        expect(reads).toEqual([{ from: 0, length: BLOCK }])
+    })
+
+    it('reads one range for neighbouring blocks', () => {
+        const { store, reads, devices } = makeFramebuffer()
+        store(BLOCK - 1, 0x111111)
+        store(BLOCK, 0x222222)
+        devices.flush()
+        expect(reads).toEqual([{ from: 0, length: 2 * BLOCK }])
+    })
+
+    it('reads the whole grid when a program writes all of it, as one range', () => {
+        const { store, reads, devices } = makeFramebuffer()
+        for (let index = 0; index < 4 * BLOCK; index += 7) store(index, index)
+        devices.flush()
+        expect(reads).toEqual([{ from: 0, length: 4 * BLOCK }])
+    })
+
+    it('flushes nothing when nothing was written', () => {
+        const { reads, devices } = makeFramebuffer()
+        devices.flush()
+        expect(reads).toEqual([])
+    })
+
+    it('forgets the dirty blocks once they are flushed', () => {
+        const { store, reads, devices } = makeFramebuffer()
+        store(0, 0x111111)
+        devices.flush()
+        reads.length = 0
+        devices.flush()
+        expect(reads).toEqual([])
+    })
+
+    it('collapses to one span when the stores are scattered over more runs than the cap', () => {
+        //a grid with more blocks than the cap, so alternating blocks make too many runs to be
+        //worth a call each
+        const many = { ...DEFAULT_PROJECT_DISPLAY, width: 256, height: 40, unitWidth: 1, unitHeight: 1 }
+        const { store, reads, devices } = makeFramebuffer(many)
+        for (let block = 0; block < 40; block += 2) store(block * BLOCK, 0x111111)
+        devices.flush()
+        expect(reads).toEqual([{ from: 0, length: 39 * BLOCK }])
+    })
+})

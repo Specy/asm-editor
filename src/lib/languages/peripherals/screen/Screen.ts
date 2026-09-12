@@ -68,6 +68,14 @@ const LINE_FEED = 0x0a
 const BYTES_PER_PIXEL = 4
 
 /**
+ * How many dropped images a Screen keeps to draw on again. A double-buffered frame needs two — one
+ * for the `clear` and one for the `present` — and evicts two, so anything above that is memory
+ * held for nothing; the third covers a frame that also resizes or presents twice. At 640 by 480
+ * they are 1.2 MB each, which is why this is not simply generous.
+ */
+const MAX_SPARE_IMAGES = 3
+
+/**
  * Which end of a 32-bit word the red byte lands on when the images are written a word at a time.
  * The images are RGBA bytes in memory order, so the word a little-endian host has to store for
  * them is ABGR; every desktop and phone this runs on is little-endian, and the other branch is
@@ -110,10 +118,25 @@ export class Screen {
     /** Depth of the open compound operations and the records they have collected so far. */
     private compoundDepth = 0
     private compoundRecords: ScreenRecord[] = []
+    /** The scalar state the last record took, reused while it still describes the Screen. */
+    private lastState: ScreenState | null = null
+    /**
+     * Images the journal's budget has dropped, kept to be drawn on again. A `clear` and a `present`
+     * each hand their old image to the journal and need a new one, and at 640 by 480 the budget is
+     * dropping two of exactly that size every frame — allocating a fresh one instead measured as
+     * expensive as the copy the transfer was meant to save, because a fresh page has to be zeroed.
+     *
+     * Only the images an eviction dropped go in here, and only those: they are unreachable by
+     * construction, where a record being undone is still being read from.
+     */
+    private spareImages: Uint8ClampedArray[] = []
 
     constructor(options: ScreenOptions) {
         this.options = options
-        this.history = new ScreenHistory(options.historyByteBudget ?? DEFAULT_SCREEN_HISTORY_BYTES)
+        this.history = new ScreenHistory(
+            options.historyByteBudget ?? DEFAULT_SCREEN_HISTORY_BYTES,
+            (record) => this.reclaim(record)
+        )
         this._width = Math.max(1, Math.trunc(options.width))
         this._height = Math.max(1, Math.trunc(options.height))
         this._backgroundColor = options.backgroundColor ?? BLACK
@@ -306,9 +329,10 @@ export class Screen {
 
     /** One pixel in the pen color. The pen width does not apply, as it does not to GDI's SetPixel. */
     drawPixel(x: number, y: number): void {
-        const point = { x: Math.trunc(x), y: Math.trunc(y) }
-        this.journalPatch('drawing', { ...point, width: 1, height: 1 })
-        this.paint(this.drawing, point.x, point.y, this._penColor)
+        const px = Math.trunc(x)
+        const py = Math.trunc(y)
+        this.journalPixel('drawing', px, py)
+        this.paint(this.drawing, px, py, this._penColor)
         this.markDrawn()
     }
 
@@ -410,10 +434,28 @@ export class Screen {
         this.markDrawn()
     }
 
-    /** Wipes text and graphics together and homes the text cursor, as EASy68K's task 11 $FF00 does. */
+    /**
+     * Wipes text and graphics together and homes the text cursor, as EASy68K's task 11 $FF00 does.
+     *
+     * The journal is given the image this replaces rather than a copy of it, which is one whole
+     * image copy less per call — a megabyte and a quarter at 640 by 480, on the operation an
+     * animating program reaches once a frame. Nothing aliases a `patch` record's pixels: `apply`
+     * reads them through `pasteRegion`, so handing the array over is safe in a way that handing
+     * over an `images` record's arrays, which `apply` adopts, would not be.
+     */
     clear(color: ScreenColor = this._backgroundColor): void {
-        this.journalPatch('drawing', this.fullRect())
-        fillImage(this.drawing, color)
+        if (this.journalsPixels) {
+            const replaced = this.drawing
+            const fresh = this.newImage(this._width, this._height, color)
+            this.journal({ kind: 'patch', target: 'drawing', ...this.fullRect(), pixels: replaced })
+            this.drawing = fresh
+            //direct drawing is two names for one array, so the visible image follows it
+            if (!this._doubleBuffering) this.visible = fresh
+        } else {
+            //nothing is keeping the old pixels, so the fill in place is the cheaper of the two
+            this.journalPatch('drawing', this.fullRect())
+            fillImage(this.drawing, color)
+        }
         this._cursorColumn = 0
         this._cursorRow = 0
         this.markDrawn()
@@ -454,8 +496,18 @@ export class Screen {
             this.markVisible()
             return
         }
-        this.journalPatch('visible', this.fullRect())
-        this.visible.set(this.drawing)
+        if (this.journalsPixels) {
+            //the same transfer `clear` does: the record takes the image being replaced, and the
+            //copy of the drawing buffer becomes the new one
+            const replaced = this.visible
+            const fresh = this.takeImage(this.drawing.length)
+            fresh.set(this.drawing)
+            this.journal({ kind: 'patch', target: 'visible', ...this.fullRect(), pixels: replaced })
+            this.visible = fresh
+        } else {
+            this.journalPatch('visible', this.fullRect())
+            this.visible.set(this.drawing)
+        }
         this.markVisible()
     }
 
@@ -657,6 +709,9 @@ export class Screen {
         //Stop can land while a compound is open, on a program suspended in the middle of a read
         this.discardCompound()
         this.history.clear()
+        //a Build can change the Screen size, and holding megabytes of the old one costs more than
+        //the allocation the next program's first frame pays
+        this.spareImages = []
         this._framebuffer = null
         this._cells = null
         this.cellGlyphs = null
@@ -906,6 +961,22 @@ export class Screen {
         else this.history.push(record)
     }
 
+    /**
+     * Whether copying pixels into a record buys anything. A Screen whose history budget is zero
+     * evicts every record as it arrives, so the copy a `patch` carries is allocated and dropped
+     * inside the same call — a `clear` and a `present` at 640 by 480 were paying two full image
+     * copies a frame for a journal the user had turned off.
+     *
+     * The record itself is still pushed, as a `none`: `sequence` and `depth` are what
+     * `ScreenInstructionHistory` reads to decide that the Screen cannot be rolled back, and a
+     * Screen that stopped counting its operations would let a CPU Undo run while the image stayed
+     * where it was, which is exactly what [ADR 0005](../../../../../docs/adr/0005-restore-screen-state-on-undo.md)
+     * forbids.
+     */
+    private get journalsPixels(): boolean {
+        return !this.memoryBacked && this.history.byteBudget > 0
+    }
+
     private discardCompound(): void {
         this.compoundDepth = 0
         this.compoundRecords = []
@@ -914,7 +985,7 @@ export class Screen {
     private journalPatch(target: 'drawing' | 'visible', rect: Rect | null): void {
         if (this.memoryBacked) return
         const clipped = rect === null ? null : this.clip(rect)
-        if (clipped === null) {
+        if (clipped === null || !this.journalsPixels) {
             this.journal({ kind: 'none' })
             return
         }
@@ -922,8 +993,39 @@ export class Screen {
         this.journal({ kind: 'patch', target, ...clipped, pixels: this.copyRegion(image, clipped) })
     }
 
+    /**
+     * The one pixel `drawPixel` is about to overwrite, as a number rather than a four-byte image.
+     * Clipping is the same contract `journalPatch` has: a point outside the Screen overwrites
+     * nothing, so its record carries no pixels.
+     */
+    private journalPixel(target: 'drawing' | 'visible', x: number, y: number): void {
+        if (this.memoryBacked) return
+        if (!this.journalsPixels || x < 0 || y < 0 || x >= this._width || y >= this._height) {
+            this.journal({ kind: 'none' })
+            return
+        }
+        const image = target === 'visible' ? this.visible : this.drawing
+        const offset = (y * this._width + x) * BYTES_PER_PIXEL
+        this.journal({
+            kind: 'pixel',
+            target,
+            x,
+            y,
+            value:
+                ((image[offset] << 24) |
+                    (image[offset + 1] << 16) |
+                    (image[offset + 2] << 8) |
+                    image[offset + 3]) >>>
+                0
+        })
+    }
+
     private journalImages(): void {
         if (this.memoryBacked) return
+        if (!this.journalsPixels) {
+            this.journal({ kind: 'none' })
+            return
+        }
         this.journal({
             kind: 'images',
             drawing: new Uint8ClampedArray(this.drawing),
@@ -932,8 +1034,38 @@ export class Screen {
         })
     }
 
+    /**
+     * The scalar state a record restores. Records share one object for as long as none of it has
+     * changed, which is what a drawing loop does: a plotting program allocates a thirteen-field
+     * snapshot per pixel otherwise, and that alone was worth 1.7 times the throughput of
+     * `drawPixel` when it went away.
+     *
+     * Sharing is decided by comparing the fields rather than by invalidating the cache from every
+     * setter, so a scalar that grows a new way of changing cannot leave records holding a state
+     * the Screen was never in. The object handed out is never written to: `apply` only reads it,
+     * and `endCompoundOperation` only passes it along.
+     */
     private captureState(): ScreenState {
-        return {
+        const last = this.lastState
+        if (
+            last !== null &&
+            last.width === this._width &&
+            last.height === this._height &&
+            last.penColor === this._penColor &&
+            last.fillColor === this._fillColor &&
+            last.backgroundColor === this._backgroundColor &&
+            last.penWidth === this._penWidth &&
+            last.penX === this._penX &&
+            last.penY === this._penY &&
+            last.cursorColumn === this._cursorColumn &&
+            last.cursorRow === this._cursorRow &&
+            last.cellWidth === this._cell.width &&
+            last.cellHeight === this._cell.height &&
+            last.doubleBuffering === this._doubleBuffering
+        ) {
+            return last
+        }
+        return (this.lastState = {
             width: this._width,
             height: this._height,
             penColor: this._penColor,
@@ -947,7 +1079,7 @@ export class Screen {
             cellWidth: this._cell.width,
             cellHeight: this._cell.height,
             doubleBuffering: this._doubleBuffering
-        }
+        })
     }
 
     private apply(record: ScreenRecord): void {
@@ -980,15 +1112,59 @@ export class Screen {
             const image = pixels.target === 'visible' ? this.visible : this.drawing
             this.pasteRegion(image, pixels)
             if (image === this.visible) this.markVisible()
+        } else if (pixels.kind === 'pixel') {
+            const image = pixels.target === 'visible' ? this.visible : this.drawing
+            const offset = (pixels.y * this._width + pixels.x) * BYTES_PER_PIXEL
+            image[offset] = (pixels.value >>> 24) & 0xff
+            image[offset + 1] = (pixels.value >>> 16) & 0xff
+            image[offset + 2] = (pixels.value >>> 8) & 0xff
+            image[offset + 3] = pixels.value & 0xff
+            if (image === this.visible) this.markVisible()
         }
     }
 
     // --------------------------------------------------------------- pixels
 
     private newImage(width: number, height: number, color: ScreenColor): Uint8ClampedArray {
-        const image = new Uint8ClampedArray(width * height * BYTES_PER_PIXEL)
+        const image = this.takeImage(width * height * BYTES_PER_PIXEL)
         fillImage(image, color)
         return image
+    }
+
+    /**
+     * An image of `bytes` to draw on, from what the journal dropped if one of the right size is
+     * there. Every caller overwrites the whole of it — `newImage` fills it and `present` copies the
+     * drawing buffer over it — so what the last owner left in it is never seen.
+     */
+    private takeImage(bytes: number): Uint8ClampedArray {
+        for (let index = this.spareImages.length - 1; index >= 0; index--) {
+            if (this.spareImages[index].length !== bytes) continue
+            const image = this.spareImages[index]
+            this.spareImages.splice(index, 1)
+            return image
+        }
+        return new Uint8ClampedArray(bytes)
+    }
+
+    /**
+     * Keeps the images of a record the budget dropped, up to `MAX_SPARE_IMAGES`. Only a `patch`
+     * holds pixels nothing else can reach: an `images` record's arrays are the ones `apply` hands
+     * straight back to the Screen, so a Screen that had been rolled back onto one would then be
+     * drawing on a buffer this had also given to someone else.
+     */
+    private reclaim(record: ScreenRecord): void {
+        const pixels = record.pixels
+        if (pixels.kind === 'compound') {
+            for (const inner of pixels.records) this.reclaim(inner)
+            return
+        }
+        if (pixels.kind !== 'patch') return
+        if (this.spareImages.length >= MAX_SPARE_IMAGES) return
+        //a patch smaller than the image is not worth keeping: it can only be reused by an
+        //operation dirtying exactly the same rectangle, and the pool would fill up with sizes
+        //nothing asks for
+        if (pixels.pixels.length !== this._width * this._height * BYTES_PER_PIXEL) return
+        this.spareImages.push(pixels.pixels)
     }
 
     private fullRect(): Rect {

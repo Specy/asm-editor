@@ -59,7 +59,20 @@ import { FileSystem, type FileSystemSession } from '$lib/languages/peripherals/F
  * per trap held the main thread at 76% busy and delivered 32 frames a second, and refreshing at
  * most this often held it at 47% and delivered 40.
  */
-const RUNNING_PANEL_REFRESH_MS = 16
+export const RUNNING_PANEL_REFRESH_MS = 16
+
+/**
+ * The same, while a Screen is being animated. Re-reading the panels does not only cost the reads:
+ * `pc` moving republishes the editor's pseudo-instruction zones, and Monaco re-measures them.
+ * Profiled in the headless shell on `m68k/bouncing-ball.x68`, Monaco's layout queries, the Svelte
+ * runtime and the memory grid were together about 60 of the 340 ms/s of main thread the workload
+ * used, with nothing in the editor changing.
+ *
+ * A program drawing on a Screen is one the user is watching the Screen of, and ten updates a second
+ * is still live for a register that is being read rather than stepped through. The moment the
+ * drawing stops, the activity window closes and the panels go back to a refresh a frame.
+ */
+export const ANIMATING_PANEL_REFRESH_MS = 250
 
 function buildSourcesEqual(left: BuildSources, right: BuildSources): boolean {
     if (left.entry !== right.entry) return false
@@ -806,21 +819,33 @@ export abstract class GenericEmulator<T, R extends string>
      * animation budget for as long as they draw, with no frames to show for it.
      */
     private sliceTimeBudgetMs(): number {
+        return this.screenIsAnimating() ? SCREEN_SLICE_MS : COMPUTE_SLICE_MS
+    }
+
+    /**
+     * Whether a Screen somebody is painting has changed within `SCREEN_ACTIVITY_MS`. Both the slice
+     * budget and the panel refresh ask, so the window lives here rather than in either of them; it
+     * is advanced by asking, which is why a caller that asks more often than once a slice only makes
+     * the window more current.
+     */
+    private screenIsAnimating(): boolean {
         const screen = this._peripherals.screen
-        if (!screen.watched) return COMPUTE_SLICE_MS
+        if (!screen.watched) return false
         const now = performance.now()
         if (screen.version !== this.lastScreenVersion) {
             this.lastScreenVersion = screen.version
             this.screenActiveUntil = now + SCREEN_ACTIVITY_MS
         }
-        return now < this.screenActiveUntil ? SCREEN_SLICE_MS : COMPUTE_SLICE_MS
+        return now < this.screenActiveUntil
     }
 
     /**
      * The panels, refreshed from inside a running program — the path an adapter takes when its Core
      * stops on an interrupt. Reading the registers, a page of memory per tab, the call stack and the
      * undo history is not free, and none of it can be seen more than once a display frame, so it is
-     * rate limited to `RUNNING_PANEL_REFRESH_MS` rather than done per interrupt.
+     * rate limited to `RUNNING_PANEL_REFRESH_MS` rather than done per interrupt — and to
+     * `ANIMATING_PANEL_REFRESH_MS` while a Screen is being drawn on, where the frames are what the
+     * user is watching and the refresh is competing with them for the thread.
      *
      * `force` is for the interrupts that suspend the program for the user: an input prompt is read
      * beside the panels, and the user has all the time in the world to notice that they are one
@@ -829,7 +854,10 @@ export abstract class GenericEmulator<T, R extends string>
      */
     protected refreshRunningPanels(force: boolean): void {
         const now = performance.now()
-        if (!force && now - this.lastPanelRefresh < RUNNING_PANEL_REFRESH_MS) return
+        const interval = this.screenIsAnimating()
+            ? ANIMATING_PANEL_REFRESH_MS
+            : RUNNING_PANEL_REFRESH_MS
+        if (!force && now - this.lastPanelRefresh < interval) return
         this.lastPanelRefresh = now
         this.updateRegisters()
         this.updateStatusRegisters()

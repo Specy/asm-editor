@@ -170,7 +170,9 @@ describe('assembly signature help', () => {
 
         const x86 = await signature(createX86SignatureHelpProvider(monacoStub), 'mov rax, ')
         expect(x86?.value.activeParameter).toBe(1)
-        expect(x86?.value.signatures[0]?.label).toBe('mov destination, source')
+        // The forms come from NASM's own table, widest first, so what the popup shows is what the
+        // assembler accepts rather than a placeholder.
+        expect(x86?.value.signatures[0]?.label).toBe('mov r/m64, reg64')
     })
 
     it('keeps x86 operand completion contextual', async () => {

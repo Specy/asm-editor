@@ -24,6 +24,7 @@
     import { resolveEditorModel, type EditorModelStore, type EditorSource } from './editorSource'
     import { zeroBasedLineToMonaco } from '$lib/languages/service/monacoConversions'
     import { setModelBuildArtifacts } from '$lib/monaco/assemblyInsights'
+    import { keepHoverReachable } from '$lib/monaco/hoverReachability'
 
     interface Props {
         disabled?: boolean
@@ -180,6 +181,7 @@
             cursorSmoothCaretAnimation: 'on'
         })
         editor = mountedEditor
+        toDispose.push(keepHoverReachable(mountedEditor, overflowWidgets))
         const observer = new ResizeObserver(() => {
             if (!mockEditor) return
             const bounds = mockEditor.getBoundingClientRect()

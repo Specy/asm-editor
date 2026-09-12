@@ -419,7 +419,7 @@
         border: 1px solid color-mix(in srgb, var(--tertiary) 80%, transparent);
         border-radius: 0.2rem;
         color: var(--secondary-text);
-        background: var(--secondary);
+        background: color-mix(in srgb, var(--primary) 80%, transparent);
         box-shadow: 0 2px 10px rgb(0 0 0 / 0.28);
         cursor: pointer;
 
@@ -447,7 +447,7 @@
         min-height: 0;
         color: var(--secondary-text);
         overflow: hidden;
-        background: color-mix(in srgb, var(--secondary) 82%, transparent);
+        background: color-mix(in srgb, var(--primary) 80%, transparent);
         border: 1px solid var(--tertiary);
         border-radius: 0.45rem;
         box-shadow: -5px 0 18px rgb(0 0 0 / 0.3);
@@ -706,10 +706,11 @@
         position: absolute;
         z-index: 1;
         top: 0;
-        right: 0.15rem;
+        right: 0;
         align-items: center;
         height: 100%;
         padding-left: 0.55rem;
+        padding-right: 0.15rem;
         opacity: 0;
         pointer-events: none;
         background: linear-gradient(90deg, transparent, var(--tertiary) 22%);
@@ -726,6 +727,7 @@
     .file:focus-within .row-actions {
         opacity: 1;
         pointer-events: auto;
+        color: var(--primary-text);
     }
 
     .empty {

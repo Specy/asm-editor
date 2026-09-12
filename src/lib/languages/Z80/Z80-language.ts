@@ -463,7 +463,7 @@ function cell(text: string, maxLength: number): string {
 
 function formatFlags(variant: Z80InstructionVariant): string {
     const touched = variant.flagsTable.filter((flag) => flag.effect !== '-')
-    if (touched.length === 0) return '—'
+    if (touched.length === 0) return '-'
     //the table writes an undefined flag as either `*` or a space; a space would render as a chip
     //with a blank in it, which reads as "affected, effect missing" rather than "undefined"
     return touched
@@ -477,7 +477,7 @@ function formatCycles(variant: Z80InstructionVariant): string {
 }
 
 function formatInstructionHover(name: string, variants: Z80InstructionVariant[]): string {
-    const header = `**${name}** — ${formatZ80InstructionSummary(variants)}`
+    const header = `**${name}** - ${formatZ80InstructionSummary(variants)}`
     const rows = variants.slice(0, HOVER_VARIANT_LIMIT).map((variant) => {
         const instruction = variant.undocumented
             ? `\`${variant.instruction}\` ⚠`
@@ -524,14 +524,14 @@ export function createZ80HoverProvider(monaco: MonacoType): monaco.languages.Hov
             if (register) {
                 const badge = register.undocumented ? ' *(undocumented)*' : ''
                 contents.push({
-                    value: `**${register.name}** — ${register.bits} bit register${badge}\n\n${register.description}`
+                    value: `**${register.name}** - ${register.bits} bit register${badge}\n\n${register.description}`
                 })
             }
 
             const condition = conditionMap.get(lower)
             if (condition) {
                 contents.push({
-                    value: `**${condition.name}** — condition code\n\n${condition.description}`
+                    value: `**${condition.name}** - condition code\n\n${condition.description}`
                 })
             }
 
@@ -545,7 +545,7 @@ export function createZ80HoverProvider(monaco: MonacoType): monaco.languages.Hov
                         ? `\n\nAlso written ${synonyms.map((name) => `\`${name}\``).join(', ')}.`
                         : ''
                 contents.push({
-                    value: `**${directive.primary}** — directive\n\n${directive.description}${also}`
+                    value: `**${directive.primary}** - directive\n\n${directive.description}${also}`
                 })
             }
 

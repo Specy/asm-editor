@@ -3,10 +3,15 @@ import { z } from 'zod'
 import type { Emulator } from '$lib/languages/Emulator'
 import { InterpreterStatus } from '$lib/languages/commonLanguageFeatures.svelte'
 import { delay } from '$lib/utils'
+import { defaultEntryPath } from '$lib/Project.svelte'
+import { fileText, type ProjectFile } from '$lib/projectFiles'
 import {
     DEFAULT_CODING_AGENT_TOOL_NAMES,
+    DEFAULT_TAKE_LINES,
+    MAX_TAKE_LINES,
     SUPPORTED_LANGUAGES,
-    type SupportedLanguage
+    type DefaultCodingAgentToolContext,
+    type DefaultCodingAgentToolName
 } from './types'
 import {
     collectEmulatorDiagnostics,
@@ -17,16 +22,6 @@ import {
 } from './formatting'
 import { runAgentTool, stringifyToolError } from './toolResults'
 
-type DefaultCodingAgentToolContext = {
-    canUpdateLanguage: boolean
-    canUseSetCode: boolean
-    getEditorLanguage: () => SupportedLanguage | null
-    setEditorLanguage: (language: SupportedLanguage) => void
-    getEditorCode: () => string
-    setEditorCode: (code: string) => void
-    getEmulator: () => Emulator | null
-}
-
 type ExecutionBlocker = {
     error: string
     retryable: boolean
@@ -35,12 +30,6 @@ type ExecutionBlocker = {
 
 function getLineCount(code: string) {
     return code.length === 0 ? 1 : code.split('\n').length
-}
-
-function getBreakpointLines(emulator: Emulator) {
-    return emulator.breakpoints
-        .filter((breakpoint) => breakpoint.file === emulator.currentFile)
-        .map((breakpoint) => breakpoint.line + 1)
 }
 
 function statusName(status: InterpreterStatus) {
@@ -53,6 +42,208 @@ function parseHexAddress(address: string) {
     return BigInt(trimmedAddress.startsWith('0x') ? trimmedAddress : `0x${trimmedAddress}`)
 }
 
+export function getEffectiveEntry(context: DefaultCodingAgentToolContext): string {
+    const lang = context.getEditorLanguage()
+    return context.getEntryPath?.() ?? (lang ? defaultEntryPath(lang) : 'main.s')
+}
+
+export function getAllProjectFiles(context: DefaultCodingAgentToolContext): Record<string, string> {
+    if (context.getFiles) {
+        const raw = context.getFiles()
+        const result: Record<string, string> = {}
+        for (const [path, fileOrContent] of Object.entries(raw)) {
+            if (typeof fileOrContent === 'string') {
+                result[path] = fileOrContent
+            } else if (
+                fileOrContent &&
+                typeof fileOrContent === 'object' &&
+                'content' in fileOrContent
+            ) {
+                result[path] = fileText(fileOrContent as ProjectFile)
+            }
+        }
+        if (Object.keys(result).length > 0) {
+            return result
+        }
+    }
+    const entry = getEffectiveEntry(context)
+    const code = context.getEditorCode?.() ?? ''
+    return { [entry]: code }
+}
+
+export function getFile(
+    context: DefaultCodingAgentToolContext,
+    path?: string
+): { path: string; content: string } | null {
+    const entry = getEffectiveEntry(context)
+    const targetPath = path ?? context.getActivePath?.() ?? entry
+    if (context.getFile) {
+        const content = context.getFile(targetPath)
+        if (content !== null && content !== undefined) {
+            return { path: targetPath, content }
+        }
+    }
+    const all = getAllProjectFiles(context)
+    if (targetPath in all) {
+        return { path: targetPath, content: all[targetPath] }
+    }
+    if (!path && context.getEditorCode) {
+        return { path: entry, content: context.getEditorCode() }
+    }
+    return null
+}
+
+export function setFile(context: DefaultCodingAgentToolContext, path: string, content: string) {
+    if (context.setFile) {
+        context.setFile(path, content)
+    } else if (context.setEditorCode) {
+        context.setEditorCode(content)
+    }
+}
+
+export function deleteFile(context: DefaultCodingAgentToolContext, path: string): boolean {
+    if (context.deleteFile) {
+        context.deleteFile(path)
+        return true
+    }
+    return false
+}
+
+export function syncEmulator(context: DefaultCodingAgentToolContext, emulator: Emulator) {
+    const all = getAllProjectFiles(context)
+    const entry = getEffectiveEntry(context)
+    const projectFiles: Record<string, ProjectFile> = {}
+    for (const [p, c] of Object.entries(all)) {
+        projectFiles[p] = { encoding: 'plain', content: c }
+    }
+    emulator.setSources({
+        files: projectFiles,
+        entry
+    })
+}
+
+/**
+ * Slices lines using standard 1-indexed line numbers [startLine, endLine], clamped to maxLines.
+ * Returns clean, unformatted raw source lines matching standard coding harness read tools.
+ */
+export function sliceLinesRange(
+    content: string,
+    startLine = 1,
+    endLine?: number,
+    maxLines = MAX_TAKE_LINES
+) {
+    const lines = content.length === 0 ? [''] : content.split('\n')
+    const lineCount = lines.length
+    const clampedStart = Math.max(1, Math.min(startLine, lineCount))
+    const defaultEnd = Math.min(clampedStart + DEFAULT_TAKE_LINES - 1, lineCount)
+    const requestedEnd = endLine !== undefined ? Math.min(endLine, lineCount) : defaultEnd
+    const clampedEnd = Math.min(requestedEnd, clampedStart + maxLines - 1)
+
+    const sliced = lines.slice(clampedStart - 1, clampedEnd)
+    const returnedLines = sliced.length
+    const hasMore = clampedEnd < lineCount
+    const nextStartLine = hasMore ? clampedEnd + 1 : null
+
+    return {
+        code: sliced.join('\n'),
+        lineCount,
+        startLine: clampedStart,
+        endLine: clampedEnd,
+        returnedLines,
+        hasMore,
+        nextStartLine
+    }
+}
+
+/**
+ * Performs exact string replacement in file content with optional start_line and end_line bounds.
+ */
+export function replaceFileContent(
+    existingContent: string,
+    targetContent: string,
+    replacementContent: string,
+    startLine?: number,
+    endLine?: number
+):
+    | { success: true; newContent: string; lineIndex: number }
+    | { success: false; error: string; occurrences?: number[] } {
+    if (targetContent.length === 0) {
+        return { success: false, error: 'target_content cannot be empty.' }
+    }
+
+    const lines = existingContent.split('\n')
+
+    let searchStartIndex = 0
+    let searchEndIndex = existingContent.length
+
+    if (startLine !== undefined && startLine >= 1) {
+        let charIndex = 0
+        for (let i = 0; i < startLine - 1 && i < lines.length; i++) {
+            charIndex += lines[i].length + 1
+        }
+        searchStartIndex = charIndex
+    }
+
+    if (endLine !== undefined && endLine >= 1) {
+        let charIndex = 0
+        for (let i = 0; i < endLine && i < lines.length; i++) {
+            charIndex += lines[i].length + 1
+        }
+        searchEndIndex = Math.min(charIndex, existingContent.length)
+    }
+
+    const searchSubstring = existingContent.slice(searchStartIndex, searchEndIndex)
+
+    const occurrences: number[] = []
+    let pos = searchSubstring.indexOf(targetContent)
+    while (pos !== -1) {
+        const absolutePos = searchStartIndex + pos
+        const lineNum = existingContent.slice(0, absolutePos).split('\n').length
+        occurrences.push(lineNum)
+        pos = searchSubstring.indexOf(targetContent, pos + 1)
+    }
+
+    if (occurrences.length === 0) {
+        // Check if targetContent exists outside the window
+        const globalOccurrences: number[] = []
+        let gPos = existingContent.indexOf(targetContent)
+        while (gPos !== -1) {
+            globalOccurrences.push(existingContent.slice(0, gPos).split('\n').length)
+            gPos = existingContent.indexOf(targetContent, gPos + 1)
+        }
+
+        if (globalOccurrences.length > 0) {
+            return {
+                success: false,
+                error: `target_content was not found between lines ${startLine ?? 1} and ${endLine ?? lines.length}, but was found at line(s): ${globalOccurrences.join(', ')}. Expand or remove start_line/end_line.`,
+                occurrences: globalOccurrences
+            }
+        }
+
+        return {
+            success: false,
+            error: `target_content was not found in the file. Ensure the snippet matches exact text, comments, indentation, and newlines.`
+        }
+    }
+
+    if (occurrences.length > 1) {
+        return {
+            success: false,
+            error: `target_content matches ${occurrences.length} times in the file at lines ${occurrences.join(', ')}. Please provide more surrounding context or specify start_line and end_line bounds to make the match unique.`,
+            occurrences
+        }
+    }
+
+    const matchCharIndex = searchStartIndex + searchSubstring.indexOf(targetContent)
+    const newContent =
+        existingContent.slice(0, matchCharIndex) +
+        replacementContent +
+        existingContent.slice(matchCharIndex + targetContent.length)
+
+    const matchedLineNumber = occurrences[0]
+    return { success: true, newContent, lineIndex: matchedLineNumber - 1 }
+}
+
 async function waitForReplacementEmulator(
     context: DefaultCodingAgentToolContext,
     previousEmulator: Emulator | null,
@@ -61,10 +252,10 @@ async function waitForReplacementEmulator(
     const startedAt = Date.now()
     while (Date.now() - startedAt < timeoutMs) {
         const emulator = context.getEmulator()
-        if (emulator && emulator !== previousEmulator) {
+        if (emulator && (previousEmulator === null || emulator !== previousEmulator)) {
             return { loaded: true, waitMs: Date.now() - startedAt }
         }
-        await delay(100)
+        await delay(50)
     }
     return { loaded: false, waitMs: Date.now() - startedAt }
 }
@@ -78,7 +269,7 @@ function executionBlocker(emulator: Emulator, action: 'execute' | 'undo'): Execu
                     : 'Cannot execute. Code is not compiled or the current program state is invalid.',
             retryable: true,
             nextAction:
-                'Call compile first. If compile reports errors, fix them with set_code before trying again.'
+                'Call compile first. If compile reports errors, fix them with replace_file_content or write_to_file before trying again.'
         }
     }
 
@@ -111,204 +302,482 @@ function executionBlocker(emulator: Emulator, action: 'execute' | 'undo'): Execu
     return null
 }
 
-function executionDetails(editorCode: string, emulator: Emulator) {
+function executionDetails(context: DefaultCodingAgentToolContext, emulator: Emulator) {
     return {
         errors: collectEmulatorErrors(emulator),
         diagnostics: collectEmulatorDiagnostics(emulator),
-        state: formatEmulatorState(editorCode, emulator)
+        state: formatEmulatorState((file) => getFile(context, file)?.content ?? '', emulator)
     }
 }
 
-function createSetCodeTool(context: DefaultCodingAgentToolContext) {
-    const sharedDescription = `Creates or updates the code editor. Use this whenever the user asks you to write, fix, modify, or demonstrate runnable assembly code.
-- This is the only way to update the editor; markdown code blocks do not change it.
-- For existing user code, call get_code first and preserve unrelated labels, comments, and structure.
-- The result reports whether assembler checks passed. If it returns compile_error, fix the reported errors before claiming success.
-- "diagnostics" also lists non-blocking findings prefixed with "Warning:" or "Suggestion:". Those never fail the build, so do not chase them unless the user asks.`
+async function handleCodeWrite(
+    context: DefaultCodingAgentToolContext,
+    targetPath: string,
+    newContent: string,
+    languageChanged: boolean,
+    previousLanguage: string | null,
+    previewLine = 1,
+    toolRun: any,
+    previousEmulator: Emulator | null = null
+) {
+    setFile(context, targetPath, newContent)
 
-    if (context.canUpdateLanguage) {
-        return tool({
-            name: 'set_code',
-            description: `${sharedDescription}
-- Always choose the assembly language that matches the code you are writing.
-- If the language changes, the tool waits briefly for the matching emulator before checking the code.`,
-            schema: z.object({
-                language: z
-                    .enum(SUPPORTED_LANGUAGES)
-                    .describe('The assembly language for the editor'),
-                code: z.string().describe('The full code to set in the editor')
-            }),
-            execute: async ({ language, code }) =>
-                runAgentTool(async (toolRun) => {
-                    const previousLanguage = context.getEditorLanguage()
-                    const previousCode = context.getEditorCode()
-                    const previousEmulator = context.getEmulator()
-                    const languageChanged = previousLanguage !== language
+    const waitResult = languageChanged
+        ? await waitForReplacementEmulator(context, previousEmulator)
+        : { loaded: true, waitMs: 0 }
+    const emulator = context.getEmulator()
 
-                    context.setEditorCode(code)
-                    context.setEditorLanguage(language)
+    const allFiles = getAllProjectFiles(context)
+    const preview = sliceLinesRange(newContent, Math.max(1, previewLine), undefined, MAX_TAKE_LINES)
 
-                    const waitResult = languageChanged
-                        ? await waitForReplacementEmulator(context, previousEmulator)
-                        : { loaded: true, waitMs: 0 }
-                    const emulator = context.getEmulator()
-
-                    if (!emulator) {
-                        return toolRun.success({
-                            language,
-                            previousLanguage,
-                            languageChanged,
-                            codeLength: code.length,
-                            lineCount: getLineCount(code),
-                            editorChanged: previousCode !== code || languageChanged,
-                            emulatorSynchronized: false,
-                            warning:
-                                'The editor was updated, but the emulator is still loading. Call compile after it loads.'
-                        })
-                    }
-
-                    emulator.clear()
-                    emulator.setCode(code)
-                    const checkDiagnostics = await emulator.check()
-                    const diagnostics = collectEmulatorDiagnostics(emulator, checkDiagnostics)
-                    const errors = collectEmulatorErrors(emulator, checkDiagnostics)
-                    if (errors.length > 0) {
-                        return toolRun.failure(
-                            'compile_error',
-                            'Code was placed in the editor, but assembler checks found errors.',
-                            {
-                                retryable: false,
-                                nextAction:
-                                    'Fix the reported assembler errors with set_code, preserving the user request.',
-                                details: {
-                                    language,
-                                    previousLanguage,
-                                    languageChanged,
-                                    codeLength: code.length,
-                                    lineCount: getLineCount(code),
-                                    editorChanged: previousCode !== code || languageChanged,
-                                    emulatorSynchronized: waitResult.loaded,
-                                    emulatorWaitMs: waitResult.waitMs,
-                                    errors,
-                                    diagnostics
-                                }
-                            }
-                        )
-                    }
-
-                    return toolRun.success({
-                        language,
-                        previousLanguage,
-                        languageChanged,
-                        codeLength: code.length,
-                        lineCount: getLineCount(code),
-                        editorChanged: previousCode !== code || languageChanged,
-                        emulatorSynchronized: waitResult.loaded,
-                        emulatorWaitMs: waitResult.waitMs,
-                        canExecute: emulator.canExecute,
-                        errors: [],
-                        diagnostics
-                    })
-                })
+    if (!emulator) {
+        return toolRun.success({
+            path: targetPath,
+            language: context.getEditorLanguage(),
+            previousLanguage,
+            languageChanged,
+            code: preview.code,
+            lineCount: preview.lineCount,
+            startLine: preview.startLine,
+            endLine: preview.endLine,
+            returnedLines: preview.returnedLines,
+            hasMore: preview.hasMore,
+            nextStartLine: preview.nextStartLine,
+            files: Object.keys(allFiles),
+            emulatorSynchronized: false,
+            warning:
+                'The file was updated, but the emulator is still loading. Call compile after it loads.'
         })
     }
 
-    return tool({
-        name: 'set_code',
-        description: `${sharedDescription}
-- The editor language is locked in this context, so update only the code.`,
-        schema: z.object({
-            code: z.string().describe('The full code to set in the editor')
-        }),
-        execute: async ({ code }) =>
-            runAgentTool(async (toolRun) => {
-                const previousCode = context.getEditorCode()
-                context.setEditorCode(code)
-                const emulator = context.getEmulator()
+    emulator.clear()
+    syncEmulator(context, emulator)
+    const checkDiagnostics = await emulator.check()
+    const diagnostics = collectEmulatorDiagnostics(emulator, checkDiagnostics)
+    const errors = collectEmulatorErrors(emulator, checkDiagnostics)
 
-                if (!emulator) {
-                    return toolRun.success({
-                        language: context.getEditorLanguage(),
-                        codeLength: code.length,
-                        lineCount: getLineCount(code),
-                        editorChanged: previousCode !== code,
-                        emulatorSynchronized: false,
-                        warning:
-                            'The editor was updated, but the emulator is not loaded. Call compile after it loads.'
-                    })
+    if (errors.length > 0) {
+        return toolRun.failure(
+            'compile_error',
+            'Code was placed in the file, but assembler checks found errors.',
+            {
+                retryable: false,
+                nextAction:
+                    'Fix the reported assembler errors with replace_file_content, preserving the user request.',
+                details: {
+                    path: targetPath,
+                    language: context.getEditorLanguage(),
+                    previousLanguage,
+                    languageChanged,
+                    code: preview.code,
+                    lineCount: preview.lineCount,
+                    startLine: preview.startLine,
+                    endLine: preview.endLine,
+                    returnedLines: preview.returnedLines,
+                    hasMore: preview.hasMore,
+                    nextStartLine: preview.nextStartLine,
+                    files: Object.keys(allFiles),
+                    emulatorSynchronized: waitResult.loaded,
+                    emulatorWaitMs: waitResult.waitMs,
+                    errors,
+                    diagnostics
                 }
+            }
+        )
+    }
 
-                emulator.clear()
-                emulator.setCode(code)
-                const checkDiagnostics = await emulator.check()
-                const diagnostics = collectEmulatorDiagnostics(emulator, checkDiagnostics)
-                const errors = collectEmulatorErrors(emulator, checkDiagnostics)
-                if (errors.length > 0) {
+    return toolRun.success({
+        path: targetPath,
+        language: context.getEditorLanguage(),
+        previousLanguage,
+        languageChanged,
+        code: preview.code,
+        lineCount: preview.lineCount,
+        startLine: preview.startLine,
+        endLine: preview.endLine,
+        returnedLines: preview.returnedLines,
+        hasMore: preview.hasMore,
+        nextStartLine: preview.nextStartLine,
+        files: Object.keys(allFiles),
+        emulatorSynchronized: waitResult.loaded,
+        emulatorWaitMs: waitResult.waitMs,
+        canExecute: emulator.canExecute,
+        errors: [],
+        diagnostics
+    })
+}
+
+function createViewFileTool(context: DefaultCodingAgentToolContext) {
+    return tool({
+        name: 'view_file',
+        description: `Views source code of a file in the project.
+- Specify "path" to inspect a specific file (e.g. "main.s", "sub.s"). If omitted, reads the active or entry file.
+- Specify "start_line" (1-indexed) and "end_line" (inclusive) to read a specific line range.
+- Returns at most ${MAX_TAKE_LINES} lines per call. Returns raw source lines. Use list_breakpoints to inspect active breakpoints.`,
+        schema: z.object({
+            path: z
+                .string()
+                .optional()
+                .describe('File path to view (e.g. "main.s"). Defaults to active or entry file.'),
+            start_line: z
+                .number()
+                .int()
+                .min(1)
+                .optional()
+                .describe('1-indexed starting line number. Defaults to 1.'),
+            end_line: z
+                .number()
+                .int()
+                .min(1)
+                .optional()
+                .describe(
+                    `1-indexed ending line number (inclusive). Returns at most ${MAX_TAKE_LINES} lines.`
+                )
+        }),
+        execute: async ({ path, start_line, end_line }) =>
+            runAgentTool(async (toolRun) => {
+                const allFiles = getAllProjectFiles(context)
+                const entryPath = getEffectiveEntry(context)
+                const targetPath = path ?? context.getActivePath?.() ?? entryPath
+
+                const fileEntry = getFile(context, targetPath)
+                if (!fileEntry) {
                     return toolRun.failure(
-                        'compile_error',
-                        'Code was placed in the editor, but assembler checks found errors.',
+                        'invalid_input',
+                        `File "${targetPath}" not found in project. Available files: ${Object.keys(allFiles).join(', ')}`,
                         {
                             retryable: false,
-                            nextAction:
-                                'Fix the reported assembler errors with set_code, preserving the user request.',
-                            details: {
-                                language: context.getEditorLanguage(),
-                                codeLength: code.length,
-                                lineCount: getLineCount(code),
-                                editorChanged: previousCode !== code,
-                                errors,
-                                diagnostics
-                            }
+                            nextAction: `Call view_file with one of the available files: ${Object.keys(allFiles).join(', ')}`
                         }
                     )
                 }
 
+                const preview = sliceLinesRange(
+                    fileEntry.content,
+                    start_line ?? 1,
+                    end_line,
+                    MAX_TAKE_LINES
+                )
+
                 return toolRun.success({
+                    path: targetPath,
                     language: context.getEditorLanguage(),
-                    codeLength: code.length,
-                    lineCount: getLineCount(code),
-                    editorChanged: previousCode !== code,
-                    emulatorSynchronized: true,
-                    canExecute: emulator.canExecute,
-                    errors: [],
-                    diagnostics
+                    code: preview.code,
+                    lineCount: preview.lineCount,
+                    startLine: preview.startLine,
+                    endLine: preview.endLine,
+                    returnedLines: preview.returnedLines,
+                    hasMore: preview.hasMore,
+                    nextStartLine: preview.nextStartLine,
+                    files: Object.keys(allFiles),
+                    entry: entryPath
+                })
+            })
+    })
+}
+
+function createReplaceFileContentTool(context: DefaultCodingAgentToolContext) {
+    return tool({
+        name: 'replace_file_content',
+        description: `Edits an existing file by replacing an exact snippet of code with new code.
+- "target_content" must match exact existing text, including whitespace, comments, and indentation.
+- If target_content appears multiple times, provide "start_line" and "end_line" bounds to disambiguate.
+- Immediately runs assembler checks and returns errors or diagnostics.`,
+        schema: z.object({
+            path: z
+                .string()
+                .optional()
+                .describe(
+                    'File path to edit (e.g. "main.s", "sub.s"). Defaults to active or entry file.'
+                ),
+            target_content: z
+                .string()
+                .describe(
+                    'The exact string to be replaced. Must match exactly including whitespace.'
+                ),
+            replacement_content: z
+                .string()
+                .describe('The new content to replace target_content with.'),
+            start_line: z
+                .number()
+                .int()
+                .min(1)
+                .optional()
+                .describe('Optional 1-indexed line number to restrict search start.'),
+            end_line: z
+                .number()
+                .int()
+                .min(1)
+                .optional()
+                .describe('Optional 1-indexed line number to restrict search end.')
+        }),
+        execute: async ({ path, target_content, replacement_content, start_line, end_line }) =>
+            runAgentTool(async (toolRun) => {
+                const targetPath = path ?? context.getActivePath?.() ?? getEffectiveEntry(context)
+                const existing = getFile(context, targetPath)
+                if (!existing) {
+                    const allFiles = getAllProjectFiles(context)
+                    return toolRun.failure(
+                        'invalid_input',
+                        `File "${targetPath}" does not exist. Use write_to_file to create new files. Available files: ${Object.keys(allFiles).join(', ')}`,
+                        {
+                            retryable: false,
+                            nextAction: 'Use write_to_file if you intend to create a new file.'
+                        }
+                    )
+                }
+
+                const replaceResult = replaceFileContent(
+                    existing.content,
+                    target_content,
+                    replacement_content,
+                    start_line,
+                    end_line
+                )
+                if (!replaceResult.success) {
+                    return toolRun.failure('invalid_input', replaceResult.error, {
+                        retryable: true,
+                        nextAction:
+                            'Call view_file to inspect the exact lines and whitespace, then retry replace_file_content.'
+                    })
+                }
+
+                return handleCodeWrite(
+                    context,
+                    targetPath,
+                    replaceResult.newContent,
+                    false,
+                    context.getEditorLanguage(),
+                    replaceResult.lineIndex + 1,
+                    toolRun
+                )
+            })
+    })
+}
+
+function createWriteToFileTool(context: DefaultCodingAgentToolContext) {
+    const schema = z.object({
+        path: z
+            .string()
+            .optional()
+            .describe(
+                'File path to write (e.g. "main.s", "sub.s"). Defaults to active or entry file.'
+            ),
+        code: z.string().describe('The full code to write to the file.'),
+        language: z
+            .enum(SUPPORTED_LANGUAGES)
+            .optional()
+            .describe('The assembly language for the editor (when language can be updated)')
+    })
+
+    return tool({
+        name: 'write_to_file',
+        description: `Creates a new file or completely writes an existing file.
+- Use this when creating fresh files or when rewriting an entire file.
+- For targeted modifications to existing code, prefer replace_file_content.
+- Immediately runs assembler checks and reports compile errors if any.`,
+        schema,
+        execute: async (args) =>
+            runAgentTool(async (toolRun) => {
+                const { path, code } = args as { path?: string; code: string }
+                const requestedLanguage = (
+                    args as { language?: (typeof SUPPORTED_LANGUAGES)[number] }
+                ).language
+                const targetPath = path ?? context.getActivePath?.() ?? getEffectiveEntry(context)
+
+                const previousLanguage = context.getEditorLanguage()
+                const previousEmulator = context.getEmulator()
+                const languageChanged =
+                    context.canUpdateLanguage &&
+                    requestedLanguage !== undefined &&
+                    previousLanguage !== requestedLanguage
+
+                if (languageChanged && requestedLanguage) {
+                    context.setEditorLanguage(requestedLanguage)
+                }
+
+                return handleCodeWrite(
+                    context,
+                    targetPath,
+                    code,
+                    languageChanged,
+                    previousLanguage,
+                    1,
+                    toolRun,
+                    previousEmulator
+                )
+            })
+    })
+}
+
+function createListBreakpointsTool(context: DefaultCodingAgentToolContext) {
+    return tool({
+        name: 'list_breakpoints',
+        description:
+            'Lists active breakpoints with surrounding code (previous and next 3 instructions/lines) for each breakpoint, explicitly marking which line has the breakpoint.',
+        schema: z.object({
+            path: z
+                .string()
+                .optional()
+                .describe(
+                    'Optional file path to filter breakpoints for (e.g. "main.s"). If omitted, returns breakpoints across all files.'
+                )
+        }),
+        execute: async ({ path }) =>
+            runAgentTool(async (toolRun) => {
+                const emulator = context.getEmulator()
+                if (!emulator) {
+                    return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
+                        retryable: true,
+                        nextAction:
+                            'Wait for the editor language to load before inspecting breakpoints.'
+                    })
+                }
+
+                const entry = getEffectiveEntry(context)
+                const filteredBreakpoints = (emulator.breakpoints ?? []).filter((breakpoint) => {
+                    if (!path) return true
+                    const bpFile = breakpoint.file ?? entry
+                    return bpFile === path
+                })
+
+                const items = filteredBreakpoints.map((breakpoint) => {
+                    const bpFile = breakpoint.file ?? entry
+                    const fileObj = getFile(context, bpFile)
+                    const content = fileObj?.content ?? ''
+                    const lines = content.length === 0 ? [''] : content.split('\n')
+                    const lineNum = breakpoint.line + 1
+                    const totalLines = lines.length
+
+                    const startContextLine = Math.max(1, lineNum - 3)
+                    const endContextLine = Math.min(totalLines, lineNum + 3)
+
+                    const contextLines: Array<{
+                        line: number
+                        text: string
+                        isBreakpoint: boolean
+                    }> = []
+                    const snippetLines: string[] = []
+
+                    for (let l = startContextLine; l <= endContextLine; l++) {
+                        const text = lines[l - 1] ?? ''
+                        const isBp = l === lineNum
+                        contextLines.push({
+                            line: l,
+                            text,
+                            isBreakpoint: isBp
+                        })
+                        const prefix = isBp ? '=> ' : '   '
+                        const suffix = isBp ? '  <-- [BREAKPOINT]' : ''
+                        snippetLines.push(`${prefix}${String(l).padStart(4)} | ${text}${suffix}`)
+                    }
+
+                    return {
+                        file: bpFile,
+                        line: lineNum,
+                        isOutOfBounds: lineNum > totalLines || lineNum < 1,
+                        snippet: snippetLines.join('\n'),
+                        context: contextLines
+                    }
+                })
+
+                return toolRun.success({
+                    path: path ?? null,
+                    count: items.length,
+                    breakpoints: items
                 })
             })
     })
 }
 
 export function createDefaultCodingAgentTools(context: DefaultCodingAgentToolContext) {
+    const viewFileTool = createViewFileTool(context)
+    const replaceFileContentTool = createReplaceFileContentTool(context)
+    const writeToFileTool = createWriteToFileTool(context)
+    const listBreakpointsTool = createListBreakpointsTool(context)
+
     return {
-        set_code: createSetCodeTool(context),
-        get_code: tool({
-            name: 'get_code',
-            description: `Returns the current editor language and source code with line numbers.
-Use this before modifying existing code or when the user says "this code", "my program", or asks about code already in the editor.
-Each line is prefixed with its 1-based line number and a "B" marker when a breakpoint is set on that line.`,
+        view_file: viewFileTool,
+        replace_file_content: replaceFileContentTool,
+        write_to_file: writeToFileTool,
+        list_files: tool({
+            name: 'list_files',
+            description:
+                'Lists all files in the current assembly project with their line counts, sizes, and which file is the entry file.',
             schema: z.object({}),
             execute: async () =>
                 runAgentTool(async (toolRun) => {
-                    const editorCode = context.getEditorCode()
-                    const emulator = context.getEmulator()
-                    const breakpoints = new Set(
-                        (emulator?.breakpoints ?? [])
-                            .filter((breakpoint) => breakpoint.file === emulator?.currentFile)
-                            .map((breakpoint) => breakpoint.line)
-                    )
-                    const lines = editorCode.split('\n').map((text, index) => {
-                        const breakpointMarker = breakpoints.has(index) ? ' B' : '  '
-                        return `${String(index + 1).padStart(4)}${breakpointMarker} | ${text}`
-                    })
+                    const allFiles = getAllProjectFiles(context)
+                    const entry = getEffectiveEntry(context)
+                    const files = Object.entries(allFiles).map(([p, text]) => ({
+                        path: p,
+                        lineCount: text.length === 0 ? 1 : text.split('\n').length,
+                        size: text.length,
+                        isEntry: p === entry
+                    }))
 
                     return toolRun.success({
-                        language: context.getEditorLanguage(),
-                        code: lines.join('\n'),
-                        codeLength: editorCode.length,
-                        lineCount: lines.length,
-                        breakpoints: Array.from(breakpoints).map((breakpoint) => breakpoint + 1)
+                        files,
+                        entry,
+                        language: context.getEditorLanguage()
                     })
                 })
         }),
+        delete_file: tool({
+            name: 'delete_file',
+            description:
+                'Deletes a file from the project. Cannot delete the entry file if it is the only file.',
+            schema: z.object({
+                path: z.string().describe('The file path to delete.')
+            }),
+            execute: async ({ path }) =>
+                runAgentTool(async (toolRun) => {
+                    const allFiles = getAllProjectFiles(context)
+                    const entry = getEffectiveEntry(context)
+
+                    if (!(path in allFiles)) {
+                        return toolRun.failure('invalid_input', `File "${path}" does not exist.`, {
+                            retryable: false,
+                            nextAction: `Available files: ${Object.keys(allFiles).join(', ')}`
+                        })
+                    }
+
+                    if (path === entry && Object.keys(allFiles).length <= 1) {
+                        return toolRun.failure(
+                            'invalid_input',
+                            `Cannot delete "${path}" because it is the sole entry file.`,
+                            {
+                                retryable: false,
+                                nextAction:
+                                    'Create another file or edit the existing file instead of deleting it.'
+                            }
+                        )
+                    }
+
+                    deleteFile(context, path)
+
+                    const emulator = context.getEmulator()
+                    if (emulator) {
+                        syncEmulator(context, emulator)
+                        const checkDiagnostics = await emulator.check()
+                        const diagnostics = collectEmulatorDiagnostics(emulator, checkDiagnostics)
+                        const errors = collectEmulatorErrors(emulator, checkDiagnostics)
+
+                        return toolRun.success({
+                            deleted: path,
+                            remainingFiles: Object.keys(getAllProjectFiles(context)),
+                            diagnostics,
+                            errors
+                        })
+                    }
+
+                    return toolRun.success({
+                        deleted: path,
+                        remainingFiles: Object.keys(getAllProjectFiles(context))
+                    })
+                })
+        }),
+        list_breakpoints: listBreakpointsTool,
         get_emulator_state: tool({
             name: 'get_emulator_state',
             description: `Returns the full emulator execution state.
@@ -329,7 +798,10 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                     return toolRun.success({
                         errors: collectEmulatorErrors(emulator, checkDiagnostics),
                         diagnostics: collectEmulatorDiagnostics(emulator, checkDiagnostics),
-                        ...formatEmulatorState(context.getEditorCode(), emulator)
+                        ...formatEmulatorState(
+                            (file) => getFile(context, file)?.content ?? '',
+                            emulator
+                        )
                     })
                 })
         }),
@@ -360,7 +832,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                         return toolRun.failure('execution_state', blocker.error, {
                             retryable: blocker.retryable,
                             nextAction: blocker.nextAction,
-                            details: executionDetails(context.getEditorCode(), emulator)
+                            details: executionDetails(context, emulator)
                         })
                     }
 
@@ -374,14 +846,17 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                         return toolRun.success({
                             stepsRequested: steps,
                             stepsExecuted,
-                            ...formatEmulatorState(context.getEditorCode(), emulator)
+                            ...formatEmulatorState(
+                                (file) => getFile(context, file)?.content ?? '',
+                                emulator
+                            )
                         })
                     } catch (error) {
                         return toolRun.failure('runtime_error', error, {
                             retryable: false,
                             nextAction:
                                 'Use get_emulator_state and latestSteps to locate the failing instruction before editing.',
-                            details: executionDetails(context.getEditorCode(), emulator)
+                            details: executionDetails(context, emulator)
                         })
                     }
                 })
@@ -406,7 +881,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                         return toolRun.failure('execution_state', blocker.error, {
                             retryable: blocker.retryable,
                             nextAction: blocker.nextAction,
-                            details: executionDetails(context.getEditorCode(), emulator)
+                            details: executionDetails(context, emulator)
                         })
                     }
 
@@ -425,7 +900,10 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                                     status: statusName(status),
                                     errors,
                                     diagnostics,
-                                    ...formatEmulatorState(context.getEditorCode(), emulator)
+                                    ...formatEmulatorState(
+                                        (file) => getFile(context, file)?.content ?? '',
+                                        emulator
+                                    )
                                 }
                             }
                         )
@@ -434,7 +912,10 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                     return toolRun.success({
                         status: statusName(status),
                         diagnostics,
-                        ...formatEmulatorState(context.getEditorCode(), emulator)
+                        ...formatEmulatorState(
+                            (file) => getFile(context, file)?.content ?? '',
+                            emulator
+                        )
                     })
                 })
         }),
@@ -466,7 +947,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                         return toolRun.failure('execution_state', blocker.error, {
                             retryable: blocker.retryable,
                             nextAction: blocker.nextAction,
-                            details: executionDetails(context.getEditorCode(), emulator)
+                            details: executionDetails(context, emulator)
                         })
                     }
 
@@ -474,14 +955,17 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                         emulator.undo(steps)
                         return toolRun.success({
                             stepsRequested: steps,
-                            ...formatEmulatorState(context.getEditorCode(), emulator)
+                            ...formatEmulatorState(
+                                (file) => getFile(context, file)?.content ?? '',
+                                emulator
+                            )
                         })
                     } catch (error) {
                         return toolRun.failure('runtime_error', error, {
                             retryable: false,
                             nextAction:
                                 'Use get_emulator_state to inspect whether undo history is still available.',
-                            details: executionDetails(context.getEditorCode(), emulator)
+                            details: executionDetails(context, emulator)
                         })
                     }
                 })
@@ -489,8 +973,14 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
         update_breakpoints: tool({
             name: 'update_breakpoints',
             description:
-                'Adds and/or removes breakpoints on 1-based source line numbers. The emulator stops on the breakpoint line before executing that instruction. Breakpoints are effective only on lines that contain executable instructions; comments, empty lines, and other non-instruction lines will not stop execution.',
+                'Adds and/or removes breakpoints on 1-based source line numbers in a specific file. The emulator stops on the breakpoint line before executing that instruction.',
             schema: z.object({
+                path: z
+                    .string()
+                    .optional()
+                    .describe(
+                        'The file path to update breakpoints for. Defaults to current execution file or entry file.'
+                    ),
                 add: z
                     .array(z.number().int().min(1))
                     .optional()
@@ -500,7 +990,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                     .optional()
                     .describe('1-based line numbers to remove breakpoints from')
             }),
-            execute: async ({ add = [], remove = [] }) =>
+            execute: async ({ path, add = [], remove = [] }) =>
                 runAgentTool(async (toolRun) => {
                     const emulator = context.getEmulator()
                     if (!emulator) {
@@ -511,10 +1001,15 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                         })
                     }
 
-                    const lineCount = getLineCount(context.getEditorCode())
+                    const targetPath = path ?? emulator.currentFile ?? getEffectiveEntry(context)
+                    const targetFile = getFile(context, targetPath)
+                    const lineCount = targetFile ? getLineCount(targetFile.content) : 1000
+
                     const current = new Set(
                         emulator.breakpoints
-                            .filter((breakpoint) => breakpoint.file === emulator.currentFile)
+                            .filter(
+                                (breakpoint) => !breakpoint.file || breakpoint.file === targetPath
+                            )
                             .map((breakpoint) => breakpoint.line)
                     )
                     const added: number[] = []
@@ -528,7 +1023,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                             continue
                         }
                         if (!current.has(lineIndex)) {
-                            emulator.toggleBreakpoint(lineIndex, emulator.currentFile)
+                            emulator.toggleBreakpoint(lineIndex, targetPath)
                             current.add(lineIndex)
                             added.push(line)
                         }
@@ -541,14 +1036,23 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                             continue
                         }
                         if (current.has(lineIndex)) {
-                            emulator.toggleBreakpoint(lineIndex, emulator.currentFile)
+                            emulator.toggleBreakpoint(lineIndex, targetPath)
                             current.delete(lineIndex)
                             removed.push(line)
                         }
                     }
 
+                    const fileBreakpoints = emulator.breakpoints
+                        .filter((breakpoint) => !breakpoint.file || breakpoint.file === targetPath)
+                        .map((breakpoint) => breakpoint.line + 1)
+
                     return toolRun.success({
-                        breakpoints: getBreakpointLines(emulator),
+                        path: targetPath,
+                        breakpoints: fileBreakpoints,
+                        allBreakpoints: emulator.breakpoints.map((b) => ({
+                            file: b.file,
+                            line: b.line + 1
+                        })),
                         added,
                         removed,
                         ignored,
@@ -559,7 +1063,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
         get_line_from_address: tool({
             name: 'get_line_from_address',
             description:
-                'Returns the source line number corresponding to a memory address. Use this to map pc values or call stack addresses back to source code.',
+                'Returns the source line number and file corresponding to a memory address. Use this to map pc values or call stack addresses back to source code.',
             schema: z.object({
                 address: z
                     .string()
@@ -584,22 +1088,32 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                         })
                     }
 
-                    const lineIndex = emulator.getLineFromAddress(parsedAddress)
+                    const location = emulator.getSourceLocationFromAddress?.(parsedAddress)
+                    const targetFile =
+                        location?.file ?? emulator.currentFile ?? getEffectiveEntry(context)
+                    const lineIndex = location
+                        ? location.line
+                        : emulator.getLineFromAddress(parsedAddress)
+
+                    const fileContent = getFile(context, targetFile)?.content ?? ''
                     const line =
                         lineIndex != null && lineIndex >= 0
-                            ? formatSourceLine(context.getEditorCode(), lineIndex)
+                            ? formatSourceLine(fileContent, lineIndex, targetFile)
                             : null
+
                     return toolRun.success({
                         address: formatNumber(parsedAddress),
-                        line
+                        file: targetFile,
+                        line: line?.line ?? null,
+                        lineNumber: line?.lineNumber ?? null
                     })
                 })
         }),
         compile: tool({
             name: 'compile',
-            description: context.canUseSetCode
-                ? 'Compiles the current editor code and resets execution state. Use this before stepping/running when canExecute is false, or after a set_code result that did not synchronize with the emulator. Returns assembler errors, non-blocking diagnostics, and whether execution can start.'
-                : 'Compiles the current editor code and resets execution state. Use this to check assembler errors before running. Returns assembler errors, non-blocking diagnostics, and whether execution can start.',
+            description: context.canEditCode
+                ? 'Compiles all project files and resets execution state. Use this before stepping/running when canExecute is false, or after modifying files. Returns assembler errors, non-blocking diagnostics, and whether execution can start.'
+                : 'Compiles all project files and resets execution state. Use this to check assembler errors before running. Returns assembler errors, non-blocking diagnostics, and whether execution can start.',
             schema: z.object({}),
             execute: async () =>
                 runAgentTool(async (toolRun) => {
@@ -611,28 +1125,41 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                         })
                     }
 
+                    syncEmulator(context, emulator)
+
                     let thrownError: unknown = null
                     try {
-                        await emulator.compile(100)
+                        const all = getAllProjectFiles(context)
+                        const entry = getEffectiveEntry(context)
+                        const projectFiles: Record<string, ProjectFile> = {}
+                        for (const [p, c] of Object.entries(all)) {
+                            projectFiles[p] = { encoding: 'plain', content: c }
+                        }
+                        await emulator.compile(100, { files: projectFiles, entry })
                     } catch (error) {
                         thrownError = error
                     }
 
                     const errors = collectEmulatorErrors(emulator)
                     const diagnostics = collectEmulatorDiagnostics(emulator)
+                    const currentFile = emulator.currentFile ?? getEffectiveEntry(context)
+                    const currentFileContent = getFile(context, currentFile)?.content ?? ''
+
                     if (errors.length > 0) {
                         return toolRun.failure('compile_error', errors[0], {
                             retryable: false,
-                            nextAction: context.canUseSetCode
-                                ? 'Fix the assembler errors with set_code, then compile or run again.'
+                            nextAction: context.canEditCode
+                                ? 'Fix the assembler errors with replace_file_content or write_to_file, then compile or run again.'
                                 : 'Report the assembler errors. Editing is not available in this context.',
                             details: {
                                 errors,
                                 diagnostics,
                                 canExecute: emulator.canExecute,
+                                currentFile,
                                 currentLine: formatSourceLine(
-                                    context.getEditorCode(),
-                                    emulator.line
+                                    currentFileContent,
+                                    emulator.line,
+                                    currentFile
                                 ).line
                             }
                         })
@@ -645,9 +1172,11 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                                 'Report the compiler failure and inspect get_emulator_state for any remaining details.',
                             details: {
                                 canExecute: emulator.canExecute,
+                                currentFile,
                                 currentLine: formatSourceLine(
-                                    context.getEditorCode(),
-                                    emulator.line
+                                    currentFileContent,
+                                    emulator.line,
+                                    currentFile
                                 ).line
                             }
                         })
@@ -657,7 +1186,12 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                         errors: [],
                         diagnostics,
                         canExecute: emulator.canExecute,
-                        currentLine: formatSourceLine(context.getEditorCode(), emulator.line).line,
+                        currentFile,
+                        currentLine: formatSourceLine(
+                            currentFileContent,
+                            emulator.line,
+                            currentFile
+                        ).line,
                         programCounter: formatNumber(emulator.pc),
                         stackPointer: formatNumber(emulator.sp)
                     })
@@ -716,5 +1250,5 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                     }
                 })
         })
-    } satisfies Record<(typeof DEFAULT_CODING_AGENT_TOOL_NAMES)[number], RegisteredTool>
+    } satisfies Record<DefaultCodingAgentToolName, RegisteredTool>
 }
