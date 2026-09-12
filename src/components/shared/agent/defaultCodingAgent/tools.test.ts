@@ -219,7 +219,10 @@ describe('DefaultCodingAgent Tools (Standard Agent Model)', () => {
         })
 
         it('clamps lines to MAX_TAKE_LINES and defaults to DEFAULT_TAKE_LINES', async () => {
-            const codeLines = Array.from({ length: 250 }, (_, i) => `line_${i + 1}`).join('\n')
+            const codeLines = Array.from(
+                { length: MAX_TAKE_LINES + 100 },
+                (_, i) => `line_${i + 1}`
+            ).join('\n')
             const { context } = createTestContext({ 'main.s': codeLines })
             const tools = createDefaultCodingAgentTools(context)
 
