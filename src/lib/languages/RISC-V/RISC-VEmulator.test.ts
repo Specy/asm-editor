@@ -13,8 +13,13 @@ import type { ProjectDisplay } from '$lib/languages/mars/marsDisplay'
 import type { Testcase } from '$lib/Project.svelte'
 import { Keyboard } from '$lib/languages/peripherals/Keyboard'
 import { ProgramClock } from '$lib/languages/peripherals/ProgramClock'
-import { InterpreterStatus } from '$lib/languages/commonLanguageFeatures.svelte'
+import {
+    InterpreterStatus,
+    type RegisterFile,
+    RegisterSize
+} from '$lib/languages/commonLanguageFeatures.svelte'
 import { FileSystem } from '$lib/languages/peripherals/FileSystem'
+import { RISCVCsrRegisterNames } from '$lib/languages/RISC-V/RISC-V-registers'
 
 /**
  * RARS's bitmap display and keyboard-and-display registers against the real Core under node, the
@@ -1284,5 +1289,185 @@ main:
         expect(emulator.compilerDiagnostics).toEqual([])
         //1 + 2 + 3 + 4, read back through %lo after being stored through it
         expect(valueOf(emulator, 's0')).toBe(10)
+    })
+})
+
+/**
+ * The FPU and CSR Register files this adapter declares, read through the real Core
+ * ([the design record](../../../../docs/design/register-files.md)). The values are bit patterns, so
+ * the tests spell them as the Core holds them: a single lives NaN-boxed in a 64 bit register and a
+ * CSR is shown at the target's word size.
+ */
+describe('RISC-V Register files', () => {
+    /** The file the panel would show under that tab. */
+    function fileOf(emulator: Emulator, id: string): RegisterFile {
+        const file = emulator.registerFiles.find((candidate) => candidate.id === id)
+        if (!file) throw new Error(`No register file named ${id}`)
+        return file
+    }
+
+    function bitsOf(file: RegisterFile, name: string): bigint {
+        const register = file.registers.find((candidate) => candidate.name === name)
+        if (!register) throw new Error(`No register named ${name}`)
+        return register.value
+    }
+
+    /** 3 as a single in `ft0`, widened to a double in `ft1`. */
+    const CONVERT =
+        `        .text
+main:
+        li      t0, 3
+        fcvt.s.w ft0, t0
+        fcvt.d.s ft1, ft0
+` + EXIT
+
+    it('shows the CPU file first, as the registers themselves', async () => {
+        const emulator = await build(CONVERT)
+        //the panel and the Testcases read `registers`, so the first file has to be that array and
+        //not a copy of it that a refresh would leave behind
+        expect(emulator.registerFiles[0].id).toBe('cpu')
+        expect(emulator.registerFiles[0].registers).toBe(emulator.registers)
+        expect(emulator.registerFiles.map((file) => file.id)).toEqual(['cpu', 'fpu', 'csr'])
+    })
+
+    it('reads the floating point file as 64 bit values on the 32 bit target', async () => {
+        const emulator = await run(CONVERT)
+        expect(emulator.errors).toEqual([])
+        const fpu = fileOf(emulator, 'fpu')
+        expect(fpu.size).toBe(RegisterSize.Double)
+        //double leads, so a file of zeroed registers reads as zeros and not as 32 rows of NaN
+        expect(fpu.formats[0]).toBe('double')
+        expect(fpu.nanBoxedSingles).toBe(true)
+        //register-number order, which is what indexing the Core's array by register number means
+        expect(fpu.registers).toHaveLength(32)
+        expect(fpu.registers[0].name).toBe('ft0')
+        expect(fpu.registers[8].name).toBe('fs0')
+        expect(fpu.registers[31].name).toBe('ft11')
+        expect(bitsOf(fpu, 'ft0')).toBe(0xffffffff40400000n)
+        expect(bitsOf(fpu, 'ft1')).toBe(0x4008000000000000n)
+    })
+
+    it('reads the seventeen CSRs at the target word size, counting instructions', async () => {
+        const emulator = await build(
+            `        .text
+main:
+        addi    t3, t3, 1
+        addi    t3, t3, 1
+        addi    t3, t3, 1
+` + EXIT
+        )
+        const csr = fileOf(emulator, 'csr')
+        expect(csr.registers.map((register) => register.name)).toEqual([...RISCVCsrRegisterNames])
+        //RV32 shows a CSR's low word, and the high half of a counter is its own `*h` register
+        expect(csr.size).toBe(RegisterSize.Long)
+        expect(bitsOf(csr, 'instret')).toBe(0n)
+        await emulator.step()
+        await emulator.step()
+        expect(bitsOf(csr, 'instret')).toBe(2n)
+        expect(bitsOf(csr, 'instreth')).toBe(0n)
+    })
+
+    it('names a floating point write in the undo history and takes it back', async () => {
+        const emulator = await build(CONVERT)
+        await emulator.step()
+        await emulator.step()
+        expect(emulator.errors).toEqual([])
+        const ft0 = fileOf(emulator, 'fpu').registers[0]
+        expect(ft0.value).toBe(0xffffffff40400000n)
+        //the step that wrote it is what the panel highlights, so the value it replaced is kept
+        expect(ft0.prev).not.toBe(ft0.value)
+        const written = emulator
+            ._getUndoHistory(8)
+            .flatMap((step) => step.mutations)
+            .find(
+                (mutation) => mutation.type === 'WriteRegister' && mutation.value.register === 'ft0'
+            )
+        expect(written).toEqual({
+            type: 'WriteRegister',
+            value: { register: 'ft0', old: 0n, size: RegisterSize.Double }
+        })
+        emulator.undo(1)
+        expect(fileOf(emulator, 'fpu').registers[0].value).toBe(0n)
+    })
+
+    it('names a CSR write in the undo history by the name of the register', async () => {
+        const emulator = await build(
+            `        .text
+main:
+        li      t0, 0x18
+        csrrw   t1, fcsr, t0
+        li      t0, 0x55
+        csrrw   t1, uscratch, t0
+` + EXIT
+        )
+        for (let i = 0; i < 4; i++) await emulator.step()
+        expect(emulator.errors).toEqual([])
+        expect(bitsOf(fileOf(emulator, 'csr'), 'fcsr')).toBe(0x18n)
+        expect(bitsOf(fileOf(emulator, 'csr'), 'uscratch')).toBe(0x55n)
+        const written = emulator
+            ._getUndoHistory(16)
+            .flatMap((step) => step.mutations)
+            .filter((mutation) => mutation.type === 'WriteRegister')
+        //the entry carries the CSR *number*, and `uscratch` is the register that tells a number
+        //from a position: it is numbered 0x040 and sits seventh in the file, so a mapping that
+        //indexed the file by the number would name it wrong or not at all
+        expect(written).toContainEqual({
+            type: 'WriteRegister',
+            value: { register: 'uscratch', old: 0n, size: RegisterSize.Long }
+        })
+        //`fcsr` passes either mapping, its number 0x003 being its position as well, and is kept
+        //because it is the CSR a floating point program actually writes
+        expect(written).toContainEqual({
+            type: 'WriteRegister',
+            value: { register: 'fcsr', old: 0n, size: RegisterSize.Long }
+        })
+    })
+
+    it('keeps the periodic time sample of the simulator out of the undo history', async () => {
+        const emulator = await build(
+            `        .text
+main:
+        li      t0, 400
+loop:
+        addi    t0, t0, -1
+        bnez    t0, loop
+` + EXIT
+        )
+        for (let i = 0; i < 400; i++) await emulator.step()
+        expect(emulator.errors).toEqual([])
+        //the Core samples the host clock into `time` on the first instruction of every run loop
+        //and every 64 instructions after it, which under stepping is once a step, and it does so
+        //after the instruction has moved the PC, so such an entry would both fill the panel and
+        //name the wrong line after a taken branch
+        const written = emulator
+            ._getUndoHistory(200)
+            .flatMap((step) => step.mutations)
+            .filter((mutation) => mutation.type === 'WriteRegister')
+        expect(written.length).toBeGreaterThan(0)
+        expect(written.map((mutation) => mutation.value.register)).not.toContain('time')
+    })
+
+    it('writes a register of either file through the Core setters', async () => {
+        const emulator = await build(CONVERT)
+        emulator._setRegisterFileValue('fpu', 'fs0', 0xffffffff40490fdbn)
+        expect(emulator._getRegisterFileValues('fpu')[8]).toBe(0xffffffff40490fdbn)
+        emulator._setRegisterFileValue('csr', 'uscratch', 0x1122334455667788n)
+        //the Core keeps the whole 64 bit value, and the 32 bit target shows its low word
+        const uscratch = RISCVCsrRegisterNames.indexOf('uscratch')
+        expect(emulator._getRegisterFileValues('csr')[uscratch]).toBe(0x55667788n)
+    })
+
+    it('gives the 64 bit target a 64 bit wide CSR file', async () => {
+        const code = `        .text\nmain:\n        li      t0, 3\n` + EXIT
+        const emulator = RISCVEmulator(code, { language: 'RISC-V-64' })
+        await emulator.check()
+        await emulator.compile(200, code)
+        expect(emulator.errors).toEqual([])
+        expect(fileOf(emulator, 'csr').size).toBe(RegisterSize.Double)
+        //while the floating point file is 64 bit wide on both targets
+        expect(fileOf(emulator, 'fpu').size).toBe(RegisterSize.Double)
+        emulator._setRegisterFileValue('csr', 'uscratch', 0x1122334455667788n)
+        const uscratch = RISCVCsrRegisterNames.indexOf('uscratch')
+        expect(emulator._getRegisterFileValues('csr')[uscratch]).toBe(0x1122334455667788n)
     })
 })

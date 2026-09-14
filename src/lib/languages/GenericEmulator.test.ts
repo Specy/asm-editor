@@ -16,6 +16,7 @@ import {
     type EmulatorDecoration,
     type EmulatorSettings,
     type ExecutionStep,
+    type RegisterFileDescriptor,
     type StackFrame
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import {
@@ -43,6 +44,16 @@ type SliceBehavior = (
     slice: number
 ) => ExecutionSlice | Promise<ExecutionSlice>
 
+/** One declared Register file, enough to exercise the values, the sizes and the flags of one. */
+const FAKE_FPU: RegisterFileDescriptor = {
+    id: 'fpu',
+    label: 'FPU',
+    size: RegisterSize.Double,
+    formats: ['single', 'double', 'hex'],
+    flagNames: ['0', '1'],
+    registers: [{ name: 'f0' }, { name: 'f1' }]
+}
+
 class FakeEmulator extends GenericEmulator<object, FakeRegister> {
     /** Every request the scheduler made, in order. */
     readonly requests: ExecutionSliceRequest[] = []
@@ -55,7 +66,11 @@ class FakeEmulator extends GenericEmulator<object, FakeRegister> {
     hasEnded = false
 
     constructor(options: EmulatorSettings = {}) {
-        super('', { systemSize: RegisterSize.Long, registerNames: ['R0'] }, options)
+        super(
+            '',
+            { systemSize: RegisterSize.Long, registerNames: ['R0'], registerFiles: [FAKE_FPU] },
+            options
+        )
         // Scheduler tests exercise an already-built fake Core without paying the unrelated compile
         // setup cost. Real adapters acquire this capability only after a successful Build.
         this.state.canExecute = true
@@ -163,7 +178,42 @@ class FakeEmulator extends GenericEmulator<object, FakeRegister> {
     }
 
     _getRegisterValues(): bigint[] {
-        return [0n]
+        return [this.registerValue]
+    }
+
+    /** What the fake Core answers with, so a test can move a value and look at the diff. */
+    registerValue = 0n
+    fileValues: bigint[] = [0n, 0n]
+    fileFlags = [0, 0]
+    /** How many times the file has been read, so a test can count the calls a refresh makes. */
+    fileReads = 0
+
+    _getRegisterFileValues(id: string): bigint[] {
+        expect(id).toBe('fpu')
+        this.fileReads += 1
+        return this.fileValues
+    }
+
+    _getRegisterFileFlags(): { name: string; value: number }[] {
+        return this.fileFlags.map((value, i) => ({ name: String(i), value }))
+    }
+
+    /** Which rows the fake Core says hold nothing; empty is a file that never blanks. */
+    fileBlanks: boolean[] = []
+
+    _getRegisterFileBlanks(id: string): boolean[] {
+        expect(id).toBe('fpu')
+        return this.fileBlanks
+    }
+
+    /** Seeding the CPU registers from outside a clear, which only `clear` does today. */
+    seedRegisters(values: bigint[]): void {
+        this.setRegisters(values)
+    }
+
+    /** Rebuilding the CPU registers out of the Core, which an adapter does after a Core write. */
+    rebuildRegistersFromCore(): void {
+        this.setRegisters()
     }
 
     _getRegisterValuesRecord(): Record<FakeRegister, bigint> {
@@ -204,6 +254,190 @@ describe('source updates', () => {
         expect(changed).not.toBe(initial)
         emulator.setSources('nop')
         expect(emulator.sourceIdentity()).toBe(changed)
+    })
+})
+
+describe('register files', () => {
+    it('shows the CPU file first, holding the very register array of the Emulator', () => {
+        const emulator = new FakeEmulator({ automaticChecking: false })
+        const [cpu, fpu] = emulator.registerFiles
+        expect(cpu.id).toBe('cpu')
+        expect(cpu.label).toBe('CPU')
+        expect(cpu.size).toBe(RegisterSize.Long)
+        expect(cpu.formats).toEqual(['hex'])
+        expect(cpu.registers).toBe(emulator.registers)
+        //the CPU's own Status flags stay in `statusRegisters`, where every caller reads them
+        expect(cpu.flags).toEqual([])
+        expect(fpu.id).toBe('fpu')
+        expect(fpu.layout).toEqual([
+            { name: 'f0', size: RegisterSize.Double, kind: 'float' },
+            { name: 'f1', size: RegisterSize.Double, kind: 'float' }
+        ])
+    })
+
+    it('keeps the CPU file on the register array a rebuild replaced', () => {
+        const emulator = new FakeEmulator({ automaticChecking: false })
+        emulator.clear()
+        expect(emulator.registerFiles[0].registers).toBe(emulator.registers)
+    })
+
+    it('zeroes every declared file before a Build', () => {
+        const emulator = new FakeEmulator({ automaticChecking: false })
+        const [, fpu] = emulator.registerFiles
+        expect(fpu.registers.map((register) => register.value)).toEqual([0n, 0n])
+        expect(fpu.registers.map((register) => register.toHex())).toEqual([
+            '0000000000000000',
+            '0000000000000000'
+        ])
+        expect(fpu.flags).toEqual([
+            { name: '0', value: 0, prev: 0 },
+            { name: '1', value: 0, prev: 0 }
+        ])
+    })
+
+    it('reads the values and the flags of every file on a Build', async () => {
+        const emulator = new FakeEmulator({ automaticChecking: false })
+        emulator.fileValues = [0x3ff8000000000000n, 7n]
+        emulator.fileFlags = [1, 0]
+        await emulator.compile(0, undefined)
+        const [, fpu] = emulator.registerFiles
+        expect(fpu.registers.map((register) => register.value)).toEqual([0x3ff8000000000000n, 7n])
+        expect(fpu.flags.map((flag) => flag.value)).toEqual([1, 0])
+    })
+
+    it('diffs a file against what the last refresh read, like the CPU registers', async () => {
+        const emulator = new FakeEmulator({ automaticChecking: false })
+        await emulator.compile(0, undefined)
+        emulator.fileValues = [1n, 0n]
+        emulator.fileFlags = [1, 0]
+        await emulator.step()
+        const [, fpu] = emulator.registerFiles
+        expect(fpu.registers.map((register) => [register.prev, register.value])).toEqual([
+            [0n, 1n],
+            [0n, 0n]
+        ])
+        //the fake Core reports no previous flag, so the previous refresh is what it is diffed
+        //against, which is the only way a highlight can mean "changed since then"
+        expect(fpu.flags).toEqual([
+            { name: '0', value: 1, prev: 0 },
+            { name: '1', value: 0, prev: 0 }
+        ])
+    })
+
+    it('reads each file once per refresh', async () => {
+        const emulator = new FakeEmulator({ automaticChecking: false })
+        await emulator.compile(0, undefined)
+        emulator.fileReads = 0
+        emulator.refreshPanels(true)
+        expect(emulator.fileReads).toBe(1)
+    })
+
+    it('zeroes the files again on a clear, with nothing left to highlight', async () => {
+        const emulator = new FakeEmulator({ automaticChecking: false })
+        emulator.fileValues = [5n, 6n]
+        emulator.fileFlags = [1, 1]
+        await emulator.compile(0, undefined)
+        emulator.clear()
+        const [, fpu] = emulator.registerFiles
+        expect(fpu.registers.map((register) => [register.prev, register.value])).toEqual([
+            [0n, 0n],
+            [0n, 0n]
+        ])
+        expect(fpu.flags).toEqual([
+            { name: '0', value: 0, prev: 0 },
+            { name: '1', value: 0, prev: 0 }
+        ])
+    })
+
+    it('blanks the rows the hook names, on every refresh', async () => {
+        const emulator = new FakeEmulator({ automaticChecking: false })
+        emulator.fileValues = [1n, 2n]
+        emulator.fileBlanks = [false, true]
+        await emulator.compile(0, undefined)
+        const [, fpu] = emulator.registerFiles
+        expect(fpu.blanks).toEqual([false, true])
+        //a blanked row still carries the value the Core reported, which the panel keeps a hover
+        //away, and a row that fills up again stops being blank on the very next refresh
+        expect(fpu.registers.map((register) => register.value)).toEqual([1n, 2n])
+        emulator.fileBlanks = [true, false]
+        await emulator.step()
+        expect(fpu.blanks).toEqual([true, false])
+    })
+
+    it('blanks nothing for a file whose hook names no row', async () => {
+        const emulator = new FakeEmulator({ automaticChecking: false })
+        emulator.fileBlanks = []
+        await emulator.compile(0, undefined)
+        expect(emulator.registerFiles[1].blanks).toEqual([false, false])
+    })
+
+    it('blanks nothing for an adapter that has no blanking hook at all', async () => {
+        class BlanklessEmulator extends FakeEmulator {}
+        //the hook is optional: a file that never blanks, which is every file but x86's x87, says so
+        //by leaving it out and must still refresh
+        BlanklessEmulator.prototype._getRegisterFileBlanks =
+            undefined as unknown as FakeEmulator['_getRegisterFileBlanks']
+        const emulator = new BlanklessEmulator({ automaticChecking: false })
+        emulator.fileValues = [1n, 2n]
+        await emulator.compile(0, undefined)
+        const [, fpu] = emulator.registerFiles
+        expect(fpu.blanks).toEqual([false, false])
+        expect(fpu.registers.map((register) => register.value)).toEqual([1n, 2n])
+    })
+
+    it('unblanks every row on a clear, as it zeroes the values', async () => {
+        const emulator = new FakeEmulator({ automaticChecking: false })
+        emulator.fileBlanks = [true, true]
+        await emulator.compile(0, undefined)
+        emulator.clear()
+        //a cleared file shows zeros, and a blank row would hide them
+        expect(emulator.registerFiles[1].blanks).toEqual([false, false])
+    })
+
+    it('refuses to build an adapter that declares a file it cannot read', () => {
+        class UnreadableFileEmulator extends FakeEmulator {}
+        //an adapter that declared a file and forgot the hook, which is a programming error and not
+        //something the panel should discover one refresh later
+        UnreadableFileEmulator.prototype._getRegisterFileValues =
+            undefined as unknown as FakeEmulator['_getRegisterFileValues']
+        expect(() => new UnreadableFileEmulator({ automaticChecking: false })).toThrow(
+            '_getRegisterFileValues'
+        )
+    })
+
+    it('refuses to build an adapter whose file names flags it cannot read', () => {
+        class FlaglessEmulator extends FakeEmulator {}
+        //a file that names Status flags and has no hook would show a row of zeros for ever, which
+        //reads as "nothing ever happened" rather than as the missing implementation it is
+        FlaglessEmulator.prototype._getRegisterFileFlags =
+            undefined as unknown as FakeEmulator['_getRegisterFileFlags']
+        expect(() => new FlaglessEmulator({ automaticChecking: false })).toThrow(
+            '_getRegisterFileFlags'
+        )
+    })
+
+    it('leaves the other files alone when the CPU registers are seeded outside a clear', async () => {
+        const emulator = new FakeEmulator({ automaticChecking: false })
+        emulator.fileValues = [5n, 6n]
+        await emulator.compile(0, undefined)
+        emulator.seedRegisters([0n])
+        const [, fpu] = emulator.registerFiles
+        //only `clear` blanks the other files, so seeding the CPU registers while a Core is live
+        //does not leave the panel showing zeros the Core disagrees with
+        expect(fpu.registers.map((register) => register.value)).toEqual([5n, 6n])
+    })
+
+    it('reads the other files when the CPU registers are rebuilt out of the Core', async () => {
+        const emulator = new FakeEmulator({ automaticChecking: false })
+        await emulator.compile(0, undefined)
+        emulator.registerValue = 3n
+        emulator.fileValues = [7n, 8n]
+        emulator.rebuildRegistersFromCore()
+        const [cpu, fpu] = emulator.registerFiles
+        //rebuilding from the Core is a read of the Core, so every file is read with it and the
+        //panel never shows a refreshed CPU next to files of an older moment
+        expect(cpu.registers.map((register) => register.value)).toEqual([3n])
+        expect(fpu.registers.map((register) => register.value)).toEqual([7n, 8n])
     })
 })
 
@@ -360,8 +594,10 @@ describe('slice scheduling', () => {
         emulator.peripherals.screen.drawPixel(1, 1)
         emulator.refreshPanels(false)
         const afterFirst = emulator.memoryReads
-        //nothing draws again, so the activity window runs out and the panels are live again
-        await new Promise((resolve) => setTimeout(resolve, SCREEN_ACTIVITY_MS))
+        //nothing draws again, so the activity window runs out and the panels are live again. The
+        //margin is what keeps this deterministic: a timer that fires at exactly the window's length
+        //leaves `performance.now()` free to land on the last millisecond of it under a loaded suite
+        await new Promise((resolve) => setTimeout(resolve, SCREEN_ACTIVITY_MS + 50))
         emulator.refreshPanels(false)
         expect(emulator.memoryReads).toBeGreaterThan(afterFirst)
     })

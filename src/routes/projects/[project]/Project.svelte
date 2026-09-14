@@ -19,13 +19,14 @@
     import Controls from '$cmp/specific/project/Controls.svelte'
     import StdOut from '$cmp/specific/project/user-tools/StdOutRenderer.svelte'
     import { clampBigInt, createDebouncer, formatTime } from '$lib/utils'
+    import { registerColumnWidth } from '$lib/languages/registerFormats'
     import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE, TESTCASE_INSTRUCTION_LIMIT } from '$lib/Config'
     import Settings from '$cmp/specific/project/settings/Settings.svelte'
     import FloatingLanguageDocumentation from '$cmp/specific/project/FloatingLanguageDocumentation.svelte'
     import FaBook from '~icons/fa-solid/book'
     import { ShortcutAction, shortcutsStore } from '$stores/shortcutsStore'
-    import RegistersVisualiser from '$cmp/specific/project/cpu/RegistersRenderer.svelte'
     import RegistersRenderer from '$cmp/specific/project/cpu/RegistersRenderer.svelte'
+    import RegisterFilesPanel from '$cmp/specific/project/cpu/RegisterFilesPanel.svelte'
     import StatusCodesVisualiser from '$cmp/specific/project/cpu/StatusCodesRenderer.svelte'
     import MemoryControls from '$cmp/specific/project/memory/MemoryControls.svelte'
     import FaShareAlt from '~icons/fa-solid/share-alt'
@@ -365,6 +366,18 @@
     let testcasesVisible = $state(false)
     let agentOpen = $state(false)
     let groupSize = $state(RegisterSize.Word)
+    //the register column is as wide as the CPU file asks and no wider, whichever tab of the panel is
+    //open: the memory panel sits beside it in a `min-content` row, so a column that followed the
+    //visible file would slide the memory panel sideways every time a tab was picked
+    let registersColumnWidth = $derived(registerColumnWidth(emulator.registerFiles, groupSize))
+    //empty for a language with a single file, which has no tab to pick and goes on sizing its column
+    //by what the column holds, exactly as it always did. `min-width` is set with the width because a
+    //`fit-content` minimum would otherwise let the widest file win the argument anyway
+    let registersColumnStyle = $derived(
+        registersColumnWidth
+            ? `width: ${registersColumnWidth}; min-width: ${registersColumnWidth};`
+            : ''
+    )
     let errorStrings = $derived(emulator.errors.join('\n'))
     let info = $derived(
         emulator.terminated && emulator.executionTime >= 0
@@ -1181,7 +1194,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
     </div>
     <div class="right-side">
         <div class="memory-wrapper">
-            <div class="column registers-column" style="gap: 0.4rem">
+            <div class="column registers-column" style="gap: 0.4rem; {registersColumnStyle}">
                 {#if emulator.statusRegisters && emulator.statusRegisters.length > 0}
                     <StatusCodesVisualiser statusCodes={emulator.statusRegisters} />
                 {/if}
@@ -1194,14 +1207,13 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                     withoutHeader
                     position="bottom"
                 />
-                <RegistersVisualiser
+                <RegisterFilesPanel
                     systemSize={emulator.systemSize}
                     size={groupSize}
                     style="flex: 1; min-height: 0;"
-                    hiddenRegistersNames={emulator.hiddenRegisters}
-                    registers={emulator.registers}
-                    on:registerClick={async (e) => {
-                        const value = e.detail.value
+                    files={emulator.registerFiles}
+                    onRegisterClick={(register) => {
+                        const value = register.value
                         const clampedSize =
                             value - (value % BigInt(emulator.memory.global.pageSize))
                         emulator.setGlobalMemoryAddress(

@@ -1159,7 +1159,7 @@ export function createDefaultCodingAgentTools(context: DefaultCodingAgentToolCon
         get_emulator_state: tool({
             name: 'get_emulator_state',
             description: `Returns the full emulator execution state.
-Use this to inspect registers, flags, call stack, breakpoints, errors, execution status, stdout, and latest mutations. Call it after stepping or running only when you need fields not already returned by step or run_to_completion.`,
+Use this to inspect registers, flags, call stack, breakpoints, errors, execution status, stdout, and latest mutations. This is the only tool that returns every Register file in full: registerFiles lists each floating-point, coprocessor and control/status register of the language, zero or not, with an empty x87 stack slot reading empty, so use it whenever you need floating-point, SSE, x87, CP0 or CSR state that step or run_to_completion did not list. Call it after stepping or running only when you need fields not already returned by them.`,
             schema: z.object({}),
             execute: async () =>
                 runAgentTool(async (toolRun) => {
@@ -1176,9 +1176,12 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                     return toolRun.success({
                         errors: collectEmulatorErrors(emulator, checkDiagnostics),
                         diagnostics: collectEmulatorDiagnostics(emulator, checkDiagnostics),
+                        //the full refresh is where every Register file is reported whole; the
+                        //execution tools report only what is not zero in them
                         ...formatEmulatorState(
                             (file) => getFile(context, file)?.content ?? '',
-                            emulator
+                            emulator,
+                            { registerFiles: 'full' }
                         )
                     })
                 })
@@ -1186,7 +1189,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
         step: tool({
             name: 'step',
             description:
-                'Steps the emulator forward by a given number of instructions. You MUST compile first before calling this tool. Use this for single-stepping or executing a few instructions at a time. Returns registers, pc, sp, status registers, stdout, current line, and latest mutations after stepping.',
+                'Steps the emulator forward by a given number of instructions. You MUST compile first before calling this tool. Use this for single-stepping or executing a few instructions at a time. Returns registers, pc, sp, status registers, stdout, current line, and latest mutations after stepping. Of the other Register files (registerFiles) it lists only the registers that are not zero and not an empty x87 stack slot, so call get_emulator_state when you need one of those files in full.',
             schema: z.object({
                 steps: z
                     .number()
@@ -1242,7 +1245,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
         run_to_completion: tool({
             name: 'run_to_completion',
             description:
-                'Runs the program until it terminates, hits a breakpoint, reaches the instruction limit, or raises a runtime error. You MUST compile first before calling this tool. Returns final registers, pc, sp, status registers, stdout, current line, and latest mutations.',
+                'Runs the program until it terminates, hits a breakpoint, reaches the instruction limit, or raises a runtime error. You MUST compile first before calling this tool. Returns final registers, pc, sp, status registers, stdout, current line, and latest mutations. Of the other Register files (registerFiles) it lists only the registers that are not zero and not an empty x87 stack slot, so call get_emulator_state when you need one of those files in full.',
             schema: z.object({}),
             execute: async () =>
                 runAgentTool(async (toolRun) => {
@@ -1300,7 +1303,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
         undo: tool({
             name: 'undo',
             description:
-                'Undoes the latest execution step or steps, up to the emulator history limit. Use undo plus step 1 when you need to re-observe a mutation you missed.',
+                'Undoes the latest execution step or steps, up to the emulator history limit. Use undo plus step 1 when you need to re-observe a mutation you missed. Like step, of the other Register files (registerFiles) it lists only the registers that are not zero and not an empty x87 stack slot, so call get_emulator_state when you need one of those files in full.',
             schema: z.object({
                 steps: z
                     .number()

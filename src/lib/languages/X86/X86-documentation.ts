@@ -345,8 +345,8 @@ export type X86ConditionCode = {
 }
 
 /**
- * The condition suffixes of `jcc`, `setcc` and `cmovcc`. The appendix that supplies the prose points
- * at a table of these and does not contain it, so this one is written here.
+ * The condition suffixes of `jcc`, `setcc` and `cmovcc`. The appendix that supplies the prose
+ * points at a table of these and does not contain it, so this one is written here.
  */
 export const X86_CONDITION_CODES: X86ConditionCode[] = [
     { code: 'e', aliases: ['z'], meaning: 'equal, zero', test: 'ZF = 1' },
@@ -372,7 +372,84 @@ export const X86_CONDITION_CODES: X86ConditionCode[] = [
     { code: 'np', aliases: ['po'], meaning: 'parity odd', test: 'PF = 0' }
 ]
 
-// --- the assembler ---------------------------------------------------------------------------------
+export type X86RegisterFileEntry = {
+    name: string
+    /** The width the registers panel shows the register at, in bits. */
+    bits: number
+    description: string
+}
+
+/**
+ * A register file beside the general purpose registers, in the order the registers panel offers its
+ * tabs. The floating point state is not a set of extra general registers: it comes with its own
+ * instructions and its own conventions, and the intro is where those are explained.
+ */
+export type X86RegisterFileDoc = {
+    /**
+     * The anchor of the section on the page, and the tab the registers panel shows the file
+     * under.
+     */
+    id: string
+    title: string
+    /** Markdown, shown once above the registers of the file. */
+    intro: string
+    registers: X86RegisterFileEntry[]
+}
+
+export const X86_DOCUMENTED_REGISTER_FILES: X86RegisterFileDoc[] = [
+    {
+        id: 'sse',
+        title: 'SSE registers',
+        intro: 'Floating point arithmetic in a 64 bit program is SSE arithmetic. The `xmm` registers are wide enough to hold several numbers at once, and each instruction says how much of a register it means: the **scalar** forms work on the lowest lane alone, so `addsd xmm0, xmm1` adds one pair of doubles and `cvtsi2sd xmm0, rax` turns an integer into a double and writes it into that same lowest lane, both of them leaving the upper lane of the destination as they found it. The moves are the exception: `movsd xmm0, [x]` loads one double from memory and clears bits 127 to 64, while `movsd xmm0, xmm1` copies the low double and leaves the upper lane alone, so where the value came from decides what the rest of the register holds. The **packed** forms, `addpd` and `mulps` among them, apply the same operation to every lane of the register at once, which is the reason the registers are this wide.\n\nThe single precision instructions are spelled with `ss` and `ps` where the double precision ones use `sd` and `pd`, and the calling convention passes floating point arguments in `xmm0` to `xmm7` and returns them in `xmm0`.',
+        registers: [
+            {
+                name: 'xmm0 to xmm15',
+                bits: 128,
+                description:
+                    'Sixteen 128 bit registers. Read as doubles they are two lanes, read as singles four, and read as raw bits sixteen bytes; the registers panel shows all three, because nothing in the register itself records which one the program meant.'
+            },
+            {
+                name: 'mxcsr',
+                bits: 32,
+                description:
+                    'The control and status register of the unit. It holds the rounding mode, the masks that decide whether an invalid operation raises an exception or quietly produces a NaN, and the flags that record which of those conditions has happened since the flags were last cleared. `ldmxcsr` and `stmxcsr` move it to and from memory.'
+            }
+        ]
+    },
+    {
+        id: 'x87',
+        title: 'x87 registers',
+        intro: 'The x87 unit is the floating point hardware x86 had before SSE, and it is still what the `f` instructions use. Its eight registers are a **stack** rather than a numbered file: `st0` is always the top, `fld` and `fld1` push a value onto it and rename everything below, and `faddp` adds the top two and pops, so the same register name means a different value after every push. Programs written today use SSE for arithmetic and reach for x87 mainly for the operations SSE has no instruction for, such as `fsin`, `fcos` or `fpatan`.\n\nThis emulator keeps the stack as ordinary 64 bit doubles rather than the 80 bit extended values real hardware computes with, so a long chain of x87 arithmetic can differ from a physical processor in the last bits of the result.\n\nA slot the stack has not filled, or has popped, keeps whatever bits it last held. The panel shows those rows blank rather than the stale value, the way `info float` prints Empty in gdb, and the bits are still a hover away; `ftag` is the register that says which slots are live.',
+        registers: [
+            {
+                name: 'st0 to st7',
+                bits: 64,
+                description:
+                    'The stack registers, listed top first: what the panel calls `st0` is whatever the last push left on top, and one more push moves that value to `st1`. An instruction that pops past the bottom of the stack, or pushes onto a full one, raises the stack fault the status word reports.'
+            },
+            {
+                name: 'fctrl',
+                bits: 16,
+                description:
+                    'The control word: the rounding mode, the precision the unit rounds results to, and the masks that say which exceptions the program wants to be told about. `fldcw` writes it, which is how code that needs truncation rather than the default round to nearest gets it. The precision field has nothing to decide here, because the stack already holds doubles.'
+            },
+            {
+                name: 'fstat',
+                bits: 16,
+                description:
+                    'The status word: the exception flags, the condition codes a comparison such as `fcom` writes, and the three bits that say which register is currently the top of the stack. `fstsw ax` copies it into `ax`, which is how an x87 comparison used to reach a conditional jump.'
+            },
+            {
+                name: 'ftag',
+                bits: 16,
+                description:
+                    'Two bits per register saying whether it holds a number, a zero, a special value such as an infinity, or nothing at all. It is what makes an empty stack slot distinguishable from one holding zero, and what the panel reads to decide which rows to leave blank.'
+            }
+        ]
+    }
+]
+
+// --- the assembler ------------------------------------------------------------------------------
 
 export type X86TokenDoc = {
     name: string
@@ -521,7 +598,7 @@ export const X86_PREFIX_DOCS: X86TokenDoc[] = [
     }
 ]
 
-// --- syscalls ---------------------------------------------------------------------------------------
+// --- syscalls -----------------------------------------------------------------------------------
 
 export const x86SyscallMap = new Map<string, X86Syscall>(
     X86_SYSCALLS.map((syscall) => [syscall.name, syscall])

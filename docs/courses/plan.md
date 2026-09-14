@@ -220,7 +220,10 @@ Playground fence, today: ` ```<lang>|playground|<flags> ` where `<lang>` is `m68
 unless present) and `open-screen` (the same panel, already unfolded instead of behind its "Show
 screen" bar; it implies `screen`). Every page in `src/content` that draws uses `open-screen`, decided
 on 2026-09-11: a reader whose program draws wants the drawing in front of them, and the bar is still
-there to fold it away.
+there to fold it away. Added by the Register files work (2026-09-14): `fpu`, `cp0`, `csr`, `sse` and
+`x87` open the register panel on that Register file instead of on the CPU one, for the languages that
+have it (`docs/design/register-files.md`); a fence naming several keeps the first. Every flag is read
+exactly as it is spelled here, so `FPU` names no file any more than `MEMORY` shows the memory panel.
 
 Exercise, to be supported by the renderer and the verification test:
 

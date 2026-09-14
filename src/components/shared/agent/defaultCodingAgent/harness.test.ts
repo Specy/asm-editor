@@ -1,7 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AssemblyCodingHarness } from './harness'
 import type { Emulator } from '$lib/languages/Emulator'
-import { InterpreterStatus } from '$lib/languages/commonLanguageFeatures.svelte'
+import {
+    InterpreterStatus,
+    makeRegister,
+    RegisterSize,
+    resolveRegisterFileLayout,
+    type RegisterFile,
+    type RegisterFileDescriptor
+} from '$lib/languages/commonLanguageFeatures.svelte'
+import type { FormattedRegisterFile } from './formatting'
 
 interface ToolExecutionResult {
     success?: boolean
@@ -105,6 +113,57 @@ function createMockEmulator(_initialCode = ''): Emulator {
                 breakpoints.push({ file, line: bLine })
             }
         })
+    } as unknown as Emulator
+}
+
+/**
+ * A Register file the way `GenericEmulator` publishes one; see the same helper in tools.test.ts.
+ */
+function makeFakeRegisterFile(descriptor: RegisterFileDescriptor, values: bigint[]): RegisterFile {
+    const layout = resolveRegisterFileLayout(descriptor)
+    return {
+        ...descriptor,
+        layout,
+        registers: layout.map((register, index) =>
+            makeRegister(register.name, values[index] ?? 0n, register.size)
+        ),
+        flags: (descriptor.flagNames ?? []).map((name) => ({ name, value: 0, prev: 0 })),
+        blanks: layout.map(() => false)
+    }
+}
+
+/**
+ * The mock with the RISC-V FPU on it: 64 bit registers read as singles by default, and a single is
+ * NaN-boxed, so `ft0`, which holds the double 3.5, reads as NaN in that Format and only its other
+ * readings say what it is.
+ */
+function createRegisterFileEmulator(): Emulator {
+    const emulator = createMockEmulator()
+    const cpu = makeFakeRegisterFile(
+        {
+            id: 'cpu',
+            label: 'CPU',
+            size: RegisterSize.Long,
+            formats: ['hex'],
+            registers: [{ name: 't0' }]
+        },
+        [0n]
+    )
+    const fpu = makeFakeRegisterFile(
+        {
+            id: 'fpu',
+            label: 'FPU',
+            size: RegisterSize.Double,
+            formats: ['single', 'double', 'hex'],
+            nanBoxedSingles: true,
+            registers: [{ name: 'ft0' }, { name: 'ft1' }]
+        },
+        [0x400c000000000000n, 0n]
+    )
+    return {
+        ...emulator,
+        registers: cpu.registers,
+        registerFiles: [cpu, fpu]
     } as unknown as Emulator
 }
 
@@ -252,5 +311,53 @@ describe('AssemblyCodingHarness', () => {
         })) as unknown as ToolExecutionResult
         expect(remBpResult.success).toBe(true)
         expect(remBpResult.removed).toBe(true)
+    })
+
+    it('reports only the non-zero registers of the other Register files after a step', async () => {
+        const mockEmulator = createRegisterFileEmulator()
+        const harness = new AssemblyCodingHarness({
+            language: 'RISC-V',
+            entry: 'main.s',
+            files: { 'main.s': 'nop' },
+            emulator: mockEmulator
+        })
+
+        const result = await harness.step()
+        const files = result.state.registerFiles as FormattedRegisterFile[]
+
+        expect(files).toEqual([
+            {
+                id: 'fpu',
+                label: 'FPU',
+                registers: [
+                    {
+                        name: 'ft0',
+                        value: 'NaN',
+                        other: ['0x400c000000000000', 'double 3.5']
+                    }
+                ]
+            }
+        ])
+    })
+
+    it('reports every Register file in full through get_emulator_state', async () => {
+        const mockEmulator = createRegisterFileEmulator()
+        const harness = new AssemblyCodingHarness({
+            language: 'RISC-V',
+            entry: 'main.s',
+            files: { 'main.s': 'nop' },
+            emulator: mockEmulator
+        })
+
+        const result = (await harness.executeTool(
+            'get_emulator_state',
+            {}
+        )) as unknown as ToolExecutionResult
+        const files = result.registerFiles as FormattedRegisterFile[]
+
+        expect(files[0].registers).toEqual([
+            { name: 'ft0', value: 'NaN', other: ['0x400c000000000000', 'double 3.5'] },
+            { name: 'ft1', value: 'NaN', other: ['0x0000000000000000', 'double 0'] }
+        ])
     })
 })

@@ -27,7 +27,20 @@ export type PlaygroundSettings = {
     /** Whether the Screen panel starts unfolded instead of behind its "Show screen" bar. */
     openScreen: boolean
     openButton: boolean
+    /**
+     * The Register file the panel opens on, lower case, or undefined for the CPU file. Only the
+     * languages that have the file answer to it; anything else opens on the CPU file anyway.
+     */
+    registerFile?: PlaygroundRegisterFile
 }
+
+/**
+ * The Register files a fence can open a Playground on, which are the lower-case labels of the tabs
+ * the panel shows ([the design record](../../../docs/design/register-files.md)).
+ */
+export type PlaygroundRegisterFile = 'fpu' | 'cp0' | 'csr' | 'sse' | 'x87'
+
+const REGISTER_FILE_FLAGS: readonly PlaygroundRegisterFile[] = ['fpu', 'cp0', 'csr', 'sse', 'x87']
 
 export type PlaygroundFence = {
     settings: PlaygroundSettings
@@ -98,6 +111,12 @@ export function parsePlaygroundFence(info: string): PlaygroundFence | undefined 
     const openScreen = entries.includes('open-screen')
     const showScreen = openScreen || entries.includes('screen')
     const isExercise = entries.includes('exercise')
+    //a fence naming several files is asking for one panel to show two tabs at once, so the first
+    //one it names is the one it gets. Spelled lower case like every other flag here, which are all
+    //read case-sensitively, so `FPU` is as much a typo as `MEMORY` is.
+    const registerFile = entries.find((entry): entry is PlaygroundRegisterFile =>
+        REGISTER_FILE_FLAGS.includes(entry as PlaygroundRegisterFile)
+    )
     return {
         settings: {
             language,
@@ -110,7 +129,8 @@ export function parsePlaygroundFence(info: string): PlaygroundFence | undefined 
             showFlags: !entries.includes('no-flags'),
             showScreen,
             openScreen,
-            openButton: entries.includes('allow-open')
+            openButton: entries.includes('allow-open'),
+            registerFile
         },
         large: entries.includes('large') || showMemory || showScreen,
         tall: entries.includes('tall'),

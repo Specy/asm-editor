@@ -233,6 +233,47 @@ function renderCorePrinciples(enabledToolNames: DefaultCodingAgentToolName[]) {
         .join('\n')
 }
 
+/**
+ * The Register files the emulators expose
+ * ([the design record](../../../../../docs/design/register-files.md)), as one tip beside the other
+ * register guidance: the model has to know the other files exist and that a float one reads as a
+ * number before it can ask for them. Example names rather than full lists, since the file it opens
+ * comes back naming its own registers. Which tool holds the complete state and which ones
+ * abbreviate it is written from the allow list, as the neighbouring tips are, so the tip never
+ * sends the model to a tool it does not have.
+ */
+function renderRegisterFileInformation(enabledToolNames: DefaultCodingAgentToolName[]) {
+    const abbreviating = (['step', 'run_to_completion', 'undo'] as const).filter((name) =>
+        hasTool(enabledToolNames, name)
+    )
+    const listed =
+        abbreviating.length > 1
+            ? `${abbreviating.slice(0, -1).join(', ')} and ${abbreviating[abbreviating.length - 1]}`
+            : abbreviating[0]
+    //the sentence names as many tools as the allow list holds, so both of its verbs follow the
+    //count: the subject is one tool, or two of them, or all three
+    const several = abbreviating.length > 1
+    const listVerb = several ? 'list' : 'lists'
+    const skipVerb = several ? 'skip' : 'skips'
+    const whereTheStateIs = [
+        abbreviating.length
+            ? `${listed} ${listVerb} only the registers that are not zero, plus the even half of a live MIPS double pair, and ${skipVerb} a row that holds nothing, such as an empty x87 stack slot`
+            : '',
+        hasTool(enabledToolNames, 'get_emulator_state')
+            ? 'get_emulator_state lists every file in full, where a row that holds nothing reads empty'
+            : ''
+    ].filter(Boolean)
+
+    return [
+        "- Register files: registers is the CPU file, and registerFiles holds the language's other files.",
+        'MIPS has FPU ($f0 to $f31, with condition flags) and CP0; RISC-V has FPU (ft0, fa0, fs0 and the rest of f0 to f31) and CSR (fcsr, cycle, instret and more); x86 has SSE (xmm0 to xmm15) and x87 (st0 to st7).',
+        'A float register reads as a decimal such as 3.5, a wide one as its lanes, with the raw hex and the other precision in other; integer registers such as mxcsr keep the usual decimal/hex shape.',
+        whereTheStateIs.length ? `${whereTheStateIs.join('; ')}.` : ''
+    ]
+        .filter(Boolean)
+        .join(' ')
+}
+
 function renderToolSelectionTips(enabledToolNames: DefaultCodingAgentToolName[]) {
     const tips = [
         hasTool(enabledToolNames, 'list_files')
@@ -258,6 +299,12 @@ function renderToolSelectionTips(enabledToolNames: DefaultCodingAgentToolName[])
             : '',
         hasTool(enabledToolNames, 'step') && hasTool(enabledToolNames, 'run_to_completion')
             ? '- step and run_to_completion already return registers, pc, sp, status registers, stdout, current line, and latestSteps. Call get_emulator_state after them only when you need callStack, breakpoints, canUndo, currentInterrupt, or a full refresh.'
+            : '',
+        hasTool(enabledToolNames, 'get_emulator_state') ||
+        hasTool(enabledToolNames, 'step') ||
+        hasTool(enabledToolNames, 'run_to_completion') ||
+        hasTool(enabledToolNames, 'undo')
+            ? renderRegisterFileInformation(enabledToolNames)
             : '',
         hasTool(enabledToolNames, 'read_memory')
             ? '- Use read_memory only when register/stdout state is insufficient, such as inspecting arrays, strings, the stack, or data sections.'
@@ -321,7 +368,9 @@ const M68K_TRAP_INFORMATION = M68K_TRAP_GROUP_DOCS.map((group) =>
     ].join('\n')
 ).join('\n\n')
 
-/** The tasks that stop the program, so the agent does not reach for one and then debug the error. */
+/**
+ * The tasks that stop the program, so the agent does not reach for one and then debug the error.
+ */
 const M68K_REJECTED_TRAP_INFORMATION = M68K_REJECTED_TRAP_TASKS.map(
     (task) => `${task.task} (${task.title})`
 ).join(', ')

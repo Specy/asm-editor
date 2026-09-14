@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createDefaultCodingAgentTools } from './tools'
+import { buildDefaultCodingAgentPrompt } from './prompts'
 import {
     DEFAULT_TAKE_LINES,
     MAX_TAKE_LINES,
@@ -9,8 +10,14 @@ import {
 import type { Emulator } from '$lib/languages/Emulator'
 import {
     InterpreterStatus,
-    makeGenericDiagnostic
+    makeGenericDiagnostic,
+    makeRegister,
+    RegisterSize,
+    resolveRegisterFileLayout,
+    type RegisterFile,
+    type RegisterFileDescriptor
 } from '$lib/languages/commonLanguageFeatures.svelte'
+import type { FormattedRegisterFile } from './formatting'
 
 interface ToolExecutionResult {
     success?: boolean
@@ -106,6 +113,130 @@ function createMockEmulator(): Emulator {
                 breakpoints.push({ file, line: bLine })
             }
         })
+    } as unknown as Emulator
+}
+
+/**
+ * A Register file the way `GenericEmulator` publishes one: the descriptor with its layout resolved
+ * and one `Register` per declared name, so the agent formatting reads exactly what the panel reads.
+ */
+function makeFakeRegisterFile(
+    descriptor: RegisterFileDescriptor,
+    values: bigint[],
+    flagValues: number[] = [],
+    blanks: boolean[] = []
+): RegisterFile {
+    const layout = resolveRegisterFileLayout(descriptor)
+    return {
+        ...descriptor,
+        layout,
+        registers: layout.map((register, index) =>
+            makeRegister(register.name, values[index] ?? 0n, register.size)
+        ),
+        flags: (descriptor.flagNames ?? []).map((name, index) => ({
+            name,
+            value: flagValues[index] ?? 0,
+            prev: 0
+        })),
+        blanks: layout.map((_, index) => blanks[index] === true)
+    }
+}
+
+function makeCpuFile(): RegisterFile {
+    return makeFakeRegisterFile(
+        {
+            id: 'cpu',
+            label: 'CPU',
+            size: RegisterSize.Long,
+            formats: ['hex'],
+            registers: [{ name: '$t0' }]
+        },
+        [7n]
+    )
+}
+
+/**
+ * An emulator holding every shape the formatting has to handle rather than a copy of one language's
+ * files: the CPU file; a float file with the MIPS pairing rule and condition flags which also holds
+ * a control register of integer kind, `mxcsr`, the way x86's SSE file does; and an integer file
+ * that nothing has written yet. `$f0` holds the single 3.5, `$f1` is untouched and the `$f2`/`$f3`
+ * pair holds the double 3.5, whose low word is zero, which is why the even half of a pair cannot be
+ * dropped for being zero.
+ */
+function createRegisterFileEmulator(): Emulator {
+    const emulator = createMockEmulator()
+    const cpu = makeCpuFile()
+    const fpu = makeFakeRegisterFile(
+        {
+            id: 'fpu',
+            label: 'FPU',
+            size: RegisterSize.Long,
+            formats: ['single', 'double', 'hex'],
+            pairedDoubles: true,
+            flagNames: ['0', '1'],
+            registers: [
+                { name: '$f0' },
+                { name: '$f1' },
+                { name: '$f2' },
+                { name: '$f3' },
+                { name: 'mxcsr', kind: 'integer' }
+            ]
+        },
+        [0x40600000n, 0n, 0n, 0x400c0000n, 0x18n],
+        [1, 0]
+    )
+    const cp0 = makeFakeRegisterFile(
+        {
+            id: 'cp0',
+            label: 'CP0',
+            size: RegisterSize.Long,
+            formats: ['hex'],
+            registers: [{ name: '$12 (status)' }, { name: '$13 (cause)' }]
+        },
+        [0n, 0n]
+    )
+    return {
+        ...emulator,
+        registers: cpu.registers,
+        registerFiles: [cpu, fpu, cp0]
+    } as unknown as Emulator
+}
+
+/**
+ * x86's x87 file, whose tag word marks stack slots empty: `st0` holds the double 3.5, `st1` is a
+ * slot the file blanks although the bits left in it are a NaN rather than zero, and `st2` is a
+ * live slot nothing has written yet.
+ */
+function createBlankingRegisterFileEmulator(): Emulator {
+    const emulator = createMockEmulator()
+    const cpu = makeCpuFile()
+    const x87 = makeFakeRegisterFile(
+        {
+            id: 'x87',
+            label: 'x87',
+            size: RegisterSize.Double,
+            formats: ['double', 'hex'],
+            registers: [{ name: 'st0' }, { name: 'st1' }, { name: 'st2' }]
+        },
+        [0x400c000000000000n, 0x7ff8000000000000n, 0n],
+        [],
+        [false, true, false]
+    )
+    return {
+        ...emulator,
+        registers: cpu.registers,
+        registerFiles: [cpu, x87]
+    } as unknown as Emulator
+}
+
+/** M68K and Z80: the CPU file is the only file the emulator publishes. */
+function createCpuOnlyEmulator(): Emulator {
+    const emulator = createMockEmulator()
+    const cpu = makeCpuFile()
+    return {
+        ...emulator,
+        registers: cpu.registers,
+        registerFiles: [cpu]
     } as unknown as Emulator
 }
 
@@ -690,6 +821,206 @@ describe('DefaultCodingAgent Tools (Standard Agent Model)', () => {
             expect(result.success).toBe(true)
             expect(result.count).toBe(0)
             expect(result.breakpoints).toEqual([])
+        })
+    })
+    describe('register files', () => {
+        it('reports every Register file in full from get_emulator_state', async () => {
+            const { context } = createTestContext({ 'main.s': 'nop' }, createRegisterFileEmulator())
+            const tools = createDefaultCodingAgentTools(context)
+
+            const result = (await tools.get_emulator_state.execute(
+                {}
+            )) as unknown as ToolExecutionResult
+            const files = result.registerFiles as FormattedRegisterFile[]
+
+            expect(files.map((file) => file.id)).toEqual(['fpu', 'cp0'])
+            expect(files[0].label).toBe('FPU')
+            //a float register reads as a decimal number in the file's default Format, with the
+            //readings that Format hides beside it, and an integer one keeps the formatNumber shape
+            expect(files[0].registers).toEqual([
+                { name: '$f0', value: '3.5', other: ['0x40600000', 'double 5.3360734e-315'] },
+                { name: '$f1', value: '0', other: ['0x00000000'] },
+                //the double the pair holds is reported on its even half, where a single reads as 0
+                { name: '$f2', value: '0', other: ['0x00000000', 'double 3.5'] },
+                { name: '$f3', value: '2.1875', other: ['0x400c0000'] },
+                {
+                    name: 'mxcsr',
+                    value: {
+                        decimal: '24',
+                        hex: '0x00000018',
+                        unsignedDecimal: '24',
+                        display: 'decimal: 24 hex: 0x00000018'
+                    }
+                }
+            ])
+            expect(files[0].flags).toEqual([
+                { name: '0', value: 1 },
+                { name: '1', value: 0 }
+            ])
+            expect(files[1].registers).toHaveLength(2)
+            //the CPU file stays where every caller already reads it and is not repeated
+            expect(result.registers).toEqual([
+                {
+                    name: '$t0',
+                    value: {
+                        decimal: '7',
+                        hex: '0x00000007',
+                        unsignedDecimal: '7',
+                        display: 'decimal: 7 hex: 0x00000007'
+                    }
+                }
+            ])
+        })
+
+        it('reports only the non-zero registers of the other files from step', async () => {
+            const { context } = createTestContext({ 'main.s': 'nop' }, createRegisterFileEmulator())
+            const tools = createDefaultCodingAgentTools(context)
+
+            const result = (await tools.step.execute({})) as unknown as ToolExecutionResult
+            const files = result.registerFiles as FormattedRegisterFile[]
+
+            expect(files.map((file) => file.id)).toEqual(['fpu', 'cp0'])
+            //`$f2` is zero and stays: it is the low half of the pair holding the double 3.5
+            expect(files[0].registers.map((register) => register.name)).toEqual([
+                '$f0',
+                '$f2',
+                '$f3',
+                'mxcsr'
+            ])
+            //the other readings travel with a step too, so the double is not lost on the way
+            expect(files[0].registers[1]).toEqual({
+                name: '$f2',
+                value: '0',
+                other: ['0x00000000', 'double 3.5']
+            })
+            //flags are a handful of bits, so they come along whatever the detail
+            expect(files[0].flags).toEqual([
+                { name: '0', value: 1 },
+                { name: '1', value: 0 }
+            ])
+            //a file with nothing written to it is still listed, so the model knows it exists
+            expect(files[1]).toEqual({ id: 'cp0', label: 'CP0', registers: [] })
+        })
+
+        it('reports only the non-zero registers from run_to_completion and undo', async () => {
+            const { context } = createTestContext({ 'main.s': 'nop' }, createRegisterFileEmulator())
+            const tools = createDefaultCodingAgentTools(context)
+
+            const run = (await tools.run_to_completion.execute(
+                {}
+            )) as unknown as ToolExecutionResult
+            const undone = (await tools.undo.execute({})) as unknown as ToolExecutionResult
+
+            for (const result of [run, undone]) {
+                const files = result.registerFiles as FormattedRegisterFile[]
+                expect(files[0].registers.map((register) => register.name)).toEqual([
+                    '$f0',
+                    '$f2',
+                    '$f3',
+                    'mxcsr'
+                ])
+                expect(files[1].registers).toEqual([])
+            }
+        })
+
+        it('marks a blanked register empty in the full listing and keeps its stale bits', async () => {
+            const { context } = createTestContext(
+                { 'main.s': 'nop' },
+                createBlankingRegisterFileEmulator()
+            )
+            const tools = createDefaultCodingAgentTools(context)
+
+            const result = (await tools.get_emulator_state.execute(
+                {}
+            )) as unknown as ToolExecutionResult
+            const files = result.registerFiles as FormattedRegisterFile[]
+
+            //the word gdb's `info float` prints, with whatever the slot last held behind it
+            expect(files[0].registers).toEqual([
+                { name: 'st0', value: '3.5', other: ['0x400c000000000000'] },
+                { name: 'st1', value: 'empty', other: ['0x7ff8000000000000'] },
+                { name: 'st2', value: '0', other: ['0x0000000000000000'] }
+            ])
+        })
+
+        it('leaves a blanked register out of the non-zero listing', async () => {
+            const { context } = createTestContext(
+                { 'main.s': 'nop' },
+                createBlankingRegisterFileEmulator()
+            )
+            const tools = createDefaultCodingAgentTools(context)
+
+            const result = (await tools.step.execute({})) as unknown as ToolExecutionResult
+            const files = result.registerFiles as FormattedRegisterFile[]
+
+            //`st1` holds a NaN rather than zero and is dropped all the same: the slot is empty
+            expect(files[0].registers.map((register) => register.name)).toEqual(['st0'])
+        })
+
+        it('reports no files for a language that only has the CPU one', async () => {
+            const { context } = createTestContext({ 'main.s': 'nop' }, createCpuOnlyEmulator())
+            const tools = createDefaultCodingAgentTools(context)
+
+            const result = (await tools.get_emulator_state.execute(
+                {}
+            )) as unknown as ToolExecutionResult
+            expect(result.registerFiles).toEqual([])
+        })
+
+        //the tip is written from the allow list, so its sentence has to read as English whether the
+        //agent has all three abbreviating tools or one of them
+        it('names the abbreviating tools in the prompt with a verb that agrees', () => {
+            const all = buildDefaultCodingAgentPrompt({
+                enabledToolNames: ['get_emulator_state', 'step', 'run_to_completion', 'undo'],
+                enabledWorkflows: []
+            })
+            expect(all).toContain(
+                'step, run_to_completion and undo list only the registers that are not zero, plus the even half of a live MIPS double pair, and skip a row that holds nothing'
+            )
+
+            const two = buildDefaultCodingAgentPrompt({
+                enabledToolNames: ['step', 'undo'],
+                enabledWorkflows: []
+            })
+            expect(two).toContain(
+                'step and undo list only the registers that are not zero, plus the even half of a live MIPS double pair, and skip a row that holds nothing'
+            )
+
+            const stepOnly = buildDefaultCodingAgentPrompt({
+                enabledToolNames: ['get_emulator_state', 'step'],
+                enabledWorkflows: []
+            })
+            expect(stepOnly).toContain(
+                'step lists only the registers that are not zero, plus the even half of a live MIPS double pair, and skips a row that holds nothing'
+            )
+        })
+
+        //undo returns registerFiles like step does, so an allow list holding only undo still needs
+        //the tip that says what its listing leaves out
+        it('renders the tip for an allow list that only undoes', () => {
+            const prompt = buildDefaultCodingAgentPrompt({
+                enabledToolNames: ['undo'],
+                enabledWorkflows: []
+            })
+            expect(prompt).toContain('undo lists only the registers that are not zero')
+        })
+
+        it('tells the prompt what a row that holds nothing reads as', () => {
+            const prompt = buildDefaultCodingAgentPrompt({
+                enabledToolNames: ['get_emulator_state'],
+                enabledWorkflows: []
+            })
+            expect(prompt).toContain('where a row that holds nothing reads empty')
+        })
+
+        it('reports no files for an emulator that publishes none at all', async () => {
+            const { context } = createTestContext({ 'main.s': 'nop' })
+            const tools = createDefaultCodingAgentTools(context)
+
+            const result = (await tools.get_emulator_state.execute(
+                {}
+            )) as unknown as ToolExecutionResult
+            expect(result.registerFiles).toEqual([])
         })
     })
 })

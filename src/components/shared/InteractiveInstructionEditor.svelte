@@ -3,6 +3,7 @@
     import { toast } from '$stores/toastStore'
     import Controls from '$cmp/specific/project/Controls.svelte'
     import { clampBigInt, formatTime } from '$lib/utils'
+    import { registerColumnWidth } from '$lib/languages/registerFormats'
     import { resolveProjectSettings } from '$lib/projectSettings'
     import { rewriteScreenDirective } from '$lib/languages/mars/screenDirective'
     import MemoryControls from '$cmp/specific/project/memory/MemoryControls.svelte'
@@ -10,6 +11,7 @@
     import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE, TESTCASE_INSTRUCTION_LIMIT } from '$lib/Config'
     import StatusCodesVisualiser from '$cmp/specific/project/cpu/StatusCodesRenderer.svelte'
     import RegistersVisualiser from '$cmp/specific/project/cpu/RegistersRenderer.svelte'
+    import RegisterFilesPanel from '$cmp/specific/project/cpu/RegisterFilesPanel.svelte'
     import { onMount, type Snippet, untrack } from 'svelte'
     import { getM68kErrorMessage } from '$lib/languages/M68K/M68kUtils'
     import type { AvailableLanguages, Testcase, TestcaseResult } from '$lib/Project.svelte'
@@ -57,6 +59,11 @@
         children?: Snippet
         forceMemoryRight?: boolean
         layout?: Layout
+        /**
+         * The Register file the panel opens on, a Playground's `fpu`/`cp0`/`csr`/`sse`/`x87` flag.
+         * Undefined, and an id this language has not got, open the CPU file.
+         */
+        initialRegisterFile?: string
     }
 
     let {
@@ -76,7 +83,8 @@
         controls,
         children,
         forceMemoryRight = false,
-        layout = 'small'
+        layout = 'small',
+        initialRegisterFile = undefined
     }: Props = $props()
     let showMemory = $derived(showMemoryProp ?? true)
     let showFlags = $derived(showFlagsProp ?? true)
@@ -112,6 +120,19 @@
     //unless the caller asked for it open: a lecture whose program draws wants the drawing visible
     let screenOpen = $state(openScreen)
     let groupSize = $state(RegisterSize.Word)
+    //the fullscreen register column is pinned to the width of the CPU file, as the project page's is:
+    //it sits in the same `min-content` row as the memory panel, so a column that followed the visible
+    //tab would slide that panel sideways every time a tab was picked. The inline column beside the
+    //editor is already a fixed 18rem and needs none of this
+    let registersColumnWidth = $derived(registerColumnWidth(emulator.registerFiles, groupSize))
+    //empty for a language with a single file, which has no tab to pick and goes on sizing its column
+    //by what the column holds, exactly as it always did. `min-width` is set with the width because a
+    //`fit-content` minimum would otherwise let the widest file win the argument anyway
+    let registersColumnStyle = $derived(
+        registersColumnWidth
+            ? `width: ${registersColumnWidth}; min-width: ${registersColumnWidth};`
+            : ''
+    )
     let testcasesVisible = $state(false)
     let testcasesResult: TestcaseResult[] = $state([])
     let editor: monaco.editor.IStandaloneCodeEditor | undefined = $state()
@@ -328,10 +349,10 @@
             </div>
         {/if}
         {#if showRegisters}
-            <RegistersVisualiser
+            <RegisterFilesPanel
                 systemSize={emulator.systemSize}
                 size={groupSize}
-                hiddenRegistersNames={emulator.hiddenRegisters}
+                initialFileId={initialRegisterFile}
                 gridStyle="
                     grid-template-columns: min-content 1fr min-content 1fr;
                     gap: 0.1rem;
@@ -339,9 +360,9 @@
                     justify-content: space-evenly;
                 "
                 style={`flex: unset; max-height: ${embedded ? `calc(var(--screen-height) - ${sizes})` : '15.85rem'}; min-height: 15.85rem;`}
-                registers={emulator.registers}
-                on:registerClick={async (e) => {
-                    handleRegisterClick(e.detail.value)
+                files={emulator.registerFiles}
+                onRegisterClick={(register) => {
+                    handleRegisterClick(register.value)
                 }}
             />
         {/if}
@@ -377,7 +398,7 @@
 {/snippet}
 
 {#snippet fullscreenRegsColumn()}
-    <div class="column fullscreen-registers-column" style="gap: 0.4rem">
+    <div class="column fullscreen-registers-column" style="gap: 0.4rem; {registersColumnStyle}">
         {#if emulator.statusRegisters && emulator.statusRegisters.length > 0 && showFlags}
             <StatusCodesVisualiser statusCodes={emulator.statusRegisters} />
         {/if}
@@ -393,14 +414,14 @@
             />
         {/if}
         {#if showRegisters}
-            <RegistersVisualiser
+            <RegisterFilesPanel
                 systemSize={emulator.systemSize}
                 size={groupSize}
+                initialFileId={initialRegisterFile}
                 style="flex: 1; min-height: 0;"
-                hiddenRegistersNames={emulator.hiddenRegisters}
-                registers={emulator.registers}
-                on:registerClick={async (e) => {
-                    handleRegisterClick(e.detail.value)
+                files={emulator.registerFiles}
+                onRegisterClick={(register) => {
+                    handleRegisterClick(register.value)
                 }}
             />
         {/if}

@@ -79,7 +79,9 @@ export enum RegisterSize {
     Byte = 1,
     Word = 2,
     Long = 4,
-    Double = 8
+    Double = 8,
+    /** 128 bits, the width of an x86 SSE register. */
+    Quad = 16
 }
 
 export type RegisterChunk = {
@@ -161,7 +163,13 @@ export function makeRegister(name: string, v: bigint | number, _size: RegisterSi
     }
 
     function toSizedGroups(groupSize: RegisterSize): RegisterChunk[] {
-        const groupLength = BigInt(groupSize) * 2n
+        //a register narrower than the grouping is one group of its own width, so the signed reading
+        //has to be taken over the width the group really has: Z80's byte wide `a` holding 0xff is
+        //-1 and not the 255 a word would read. `hexChunks` in registerFormats.ts is the same
+        //grouping for a Register file's rows and clamps the same way; the two have to agree,
+        //because the panels show them side by side.
+        const groupBytes = Math.max(1, Math.min(Number(groupSize), Number(size)))
+        const groupLength = BigInt(groupBytes) * 2n
         const hex = toHex()
         const prevHex = toHexString(prev, size)
         const chunks: RegisterChunk[] = []
@@ -172,7 +180,7 @@ export function makeRegister(name: string, v: bigint | number, _size: RegisterSi
             chunks.push({
                 hex: hex.slice(index, offset),
                 value: groupValue,
-                valueSigned: unsignedBigIntToSigned(groupValue, groupSize),
+                valueSigned: unsignedBigIntToSigned(groupValue, groupBytes),
                 groupSize: groupLength,
                 prev: {
                     hex: prevHex.slice(index, offset),
@@ -190,6 +198,11 @@ export function makeRegister(name: string, v: bigint | number, _size: RegisterSi
         },
         get prev() {
             return prev
+        },
+        //the renderers need the width a register ended up with, which is not always the one its
+        //Register file declares: the Z80 adapter narrows `a` to a byte after the file is built
+        get size() {
+            return size
         },
         setSize,
         setValue,
@@ -256,6 +269,92 @@ export type MutationOperation =
 
 export type Register = ReturnType<typeof makeRegister>
 
+/**
+ * How a Register file's values are read for display. `hex` shows the bit pattern grouped by size,
+ * the two float Formats decode the bits as IEEE 754. A file offers the Formats that make sense for
+ * its registers and the first one it offers is its default.
+ */
+export type RegisterFormat = 'hex' | 'single' | 'double'
+
+/**
+ * One register of a Register file. Both fields are overrides for files that are not uniform:
+ * `size` defaults to the file's size (x86's SSE file is 128 bits wide but `mxcsr` is 32), and
+ * `kind` defaults to `float` when the file offers a float Format and to `integer` otherwise, so an
+ * integer control register keeps its hexadecimal rendering inside a floating-point file.
+ */
+export type RegisterFileRegister = {
+    name: string
+    size?: RegisterSize
+    kind?: 'integer' | 'float'
+}
+
+/** A `RegisterFileRegister` with the file's defaults filled in: what the renderers read. */
+export type ResolvedRegisterFileRegister = Required<RegisterFileRegister>
+
+/**
+ * What an adapter declares about a Register file it can read out of its Core
+ * ([the design record](../../../docs/design/register-files.md)): a named, ordered set of registers
+ * that share a width and a way of being read, optionally with a row of Status flags of its own.
+ */
+export type RegisterFileDescriptor = {
+    id: string
+    label: string
+    size: RegisterSize
+    /** The Formats this file offers, the first of which is its default. */
+    formats: readonly RegisterFormat[]
+    registers: readonly RegisterFileRegister[]
+    /**
+     * MIPS: a double is read from the even/odd register pair, low word in the even register, so
+     * only the even rows show a value and the odd ones show nothing, as MARS's Double column does.
+     */
+    pairedDoubles?: boolean
+    /**
+     * RISC-V: a 64 bit register holds a single only when its high word is all ones, and anything
+     * else reads as NaN in the single Format, as RARS shows it.
+     */
+    nanBoxedSingles?: boolean
+    /** The file's own Status flags, shown above its registers. MIPS's FPU has eight, named 0..7. */
+    flagNames?: readonly string[]
+    hiddenRegisters?: readonly string[]
+}
+
+/**
+ * A Register file as the panels and the coding agent see it: the descriptor, its registers read
+ * back out of the Core with the previous value each keeps for change highlighting, and its own
+ * Status flags. `layout` is the descriptor's register list with every default filled in, kept
+ * beside the values because a `Register` carries no kind.
+ */
+export type RegisterFile = Omit<RegisterFileDescriptor, 'registers'> & {
+    layout: readonly ResolvedRegisterFileRegister[]
+    registers: Register[]
+    flags: StatusRegister[]
+    /**
+     * One entry per register, true for a row that holds no value at this refresh and is shown
+     * blank, the way gdb prints Empty for an x87 stack slot the tag word marks empty. The
+     * register keeps the stale bits underneath, a hover away. Empty when a file never blanks.
+     */
+    blanks: boolean[]
+}
+
+/**
+ * A file that offers any float Format holds floating-point registers, unless one of them says
+ * otherwise.
+ */
+export function defaultRegisterKind(formats: readonly RegisterFormat[]): 'integer' | 'float' {
+    return formats.some((format) => format !== 'hex') ? 'float' : 'integer'
+}
+
+export function resolveRegisterFileLayout(
+    file: Pick<RegisterFileDescriptor, 'size' | 'formats' | 'registers'>
+): ResolvedRegisterFileRegister[] {
+    const kind = defaultRegisterKind(file.formats)
+    return file.registers.map((register) => ({
+        name: register.name,
+        size: register.size ?? file.size,
+        kind: register.kind ?? kind
+    }))
+}
+
 export type EmulatorDecoration = {
     type: 'below-line'
     note?: string
@@ -285,6 +384,12 @@ export type BaseEmulatorState = {
     systemSize: RegisterSize
     compiledCode?: string
     registers: Register[]
+    /**
+     * Every Register file the Emulator exposes. The CPU file is always element 0 and its
+     * `registers` is the very array `registers` above is, so a caller that only knows about the
+     * general registers keeps reading them where it always did.
+     */
+    registerFiles: RegisterFile[]
     startingRegisterNames: string[]
     hiddenRegisters: string[]
     decorations: EmulatorDecoration[]

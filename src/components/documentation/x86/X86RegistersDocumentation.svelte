@@ -4,6 +4,7 @@
     import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
     import {
         X86_CONDITION_CODES,
+        X86_DOCUMENTED_REGISTER_FILES,
         X86_FLAGS,
         X86_REGISTERS
     } from '$lib/languages/X86/X86-documentation'
@@ -57,6 +58,24 @@
                 <MarkdownRenderer source={flag.description} {disableLinks} />
             </span>
         </Card>
+    {/each}
+
+    {#each X86_DOCUMENTED_REGISTER_FILES as file (file.id)}
+        <h2 class="section-title" id={file.id}>{file.title}</h2>
+        <div class="note">
+            <MarkdownRenderer source={file.intro} {disableLinks} />
+        </div>
+        {#each file.registers as register (register.name)}
+            <Card gap="0.6rem" padding="1rem" background="secondary" style="width: 100%;">
+                <h3 class="sub-title">
+                    {register.name}
+                    <span class="part">{register.bits} bit</span>
+                </h3>
+                <span class="sub-description">
+                    <MarkdownRenderer source={register.description} {disableLinks} />
+                </span>
+            </Card>
+        {/each}
     {/each}
 
     <h2 class="section-title" id="condition-codes">Condition codes</h2>

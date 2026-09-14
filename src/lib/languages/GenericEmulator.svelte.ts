@@ -12,7 +12,9 @@ import {
     InterpreterStatus,
     makeGenericDiagnostic,
     makeRegister,
-    numbersOfSizeToSlice
+    numbersOfSizeToSlice,
+    type RegisterFile,
+    resolveRegisterFileLayout
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import { Terminal } from '$lib/languages/peripherals/Terminal.svelte'
 import {
@@ -174,6 +176,7 @@ export abstract class GenericEmulator<T, R extends string>
         this.state = $state({
             systemSize: options.systemSize,
             registers: [],
+            registerFiles: [],
             startingRegisterNames: [...options.registerNames],
             hiddenRegisters: options.hiddenRegisters ?? [], //TODO should this be state?
             pc: 0n,
@@ -215,6 +218,9 @@ export abstract class GenericEmulator<T, R extends string>
                 ]
             }
         })
+        //built before the clear below, because `setRegisters` keeps the CPU file pointed at the
+        //register array it rebuilds
+        this.state.registerFiles = this.createRegisterFiles()
         this.clear()
         if (this._emulatorOptions.automaticChecking) void this.semanticCheck()
     }
@@ -338,6 +344,113 @@ export abstract class GenericEmulator<T, R extends string>
         }
     }
 
+    /**
+     * The Register files this Emulator shows, built once: the CPU file, whose `registers` is the
+     * very array `state.registers` is, and then one file per declared descriptor with its registers
+     * zeroed and its Status flags at 0. The files themselves and their flags live for the whole
+     * session; a clear rebuilds a file's Register objects so that nothing is left to highlight,
+     * exactly as `setRegisters` rebuilds the CPU ones.
+     *
+     * A declared file the adapter cannot read is a programming error, not something to show as a
+     * panel of zeros, so both read hooks are demanded here rather than missed at the first refresh.
+     * This runs from the constructor, before a subclass's field initialisers, so the hooks have to
+     * be methods on the adapter and not fields holding arrow functions; the errors say so, because
+     * an adapter written the second way looks from the outside as though it implements them.
+     */
+    private createRegisterFiles(): RegisterFile[] {
+        const descriptors = this.getRegisterFileDescriptors()
+        if (descriptors.length > 0 && !this._getRegisterFileValues) {
+            throw new Error(
+                `${this.constructor.name} declares the register files ` +
+                    `${descriptors.map((file) => file.id).join(', ')} but does not implement ` +
+                    '_getRegisterFileValues as a method (a field holding an arrow function is ' +
+                    'still undefined while this constructor runs)'
+            )
+        }
+        const withFlags = descriptors.filter((file) => (file.flagNames?.length ?? 0) > 0)
+        if (withFlags.length > 0 && !this._getRegisterFileFlags) {
+            throw new Error(
+                `${this.constructor.name} declares Status flags on the register files ` +
+                    `${withFlags.map((file) => file.id).join(', ')} but does not implement ` +
+                    '_getRegisterFileFlags as a method (a field holding an arrow function is ' +
+                    'still undefined while this constructor runs)'
+            )
+        }
+        const cpu: RegisterFile = {
+            id: 'cpu',
+            label: 'CPU',
+            size: this._systemSize,
+            formats: ['hex'],
+            layout: this._registerNames.map((name) => ({
+                name,
+                size: this._systemSize,
+                kind: 'integer'
+            })),
+            hiddenRegisters: this.state.hiddenRegisters,
+            registers: this.state.registers,
+            flags: [],
+            blanks: []
+        }
+        return [
+            cpu,
+            ...descriptors.map((descriptor) => {
+                const layout = resolveRegisterFileLayout(descriptor)
+                return {
+                    ...descriptor,
+                    layout,
+                    registers: layout.map((register) =>
+                        makeRegister(register.name, 0n, register.size)
+                    ),
+                    flags: (descriptor.flagNames ?? []).map((name) => ({
+                        name,
+                        value: 0,
+                        prev: 0
+                    })),
+                    blanks: layout.map(() => false)
+                } satisfies RegisterFile
+            })
+        ]
+    }
+
+    /**
+     * Every declared Register file, read back out of the Core beside the CPU registers, whichever
+     * tab the panel happens to be showing: a highlight then always means "changed since the last
+     * refresh". One `_getRegisterFileValues` call per file (and one `_getRegisterFileFlags` for a
+     * file that has flags, one `_getRegisterFileBlanks` when the adapter can blank rows) and nothing
+     * allocated besides the arrays the adapter returns.
+     *
+     * Without a Core there is nothing to read and the files hold the zeros they were built with,
+     * which is what the CPU file shows before a Build too.
+     */
+    private updateRegisterFiles(): void {
+        const files = this.state.registerFiles
+        if (files.length < 2 || !this.getInstance()) return
+        for (let i = 1; i < files.length; i++) {
+            const file = files[i]
+            const values = this._getRegisterFileValues!(file.id)
+            for (let j = 0; j < file.registers.length; j++) {
+                file.registers[j].setValue(values[j] ?? 0n)
+            }
+            if (this._getRegisterFileBlanks) {
+                const blanks = this._getRegisterFileBlanks(file.id)
+                for (let j = 0; j < file.blanks.length; j++) {
+                    file.blanks[j] = blanks[j] === true
+                }
+            }
+            if (file.flags.length === 0) continue
+            const flags = this._getRegisterFileFlags!(file.id)
+            for (let j = 0; j < file.flags.length; j++) {
+                const flag = file.flags[j]
+                const read = flags[j]
+                const value = read?.value ? 1 : 0
+                //a Core that reports no previous value is diffed against the last refresh, which is
+                //what the file itself still holds at this point
+                flag.prev = read?.prev === undefined ? flag.value : read.prev ? 1 : 0
+                flag.value = value
+            }
+        }
+    }
+
     protected setRegisters(override?: bigint[]) {
         if (!this.getInstance() && !override) {
             override = new Array(this._registerNames.length).fill(0)
@@ -346,6 +459,37 @@ export abstract class GenericEmulator<T, R extends string>
         this.state.registers = (override ?? this._getRegisterValues()).map((reg, i) => {
             return makeRegister(this._registerNames[i], reg, this._systemSize)
         })
+        const cpu = this.state.registerFiles[0]
+        //the CPU file is the register array itself, never a copy of it
+        if (cpu) cpu.registers = this.state.registers
+        //a caller that rebuilt the CPU registers out of a live Core wants the other files read at
+        //the same moment, or the panel shows a refreshed CPU next to stale Register files. A
+        //caller that passed its own values did not read the Core at all, and during construction
+        //there is no instance to read, which is the case `updateRegisterFiles` guards against.
+        if (!override) this.updateRegisterFiles()
+    }
+
+    /**
+     * Every file other than the CPU one back to zero, with no previous value left to highlight
+     * against, as the freshly built CPU registers are. `clear` calls this itself rather than
+     * letting `setRegisters` infer it: a caller that seeds the CPU registers with its own values
+     * while a Core is live wants the other files left as the last refresh read them, not blanked,
+     * and reading them belongs to the refresh paths, which all go through `updateRegisters`, and to
+     * the branch of `setRegisters` that reads the Core itself.
+     */
+    private resetRegisterFiles(): void {
+        const files = this.state.registerFiles
+        for (let i = 1; i < files.length; i++) {
+            const file = files[i]
+            file.registers = file.layout.map((register) =>
+                makeRegister(register.name, 0n, register.size)
+            )
+            for (const flag of file.flags) {
+                flag.value = 0
+                flag.prev = 0
+            }
+            file.blanks.fill(false)
+        }
     }
 
     protected getRegistersValue() {
@@ -358,6 +502,7 @@ export abstract class GenericEmulator<T, R extends string>
         this.getRegistersValue().forEach((reg, i) => {
             this.state.registers[i].setValue(reg)
         })
+        this.updateRegisterFiles()
         this.state.sp = this._getSp()
     }
 
@@ -579,6 +724,7 @@ export abstract class GenericEmulator<T, R extends string>
             }
         }
         this.setRegisters(new Array(this._registerNames.length).fill(0))
+        this.resetRegisterFiles()
         this.updateStatusRegisters()
     }
 
@@ -841,11 +987,11 @@ export abstract class GenericEmulator<T, R extends string>
 
     /**
      * The panels, refreshed from inside a running program — the path an adapter takes when its Core
-     * stops on an interrupt. Reading the registers, a page of memory per tab, the call stack and the
-     * undo history is not free, and none of it can be seen more than once a display frame, so it is
-     * rate limited to `RUNNING_PANEL_REFRESH_MS` rather than done per interrupt — and to
-     * `ANIMATING_PANEL_REFRESH_MS` while a Screen is being drawn on, where the frames are what the
-     * user is watching and the refresh is competing with them for the thread.
+     * stops on an interrupt. Reading the registers of every Register file, a page of memory per
+     * tab, the call stack and the undo history is not free, and none of it can be seen more than
+     * once a display frame, so it is rate limited to `RUNNING_PANEL_REFRESH_MS` rather than done
+     * per interrupt, and to `ANIMATING_PANEL_REFRESH_MS` while a Screen is being drawn on, where
+     * the frames are what the user is watching and the refresh is competing for the thread.
      *
      * `force` is for the interrupts that suspend the program for the user: an input prompt is read
      * beside the panels, and the user has all the time in the world to notice that they are one
@@ -868,9 +1014,9 @@ export abstract class GenericEmulator<T, R extends string>
 
     /**
      * Everything the user inspects, read back out of the Core: the current line, whether Undo is
-     * available, and the register, memory, status-register and program-counter views. The end of a
-     * run does this, and so does a pause, which would otherwise leave every panel showing what it
-     * held when Run was pressed.
+     * available, and the register (every Register file, not only the visible tab), memory,
+     * status-register and program-counter views. The end of a run does this, and so does a pause,
+     * which would otherwise leave every panel showing what it held when Run was pressed.
      */
     /**
      * The end of a run that threw: the failing instruction is reported, and the panels are brought
@@ -1392,6 +1538,11 @@ export abstract class GenericEmulator<T, R extends string>
 
     get registers() {
         return this.state.registers
+    }
+
+    /** Every Register file, the CPU one first; see `createRegisterFiles`. */
+    get registerFiles() {
+        return this.state.registerFiles
     }
 
     get startingRegisterNames() {

@@ -36,11 +36,11 @@
     <title>x86-64 Complete Documentation</title>
     <meta
         name="description"
-        content="Complete x86-64 documentation in a single page. Includes the integer instruction set, every mnemonic the assembler accepts, the directives, the registers and flags, and the syscalls."
+        content="Complete x86-64 documentation in a single page. Includes the integer instruction set, every mnemonic the assembler accepts, the directives, the registers and flags, the SSE and x87 floating point registers, and the syscalls."
     />
     <meta
         property="og:description"
-        content="Complete x86-64 documentation in a single page. Includes the integer instruction set, every mnemonic the assembler accepts, the directives, the registers and flags, and the syscalls."
+        content="Complete x86-64 documentation in a single page. Includes the integer instruction set, every mnemonic the assembler accepts, the directives, the registers and flags, the SSE and x87 floating point registers, and the syscalls."
     />
 </svelte:head>
 

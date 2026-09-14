@@ -1,11 +1,14 @@
 import type { Emulator } from '$lib/languages/Emulator'
 import {
+    defaultRegisterKind,
     RegisterSize,
     type Diagnostic,
     type ExecutionStep,
+    type RegisterFile,
     formatDiagnostic,
     toHexString
 } from '$lib/languages/commonLanguageFeatures.svelte'
+import { renderRegister } from '$lib/languages/registerFormats'
 import { unsignedBigIntToSigned } from '$lib/utils'
 
 export type FormattedNumber = {
@@ -20,7 +23,8 @@ const SIZE_NAMES = {
     [RegisterSize.Byte]: 'Byte',
     [RegisterSize.Word]: 'Word',
     [RegisterSize.Long]: 'Long',
-    [RegisterSize.Double]: 'Double'
+    [RegisterSize.Double]: 'Double',
+    [RegisterSize.Quad]: 'Quad'
 } satisfies Record<RegisterSize, string>
 
 function normalizeNumber(value: bigint | number) {
@@ -188,9 +192,145 @@ export function formatRegisters(emulator: Emulator) {
     }))
 }
 
+export type FormattedRegisterFileRegister = {
+    name: string
+    /**
+     * A float register reads as a decimal number, an integer one keeps the `formatNumber` shape,
+     * and a row the file blanks reads `empty`.
+     */
+    value: string | FormattedNumber
+    /**
+     * The readings the default Format does not show, the same lines the panel hovers: the raw hex
+     * and the other precision. Absent on a register that has nothing else to say.
+     */
+    other?: string[]
+}
+
+export type FormattedRegisterFile = {
+    id: string
+    label: string
+    registers: FormattedRegisterFileRegister[]
+    flags?: { name: string; value: number }[]
+}
+
+/**
+ * How much of a Register file to report: everything it holds, or only the registers that are not
+ * still zero.
+ */
+export type RegisterFileDetail = 'full' | 'non-zero'
+
+/**
+ * One register in the Format its Register file is read in by default, which is the first Format the
+ * file offers. A float register becomes the decimal number the panel shows, so the model reads
+ * `3.5` instead of a bit pattern, and a register of integer kind (a control register such as
+ * `mxcsr` inside a floating-point file, or a whole file like CP0) keeps the `formatNumber` shape
+ * every other number in these tool results has. Whatever the default Format leaves unsaid follows
+ * it in `other`, which is the panel's hover.
+ */
+function formatRegisterFileValue(
+    file: RegisterFile,
+    index: number
+): Omit<FormattedRegisterFileRegister, 'name'> {
+    const register = file.registers[index]
+    const size = Number(register.size ?? file.layout[index]?.size ?? file.size) as RegisterSize
+    const format = file.formats[0] ?? 'hex'
+    const kind = file.layout[index]?.kind ?? defaultRegisterKind(file.formats)
+    //an integer register, and a whole file whose default Format is hex, keeps the shape every other
+    //number in these results has, and that shape already carries both the decimal and the hex
+    if (format === 'hex' || kind === 'integer') return { value: formatNumber(register.value, size) }
+    const rendered = renderRegister(file, file.registers, index, format)
+    //a row a Format has nothing to show on is the odd half of a MIPS double pair, whose value lives
+    //in its even neighbour; the raw pattern is still worth reporting rather than an empty string,
+    //and the hex rendering is what knows the readings that row does have
+    if (rendered.blank) {
+        return withOtherReadings(
+            `0x${toHexString(register.value, size)}`,
+            renderRegister(file, file.registers, index, 'hex').hover
+        )
+    }
+    //a wide register holds several lanes of the same Format, low lane first, as the panel shows
+    //them. The default Format alone is not the whole truth: a double held in a file whose default
+    //is single reads as a wrong number on MIPS and as NaN on RISC-V, so the hover lines the panel
+    //would show, the raw pattern and the other precision, come along for the model to read too.
+    return withOtherReadings(rendered.chunks.map((chunk) => chunk.text).join(', '), rendered.hover)
+}
+
+function withOtherReadings(
+    value: string,
+    other: string[]
+): Omit<FormattedRegisterFileRegister, 'name'> {
+    return other.length > 0 ? { value, other } : { value }
+}
+
+/**
+ * A row the file blanks at this refresh, which is an x87 stack slot the tag word marks empty. It
+ * reads `empty`, the word gdb's `info float` prints for one, because the bits underneath are
+ * whatever the slot last held and no Format may read them as a number; they follow in `other`, the
+ * same hover the panel keeps them behind, since the dash the panel draws says nothing in a tool
+ * result.
+ */
+function formatBlankRegisterFileValue(
+    file: RegisterFile,
+    index: number
+): Omit<FormattedRegisterFileRegister, 'name'> {
+    const rendered = renderRegister(file, file.registers, index, file.formats[0] ?? 'hex')
+    return withOtherReadings('empty', rendered.hover)
+}
+
+/**
+ * Whether `non-zero` may leave a register out. A zero bit pattern is not enough on its own in a
+ * `pairedDoubles` file: the even register of a pair holds the low word of a double, which is zero
+ * for plenty of values (3.5 is `0x400c000000000000`), and the even row is the one the pair's double
+ * reading is reported on, so dropping it would hide a value the odd half cannot show alone.
+ */
+function isStillZero(file: RegisterFile, index: number): boolean {
+    if (file.registers[index].value !== 0n) return false
+    if (!file.pairedDoubles || index % 2 === 1) return true
+    return (file.registers[index + 1]?.value ?? 0n) === 0n
+}
+
+/**
+ * Every Register file beyond the CPU one, which stays in `registers` where every caller already
+ * reads it ([the design record](../../../../../docs/design/register-files.md)). `non-zero` drops
+ * the registers whose bit pattern is still zero, which on a teaching program is most of a
+ * floating-point file, bar the low half of a pair whose double is not (see `isStillZero`), and the
+ * rows the file blanks, which hold nothing to report; the file is listed either way, with an empty
+ * register array when nothing in it is set, so the model can see that it exists and ask for it in
+ * full. A file's Status flags are a handful of bits and are always reported.
+ */
+export function formatRegisterFiles(
+    emulator: Emulator,
+    detail: RegisterFileDetail
+): FormattedRegisterFile[] {
+    //every emulator publishes its files, the fallback is for the bare object the agent tests build
+    //as a mock emulator
+    const files = emulator.registerFiles ?? []
+    return files.slice(1).map((file) => {
+        const registers: FormattedRegisterFileRegister[] = []
+        file.registers.forEach((register, index) => {
+            const blank = file.blanks?.[index] === true
+            if (detail === 'non-zero' && (blank || isStillZero(file, index))) return
+            const value = blank
+                ? formatBlankRegisterFileValue(file, index)
+                : formatRegisterFileValue(file, index)
+            registers.push({ name: register.name, ...value })
+        })
+        const flags = file.flags.map((flag) => ({ name: flag.name, value: flag.value }))
+        const formatted: FormattedRegisterFile = { id: file.id, label: file.label, registers }
+        if (flags.length > 0) formatted.flags = flags
+        return formatted
+    })
+}
+
+export type FormatEmulatorStateOptions = {
+    /** How much of every Register file beyond the CPU one to report. Defaults to `non-zero`. */
+    registerFiles?: RegisterFileDetail
+}
+
 export function formatEmulatorState(
     codeOrResolver: string | ((file?: string) => string),
-    emulator: Emulator
+    emulator: Emulator,
+    options: FormatEmulatorStateOptions = {}
 ) {
     const resolve = typeof codeOrResolver === 'function' ? codeOrResolver : () => codeOrResolver
     const currentFile = emulator.currentFile ?? emulator.entry ?? ''
@@ -229,6 +369,7 @@ export function formatEmulatorState(
         programCounter: formatNumber(emulator.pc),
         statusRegisters: emulator.statusRegisters,
         registers: formatRegisters(emulator),
+        registerFiles: formatRegisterFiles(emulator, options.registerFiles ?? 'non-zero'),
         latestSteps: formatLatestSteps(codeOrResolver, emulator.latestSteps)
     }
 }

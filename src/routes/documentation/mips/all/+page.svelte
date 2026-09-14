@@ -4,7 +4,6 @@
     import MIPSDirectiveDocumentation from '$cmp/documentation/mips/MIPSDirectiveDocumentation.svelte'
     import MIPSSyscallExplanation from '$cmp/documentation/mips/MIPSSyscallExplanation.svelte'
     import MIPSRegistersDocumentation from '$cmp/documentation/mips/MIPSRegistersDocumentation.svelte'
-    import Header from '$cmp/shared/layout/Header.svelte'
     import MarsScreenDocumentation from '$cmp/documentation/mars/MarsScreenDocumentation.svelte'
 
     import {
@@ -85,8 +84,12 @@
     </section>
 
     <section id="registers">
-        <Header type="h3">Registers</Header>
-        <p class="text-muted">MIPS has 32 GPR registers each of 32 bits</p>
+        <h2>Registers</h2>
+        <p class="text-muted">
+            MIPS has 32 general purpose registers of 32 bits each, and two coprocessors with
+            registers of their own: the floating point registers of coprocessor 1 and the exception
+            registers of coprocessor 0.
+        </p>
         <MIPSRegistersDocumentation />
     </section>
 

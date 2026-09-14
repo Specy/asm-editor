@@ -1304,3 +1304,154 @@ target:
         expect(valueOf(emulator, '$s0')).toBe(0)
     })
 })
+
+/**
+ * The FPU and CP0 Register files against the real Core: what MARS holds in coprocessor 1 and
+ * coprocessor 0 reaches the files the panel shows, and the Core's backstepper rolls a floating-point
+ * write back ([the design record](../../../../docs/design/register-files.md)).
+ */
+describe('MIPS Register files', () => {
+    /**
+     * This MARS fork has no `li.s`, so 1.5 comes out of a `.float`. `add.s` doubles it, `cvt.d.s`
+     * builds a double in the `$f4`/`$f5` pair and `c.lt.s` writes condition flag 0.
+     */
+    const FLOATS =
+        `        .data
+value:  .float  1.5
+        .text
+main:
+        l.s     $f0, value
+        add.s   $f2, $f0, $f0
+        cvt.d.s $f4, $f0
+        c.lt.s  $f0, $f2
+` + EXIT
+
+    function fileOf(emulator: Emulator, id: string) {
+        const file = emulator.registerFiles.find((candidate) => candidate.id === id)
+        if (!file) throw new Error(`No register file named ${id}`)
+        return file
+    }
+
+    function fileValueOf(emulator: Emulator, id: string, name: string): bigint {
+        const register = fileOf(emulator, id).registers.find((candidate) => candidate.name === name)
+        if (!register) throw new Error(`No register named ${name} in ${id}`)
+        return register.value
+    }
+
+    it('lists the CPU file first, holding the very general registers', async () => {
+        const emulator = await run(FLOATS)
+        expect(emulator.registerFiles.map((file) => file.id)).toEqual(['cpu', 'fpu', 'cp0'])
+        expect(emulator.registerFiles.map((file) => file.label)).toEqual(['CPU', 'FPU', 'CP0'])
+        expect(emulator.registerFiles[0].registers).toBe(emulator.registers)
+    })
+
+    it('reads the FPU registers, the pair a double occupies and the condition flags', async () => {
+        const emulator = await run(FLOATS)
+        expect(emulator.errors).toEqual([])
+        const fpu = fileOf(emulator, 'fpu')
+        expect(fpu.registers).toHaveLength(32)
+        expect(fileValueOf(emulator, 'fpu', '$f0')).toBe(0x3fc00000n)
+        expect(fileValueOf(emulator, 'fpu', '$f2')).toBe(0x40400000n)
+        //a double lives in the even/odd pair, low word in the even register, as MARS stores it:
+        //1.5 as a double is 0x3ff8000000000000
+        expect(fileValueOf(emulator, 'fpu', '$f4')).toBe(0x00000000n)
+        expect(fileValueOf(emulator, 'fpu', '$f5')).toBe(0x3ff80000n)
+        //`c.lt.s` with no flag number writes flag 0, and 1.5 is less than 3
+        expect(fpu.flags.map((flag) => flag.name)).toEqual(['0', '1', '2', '3', '4', '5', '6', '7'])
+        expect(fpu.flags.map((flag) => flag.value)).toEqual([1, 0, 0, 0, 0, 0, 0, 0])
+    })
+
+    it('reads the four coprocessor 0 registers MARS implements', async () => {
+        const emulator = await run(FLOATS)
+        const cp0 = fileOf(emulator, 'cp0')
+        expect(cp0.registers.map((register) => register.name)).toEqual([
+            '$8 (vaddr)',
+            '$12 (status)',
+            '$13 (cause)',
+            '$14 (epc)'
+        ])
+        //status holds MARS's reset value until an exception changes it, the other three stay at 0
+        expect(cp0.registers.map((register) => register.value)).toEqual([0n, 0x0000ff11n, 0n, 0n])
+    })
+
+    it('leaves a $f register to highlight after the step that wrote it', async () => {
+        const emulator = await build(FLOATS)
+        //`l.s` of a label assembles to `lui $at` and `lwc1`, so the third step is the `add.s`
+        for (let step = 0; step < 3; step++) await emulator.step()
+        const f2 = fileOf(emulator, 'fpu').registers[2]
+        expect(f2.value).toBe(0x40400000n)
+        expect(f2.prev).toBe(0n)
+    })
+
+    it('restores a floating-point write on Undo, as the Core backsteps it', async () => {
+        const emulator = await build(FLOATS)
+        for (let step = 0; step < 3; step++) await emulator.step()
+        emulator.undo(1)
+        const f2 = fileOf(emulator, 'fpu').registers[2]
+        expect(f2.value).toBe(0n)
+        //the value the rollback took away is what the panel highlights against
+        expect(f2.prev).toBe(0x40400000n)
+    })
+
+    /**
+     * An address error taken with a handler installed at MARS's exception vector. Loading from
+     * address 1 is unaligned, so before the jump MARS writes the faulting address into
+     * `$8 (vaddr)`, the exception code into `$13 (cause)` and the exception level bit into
+     * `$12 (status)`. The handler steps the return address past the faulting instruction, because
+     * `eret` returns to `$14 (epc)` and re-running the load would take the same exception forever.
+     */
+    const ADDRESS_ERROR =
+        `        .text
+main:
+        lw      $t0, 1($zero)
+` +
+        EXIT +
+        `        .ktext  0x80000180
+        mfc0    $k0, $14
+        addiu   $k0, $k0, 4
+        mtc0    $k0, $14
+        eret
+`
+
+    it('names a coprocessor 0 write in the undo history as the CP0 file names it', async () => {
+        const emulator = await build(ADDRESS_ERROR)
+        expect(emulator.errors).toEqual([])
+        //the faulting load and the three handler instructions up to `mtc0`, stopping before the
+        //`eret` that clears the exception level bit again
+        for (let step = 0; step < 4; step++) await emulator.step()
+        const written = emulator.latestSteps
+            .flatMap((step) => step.mutations)
+            .filter((mutation) => mutation.type === 'WriteRegister')
+            .map((mutation) => mutation.value.register)
+        expect(written).toContain('$12 (status)')
+        expect(written).toContain('$13 (cause)')
+        expect(written).toContain('$8 (vaddr)')
+        //vaddr is the address the load asked for, cause holds exception code 4 (address error on
+        //load) in bits 2 to 6, status has the exception level bit set over MARS's reset value of
+        //0x0000ff11, and epc is the address of the load, which the handler has just stepped past
+        const cp0 = fileOf(emulator, 'cp0')
+        expect(cp0.registers.map((register) => register.value)).toEqual([
+            0x00000001n,
+            0x0000ff13n,
+            0x00000010n,
+            0x00400004n
+        ])
+    })
+
+    it('shows zeros for both files before a Build and refuses an unknown file', () => {
+        const emulator = MIPSEmulator('')
+        expect(emulator._getRegisterFileValues('fpu')).toEqual(new Array(32).fill(0n))
+        expect(emulator._getRegisterFileValues('cp0')).toEqual([0n, 0n, 0n, 0n])
+        expect(() => emulator._getRegisterFileValues('cp1')).toThrow('Unknown register file: cp1')
+    })
+
+    it('writes a register of either file through the Core setters', async () => {
+        const emulator = await run(FLOATS)
+        emulator._setRegisterFileValue('fpu', '$f6', 0xffffffffn)
+        emulator._setRegisterFileValue('cp0', '$13 (cause)', 0x8000000fn)
+        //the setters bypass the backstepper, so a preset is visible at the next refresh and is not
+        //an entry the simulation can step back over
+        expect(emulator._getRegisterFileValues('fpu')[6]).toBe(0xffffffffn)
+        expect(emulator._getRegisterFileValues('cp0')[2]).toBe(0x8000000fn)
+    })
+})

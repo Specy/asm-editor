@@ -10,6 +10,7 @@ import {
     type EmulatorSettings,
     type ExecutionStep,
     type MutationOperation,
+    type RegisterFileDescriptor,
     RegisterSize,
     type StackFrame
 } from '$lib/languages/commonLanguageFeatures.svelte'
@@ -24,16 +25,21 @@ import type { Testcase } from '$lib/Project.svelte'
 import {
     BlinkState,
     createX86Emulator,
+    decodeFpuState,
     locateDiagnosticColumn,
+    readLogicalStTags,
     EmulatorStatus as CoreEmulatorStatus,
     RegisterSize as CoreRegisterSize,
     X86_REGISTER_NAMES,
+    X86_SSE_REGISTERS,
+    X86_X87_REGISTERS,
     type ExecutionStep as CoreExecutionStep,
     type MonacoError as CoreMonacoError,
     type MutationOperation as CoreMutationOperation,
     type X86CompileResult,
     type X86CompilationDiagnostic,
     type X86Emulator as CoreX86Emulator,
+    type X86FpuState,
     type X86RegisterName
 } from '@specy/x86'
 import structuredClone from '@ungap/structured-clone'
@@ -57,6 +63,39 @@ import {
  * answered Stop seventeen seconds after it was pressed.
  */
 const X86_INSTRUCTIONS_PER_MS = 10
+
+/**
+ * The Register files x86 holds beside the general registers
+ * ([the design record](../../../../docs/design/register-files.md)): the SSE registers and the x87
+ * stack, each listed in the order `getFpuState` reports it, which is the order
+ * `X86_SSE_REGISTERS` and `X86_X87_REGISTERS` name.
+ */
+const X86_REGISTER_FILES: RegisterFileDescriptor[] = [
+    {
+        id: 'sse',
+        label: 'SSE',
+        size: RegisterSize.Quad,
+        formats: ['double', 'single', 'hex'],
+        registers: [
+            ...Array.from({ length: 16 }, (_, i) => ({ name: `xmm${i}` })),
+            { name: 'mxcsr', size: RegisterSize.Long, kind: 'integer' as const }
+        ]
+    },
+    {
+        id: 'x87',
+        label: 'x87',
+        //Blink keeps the stack as 64 bit doubles rather than as 80 bit extended values, so a row is
+        //exactly a double and there is no extended precision to offer a Format for
+        size: RegisterSize.Double,
+        formats: ['double', 'hex'],
+        registers: [
+            ...Array.from({ length: 8 }, (_, i) => ({ name: `st${i}` })),
+            { name: 'fctrl', size: RegisterSize.Word, kind: 'integer' as const },
+            { name: 'fstat', size: RegisterSize.Word, kind: 'integer' as const },
+            { name: 'ftag', size: RegisterSize.Word, kind: 'integer' as const }
+        ]
+    }
+]
 
 export const DEFAULT_X86_FLAGS = [
     { name: 'CF', value: 0 },
@@ -88,6 +127,12 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     private compileQueue: Promise<void> = Promise.resolve()
     private checkCodeQueue: Promise<void> = Promise.resolve()
     private buildLineMap: X86SourceLine[] = []
+    /**
+     * Which x87 stack slots were empty in the block the values read decoded. A refresh reads a
+     * file's values immediately before its blanks, so the tags cost no second bridge call. Before
+     * the first read every slot is empty, which is what a machine that does not exist yet reports.
+     */
+    private x87Blanks: boolean[] = new Array(X87_STACK_DEPTH).fill(true)
 
     constructor(source: BuildInput, options: EmulatorSettings, core: CoreX86Emulator) {
         super(
@@ -95,7 +140,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             {
                 systemSize: RegisterSize.Double,
                 registerNames: [...X86_REGISTER_NAMES],
-                endianness: 'little'
+                endianness: 'little',
+                registerFiles: X86_REGISTER_FILES
             },
             {
                 ...options,
@@ -266,6 +312,34 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return this.core?.getPc() ?? 0n
     }
 
+    /**
+     * One block read per file rather than one shared by both: the Core copies the whole 356 byte
+     * block over the bridge in a single call, so a refresh costs two of them, and sharing one read
+     * would mean caching a block without being told when a refresh begins. The raw block is
+     * decoded here instead of asking for `getFpuState`, because the x87 tag word that says which
+     * stack slots hold a value is read from the very same bytes, and the blanks are wanted on
+     * every refresh the values are.
+     */
+    _getRegisterFileValues(id: string): bigint[] {
+        const names = registerFileNames(id)
+        if (!this.core) return new Array(names.length).fill(0n)
+        const block = this.core.runtime.getFpuStateRaw()
+        if (id === 'x87') this.x87Blanks = readLogicalStTags(block).map(isEmptyStTag)
+        return fpuStateValues(id, decodeFpuState(block))
+    }
+
+    /**
+     * An x87 stack slot the tag word marks empty holds whatever it last held, commonly a NaN, so
+     * the panel shows the row blank the way gdb's `info float` prints Empty. The control, status
+     * and tag words always hold a value, and no SSE register ever blanks.
+     */
+    _getRegisterFileBlanks(id: string): boolean[] {
+        const names = registerFileNames(id)
+        if (id !== 'x87') return []
+        //the stack is the first eight names of the file and the three words after it never blank
+        return names.map((_, index) => this.x87Blanks[index] ?? false)
+    }
+
     _getRegisterValue(
         register: X86RegisterName,
         size: RegisterSize | undefined = RegisterSize.Double
@@ -358,6 +432,15 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     async _runTestcase(_testcase: Testcase, haltLimit: number): Promise<void> {
         const limit = haltLimit <= 0 ? Number.MAX_SAFE_INTEGER : haltLimit
         await this.runWithInput(limit, [])
+    }
+
+    /**
+     * Writes one register back through the block it was read from, so the values the write does not
+     * name survive it, as do the x87 pointers `X86FpuState` does not carry.
+     */
+    _setRegisterFileValue(id: string, register: string, value: bigint): void {
+        const core = this.requireCore()
+        core.setFpuState(withFpuRegisterValue(id, core.getFpuState(), register, value))
     }
 
     _setRegisterValue(
@@ -494,6 +577,8 @@ function toCoreRegisterSize(size: RegisterSize | undefined): CoreRegisterSize {
             return CoreRegisterSize.Word
         case RegisterSize.Long:
             return CoreRegisterSize.Long
+        case RegisterSize.Quad:
+            return CoreRegisterSize.Quad
         case RegisterSize.Double:
         default:
             return CoreRegisterSize.Double
@@ -508,10 +593,91 @@ function toLocalRegisterSize(size: CoreRegisterSize): RegisterSize {
             return RegisterSize.Word
         case CoreRegisterSize.Long:
             return RegisterSize.Long
+        //an SSE register write: the undo history names it `xmm<n>` and the panel shows it 16 bytes
+        //wide, so the width has to survive the crossing
+        case CoreRegisterSize.Quad:
+            return RegisterSize.Quad
         case CoreRegisterSize.Double:
         default:
             return RegisterSize.Double
     }
+}
+
+/** The x87 stack holds eight slots, whatever the tag word says about them. */
+const X87_STACK_DEPTH = 8
+
+/** The two bit x87 tag that means the slot holds nothing, as `readLogicalStTags` documents it. */
+const X87_TAG_EMPTY = 0b11
+
+function isEmptyStTag(tag: number): boolean {
+    return tag === X87_TAG_EMPTY
+}
+
+const WORD_MASK = 0xffffn
+const LONG_MASK = 0xffffffffn
+const QUAD_MASK = (1n << 128n) - 1n
+
+//one buffer for the module: an x87 row is a double on the way out and a bit pattern on the way in,
+//and the panel converts eight of them on every refresh
+const doubleBits = new DataView(new ArrayBuffer(8))
+
+function registerFileNames(id: string): readonly string[] {
+    if (id === 'sse') return X86_SSE_REGISTERS
+    if (id === 'x87') return X86_X87_REGISTERS
+    throw new Error(`Unknown X86 register file: ${id}`)
+}
+
+/**
+ * One file's values as unsigned bit patterns, in the order its descriptor lists them. The x87 stack
+ * arrives decoded as doubles, so it goes back to the IEEE 754 bits the panel renders and diffs.
+ */
+function fpuStateValues(id: string, state: X86FpuState): bigint[] {
+    if (id === 'sse') return [...state.xmm, BigInt(state.mxcsr >>> 0)]
+    if (id === 'x87') {
+        return [
+            ...state.st.map(toDoubleBits),
+            BigInt(state.fctrl & 0xffff),
+            BigInt(state.fstat & 0xffff),
+            BigInt(state.ftag & 0xffff)
+        ]
+    }
+    throw new Error(`Unknown X86 register file: ${id}`)
+}
+
+function withFpuRegisterValue(
+    id: string,
+    state: X86FpuState,
+    register: string,
+    value: bigint
+): X86FpuState {
+    const index = registerFileNames(id).indexOf(register)
+    if (index < 0) throw new Error(`Unknown X86 ${id} register: ${register}`)
+    if (id === 'sse') {
+        if (register === 'mxcsr') return { ...state, mxcsr: Number(value & LONG_MASK) }
+        const xmm = [...state.xmm]
+        xmm[index] = value & QUAD_MASK
+        return { ...state, xmm }
+    }
+    //the first eight names of the x87 file are the stack and the last three the control words
+    if (index < 8) {
+        const st = [...state.st]
+        st[index] = fromDoubleBits(value)
+        return { ...state, st }
+    }
+    const word = Number(value & WORD_MASK)
+    if (register === 'fctrl') return { ...state, fctrl: word }
+    if (register === 'fstat') return { ...state, fstat: word }
+    return { ...state, ftag: word }
+}
+
+function toDoubleBits(value: number): bigint {
+    doubleBits.setFloat64(0, value, true)
+    return doubleBits.getBigUint64(0, true)
+}
+
+function fromDoubleBits(bits: bigint): number {
+    doubleBits.setBigUint64(0, bits & 0xffffffffffffffffn, true)
+    return doubleBits.getFloat64(0, true)
 }
 
 function toLocalStatus(status: CoreEmulatorStatus): EmulatorStatus {

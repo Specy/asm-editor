@@ -2,7 +2,7 @@
     import Card from '$cmp/shared/layout/Card.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
     import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
-    import { mipsRegisterFiles, mipsRegisters } from '$lib/languages/MIPS/MIPS-documentation'
+    import { riscvRegisterFiles } from '$lib/languages/RISC-V/RISC-V-documentation'
 
     interface Props {
         disableLinks?: boolean
@@ -12,24 +12,14 @@
 </script>
 
 <Column gap="1rem" style="width: 100%;">
-    <h2 class="section-title" id="general-registers">General purpose registers</h2>
-    {#each Object.values(mipsRegisters) as register (register.name)}
-        <Card gap="1rem" padding="1rem" background="secondary" style="width: 100%;">
-            <h3 class="sub-title">{register.name} ({register.number})</h3>
-            <MarkdownRenderer source={register.description} {disableLinks} />
-        </Card>
-    {/each}
-
-    {#each mipsRegisterFiles as file (file.id)}
+    {#each riscvRegisterFiles as file (file.id)}
         <h2 class="section-title" id={file.id}>{file.title}</h2>
         <div class="note">
             <MarkdownRenderer source={file.intro} {disableLinks} />
         </div>
         {#each file.registers as register (register.name)}
             <Card gap="1rem" padding="1rem" background="secondary" style="width: 100%;">
-                <h3 class="sub-title">
-                    {register.name}{register.detail ? ` (${register.detail})` : ''}
-                </h3>
+                <h3 class="sub-title">{register.name} ({register.number})</h3>
                 <MarkdownRenderer source={register.description} {disableLinks} />
             </Card>
         {/each}

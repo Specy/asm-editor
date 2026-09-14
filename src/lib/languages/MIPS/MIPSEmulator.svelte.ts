@@ -8,6 +8,8 @@ import {
     type JsProgramStatement,
     MIPS,
     type MIPSAssembleError,
+    MIPS_COPROCESSOR0_REGISTER_NUMBERS,
+    type MipsTokenizedLine,
     registerHandlers,
     type RegisterName,
     unimplementedHandler
@@ -25,6 +27,7 @@ import {
     type ExecutionStep,
     makeLabelColor,
     type MutationOperation,
+    type RegisterFileDescriptor,
     type SourceBreakpoint,
     RegisterSize,
     type StackFrame
@@ -49,6 +52,11 @@ import {
     screenLabelProbeSource
 } from '$lib/languages/mars/screenDirective'
 import {
+    makeTokenSpanIndex,
+    tokenSpanEnd,
+    type TokenSpanIndex
+} from '$lib/languages/mars/tokenSpans'
+import {
     sourceText,
     textAssemblyFiles,
     updateEntryText,
@@ -56,6 +64,8 @@ import {
     type BuildSources
 } from '$lib/projectFiles'
 import {
+    MIPSCoprocessor0RegisterNames,
+    MIPSCoprocessor1RegisterNames,
     MIPSNumericRegisterNames,
     MIPSRegisterNames,
     type MIPSRegisterName
@@ -99,6 +109,35 @@ const MIPS_CHUNK_TARGET_MS = 1
 const INVALID_CHARACTER_ERROR = 'Invalid character'
 const INVALID_NUMBER_ERROR = 'Invalid number'
 
+/** The compare flags `c.cond.s` writes, numbered as MARS's Coproc 1 tab labels them. */
+const MIPS_CONDITION_FLAG_NAMES = ['0', '1', '2', '3', '4', '5', '6', '7']
+
+/**
+ * The two Register files MARS holds beside the general registers, named as its Coproc 1 and Coproc 0
+ * tabs name them ([the design record](../../../../docs/design/register-files.md)). The FPU is 32 bits
+ * wide and a double lives in an even/odd pair, so it declares `pairedDoubles`, and the eight compare
+ * flags are its own Status flags. CP0 is read as hexadecimal only: its four registers are bit fields,
+ * not numbers.
+ */
+const MIPS_REGISTER_FILES: RegisterFileDescriptor[] = [
+    {
+        id: 'fpu',
+        label: 'FPU',
+        size: RegisterSize.Long,
+        formats: ['single', 'double', 'hex'],
+        pairedDoubles: true,
+        flagNames: MIPS_CONDITION_FLAG_NAMES,
+        registers: MIPSCoprocessor1RegisterNames.map((name) => ({ name }))
+    },
+    {
+        id: 'cp0',
+        label: 'CP0',
+        size: RegisterSize.Long,
+        formats: ['hex'],
+        registers: MIPSCoprocessor0RegisterNames.map((name) => ({ name }))
+    }
+]
+
 export function MIPSEmulator(source: BuildInput, options: EmulatorSettings = {}) {
     return new AsmEditorMIPSEmulator(source, options)
 }
@@ -133,7 +172,8 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
                 systemSize: RegisterSize.Long,
                 registerNames: [...MIPSRegisterNames],
                 hiddenRegisters: ['$zero'],
-                endianness: 'little'
+                endianness: 'little',
+                registerFiles: MIPS_REGISTER_FILES
             },
             {
                 ...options,
@@ -204,10 +244,12 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         const files = textAssemblyFiles(sources)
         const mips = MIPS.makeMipsFromFiles(files, sources.entry)
         const result = mips.assemble()
+        const lines = tokenizedLines(mips)
+        const spans = makeTokenSpanIndex(lines)
         return [
             ...directive,
-            ...includedScreenDiagnostics(files, sources.entry, mips),
-            ...result.errors.map(assembleErrorToDiagnostic)
+            ...includedScreenDiagnostics(files, sources.entry, lines),
+            ...result.errors.map((error) => assembleErrorToDiagnostic(error, spans))
         ]
     }
 
@@ -231,10 +273,12 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         //compile's buffer (legacy ordering was setUndoSize -> assemble -> setUndoEnabled)
         mips.setUndoSize(Math.max(1, normalizeUndoSize(undoSize)))
         const result = mips.assemble()
+        const lines = tokenizedLines(mips)
+        const spans = makeTokenSpanIndex(lines)
         const diagnostics = [
             ...configured.diagnostics,
-            ...includedScreenDiagnostics(files, sources.entry, mips),
-            ...result.errors.map(assembleErrorToDiagnostic)
+            ...includedScreenDiagnostics(files, sources.entry, lines),
+            ...result.errors.map((error) => assembleErrorToDiagnostic(error, spans))
         ]
         //`hasErrors` only means "the collection is non-empty", and warnings share that collection,
         //so a warnings-only program would be rejected despite having assembled fine
@@ -437,6 +481,65 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         return [...mips.getRegistersValues(), mips.programCounter, mips.getHi(), mips.getLo()].map(
             (value) => BigInt(value)
         )
+    }
+
+    /**
+     * One flat Core call per file, as [ADR 0021](../../../../docs/adr/0021-register-files-from-core-exports.md)
+     * has it. MARS hands both arrays over as `Int32Array` of signed 32 bit ints, so a pattern with
+     * the top bit set reads back negative and `>>> 0` is what turns it into the bit pattern the
+     * panel renders. Without a Core there is nothing to read and the file shows zeros, as the CPU
+     * registers do before a Build.
+     */
+    _getRegisterFileValues(id: string): bigint[] {
+        const mips = this.mips
+        if (id === 'fpu') {
+            if (!mips) return new Array(MIPSCoprocessor1RegisterNames.length).fill(0n)
+            return Array.from(mips.getCoprocessor1Values(), (value) => BigInt(value >>> 0))
+        }
+        if (id === 'cp0') {
+            if (!mips) return new Array(MIPSCoprocessor0RegisterNames.length).fill(0n)
+            return Array.from(mips.getCoprocessor0Values(), (value) => BigInt(value >>> 0))
+        }
+        throw new Error(`Unknown register file: ${id}`)
+    }
+
+    /**
+     * The FPU's eight compare flags, the only file of the two that has any. No `prev` is reported:
+     * MARS remembers a previous value only inside its backstep stack, so `GenericEmulator` diffs
+     * each flag against what the last refresh read.
+     */
+    _getRegisterFileFlags(id: string): { name: string; value: number; prev?: number }[] {
+        if (id === 'cp0') return []
+        if (id !== 'fpu') throw new Error(`Unknown register file: ${id}`)
+        const flags = this.mips?.getConditionFlags() ?? []
+        return MIPS_CONDITION_FLAG_NAMES.map((name, index) => ({
+            name,
+            value: flags[index] ?? 0
+        }))
+    }
+
+    /**
+     * Writes one register of a Register file, for a preset value. The Core's setters bypass the
+     * backstepper, so such a write never becomes an entry the simulation can step back over.
+     */
+    _setRegisterFileValue(id: string, register: string, value: bigint): void {
+        const mips = this.requireMips()
+        const word = Number(BigInt.asUintN(32, value))
+        if (id === 'fpu') {
+            const index = MIPSCoprocessor1RegisterNames.indexOf(register)
+            if (index < 0) throw new Error(`No FPU register named ${register}`)
+            mips.setCoprocessor1Value(index, word)
+            return
+        }
+        if (id === 'cp0') {
+            const index = MIPSCoprocessor0RegisterNames.indexOf(register)
+            if (index < 0) throw new Error(`No CP0 register named ${register}`)
+            //coprocessor 0 is sparse, so the setter takes the register's MIPS number and not its
+            //position in the file
+            mips.setCoprocessor0Value(MIPS_COPROCESSOR0_REGISTER_NUMBERS[index], word)
+            return
+        }
+        throw new Error(`Unknown register file: ${id}`)
     }
 
     _getRegisterValuesRecord(): Record<MIPSRegisterName, bigint> {
@@ -819,20 +922,25 @@ function calculateBreakpoints(mips: JsMips, breakpoints: SourceBreakpoint[]): nu
     })
 }
 
-function includedScreenDiagnostics(
-    files: Readonly<Record<string, string>>,
-    entry: string,
-    mips: JsMips
-): Diagnostic[] {
+/** The tokenized source of a build, or nothing when the Core will not give it up. */
+function tokenizedLines(mips: JsMips): MipsTokenizedLine[] {
     try {
-        return ignoredIncludedScreenDiagnostics(
-            files,
-            entry,
-            mips.getTokenizedLines().map((line) => line.sourcePath)
-        )
+        return mips.getTokenizedLines()
     } catch {
         return []
     }
+}
+
+function includedScreenDiagnostics(
+    files: Readonly<Record<string, string>>,
+    entry: string,
+    lines: readonly MipsTokenizedLine[]
+): Diagnostic[] {
+    return ignoredIncludedScreenDiagnostics(
+        files,
+        entry,
+        lines.map((line) => line.sourcePath)
+    )
 }
 
 function toInstruction(statement: JsProgramStatement | null | undefined): Instruction | null {
@@ -845,12 +953,16 @@ function toInstruction(statement: JsProgramStatement | null | undefined): Instru
     }
 }
 
-function assembleErrorToDiagnostic(error: MIPSAssembleError): Diagnostic {
+function assembleErrorToDiagnostic(
+    error: MIPSAssembleError,
+    spans: TokenSpanIndex
+): Diagnostic {
     return {
         severity: error.isWarning ? 'warning' : 'error',
         file: error.sourcePath,
         lineIndex: error.sourceLine - 1,
         column: error.sourceColumn,
+        endColumn: tokenSpanEnd(spans, error.sourcePath, error.sourceLine, error.sourceColumn),
         line: {
             line: '',
             line_index: error.sourceLine
@@ -947,19 +1059,11 @@ function getRegisterFileName(index: number) {
     return `GPR[${index}]`
 }
 
-function getCP0RegisterName(index: number) {
-    switch (index) {
-        case 8:
-            return 'CP0 $8 (vaddr)'
-        case 12:
-            return 'CP0 $12 (status)'
-        case 13:
-            return 'CP0 $13 (cause)'
-        case 14:
-            return 'CP0 $14 (epc)'
-        default:
-            return `CP0[${index}]`
-    }
+function getCP0RegisterName(registerNumber: number) {
+    //coprocessor 0 is sparse, so a backstep entry carries the register's MIPS number and the file
+    //has to be searched for that number rather than indexed by it
+    const index = (MIPS_COPROCESSOR0_REGISTER_NUMBERS as readonly number[]).indexOf(registerNumber)
+    return MIPSCoprocessor0RegisterNames[index] ?? `CP0[${registerNumber}]`
 }
 
 function getCP1RegisterName(index: number) {

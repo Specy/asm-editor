@@ -36,6 +36,8 @@
         showScreen: boolean
         openScreen: boolean
         openButton: boolean
+        /** The Register file the panel opens on, from a Playground's `fpu`/`cp0`/`csr`/`sse`/`x87` flag. */
+        registerFile?: string
     }
 
     const languageOptions: Array<{ key: AvailableLanguages; value: AvailableLanguages }> = [
@@ -57,7 +59,8 @@
         showFlags: false,
         showScreen: false,
         openScreen: false,
-        openButton: false
+        openButton: false,
+        registerFile: undefined
     })
     let inIframe = $state(true)
     let code = $state(BASE_CODE[settings.language])
@@ -108,6 +111,9 @@
         //asking for the Screen open is asking for one, so a link needs only the one parameter
         const showScreen = openScreen || searchParams.get('showScreen') === 'true'
         const openButton = searchParams.get('openButton') === 'true'
+        //the panel itself decides what to do with a file this language has not got, which is to
+        //open on the CPU one
+        const registerFile = searchParams.get('registerFile')?.trim().toLowerCase() || undefined
 
         return {
             showMemory,
@@ -119,7 +125,8 @@
             showFlags,
             showScreen,
             openScreen,
-            openButton
+            openButton,
+            registerFile
         } satisfies Settings
     }
 
@@ -135,6 +142,7 @@
         const showScreen = settings.showScreen ? 'showScreen=true&' : ''
         const openScreen = settings.openScreen ? 'openScreen=true&' : ''
         const openButton = settings.openButton ? 'openButton=true&' : ''
+        const registerFile = settings.registerFile ? `registerFile=${settings.registerFile}&` : ''
         const props = [
             showMemory,
             showConsole,
@@ -144,7 +152,8 @@
             showFlags,
             showScreen,
             openScreen,
-            openButton
+            openButton,
+            registerFile
         ].join('')
         const lang = `language=${settings.language}&`
         const compressed = lzstring.compressToEncodedURIComponent(code)
@@ -212,6 +221,7 @@
                         showFlags={settings.showFlags}
                         showScreen={settings.showScreen && languageHasScreen(settings.language)}
                         openScreen={settings.openScreen}
+                        initialRegisterFile={settings.registerFile}
                         language={settings.language}
                         forceMemoryRight={true}
                     >

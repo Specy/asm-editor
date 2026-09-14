@@ -43,3 +43,25 @@ export const MIPSRegisterNames: readonly MIPSRegisterName[] = [
     'hi',
     'lo'
 ]
+
+/**
+ * The FPU register file, `$f0` to `$f31` in register-number order, which is the order
+ * `getCoprocessor1Values` returns them in.
+ */
+export const MIPSCoprocessor1RegisterNames: readonly string[] = Array.from(
+    { length: 32 },
+    (_, index) => `$f${index}`
+)
+
+/**
+ * The four coprocessor 0 registers MARS implements, in the order `getCoprocessor0Values` returns
+ * them, spelled as MARS's Coproc 0 tab spells them. The register's MIPS number is part of its name
+ * because coprocessor 0 is sparse: the number is not the position in the file, and the setter takes
+ * the number, so `MIPS_COPROCESSOR0_REGISTER_NUMBERS` holds the same order.
+ */
+export const MIPSCoprocessor0RegisterNames: readonly string[] = [
+    '$8 (vaddr)',
+    '$12 (status)',
+    '$13 (cause)',
+    '$14 (epc)'
+]

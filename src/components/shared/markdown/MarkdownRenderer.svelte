@@ -38,6 +38,7 @@
         const showScreen = settings.showScreen ? 'showScreen=true&' : ''
         const openScreen = settings.openScreen ? 'openScreen=true&' : ''
         const showOpenButton = settings.openButton ? 'openButton=true&' : ''
+        const registerFile = settings.registerFile ? `registerFile=${settings.registerFile}&` : ''
         const props = [
             showMemory,
             showConsole,
@@ -47,7 +48,8 @@
             showFlags,
             showScreen,
             openScreen,
-            showOpenButton
+            showOpenButton,
+            registerFile
         ].join('')
         const lang = `language=${settings.language}&`
         const compressed = lzstring.compressToEncodedURIComponent(code)

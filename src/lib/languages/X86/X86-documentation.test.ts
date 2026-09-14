@@ -5,6 +5,7 @@ import {
     X86_CONDITION_CODES,
     X86_DIRECTIVE_DOCS,
     X86_DIRECTIVES,
+    X86_DOCUMENTED_REGISTER_FILES,
     X86_DOCUMENTED_SECTIONS,
     X86_INSTRUCTIONS,
     X86_PREFIX_DOCS,
@@ -182,6 +183,58 @@ describe('condition codes', () => {
         expect(missing).toEqual([])
         // 16 conditions, each with the aliases x86 gives it, is the whole table.
         expect(new Set(codes).size).toBe(30)
+    })
+})
+
+describe('the register files', () => {
+    it('describes the two the registers panel shows beside the general registers', () => {
+        expect(X86_DOCUMENTED_REGISTER_FILES.map((file) => file.id)).toEqual(['sse', 'x87'])
+        const [sse, x87] = X86_DOCUMENTED_REGISTER_FILES
+        expect(sse.registers.map((register) => register.name)).toEqual(['xmm0 to xmm15', 'mxcsr'])
+        expect(x87.registers.map((register) => register.name)).toEqual([
+            'st0 to st7',
+            'fctrl',
+            'fstat',
+            'ftag'
+        ])
+        // The widths the panel reads the values at, which is what the descriptions promise.
+        expect(sse.registers.map((register) => register.bits)).toEqual([128, 32])
+        expect(x87.registers.map((register) => register.bits)).toEqual([64, 16, 16, 16])
+    })
+
+    it('says what blink does differently from the hardware', () => {
+        const x87 = X86_DOCUMENTED_REGISTER_FILES.find((file) => file.id === 'x87')!
+        // The stack is kept as doubles rather than 80 bit extended values, so a reader comparing
+        // results against a physical processor has to be told before they are surprised.
+        expect(x87.intro).toContain('64 bit doubles')
+        expect(x87.intro).toContain('80 bit')
+    })
+
+    it('separates the scalar move from the scalar arithmetic', () => {
+        const sse = X86_DOCUMENTED_REGISTER_FILES.find((file) => file.id === 'sse')!
+        // movsd from memory zeroes the upper lane while the register form and the arithmetic keep
+        // it, so the prose must not promise one rule for all of them.
+        expect(sse.intro).toContain('clears bits 127 to 64')
+        expect(sse.intro).toContain('movsd xmm0, xmm1')
+    })
+
+    it('says that an empty stack slot is shown blank', () => {
+        const x87 = X86_DOCUMENTED_REGISTER_FILES.find((file) => file.id === 'x87')!
+        // The panel blanks the rows the tag word marks empty, which is a surprise worth naming
+        // beside the register that decides it.
+        expect(x87.intro).toContain('blank')
+        expect(x87.intro).toContain('ftag')
+        const ftag = x87.registers.find((register) => register.name === 'ftag')!
+        expect(ftag.description).toContain('blank')
+    })
+
+    it('explains every register it lists', () => {
+        for (const file of X86_DOCUMENTED_REGISTER_FILES) {
+            expect(file.intro.length, file.id).toBeGreaterThan(100)
+            for (const register of file.registers) {
+                expect(register.description.length, register.name).toBeGreaterThan(60)
+            }
+        }
     })
 })
 

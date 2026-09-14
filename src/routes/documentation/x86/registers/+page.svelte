@@ -7,11 +7,11 @@
     <title>x86-64 Registers & Flags</title>
     <meta
         name="description"
-        content="The x86-64 registers, the four widths each one can be used at, the flags arithmetic writes, and the condition codes the conditional instructions read."
+        content="The x86-64 registers, the four widths each one can be used at, the flags arithmetic writes, the condition codes the conditional instructions read, and the SSE and x87 floating point registers."
     />
     <meta
         property="og:description"
-        content="The x86-64 registers, the four widths each one can be used at, the flags arithmetic writes, and the condition codes the conditional instructions read."
+        content="The x86-64 registers, the four widths each one can be used at, the flags arithmetic writes, the condition codes the conditional instructions read, and the SSE and x87 floating point registers."
     />
 </svelte:head>
 <Page cropped contentStyle="padding: 1rem; gap: 1rem;">

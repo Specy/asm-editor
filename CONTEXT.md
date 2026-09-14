@@ -8,6 +8,21 @@ The UI-facing object a **Project** interacts with to build, execute, debug, and 
 
 The language-specific engine that actually assembles and executes code (s68k's `Interpreter`, `@specy/mips`'s `JsMips`, `@specy/risc-v`'s `JsRiscV`, `@specy/x86`'s emulator, `@specy/z80`'s `Z80Machine`). A Core knows nothing about the UI; an Emulator wraps exactly one Core.
 
+## Register file
+
+A named, ordered set of an **Emulator**'s registers that share a width and a way of reading their values, read from the **Core** as one unit, optionally with a row of **Status flags** of its own. Every Emulator has a Register file for its general registers; an architecture adds the files its Core holds, such as floating-point registers or control and status registers. The program counter and the CPU's Status flags are not Register files.
+_Avoid_: coprocessor registers, register group, register set, extra registers
+
+## Format
+
+The way a **Register file**'s bit patterns are read for display: hex, single precision or double precision. A file offers the Formats that make sense for its registers and the person picks one; a Format changes what is shown, never the value.
+_Avoid_: view, representation, interpretation, display mode
+
+## Status flag
+
+A named one-bit condition of an **Emulator**, shown as 0 or 1 with its change highlighted. The CPU has a row of them (the M68K CCR bits, the x86 EFLAGS bits, the Z80 F bits; MIPS and RISC-V have none), and a **Register file** may carry a row of its own, such as the MIPS FPU condition flags.
+_Avoid_: status register, status codes, condition codes, CCR (except for the M68K register itself)
+
 ## Diagnostic
 
 A compile/check-time finding about the program's source, tagged `error`, `warning` or `suggestion`. Only `error`-severity diagnostics block compilation and disable Build; the others are reported (amber/info squiggles, listed above stdout) while the program still builds and runs. A Core may supply a **Hint**, which is shown directly with the finding. Distinct from the Emulator's runtime **errors**, which are strings produced while executing. Producers today: s68k, MIPS and RISC-V preserve their Core-supplied severity; x86 and Z80 report errors only (the x86 Core only parses its assembler logs when the assembler exits non-zero, discarding the severity marker it matched on, and `@specy/z80` returns one flat diagnostic list with no severity field).

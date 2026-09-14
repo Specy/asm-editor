@@ -2,7 +2,11 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { extractPlaygrounds, type ContentPlayground } from '$lib/content/playgrounds'
+import {
+    extractPlaygrounds,
+    parsePlaygroundFence,
+    type ContentPlayground
+} from '$lib/content/playgrounds'
 import { createEmulator, type Emulator } from '$lib/languages/Emulator'
 import { InterpreterStatus } from '$lib/languages/commonLanguageFeatures.svelte'
 import { ProgramClock } from '$lib/languages/peripherals/ProgramClock'
@@ -254,6 +258,47 @@ const pages = contentPages()
 
 it('finds the course pages', () => {
     expect(pages.length).toBeGreaterThan(0)
+})
+
+/**
+ * The Register file a fence opens its Playground on, which is the lower-case label of one of the
+ * panel's tabs (`docs/design/register-files.md`). Parsed here rather than in the panel so that the
+ * renderer's embed URL and the embed's own reading of it cannot drift apart.
+ */
+describe('the register file fence flag', () => {
+    it('reads the file a fence names', () => {
+        expect(parsePlaygroundFence('mips|playground|fpu')?.settings.registerFile).toBe('fpu')
+        expect(parsePlaygroundFence('riscv|playground|csr')?.settings.registerFile).toBe('csr')
+        expect(parsePlaygroundFence('x86|playground|x87')?.settings.registerFile).toBe('x87')
+    })
+
+    it('leaves a fence without one on the CPU file', () => {
+        const parsed = parsePlaygroundFence('m68k|playground|memory')
+        expect(parsed?.settings.registerFile).toBeUndefined()
+    })
+
+    it('keeps the other flags beside it, in any order', () => {
+        const parsed = parsePlaygroundFence('mips|playground|memory|fpu|console|pc')
+        expect(parsed?.settings.registerFile).toBe('fpu')
+        expect(parsed?.settings.showMemory).toBe(true)
+        expect(parsed?.settings.showConsole).toBe(true)
+        expect(parsed?.settings.showPc).toBe(true)
+        expect(parsed?.settings.showRegisters).toBe(true)
+    })
+
+    it('keeps the first of several, because one panel shows one tab', () => {
+        expect(parsePlaygroundFence('x86|playground|sse|x87')?.settings.registerFile).toBe('sse')
+        expect(parsePlaygroundFence('x86|playground|x87|sse')?.settings.registerFile).toBe('x87')
+    })
+
+    it('ignores a flag that names no file', () => {
+        expect(parsePlaygroundFence('mips|playground|mmu')?.settings.registerFile).toBeUndefined()
+    })
+
+    it('reads it case-sensitively, as it reads every other flag of a fence', () => {
+        expect(parsePlaygroundFence('mips|playground|FPU')?.settings.registerFile).toBeUndefined()
+        expect(parsePlaygroundFence('x86|playground|Sse')?.settings.registerFile).toBeUndefined()
+    })
 })
 
 for (const page of pages) {
