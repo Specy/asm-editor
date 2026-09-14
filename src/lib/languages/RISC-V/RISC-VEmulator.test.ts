@@ -236,6 +236,34 @@ describe('RISC-V source set', () => {
         ).toBe(false)
     })
 
+    it('names a .globl callee in the call stack, wherever the label was declared', async () => {
+        const sources = {
+            entry: 'main.s',
+            files: {
+                'main.s': {
+                    encoding: 'plain' as const,
+                    content:
+                        '.include "fibonacci.s"\n.text\n.globl main\nmain:\njal ra, fibonacci\n' +
+                        EXIT
+                },
+                'fibonacci.s': {
+                    encoding: 'plain' as const,
+                    content: '.text\n.globl fibonacci\nfibonacci:\njr ra\n'
+                }
+            }
+        }
+        const emulator = RISCVEmulator(sources)
+        await emulator.check()
+        await emulator.compile(20, sources)
+        //.globl moves the label out of the local symbol table, and a Core that only looked there
+        //used to throw on every step for as long as the frame stayed on the stack
+        for (let step = 0; step < 10 && emulator.callStack.length === 0; step++) {
+            await emulator.step()
+        }
+        expect(emulator.errors).toEqual([])
+        expect(emulator.callStack).toMatchObject([{ name: 'fibonacci', file: 'fibonacci.s' }])
+    })
+
     it('keeps every repeated-include instruction and address in its inline expansion', async () => {
         const sources = {
             entry: 'main.s',
