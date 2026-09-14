@@ -953,10 +953,7 @@ function toInstruction(statement: JsProgramStatement | null | undefined): Instru
     }
 }
 
-function assembleErrorToDiagnostic(
-    error: MIPSAssembleError,
-    spans: TokenSpanIndex
-): Diagnostic {
+function assembleErrorToDiagnostic(error: MIPSAssembleError, spans: TokenSpanIndex): Diagnostic {
     return {
         severity: error.isWarning ? 'warning' : 'error',
         file: error.sourcePath,

@@ -299,3 +299,43 @@ describe('x86 register files', () => {
         }
     })
 })
+
+describe('x86 diagnostic spans', () => {
+    //NASM reports a line and no column, so the Core finds the name the message quotes and hands
+    //back its extent; both the semantic check and the Build have to carry it through to Monaco
+    const sources = {
+        entry: 'main.asm',
+        files: {
+            'main.asm': {
+                encoding: 'plain' as const,
+                content: [
+                    'bits 64',
+                    'global _start',
+                    'section .text',
+                    '_start',
+                    '  mov rsi, missingSymbol',
+                    '  syscall',
+                    ''
+                ].join('\n')
+            }
+        }
+    }
+
+    it('spans the whole name a diagnostic points at', async () => {
+        const emulator = await X86Emulator(sources, { automaticChecking: false })
+        try {
+            const diagnostics = await emulator.check()
+            //`_start` is the whole of line 4, and `missingSymbol` runs from column 12 to 25
+            const orphan = diagnostics.find((d) => d.message.includes('label alone'))
+            expect(orphan?.lineIndex).toBe(3)
+            expect(orphan?.column).toBe(1)
+            expect(orphan?.endColumn).toBe(7)
+            const symbol = diagnostics.find((d) => d.message.includes('missingSymbol'))
+            expect(symbol?.lineIndex).toBe(4)
+            expect(symbol?.column).toBe(12)
+            expect(symbol?.endColumn).toBe(25)
+        } finally {
+            emulator.dispose()
+        }
+    })
+})

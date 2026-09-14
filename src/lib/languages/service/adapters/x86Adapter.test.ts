@@ -66,4 +66,39 @@ describe('x86 Project analysis adapter', () => {
         })
         expect(snapshot.diagnostics).toEqual([])
     })
+    //the Project page squiggles from this snapshot whenever it has Files, so the extent the Core
+    //found for the name NASM quoted has to reach Monaco through here too
+    it('spans the whole name a diagnostic points at', async () => {
+        const sources = normalizeBuildInput({
+            entry: 'main.asm',
+            files: {
+                'main.asm': {
+                    encoding: 'plain',
+                    content: [
+                        'bits 64',
+                        'global _start',
+                        'section .text',
+                        '_start',
+                        '  mov rsi, missingSymbol',
+                        '  syscall'
+                    ].join('\n')
+                }
+            }
+        })
+
+        const snapshot = await analyzeX86Project(sources, 'span-test', 1)
+
+        //ranges are zero based and end exclusive: `_start` is columns 0 to 6, `missingSymbol` 11 to 24
+        const range = (needle: string) =>
+            snapshot.diagnostics.find((diagnostic) => diagnostic.message.includes(needle))?.location
+                .range
+        expect(range('label alone')).toEqual({
+            start: { line: 3, column: 0 },
+            end: { line: 3, column: 6 }
+        })
+        expect(range('missingSymbol')).toEqual({
+            start: { line: 4, column: 11 },
+            end: { line: 4, column: 24 }
+        })
+    })
 })

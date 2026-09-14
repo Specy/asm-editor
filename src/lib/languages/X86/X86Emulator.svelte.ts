@@ -26,7 +26,7 @@ import {
     BlinkState,
     createX86Emulator,
     decodeFpuState,
-    locateDiagnosticColumn,
+    locateDiagnosticSpan,
     readLogicalStTags,
     EmulatorStatus as CoreEmulatorStatus,
     RegisterSize as CoreRegisterSize,
@@ -764,6 +764,7 @@ function mapCoreDiagnosticToProject(
         file: source.path,
         lineIndex: source.line,
         column: Math.max(1, error.column),
+        ...(error.endColumn === undefined ? {} : { endColumn: error.endColumn }),
         ...(error.code ? { code: error.code } : {}),
         line: { line, line_index: source.line },
         message: error.message,
@@ -785,11 +786,13 @@ function coreDiagnosticToDiagnostic(
         : x86SourceLineAt(lineMap, generatedLine, sources.entry)
     const line = sourceLine(sources, source) || code.split('\n')[generatedLine] || ''
     const hint = x86DiagnosticHint(diagnostic.warningClass)
+    const span = locateDiagnosticSpan(diagnostic.error, line, diagnostic.warningClass)
     return {
         severity: diagnostic.severity ?? 'error',
         file: source.path,
         lineIndex: source.line,
-        column: locateDiagnosticColumn(diagnostic.error, line, diagnostic.warningClass),
+        column: span.column,
+        ...(span.endColumn === undefined ? {} : { endColumn: span.endColumn }),
         ...(diagnostic.warningClass ? { code: diagnostic.warningClass } : {}),
         line: {
             line,

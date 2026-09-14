@@ -1471,3 +1471,28 @@ loop:
         expect(emulator._getRegisterFileValues('csr')[uscratch]).toBe(0x1122334455667788n)
     })
 })
+
+describe('RISC-V diagnostic spans', () => {
+    //`_checkCode` builds its own throwaway Core, which is the path that squiggles a program that
+    //does not assemble, so the spans are read from `check()` rather than from a Build
+    const BAD = [
+        '        .text',
+        'main:',
+        '        addi    t0, t1, notanumber',
+        '        bogusinstr t0',
+        ''
+    ].join('\n')
+
+    it('spans the whole token a diagnostic points at', async () => {
+        const emulator = RISCVEmulator(BAD)
+        const diagnostics = await emulator.check()
+        const operand = diagnostics.find((d) => d.message.includes('notanumber'))
+        //`notanumber` is the 25th through 34th character of its line
+        expect(operand?.lineIndex).toBe(2)
+        expect(operand?.column).toBe(25)
+        expect(operand?.endColumn).toBe(35)
+        const operator = diagnostics.find((d) => d.message.includes('bogusinstr'))
+        expect(operator?.column).toBe(9)
+        expect(operator?.endColumn).toBe(19)
+    })
+})

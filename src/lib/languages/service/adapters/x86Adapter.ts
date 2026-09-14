@@ -22,6 +22,11 @@ export function x86DiagnosticToLanguageDiagnostic(
         ? { path: file, line: error.lineIndex }
         : x86SourceLineAt(lineMap, error.lineIndex, entry)
     const column = Math.max(0, error.column - 1)
+    //NASM reports no column at all, so the Core finds the name the message quotes in the line and
+    //hands back its extent; a range here is zero based where the Core's `endColumn` is one based
+    //and exclusive, and a message that named nothing findable keeps the single character this drew
+    const end =
+        error.endColumn === undefined ? column + 1 : Math.max(column + 1, error.endColumn - 1)
     return {
         //The Core reports its own severity: a NASM warning is not an error, and painting it red
         //here contradicted the amber squiggle the same finding gets after a Build.
@@ -31,7 +36,7 @@ export function x86DiagnosticToLanguageDiagnostic(
             path: source.path,
             range: {
                 start: { line: source.line, column },
-                end: { line: source.line, column: column + 1 }
+                end: { line: source.line, column: end }
             }
         },
         message: error.message

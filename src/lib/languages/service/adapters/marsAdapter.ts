@@ -9,6 +9,11 @@ import {
     SCREEN_LABEL_PROBE_ADDRESS,
     screenLabelProbeSource
 } from '$lib/languages/mars/screenDirective'
+import {
+    makeTokenSpanIndex,
+    tokenSpanEnd,
+    type TokenSpanIndex
+} from '$lib/languages/mars/tokenSpans'
 import { fileText, sourceText, textAssemblyFiles, type BuildSources } from '$lib/projectFiles'
 import type {
     ProjectAnalysisSnapshot,
@@ -56,9 +61,23 @@ function lineText(sources: BuildSources, path: string, line: number): string {
     }
 }
 
-function coreDiagnostic(error: MarsError, sources: BuildSources, target: MarsTarget) {
+function coreDiagnostic(
+    error: MarsError,
+    sources: BuildSources,
+    target: MarsTarget,
+    spans: TokenSpanIndex
+) {
     const line = Math.max(0, error.sourceLine - 1)
     const column = Math.max(0, error.sourceColumn - 1)
+    //the Cores point at the first character of the token and say no more, so the span comes from
+    //their own token list; `tokenSpanEnd` is one-based and exclusive like Monaco, a range here is
+    //zero-based, and a token that cannot be confirmed leaves the single character this always drew
+    const tokenEnd = tokenSpanEnd(
+        spans,
+        error.sourcePath || sources.entry,
+        error.sourceLine,
+        error.sourceColumn
+    )
     const related: RelatedLanguageDiagnostic[] = error.macroExpansionTrace.map((location) => ({
         message: 'Expanded from here',
         location: {
@@ -83,7 +102,7 @@ function coreDiagnostic(error: MarsError, sources: BuildSources, target: MarsTar
             path: error.sourcePath || sources.entry,
             range: {
                 start: { line, column },
-                end: { line, column: column + 1 }
+                end: { line, column: tokenEnd === undefined ? column + 1 : tokenEnd - 1 }
             }
         },
         message: error.message,
@@ -122,7 +141,9 @@ export function analyzeMarsProject(
     const files = textAssemblyFiles(sources)
     const core = makeCore(files, sources.entry, target)
     const result = core.assemble()
-    const reached = new Set(core.getTokenizedLines().map((line) => line.sourcePath))
+    const tokenizedLines = core.getTokenizedLines()
+    const spans = makeTokenSpanIndex(tokenizedLines)
+    const reached = new Set(tokenizedLines.map((line) => line.sourcePath))
     reached.add(sources.entry)
     const fileStatus: Record<string, ProjectFileAnalysisStatus> = Object.create(null)
     for (const [path, file] of Object.entries(sources.files)) {
@@ -143,7 +164,7 @@ export function analyzeMarsProject(
         target,
         diagnostics: [
             ...screenDiagnostics.map((diagnostic) => legacyDiagnostic(diagnostic, sources.entry)),
-            ...result.errors.map((error) => coreDiagnostic(error, sources, target))
+            ...result.errors.map((error) => coreDiagnostic(error, sources, target, spans))
         ],
         symbols: [],
         occurrences: [],

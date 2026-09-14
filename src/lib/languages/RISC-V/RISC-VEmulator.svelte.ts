@@ -1117,10 +1117,7 @@ function toInstruction(statement: JsProgramStatement | null | undefined): Instru
     }
 }
 
-function assembleErrorToDiagnostic(
-    error: RISCVAssembleError,
-    spans: TokenSpanIndex
-): Diagnostic {
+function assembleErrorToDiagnostic(error: RISCVAssembleError, spans: TokenSpanIndex): Diagnostic {
     const lineIndex = sourceLineToIndex(error.sourceLine)
     return {
         severity: error.isWarning ? 'warning' : 'error',
