@@ -1,0 +1,6 @@
+{
+    "name": "Floating point: x87 and SSE",
+    "description": "What a coprocessor is and why x86 ended up with two floating point units, how a double is stored and why 0.1 is not 0.1, the scalar and packed SSE instructions, the x87 stack and the functions only it has.",
+    "order": 6,
+    "topic": "floating-point"
+}

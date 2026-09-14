@@ -1,0 +1,6 @@
+{
+    "name": "Arithmetic, logic and bits",
+    "description": "The two multiplications and the division that reads rdx:rax, why the line before a div is never optional, masks with and, or and xor, and the difference between shr and sar.",
+    "order": 2,
+    "topic": "arithmetic"
+}

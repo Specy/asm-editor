@@ -1,0 +1,6 @@
+{
+    "name": "Bytes, words, dwords and qwords",
+    "description": "The four sizes and their ranges, two's complement, why the same add works for signed and unsigned numbers, and the movzx, movsx and cdq family that widens a small number into a big register.",
+    "order": 3,
+    "topic": "numbers"
+}

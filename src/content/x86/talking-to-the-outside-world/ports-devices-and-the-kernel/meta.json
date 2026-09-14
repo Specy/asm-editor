@@ -1,0 +1,6 @@
+{
+    "name": "Ports, devices and the kernel in between",
+    "description": "The two ways x86 reaches a device, in and out and memory mapped registers, why ring 3 may use neither, what a file descriptor gives you instead, and mmap asking for memory that did not exist.",
+    "order": 1,
+    "topic": "mmio"
+}

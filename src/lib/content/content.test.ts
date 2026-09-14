@@ -53,13 +53,11 @@ const TIMEOUT = 180_000
 const EXECUTION_LIMIT = /execution limit of/i
 
 /**
- * x86 has no course and no documentation pages yet (`docs/courses/plan.md`, decision 1: its syntax
- * is undecided), and `@specy/x86` wraps a Linux userland rather than a simulator, so a fence in that
- * language is reported and left unrun instead of failing the suite.
+ * Languages whose fences are reported and left unrun instead of failing the suite. Empty since the
+ * x86 course landed: x86 was the one entry, held out while its syntax was undecided, and its pages
+ * are now built and run with the same Core the app ships like every other language's.
  */
-const UNRUNNABLE = {
-    X86: '@specy/x86 wraps a Linux userland and x86 has no course yet'
-} as Partial<Record<string, string>>
+const UNRUNNABLE = {} as Partial<Record<string, string>>
 
 type ContentPage = {
     /** Relative to the repository root, which is how a failure names it. */

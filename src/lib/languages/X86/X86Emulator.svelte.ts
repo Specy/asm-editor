@@ -128,6 +128,12 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     private checkCodeQueue: Promise<void> = Promise.resolve()
     private buildLineMap: X86SourceLine[] = []
     /**
+     * True from the start of a Build until the program is first asked to run, which is the window
+     * `isProgramOutput` discards output in. It closes at the run rather than at the end of the
+     * Build because blink writes its launch line after `initialize` has returned.
+     */
+    private beforeFirstRun = false
+    /**
      * Which x87 stack slots were empty in the block the values read decoded. A refresh reads a
      * file's values immediately before its blanks, so the tags cost no second bridge call. Before
      * the first read every slot is empty, which is what a machine that does not exist yet reports.
@@ -200,7 +206,13 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return currentCheck
     }
 
+    /** Opens the window `isProgramOutput` discards output in; a run hook closes it. */
     async _compile(sources: BuildSources): Promise<CompileResult> {
+        this.beforeFirstRun = true
+        return this.compileSources(sources)
+    }
+
+    private async compileSources(sources: BuildSources): Promise<CompileResult> {
         const core = this.requireCore()
         if (!hasNativeProjectApi(core)) return this.compileLegacyProject(core, sources)
         this.buildLineMap = []
@@ -406,6 +418,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
      * slice ([screen-peripherals.md](../../../../docs/design/screen-peripherals.md)).
      */
     async _runSlice(request: ExecutionSliceRequest): Promise<ExecutionSlice> {
+        this.beforeFirstRun = false
         const budget = sliceInstructionBudget(request, X86_INSTRUCTIONS_PER_MS)
         const breakpoints = hasNativeProjectApi(this.requireCore())
             ? request.breakpoints.map(({ file, line }) => ({ path: file, line }))
@@ -430,6 +443,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     }
 
     async _runTestcase(_testcase: Testcase, haltLimit: number): Promise<void> {
+        this.beforeFirstRun = false
         const limit = haltLimit <= 0 ? Number.MAX_SAFE_INTEGER : haltLimit
         await this.runWithInput(limit, [])
     }
@@ -456,6 +470,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     }
 
     async _step(): Promise<{ terminated: boolean }> {
+        this.beforeFirstRun = false
         const core = this.requireCore()
         const execution = this.executionController.capture()
         const result = await this.executionController.waitFor(execution, () => core.step())
@@ -551,10 +566,22 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         }
     }
 
+    /**
+     * Whether what the Core is writing came from the program rather than from the toolchain around
+     * it. The assembler and the linker write their diagnostics under their own states, and blink
+     * then announces the program it is about to launch with a shell-like `$ /program` line, written
+     * with the state already moved to running and before a single instruction of the program has
+     * executed. Nothing between the start of a Build and the first run is the program talking, so
+     * that whole window is discarded: without it a Testcase would have to declare the launch line as
+     * `expectedOutput` on every x86 page, and the console would open on a prompt nobody typed.
+     */
     private isProgramOutput(): boolean {
         const state = this.core?.state
         return (
-            state !== undefined && state !== BlinkState.Assembling && state !== BlinkState.Linking
+            !this.beforeFirstRun &&
+            state !== undefined &&
+            state !== BlinkState.Assembling &&
+            state !== BlinkState.Linking
         )
     }
 }

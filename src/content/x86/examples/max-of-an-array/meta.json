@@ -1,0 +1,6 @@
+{
+    "name": "The largest element",
+    "description": "A best-so-far kept in a register, compared against each element in turn, and the branchless cmov that can replace the whole comparison.",
+    "order": 5,
+    "topic": "max-of-an-array"
+}

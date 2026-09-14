@@ -1,0 +1,10 @@
+{
+    "id": "x86",
+    "name": "x86 assembly",
+    "authors": ["Specy"],
+    "description": "x86-64: sixteen general registers with four names each, instructions that read and write memory directly, an addressing mode that multiplies and adds for you, and two floating point units stacked on top of each other by forty years of compatibility. Written in NASM syntax and run as a Linux program.",
+    "image": "",
+    "tags": ["assembly", "x86"],
+    "date": "2026-09-14",
+    "order": 5
+}

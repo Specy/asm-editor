@@ -181,12 +181,12 @@ _Avoid_: beginner course, basics course
 
 ## Language course
 
-A **Course** about one of the editor's languages (M68K, MIPS, RISC-V, Z80). It mirrors the **General course** Module for Module and Lecture for Lecture, retitled for the language, with an opening "Getting started" Lecture and the outside-world Module bent to what the machine really has (traps, syscalls, memory-mapped or port-mapped I/O). It closes with an **Examples** Module.
+A **Course** about one of the editor's languages (M68K, MIPS, RISC-V, Z80, x86). It mirrors the **General course** Module for Module and Lecture for Lecture, retitled for the language, with an opening "Getting started" Lecture and the outside-world Module bent to what the machine really has (traps, syscalls, memory-mapped or port-mapped I/O). It closes with an **Examples** Module. A Lecture with no counterpart in the General course is allowed where the machine has something the others do not: RISC-V's "Going 64-bit", and the floating point Lecture of the three languages whose Core has a floating point unit.
 _Avoid_: specific course, single course, deep dive
 
 ## Example
 
-A complete, verified program that closes a **Language course**: one **Lecture** in its Examples Module, placed by what the reader needs to know before it. The same ladder of Examples exists in every Language course, program for program (the snake game in M68K is the snake game in RISC-V), so a reader can compare how each language does the same thing.
+A complete, verified program that closes a **Language course**: one **Lecture** in its Examples Module, placed by what the reader needs to know before it. The same ladder of Examples exists in every Language course, program for program (the snake game in M68K is the snake game in RISC-V), so a reader can compare how each language does the same thing. A rung is missing only where the environment cannot run it: x86 has nineteen of the twenty five, having neither a Screen nor a way to read the console.
 _Avoid_: demo, sample, snippet
 
 ## Exercise

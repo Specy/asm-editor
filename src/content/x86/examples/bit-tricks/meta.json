@@ -1,0 +1,6 @@
+{
+    "name": "Even or odd, count the set bits, multiply by shifting",
+    "description": "Odd or even with test, counting the set bits by clearing the lowest one, multiplying by ten with two shifts, and reading a single bit with bt.",
+    "order": 9,
+    "topic": "bit-tricks"
+}

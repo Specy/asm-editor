@@ -1,0 +1,6 @@
+{
+    "name": "Arrays, strings and the string instructions",
+    "description": "Walking an array by index and by pointer, a string as bytes with a terminator you write yourself, and the movs, stos, lods and scas family with the rep prefixes that turn one instruction into a memcpy.",
+    "order": 3,
+    "topic": "data-in-memory"
+}

@@ -1,0 +1,6 @@
+{
+    "name": "Loops",
+    "description": "while, do while and for written as a backwards jump, why a loop that counts down to zero needs no cmp, indexing an array with a scale, and the loop instruction nobody uses any more.",
+    "order": 1,
+    "topic": "loops"
+}

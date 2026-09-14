@@ -1,0 +1,7 @@
+{
+    "name": "A subroutine with its arguments in registers",
+    "description": "call and ret with the System V convention: the arguments in rdi and rsi, the answer in rax, and the return address on the stack.",
+    "order": 10,
+    "topic": "subroutine-with-register-arguments",
+    "template": 3
+}

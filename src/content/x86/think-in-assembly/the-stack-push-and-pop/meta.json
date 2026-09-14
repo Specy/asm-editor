@@ -1,0 +1,6 @@
+{
+    "name": "The stack, push and pop",
+    "description": "push and pop as a subtraction and a store, the stack drawn address by address as it grows downwards, making room with one sub rsp, and the other things that move rsp behind your back.",
+    "order": 4,
+    "topic": "the-stack"
+}

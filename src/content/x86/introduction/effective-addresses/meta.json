@@ -1,0 +1,6 @@
+{
+    "name": "Effective addresses",
+    "description": "The one addressing mode x86 has, base plus index times scale plus displacement, lea as three operand arithmetic, and what default rel turns every bracketed label into.",
+    "order": 5,
+    "topic": "addressing-modes"
+}

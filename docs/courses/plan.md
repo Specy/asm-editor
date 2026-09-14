@@ -10,6 +10,14 @@ ADR 0012.
 1. Four Language courses, written in this order: M68K, RISC-V, MIPS, Z80. x86 is deferred until its
    syntax (FASM or NASM) is decided and it has documentation pages. RISC-V-64 is one lecture inside the
    RISC-V course; everything else is RV32.
+
+    **Amended 2026-09-15**: x86 has a course. The syntax question settled itself, `@specy/x86` assembles
+    NASM and nothing else (`mode: 'NASM_trunk'`, hardcoded in the adapter), and the documentation pages
+    landed on 2026-09-12 (`docs/design/x86-documentation.md`). Slug `x86`, name "x86 assembly",
+    order 5. It is x86-64 in long mode, run by blink as a Linux process, so the outside-world module is
+    about the Linux ABI and not about a bare machine. The course is 37 pages: 18 lectures and 19
+    Examples, the ladder minus the six programs the environment cannot run (below).
+
 2. The General course grows from 10 to 18 lectures in three modules (skeleton below). The ten existing
    lectures get a three-tier revision: a light pass on all (typos, dashes, the unfinished landing text,
    descriptions rewritten in the voice), Registers and Addressing modes expanded to the 500-word floor
@@ -30,6 +38,7 @@ ADR 0012.
    the ladders; its URLs redirect.
 8. Slugs `m68k`, `mips`, `risc-v`, `z80`. Names "M68K assembly", "MIPS assembly", "RISC-V assembly",
    "Z80 assembly". Courses page order: Assembly basics, M68K, MIPS, RISC-V, Z80. Author Specy.
+   `x86` and "x86 assembly" joined at order 5 on 2026-09-15.
 9. Assembly serves the explanation: in the **General course** a program makes a general idea
    concrete and no page teaches a language's own numbers or directive set; the outside-world module
    carries no Playgrounds at all. Length guides, not limits (Specy, 2026-09-06: "better prioritize proper explanation than word
@@ -142,6 +151,56 @@ topic key must match the General course's. Titles by language:
 | `syscalls`           | trap #15 and its tasks                       | syscall                                       | ecall                                         | Ports: in and out                            |
 | `mmio`               | The screen, keyboard and mouse through traps | The bitmap display and the keyboard registers | The bitmap display and the keyboard registers | The screen, keyboard and mouse through ports |
 | `interrupts`         | Exceptions and the vector table              | Exceptions, coprocessor 0 and interrupts      | Exceptions, CSRs and interrupts               | Interrupts: im, ei, di and halt              |
+
+A second topic exists in some courses and not others, the way `rv64` does. Added 2026-09-15:
+
+| topic            | where it is                                                         | title                                                                                                          |
+| ---------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `floating-point` | MIPS, RISC-V, x86; the last lecture of `think-in-assembly`, order 6 | "Floating point and coprocessor 1", "Floating point and the F and D extensions", "Floating point: x87 and SSE" |
+
+It is absent from M68K and Z80 because neither Core has a floating point unit, and absent from the
+General course, so its topic links run between the three Language courses only, which `getTopicLinks`
+handles (no overview, siblings listed). It sits after `subroutines` because it needs the calling
+convention: how a float is passed and returned is part of the lecture. Every Playground in it opens
+on the Register file that holds the answer, with the `fpu`, `sse`, `x87` or `csr` fence flag, and
+every Exercise moves its answer into a general register first, because a Testcase still reads the CPU
+file only (`docs/design/register-files.md`).
+
+### The x86 course (`x86`), 18 lectures and 19 Examples
+
+| module                         | slug                                         | title                                       | topic               |
+| ------------------------------ | -------------------------------------------- | ------------------------------------------- | ------------------- |
+| `introduction`                 | `getting-started`                            | Getting started with x86                    | `introduction`      |
+| `introduction`                 | `the-16-registers-and-their-halves`          | The 16 registers and their halves           | `registers`         |
+| `introduction`                 | `memory-little-endian-and-sizes`             | Memory, little endian and sizes             | `memory`            |
+| `introduction`                 | `bytes-words-dwords-and-qwords`              | Bytes, words, dwords and qwords             | `numbers`           |
+| `introduction`                 | `the-x86-instruction-set`                    | The x86 instruction set                     | `instruction-set`   |
+| `introduction`                 | `effective-addresses`                        | Effective addresses                         | `addressing-modes`  |
+| `introduction`                 | `the-flags-register`                         | The flags register                          | `flags`             |
+| `introduction`                 | `sections-directives-and-labels`             | Sections, directives and labels             | `program-structure` |
+| `think-in-assembly`            | `cmp-and-the-conditional-jumps`              | cmp and the conditional jumps               | `branching`         |
+| `think-in-assembly`            | `loops`                                      | Loops                                       | `loops`             |
+| `think-in-assembly`            | `arithmetic-logic-and-bits`                  | Arithmetic, logic and bits                  | `arithmetic`        |
+| `think-in-assembly`            | `arrays-strings-and-the-string-instructions` | Arrays, strings and the string instructions | `data-in-memory`    |
+| `think-in-assembly`            | `the-stack-push-and-pop`                     | The stack, push and pop                     | `the-stack`         |
+| `think-in-assembly`            | `call-ret-and-the-system-v-convention`       | call, ret and the System V convention       | `subroutines`       |
+| `think-in-assembly`            | `floating-point-x87-and-sse`                 | Floating point: x87 and SSE                 | `floating-point`    |
+| `talking-to-the-outside-world` | `syscall-and-the-linux-abi`                  | syscall and the Linux ABI                   | `syscalls`          |
+| `talking-to-the-outside-world` | `ports-devices-and-the-kernel`               | Ports, devices and the kernel in between    | `mmio`              |
+| `talking-to-the-outside-world` | `interrupts-exceptions-and-signals`          | Interrupts, exceptions and signals          | `interrupts`        |
+
+**The six rungs x86 does not have**, each named on the page that would have linked to them:
+
+- `sum-of-two-numbers` (18): a program cannot read the console. blink's shell takes the line instead,
+  the program stays parked on its `read`, and the "syscall and the Linux ABI" lecture says so.
+- `drawing-on-the-screen`, `bouncing-ball`, `keyboard-control`, `snake`, `flappy-bird` (20 to 24):
+  `languageHasScreen` is false for x86, because blink emulates a Linux process and a Linux process has
+  no framebuffer. The "Ports, devices and the kernel in between" lecture says so.
+
+The Examples keep the ladder's `order`, so the numbering runs 0 to 17 and then 19, with the gap where
+`sum-of-two-numbers` would be. Four of them carry `template` keys (1 `moving-values`,
+2 `counting-loop`, 3 `subroutine-with-register-arguments`, 4 `hello-world`), which replaced
+`src/lib/content/x86Templates.ts`; that file is deleted.
 
 Getting started covers, in this order: what the CPU is and where it was used (verify every date and
 name before writing it), which simulator the editor imitates (EASy68K, MARS, RARS; none for the Z80),
@@ -287,6 +346,9 @@ Lecture `meta.json` gains `"topic": "<key>"`. Course `meta.json` is unchanged ap
 | J   | The Test button stays on an embedded Playground that carries testcases (it was hidden when the testcases panel was shown); the exam editor passes `embedded={false}` and is unchanged                                                                                                                                                               | `InteractiveInstructionEditor.svelte`                                    | done 2026-09-06, b48f09b                                                                |
 | K   | The existing lectures say "click compile"; the button is labelled Build. Part of the light pass                                                                                                                                                                                                                                                     | `src/content/assembly-basics`                                            | done 2026-09-06, 9387c72                                                                |
 | L   | Custom components for lectures (a stack or memory diagram a markdown table cannot show), allowed by Specy on 2026-09-06; add renderer support in the worktree when a page needs one and record it here                                                                                                                                              | `MarkdownRenderer.svelte`                                                | when needed                                                                             |
+| M   | The x86 console showed blink's `$ /program` launch line as if the program had printed it, which every Testcase would otherwise have had to declare as `expectedOutput`. Output is now discarded from the start of a Build until the first run                                                                                                       | `X86Emulator.svelte.ts`                                                  | done 2026-09-15                                                                         |
+| N   | x86 fences were skipped by the verification test (`UNRUNNABLE`); the entry is gone and the map is empty                                                                                                                                                                                                                                             | `src/lib/content/content.test.ts`                                        | done 2026-09-15                                                                         |
+| O   | `src/lib/content/x86Templates.ts` deleted: the four x86 templates are now Examples with a `template` key, like every other language's                                                                                                                                                                                                               | `templates.ts`, `src/content/x86/examples`                               | done 2026-09-15                                                                         |
 
 ## Verification
 
@@ -391,6 +453,41 @@ Lecture `meta.json` gains `"topic": "<key>"`. Course `meta.json` is unchanged ap
       signed-comparison condition; after `cp`, signed less-than is `S` differing from `P/V`.
     - An unmapped port reads `FF` and swallows writes silently.
 
+    Batch 5 done 2026-09-15: the eighteen x86 lectures and the nineteen Examples, 180 content tests
+    green, plus the `floating-point` lecture of the MIPS and RISC-V courses. What its writer
+    established by running, for anyone else touching x86 content:
+
+    - **`default rel` goes at the top of every program.** Without it NASM 3.00 assembles the absolute
+      form of `[label]` and warns "implicit DEFAULT ABS is deprecated" on the first one, which is a
+      yellow squiggle on a reader's first build. An address with an index register in it
+      (`[a + rcx*8]`) is absolute either way and never warns.
+    - **NASM 3.00 does not refuse an operand with no size.** `mov [x], 5` assembles as a **byte**;
+      `mov [x], 5000` assembles as a byte too, with a "byte exceeds bounds" warning, and writes `88`.
+      So the size keyword is the content's job, not the assembler's.
+    - Reserved words cannot be labels, and the list is longer than it looks: `word`, `fs` and the
+      other segment registers are all build errors as label names, reported as "instruction expected".
+    - A local label (`.done`) belongs to the last **non-local** label above it, so a jump table whose
+      cases are ordinary labels needs ordinary labels for its shared exits too.
+    - **Every fault ends the run silently**, with `rip` parked on the instruction: divide by zero, a
+      quotient too big for `rax`, an unmapped address, a write into `.text`, and `in`/`out`. No
+      message is printed and `emulator.errors` is empty, so a page cannot promise one.
+    - **`int3` and `hlt` hang the emulator**, not the program, and no instruction budget cuts them
+      off. Neither may appear in a Playground.
+    - **Signals are not delivered.** A program that installs a `SIGFPE` handler with `rt_sigaction`
+      and then divides by zero hangs the emulator rather than reaching the handler.
+    - `brk` returns `-38`, which is `ENOSYS`; so does any call blink does not implement. `mmap` of
+      anonymous memory works and returns `0x80000000`, `munmap` returns 0, and `clock_gettime`,
+      `getpid`, `nanosleep`, `open`, `read`, `close` and `write` all work. `open("/program")` returns
+      descriptor 3 and reads the program's own ELF header.
+    - Addresses are fixed as long as the code is under a page: `.text` at `0x401000`, `.data` then
+      `.bss` at `0x402000`, `rsp` starting at `0x4FFFFFFFFED0` with `argc` at the top of the stack.
+      `rdx` is **not** zero at `_start`; Linux leaves an address in it.
+    - `faddp st1, st0` is not a form in NASM 3.00; write `faddp`. `fistp` rounds to nearest rather
+      than truncating, so the square root of 7 stores as 3.
+    - The Register file fence flags (`sse`, `x87`, `fpu`, `csr`) are how a floating point Playground
+      shows its answer, and a Testcase still cannot read those files, so an Exercise moves the answer
+      into a general register with `movq`, `mfc1` or `fmv.x.w` first.
+
 6. Pull request from `feat/courses` after PR #71 merges; rebase onto main first.
 
 Reviewer's gates per batch: voice script clean, verification test green, the pages read aloud like the
@@ -425,6 +522,7 @@ reference lectures, descriptions in the voice, `topic` keys present and matching
   tasks 60 and 62 are refused), but MIPS runs a user exception handler at `.ktext 0x80000180` and RISC-V
   runs one once `ustatus` bit 0 is set; the M68K rejects every trap but 15 and ends the run on a fault;
   the Z80 assembles `di`, `ei` and `im` as no-ops. Verified in batch 1; the interrupt lectures say so.
-- x86 has no course; the embed still lists it, which is fine.
+- x86 had no course until 2026-09-15; the embed always listed it. What it still has no answer for is
+  console input and a Screen, which is why its ladder is 19 rungs and not 25.
 - The playground embed boots a full editor per iframe; change B is required before lectures with five
   or more Playgrounds ship.
