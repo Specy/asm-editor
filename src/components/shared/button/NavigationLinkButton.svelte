@@ -3,13 +3,23 @@
 
     interface Props {
         href: string
+        /**
+         * Marks what the link leads to, for a list where each entry stands for something with a
+         * colour of its own. Left out, the button is the neutral one every other list uses.
+         */
+        color?: string | undefined
         children?: import('svelte').Snippet
     }
 
-    let { href, children }: Props = $props()
+    let { href, color = undefined, children }: Props = $props()
 </script>
 
-<a class="link" {href}>
+<a
+    class="link"
+    class:coloured={color !== undefined}
+    style={color ? `--link-accent: ${color}` : ''}
+    {href}
+>
     {@render children?.()}
     <div class="arrow">
         <FaArrowRight />
@@ -34,6 +44,16 @@
             background-color: var(--tertiary);
             color: var(--tertiary-text);
         }
+    }
+    .link.coloured {
+        border-left: 0.3rem solid var(--link-accent);
+        background-color: color-mix(in srgb, var(--link-accent) 8%, var(--secondary));
+        &:hover {
+            background-color: color-mix(in srgb, var(--link-accent) 18%, var(--secondary));
+        }
+    }
+    .link.coloured .arrow {
+        color: var(--link-accent);
     }
     .arrow {
         opacity: 0;

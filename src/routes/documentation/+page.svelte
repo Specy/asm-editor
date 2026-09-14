@@ -3,7 +3,9 @@
     import NavigationLinkButton from '$cmp/shared/button/NavigationLinkButton.svelte'
     import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
     import Header from '$cmp/shared/layout/Header.svelte'
-    const langs = ['M68K', 'MIPS', 'RISC-V', 'X86', 'Z80']
+    import { languageAccent } from '$lib/languages/languageColors'
+    import type { AvailableLanguages } from '$lib/Project.svelte'
+    const langs = ['M68K', 'MIPS', 'RISC-V', 'X86', 'Z80'] satisfies AvailableLanguages[]
 </script>
 
 <DefaultNavbar />
@@ -24,7 +26,10 @@
     <Header>Languages</Header>
     <div class="langs">
         {#each langs as lang (lang)}
-            <NavigationLinkButton href="/documentation/{lang.toLowerCase()}">
+            <NavigationLinkButton
+                href="/documentation/{lang.toLowerCase()}"
+                color={languageAccent(lang)}
+            >
                 <div>
                     {lang}
                 </div>
