@@ -1,9 +1,13 @@
 # Course plan: the General course and the Language courses
 
-Decided on 2026-09-06 in a design interview. This is the record the writers work from; the voice they
-write in is `docs/courses/voice.md`, the vocabulary is `CONTEXT.md` (Course, Module, Lecture,
-Playground, General course, Language course, Example, Exercise, Topic), the structural decision is
-ADR 0012.
+Decided on 2026-09-06 in a design interview. This is the structural record: what the courses are made
+of, how a page is put together mechanically, and what each Core really does when a program runs on it.
+The vocabulary is `CONTEXT.md` (Course, Module, Lecture, Playground, General course, Language course,
+Example, Exercise, Topic) and the structural decision is ADR 0012.
+
+There is deliberately no writing guide here. One existed until 2026-09-15 and was removed, along with
+the script that enforced it, so that the question of how the pages should read can be reopened from
+scratch now that all of them are written.
 
 ## Decisions
 
@@ -19,9 +23,7 @@ ADR 0012.
     Examples, the ladder minus the six programs the environment cannot run (below).
 
 2. The General course grows from 10 to 18 lectures in three modules (skeleton below). The ten existing
-   lectures get a three-tier revision: a light pass on all (typos, dashes, the unfinished landing text,
-   descriptions rewritten in the voice), Registers and Addressing modes expanded to the 500-word floor
-   with a Playground each, Flags re-voiced with a Playground.
+   lectures are revised in place; Registers, Addressing modes and Flags each gain a Playground.
 3. Each Language course mirrors the General course Module for Module and Lecture for Lecture, retitled
    for the language. Its first lecture is "Getting started with ...", which is the mirror of the General
    Introduction and also holds the syntax conventions and the first program. "Using the editor" is not
@@ -39,24 +41,16 @@ ADR 0012.
 8. Slugs `m68k`, `mips`, `risc-v`, `z80`. Names "M68K assembly", "MIPS assembly", "RISC-V assembly",
    "Z80 assembly". Courses page order: Assembly basics, M68K, MIPS, RISC-V, Z80. Author Specy.
    `x86` and "x86 assembly" joined at order 5 on 2026-09-15.
-9. Assembly serves the explanation: in the **General course** a program makes a general idea
-   concrete and no page teaches a language's own numbers or directive set; the outside-world module
-   carries no Playgrounds at all. Length guides, not limits (Specy, 2026-09-06: "better prioritize proper explanation than word
-   count"): General lectures around 500 to 900 words with one to three Playgrounds; Language lectures
-   around 800 to 1,500 words with three to five Playgrounds and one or two Exercises; Example pages
-   around 150 to 300 words of prose. A lecture is as long as its explanation needs; the lower number
-   is the one that matters, and no explanation is ever cut to hit the upper one. Full scale: 175
-   pages, 96 verified programs.
+9. The **General course**'s outside-world module carries no Playgrounds at all: a reader who has not
+   yet studied a language cannot run a program that prints without first being taught a convention
+   that course does not teach. Full scale as built, counting Lectures and Examples: Assembly
+   basics 18, M68K 42, MIPS 43, RISC-V 44, Z80 42, x86 37, so 226 pages.
 10. Playgrounds get a `screen` flag (off by default) so the Screen peripheral can be shown inline.
 11. Work happens in a git worktree at `/home/dev/code/asm-editor-courses` on branch `feat/courses`
     cut from `feat/screen-peripherals`; it becomes a pull request after PR #71 merges. Content under
     `src/content` may also be edited in the main checkout; code only in the worktree until the freeze
     lifts. The one exception, agreed the same day: the `screen` playground flag, done in the main
     checkout.
-12. One Opus writer per batch, orchestrated and reviewed by the main session: the three-page voice
-    sample first (Subroutines, Getting started with M68K, Sum of an array in M68K), then the General
-    course, then each Language course. A page is done when it passes the voice script and the
-    verification test.
 
 ## The General course (`assembly-basics`), 18 lectures
 
@@ -64,17 +58,17 @@ Slug, title, topic key, status. Order is the position in the module.
 
 ### Module `introduction`, "Introduction"
 
-| #   | slug                                   | title                                | topic               | status                                |
-| --- | -------------------------------------- | ------------------------------------ | ------------------- | ------------------------------------- |
-| 0   | `introduction`                         | Introduction                         | `introduction`      | existing, light pass                  |
-| 1   | `using-the-editor`                     | Using the editor                     | `using-the-editor`  | new                                   |
-| 2   | `registers`                            | Registers                            | `registers`         | existing, expanded with a Playground  |
-| 3   | `memory`                               | Memory                               | `memory`            | existing, light pass                  |
-| 4   | `numbers-and-sizes`                    | Numbers and sizes                    | `numbers`           | new                                   |
-| 5   | `instruction-set`                      | Instruction set                      | `instruction-set`   | existing, light pass                  |
-| 6   | `addressing-modes`                     | Addressing modes                     | `addressing-modes`  | existing, expanded with a Playground  |
-| 7   | `flags`                                | Flags                                | `flags`             | existing, re-voiced with a Playground |
-| 8   | `structure-and-lifecycle-of-a-program` | Structure and lifecycle of a program | `program-structure` | existing, light pass                  |
+| #   | slug                                   | title                                | topic               | status                               |
+| --- | -------------------------------------- | ------------------------------------ | ------------------- | ------------------------------------ |
+| 0   | `introduction`                         | Introduction                         | `introduction`      | existing, light pass                 |
+| 1   | `using-the-editor`                     | Using the editor                     | `using-the-editor`  | new                                  |
+| 2   | `registers`                            | Registers                            | `registers`         | existing, expanded with a Playground |
+| 3   | `memory`                               | Memory                               | `memory`            | existing, light pass                 |
+| 4   | `numbers-and-sizes`                    | Numbers and sizes                    | `numbers`           | new                                  |
+| 5   | `instruction-set`                      | Instruction set                      | `instruction-set`   | existing, light pass                 |
+| 6   | `addressing-modes`                     | Addressing modes                     | `addressing-modes`  | existing, expanded with a Playground |
+| 7   | `flags`                                | Flags                                | `flags`             | existing, expanded with a Playground |
+| 8   | `structure-and-lifecycle-of-a-program` | Structure and lifecycle of a program | `program-structure` | existing, light pass                 |
 
 What the new ones cover:
 
@@ -109,12 +103,9 @@ What the new ones cover:
 | 1   | `memory-mapped-io`          | Memory-mapped I/O         | `mmio`       | new    |
 | 2   | `interrupts-and-exceptions` | Interrupts and exceptions | `interrupts` | new    |
 
-This module has **no Playgrounds** (Specy, 2026-09-06: it "should only give an idea of how assembly
-languages do things, it should not actually use the assembly code... in this course the assembly
-languages are used to explain things in the general term, not the opposite"). Its three Lectures are
-terminology and mechanism, with at most a three-line fragment showing the shape of a request, and no
-service numbers, port numbers or device addresses, which belong to the Language courses. See "What
-the General course uses assembly for" in the voice guide.
+This module has **no Playgrounds**. Its three Lectures are terminology and mechanism, with at most a
+three-line fragment showing the shape of a request, and no service numbers, port numbers or device
+addresses, which belong to the Language courses.
 
 - System calls and traps: the program asks the environment to do something; user and supervisor mode;
   the number, the arguments, the one instruction that hands control over; the numbers belong to the
@@ -332,23 +323,22 @@ Lecture `meta.json` gains `"topic": "<key>"`. Course `meta.json` is unchanged ap
 
 ## Implementation list (code)
 
-| #   | change                                                                                                                                                                                                                                                                                                                                              | where                                                                    | when                                                                                    |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
-| A   | `screen` fence flag, `showScreen` embed parameter and checkbox, `showScreen` prop passed explicitly (false by default)                                                                                                                                                                                                                              | `MarkdownRenderer.svelte`, `routes/embed/+page.svelte`                   | done 2026-09-06, main checkout (uncommitted) and `feat/courses` d64940f                 |
-| B   | `loading="lazy"` on the playground iframe (check DOMPurify keeps the attribute)                                                                                                                                                                                                                                                                     | `MarkdownRenderer.svelte`                                                | done 2026-09-06, 8f19554                                                                |
-| C   | `topic` key read by the getters; lecture page renders "Go deeper", "The overview is in", "The same topic in", "The same program in" from it                                                                                                                                                                                                         | `lib/content/getters.ts`, lecture page                                   | done 2026-09-06, 31506cf (`getTopicLinks` in the getters, rendered by the lecture page) |
-| D   | Retire `src/content/examples`; redirect `/learn/courses/examples` and its three lectures to the new pages (in the `[courseId]` layout load)                                                                                                                                                                                                         | routes                                                                   | done 2026-09-07: redirects in `src/lib/content/redirects.ts`, most specific rule first  |
-| E   | `testcase` fence attached to the preceding Playground; `exercise` and `solution` flags                                                                                                                                                                                                                                                              | `MarkdownRenderer.svelte`, `lib/content/playgrounds.ts`                  | done 2026-09-06, e95aaaf                                                                |
-| F   | Verification test: walk `src/content`, build and run every Playground with its Core, apply the exercise rules, respect `runFor`                                                                                                                                                                                                                     | `src/lib/content/content.test.ts`                                        | done 2026-09-06, 13bf2be (`npx vitest run src/lib/content`)                             |
-| G   | Voice script: grep the content folder for the banned list in `voice.md`, fail on any hit                                                                                                                                                                                                                                                            | `scripts/check-voice.mjs`, `npm run check:voice`, part of `npm run lint` | done 2026-09-06, f4b8bd7                                                                |
-| H   | `getters.ts` reads `authors`, the course files write `author`; align on `authors`                                                                                                                                                                                                                                                                   | `getters.ts`, course `meta.json`                                         | done 2026-09-06, 3f3d01c                                                                |
-| I   | Pre-existing bug found in batch 0: `cleanTestcases` sets `expected: BigInt(memory.address)` instead of `BigInt(memory.expected)` for `number` memory entries, in both starting and expected memory. It runs on every project loaded from storage and on every embed URL, so a `number` memory expectation is checked against its address in the app | `src/lib/Project.svelte.ts`                                              | done 2026-09-06, c3fc00a, with `src/lib/Project.test.ts`                                |
-| J   | The Test button stays on an embedded Playground that carries testcases (it was hidden when the testcases panel was shown); the exam editor passes `embedded={false}` and is unchanged                                                                                                                                                               | `InteractiveInstructionEditor.svelte`                                    | done 2026-09-06, b48f09b                                                                |
-| K   | The existing lectures say "click compile"; the button is labelled Build. Part of the light pass                                                                                                                                                                                                                                                     | `src/content/assembly-basics`                                            | done 2026-09-06, 9387c72                                                                |
-| L   | Custom components for lectures (a stack or memory diagram a markdown table cannot show), allowed by Specy on 2026-09-06; add renderer support in the worktree when a page needs one and record it here                                                                                                                                              | `MarkdownRenderer.svelte`                                                | when needed                                                                             |
-| M   | The x86 console showed blink's `$ /program` launch line as if the program had printed it, which every Testcase would otherwise have had to declare as `expectedOutput`. Output is now discarded from the start of a Build until the first run                                                                                                       | `X86Emulator.svelte.ts`                                                  | done 2026-09-15                                                                         |
-| N   | x86 fences were skipped by the verification test (`UNRUNNABLE`); the entry is gone and the map is empty                                                                                                                                                                                                                                             | `src/lib/content/content.test.ts`                                        | done 2026-09-15                                                                         |
-| O   | `src/lib/content/x86Templates.ts` deleted: the four x86 templates are now Examples with a `template` key, like every other language's                                                                                                                                                                                                               | `templates.ts`, `src/content/x86/examples`                               | done 2026-09-15                                                                         |
+| #   | change                                                                                                                                                                                                                                                                                                                                              | where                                                   | when                                                                                    |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| A   | `screen` fence flag, `showScreen` embed parameter and checkbox, `showScreen` prop passed explicitly (false by default)                                                                                                                                                                                                                              | `MarkdownRenderer.svelte`, `routes/embed/+page.svelte`  | done 2026-09-06, main checkout (uncommitted) and `feat/courses` d64940f                 |
+| B   | `loading="lazy"` on the playground iframe (check DOMPurify keeps the attribute)                                                                                                                                                                                                                                                                     | `MarkdownRenderer.svelte`                               | done 2026-09-06, 8f19554                                                                |
+| C   | `topic` key read by the getters; lecture page renders "Go deeper", "The overview is in", "The same topic in", "The same program in" from it                                                                                                                                                                                                         | `lib/content/getters.ts`, lecture page                  | done 2026-09-06, 31506cf (`getTopicLinks` in the getters, rendered by the lecture page) |
+| D   | Retire `src/content/examples`; redirect `/learn/courses/examples` and its three lectures to the new pages (in the `[courseId]` layout load)                                                                                                                                                                                                         | routes                                                  | done 2026-09-07: redirects in `src/lib/content/redirects.ts`, most specific rule first  |
+| E   | `testcase` fence attached to the preceding Playground; `exercise` and `solution` flags                                                                                                                                                                                                                                                              | `MarkdownRenderer.svelte`, `lib/content/playgrounds.ts` | done 2026-09-06, e95aaaf                                                                |
+| F   | Verification test: walk `src/content`, build and run every Playground with its Core, apply the exercise rules, respect `runFor`                                                                                                                                                                                                                     | `src/lib/content/content.test.ts`                       | done 2026-09-06, 13bf2be (`npx vitest run src/lib/content`)                             |
+| H   | `getters.ts` reads `authors`, the course files write `author`; align on `authors`                                                                                                                                                                                                                                                                   | `getters.ts`, course `meta.json`                        | done 2026-09-06, 3f3d01c                                                                |
+| I   | Pre-existing bug found in batch 0: `cleanTestcases` sets `expected: BigInt(memory.address)` instead of `BigInt(memory.expected)` for `number` memory entries, in both starting and expected memory. It runs on every project loaded from storage and on every embed URL, so a `number` memory expectation is checked against its address in the app | `src/lib/Project.svelte.ts`                             | done 2026-09-06, c3fc00a, with `src/lib/Project.test.ts`                                |
+| J   | The Test button stays on an embedded Playground that carries testcases (it was hidden when the testcases panel was shown); the exam editor passes `embedded={false}` and is unchanged                                                                                                                                                               | `InteractiveInstructionEditor.svelte`                   | done 2026-09-06, b48f09b                                                                |
+| K   | The existing lectures say "click compile"; the button is labelled Build. Part of the light pass                                                                                                                                                                                                                                                     | `src/content/assembly-basics`                           | done 2026-09-06, 9387c72                                                                |
+| L   | Custom components for lectures (a stack or memory diagram a markdown table cannot show), allowed by Specy on 2026-09-06; add renderer support in the worktree when a page needs one and record it here                                                                                                                                              | `MarkdownRenderer.svelte`                               | when needed                                                                             |
+| M   | The x86 console showed blink's `$ /program` launch line as if the program had printed it, which every Testcase would otherwise have had to declare as `expectedOutput`. Output is now discarded from the start of a Build until the first run                                                                                                       | `X86Emulator.svelte.ts`                                 | done 2026-09-15                                                                         |
+| N   | x86 fences were skipped by the verification test (`UNRUNNABLE`); the entry is gone and the map is empty                                                                                                                                                                                                                                             | `src/lib/content/content.test.ts`                       | done 2026-09-15                                                                         |
+| O   | `src/lib/content/x86Templates.ts` deleted: the four x86 templates are now Examples with a `template` key, like every other language's                                                                                                                                                                                                               | `templates.ts`, `src/content/x86/examples`              | done 2026-09-15                                                                         |
 
 ## Verification
 
@@ -357,141 +347,112 @@ Lecture `meta.json` gains `"topic": "<key>"`. Course `meta.json` is unchanged ap
 - Programs that read input get it from the `testcase` fence's `input`; a program that asks for input
   with none declared fails the test.
 - Every Exercise: the solution passes the testcase, the skeleton fails it.
-- The voice script passes.
-- A page is not done until both pass. The batch is not delivered until every page in it is done.
 
-## Process
+`npx vitest run src/lib/content` is the whole of it.
 
-1. Now, main checkout: `docs/courses/voice.md`, `docs/courses/plan.md`, ADR 0012, the glossary
-   entries, change A.
-2. Worktree: `git worktree add /home/dev/code/asm-editor-courses -b feat/courses feat/screen-peripherals`,
-   `npm install` there, apply change A to it as its first commit.
-3. Batch 0, an Opus agent: changes E, F, G in the worktree (small, independent of content), and the
-   three-page voice sample: `assembly-basics/think-in-assembly/subroutines`,
-   `m68k/introduction/getting-started` (with one Exercise), `m68k/examples/sum-of-an-array`. Specy reads
-   the sample; the voice guide is amended before anything else is written.
-   Done 2026-09-06 (commits e95aaaf to 3f4264c on `feat/courses`): 20 content tests green, voice
-   script green, `npm run check` at the two-error baseline, lint clean. Left out of Getting started
-   for lack of a source in the repo: the 68000's dates and the machines it shipped in.
-   Specy's verdict (2026-09-06): the pages performed instead of explaining; the rules are now the
-   "Say it straight" section of the voice guide, the ladder was reordered so no easy program prints,
-   and the three pages are being rewritten before batch 1.
-4. Batch 1: the General course (10 revised, 7 new after Subroutines landed in batch 0). Changes B,
-   C, H, I and K land in the same batch; D waits for the last batch. Visual checks of rendered pages
-   are the owner's, in the browser: the machine has no usable headless browser (the cached Chromium
-   lacks libnss3 and libnspr4).
-5. Batches 2 to 5: M68K, RISC-V, MIPS, Z80. The Examples of each later language are ported program
-   by program from the M68K pages. A course is too big for one writer's context, so each is split:
-   **2a**, the sixteen lectures, then **2b**, the twenty-three remaining Examples, sequentially, with
-   the earlier pages as the second writer's voice reference.
+## Facts established by running
 
-    Batch 2a done 2026-09-06 (commits 8c38014 to 7ed426b): all sixteen M68K lectures, 65 teaching
-    Playgrounds and 30 Exercises, 190 content tests green, voice/lint/check clean. Facts the writer
-    established by running, worth knowing before writing another M68K page: this simulator does not
-    place assembled instructions in memory (four bytes reserved per instruction, those addresses still
-    read `$FF`); the top byte of a 24-bit address is ignored; `org` only moves forwards; an `equ` takes
-    `+` and `-` on another `equ` but not `*`; a byte push moves `sp` by 1, where a real 68000 moves it
-    by 2; `addx`, `subx`, `negx`, `roxl`, `roxr`, `rte`, `stop`, `chk` and `trapv` are unknown to this
-    assembler, so the `X` flag is written and never read; `divu` overflow sets `V` and leaves the
-    register alone; `trap #14` fails at build time. An Exercise's `solution` Playground is also run
-    plainly, with every register at zero and no scripted input, so a solution that divides or loops
-    must survive that; expected register values are written as unsigned hex.
+Everything below was found by building and running a program in this editor, not read out of a manual.
+Each one cost time to rediscover, which is why it is written down.
 
-    Batch 2b done 2026-09-06 (commits 32f0053 to 1780c5c): the twenty-three remaining Examples, so
-    the M68K course is complete at 41 pages. 213 content tests green. The M68K Core charges its
-    instruction budget per run segment between traps, so a trap-heavy program's `runFor` is a budget
-    rather than a count. `.prettierignore` carried a gitignore-style `examples/` line that also
-    matched `src/content/<course>/examples/`, so every Example page was silently skipped by the
-    formatter; it is anchored to `/examples/` in 3777c7d, which leaves the repository’s own
-    `examples/` folder ignored. The cross-course links were checked in the browser both ways: a
-    General course lecture offers "Go deeper" into M68K, an M68K lecture points back at its
-    overview, and an Example renders nothing until a second language has the same rung.
+### Shared by every language
 
-    Batch 3a done 2026-09-07 (commits 5f433f9 to afbc8ff): the seventeen MIPS lectures. Facts the
-    writer established by running, which the RARS-based RISC-V course should re-check rather than
-    assume, since RARS is a port of MARS:
+- An Exercise's `solution` Playground is also run plainly, with every register at zero and no scripted
+  input, so a solution that divides or loops must survive that.
+- `expectedOutput` defaults to `""` and is always compared, so any program that prints must declare
+  what it prints or its Testcase fails.
 
-    - **A testcase returns MIPS registers as signed BigInts**, so a negative expectation is written
-      `-5`, not the unsigned hex the M68K course uses. Getting this wrong fails an exercise that is
-      actually correct.
-    - `$v0` carries both a syscall number and a return value, so an exercise must check a register
-      the exit `li $v0, 10` has not overwritten.
-    - No branch delay slots: this Core follows MARS, whose delayed branching ships off, so the
-      instruction after a taken branch does not run.
-    - Execution starts at the **first instruction in `.text`**, not at `main`; `.globl main` names
-      the entry point and no other name works.
-    - The assembler does no arithmetic (`li $t0, 4*2` is a build error) and takes no `0b` literals.
-      Mnemonics and directives are case-insensitive, register names are not, and `$s8` is not a
-      name for `$fp`.
-    - `.word` and `.half` are auto-aligned, `.space`, `.ascii` and `.asciiz` are not, so a buffer
-      after an odd-length string faults on its first `sw`.
-    - Syscalls 13 to 16 (files) stop the run, and 55 to 59 (dialogs) throw under scripted input, so
-      neither can appear in a Playground. Unwritten memory reads 0 and the text segment cannot be
-      read as data.
-    - An infinite loop is cut off at the instruction budget silently, with no error.
+### M68K
 
-    Batch 4a done 2026-09-07 (commits 5757f94 to 1633d33): the seventeen Z80 lectures. What its
-    writer established by running, for batch 4b and anyone else touching Z80 content:
+- This simulator does not place assembled instructions in memory: four bytes are reserved per
+  instruction and those addresses still read `$FF`.
+- The top byte of a 24-bit address is ignored. `org` only moves forwards. An `equ` takes `+` and `-`
+  on another `equ` but not `*`.
+- A byte push moves `sp` by 1, where a real 68000 moves it by 2.
+- `addx`, `subx`, `negx`, `roxl`, `roxr`, `rte`, `stop`, `chk` and `trapv` are unknown to this
+  assembler, so the `X` flag is written and never read. `divu` overflow sets `V` and leaves the
+  register alone. `trap #14` fails at build time.
+- Expected register values are written as unsigned hex.
+- The Core charges its instruction budget per run segment between traps, so a trap-heavy program's
+  `runFor` is a budget rather than a count.
 
-    - Every Playground needs its own `.org 0x8000`; with no `.org` a program assembles at `0x0000`.
-    - Untouched memory reads `00` here, where the M68K reads `FF`, and **this simulator does place
-      the assembled instruction bytes in memory**, unlike the M68K one, so a program can read its
-      own opcodes.
-    - A program ends four ways, all reported as terminated: `halt`, `ei` then `halt`, a top-level
-      `ret`, and the cliff where the program counter reaches the byte after the last assembled one.
-      `rst n` ends a run too, by calling into empty low memory.
-    - Literals: `31`, `0x1F`, `$1F`, `1Fh`, `0b00011111`, `0o37` and `'A'` all work; **`%00011111`
-      does not**. A leading zero is decimal. `equ` accepts `*` as well as `+` and `-`, unlike the
-      M68K assembler. `.align` starts a second segment whose cliff stops the run, so avoid it.
-    - Condition-code names (`v`, `c`, `z`, `m`, `p`, `nz`, `nc`, `po`, `pe`, `nv`) cannot be labels.
-    - **A testcase can preset every register but `pc`, and only pairs can be checked**, so a result
-      in `b` is asserted on `bc` (`{"bc": "0x0100"}` for `b = 1`).
-    - **`expectedOutput` defaults to `""` and is always compared**, in every language, so any
-      Exercise whose program prints must declare what it prints or it fails.
-    - `P/V` does three jobs: parity after logic, overflow after arithmetic, and "`bc` is not zero"
-      after a block instruction. `bit n,r` sets `Z` when the bit is **0**. There is no
-      signed-comparison condition; after `cp`, signed less-than is `S` differing from `P/V`.
-    - An unmapped port reads `FF` and swallows writes silently.
+### MIPS
 
-    Batch 5 done 2026-09-15: the eighteen x86 lectures and the nineteen Examples, 180 content tests
-    green, plus the `floating-point` lecture of the MIPS and RISC-V courses. What its writer
-    established by running, for anyone else touching x86 content:
+RARS is a port of MARS, so the RISC-V course re-checked these rather than assuming them.
 
-    - **`default rel` goes at the top of every program.** Without it NASM 3.00 assembles the absolute
-      form of `[label]` and warns "implicit DEFAULT ABS is deprecated" on the first one, which is a
-      yellow squiggle on a reader's first build. An address with an index register in it
-      (`[a + rcx*8]`) is absolute either way and never warns.
-    - **NASM 3.00 does not refuse an operand with no size.** `mov [x], 5` assembles as a **byte**;
-      `mov [x], 5000` assembles as a byte too, with a "byte exceeds bounds" warning, and writes `88`.
-      So the size keyword is the content's job, not the assembler's.
-    - Reserved words cannot be labels, and the list is longer than it looks: `word`, `fs` and the
-      other segment registers are all build errors as label names, reported as "instruction expected".
-    - A local label (`.done`) belongs to the last **non-local** label above it, so a jump table whose
-      cases are ordinary labels needs ordinary labels for its shared exits too.
-    - **Every fault ends the run silently**, with `rip` parked on the instruction: divide by zero, a
-      quotient too big for `rax`, an unmapped address, a write into `.text`, and `in`/`out`. No
-      message is printed and `emulator.errors` is empty, so a page cannot promise one.
-    - **`int3` and `hlt` hang the emulator**, not the program, and no instruction budget cuts them
-      off. Neither may appear in a Playground.
-    - **Signals are not delivered.** A program that installs a `SIGFPE` handler with `rt_sigaction`
-      and then divides by zero hangs the emulator rather than reaching the handler.
-    - `brk` returns `-38`, which is `ENOSYS`; so does any call blink does not implement. `mmap` of
-      anonymous memory works and returns `0x80000000`, `munmap` returns 0, and `clock_gettime`,
-      `getpid`, `nanosleep`, `open`, `read`, `close` and `write` all work. `open("/program")` returns
-      descriptor 3 and reads the program's own ELF header.
-    - Addresses are fixed as long as the code is under a page: `.text` at `0x401000`, `.data` then
-      `.bss` at `0x402000`, `rsp` starting at `0x4FFFFFFFFED0` with `argc` at the top of the stack.
-      `rdx` is **not** zero at `_start`; Linux leaves an address in it.
-    - `faddp st1, st0` is not a form in NASM 3.00; write `faddp`. `fistp` rounds to nearest rather
-      than truncating, so the square root of 7 stores as 3.
-    - The Register file fence flags (`sse`, `x87`, `fpu`, `csr`) are how a floating point Playground
-      shows its answer, and a Testcase still cannot read those files, so an Exercise moves the answer
-      into a general register with `movq`, `mfc1` or `fmv.x.w` first.
+- **A testcase returns MIPS registers as signed BigInts**, so a negative expectation is written
+  `-5`, not the unsigned hex the M68K course uses. Getting this wrong fails an exercise that is
+  actually correct.
+- `$v0` carries both a syscall number and a return value, so an exercise must check a register
+  the exit `li $v0, 10` has not overwritten.
+- No branch delay slots: this Core follows MARS, whose delayed branching ships off, so the
+  instruction after a taken branch does not run.
+- Execution starts at the **first instruction in `.text`**, not at `main`; `.globl main` names
+  the entry point and no other name works.
+- The assembler does no arithmetic (`li $t0, 4*2` is a build error) and takes no `0b` literals.
+  Mnemonics and directives are case-insensitive, register names are not, and `$s8` is not a
+  name for `$fp`.
+- `.word` and `.half` are auto-aligned, `.space`, `.ascii` and `.asciiz` are not, so a buffer
+  after an odd-length string faults on its first `sw`.
+- Syscalls 13 to 16 (files) stop the run, and 55 to 59 (dialogs) throw under scripted input, so
+  neither can appear in a Playground. Unwritten memory reads 0 and the text segment cannot be
+  read as data.
+- An infinite loop is cut off at the instruction budget silently, with no error.
 
-6. Pull request from `feat/courses` after PR #71 merges; rebase onto main first.
+### Z80
 
-Reviewer's gates per batch: voice script clean, verification test green, the pages read aloud like the
-reference lectures, descriptions in the voice, `topic` keys present and matching.
+- Every Playground needs its own `.org 0x8000`; with no `.org` a program assembles at `0x0000`.
+- Untouched memory reads `00` here, where the M68K reads `FF`, and **this simulator does place
+  the assembled instruction bytes in memory**, unlike the M68K one, so a program can read its
+  own opcodes.
+- A program ends four ways, all reported as terminated: `halt`, `ei` then `halt`, a top-level
+  `ret`, and the cliff where the program counter reaches the byte after the last assembled one.
+  `rst n` ends a run too, by calling into empty low memory.
+- Literals: `31`, `0x1F`, `$1F`, `1Fh`, `0b00011111`, `0o37` and `'A'` all work; **`%00011111`
+  does not**. A leading zero is decimal. `equ` accepts `*` as well as `+` and `-`, unlike the
+  M68K assembler. `.align` starts a second segment whose cliff stops the run, so avoid it.
+- Condition-code names (`v`, `c`, `z`, `m`, `p`, `nz`, `nc`, `po`, `pe`, `nv`) cannot be labels.
+- **A testcase can preset every register but `pc`, and only pairs can be checked**, so a result
+  in `b` is asserted on `bc` (`{"bc": "0x0100"}` for `b = 1`).
+- **`expectedOutput` defaults to `""` and is always compared**, in every language, so any
+  Exercise whose program prints must declare what it prints or it fails.
+- `P/V` does three jobs: parity after logic, overflow after arithmetic, and "`bc` is not zero"
+  after a block instruction. `bit n,r` sets `Z` when the bit is **0**. There is no
+  signed-comparison condition; after `cp`, signed less-than is `S` differing from `P/V`.
+- An unmapped port reads `FF` and swallows writes silently.
+
+### x86
+
+- **`default rel` goes at the top of every program.** Without it NASM 3.00 assembles the absolute
+  form of `[label]` and warns "implicit DEFAULT ABS is deprecated" on the first one, which is a
+  yellow squiggle on a reader's first build. An address with an index register in it
+  (`[a + rcx*8]`) is absolute either way and never warns.
+- **NASM 3.00 does not refuse an operand with no size.** `mov [x], 5` assembles as a **byte**;
+  `mov [x], 5000` assembles as a byte too, with a "byte exceeds bounds" warning, and writes `88`.
+  So the size keyword is the content's job, not the assembler's.
+- Reserved words cannot be labels, and the list is longer than it looks: `word`, `fs` and the
+  other segment registers are all build errors as label names, reported as "instruction expected".
+- A local label (`.done`) belongs to the last **non-local** label above it, so a jump table whose
+  cases are ordinary labels needs ordinary labels for its shared exits too.
+- **Every fault ends the run silently**, with `rip` parked on the instruction: divide by zero, a
+  quotient too big for `rax`, an unmapped address, a write into `.text`, and `in`/`out`. No
+  message is printed and `emulator.errors` is empty, so a page cannot promise one.
+- **`int3` and `hlt` hang the emulator**, not the program, and no instruction budget cuts them
+  off. Neither may appear in a Playground.
+- **Signals are not delivered.** A program that installs a `SIGFPE` handler with `rt_sigaction`
+  and then divides by zero hangs the emulator rather than reaching the handler.
+- `brk` returns `-38`, which is `ENOSYS`; so does any call blink does not implement. `mmap` of
+  anonymous memory works and returns `0x80000000`, `munmap` returns 0, and `clock_gettime`,
+  `getpid`, `nanosleep`, `open`, `read`, `close` and `write` all work. `open("/program")` returns
+  descriptor 3 and reads the program's own ELF header.
+- Addresses are fixed as long as the code is under a page: `.text` at `0x401000`, `.data` then
+  `.bss` at `0x402000`, `rsp` starting at `0x4FFFFFFFFED0` with `argc` at the top of the stack.
+  `rdx` is **not** zero at `_start`; Linux leaves an address in it.
+- `faddp st1, st0` is not a form in NASM 3.00; write `faddp`. `fistp` rounds to nearest rather
+  than truncating, so the square root of 7 stores as 3.
+- The Register file fence flags (`sse`, `x87`, `fpu`, `csr`) are how a floating point Playground
+  shows its answer, and a Testcase still cannot read those files, so an Exercise moves the answer
+  into a general register with `movq`, `mfc1` or `fmv.x.w` first.
 
 ## Where the writers find the facts
 
@@ -507,7 +468,7 @@ reference lectures, descriptions in the voice, `topic` keys present and matching
   top `0xFFFF`), `Z80-documentation.ts`, `examples/z80/`, `/documentation/z80` pages including `io`,
   ADR 0002 and ADR 0011.
 - Peripherals for every language: `docs/design/screen-peripherals.md` and ADRs 0003 to 0011.
-- Existing lectures, for the voice and for what the General course already says: `src/content/assembly-basics`.
+- What the General course already says, so a Language course can take it as read: `src/content/assembly-basics`.
 
 ## Risks and known gaps that shape the content
 
