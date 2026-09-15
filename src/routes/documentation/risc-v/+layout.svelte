@@ -95,6 +95,11 @@
             title="Registers"
             onClick={() => (menuOpen = false)}
         />
+        <MenuLink
+            href="/documentation/risc-v/rv64"
+            title="64 bit known issues"
+            onClick={() => (menuOpen = false)}
+        />
     </Column>
     <TogglableSection
         open={true}
