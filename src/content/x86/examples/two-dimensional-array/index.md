@@ -1,13 +1,10 @@
-A grid of three rows and four columns, held in memory as twelve numbers in a row. Memory has no idea
-what a row is, so the program works out where `grid[row][col]` is with one multiplication and one
-addition.
+Memory is a line of bytes. It has no idea what a row is, and there is no arrangement of hardware that
+will give it one. A grid of three rows and four columns is therefore twelve numbers in a row, plus an
+agreement about how to read them.
 
-The formula is `row * COLS + col`, and it is the same in C, where `grid[2][1]` compiles to exactly
-that. Storing rows one after another is called **row major** order, and it is what C, and this
-program, do.
-
-**You need to know:** the "Effective addresses" lecture and the "Loops" lecture. What is new here is
-an index built from two numbers, and nested loops that walk a grid along a row and down a column.
+The agreement here is **row major**: the whole of row 0, then the whole of row 1, then row 2. Under
+that agreement the element at row `r` and column `c` is number `r * COLS + c` in the line, and the
+multiplication is where the shape of the grid actually lives.
 
 ```x86|playground|memory|allow-open
 default rel
@@ -57,21 +54,24 @@ _start:
     syscall
 ```
 
-`r8` is `A`, which is 10, the element at row 2 column 1. `r9` is `1A`, which is 26, the sum of
-5 + 6 + 7 + 8. `r10` is `15`, which is 21, the sum of 3 + 7 + 11.
+`r9` is 26, which is 5 + 6 + 7 + 8, a whole row. `r10` is 21, which is 3 + 7 + 11, a whole column. The
+two loops that produced them are the same length and do very different amounts of work.
 
-The three `dq` lines are one array. The assembler writes twelve qwords one after another and the line
-breaks are for you to read, which is exactly the point: nothing in memory records that this is a
-grid, and the `imul rax, COLS` is where the shape actually lives.
+The row loop adds 1 to its index each pass, so it reads twelve consecutive qwords going forwards. The
+column loop adds `COLS` to its index, so it jumps thirty two bytes at a time. On real hardware that is
+several times slower for exactly the same arithmetic, because neighbouring elements of a row arrive in
+the same cache line and are already there by the time the loop asks for them, while neighbouring
+elements of a column are each in a different one. A program that walks a large array the wrong way
+round can spend most of its time waiting for memory.
 
-Walking a **row** steps the index by 1 and walking a **column** steps it by `COLS`, which is why the
-row loop is shorter. On a real machine it is also much faster: neighbouring elements of a row share a
-cache line and neighbouring elements of a column do not, so a program that walks a big array the
-wrong way round can take several times as long for the same arithmetic.
+Nothing recorded that this was a grid, which you can prove. Change `COLS equ 4` to `COLS equ 3` and do
+not touch a byte of the data. The program now reads the same twelve numbers as four rows of three,
+`r8` becomes 8, and no error is reported anywhere, because the only thing that ever said "four
+columns" was the `imul`.
 
-`[grid + rax*8]` can scale by 8 because an element is a qword. An element of any other size, a
-twenty byte structure say, needs a real multiplication into a register first, since the scale only
-goes up to 8.
+The three `dq` lines are one array for the same reason: the assembler writes twelve qwords one after
+another and the line breaks in the source exist for your benefit only.
 
-Try changing `COLS equ 4` to `COLS equ 3` without touching the data. The program reads the same twelve
-numbers as a 4 by 3 grid, and `r8` becomes 8, because `grid[2][1]` is now the eighth element.
+`[grid + rax*8]` scales by 8 because an element is a qword. An element of some other size, a twenty
+byte record say, needs a real multiplication into a register first, because the scale in an address
+only goes up to 8.

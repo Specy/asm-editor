@@ -5,13 +5,9 @@ Length of a string walked to the terminator to measure something. This one walks
 to find the far end and then does its work on the way back, so there are two pointers moving at
 once, and the length it measured on the way is what says when to stop.
 
-**You need to know:** the "Length of a string" Example and the "Addressing on the Z80" lecture. What
-is new here is a second pointer in `de`, which can be written through with `ld (de), a` and nothing
-else, so the byte being moved has to pass through the accumulator.
-
 ```z80|playground|memory|no-flags|allow-open
     .org 0x8000
-    ld hl, text     ; p = text
+    ld hl, text     ; hl = the start of the string
 find_end:
     ld a, (hl)
     or a
@@ -46,10 +42,10 @@ done:
 text:   .asciz "Assembly"
 ```
 
-The M68K writes this loop as "while `left` is below `right`", one `cmp.l a0, a1` per pass. The Z80
-has no comparison on a pair at all: `cp` compares against `a` and `a` is eight bits, and the only 16
-bit subtraction, `sbc hl, de`, writes over `hl`, which here is one of the two pointers. So the loop
-counts instead. The length is measured once, `srl a` halves it, and `djnz` runs exactly that many
+The obvious way to write this loop is "keep going while `left` is below `right`", and that needs a
+comparison of two 16 bit pairs. There is no such comparison: `cp` works against `a`, which is eight
+bits, and the only 16 bit subtraction, `sbc hl, de`, writes its answer over `hl`, which here is one
+of the two pointers you are trying to keep. So the loop counts instead. The length is measured once, `srl a` halves it, and `djnz` runs exactly that many
 swaps.
 
 Halving with a shift is where the odd lengths are taken care of: `srl a` throws the bottom bit away,
@@ -63,6 +59,3 @@ hand end goes into `a` first and then into `c` to get out of the way.
 
 Run it with the memory panel on `9000` and the eight bytes read `79 6C 62 6D 65 73 73 41`. Press the
 text button in the panel's corner and they read `ylbmessA`.
-
-Try changing the string to `.asciz "Level"`: five characters, two swaps, the `v` in the middle stays
-where it is, and the memory panel reads `leveL`.

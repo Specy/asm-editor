@@ -1,15 +1,10 @@
 48879 printed three times, as `BEEF`, as `48879` and as `1011111011101111`, by a subroutine that
-turns a number into characters itself. Port `0x11` does the same job for a byte in one instruction;
-this is what it does inside, and it is the program every language writes once and then hides in a
-library.
+turns a number into characters itself. Port `0x11` does the same job for a byte in one instruction.
+This is what has to happen inside it.
 
 Read two numbers and print their sum handed a number to a port and got text back. Here the only port
 used is the character one, and everything between the number and the characters is yours, including
 the division, which this machine has no instruction for.
-
-**You need to know:** the "Multiply and divide, with the remainder" Example and the "Ports: in and
-out" lecture. What is new here is that the digits come out backwards, the lowest one first, so the
-buffer is filled from its end towards its front.
 
 ```z80|playground|console|no-flags|allow-open
 P_CHAR  equ 0x10
@@ -26,7 +21,7 @@ P_CHAR  equ 0x10
     call print_in_base
     halt
 
-; print_in_base(n, base): n in hl, base in c
+; print a number in a base: the number in hl, the base in c
 print_in_base:
     ld de, buffer_end
     dec de
@@ -84,9 +79,9 @@ every `ld (de), a` does the second one: each digit lands in front of the ones al
 `de` is left pointing at the first character.
 
 The block from `digit` down to `djnz divide` is the shift and subtract division from Multiply and
-divide, whole, and it runs sixteen passes to produce one digit. The M68K writes one `divu` there, so
-where its version costs one instruction per character, this one costs a loop, and the three numbers
-together come to 2704 instructions.
+divide, whole, and it runs sixteen passes to produce a single digit. That is the price of having no
+divide instruction: one loop per character printed, and the three numbers together come to 2704
+instructions.
 
 `inc l` puts the quotient bit into `hl` as the dividend leaves it, so at the end of the sixteen
 passes `hl` is `n / base` and `a` is `n % base`, which is the digit. Then `ld a, h` and `or l` ask
@@ -102,6 +97,3 @@ between the two, which is what makes any base up to 36 work.
 The buffer has 18 bytes because the longest answer is a 16 bit number in base 2. After the binary
 run the string starts at `9001`, seventeen bytes below `buffer_end`: sixteen digits and the zero
 that ends them.
-
-Try changing `ld c, 2` to `ld c, 36`, the largest base the digits reach. The third line of the
-console becomes `11PR`.

@@ -1,15 +1,10 @@
-The registers hold sixteen numbers. Everything else a program works with is in memory, and this
-lecture is how x86 reaches it: what an address is here, which way round a number is stored, and the
-word you have to write when nothing else in the line says how many bytes you meant.
+Sixteen registers run out fast. Anything a program keeps for longer than a few instructions, and
+anything there is more than sixteen of, lives in memory instead.
 
 ## The address space
 
-Memory is one large array of bytes, and an address is a 64 bit number. Nothing today has anything
-like `2^64` bytes of anything, so processors implement the low 48 bits and require the top 16 to be a
-copy of bit 47, which is what a manual means by a **canonical** address. The practical reading is
-that addresses are 48 bits and come in two clumps, one at the bottom of the space and one at the top.
-
-A program in this editor uses three regions of it:
+Memory is one large array of bytes, and an address is a 64 bit number picking one of them out. Your
+program gets three regions of it:
 
 | region    | starts at        | holds                                                        |
 | --------- | ---------------- | ------------------------------------------------------------ |
@@ -17,19 +12,20 @@ A program in this editor uses three regions of it:
 | data      | `0x402000`       | `section .data` and then `section .bss`, in that order       |
 | the stack | `0x4FFFFFFFFED0` | the stack, growing downwards                                 |
 
-Those addresses are the linker's doing, not the processor's, and they stay put as long as your code
-is under one page, which everything in this course is. The memory panel opens on the stack,
-because it follows `rsp`; type an address into its box to look anywhere else.
+Those three addresses are chosen by the **linker**, the program that takes the assembler's output and
+decides where each piece of it goes before the operating system loads it. They stay where they are as
+long as the code stays small, which everything in this course does. The memory panel opens on the
+stack, because it follows `rsp`. Type an address into its box to look anywhere else.
 
-Unlike MIPS and RISC-V, x86 does **not** need a load before it can work on memory. `add rax, [total]`
-reads eight bytes from `total`, adds them to `rax` and writes `rax`, all in one instruction. The rule
-is that at most one operand may be in memory, so `add [a], [b]` does not assemble and `mov [a], [b]`
-does not either.
+Reaching memory does not need a separate instruction. `add rax, [total]` reads eight bytes from
+`total`, adds them to `rax` and writes `rax`, in one line. The only restriction is that at most one
+operand may be in memory, so `add [a], [b]` does not assemble and neither does `mov [a], [b]`.
 
 ## Little endian
 
-x86 is little endian: the lowest byte of a number goes at the lowest address. Build this one, type
-`402000` into the memory panel's address box, and read the bytes.
+x86 is little endian: the lowest byte of a number goes at the lowest address. That is easy to state
+and surprising to look at, so look at it. Build this one, type `402000` into the memory panel's
+address box, and read the bytes.
 
 ```x86|playground|memory|no-flags
 default rel
@@ -49,7 +45,7 @@ _start:
     mov r10b, [b]
 
     mov rax, 60
-    xor rdi, rdi
+    mov rdi, 0
     syscall
 ```
 
@@ -60,16 +56,17 @@ The fifteen bytes read
 ```
 
 Every one of the four numbers is stored backwards from the way you wrote it, and every one of them
-loads back correctly, because the load reverses what the store did. The order only becomes visible
-when you look at the bytes, which is exactly what the memory panel does.
+loads back correctly, because the load undoes exactly what the store did. The order only matters when
+you look at the individual bytes, which is what the memory panel does and what a program does when it
+reads one byte out of a bigger number.
 
 `q` is at `0x402000`, `d` at `0x402008`, `w` at `0x40200C` and `b` at `0x40200E`. NASM puts each item
-directly after the one before it and does not insert padding to make things line up, which the MIPS
-and RISC-V assemblers do for you. Nothing here needs it, because x86 does not care about alignment.
+directly after the one before it with no gaps, so the addresses are just the sizes added up.
 
 ## Unaligned loads
 
-A load from an address that is not a multiple of the size works.
+A load from an address that is not a multiple of its own size works here, which is not true
+everywhere and is worth knowing.
 
 ```x86|playground|no-flags
 default rel
@@ -86,17 +83,18 @@ _start:
     mov rdx, [rbx + 3]          ; and from 0x402003
 
     mov rax, 60
-    xor rdi, rdi
+    mov rdi, 0
     syscall
 ```
 
-`rcx` comes out at `9988776655443322` and `rdx` at `BBAA998877665544`, each one eight bytes read
-starting wherever it was told to start. On MIPS the same load faults, and on ARM it used to. Here it
-is an ordinary instruction that happens to be a little slower when it straddles a cache line.
+`rcx` comes out at `9988776655443322`: eight bytes read starting one byte into the array, with no
+complaint from anything. The cost is a little speed, and only when the eight bytes happen to straddle
+a **cache line**, the 64 byte block the processor actually fetches memory in. A read inside one line
+is one fetch, a read across two lines is two.
 
-`lea rbx, [bytes]` is load effective address: it puts the **address** of `bytes` into `rbx` without
-reading anything. `mov rbx, [bytes]` would read the eight bytes there instead. The square brackets
-mean memory in both, and `lea` is the instruction that says "the address, not the contents".
+`lea rbx, [bytes]` is load effective address, and it is the instruction that says "the address, not
+the contents". `mov rbx, [bytes]` would have read the eight bytes there. The square brackets look the
+same in both, so it is the mnemonic that decides.
 
 ## Say how many bytes you mean
 
@@ -107,8 +105,9 @@ Look at these two lines:
     mov [total], 5          ; how many bytes?
 ```
 
-In the first one, the register says the size. In the second one nothing does, and the assembler has
-to guess. NASM's guess is the smallest size the number fits in, which for a small number is one byte.
+In the first one the register settles it. In the second one nothing does. A label is an address and 5
+is a number, and neither of them has a width, so the assembler is left guessing. NASM's guess is the
+smallest size the number fits in, and 5 fits in one byte.
 
 ```x86|playground|memory|no-flags
 default rel
@@ -128,7 +127,7 @@ _start:
     mov dword [rbx + 8], 7      ; four bytes, because the line says so
 
     mov rax, 60
-    xor rdi, rdi
+    mov rdi, 0
     syscall
 ```
 
@@ -139,17 +138,19 @@ come out as
 05 FF FF FF FF FF FF FF   07 00 00 00 FF FF FF FF
 ```
 
-`mov [rbx], 5` changed one byte and left seven. `mov dword [rbx + 8], 7` changed four and left four.
-Write the size whenever the other operand is a number: `byte`, `word`, `dword` and `qword` are the
+The first write changed one byte out of eight and left seven `FF`s standing, which is almost never
+what somebody writing `mov [total], 5` meant. The second write says `dword` and changes four. So:
+write the size whenever the other operand is a number. `byte`, `word`, `dword` and `qword` are the
 four, for 1, 2, 4 and 8 bytes.
+
+The assembler will tell you when the size it guessed cannot hold the number. Change `mov [rbx], 5` to
+`mov [rbx], 5000` and it warns, keeps the low eight bits and writes `88`, which is 5000 with
+everything above the first byte thrown away.
 
 The names are historical. A **word** is two bytes because the 8086's registers were two bytes, and
 every widening since has kept the name and added a prefix, so a **dword** is a double word and a
 **qword** a quadruple one. The `db`, `dw`, `dd` and `dq` directives that put data in memory are named
 after the same four.
-
-Try changing `mov [rbx], 5` to `mov [rbx], 5000`. The assembler warns that a byte cannot hold 5000,
-keeps the low eight bits and writes `88`.
 
 ## Your turn
 
@@ -168,7 +169,7 @@ _start:
     ; your code here
 
     mov rax, 60
-    xor rdi, rdi
+    mov rdi, 0
     syscall
 ```
 
@@ -195,7 +196,7 @@ _start:
     mov rcx, [value]        ; eight
 
     mov rax, 60
-    xor rdi, rdi
+    mov rdi, 0
     syscall
 ```
 
@@ -216,7 +217,7 @@ _start:
     ; your code here
 
     mov rax, 60
-    xor rdi, rdi
+    mov rdi, 0
     syscall
 ```
 
@@ -243,7 +244,7 @@ _start:
     mov word [slot], 0x1234     ; two bytes, and the size says so
 
     mov rax, 60
-    xor rdi, rdi
+    mov rdi, 0
     syscall
 ```
 

@@ -7,10 +7,6 @@ more ports, right next to the console ones, and drawing is always the same two s
 colours and the coordinates to their ports, then write **one command** to the command port, which
 runs one operation on whatever is currently set.
 
-**You need to know:** the "The screen, keyboard and mouse through ports" lecture and the "Arrays,
-strings and ix" lecture. What is new here is that the picture is a table: one shape is a record of
-seven bytes, and the whole program is `ix` walking it.
-
 ```z80|playground|open-screen|no-registers|no-flags|allow-open
 P_CHAR  equ 0x10        ; the console character port draws at the text cursor
 P_PEN   equ 0x20        ; lines, outlines and text
@@ -114,8 +110,8 @@ label:  .asciz "A HOUSE IN ELEVEN COMMANDS"
 Every coordinate is one byte, so the Screen is at most 256 by 256 pixels, and no coordinate can hold
 the number 256 itself. The first shape resizes it to **240 by 192**, which is a size whose right and
 bottom edges a byte can name, and after that a rectangle can reach every pixel there is. A rectangle
-excludes its right and bottom edges, the way EASy68K's does, so the ground really does reach the
-last row of the Screen.
+**excludes its right and bottom edges**, so a rectangle from row 0 to row 192 paints rows 0 to 191
+and the ground really does reach the last row of the Screen.
 
 A colour is one byte in a **3-3-2** layout: three bits of red in bits 7 to 5, three of green in bits
 4 to 2 and two of blue in bits 1 and 0. `SKY equ 0x9B` is `100 110 11`, which is four of the seven
@@ -123,10 +119,11 @@ reds, six of the seven greens and all three of the blues, and comes out a pale b
 blue is what was left over, which is why the greys on this machine are not exactly neutral.
 
 The seven fields of a shape are the seven ports a drawing operation reads, in the order the loop
-writes them, and `equ` gives each one its offset. `(ix+FILL)` is `p->fill` in C, `add ix, de` with
-`SHAPE` in `de` is `p++`, and adding an eighth field to every shape means changing `SHAPE` and one
-line in the loop. `COUNT` is worked out by the assembler from the two labels around the table, so
-adding a row to the picture is adding a row and nothing else.
+writes them, and `equ` gives each one its offset from the start of the row. `(ix+FILL)` reads the
+fill colour out of the row `ix` currently points at, and `add ix, de` with `SHAPE` in `de` steps
+`ix` on to the next row. Adding an eighth field to every shape means changing `SHAPE` and one line
+in the loop, and nothing else. `COUNT` is worked out by the assembler from the two labels around the
+table, so adding a row to the picture is adding a row.
 
 The sky, the ground, the sun and the door have the same colour in both their fields, so those shapes
 have no rim. The house sets them apart, `WALL` inside and `WHITE` outside, and the three pixel pen
@@ -146,11 +143,12 @@ matters, which is why it says `ROOF` where the lines above it say `WALL`.
 The label goes through the console character port, the same port Print a string used, because **the
 Screen has no text command of its own**. Text lands at the text cursor, which is counted in 8 by 8
 character cells, so a 240 pixel Screen is 30 columns wide and the label can only start on a cell
-boundary. The M68K draws a string at any pixel it likes with task 95; here you get cells. The
-characters are painted in the pen colour on the background colour, and the background is whatever
+boundary: there is no way to put text at an arbitrary pixel. The characters are painted in the pen
+colour on the background colour, and the background is whatever
 the last clear filled the Screen with, which is why white on the sky looks right.
 
-Try changing the `115` in the `C_LINE_TO` row of the roof to `70`. That row is the apex, so the roof
-stops being a triangle and leans over to the left, and nothing else in the program has to know. The
-fill point at `115, 65` is still inside the leaning roof, so command 8 still finds its fence. Push
-the apex far enough that it is not and the fill spreads over the sky instead.
+The fill is the fragile part of the picture, and it is worth breaking on purpose. The `115` in the
+`C_LINE_TO` row of the roof is the apex; move it to `70` and the roof leans left, which is fine,
+because the fill point at `115, 65` is still inside it. Keep pushing the apex and eventually that
+point falls outside the three lines, and then command 8 finds no fence at all and the roof colour
+floods the whole sky. A flood fill trusts you to give it a point that is genuinely enclosed.

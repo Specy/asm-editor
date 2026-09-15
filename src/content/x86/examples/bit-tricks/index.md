@@ -1,12 +1,7 @@
-Three things done with bits instead of arithmetic: telling odd from even, counting the set bits in a
-number, and multiplying by ten with shifts. None of them needs `div` or `mul`.
+Four questions about the number 37, answered without a single `mul` or `div` between them: is it even,
+how many of its bits are set, what is it times ten, and is bit 5 one.
 
-A number in a register is a pattern of bits, and `and`, `or`, `xor`, the shifts and `bt` work on that
-pattern directly. When the question you are asking is about the bits, they are both shorter and much
-faster than the arithmetic that would answer it.
-
-**You need to know:** the "Arithmetic, logic and bits" lecture. What is new here is `bt`, which puts
-one bit of a register into `CF`, and the loop that clears the lowest set bit.
+37 is `100101` in binary, and every answer below is easier to see in that form than in the decimal.
 
 ```x86|playground|allow-open
 default rel
@@ -48,16 +43,28 @@ _start:
     syscall
 ```
 
-`r8` is 0, because 37 is odd. `r9` is 3, the number of set bits in `100101`. `r10` is `172`, which is 370. `r12` is `25`, which is 37, since the whole number already fits in a byte. `r13` is 1, because
-bit 5 of `100101` is the leading one.
+The counting loop is the one worth taking apart, because `and rbx, rcx` with `rcx` one less than
+`rbx` does something that is not obvious at all: it clears the **lowest set bit** of `rbx` and leaves
+every other bit alone.
 
-`and rbx, rbx - 1` clears the **lowest set bit** and nothing else, which is the trick the counting
-loop is built on: the loop runs once per set bit and not once per bit, so counting the bits of a
-number with two of them takes two passes and not sixty four. It is called Kernighan's algorithm, and
-x86 has an instruction that does the whole count, `popcnt`, on processors that have the extension.
+Watch it on 37. Subtracting one turns the lowest set bit into a zero and every zero below it into a
+one:
 
-`test rax, 1` and `and rax, 1` compute the same thing; `test` throws the answer away and keeps only
-the flags, so `rax` survives.
+| `rbx`    | `rbx - 1` | `and`    |
+| -------- | --------- | -------- |
+| `100101` | `100100`  | `100100` |
+| `100100` | `100011`  | `100000` |
+| `100000` | `011111`  | `000000` |
 
-Try changing `mov rax, 37` to `mov rax, 40`. `r8` becomes 1, `r9` becomes 2, and `r13` becomes 1 as
-well, since 40 is `101000` and bit 5 is still set.
+Three passes, three set bits, and the loop stops because there is nothing left. The point is that the
+loop runs once per **set** bit rather than once per bit, so a sixty four bit register with two bits set
+takes two passes and not sixty four. It is known as Kernighan's algorithm, and a processor with the
+right extension does the whole count in one instruction, `popcnt`.
+
+`test rax, 1` and `and rax, 1` compute exactly the same bits, and the difference is what happens
+afterwards: `test` throws the answer away and keeps only the flags, so `rax` still holds 37 for the
+three sections below it to use.
+
+`r12` comes out at `25`, which is 37 again, because masking the low byte of a number that already fits
+in a byte changes nothing. That is not a bug, and a mask on a bigger number, `and r12, 0xFF` applied
+to 1000, would leave `E8`.

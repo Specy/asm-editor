@@ -1,6 +1,6 @@
-The last lecture wrote the four sizes into memory. This one is about what the bits in them mean: how
-a negative number is stored, what happens when a result does not fit, and the instructions that widen
-a small number into a big register.
+A register holds 64 bits. What those bits mean is not written anywhere: the same eight bytes are a
+positive number, a negative number, four characters or an address depending only on which instruction
+reads them.
 
 ## The four sizes
 
@@ -23,14 +23,15 @@ Negative numbers are stored in **two's complement**: to negate a number, flip ev
 `1` is `00000001`, so `-1` is `11111110 + 1`, which is `11111111`. The top bit ends up set for every
 negative number and clear for every positive one, which is why it is called the sign bit.
 
-The point of two's complement is that **addition does not need to know**. `0xFF + 0x01` is `0x00`
-with a carry out, which is right as -1 + 1 = 0 and right as 255 + 1 = 256 with the 256 dropped. So
-`add`, `sub` and `mov` have one version and it works for both readings. What differs is:
+The point of doing it that way is that **addition does not need to know**. `0xFF + 0x01` is `0x00`
+with a carry out, and that is the right answer read as -1 + 1 = 0 and the right answer read as
+255 + 1 = 256 with the 256 dropped off the top. So `add`, `sub` and `mov` have one version each and
+it serves both readings. Three things do differ:
 
 - **The flags they set.** `CF` says the unsigned answer did not fit, `OF` says the signed one did not.
 - **The conditional jumps.** `jb` and `ja` compare unsigned, `jl` and `jg` compare signed.
 - **Multiplication and division.** `mul` and `div` are unsigned, `imul` and `idiv` are signed, and
-  they are different instructions.
+  they really are different instructions.
 
 The registers panel shows a value in hex; hovering it shows what those bits read as signed and as
 unsigned.
@@ -50,29 +51,32 @@ _start:
     add rbx, 1                      ; one more than that
 
     mov rax, 60
-    xor rdi, rdi
+    mov rdi, 0
     syscall
 ```
 
-`al` comes out at `2C`, which is 44: the answer 300 is `1_0010_1100` and the byte kept the low eight
-bits. `CF` is set, because the unsigned answer did not fit. `OF` is clear, because as signed
-arithmetic `200` in a byte is -56, and -56 + 100 = 44, which fits perfectly well.
+`al` comes out at `2C`, which is 44. The answer 300 is `1_0010_1100` in binary and a byte kept the
+low eight bits of it. `CF` is set, because the unsigned answer did not fit. `OF` is clear, and this is
+the part worth pausing on: read as signed, `200` in a byte is already -56, and -56 + 100 = 44, which
+fits perfectly well. One addition, two readings, and only one of them overflowed.
 
 `rbx` comes out at `8000000000000000`. Unsigned that is the right answer. Signed it is the most
-negative number there is, and `OF` is set to say so.
+negative number there is, and `OF` is set to say the answer went off the top of the signed range and
+came back round the bottom.
 
-Nothing stops the program either time. **x86 has no trap on integer overflow.** The flags record what
-happened and it is the program's job to look, which is what `jo` and `jc` are for.
+Nothing stopped the program either time. **x86 has no trap on integer overflow.** The flags record
+what happened and it is the program's job to look, which is what `jo` and `jc` are for.
 
 ## Widening a small number
 
-Loading a byte into `al` leaves the seven bytes above it holding whatever they held. Most of the time
-you want the byte turned into a full 64 bit number first, and which instruction does that depends on
-whether the byte was signed.
+Loading a byte into `al` leaves the seven bytes above it holding whatever they held, so a byte read
+out of memory is not yet a number you can do 64 bit arithmetic on. Turning it into one means filling
+those seven bytes, and how to fill them depends on whether the byte was signed.
 
 - **`movzx`** zero extends: the new bits are all 0.
-- **`movsx`** sign extends: the new bits are all copies of the old top bit.
-- **`movsxd`** is `movsx` for the 32 to 64 case, which needed its own name.
+- **`movsx`** sign extends: the new bits are all copies of the old top bit, so a negative byte stays
+  negative.
+- **`movsxd`** is `movsx` for the 32 to 64 case, which needed a name of its own.
 
 ```x86|playground|no-flags
 default rel
@@ -91,35 +95,43 @@ _start:
     movsxd r11, dword [sd]      ; and from four
 
     mov rax, 60
-    xor rdi, rdi
+    mov rdi, 0
     syscall
 ```
 
-The same byte `FD` becomes 253 or -3 depending on which instruction read it, and nothing in memory
-said which one was meant. That is the whole of signedness in assembly: the type lives in the
-instruction you chose, never in the data.
+The one byte `FD` became 253 in one register and -3 in another, and nothing in memory said which one
+was meant. The instruction you chose is the only thing that decided.
 
-Try changing `movzx rbx, byte [sb]` to `movzx rbx, word [sb]`. It reads `FDFD`, which is the byte at
-`sb` and the byte after it, the first byte of `sw`. The size comes from the word you wrote and not
-from how big the thing at the label was.
+The `byte` keyword in `movzx rbx, byte [sb]` is doing real work. Change it to
+`movzx rbx, word [sb]` and the instruction reads `FDFD`: the byte at `sb` and the byte that happens
+to follow it, which is the first byte of `sw`. The size comes from the word you wrote, not from how
+big the thing at the label was declared to be.
 
 ## Widening rax in place
 
-Four instructions with no operands widen the accumulator into itself. They exist because `mul`,
-`div`, `idiv` and `cqo` were designed together.
+Six instructions widen `rax` without taking any operands at all. They exist for division. `div` and
+`idiv` read a dividend twice as wide as the number you divide by, spread across `rdx` and `rax`, so
+before dividing `rax` by something you have to fill `rdx` with the right thing, and "the right thing"
+for a signed number means copies of its sign bit.
 
-| instruction | widens         | into      |
-| ----------- | -------------- | --------- |
-| `cbw`       | `al`, 8 bits   | `ax`      |
-| `cwde`      | `ax`, 16 bits  | `eax`     |
-| `cdqe`      | `eax`, 32 bits | `rax`     |
-| `cwd`       | `ax`, 16 bits  | `dx:ax`   |
-| `cdq`       | `eax`, 32 bits | `edx:eax` |
-| `cqo`       | `rax`, 64 bits | `rdx:rax` |
+The names look like line noise until you know the key. The `c` is convert; the letters after it are
+the size it starts from and the size it ends at, `b` for byte, `w` for word, `d` for dword, `q` for
+quadword and `o` for a sixteen byte octword. A final **`e`** means extended, which is this family's
+way of saying "keep the answer inside one register".
 
-The first three widen inside one register. The last three fill a **second** register with copies of
-the sign bit, which is what `idiv` needs: signed division reads a dividend twice as wide as its
-divisor, so dividing `rax` by something means filling `rdx` first.
+| instruction | widens         | into      | reads as                    |
+| ----------- | -------------- | --------- | --------------------------- |
+| `cbw`       | `al`, 8 bits   | `ax`      | convert byte to word        |
+| `cwde`      | `ax`, 16 bits  | `eax`     | word to dword, extended     |
+| `cdqe`      | `eax`, 32 bits | `rax`     | dword to quadword, extended |
+| `cwd`       | `ax`, 16 bits  | `dx:ax`   | word to dword               |
+| `cdq`       | `eax`, 32 bits | `edx:eax` | dword to quadword           |
+| `cqo`       | `rax`, 64 bits | `rdx:rax` | quadword to octword         |
+
+So the three with an `e` grow a value inside the register it is already in. The three without spill
+into a **second** register, and those are the ones a division needs. `cwd` and `cwde` start from the
+same `ax` and differ only in where they put the answer, which is exactly what the `e` is there to
+tell you.
 
 ```x86|playground|no-flags
 default rel
@@ -136,13 +148,18 @@ _start:
     mov r9, rdx
 
     mov rax, 60
-    xor rdi, rdi
+    mov rdi, 0
     syscall
 ```
 
-`xor rdx, rdx` is what you write instead when the dividend is unsigned, since an unsigned number is
-widened with zeroes. Forgetting either one is the usual way a division goes wrong, and the
-"Arithmetic, logic and bits" lecture returns to it.
+Both lines did the same thing to the same value and put the result in different places. `cdqe` left
+one register holding -3 in 64 bits. `cqo` left two registers holding -3 in 128 bits, which is
+`FFFFFFFFFFFFFFFF` in `rdx` and `FFFFFFFFFFFFFFFD` in `rax`: all ones above, and the number itself
+below.
+
+Before an **unsigned** division you write `xor rdx, rdx` instead, because an unsigned number is
+widened with zeroes and not with its top bit. Forgetting either line is how a division goes wrong,
+and "Arithmetic, logic and bits" comes back to it with the fault it causes.
 
 ## Your turn
 
@@ -161,7 +178,7 @@ _start:
     ; your code here
 
     mov rax, 60
-    xor rdi, rdi
+    mov rdi, 0
     syscall
 ```
 
@@ -187,7 +204,7 @@ _start:
     movzx rcx, byte [amount]    ; zeroes instead
 
     mov rax, 60
-    xor rdi, rdi
+    mov rdi, 0
     syscall
 ```
 
@@ -205,7 +222,7 @@ _start:
     ; your code here
 
     mov rax, 60
-    xor rdi, rdi
+    mov rdi, 0
     syscall
 ```
 
@@ -228,7 +245,7 @@ _start:
     add ebx, 1              ; one more, which OF reports and nothing stops
 
     mov rax, 60
-    xor rdi, rdi
+    mov rdi, 0
     syscall
 ```
 

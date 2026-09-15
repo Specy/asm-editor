@@ -5,12 +5,10 @@ another tap starts the next one.
 
 **Click the Screen panel before you press a key**, the same as in Move a square with the keyboard.
 
-**You need to know:** everything above it on the ladder. The keyboard is polled the way Move a square
-with the keyboard polls it, only what changed is redrawn the way A bouncing ball does it, and the
-pipes are an array of records walked with a pointer. What is new is the **state machine** a game is,
-the **sixteenths of a row** the bird's height is measured in, because a bird that can only move in
-whole rows cannot accelerate smoothly, and a grid painted **one column at a time** out of the world
-the program keeps in memory.
+Three ideas in it are worth the read even if you never write a game. A game is a **state machine**,
+and this one has three states. The bird's height is counted in **sixteenths of a row**, because
+something that can only move in whole rows cannot speed up gradually. And the picture is worked out
+**one column at a time** from what the program knows, rather than stored anywhere.
 
 ```riscv|playground|open-screen|console|no-registers|allow-open
 # @screen unit=4 width=256 height=256 base=display
@@ -485,10 +483,9 @@ any of them was a flap. A player who taps three times while one frame is being d
 characters and one flap, and a player who holds the key down gets the auto repeat the terminal sends,
 which is a flap a few times a second.
 
-Every one of those comparisons costs a `li` first. A RISC-V branch compares two registers and takes
-no immediate, so `li t2, ' '` and then `beq t1, t2, flapped` is what the MIPS version of this game
-writes as one `beq $t1, ' ', flapped`, and the same pair turns up in front of `ble`, `blt` and `bge`
-all through the program.
+Every one of those comparisons costs a `li` in front of it, because the character to compare
+against has to be in a register first. `li t2, ' '` then `beq t1, t2, flapped` is the pair, and it
+turns up in front of `ble`, `blt` and `bge` all through the program.
 
 `s2` is the bird's height and it counts **sixteenths of a row**. Gravity adds `GRAV`, which is 3, to
 `s3` every frame, and a flap sets `s3` to -26: in whole rows those would be 0 and -1, and the bird
@@ -516,16 +513,14 @@ below it, and every word of the column is written once with the colour it ends t
 the band first and drawing the bird into it afterwards would write half of those words twice, and the
 display is the picture, so a reader whose browser repainted in between would see the gap.
 
-The window is why `draw_bird` keeps the bird's top row in `s9`. `world_column` uses `t0` to `t2`,
-`t5` and `t6`, `fill_span` uses `t0` and `t1`, and the window takes `t3` and `t4`, so all seven
-temporaries are spoken for and a value that has to live across a call needs a saved register. RISC-V
-has twelve of those, which is why `s8`, `s9` and `s10` are free to be locals here at all, and each
-subroutine that takes one still saves it next to `ra` on the way in.
+The window is why `draw_bird` keeps the bird's top row in `s9` rather than in a temporary.
+`world_column` uses `t0` to `t2`, `t5` and `t6`, `fill_span` uses `t0` and `t1`, and the window
+itself takes `t3` and `t4`: every temporary is spoken for, so anything that has to survive a call
+goes in a saved register. There are twelve of those, which is what leaves `s8`, `s9` and `s10` free
+to be locals here, and each subroutine that borrows one saves it next to `ra` on the way in.
 
-The score goes to the console because there is nowhere else to put it. The M68K version of this game
-draws it onto the screen with a task that puts text at a pixel position, and the bitmap display has
-no text of any kind, which is also why the end of a game is the ground turning `DEADGROUND` and not
-the words GAME OVER.
+The score goes to the console because the display draws pixels and nothing else. That is also why a
+lost game is the ground turning `DEADGROUND` rather than the words GAME OVER.
 
 `random_gap` is a 32 bit **xorshift**. Three shifts and three `xor` instructions turn a number into
 the next one of a sequence, its high bits are the ones worth using, and `remu` by `GAPSPAN` puts the
@@ -533,6 +528,6 @@ middle of a gap somewhere in the band `GAPMIN` starts. The seed comes from servi
 the first flap happens, so the course depends on when you started playing instead of on a number
 written into the program.
 
-Try changing `.eqv HALFGAP, 9` to `6` and playing again. A gap is measured from its middle in both
-directions, by the drawing and by the hit test alike, so that one number is the whole of the
-difficulty.
+`HALFGAP` is the whole of the difficulty. A gap is measured outwards from its middle in both
+directions, by the drawing and by the hit test alike, so lowering it from 9 to 6 makes every gap in
+the game narrower and nothing else in the program needs to know.

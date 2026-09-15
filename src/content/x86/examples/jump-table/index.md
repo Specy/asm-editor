@@ -1,11 +1,7 @@
-A `switch` with four cases, done without comparing anything. The addresses of the four branches are
-written into memory as a table, and the program reads the one it wants and jumps to it.
-
-A chain of `cmp` and `je` costs one comparison per case. A jump table costs one memory read and one
-jump whatever the case is, which is why a C compiler turns a dense `switch` into exactly this.
-
-**You need to know:** the "cmp and the conditional jumps" lecture and the "Effective addresses"
-lecture. What is new here is a label used as **data**, and `jmp` with a memory operand.
+Four possible destinations and not one comparison between them. Choosing between four branches with
+`cmp` and `je` costs up to four comparisons, and every case you add costs one more. This program costs
+one memory read and one jump, and it would still cost one memory read and one jump with two hundred
+cases in the table.
 
 ```x86|playground|allow-open
 default rel
@@ -44,23 +40,22 @@ done:
     syscall
 ```
 
-`r8` comes out at `1E`, which is 30, the third case.
+`dq case0` is the line that makes this possible, and it is stranger than it looks. A label is a
+number, the address of some code, and nothing stops you storing that number in memory the way you
+would store a price or a count. Four labels, four qwords, an ordinary array that happens to be full of
+addresses of instructions.
 
-`dq case0` writes the **address** of `case0` into memory, eight bytes of it. A label is a number, and
-nothing stops you storing it the way you would store any other number.
+`jmp [rbx + rcx*8]` then reads eight bytes out of that array and puts them in `rip`. The brackets are
+load bearing: `jmp rbx` without them would jump to the address of the table itself and start executing
+the table, treating a list of addresses as a list of instructions.
 
-`jmp [rbx + rcx*8]` reads eight bytes from the table and puts them in `rip`. Written without the
-brackets, `jmp rbx`, it would jump to the address of the table itself and try to execute the
-addresses as instructions.
+The `cmp rcx, CASES` and `jae` above it are not a nicety. An index past the end of the table reads
+eight bytes of whatever the assembler put after it and jumps to that, and "whatever was next in memory"
+is not an address of anything. Set `mov rcx, 9` and the check catches it and `r8` comes out as -1. Now
+delete the check and run it again: the program stops somewhere, with no message, and `rip` in the
+registers panel is your only evidence about where it went.
 
-The `cmp rcx, CASES` and `jae` are not optional. An index past the end reads eight bytes of whatever
-follows the table and jumps there, which is a jump to a number that was never an address. That check
-is the `default:` of the `switch`.
-
-The labels here are ordinary ones rather than local `.case0` labels, because a local label belongs to
-the last ordinary label above it, and the `.done` inside `case0` would then be a different label from
-the `.done` inside `case1`.
-
-Try changing `mov rcx, 2` to `mov rcx, 9`. The check catches it and `r8` comes out at
-`FFFFFFFFFFFFFFFF`. Then delete the `cmp` and the `jae` and run it again: the program stops
-somewhere, and `rip` in the registers panel is the only clue about where it went.
+The four labels here are ordinary ones and not local `.case0` labels, and it is not a style choice. A
+local label belongs to the last ordinary label above it, so a `.done` written inside `case0` would be a
+different label from a `.done` written inside `case1`, and the four `jmp done` lines would go to four
+different places.

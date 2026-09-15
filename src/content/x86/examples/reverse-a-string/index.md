@@ -1,13 +1,9 @@
-A string reversed where it sits, with no second buffer. Two pointers start at the two ends, swap the
-bytes they point at, and step towards each other until they meet.
+A string reversed where it sits, with no second copy of it anywhere. Two addresses start at the two
+ends of the string, swap the bytes they point at, and walk towards each other until they meet in the
+middle.
 
-Swapping in place is what makes this different from copying. There is no room for a second copy and
-none is needed: every byte is written exactly once, and the loop stops when the two pointers have met
-rather than after a count.
-
-**You need to know:** the "Arrays, strings and the string instructions" lecture. What is new here is
-two pointers moving in opposite directions, and `equ` doing the arithmetic that finds the last
-character.
+Every byte is written exactly once, so the work is half the length of the string, and the loop needs
+no count: it stops when the two addresses have run into each other.
 
 ```x86|playground|memory|allow-open
 default rel
@@ -38,16 +34,23 @@ _start:
     syscall
 ```
 
-Type `402000` into the memory panel. The nine bytes read `79 6C 62 6D 65 73 73 61 00`, which is
-`ylbmessa` and the terminator still where it was. The reversal left the zero alone, because `LEN`
-subtracted it out.
+Type `402000` into the memory panel. The nine bytes read `79 6C 62 6D 65 73 73 61 00`: `ylbmessa`,
+and the terminator still sitting exactly where it was.
 
-`jae` compares the two **addresses**, and it is the unsigned condition because an address is never
-negative. The check is at the top of the loop, so a string of one character swaps nothing at all:
-the two pointers start on the same byte and `jae` is true straight away.
+Keeping the zero out of the reversal is what `LEN equ $ - text - 1` is for. `$ - text` is nine, every
+byte the `db` line produced, and the `- 1` takes the terminator back off, leaving eight characters to
+reverse. Drop the `- 1` and the zero gets swapped to the front, where it turns the string into an
+empty one.
 
-Two `mov` pairs rather than `xchg`. `xchg al, [rsi]` exists and would halve the lines, and on a
-memory operand it carries an implicit `lock` prefix that makes it far slower than the four moves.
+`jae` compares two **addresses**, which is why it is the unsigned condition: addresses are never
+negative, and the signed `jge` would give a different answer on any address with its top bit set. The
+comparison is at the top of the loop, which handles both ways the two can finish. An odd length string
+ends with both addresses on the same middle byte, and `jae` is true. An even length one ends with them
+crossed over, one past each other, and `jae` is true then too. A single character string never enters
+the loop at all.
 
-Try reversing a string with an even number of characters, say `db "abcd", 0`. The pointers cross
-between `b` and `c` without ever landing on the same byte, and `jae` catches that too.
+Four `mov` instructions do the swap, where `xchg al, [rsi]` would do it in half the lines. That is
+deliberate. `xchg` with a memory operand carries an implicit **`lock` prefix**, which tells the
+processor to hold the memory bus for the whole instruction so that nothing else in the machine can
+touch that address in the middle of it. That guarantee is exactly what you want when two threads share
+a counter, and it costs far more than four plain moves when, as here, nobody else is looking.

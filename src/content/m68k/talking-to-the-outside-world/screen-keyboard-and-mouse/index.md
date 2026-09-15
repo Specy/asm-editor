@@ -1,8 +1,7 @@
-Some machines put their devices at addresses and a program reaches them with `move`. This one has
-none: there is no framebuffer to write into, no keyboard register to poll, no address anywhere in the
-16 megabytes that is anything but memory. The screen, the keyboard and the mouse are all `trap #15`
-tasks, one task per operation, and the request has the shape you already know: the task number in
-`d0.b`, the arguments in `d1` and up.
+Nothing in the 16 megabytes is a device. There is no block of memory that is secretly the screen,
+no address that answers with the last key pressed, nowhere a `move` can reach the outside world.
+Every pixel and every keypress comes through `trap #15` instead, one task per operation, in the
+shape you already know: the task number in `d0.b`, the arguments in `d1` and up.
 
 ## The screen
 
@@ -13,7 +12,7 @@ and drawing outside the screen is quietly ignored.
 Two colours are kept for you: the **pen**, which draws lines, outlines, pixels and text, and the
 **fill**, which fills the insides of rectangles and ellipses. Each is one task, and the colour is a
 long written `$00BBGGRR`: **blue in the high byte, then green, then red in the lowest**, which is
-EASy68K's order and backwards from the `#RRGGBB` you write in CSS.
+backwards from the `#RRGGBB` you write in CSS.
 
 | colour | value       |     | colour | value       |
 | ------ | ----------- | --- | ------ | ----------- |
@@ -85,11 +84,11 @@ label: dc.b 'Drawn with trap #15', 0
 
 A rectangle and an ellipse both take the same four numbers, the corners of a box: `d1` and `d2` are
 its left and top, `d3` and `d4` its right and bottom. The ellipse is the one inscribed in that box,
-so a square box draws a circle. Both **exclude their right and bottom edges**, the way the Windows
-drawing calls EASy68K was built on do, which means a box whose edges meet draws nothing at all.
-
-Try changing `move.l #480, d3` on the ellipse to `move.l #400, d3` and running again: the circle
-becomes an egg, because the box stopped being square.
+so a square box draws a circle. Both **exclude their right and bottom edges**, which matters more than it sounds. Set a box's right
+edge equal to its left one and the box has no width at all, so nothing is drawn and nothing
+complains. In the program above, the ellipse runs from 360 to 480; change its `move.l #480, d3`, the
+line four above `move.b #88, d0`, to `move.l #360, d3` and run it again. The circle is simply not
+there, and the only sign of it is the gap where it was.
 
 ## The drawing tasks
 
@@ -117,9 +116,9 @@ Tasks 84, 85, 86 and 96 share one **drawing point**, which is where the next `85
 polyline is one `86` and then one `85` per corner.
 
 Task 92 takes four modes. **4** draws normally and is what a program starts in. **2** moves the
-drawing point and changes no pixel. **16** and **17** turn double buffering off and on. EASy68K's
-other modes, the ones that combine the new pixel with the old one bitwise, stop the program here with
-an error naming the mode.
+drawing point and changes no pixel. **16** and **17** turn double buffering off and on. The other mode
+numbers, the ones that would combine the new pixel with the old one bitwise, are not implemented and
+stop the program with an error naming the mode.
 
 Two more tasks belong to the screen without drawing on it. **Task 11** moves the text cursor, which
 is where printed text lands, in character cells counted from the top left, and `d1.w = $FF00` clears
@@ -127,7 +126,7 @@ the whole screen, text and graphics together. **Task 33** sets or reads the scre
 width in the high word of `d1.l` and the height in the low word, and `d1.l = 0` asks instead of
 setting.
 
-Text and graphics share one image here, because EASy68K had a single output window. So `trap #15`
+Text and graphics share one image, so `trap #15`
 task 14 both appends to the transcript above the screen **and** draws the string on the screen at the
 text cursor, and clearing with task 11 wipes the drawing too.
 
@@ -215,7 +214,7 @@ Task 19 takes four key codes packed into `d1.l`, one per byte, and answers in `d
 `$FF` or `$00` byte per key, in the same order. So the highest byte of the answer belongs to the
 highest byte of the question.
 
-The key codes are EASy68K's, and most of them you can work out:
+Most of the key codes you can work out:
 
 - A letter is the ASCII code of its **capital**, so `A` is `$41` and `Z` is `$5A`, whether or not
   Shift is held.
@@ -421,8 +420,9 @@ to a few dozen traps, and let task 23 set the pace.
 
 ## Your turn
 
-Fill a red rectangle over the box from (10, 10) to (100, 100), then read the colour of the pixel at
-(50, 50) back with task 83 and leave it in `d0`. Red is `$000000FF`, so `d0` comes out at 255.
+Fill a red rectangle over the box from (10, 10) to (100, 100), then read the pixel at (50, 50) back
+off the screen with task 83 and leave its colour in `d0`. Red is `$000000FF`, so a correct answer
+comes back as 255.
 
 ```m68k|playground|open-screen|exercise
 * your code here
@@ -462,9 +462,9 @@ RED equ $000000FF
 
 </details>
 
-The second one asks the screen how big it is with task 33 and takes the packed answer apart: the
-width in `d1` and the height in `d2`, each on its own. A program that has not resized the screen gets
-640 and 480.
+Task 33 answers with the screen's width and height packed into the two halves of one register. Ask
+it, then split the answer: the width on its own in `d1` and the height on its own in `d2`. Nothing
+here has resized the screen, so they come to 640 and 480.
 
 ```m68k|playground|open-screen|exercise
 * your code here

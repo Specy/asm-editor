@@ -1,6 +1,6 @@
 [Assembly basics](/learn/courses/assembly-basics) went through registers, memory, branching and the
-stack once, using whichever language made each point clearest. From here on there is one machine, the
-Zilog Z80.
+stack once, quickly, to give you the ideas. From here on there is one machine, and everything is
+about that machine: the Zilog Z80.
 
 ## The machine
 
@@ -35,16 +35,16 @@ written to memory reads `34 12`.
 
 ## The simulator
 
-There is no real Z80 in your browser, there is an emulator. The other languages in this editor each
-imitate a simulator that came before them, EASy68K or MARS or RARS, and the Z80 imitates none: real
-Z80 machines had no operating system in common, every one of them had its own ROM at its own
-addresses, and there is nothing to copy.
+There is no real Z80 in your browser, there is an emulator. It runs the instructions a Z80 runs and
+gives you the same 64 KB of memory to put them in, and it does not pretend to be any particular Z80
+machine. It could not: the ZX Spectrum, the Amstrad and a CP/M box shared the CPU and nothing else.
+Each had its own built in routines at its own addresses, so "the way you print a character on a Z80"
+was a different answer on every machine that ever shipped.
 
-So this editor uses the Z80's own mechanism instead, **I/O ports**. There is no system call
-instruction anywhere in the instruction set, and a program that wants to print a character or read a
-key writes or reads a port number with `in` and `out`. Which port does what is what the "Talking to
-the outside world" module of this course is for. Until then, programs show what they did in the
-registers and the memory.
+What all of them did share is the CPU's own mechanism for talking to hardware, **I/O ports**, and
+that is what this editor uses. A program that wants to print a character or read a key hands a byte
+to a numbered port with `in` and `out`. Which port does what is the subject of the "Talking to the
+outside world" module. Until then, programs show what they did in the registers and the memory.
 
 ## How a program is written down
 
@@ -55,12 +55,16 @@ A line is a label, an instruction, a directive, a comment, or nothing.
   next, code or data. The colon is optional here, and these pages write it.
 - A **directive** is a line addressed to the assembler instead of the CPU. `.org` says where in
   memory what follows goes, `.db` and `.dw` write bytes and words there, `.ds` reserves room, `equ`
-  gives a number a name. They get a lecture of their own, "org, db, dw and ds", later in this course.
-- Everything else is **indented**, one instruction per line. Four spaces is what these courses use.
+  gives a number a name. They get a lecture of their own, "org, db, dw and ds", a few pages from
+  here; until then, what you need is that `.org 0x8000` means "put what follows at address
+  `0x8000`".
+- Everything else is **indented**, one instruction per line. Four spaces is what these pages use.
 - **Case does not matter.** `LD A, B` and `ld a, b` are the same instruction. We write lower case.
 
-Numbers can be written in several bases, and unlike the M68K there is no `#` in front of an
-immediate: the parentheses are what mark a memory access.
+A number written straight into an instruction, like the `10` in `ld a, 10`, is called an
+**immediate**: the value is part of the instruction rather than sitting in a register or in memory.
+Nothing marks it. Numbers can be written in several bases, and any of these spellings is the same
+immediate:
 
 | written      | means                         |
 | ------------ | ----------------------------- |
@@ -76,9 +80,9 @@ immediate: the parentheses are what mark a memory access.
 reads the byte _at address_ `0x1F` instead. Two characters make two completely different
 instructions.
 
-There are no size suffixes. On the M68K you write `move.b` or `move.l` to say how much you are
-moving; on the Z80 the registers you name say it for you, `ld a, b` moves one byte because `a` and
-`b` are one byte each, and `ld hl, bc` moves two because those pairs are two.
+Nothing on the instruction says how many bytes are being moved, because the registers you name
+already say it. `ld a, b` moves one byte, since `a` and `b` are one byte each, and `ld hl, bc` moves
+two, since those pairs are two.
 
 ## Your first program
 
@@ -106,9 +110,6 @@ byte and `c` is still zero.
 program is assembled at `0x0000`, which on a real Z80 is where the reset and interrupt entry points
 live, so every program in this course starts with that line.
 
-Try changing `add a, b` to `add a, a` and see 20 come out instead, since the accumulator is then
-added to itself.
-
 ## Bytes and the pair they make
 
 `h` and `l` are two registers and `hl` is both of them at once, and every instruction that names one
@@ -134,8 +135,6 @@ watching `hl` in the registers panel.
 `de` reads `3400` because `d` is the high byte of `de` and `e` was never written. The last line
 changed `l` and left `h` alone, so `hl` went from `1234` to `12FF`.
 
-Try changing `ld l, 0xFF` to `ld h, 0xFF` and watch `hl` become `FF34` instead.
-
 ## The flags panel
 
 The flags sit just above the registers, and there are six of them: `S`, `Z`, `H`, `P/V`, `N` and `C`.
@@ -153,9 +152,10 @@ the subtraction did to the flags. `Z` goes to 1 when the two were equal.
 ```
 
 Step through it and watch `Z`: it goes to 1 after the first `cp`, survives the two `ld` instructions
-in the middle, and goes back to 0 after the second `cp`. **A load never touches the flags on the
-Z80**, which is not true of the M68K, where a plain `move` sets them and destroys a comparison you
-made a line earlier. The F register gets a lecture of its own later on.
+in the middle, and goes back to 0 after the second `cp`. **A load never touches the flags.** That is
+worth knowing early: you can compare two things, then spend as many `ld` instructions as you like
+fetching whatever you need, and the answer to the comparison is still sitting there waiting. The F
+register gets a lecture of its own later on.
 
 ## Four ways a program ends
 
@@ -167,8 +167,7 @@ knowing now because every program you write will use one of them.
   so the editor reports the program as terminated. This is what these pages use.
 - **Running off the end of the code.** The program counter reaches an address that no line of your
   source produced, and the run stops there. The two programs above would end the same way with their
-  `halt` deleted, which is why the earlier lectures of the other courses could get away with no
-  ending at all.
+  `halt` deleted.
 - **A top level `ret`.** `ret` pops a return address off the stack and jumps to it, and at the top
   level there is nothing on the stack, so it pops whatever `0xFFFF` and beyond happen to hold. The
   editor treats that as the end of the program too.
@@ -178,7 +177,7 @@ knowing now because every program you write will use one of them.
 The **Build** button assembles what you wrote and points the emulator at the first instruction,
 **Run** runs it to one of those four endings, and **Step** runs one instruction at a time.
 
-## Your turn
+## Two to write yourself
 
 The test starts `hl` at `0x1234`. Leave its high byte in `a` and its low byte in `c`, which makes
 `bc` read `0034` in the panel, since `b` is untouched and stays zero.

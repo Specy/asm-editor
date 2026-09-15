@@ -1,13 +1,9 @@
 Two subroutines that call themselves. `factorial(8)` comes back as 40320 in `$s0`, and `fib(10)`
 comes back as 55 in `$s1`, and neither of them has a loop anywhere: the repetition is the calls.
 
-Stack arguments and a stack frame built one frame for one call. Recursion is the same instructions
-with nothing added, because a prologue subtracts from wherever `$sp` happens to be, so every call
-gets a frame of its own at a fresh address and `0($sp)` means this call's own room.
-
-**You need to know:** the "Stack arguments and a stack frame" Example and the "jal, jr and the
-calling convention" lecture. What is new here is a subroutine calling itself, which needs no
-mechanism the previous program did not already use.
+Recursion needs no mechanism that is not already here. A prologue subtracts from wherever `$sp`
+happens to be, so every call gets a frame of its own at a fresh address, and `0($sp)` always means
+this call's own room.
 
 ```mips|playground|memory|allow-open
 .text
@@ -72,17 +68,19 @@ a caller-saved register and the recursive call destroyed it, so this call reads 
 of its own frame, at an address seven other calls are not using. A variable at a fixed address would
 be shared by every call and overwritten by the second one.
 
-`factorial` takes eight bytes of stack per call, four for `$ra` and four for `n`, and nothing more.
-The M68K's twelve are the argument its caller pushes, the return address `bsr` pushes and the old
-frame pointer `link` pushes; `jal` pushes nothing at all and the argument arrives in `$a0`. Step
-into the calls and `$sp` drops by eight at each one, down to `7FFFEFBC` at the deepest, where `n` is
-1 and the recursion turns round. `fib` takes twelve, because of the word of local room it asked for.
+`factorial` takes eight bytes of stack per call, four for `$ra` and four for `n`, and not a byte
+more. That is as small as a recursive frame gets here, because `jal` pushes nothing and the argument
+arrives in a register: the only things on the stack are the two this subroutine decided to put
+there. Step into the calls and watch `$sp` drop by eight each time, down to `7FFFEFBC` at the
+deepest point, where `n` is 1 and the recursion turns round. `fib` takes twelve, because of the
+word of local room it asked for.
 
 `fib` is the expensive one: `fib(n)` calls itself twice, so the number of calls roughly doubles for
 every 1 you add to `n`, and it takes 2300 instructions for a number you could get with a loop and
 two registers. Recursion is written to be read, not to be quick.
 
-Try changing `li $a0, 8` to `li $a0, 10` and `$s0` comes out at `00375F00`, which is 3628800, the
-right answer. The M68K version of this program answers that same change wrongly, because its `mulu`
-multiplies two 16 bit halves; `mul` here is a full 32 bit multiply, and the first factorial it gets
-wrong is 13, which comes out at `7328CC00` instead of 6227020800.
+Change `li $a0, 8` to `li $a0, 10` and the answer is 3628800, which is right. Push it to 13 and it
+is not: `$s0` reads `7328CC00`, while 13 factorial is 6227020800. Nothing went wrong in the
+recursion. `mul` writes the low 32 bits of the product, 6227020800 needs 33 of them, so the top bit
+fell off the end and the program reported the rest with complete confidence. That is what an
+overflow looks like when nobody is checking for one.

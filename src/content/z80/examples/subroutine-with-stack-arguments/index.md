@@ -6,10 +6,6 @@ A subroutine with its arguments in registers passed everything in `a` and `b`. T
 subroutine has to keep something across a call, because the call is free to destroy any register it
 likes.
 
-**You need to know:** the "call, ret and passing values" lecture and the "The stack, push and pop"
-lecture. What is new here is `ix` as a frame pointer, it stays still in the middle of the frame
-while `sp` keeps moving, so `(ix+4)` names the same argument from the first instruction to the last.
-
 ```z80|playground|memory|no-flags|allow-open
     .org 0x8000
     ld hl, 4
@@ -65,10 +61,21 @@ done:
     halt
 ```
 
-The M68K builds this frame with one instruction, `link a6, #-4`, and takes it down with `unlk`. The
-Z80 has neither, so the three instructions after the label are `link` written out: `push ix` saves
-what the caller had, `ld ix, 0` and `add ix, sp` copy `sp` into `ix` (there is no `ld ix, sp`), and
-the two `dec sp` take the local room. `ld sp, ix` and `pop ix` are `unlk`.
+The four instructions after the label are the frame being built, and each one has a job.
+
+`push ix` puts the caller's `ix` on the stack. The caller may have been using `ix` for something of
+its own, and this subroutine is about to overwrite it, so it has to go back exactly as it was found.
+
+`ld ix, 0` then `add ix, sp` copies `sp` into `ix`. It takes two instructions because there is no
+`ld ix, sp`; zeroing `ix` and adding `sp` to it gets there. From this moment `ix` stops moving and
+`sp` carries on, which is the whole point of the arrangement.
+
+`dec sp` twice lowers the stack pointer by two bytes. Nothing is written there; lowering `sp` is how
+you claim room, because everything below `sp` is fair game for the next `push` and everything above
+it is yours.
+
+At the end, `ld sp, ix` throws the local room away by putting `sp` back where `ix` has been sitting
+all along, and `pop ix` hands the caller's `ix` back.
 
 Once that has run, the frame is this, with 🟢 on the stack pointer:
 

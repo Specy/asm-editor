@@ -1,6 +1,6 @@
-`add` and `sub` behave exactly as they look, in all three sizes, with the `i`, `q` and `a` forms we
-saw in the instruction set lecture. Multiplication and division are the two with rules: their
-operands are words, and a division answers two questions at once.
+`add` and `sub` behave exactly as they look, in all three sizes. Multiplication and division are the
+two that do not. Both of them work in words rather than longs, and a division hands you two answers
+in one register, so they are worth going slowly over.
 
 ## Multiplication packs a long into a register
 
@@ -33,7 +33,7 @@ answers back into `dn`: the **quotient in the low word** and the **remainder in 
 ```m68k|playground
     move.l #100000, d0
     move.l #3, d1
-    divu d1, d0         ; 100000 / 3 and 100000 % 3, both at once
+    divu d1, d0         ; the quotient and the remainder, both at once
 ```
 
 `d0` comes out at `00018235`. Press **W** in the registers panel and the two words are drawn apart:
@@ -45,15 +45,16 @@ alone**, so the answer you get is the number you started with. Try changing `mov
 `move.l #1, d1`: `d0` stays `000186A0`, which is the 100000 you put in, and `V` goes to 1. Dividing by
 zero is worse: the run ends with "Division by zero" in the message under the editor.
 
-So a division is followed by a check of `V` in any program you did not write the numbers for
-yourself.
+A division whose operands came from somewhere you do not control therefore wants a `bvs` after it,
+or you get the number you started with and no complaint.
 
 ## Logic and masks
 
-`and`, `or`, `eor` and `not` are C's `&`, `|`, `^` and `~`, one bit position at a time with no
-carrying between them. The `i` forms take a plain number: `andi.l #$FF, d0`. `eor` insists on a data
-register as its **source**, so `eor.l d1, d0` is fine and `eor.l #1, d0` has to be written
-`eori.l #1, d0`.
+`and`, `or`, `eor` and `not` work one bit position at a time, with nothing carrying between the
+positions. `and` gives a 1 only where both inputs had one, `or` where either did, `eor` where exactly
+one did, and `not` flips every bit. The `i` forms take a plain number: `andi.l #$FF, d0`. `eor`
+insists on a data register as its **source**, so `eor.l d1, d0` is fine and `eor.l #1, d0` has to be
+written `eori.l #1, d0`.
 
 A **mask** is a number written for the pattern of its bits, and the three do the three things you can
 want: `and` keeps the bits the mask has set, `or` sets them, `eor` flips them.
@@ -106,9 +107,9 @@ Each of them takes the count two ways, and there is a third form for memory:
     ror.l #1, d4        ; the bottom bit comes back at the top
 ```
 
-`d0` is `00100000`, which is 1 shifted twenty places. `d2` is `0000FF00`. `d3` is `FFFFFFFB`, which
-is -5. `d4` is `C0000000`, because the 1 at the bottom rotated round to the top and joined the 1
-already there.
+`d3` comes out at `FFFFFFFB`, which is -5, because `asr` dragged the sign along and -20 over 4 is
+still negative. `d4` is `C0000000`: the 1 at the bottom rotated round to the top and joined the 1
+that was already there, so no bit was lost.
 
 The bit that falls off the end lands in the carry flag, which is how a program reads the bits of a
 number one at a time: shift, then `bcs` or `bcc`.
@@ -140,15 +141,15 @@ is one byte, so they run 0 to 7.
 `d0` comes out at `00000001` and `Z` at 1. Step through it with the flags panel open and watch `Z`
 after each of the four: it reports the bit each instruction found, not the bit it left behind.
 
-`btst` is how you write `if (x & 8)` without building the mask, and `bset` and `bclr` are `x |= 8`
-and `x &= ~8`. What they add over `andi` and `ori` is the bit number in a register: `btst d1, d0`
-tests the bit `d1` names, which a mask written as a constant cannot do.
+You could do all four of those with `andi`, `ori` and `eori` and a mask you worked out yourself.
+What the bit instructions add is that the bit number can be in a register: `btst d1, d0` tests
+whichever bit `d1` is naming right now, and a mask written as a constant cannot move.
 
 ## Your turn
 
-The test starts `d0` at 1000. Divide it by 7 and take the packed answer apart: the quotient in `d2`,
-which is 142, and the remainder in `d3`, which is 6. Both registers must hold the number on its own,
-with zeroes above it.
+`d0` holds 1000. Divide it by 7 and then unpack the two answers into separate registers: the
+quotient, 142, in `d2`, and the remainder, 6, in `d3`. Each register should hold its number on its
+own with zeroes above it, so getting the values out of the two halves is most of the work.
 
 ```m68k|playground|exercise
 * your code here
@@ -175,8 +176,8 @@ with zeroes above it.
 
 </details>
 
-The second one starts `d0` at `$F0F0F0F0` and wants the number of bits set in it left in `d1`, which
-is 16. Shift the bits out one at a time and count the ones that land in the carry.
+Now count bits. `d0` holds `$F0F0F0F0`; leave the number of 1 bits in it in `d1`, which comes to 16.
+Shift them out one at a time and count the ones that land in the carry.
 
 ```m68k|playground|exercise
 * your code here

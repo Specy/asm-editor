@@ -6,10 +6,6 @@ The instructions of the Example before this one treat a register as a number. Th
 same register as eight bits side by side, which is the other way to read one and often the cheaper
 way.
 
-**You need to know:** the "8-bit and 16-bit arithmetic, logic and bits" lecture and the "jp, jr and
-the conditions" lecture. What is new here is the carry flag as a way out of a register, `srl` drops
-the bit that falls off the bottom into `C` and a jump reads it.
-
 ```z80|playground|no-flags|allow-open
 N   equ 182
 
@@ -38,12 +34,13 @@ no_bit:
     djnz count
 
     ld a, N
-    and 0x0F        ; the low nibble on its own
+    and 0x0F        ; the low four bits on their own
     ld e, a
     halt
 ```
 
-`bit 0, a` is C's `n & 1` without building the mask and without changing `a`, and it sets `Z` from
+`bit 0, a` asks whether the lowest bit is set, without building a mask and without changing `a`, and
+it sets `Z` from
 the bit it found **backwards**: `Z` goes to 1 when the bit was 0, which is the opposite of what you
 expect the first time. So `jr z` means "the bit was clear", and `d` comes out at `00` here because
 182 is even.
@@ -58,11 +55,9 @@ pair, so `add hl, hl` is what a program writes when it is `hl` being doubled.
 `0xB6`. That is how any field is taken out of a packed value: mask what you want, then shift it down
 to the bottom if it was not there already.
 
-The loop runs eight times, once per bit, and does C's `count += n & 1; n >>= 1;` with the `& 1` done
+The loop runs eight times, once per bit, adding the lowest bit to the count and then shifting the
+number down, with the "is the lowest bit set" done
 by the shift itself. `srl a` moves every bit one place down and the bit that falls off the bottom
 lands in `C`, so `jr nc` skips the `inc` when it was a zero. `c` comes out at `05`, which is the
 number of ones in `10110110`, and `a` is empty by the time the loop ends, since eight shifts push
 every bit out of it.
-
-Try changing `N equ 182` to `N equ 183`, one more. `d` becomes `01` because the number is now odd,
-`hl` becomes `05B8`, which is 1464, `c` becomes 6 and `e` becomes 7.

@@ -1,13 +1,9 @@
 Two subroutines that call themselves. `factorial(8)` comes back as 40320 in `s0`, and `fib(10)`
 comes back as 55 in `s1`, and neither of them has a loop anywhere: the repetition is the calls.
 
-Stack arguments and a stack frame built one frame for one call. Recursion is the same instructions
-with nothing added, because a prologue subtracts from wherever `sp` happens to be, so every call
-gets a frame of its own at a fresh address and `0(sp)` means this call's own room.
-
-**You need to know:** the "Stack arguments and a stack frame" Example and the "jal, ret and the
-calling convention" lecture. What is new here is a subroutine calling itself, which needs no
-mechanism the previous program did not already use.
+A subroutine that calls itself needs no new instruction. A prologue subtracts from wherever `sp`
+happens to be at that moment, so the eighth call down gets its room at a different address from the
+first, and `0(sp)` inside any of them means that call's own copy.
 
 ```riscv|playground|memory|allow-open
 .text
@@ -71,26 +67,22 @@ register and the recursive call destroyed it, so this call reads its own `n` bac
 frame, at an address seven other calls are not using. A variable at a fixed address would be shared
 by every call and overwritten by the second one.
 
-`fib` has a base case that moves nothing: `fib(0)` is 0 and `fib(1)` is 1, and both of them are
-already sitting in `a0` where the answer goes, so `blt a0, t0, fib_done` jumps straight to the
-epilogue. MIPS writes a `move $v0, $a0` there, because on that machine the argument and the answer
-are two different registers.
+`fib` has a base case that moves nothing at all. `fib(0)` is 0 and `fib(1)` is 1, and in both cases
+that number is already sitting in `a0`, which is where the answer goes, so the branch jumps straight
+to the epilogue and returns what it was given.
 
-`li t0, 2` above the branch is there because `blt` compares two registers and 2 is not one. The M68K
-writes `cmp.l #2, d0` and MIPS lets its assembler hide the same `li` inside a `blt $a0, 2, label`;
-here it is a line you write, and it runs once per call.
+`li t0, 2` above that branch is the constant being put somewhere the branch can reach it, and it
+runs once per call.
 
-`factorial` takes sixteen bytes of stack per call, of which it uses eight, four for `ra` and four for
-`n`. The M68K's twelve are the argument its caller pushes, the return address `bsr` pushes and the
-old frame pointer `link` pushes; `jal` pushes nothing at all and the argument arrives in `a0`. Step
-into the calls and `sp` drops by sixteen at each one, down to `7FFFEF7C` at the deepest, where `n` is
-1 and the recursion turns round.
+`factorial` claims sixteen bytes per call and uses eight of them, four for `ra` and four for `n`.
+Step into the calls and watch `sp` drop by sixteen each time, down to `7FFFEF7C` at the deepest
+point, where `n` has reached 1 and the recursion turns round and starts multiplying its way back
+up.
 
 `fib` is the expensive one: `fib(n)` calls itself twice, so the number of calls roughly doubles for
 every 1 you add to `n`. `factorial(8)` is 104 instructions and `fib(10)` is about 2120, for a number
 you could get with a loop and two registers. Recursion is written to be read, not to be quick.
 
-Try changing `li a0, 8` to `li a0, 10` and `s0` comes out at `00375F00`, which is 3628800, the right
-answer. `mul` here is a full 32 bit multiply, so the first factorial it gets wrong is 13, which comes
-out at `7328CC00` instead of 6227020800. The M68K version gets that same change wrong, at 352000,
-because its `mulu` multiplies two 16 bit words and 362880 does not fit in one.
+Ask for a bigger factorial and at some point the answer stops being true. `mul` writes 32 bits, and
+13! is 6227020800, which needs 33. The program does not stop or complain: `s0` just comes out at
+`7328CC00`, the bottom 32 bits of the right answer, looking exactly as trustworthy as 40320 did.

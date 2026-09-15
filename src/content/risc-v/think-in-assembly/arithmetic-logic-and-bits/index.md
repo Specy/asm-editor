@@ -1,6 +1,6 @@
-`add` and `sub` behave exactly as they look, and they wrap without a word of complaint, which "Words,
-halves and bytes" showed. Multiplication and division are the two with rules of their own, because a
-product can need 64 bits and a division has two answers.
+`add` and `sub` behave exactly as they look, and they wrap round without a word of complaint.
+Multiplication and division are the two worth slowing down for, because a product can need more room
+than a register has and a division produces two answers rather than one.
 
 ## Two instructions for one product
 
@@ -32,18 +32,17 @@ main:
     rem s1, t5, t6      # the remainder
 ```
 
-`t2` comes out at `540BE400` and `t3` at 2, which together are 10000000000. `s0` is 142 and `s1` is
-6, because 7 times 142 is 994.
+`t2` and `t3` are the two halves of one answer: together they are 10000000000, which is far more
+than either register could have held alone. `s1` is 6 because 7 times 142 is 994, six short of the
+1000 it was dividing.
 
-The MIPS course keeps its product in `hi` and `lo`, two registers outside the 32 that only four
-instructions can reach, and a `mult` between a `div` and its `mflo` throws the quotient away. There
-is nothing like that here: `mul` and `div` write the register you named, and nothing else on the
-machine is touched.
+Each of these writes the one register you named and touches nothing else on the machine, so there is
+never a hidden result sitting somewhere waiting to be collected before the next multiplication
+overwrites it. The cost is that a program which wants the whole 64 bit product runs the
+multiplication twice, once as `mul` and once as `mulh`. A chip is allowed to spot the pair and do
+the work once.
 
-The cost is that a program wanting the whole 64 bit product runs the multiplication twice, once as
-`mul` and once as `mulh`. A chip is allowed to notice the pair and do the work once.
-
-## Division by zero says nothing
+## Dividing by zero
 
 `div` by zero does not stop the program, does not raise an exception and does not need a guard.
 RISC-V wrote the answers into the specification instead:
@@ -67,13 +66,13 @@ main:
     rem s1, t5, t6      # and the remainder is 0
 ```
 
-`t2` and `t4` come out at `FFFFFFFF`, `t3` at 10, `s0` at `80000000` and `s1` at 0. Nothing stopped
-and nothing was reported.
+Nothing stopped, nothing was reported, and every one of those registers holds a perfectly ordinary
+looking number.
 
-MIPS is the opposite: its three operand `div` and `rem` are pseudo-instructions that assemble a
-`break` in front of the real division, so a divisor of zero ends the run with a message. Here the
-program carries on with a -1, so **a divisor that could be zero is yours to test**, with a `beqz`
-before the `div`.
+This is a deliberate choice rather than an oversight: the instruction always produces an answer, so
+the hardware needs no way to report a failure in the middle of one. The consequence lands on you.
+**A divisor that could be zero is yours to test**, with a `beqz` in front of the division, because
+otherwise the program will carry on perfectly happily with a -1 in it.
 
 ## Logic and masks
 
@@ -133,9 +132,9 @@ Three shifts, each with a constant form and a register form:
 The constant amount is five bits, so 0 to 31, and the register forms use the low five bits of the
 register and ignore the rest.
 
-**There is no rotate.** MIPS has `rol` and `ror` as pseudo-instructions and the M68K has four real
-rotate instructions; the RISC-V base has none at all, so a rotate is a shift each way and an `or`,
-written by you.
+A **rotate**, where the bits that fall off one end come back in at the other, is not in the base
+instruction set. You build one: shift the word each way by amounts that add up to 32, then `or` the
+two halves together, which is the last three lines of the program below.
 
 ```riscv|playground
 .text
@@ -184,9 +183,53 @@ loop:
 `t1` comes out at 16 and `t0` at 0, shifted away entirely. `add t1, t1, t3` with a bit that is 0 or 1
 is the whole of "count it if it is set", which needs no branch.
 
-MIPS has `clz` and `clo`, which count the run of zeroes or ones at the top of a word in one
-instruction. The RISC-V base has neither, and neither does this assembler, so finding the highest set
-bit is a loop like the one above.
+Finding the **highest** set bit is the same loop the other way up: shift left until the top bit is
+set, counting as you go. There is a RISC-V extension with single instructions for both, called Zbb,
+and this assembler does not have it.
+
+## Choosing a value without a branch
+
+Here is what a mask is really good for. Suppose you want the larger of two numbers in a register,
+and you would rather not jump anywhere to get it.
+
+Start from the useful fact that `and` with a mask of **all ones** leaves a value alone, and `and`
+with a mask of **all zeroes** wipes it out. So if you can produce one of those two masks from a
+comparison, you can pick between two values with no branch at all.
+
+`slt` gives you a 1 or a 0. `sub t3, zero, t2` turns that into the mask: 0 minus 0 is `00000000`,
+and 0 minus 1 is `FFFFFFFF`.
+
+```riscv|playground
+.text
+main:
+    li t0, -5
+    li t1, 3
+    slt t2, t0, t1      # 1, because -5 is the smaller
+    sub t3, zero, t2    # so the mask is all ones
+    xor t4, t0, t1      # the bits in which the two differ
+    and t4, t4, t3      # kept by this mask, wiped by the other one
+    xor t4, t4, t0      # applied to t0, which turns it into t1
+```
+
+The last three lines are worth watching one bit at a time. Take the lowest four bits of each value,
+with `t0` as -5, which ends in `1011`, and `t1` as 3, which ends in `0011`:
+
+| step             | bits   | what it is                                     |
+| ---------------- | ------ | ---------------------------------------------- |
+| `t0`             | `1011` | the value we start from                        |
+| `t1`             | `0011` | the value we may want instead                  |
+| `xor t4, t0, t1` | `1000` | a 1 wherever the two disagree                  |
+| `and t4, t4, t3` | `1000` | the mask is all ones, so nothing is dropped    |
+| `xor t4, t4, t0` | `0011` | flipping exactly those bits of `t0` gives `t1` |
+
+Flipping a bit twice puts it back, so `xor` with the difference is what carries one value across
+into the other. Had the comparison come out 0, the mask would have been all zeroes, the `and` would
+have wiped the difference out, and the final `xor` with nothing would have left `t0` exactly as it
+was.
+
+Five instructions where the branch version takes three, so this is not a saving. It is what you
+reach for when the jump itself is the thing you want to avoid, which on a real chip is a branch
+whose outcome is hard to guess in advance.
 
 ## Your turn
 

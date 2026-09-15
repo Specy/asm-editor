@@ -44,7 +44,7 @@ scratch now that all of them are written.
 9. The **General course**'s outside-world module carries no Playgrounds at all: a reader who has not
    yet studied a language cannot run a program that prints without first being taught a convention
    that course does not teach. Full scale as built, counting Lectures and Examples: Assembly
-   basics 18, M68K 42, MIPS 43, RISC-V 44, Z80 42, x86 37, so 226 pages.
+   basics 18, M68K 42, MIPS 43, RISC-V 44, Z80 42, x86 38, so 227 pages.
 10. Playgrounds get a `screen` flag (off by default) so the Screen peripheral can be shown inline.
 11. Work happens in a git worktree at `/home/dev/code/asm-editor-courses` on branch `feat/courses`
     cut from `feat/screen-peripherals`; it becomes a pull request after PR #71 merges. Content under
@@ -175,7 +175,8 @@ file only (`docs/design/register-files.md`).
 | `think-in-assembly`            | `arrays-strings-and-the-string-instructions` | Arrays, strings and the string instructions | `data-in-memory`    |
 | `think-in-assembly`            | `the-stack-push-and-pop`                     | The stack, push and pop                     | `the-stack`         |
 | `think-in-assembly`            | `call-ret-and-the-system-v-convention`       | call, ret and the System V convention       | `subroutines`       |
-| `think-in-assembly`            | `floating-point-x87-and-sse`                 | Floating point: x87 and SSE                 | `floating-point`    |
+| `think-in-assembly`            | `floating-point-and-the-x87-stack`           | Floating point and the x87 stack            | `floating-point`    |
+| `think-in-assembly`            | `sse-and-packed-arithmetic`                  | SSE and packed arithmetic                   | `sse`               |
 | `talking-to-the-outside-world` | `syscall-and-the-linux-abi`                  | syscall and the Linux ABI                   | `syscalls`          |
 | `talking-to-the-outside-world` | `ports-devices-and-the-kernel`               | Ports, devices and the kernel in between    | `mmio`              |
 | `talking-to-the-outside-world` | `interrupts-exceptions-and-signals`          | Interrupts, exceptions and signals          | `interrupts`        |

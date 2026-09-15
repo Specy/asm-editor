@@ -1,9 +1,6 @@
-Ten slots of memory, filled with the numbers 1 to 10. The loop has a counter, the counter is also the
-index into the array, and the whole of the indexing is in one memory operand.
-
-**You need to know:** the "Loops" lecture and the "Effective addresses" lecture. What is new here is
-`resq`, which reserves slots without writing anything into the program file, and the scale of 8 in
-`[numbers + rcx*8]` that turns an index into an address.
+Ten slots of memory, filled with the numbers 1 to 10. The thing to watch here is not the loop, which
+you have seen, but what it leaves behind in the memory panel: eighty bytes that a program elsewhere
+would call an array of ten numbers, and that memory itself has no opinion about at all.
 
 ```x86|playground|memory|allow-open
 default rel
@@ -28,21 +25,21 @@ _start:
     syscall
 ```
 
-Type `402000` into the memory panel. The eighty bytes read `01` then seven zeroes, `02` then seven
-zeroes, and so on to `0A`: ten qwords, little endian, holding 1 to 10.
+Type `402000` into the memory panel. Eighty bytes: `01` then seven zeroes, `02` then seven zeroes, on
+to `0A`. Seven eighths of what the program wrote is zero, because a qword is eight bytes wide whether
+or not the number in it needs them.
 
-`[numbers + rcx*8]` is a displacement, an index and a scale. The processor multiplies `rcx` by 8 and
-adds it to the address of `numbers` as part of working out where to write, so the whole of `&numbers[i]`
-is inside one operand. The 8 is the size of one element and nothing else.
+That is what `resq 10` asked for. `resq` reserves units and not bytes, so the 10 means ten qwords and
+the program gets eighty bytes. Writing `resb 10` by mistake gives you ten bytes, the loop writes past
+the end of them on its second pass, and nothing warns you, because there is nothing there to warn:
+`numbers` is an address and the loop is arithmetic on it.
 
-`jb` and not `jl`, because an index is never negative and unsigned is the right question to ask about
-it.
+The `8` in `[numbers + rcx*8]` is the same number for the same reason, and it has to match. Change
+the array to `resd 10`, the store to `mov [numbers + rcx*4], eax` and the scale to 4, and the loop
+fills ten dwords correctly. Change only two of the three and it writes the right values into the
+wrong places.
 
-`inc rcx` and not `add rcx, 1` is the habit to pick up. It is one byte shorter, and it leaves `CF`
-alone, which matters in a loop that is adding numbers up with a carry between passes.
-
-A loop that writes the **same** value into every slot does not need a loop. `rep stosq` stores `rax`
-into `[rdi]` and steps it, `rcx` times, so filling ten qwords with 7 is
+A loop that put the **same** value in every slot would not need to be a loop at all:
 
 ```
     lea rdi, [numbers]
@@ -52,9 +49,5 @@ into `[rdi]` and steps it, `rcx` times, so filling ten qwords with 7 is
     rep stosq
 ```
 
-That is five instructions whatever the length, and it is what `memset` compiles to. It cannot help
-here because every slot gets a different number.
-
-Try changing `resq 10` to `resd 10`, the store to `mov [numbers + rcx*4], eax`, and the scale to 4.
-The same loop fills ten dwords instead, and the memory panel shows `01 00 00 00` where it showed
-eight bytes.
+Five instructions no matter how long the array is. That cannot help here, because every slot gets a
+different number, but it is the shape to reach for when they do not.

@@ -5,11 +5,10 @@ ends the moment the bird touches a pipe or the ground, and another tap starts th
 **Click the Screen panel before you press a key**, the same as in Move a square with the keyboard.
 You can also click on the drawing itself, since the mouse counts as a flap too.
 
-**You need to know:** everything above it on the ladder. The frame is drawn off screen and shown all
-at once the way A bouncing ball does it, the keys are polled the way Move a square with the keyboard
-polls them, and the pipes are a table walked with an address register. What is new is the **state
-machine** a game is, and the **sixteenths of a pixel** the bird's height is measured in, because a
-bird that can only move in whole pixels cannot accelerate smoothly.
+Play it first, then come back to the listing. It is eight hundred lines and most of them are
+drawing, so do not read it top to bottom. The banners inside it split it into four parts, one frame,
+input, the world and drawing, and the sections under the listing take the four ideas that are worth
+having in their own right.
 
 ```m68k|playground|open-screen|no-registers|no-flags|allow-open
     ORG     $1000
@@ -820,7 +819,7 @@ PLATER  equ     356
 PANELL  equ     104
 PANELR  equ     536
 
-* colors are $00BBGGRR longs, the encoding EASy68K uses
+* colors are $00BBGGRR longs: blue high, then green, then red
 SKY     equ     $00E8C04E
 CLOUDC  equ     $00F8FBFF
 PIPEC   equ     $0039BB58
@@ -839,52 +838,108 @@ PAPER   equ     $00FFFFFF
 { "runFor": 20000 }
 ```
 
+## Three states, one frame loop
+
 A game is always in one of three states, and `state` says which: `READY` while the bird hangs still
-waiting for the first flap, `PLAYING`, and `DEAD` while it drops to the ground. The frame loop reads
-the input once, branches on `state`, and every branch ends at `draw`, so one frame is one pass and
-the three states differ only in what they do to the bird and the pipes in between.
+waiting for the first flap, `PLAYING`, and `DEAD` while it drops to the ground.
 
-`readflap` answers 1 only on the frame a press begins. Task 19 and task 61 both report what is held
-_right now_, so a key held down for twenty frames reads as pressed twenty times, which would be
-twenty flaps. `held` is the word that turns that into one: a press counts when the frame before it
-had nothing down. The answer travels in `d7` from there to the state machine, which is why the
-comment above `frame` says nothing called from there may touch it.
+```m68k
+frame:
+    bsr     readflap
+    move.w  d0,d7
 
-`birdy` is a long, and it counts **sixteenths of a pixel**. Gravity adds `GRAV`, which is 5, to
-`birdv` every frame, and a flap sets `birdv` to -80: in whole pixels those would be 0 and -5, and the
-bird would drop like a brick or not accelerate at all. `asr.l #4,d0` is what turns the sixteenths
-back into the pixel the bird is drawn at, and the low four bits that get shifted away are the
-fractional part the next frame keeps.
+    move.w  state,d0
+    cmp.w   #PLAYING,d0
+    beq     playing
+    cmp.w   #DEAD,d0
+    beq     dead
+```
 
-Three pipes make an endless course. `movepipes` slides each one left by `SPEED`, and a pipe whose
-left edge has gone past `NEGPIPE`, which is one pipe width off the left of the screen, jumps
-`CYCLE` to the right and asks `randgap` for a new gap. `CYCLE` is `SPACING*3`, so the pipe lands
-exactly where a fourth pipe would have been and the spacing never drifts. The third word of a pipe's
-record is whether it has been counted, and it goes up the score when the pipe's right edge passes
-`BIRDX`.
+Every frame reads the input once, branches on `state`, and ends at `draw` whichever way it went, so
+one pass round that loop is exactly one frame. The three states differ only in what they do to the
+bird and the pipes on the way through. That shape is what keeps a game readable at this size: there
+is one place where a frame begins and one place where it ends, and adding a fourth state means
+adding a branch and a label, not rethinking anything.
 
-`randgap` is a sixteen bit congruential generator: multiply the seed by 25173, add 13849, keep the
-low word. The high byte of the result is the half worth using, and `mulu #GAPSPAN` followed by
-`lsr.l #8` turns a byte into a number from 0 to `GAPSPAN` without a division. The seed itself comes
-from task 8 on the frame the first flap happens, so the course depends on when you started playing
-instead of on a number written into the program.
+`d7` carries one thing across the whole loop, which is whether a flap began this frame. Nothing the
+loop calls is allowed to touch it, and that is written in the comment above `frame` because nothing
+in the machine will enforce it.
 
-`hittest` measures a box that is `HITIN` pixels smaller than the bird on each side, which is what
-makes a near miss feel like one. It also skips a pipe that is still to the right of the bird or
-already behind it, so the only test that runs on most frames is two comparisons per pipe.
+## A press, not a key held down
 
-The drawing is the same double buffering A bouncing ball uses: task 92 mode 17 at the start, the
-whole frame painted back to front into the off screen image, and task 94 to show it. Task 23 then
-lets `DELAY` hundredths of a second of program time pass, so the bird falls at the same speed
-whatever machine is underneath. The clouds, the tufts of grass and the wing that beats through three
-positions cost nothing but the order they are drawn in.
+`readflap` has to answer "did a flap begin" and the tasks it has only answer "is something down right
+now". A key held for twenty frames reads as pressed twenty times, which would be twenty flaps.
 
-The score and the messages are drawn with task 95, which puts text at a pixel position instead of at
-the text cursor. The screen's font is an 8 by 16 cell, so `ctext` counts the characters, takes four
-pixels off the centre for each one and draws from there. `appnum` builds the digits backwards into a
-buffer the way Print a number in any base without help does, because a division gives the last digit
-first.
+```m68k
+    clr.w   held
+    moveq   #0,d0
+    rts
+pressed:
+    tst.w   held
+    bne     stillheld
+    move.w  #1,held
+    moveq   #1,d0               ; this frame is where the press began
+    rts
+```
 
-Try changing `GAPH equ 140` to `100` and playing again. The gap the pipes leave is the whole of the
-difficulty, and `HALFGAP` right under it has to change with it: the drawing measures the gap from its
-middle, so the two numbers are one number written twice.
+`held` is one word of memory remembering the answer from last time, and a press only counts when the
+frame before it had nothing down. Any program polling anything needs this the moment it cares about
+edges rather than levels.
+
+## Sixteenths of a pixel
+
+`birdy` is a long and it does not count pixels, it counts sixteenths of one. Gravity adds `GRAV`,
+which is 5, to `birdv` every frame, and a flap sets `birdv` to -80.
+
+In whole pixels those two numbers would be 0 and -5, so the bird would either not accelerate at all
+or drop like a brick, and there is nothing in between to pick. Sixteen times finer gives sixteen
+times as many speeds to choose from, out of the same integer arithmetic. `asr.l #4,d0` turns the
+sixteenths back into the pixel the bird is drawn at, and the four bits it shifts away are the
+fractional part the next frame carries on with.
+
+## Three pipes and an endless course
+
+`movepipes` slides each pipe left by `SPEED`. A pipe whose left edge has gone past `NEGPIPE`, one
+pipe width off the left of the screen, jumps `CYCLE` to the right and asks `randgap` for a new gap.
+
+`CYCLE` is `SPACING*3`, so the recycled pipe lands exactly where a fourth pipe would have been and
+the spacing never drifts, however long you play. Three pipes is all the memory the course ever needs.
+The third word of a pipe's record is whether it has been counted, and it puts one on the score when
+the pipe's right edge passes `BIRDX`.
+
+The gaps come out of arithmetic rather than out of anywhere random:
+
+```m68k
+randgap:
+    moveq   #0,d0
+    move.w  seed,d0
+    mulu    #25173,d0
+    add.l   #13849,d0
+    move.w  d0,seed             ; the low word of the product is the next seed
+```
+
+Multiply the seed, add a constant, keep the low word, and the sequence runs a long way before it
+repeats. The high byte is the half worth using, and `mulu #GAPSPAN` then `lsr.l #8` squeezes a byte
+into a number from 0 to `GAPSPAN` with no division anywhere. The seed itself is read from task 8 on
+the frame the first flap happens, so the course depends on when you started playing rather than on a
+number written into the program.
+
+## The rest of it
+
+`hittest` measures a box `HITIN` pixels smaller than the bird on every side, which is what makes a
+near miss feel like a near miss instead of a hit. It also skips any pipe still to the right of the
+bird or already behind it, so on most frames the whole collision test is two comparisons per pipe.
+
+The drawing is the double buffering from A bouncing ball: task 92 mode 17 at the start, the frame
+painted back to front into the off screen image, task 94 to show all of it at once. Task 23 then lets
+`DELAY` hundredths of a second of program time pass, so the bird falls at the same rate whatever
+machine is underneath. The clouds, the tufts of grass and the wing that beats through three positions
+cost nothing but the order they are drawn in.
+
+The score and the messages go through task 95, which puts text at a pixel position rather than at the
+text cursor. The screen's font is an 8 by 16 cell, so `ctext` counts the characters, takes four
+pixels off the centre for each one, and draws from there. `appnum` builds the digits backwards into a
+buffer, because a division gives you the last digit first.
+
+`GAPH` is the whole of the difficulty, and `HALFGAP` under it has to change with it: the drawing
+measures the gap from its middle, so those two names are one number written twice.

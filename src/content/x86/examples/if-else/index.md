@@ -1,12 +1,9 @@
-Two numbers in memory, and the larger of the two left in a register. This is an `if` with an `else`,
-which in assembly is a comparison, a conditional jump and a label to jump to.
+The branching lecture built an `if` with two branches and three jumps. This program is the smaller
+shape you will write far more often: one branch, one jump, and no `else` at all.
 
-The condition is written the other way round from the C it comes from. C says what to do when the
-test passes; the assembly jumps away when it fails, because the instructions straight after the jump
-are the "it passed" path.
-
-**You need to know:** the "cmp and the conditional jumps" lecture. What is new here is reading the
-second operand of a `cmp` straight out of memory, which x86 allows and a load/store machine does not.
+The trick is to do the work for one of the two answers **before** you ask the question. Load `x` into
+`rax` and you have already answered "what if x is the larger". Now the only thing left to handle is
+the other case, which takes one conditional jump and one instruction.
 
 ```x86|playground|allow-open
 default rel
@@ -30,29 +27,20 @@ _start:
     syscall
 ```
 
-`r8` comes out at `C`, which is 12. Step through it and watch the flags: `cmp` writes `SF` because
-7 minus 12 is negative, `jge` reads `SF` against `OF` and does not jump, so the `mov rax, [y]` runs.
+Step through it. The `cmp` sets `SF`, because 7 minus 12 is negative. `jge` asks whether `SF` and
+`OF` agree, finds that they do not, and does not jump, so the `mov rax, [y]` underneath it runs and
+`rax` becomes 12. Swap the two numbers in `.data` and the jump is taken instead, the `mov` never runs,
+and the answer `rax` was already holding turns out to have been right all along.
 
-`jge` and not `jae`. These are signed numbers, and the signed and unsigned conditions give different
-answers the moment one of them is negative. Change `x` to `dq -1` and the program still answers 12;
-change the `jge` to a `jae` as well and it answers -1, because as an unsigned number `-1` is the
-largest there is.
+`.done` begins with a dot, which makes it local to `_start`, the last ordinary label above it. Another
+subroutine in the same file can have a `.done` of its own with no clash, and that is what saves you
+inventing `done_2` and `done_3` down a long file.
 
-`.else` and `.done` begin with a dot, so they belong to `_start`, the last ordinary label above them.
-Another subroutine in the same file can have its own `.else` without a clash, which is what saves you
-inventing `else_2` and `done_3` across a long program.
+`jge` and not `jae`, because these are signed numbers. Change `x` to `dq -1` and the program still
+answers 12. Change the `jge` to `jae` as well and it answers -1, because read as an unsigned number
+`-1` is the largest value a register can hold. Both instructions are correct; only one of them matches
+the data.
 
-The whole thing fits in two instructions with no jump at all:
-
-```
-    mov rax, [x]
-    cmp rax, [y]
-    cmovl rax, [y]          ; take y only when x is less
-```
-
-`cmovcc` always runs and only sometimes writes, so the processor never has to guess which way a
-branch will go. It cannot replace every branch, because it reads both operands whatever the condition
-says, but for picking one of two values it is what a compiler emits.
-
-Try swapping the two numbers so that `x` is 12 and `y` is 7. The jump is taken, the `mov` is skipped
-and `r8` still holds the larger.
+One more thing this program shows off: `cmp rax, [y]` takes its second operand straight out of memory,
+so the comparison costs one instruction instead of a load and then a compare. The other operand still
+has to be a register, which is why `mov rax, [x]` on the line above is not optional.

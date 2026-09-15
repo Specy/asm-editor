@@ -1,14 +1,13 @@
-Every program in this course has ended with the same three lines and nobody has said what they do.
-This lecture is those three lines: the one instruction that leaves your program, the agreement about
-which register carries what, and the calls a program here can make.
+A program cannot print. Printing means writing to a terminal, and a terminal belongs to the operating
+system, in memory your program is not allowed to touch. The same goes for reading a file, asking for
+more memory, and stopping. What a program can do is **ask**, and `syscall` is the instruction that
+asks.
 
 ## One instruction, one agreement
 
-A program cannot print. Printing means writing to a terminal, and a terminal is a device the
-operating system owns, in memory your program is not allowed to touch. What a program can do is
-**ask**, and `syscall` is the instruction that asks.
-
-`syscall` takes no operands. Everything about the request is in the registers when it runs:
+`syscall` takes no operands. Everything about the request is in the registers when it runs, and which
+register means what is settled by the **ABI**, the application binary interface: the written
+agreement between programs and the kernel about where things go.
 
 | register | holds                       |
 | -------- | --------------------------- |
@@ -21,14 +20,14 @@ operating system owns, in memory your program is not allowed to touch. What a pr
 | `r9`     | the sixth                   |
 | `rax`    | the result, on the way back |
 
-That is the System V convention again with one change: the fourth argument is in `r10` and not
-`rcx`, because **`syscall` destroys `rcx` and `r11`**. The processor puts the return address in `rcx`
-and the flags in `r11` as part of carrying out the instruction, so anything you were keeping in
-either is gone.
+That is the System V convention from the calling lecture with one change: the fourth argument is in
+`r10` and not `rcx`. The reason is that **`syscall` destroys `rcx` and `r11`**. The processor puts the
+address to come back to in `rcx` and the flags in `r11` as part of carrying the instruction out, so
+whatever you were keeping in either is gone, and `rcx` could not have carried an argument in.
 
-The result comes back in `rax`. A small negative number means failure, and the number is the error:
-`-2` is "no such file", `-9` is "bad file descriptor", `-38` is "this kernel does not implement that
-call". There is no flag to check, the value is the answer.
+The result comes back in `rax`. A small negative number means failure and the number says which
+failure: `-2` is "no such file", `-9` is "bad file descriptor", `-38` is "this kernel does not
+implement that call". There is no flag to check afterwards. The returned value is the whole answer.
 
 ## Printing
 
@@ -55,24 +54,26 @@ _start:
     syscall
 ```
 
-`write` prints **exactly** the bytes you point it at and no more. There is no terminator involved and
-nothing is added for you, so the newline is a byte in the string and the length is counted by the
-assembler with `$ - greeting`. Take the `, 10` out and the console loses the line break; take one off
-the length and the `!` disappears.
+`write` prints **exactly** the bytes you point it at and no more. It does not look for a terminator
+and it does not add anything, so the line break is a byte you put in the string yourself, and the
+length is counted by the assembler with `$ - greeting`. Take the `, 10` out and the console loses the
+line break. Take one off the length and the `!` disappears.
 
-A **file descriptor** is a small number naming something open. Every program starts with three:
-**0** is standard input, **1** is standard output, **2** is standard error. `write` to 2 instead of 1
-and the bytes still reach the console here, which is what a program does with a message that is not
-part of its answer.
+A **file descriptor** is a small number naming something the kernel has open on your behalf. Every
+program starts with three: **0** is standard input, **1** is standard output, **2** is standard
+error. Writing to 2 instead of 1 still reaches the console here, and it is where a program puts a
+message that is not part of its answer, so that somebody redirecting the output to a file still sees
+the complaint.
 
 ## Stopping
 
-Call 60 is `exit`, and its one argument is the status, which is what a shell reports as `$?`. Zero
-means success by convention and anything else means something went wrong.
+Call 60 is `exit`, and its one argument is the status the program finishes with, which is the number
+a shell reports afterwards. Zero means success by convention and anything else means something went
+wrong.
 
-`exit` never returns. A program that reaches the end of its code without calling it does not stop, it
-carries on into whatever bytes are next in memory and executes them as instructions. In this editor
-that ends the run quietly a moment later, which is not an ending you should rely on: write the exit.
+Nothing else stops a program, and `exit` never returns. Code that runs off the end of `_start` carries
+on into whatever bytes happen to come next in memory and executes them as instructions. Here that ends
+the run quietly a moment later, which is not an ending to rely on.
 
 ```x86|playground|console|no-registers
 default rel
@@ -97,16 +98,16 @@ _start:
 
 ## Opening a file
 
-`open` takes a path and returns a descriptor, `read` fills a buffer from it, `close` gives it back.
-The program the editor runs is a file on blink's own filesystem called `/program`, so a program can
-open and read itself.
+Three calls work together on a file: `open` takes a path and returns a descriptor, `read` fills a
+buffer through it, and `close` hands the descriptor back. The program the editor runs is itself a
+file, called `/program`, so a program here can open and read its own bytes.
 
 ```x86|playground|no-flags
 default rel
 global _start
 
 section .rodata
-path:   db "/program", 0    ; a path is a C string, so it is terminated
+path:   db "/program", 0    ; the kernel reads a path up to a zero byte
 
 section .bss
 buf:    resb 16
@@ -115,7 +116,7 @@ section .text
 _start:
     mov rax, 2              ; call 2: open
     lea rdi, [path]
-    xor rsi, rsi            ; flags: O_RDONLY is 0
+    xor rsi, rsi            ; flags: read only is 0
     xor rdx, rdx            ; mode, unused when not creating
     syscall
     mov r12, rax            ; the descriptor
@@ -138,17 +139,19 @@ _start:
     syscall
 ```
 
-`r12` comes out at 3, the first descriptor after the three a program starts with. `r13` is 4, the
-number of bytes `read` actually delivered, which is not always the number you asked for and is the
-value to loop on. `r14` is `464C457F`, which little endian is the bytes `7F 45 4C 46`: a `7F` and
-then `ELF`, the magic number at the start of every Linux executable. The program has just read its
+`r12` comes out at 3, the first descriptor free after the three every program starts with. `r13` is 4,
+which is the number of bytes `read` actually delivered and not the number you asked for. Those two are
+allowed to differ, and a program that assumes they do not is a program that loses data on a slow file.
+
+`r14` is `464C457F`. Read it as bytes, little endian, and it is `7F 45 4C 46`: a `7F` followed by the
+letters `ELF`, which is the mark at the start of every Linux executable. The program has just read its
 own header.
 
 ## The calls this emulator has
 
 blink implements around 180 of the Linux calls, and the
 [syscall page](/documentation/x86/syscall) lists every one with its number and arguments. These are
-the ones a program here is likely to want:
+the ones this course uses:
 
 | number | name            | arguments                                              |
 | -----: | --------------- | ------------------------------------------------------ |
@@ -156,37 +159,34 @@ the ones a program here is likely to want:
 |      1 | `write`         | descriptor, buffer, count                              |
 |      2 | `open`          | path, flags, mode                                      |
 |      3 | `close`         | descriptor                                             |
-|      8 | `lseek`         | descriptor, offset, whence                             |
 |      9 | `mmap`          | address, length, protection, flags, descriptor, offset |
 |     11 | `munmap`        | address, length                                        |
-|     35 | `nanosleep`     | the interval, where to put what is left                |
-|     39 | `getpid`        | none                                                   |
 |     60 | `exit`          | status                                                 |
 |    228 | `clock_gettime` | which clock, where to put the answer                   |
 
-A number nothing implements returns `-38` and does not stop the program, so a call that quietly does
-nothing is usually one this emulator does not have.
+A number nothing implements returns `-38` and does not stop the program, so a call that appears to do
+nothing at all is usually one this emulator does not have.
 
 **Reading the console does not work here yet.** `read` from descriptor 0 is how a Linux program takes
-what you type, and this editor cannot yet hand a line you type to an x86 program: the program sits on
-the `read` and the line goes to the shell blink runs around it. So every program in this course
-prints and none of them reads, and the Examples that ask for input in the other languages have no x86
-version.
+a line you type, and the editor cannot yet hand a typed line to an x86 program: the program sits
+waiting on the `read` while the line goes to the shell that blink runs around it. So every program in
+this course prints and none of them reads.
 
 ## What a request costs
 
-`syscall` is not a call to a subroutine. It changes the processor's **privilege level**, from ring 3,
-where your program runs and the memory of the operating system is unreachable, to ring 0, where the
-kernel's code runs and everything is reachable. The kernel reads your register values, checks them,
-does the work, and returns you to ring 3 with the answer in `rax`.
+Despite the name, this is not a call to a subroutine. `syscall` changes the processor's **privilege
+level**, from ring 3, where your program runs and the operating system's memory is unreachable, to
+ring 0, where the kernel's code runs and everything is reachable. The kernel reads your register values, checks that you
+are allowed to ask for what you asked for, does the work, and puts you back in ring 3 with the answer
+in `rax`.
 
-That transition is why a `write` of one byte costs hundreds of times what a `mov` costs, and why C's
-`printf` collects output in a buffer and calls `write` once for a whole line instead of once per
-character.
+All of that checking and switching is why a `write` of one byte costs hundreds of times what a `mov`
+costs. It is also why nearly every language's print function collects characters in a buffer of its
+own and calls `write` once per line, or once per screenful, rather than once per character.
 
-`int 0x80` is the older way of making the same transition, from the days before `syscall` existed. It
-still works for 32 bit programs and it uses a different table of numbers, so a number you read in an
-old book may not be the one to use with `syscall`.
+`int 0x80` is the older way of making the same transition, from before `syscall` existed. It still
+works for 32 bit programs and it uses a different table of numbers, so a call number you find in an
+old book may not be the one to use here.
 
 ## Your turn
 
@@ -241,8 +241,8 @@ _start:
 </details>
 
 The second one prints the same string one character at a time, with a `write` of one byte per pass
-through a loop. The console should read `assembly` with no newline. This is what `printf` avoids
-doing.
+through a loop. The console should read `assembly` with no newline. Eight requests to the kernel where
+one would have done, which is exactly what a buffered print function exists to avoid.
 
 ```x86|playground|console|exercise
 default rel

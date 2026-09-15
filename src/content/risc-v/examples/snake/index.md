@@ -6,11 +6,11 @@ board turns dark red when you lose.
 **Click the Screen panel before you press a key**, the same as in Move a square with the keyboard, and
 press Run again to play another game.
 
-**You need to know:** everything above it on the ladder. The body is an array walked with a pointer
-and moved with a loop, the drawing and the generator are subroutines, the keyboard is polled the way
-Move a square with the keyboard polls it, and only what changed is redrawn the way A bouncing ball
-does it. What is new is the board kept as **cells**, one byte for the column and one for the row
-packed into a word, which becomes an address only at the moment something is drawn.
+Almost everything in it has appeared on an earlier page: an array walked with a pointer, subroutines
+with agreed registers, a polled keyboard, a frame that redraws only what moved. The one genuinely
+new idea is that the board is kept as **cells** rather than as addresses. A segment of the snake is
+one word holding a column in one byte and a row in another, and it only turns into an address at the
+moment something is drawn.
 
 ```riscv|playground|open-screen|console|no-registers|allow-open
 # @screen unit=16 width=512 height=512 base=display
@@ -311,25 +311,19 @@ turn a number into the next one of a sequence, which is as random as a program w
 dice can be. Both coordinates are `andi` with 31, since 32 is a power of two and the low five bits of
 any number are already a column.
 
-Three `sw` instructions reach the screen in a frame and two of them change anything: the cell the tail
-left, the cell the head arrived in, and the food, which is repainted whether it moved or not. The M68K
-version of this game redraws every segment of the snake into an off screen image and shows the whole
-image at once, because that machine has a task for drawing off screen; the bitmap display is the
-picture itself, so the cheapest correct frame is the one that writes the fewest words. A frame here is
-105 instructions, where clearing the board and redrawing everything would be over four thousand:
-`fill_grid` alone is 1024 passes of four instructions.
+A frame reaches the screen with three `sw` instructions, and only two of them usually change
+anything: the cell the tail left, the cell the head arrived in, and the food, repainted whether it
+moved or not. The display is the picture, so the cheapest correct frame is the one that writes the
+fewest words. This one is 105 instructions. Clearing the board and redrawing the whole snake would
+be over four thousand, since `fill_grid` alone is 1024 passes of four instructions.
 
-Every variable this program keeps between frames lives in memory, not in a register, and a store to
-one of them is written with three operands: `sw t4, score, t0` puts the score away and uses `t0` to
-work the address out in, because RISC-V has no `$at` for the assembler to borrow. MIPS writes
-`sw $t4, score` and spends the hidden register without saying so. The same reason puts the four key
-codes in `s8` to `s11` and `MAXLEN` in `t5` before the branch that reads it: every RISC-V branch
-compares two registers and none of them takes a number.
+Everything kept between frames lives in memory rather than in a register, and a store to a label
+needs three operands: `sw t4, score, t0` puts the score away and uses `t0` to build the address in.
+A store has room for one register and one offset, so if you want it to reach a label you have to
+lend it a register to work in, and it has to be one you are willing to lose.
 
-The score is printed to the console, and it is printed there because there is nowhere else to put it.
-The M68K draws it onto the screen with a task that puts text at a pixel position; the bitmap display
-has no text of any kind. Apart from the wait that paces a frame, every `ecall` in this program is
-printing or the exit at the end.
+The score goes to the console because the display draws pixels and nothing else. Every `ecall` in
+the program is either printing, the wait that paces a frame, or the exit at the end.
 
 `fill_grid` and `draw_cell` both read the colour out of `s1` and the base of the grid out of `s0`, and
 `draw_cell` promises to destroy `t0` and `t1` and nothing else, which is what lets the loop that draws
@@ -341,7 +335,7 @@ With nobody typing, the snake runs straight to the right, eats the food on the w
 game the verification run plays. The `runFor` of 100000 is the budget the Playground gets before it
 stops; a game you are playing ends when you make it end.
 
-Try changing `seed:    .word 0x1F123BB5` to `0x2545F491`. The first food is written into the data
-section and does not move, but the one after it falls at column 26 of row 11 instead of column 7 of
-row 8. The sequence is fixed by where it starts, so the same program run twice gives the same game
-twice, which is what makes a program with a generator like this one debuggable at all.
+Change the seed in the data section and every piece of food after the first one falls somewhere
+else. The sequence is decided entirely by where it starts, so the same program run twice plays the
+same game twice. That is not a flaw to be worked around: it is what makes a program built on a
+generator possible to debug at all.

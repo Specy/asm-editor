@@ -1,8 +1,11 @@
-A **framebuffer** is a run of memory in which each element is one pixel, and it is how the MIPS and
-RISC-V simulators here reach their screens. This Z80 has none, and the reason is arithmetic: 256 by
-192 pixels at one byte each is 48 KB, three quarters of the whole address space, spent on a picture.
-So the Screen, the Keyboard and the Mouse are more ports, decoded next to the console ports of the
-previous lecture
+The usual way for a program to draw is a **framebuffer**: a run of memory in which each element is
+one pixel, so painting the screen is writing to memory. That is not an option here, and the reason
+is arithmetic. A screen 256 by 192 pixels, one byte per pixel, is 48 KB. The whole address space is
+64 KB. Three quarters of everything the machine can address would be the picture, leaving you a
+quarter for the program that draws it.
+
+So the Screen, the Keyboard and the Mouse are ports instead, decoded next to the console ports of
+the previous lecture
 ([ADR 0011](https://github.com/Specy/asm-editor/blob/main/docs/adr/0011-z80-peripherals-through-the-port-map.md)).
 
 ## The Screen ports
@@ -47,8 +50,8 @@ The commands are numbers written to `0x27`:
 |      12 | double buffering off                                         |
 |      13 | present: show the off-screen image                           |
 
-A rectangle **excludes its right and bottom edges**, the way EASy68K's does, so a box whose corners
-meet draws nothing.
+A rectangle **excludes its right and bottom edges**, so a box from 10 to 20 covers columns 10 to 19,
+and a box whose two corners are the same point draws nothing.
 
 ## The colour byte
 
@@ -155,13 +158,9 @@ done:
 label:  .asciz "PORTS DRAW THIS"
 ```
 
-Try changing `ld a, 220` on the ellipse to `ld a, 180`: the box stops being wide and the ellipse
-becomes a circle.
-
 The last loop is the character port from the previous lecture, unchanged. Text and graphics share one
-image here, the way EASy68K's single output window did, so anything printed on the console ports also
-lands on the Screen at the text cursor, in 8 by 8 cells: 32 columns by 24 rows on the default Screen.
-Command 9 wipes both.
+image, so anything printed on the console ports also lands on the Screen at the text cursor, in 8 by
+8 cells: 32 columns by 24 rows on the default Screen. Command 9 wipes both.
 
 ## Double buffering and the frame
 
@@ -259,8 +258,10 @@ keepy:
 `cp LIMITX` catches both edges with one unsigned comparison: a step that would take `x` below zero
 wraps it round past 250, which is above the limit as well.
 
-Try changing `ld a, C_BUF_ON` to `ld a, 12`, which turns double buffering off. The ball still moves
-and now it flickers, because you are watching the clear and the draw happen.
+If double buffering sounds like ceremony you could skip, turn it off: change `ld a, C_BUF_ON` to
+`ld a, 12` and run it again. The ball still moves, and it flickers badly, because you are now
+watching the clear and the redraw happen one after the other instead of only ever seeing a finished
+frame.
 
 Port `0x50` is the other way to pace a program: put a number of hundredths of a second in `b` and read
 it, and the program waits that long. Port `0x52` reads one byte of the hundredths since the run
@@ -281,9 +282,9 @@ Four ports, and they are all reads:
 Port `0x31` is what a game reads: it consumes nothing, so a key held down answers 1 every time round
 the loop, and it needs the `in r,(c)` form because the key code travels in `b`.
 
-The key codes are EASy68K's, the same table every language in this editor uses. A letter is the
-ASCII code of its **capital**, so `A` is `0x41` whether or not Shift is held; a digit is its ASCII
-code; and the arrows are left `0x25`, up `0x26`, right `0x27`, down `0x28`.
+A letter's code is the ASCII code of its **capital**, so `A` is `0x41` whether or not Shift is held,
+and a digit is its own ASCII code. The arrows are left `0x25`, up `0x26`, right `0x27`, down
+`0x28`.
 
 **Click the Screen panel before you press a key**: the Screen only gets the keyboard when it has the
 focus, and a ring around it says so while it does.
@@ -521,7 +522,7 @@ Port `0x43` is how a program tells a **new** click from one it has already handl
 compare it with the count you saw last time, and act only when it has changed. Polling the buttons
 alone cannot do that, since a button held for half a second reads as down every frame.
 
-## Your turn
+## Two to draw
 
 Fill a red rectangle over the box from (10, 10) to (100, 100), then read the colour of the pixel at
 (50, 50) back and leave it in `a`. Red is `0xE0`, so `a` comes out at `E0`. The pen and the fill both

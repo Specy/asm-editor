@@ -1,6 +1,6 @@
-"Getting started with x86" named the sixteen registers and said each of them answers to four names.
-This lecture is what those names are, which instructions reach for a register without being told to,
-and the one rule about widths that catches everybody.
+Sixteen registers is everything the processor can hold at once. Everything else a program works with
+is in memory, several hundred times further away, so which value is in a register at which moment is
+most of what writing assembly consists of.
 
 ## The sixteen
 
@@ -20,11 +20,10 @@ The first eight names are the ones the 8086 had in 1978, and the jobs in the thi
 that old too. `r8` to `r15` arrived with the 64 bit extension in 2003 and were given no personality
 at all.
 
-The conventions are conventions, with two exceptions the hardware really does enforce: `rsp` is moved
-by `push`, `pop`, `call` and `ret` whether you like it or not, and a handful of instructions read and
-write `rax`, `rdx` and `rcx` by name without those registers appearing in the line. Everything else
-is a habit that the calling convention writes down, which is the "call, ret and the System V
-convention" lecture.
+Read the third column as habits rather than rules. Two of them the hardware really does enforce:
+`rsp` is moved by `push`, `pop`, `call` and `ret` whether you like it or not, and a handful of
+instructions read and write `rax`, `rdx` and `rcx` without those registers appearing anywhere in the
+line. The rest is an agreement between programs, written down as the calling convention.
 
 ## Four names, one register
 
@@ -44,7 +43,18 @@ pair of byte registers.
 | `rsp` | `esp` | `sp`  | `spl` |             |
 | `r8`  | `r8d` | `r8w` | `r8b` |             |
 
-Reading one of these reads that many bits out of the one register.
+Picture one row of the table as eight bytes side by side. `rax` is all eight, `eax` is the right hand
+four, `ax` the right hand two, `al` the rightmost one, and `ah` the one next to it:
+
+```
+ rax  [ b7 ][ b6 ][ b5 ][ b4 ][ b3 ][ b2 ][ b1 ][ b0 ]
+ eax                    [ b3 ][ b2 ][ b1 ][ b0 ]
+ ax                                  [ b1 ][ b0 ]
+ ah                                  [ b1 ]
+ al                                        [ b0 ]
+```
+
+Naming one of them reads or writes that many bytes of the one register.
 
 ```x86|playground|no-flags
 default rel
@@ -60,17 +70,17 @@ _start:
     mov r12, rax                ; all eight
 
     mov rax, 60
-    xor rdi, rdi
+    mov rdi, 0
     syscall
 ```
 
-`rbx` comes out at `88`, `rcx` at `77`, `r10` at `7788`, `r11` at `55667788` and `r12` at the whole
-thing. Nothing copied a register here, every line read a different width of the same one.
+Nothing copied a register there. Every line read a different width of the same one, and the five
+destinations show you `rax` cut five ways.
 
 `ah` is the odd one. It cannot be named in an instruction that also names `r8` to `r15` or their
 halves, because the byte that makes those registers reachable is the same byte that would say `ah`.
-`mov r9b, ah` is a build error, `mov cl, ah` is fine, and that is a rule of the encoding rather than
-of the assembler.
+`mov r9b, ah` is a build error, `mov cl, ah` is fine, and that is a rule of how instructions are
+encoded rather than a rule of the assembler.
 
 ## Writing 32 bits clears the top
 
@@ -92,22 +102,31 @@ _start:
     mov r10d, 0                 ; 32 written, and the other 32 cleared
 
     mov rax, 60
-    xor rdi, rdi
+    mov rdi, 0
     syscall
 ```
 
-`r8` ends at `FFFFFFFFFFFFFF00`, `r9` at `FFFFFFFFFFFF0000`, and `r10` at zero.
+`r8` ends at `FFFFFFFFFFFFFF00`, `r9` at `FFFFFFFFFFFF0000`, and `r10` at zero, which is the odd one
+out of the three.
 
-The rule exists because most 64 bit programs are doing 32 bit arithmetic, and a 32 bit instruction is
-one byte shorter than the 64 bit one that does the same thing. Zeroing rather than preserving lets
-the processor treat the result as a fresh value that does not depend on what was in the register
-before, which is worth more than the compatibility would have been. The practical form of it is that
-`mov eax, eax` clears the top half of `rax`, and that a `mov ecx, 5` you wrote out of habit has also
-wiped whatever was in `rcx` above it.
+The reason is worth a paragraph, because it is the first place the shape of the hardware leaks into
+the language. Inside a modern processor the sixteen registers you write are names, not places. The
+hardware keeps a much larger pool of storage and hands out a fresh slot each time an instruction
+writes a register, so that two instructions using the same name do not have to wait for each other
+unless one really needs the other's answer. That trick only works if the processor can tell that an
+instruction's result depends on nothing that came before it.
+
+A write to `al` does not qualify: the new `rax` is one new byte and seven old ones, so it has to wait
+for whatever produced those seven. A write to `eax` that zeroed the top half depends on nothing, and
+the processor can start it immediately. Most 64 bit programs do most of their arithmetic 32 bits wide,
+so the designers made the common case the independent one. `mov eax, eax` is the shortest way to
+throw away the top half of `rax` on purpose, and a `mov ecx, 5` you wrote out of habit has also wiped
+whatever `rcx` held above it.
 
 ## The registers an instruction takes without asking
 
-Some instructions name fewer operands than they use.
+Some instructions name fewer operands than they use, and the first time one does it, it looks like a
+misprint.
 
 ```x86|playground|no-flags
 default rel
@@ -124,20 +143,30 @@ _start:
     shl rbx, cl                 ; shift left by cl, which is 4
 
     mov rax, 60
-    xor rdi, rdi
+    mov rdi, 0
     syscall
 ```
 
-`mul rbx` names one operand and uses three registers: it multiplies `rax` by `rbx` and puts the
-answer in `rdx:rax`, the high 64 bits in `rdx` and the low 64 in `rax`. A million million squared is
-`10^24`, which does not fit in 64 bits, so `rax` comes out at `1BCECCEDA1000000` and `rdx` at
-`D3C2`. `div` reads the same pair the other way round.
+`mul rbx` names one operand and touches three registers. It multiplies whatever is in `rax` by the
+operand and writes the answer across `rdx` and `rax` together, the high 64 bits in `rdx` and the low
+64 in `rax`. It has to: a million million squared is `10^24`, and `10^24` does not fit in 64 bits.
 
-`shl rbx, cl` shifts by a variable amount, and the amount has to be in `cl`. Not in `bl`, not in
-`dl`. A shift by a constant, `shl rbx, 4`, needs no register at all.
+| after                | `rdx`  | `rax`              |
+| -------------------- | ------ | ------------------ |
+| `mov rax, 10^12`     | junk   | `E8D4A51000`       |
+| `mul rbx`, high half | `D3C2` |                    |
+| `mul rbx`, low half  |        | `1BCECCEDA1000000` |
 
-The other instructions that do this are the string operations, which read `rsi`, write `rdi` and
-count in `rcx`, and `loop`, which counts down `rcx`. Both get their own lecture later.
+Stick the two halves together and you have `D3C21BCECCEDA1000000`, which is `10^24` written in hex.
+Neither register holds the answer on its own. `div` reads the same pair the other way round, taking a
+dividend out of `rdx` and `rax` together, which is why the lecture on arithmetic spends most of its
+time on the line before a division.
+
+`shl rbx, cl` shifts by an amount held in a register, and the amount has to be in `cl`. Not in `bl`,
+not in `dl`. A shift by a constant, `shl rbx, 4`, needs no register at all.
+
+The string instructions and `loop` do the same kind of thing, reading `rsi`, `rdi` and `rcx` without
+naming them, and both get a lecture later.
 
 ## rip and the flags
 
@@ -150,7 +179,7 @@ _addressed_, though, and `[rel label]` means "the address of `label`, written as
 bottom, starting at `0x401000`.
 
 **`rflags`** is the flags, one bit each, and the panel shows them as their own row above the
-registers. "The flags register" is the lecture on what each one means.
+registers.
 
 ## Your turn
 
@@ -167,7 +196,7 @@ _start:
     ; your code here
 
     mov rax, 60
-    xor rdi, rdi
+    mov rdi, 0
     syscall
 ```
 
@@ -192,15 +221,15 @@ _start:
     mov edx, r8d        ; the lowest four, and this one clears the top of rdx
 
     mov rax, 60
-    xor rdi, rdi
+    mov rdi, 0
     syscall
 ```
 
 </details>
 
-The second one multiplies. Leave `0x10000000000000000` divided between `rdx` and `rax` the way `mul`
-leaves it: put `0x100000000` in `rax`, multiply it by itself, and the answer, `2^64`, lands as 1 in
-`rdx` and 0 in `rax`.
+The second one multiplies. Put `0x100000000` in **`rbx`**, get it into `rax` as well, and multiply
+the two with `mul`. The answer is `2^64`, which is one more than a register can hold, so it arrives
+as a 1 in `rdx` and a 0 in `rax`.
 
 ```x86|playground|exercise
 default rel
@@ -211,7 +240,7 @@ _start:
     ; your code here
 
     mov rax, 60
-    xor rdi, rdi
+    mov rdi, 0
     syscall
 ```
 
@@ -235,7 +264,7 @@ _start:
     mul rbx             ; rdx:rax = rax * rbx
 
     mov rax, 60
-    xor rdi, rdi
+    mov rdi, 0
     syscall
 ```
 

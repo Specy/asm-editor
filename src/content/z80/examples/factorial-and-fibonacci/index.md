@@ -6,10 +6,6 @@ Stack arguments and a stack frame built one frame for one call. Recursion needs 
 that, because `call` pushes at wherever `sp` happens to be, so every call gets its return address at
 a fresh place and anything the subroutine pushes is private to that call for the same reason.
 
-**You need to know:** the "Stack arguments and a stack frame" Example and the "call, ret and passing
-values" lecture. What is new here is a subroutine calling itself, and `push af` as the way each call
-keeps its own copy of `n`.
-
 ```z80|playground|memory|no-flags|allow-open
     .org 0x8000
     ld a, 8
@@ -87,6 +83,7 @@ calls, and the whole program is 1836 instructions. `fib` is the expensive half: 
 itself twice, so the number of calls roughly doubles for every 1 you add to `n`, for a number you
 could get with a loop and two registers. Recursion is written to be read, not to be quick.
 
-Try changing `ld a, 8` to `ld a, 9`. `ix` comes out at `8980`, which is 35200 and simply wrong: 9!
-is 362880, and `hl` is sixteen bits, so everything above 65535 was thrown away as the additions
-wrapped.
+Ask it for 9! instead of 8!, by changing `ld a, 8` to `ld a, 9`. `ix` comes out at `8980`, which is
+35200, and that is simply wrong: 9! is 362880. `hl` is sixteen bits, so everything above 65535 was
+thrown away as the additions wrapped, and the program reported the leftovers with complete
+confidence. Factorials outgrow a 16 bit register at 9, and nothing in the machine will tell you.

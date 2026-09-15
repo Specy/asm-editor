@@ -1,13 +1,6 @@
-Six numbers written into memory by the assembler, added up and the total left in `r8`. There is one
-loop, it runs a fixed number of times and there is no condition inside it, so the thing to look at is
-how the program gets from one number to the next.
-
-An array does not fit in the registers and its elements have no names of their own, so the program
-keeps the address of the next element in a register and steps it forward as it goes.
-
-**You need to know:** the "Loops" lecture and the "Arrays, strings and the string instructions"
-lecture. What is new here is the label after the last element: `numbers_end:` is the address the
-array stops at, so the loop needs no counter at all.
+Six numbers added up, and the loop that does it has no counter in it anywhere. There is no `i`, no
+comparison against 6, and nothing to update if the array grows. Two registers hold two addresses, and
+the loop runs until one of them catches the other up.
 
 ```x86|playground|memory|allow-open
 default rel
@@ -19,14 +12,14 @@ numbers_end:
 
 section .text
 _start:
-    lea rsi, [numbers]      ; p = numbers
-    lea rdi, [numbers_end]  ; the address one past the last element
-    xor rax, rax            ; sum = 0
+    lea rsi, [numbers]      ; the address of the first element
+    lea rdi, [numbers_end]  ; and of one past the last
+    xor rax, rax            ; the running total
 .next:
-    add rax, [rsi]          ; sum += *p
-    add rsi, 8              ; p++, and the 8 is the size of an element
+    add rax, [rsi]          ; add whatever rsi is pointing at
+    add rsi, 8              ; and step it on by one element
     cmp rsi, rdi
-    jb .next                ; while (p < end)
+    jb .next                ; until it reaches the end
     mov r8, rax
 
     mov rax, 60
@@ -34,17 +27,20 @@ _start:
     syscall
 ```
 
-`r8` comes out at `6C`, which is 108.
+Run it and look at `rsi` and `rdi` when it stops. Both hold `0x402030`, which is forty eight bytes
+past `0x402000`: six elements of eight bytes each. The loop stopped because the moving address
+arrived at the fixed one, and neither register ever held a count.
 
-`numbers_end:` is a label with nothing under it, so it holds the address the next thing would have
-gone at, which is one past the array. That is C's `numbers + 6`, the pointer you may compare against
-and may not read. Both registers finish at `0x402030`, forty eight bytes past the
-start, which is six elements of eight bytes.
+`numbers_end:` is where that fixed address comes from. It is a label with nothing underneath it, so it
+names the address the next item would have gone at had there been one. It is an address to compare
+against and never to read from, and it costs nothing, because the assembler works it out while it lays
+the data down.
 
-`add rax, [rsi]` reads memory as one of its operands, so the loop body is two instructions where MIPS
-and RISC-V need a load and then an add. The counting form, `add rax, [numbers + rcx*8]` with an
-index, is the same number of instructions and reaches `numbers[i-1]` as easily; the pointer form is
-the one the string instructions can take over.
+Add a seventh number to the `dq` line, say `100`. The total becomes 208 and not one instruction in the
+program changes, because `numbers_end:` moved along with the array. Now do the same to a version of
+this loop written with a counter and a `cmp rcx, 6`, and you have two places to keep in step instead
+of none.
 
-Try adding a seventh number to the `dq` line, say `100`. `r8` comes out at 208 and nothing else in
-the program changes, because `numbers_end:` moved with the array.
+The body is two instructions. `add rax, [rsi]` takes its second operand out of memory, so there is no
+separate load, and `add rsi, 8` moves on by exactly one element. The 8 is the size of a qword, and if
+the array were dwords it would be 4.

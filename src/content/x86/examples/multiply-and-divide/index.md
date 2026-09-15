@@ -1,12 +1,9 @@
-Multiplication and division, both of them twice: once unsigned and once signed. The quotient and the
-remainder come out of one instruction, and the line before each division is the one that decides
-whether it works.
+Four divisions and multiplications in one program, arranged so that the four answers sit in `r8` to
+`r14` at the end and can be compared with each other.
 
-`mul` and `div` are unsigned, `imul` and `idiv` are signed, and they are genuinely different
-instructions, not the same one read two ways, because the high half of the answer differs.
-
-**You need to know:** the "Arithmetic, logic and bits" lecture. What is new here is the one operand
-form of `mul`, which produces a 128 bit answer in `rdx:rax`.
+The thing to watch is `rdx`. It is an output of every division, an input to every division, and an
+output of the wide multiplication, and it is named in exactly one of the eight instructions that use
+it.
 
 ```x86|playground|allow-open
 default rel
@@ -43,16 +40,21 @@ _start:
     syscall
 ```
 
-`r8` is 28 and `r9` is 4. `r10` reads `FFFFFFFFFFFFFFE4`, which is -28, and `r11` reads -4: C rounds
-integer division towards zero and gives the remainder the sign of the dividend, and `idiv` is where
-that rule comes from. `r12` is `2A`, which is 42. `r13` and `r14` are `FFFFFFFFFFFFFFFE` and 1,
-which together are `2^65 - 2`, the answer that did not fit in one register.
+`r10` reads `FFFFFFFFFFFFFFE4`, which is -28, and `r11` reads -4. Both signs come from the dividend:
+-200 divided by 7 is -28 with 4 left over, and `idiv` gives the remainder the sign of the number being
+divided rather than the sign of the divisor. Most languages inherited the rule from this instruction.
 
-`div` and `idiv` read a dividend twice as wide as their operand, out of `rdx:rax`, so the line
-before is never optional: `xor rdx, rdx` for an unsigned division and `cqo` for a signed one. Delete
-either and the program stops on the division, because the dividend becomes enormous and the quotient
-does not fit in `rax`. That is a divide error, and so is dividing by zero.
+`r13` and `r14` are the pair that has to be read together. `r13` is `FFFFFFFFFFFFFFFE` and `r14` is 1,
+and neither of them is the answer. Stick them end to end, `r14` on the left, and you have
+`1FFFFFFFFFFFFFFFE`, which is `0xFFFFFFFFFFFFFFFF` doubled. One instruction produced a 65 bit number
+and split it across two registers, because there was nowhere else for the top of it to go.
 
-Try changing `mov rbx, 7` to `mov rbx, 8` and then replacing the whole first division with
-`shr rax, 3`. Dividing by a power of two is a shift, which is what a compiler emits on sight because
-`div` is one of the slowest instructions there is.
+Now put your finger on the `cqo` and delete it. The program stops on the `idiv` underneath. `rdx` was
+holding 4, the remainder from the division ten lines above, and `idiv` reads `rdx` and `rax` together
+as one number, so the dividend it actually got was about four times `2^64`. Divide that by 7 and the
+quotient has no chance of fitting in `rax`, which is a divide error, and the run ends there. Put the
+`cqo` back and it runs to the end.
+
+Dividing by a power of two need not involve `div` at all. Change `mov rbx, 7` to `mov rbx, 8`, replace
+the first three division lines with `shr rax, 3`, and you get the same answer from an instruction that
+costs a fraction as much.

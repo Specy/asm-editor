@@ -1,10 +1,8 @@
-The M68K reaches its screen through a trap: every drawing operation is a task number and a request.
-MIPS has no such thing. Its screen is **memory**, its keyboard is **four addresses**, and the
-instructions that reach both are `lw` and `sw`. Nothing is asked of the simulator at all.
-
-Both devices are MARS's own tools, the **bitmap display** and the **keyboard and display simulator**,
-with the same parameters and the same register layout, so a program written for MARS runs here
-unchanged.
+The screen and the keyboard are both reached with `lw` and `sw`, and with nothing else. No new
+instruction, no service number, no request of any kind: certain addresses are wired to devices
+instead of to memory, so storing a word at one of them changes a pixel and loading a word from
+another tells you what somebody typed. This arrangement is called **memory mapped I/O**, and it is
+why the two things this page is about need no new syntax at all.
 
 ## One word is one pixel
 
@@ -45,13 +43,14 @@ main:
     syscall
 ```
 
-Four `sw` instructions and four pixels change. `.space 1024` is what reserves the memory the grid
-covers: the screen shows whatever those words hold, so a program that writes past what it reserved is
-writing over something else, and one that reserves too little shows whatever is next in the data
-section.
+Four `sw` instructions, four pixels. The offsets tell the story: `0` and `4` are neighbours across
+the top, because one pixel is one word and one word is four bytes, and `64` is one row down, because
+a row is 16 words and 16 times 4 is 64.
 
-Try changing `sw $t1, 64($t0)` to `sw $t1, 68($t0)` and running again: the blue pixel moves one to
-the right, because one word is one pixel and four bytes.
+The `.space 1024` is what reserves the memory the grid covers. The panel draws whatever those 256
+words hold, no more and no less, so a program that writes past the end of its reservation is
+scribbling on other data, and one that reserves too little shows you whatever happens to follow it
+in the data section.
 
 ## The @screen line
 
@@ -68,10 +67,14 @@ with a comment line naming `@screen`. Every Build reads it, before the first ins
 - **`base`** is **a label your program defines**, which is the point of it, since the program then
   never has to know the address. An address such as `0x10010000` works too.
 
-It is a comment, so the same file still assembles in MARS, where you set the five values in the
-tool's window by hand. Anything the line gets wrong is a **warning** on that line and never an error:
-a size that is not on the list is replaced by the nearest one that is, and a label that does not
-exist leaves the base address alone. What the directive leaves out keeps the value it had.
+It begins with a `#`, so as far as the assembler is concerned it is a comment and nothing else. The
+editor reads it separately, on every Build, which is why the panel is already the right shape before
+your first instruction runs. You can also set all five by hand with the Screen panel's **Display**
+button.
+
+Anything the line gets wrong is a **warning** on that line, never an error: a size that is not on
+the list is replaced by the nearest one that is, and a label that does not exist leaves the base
+address as it was. Whatever you leave out keeps the value it already had.
 
 ## Working out which word
 
@@ -118,9 +121,10 @@ A blue and green ramp over the whole grid, 256 pixels drawn by two nested loops.
 the `y * 16`, and `sll $t2, $t2, 2` afterwards is the four bytes; the two could be one shift of 6,
 and they are written apart so the formula is readable.
 
-`sll $t0, $s2, 4` puts `x`, which runs 0 to 15, into bits 4 to 7 of the colour, which is the top half
-of the blue byte. Try changing it to `sll $t0, $s2, 20` and running again: `x` lands in the red byte
-instead, and the ramp runs the other way across the colours.
+`sll $t0, $s2, 4` puts `x`, which runs from 0 to 15, into bits 4 to 7 of the colour, which is the
+top half of the blue byte. Shifting by 20 instead would put it in the red byte, and the same loop
+would paint a completely different picture: the shift amount is the only thing that decides which
+colour a coordinate feeds.
 
 ## An animation
 
@@ -178,13 +182,16 @@ flip:
 { "runFor": 200000 }
 ```
 
-Take the `syscall` out and the dot moves as fast as the instruction budget allows and then the
-program stops, which is not the same thing as fast. Try changing `li $a0, 50` to `li $a0, 200` and
-watching it slow down.
+Take the `li $v0, 32` and its `syscall` out and run it again. The dot does not move faster in any
+useful sense: it races through the Playground's two million instructions and the program stops. The
+wait is not a slowdown, it is what makes the speed of the animation a number you chose rather than a
+number your computer chose.
 
-The whole grid is repainted every frame, which is 256 stores, and then one more for the dot. Erasing
-only the pixel the dot was at last time would be two stores a frame, and that is what a program with
-a bigger grid does.
+Now count what a frame costs. This one repaints all 256 words and then stores the dot, so 257 stores
+per frame, and it gets away with that because the grid is tiny. Put the same loop on a 64 by 64 grid
+and a frame is 4096 stores. The alternative is to erase only the pixel the dot was on last time,
+which is two stores a frame whatever the grid size, and that is what every program on a real sized
+screen does: the cost of a frame has to depend on what **moved**, not on how big the screen is.
 
 ## The keyboard and the console at 0xffff0000
 
@@ -220,8 +227,9 @@ main:
     syscall
 ```
 
-The console shows `Hi`. `$t0` comes out at 1, the Ready bit of a device that is always willing to
-take a character, and `$t2` at 0, because nothing was typed.
+The console shows `Hi`, written by two `sw` instructions and no service number anywhere. `$t0` is 1,
+the transmitter's Ready bit, which is always set because the console is always willing to take
+another character. `$t2` is 0, because nobody typed anything.
 
 ## Polling the keyboard
 
@@ -280,10 +288,11 @@ order.
 
 ## Interrupts, and why the program stops
 
-Bit 1 of either control register is MARS's **interrupt enable** bit: setting it asks the device to
-interrupt the program when it has something, instead of being polled. This editor does not deliver
-device interrupts. A program that set the bit would wait for one forever, so a `sw` that sets it ends
-the run instead, with
+Bit 1 of either control register is the **interrupt enable** bit: setting it asks the device to
+interrupt your program the moment it has something, rather than being asked over and over. This
+editor does not deliver device interrupts, so a program that set that bit would sit waiting for one
+that never came. Rather than let it hang, a `sw` that sets the bit ends the run with a message
+saying so:
 
 ```
 Interrupt-driven I/O is not supported: the program set the interrupt-enable bit (bit 1) of the
@@ -292,15 +301,16 @@ receiver control register at 0xffff0000. Poll the Ready bit (bit 0) instead.
 
 The next lecture is about the interrupt and exception machinery that message is refusing.
 
-## What this editor does differently
+## Four things about the panels
 
-- The display is always there, as a panel, rather than a tool you connect to a program before running
-  it.
-- Service 30 counts from the start of the run, and a testcase runs on a virtual clock.
-- There is no mouse. Neither MARS nor RARS has one, and the M68K course's mouse is a trap task with
-  no equivalent here.
-- A testcase cannot type: an automated run leaves the receiver empty, so the keyboard programs on
-  this page are yours to try by hand and cannot be checked by a test.
+- The display is a panel that is always there. You do not have to connect it to a program before
+  running one.
+- Service 30 counts from the start of the run, and a testcase runs on a virtual clock rather than a
+  real one.
+- The only input device is the keyboard. Those four addresses are everything the screen panel
+  can tell a program, so a program here is driven by keystrokes.
+- A testcase cannot type. An automated run leaves the receiver empty for ever, so the two keyboard
+  programs on this page are yours to try by hand, and no test can check them.
 
 The five display parameters, the four registers and the `@screen` settings are all on the
 [MIPS screen documentation page](/documentation/mips/screen).

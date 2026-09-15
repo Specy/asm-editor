@@ -1,13 +1,10 @@
-A rectangle's height is a variable in memory and its width is a constant. The program reads the
-height, multiplies by the width and writes the area back to another variable, which is the shape of
-every program that works on data it did not invent.
+There are two ways to give a number a name, and they are not alike at all.
 
-The difference between the two is where they are. `height` is eight bytes in `section .data` that the
-program can read and write; `WIDTH` is an `equ`, a name the assembler replaces with the number 12
-while assembling, and it takes no memory at all.
-
-**You need to know:** the "Sections, directives and labels" lecture. What is new here is `.bss`, the
-section for space that starts as zeroes and costs nothing in the program file.
+`height` in this program is a **variable**: eight bytes sitting in memory at an address, which the
+program reads, and could write, and which you can watch change in the memory panel. `WIDTH` is a
+**constant** made with `equ`: a name the assembler swaps for the number 12 while it assembles, after
+which the number is part of the instruction and the name has ceased to exist. Nothing in the running
+program knows `WIDTH` was ever there.
 
 ```x86|playground|memory|allow-open
 default rel
@@ -35,21 +32,24 @@ _start:
     syscall
 ```
 
-Type `402000` into the memory panel. The twenty four bytes hold `height` at `0x402000`, still 5;
-`area` at `0x402008`, now `3C`, which is 60; and `scratch` at `0x402010`, now `63`, which is 99.
+Type `402000` into the memory panel and three variables are laid out in a row: `height` at
+`0x402000`, `area` eight bytes further on, `scratch` eight further still. `WIDTH` is nowhere, because
+there is nothing to see.
 
-`mov qword [scratch], 99` needs the word `qword` because neither operand says a size: a label is an
-address and 99 is a number, and without it NASM writes one byte rather than eight.
+`mov qword [scratch], 99` needs the word `qword` because neither operand carries a size. A label is an
+address and 99 is a number, and without the keyword NASM writes a single byte and leaves the other
+seven alone.
 
-The register in the middle is avoidable. `add [area], rax` and `inc qword [area]` both read memory,
-work on it and write it back in one instruction, which is a **read modify write** and is what x86 has
-that MIPS and RISC-V do not: there, every one of those is a load, an arithmetic instruction and a
-store. The multiplication here still needs `rax`, because `imul` has no form that writes memory.
+`scratch` is in `.bss`, which is the section for space that starts as zeroes. The difference from
+`.data` is what ends up in the program file: `area: dq 0` puts eight bytes of zero on disk, and
+`scratch: resq 1` puts a note in a header saying "eight more bytes, please". For eight bytes that is
+nothing. For a megabyte buffer it is the difference between a program that is a megabyte long and one
+that is not.
 
-A third section is worth knowing about. `section .rodata` holds data the program must never write,
-and the loader maps it without write permission, so a stray store to a constant ends the program
-instead of quietly corrupting it. Strings and lookup tables belong there.
+There is a third section worth knowing about. `section .rodata` is loaded without write permission, so
+a stray store into it ends the program instead of quietly corrupting a constant. Strings and lookup
+tables belong there.
 
-Try changing `WIDTH equ 12` to `WIDTH equ 100` and running again. Nothing else changes and the area
-becomes 500, because the constant lives in the instruction and the instruction is reassembled every
-time you press Build.
+The middle register is avoidable, for addition at least. `add [area], rax` reads memory, adds and
+writes it back in one instruction, and `inc qword [area]` does the same for a step of one. The
+multiplication still needs `rax`, because `imul` has no form that writes its answer to memory.

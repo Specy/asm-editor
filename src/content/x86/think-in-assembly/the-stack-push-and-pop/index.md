@@ -1,6 +1,7 @@
-Sixteen registers is not many, and a subroutine that needs one you are already using has to put it
-somewhere. The stack is that somewhere, and x86 has two instructions for it that most of the other
-architectures in this editor do not.
+Sixteen registers is not many. Sooner or later you need one that is already holding something you
+still want, and the value has to go somewhere until you are finished. Picking an address in memory
+by hand and remembering it works, right up until two pieces of code pick the same address. The stack
+is the arrangement that makes that impossible, and x86 has two instructions that do the whole of it.
 
 ## rsp, and downwards
 
@@ -42,9 +43,9 @@ holds `0x4FFFFFFFFED0` and the stack already has something on it (🟢 is the st
 | `0x4FFFFFFFFEC8` |  0000000000000000   |
 | `0x4FFFFFFFFED0` | 🟢 0000000000000001 |
 
-That `1` is `argc`, the number of command line arguments the program was started with, and the qword
-above it is the pointer to the program's own name. Linux leaves them there for the program to read,
-which is what a C `main` gets as its arguments.
+That `1` is the number of command line arguments the program was started with, and the qword above it
+is the address of the program's own name. Linux puts them there before it starts you, which is why
+the stack has something on it before your first instruction runs.
 
 `push rax` drops `rsp` to `0x4FFFFFFFFEC8` and writes:
 
@@ -94,9 +95,9 @@ _start:
     syscall
 ```
 
-`r8` comes out at 2. The `add rsp, 24` at the end is not optional: a program that leaves `rsp` where
-it found it can be entered and left by anything, and one that does not eventually returns to an
-address that is really a saved register.
+`r8` comes out at 2. The `add rsp, 24` at the end is not optional. `ret` takes whatever `rsp` points
+at and puts it in `rip`, so a subroutine that forgets to give its room back returns to one of its own
+local values instead of to its caller.
 
 ## Saving registers across something
 
@@ -140,11 +141,12 @@ pushes, always: the stack hands back what was put on it last.
 So everything on the stack is shared with the machinery of calling, and that is what the next lecture
 is about.
 
-There is also a rule the calling convention adds: **`rsp` should be a multiple of 16** at the moment
-a `call` happens. Nothing in the hardware enforces it, and none of the programs in this course break
-on it, but a library function that uses the SSE instructions with aligned operands does. `_start`
-begins with `rsp` a multiple of 16, and since every push moves it by 8, the count of pushes decides
-whether it still is.
+One more rule comes not from the hardware but from the agreement programs follow when they call each
+other: **`rsp` should be a multiple of 16** at the moment a `call` happens. Nothing checks it, and
+nothing in this course goes wrong when it is broken, but code compiled by somebody else is entitled to
+assume it and some instructions fault outright on a misaligned address. `_start` begins with `rsp` a
+multiple of 16, and every push moves it by 8, so the count of pushes between there and a call is what
+decides whether the rule still holds.
 
 ## Your turn
 

@@ -1,31 +1,20 @@
 A loop is a jump backwards, and we already have jumps. What the Z80 adds is one instruction that does
 the counting and the jumping together, and it is the reason `b` is the register it is.
 
-## A while loop, written out
+## A counted loop, written out
 
-In C:
+Say you want to do something ten times. Written out by hand, the loop is four pieces:
 
-```c
-int i = 0;
-while (i < 10) {
-    i++;
-}
-```
+- a counter, set to its starting value before the loop begins,
+- a **test** at the top, which leaves the loop when the counter has gone far enough,
+- the body, whatever the loop is actually for,
+- a jump back to the test.
 
-Flattened into `goto`s, the way the general course did it, that is a test at the top and a jump back
-at the bottom:
+That last jump is what makes it a loop. Everything else is ordinary straight line code, and the only
+new idea is that a label can be **behind** you as well as ahead of you.
 
-```c
-    int i = 0;
-while_start:
-    if (i >= 10) goto while_end;
-    i++;
-    goto while_start;
-while_end:
-```
-
-And every line of that is an instruction. `i` lives in `b`, and the comparison has to go through `a`,
-since `cp` compares against the accumulator and nothing else.
+Here it is with the counter in `b`. The comparison has to go through `a`, because `cp` compares
+against the accumulator and nothing else.
 
 ```z80|playground
     .org 0x8000
@@ -33,18 +22,15 @@ since `cp` compares against the accumulator and nothing else.
 loop:
     ld a, b         ; the comparison has to go through a
     cp 10
-    jr nc, done     ; if(i >= 10) goto done
-    inc b           ; i++
-    jr loop         ; goto loop
+    jr nc, done     ; 10 or more: leave the loop
+    inc b           ; the body: count one on
+    jr loop         ; and back to the test
 done:
     halt
 ```
 
-`b` comes out at `0A`, which is 10. Three of those instructions are the loop and one is the body,
-which is three quarters of the program spent on counting.
-
-Try changing `cp 10` to `cp 200`: the loop runs 200 times instead, and the run finishes just as fast,
-because 200 iterations of four instructions is nothing.
+Three of those four instructions are the loop and one is the body. Three quarters of the program is
+spent on counting, which is why the next instruction exists.
 
 ## djnz
 
@@ -81,8 +67,8 @@ and the loop runs the whole way round. `c` comes out at `00`, because it went fr
 round to 0 again, which is what a byte does after 256 increments. Put `ld c, 1` in that body instead
 of the `inc` and step it if you want to watch `b` count down from `FF`.
 
-A loop that might have to run zero times therefore needs a test before it, which is a `do while` in C
-turned into a `while`: `ld a, b`, `or a`, `jr z, skip`.
+So a `djnz` loop always runs at least once. If the count can legitimately be zero, and "do it no
+times" has to mean no times, the loop needs a test in front of it: `ld a, b`, `or a`, `jr z, skip`.
 
 ## Walking memory
 
@@ -91,12 +77,12 @@ to a `djnz`.
 
 ```z80|playground|memory
     .org 0x8000
-    ld hl, numbers  ; p = numbers
+    ld hl, numbers  ; hl = the start of the array
     ld b, 5         ; five of them
     ld a, 0         ; sum = 0
 loop:
-    add a, (hl)     ; sum = sum + *p
-    inc hl          ; p++
+    add a, (hl)     ; add the byte hl points at
+    inc hl          ; on to the next byte
     djnz loop
     halt
 
@@ -104,11 +90,8 @@ loop:
 numbers: .db 1, 2, 3, 4, 5
 ```
 
-`a` comes out at `0F`, which is 15, and `hl` at `9005`, one past the last byte it read. Three
-instructions in the loop, one of which is the work.
-
-Try changing `add a, (hl)` to `add a, a` and `ld a, 1`, which doubles `a` five times: the array is
-never read and `a` comes out at `20`, which is 32.
+`hl` finishes at `9005`, one byte past the last element it read, which is where a walk always ends
+up: the pointer is stepped after the last read as well as after the others.
 
 ## Looping on something other than a count
 
@@ -117,14 +100,14 @@ terminator is the standard one:
 
 ```z80|playground|memory
     .org 0x8000
-    ld hl, message  ; p = message
+    ld hl, message  ; hl = the start of the string
     ld b, 0         ; n = 0
 loop:
-    ld a, (hl)      ; c = *p
+    ld a, (hl)      ; the byte hl points at
     or a            ; is c zero?
-    jr z, done      ; if(c == 0) goto done
+    jr z, done      ; a zero byte is the end of the string
     inc b           ; n++
-    inc hl          ; p++
+    inc hl          ; on to the next byte
     jr loop
 done:
     halt
@@ -185,7 +168,7 @@ set through `exx`, or a byte in memory. Counting down `c` with `dec c` and `jr n
 in the loop instead of two pushes outside it, so which is cheaper depends on how often the outer loop
 goes round.
 
-## Your turn
+## Two loops to write
 
 Add up the numbers from 1 to 10 and leave the total in `a`, which is 55, or `37` in hexadecimal. A
 `djnz` loop counts down from 10 to 1, and adding the counter itself each time round is the whole
@@ -245,11 +228,11 @@ message: .asciz "hello"
     ld hl, message
     ld b, 0         ; n = 0
 loop:
-    ld a, (hl)      ; c = *p
+    ld a, (hl)      ; the byte hl points at
     or a
-    jr z, done      ; if(c == 0) goto done
+    jr z, done      ; a zero byte is the end of the string
     inc b           ; n++
-    inc hl          ; p++
+    inc hl          ; on to the next byte
     jr loop
 done:
     halt

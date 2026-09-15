@@ -1,54 +1,47 @@
 Two unit conversions, one in each direction. The first turns 365 days into hours with a `mul`, and
-the second turns 1000 seconds into 16 minutes and 40 seconds with a `div` and a `rem`, one
-instruction per answer.
+the second turns 1000 seconds into 16 minutes and 40 seconds, with the minutes from a `div` and the
+leftover seconds from a `rem`.
 
-Every program up to here added and subtracted. These are the instructions that are not in the base
-set at all: multiplication and division are the **M extension**, which this simulator has, and a
-RISC-V chip is allowed to ship without them.
-
-**You need to know:** the "Arithmetic, logic and bits" lecture. What is new here is that a
-multiplication has two halves and one instruction gives you one of them, so the top 32 bits of a
-product are a second instruction, `mulh`, run on the same two registers.
+Everything up to here added and subtracted. Multiplication and division are the **M extension**: a
+group of instructions that a RISC-V chip is allowed to leave out, and that this simulator has. That
+is the deal the whole instruction set is built on, a small core everyone implements and named groups
+on top of it.
 
 ```riscv|playground|allow-open
 .text
 main:
-    li t0, 365          # days = 365
+    li t0, 365
     li t1, 24
-    mul t2, t0, t1      # hours = days * 24
+    mul t2, t0, t1      # hours in a year
     mulh t3, t0, t1     # the top half of the same product
 
-    li t4, 1000         # seconds = 1000
+    li t4, 1000
     li t5, 60
     div t6, t4, t5      # whole minutes
     rem s0, t4, t5      # the seconds left over
 
     li s1, 0
-    div s2, t0, s1      # a division by zero answers -1
-    rem s3, t0, s1      # and gives the dividend back
+    div s2, t0, s1      # a division by zero, on purpose
+    rem s3, t0, s1
 ```
 
-`mul t2, t0, t1` writes the **low** 32 bits of the product into an ordinary register you named.
-`t2` comes out at `00002238`, which is 8760, and `t3` at 0, because 8760 needs 14 bits and there is
-nothing to put above them. `mulh` is the signed top half, `mulhu` reads both operands as unsigned and
-`mulhsu` reads the first as signed and the second as unsigned.
+Multiply two 32 bit numbers and the answer can need 64 bits. A register holds 32, so the product
+comes in two pieces and each piece is an instruction: `mul` writes the bottom half, `mulh` writes
+the top half of the same multiplication. For 365 times 24 the top half is all zeroes, since 8760
+fits with room to spare, and the second instruction looks pointless.
 
-`div` and `rem` each write one register too, so the quotient and the remainder are two instructions
-over the same pair. `t6` is 16 and `s0` is 40. The M68K packs both answers into the two halves of one
-register and needs a `swap` and two masks to get at them, and MIPS puts them in `hi` and `lo`, two
-registers outside the 32 that only these instructions write and that `mfhi` and `mflo` copy out of.
-There is no `hi` and no `lo` here, and nothing to read before the next multiplication overwrites it.
+Change the 24 to `12000000` and it stops looking pointless. `t2` comes out at `05117F00` and `t3` at
+1, and the real answer is that 1 times 4294967296, plus 85032704, which is 4380000000. The low half
+alone is wrong by exactly the amount it could not hold. `mulhu` and `mulhsu` are the same top half
+for operands read as unsigned, or the first signed and the second not.
 
-Division truncates towards zero and the remainder takes the sign of the dividend, so `-7 / 2` is -3
-and `-7 % 2` is -1. `divu` and `remu` are the unsigned pair, which read the same bits as numbers from
-0 to 4294967295.
+`div` and `rem` split the same way, one instruction per answer, over the same two source registers.
+Division cuts towards zero and the remainder keeps the sign of the number being divided, so -7 over
+2 is -3 with a remainder of -1. `divu` and `remu` are the pair that read their operands as plain
+positive counts from 0 to 4294967295.
 
-**Dividing by zero raises nothing.** No exception, no message, no stop: `div` answers -1, which is
-`FFFFFFFF`, and `rem` gives the dividend straight back, which is why `s2` comes out at -1 and `s3` at 365. MIPS stops the program with `break instruction executed` when its three operand `div` is used,
-and the M68K sets its overflow flag; here a program that can be handed a zero has to test for it
-itself, with a `beqz` before the division.
-
-Try changing `li t1, 24` to `li t1, 12000000`. `t2` comes out at `05117F00` and `t3` at 1, so the
-product is 1 times 4294967296 plus 85032704, which is 4380000000, the right answer for 365 times
-twelve million. That is what `mulh` is for: the low half on its own is wrong by exactly the 4294967296
-it could not hold.
+The last two lines divide by zero, and the program does not stop, complain, or print anything. `div`
+answers `FFFFFFFF`, which is -1, and `rem` hands back the number you were dividing. That is the
+defined behaviour, not a bug in the simulator, and it means a program handed a zero it did not
+expect carries on quietly with a wrong answer. If a divisor could be zero, a `beqz` in front of the
+division is the only thing that will catch it.

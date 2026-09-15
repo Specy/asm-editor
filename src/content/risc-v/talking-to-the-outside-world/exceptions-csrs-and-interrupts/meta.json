@@ -1,6 +1,6 @@
 {
-    "name": "Exceptions, CSRs and interrupts",
-    "description": "RISC-V keeps the address of its handler in a control register instead of a table, and this editor really runs the handler you write, once one bit of ustatus is set. The CSR instructions, ucause and uepc, uret, and why the handler has to step past the instruction that faulted.",
+    "name": "When an instruction cannot be carried out",
+    "description": "A load at an address that cannot work does not have to end the run. Pointing utvec at a handler of your own, the one bit in ustatus that switches it on, stepping past the instruction that faulted, and what ucause tells you afterwards.",
     "order": 2,
     "topic": "interrupts"
 }

@@ -11,10 +11,12 @@ with is `ecall`.
 3. run `ecall`.
 
 Anything the service answers with comes back in `a0`. There is one `ecall` instruction and about
-thirty services behind it, and which number means what is the environment's choice, not the CPU's:
-RARS decided that 4 prints a string, and a RISC-V chip in a router knows nothing about it. Linux on
-RISC-V asks the same way, with its own number in `a7`, and RARS took some of its numbers: 64 is a
-write and 93 is an exit on both.
+thirty services behind it, and here is the part worth understanding: **which number means what is
+not part of RISC-V**. The processor's only job is to stop what it was doing and hand over to
+whatever is running the program. What that is, and what it makes of the number in `a7`, depends
+entirely on where your program is running. A RISC-V chip inside a router would make nothing of a 4.
+A RISC-V program under Linux asks in exactly the same way, with Linux's own numbers, and a few of
+them match the ones here: 64 writes and 93 exits in both.
 
 `a7` is the eighth argument register the rest of the time, and `a0` is both the first argument and
 the first return value, which is the same double duty a subroutine call gives them.
@@ -88,8 +90,9 @@ The console reads `0x000000ff 00000000000000000000000000000101 4294967295`. All 
 the full width of a word, so 255 comes out as eight hex digits and 5 as thirty two binary ones, and
 service 36 prints the same bits service 1 would have printed as `-1`.
 
-Try changing `li a0, 255` to `li a0, -1` and running again: service 34 prints `0xffffffff`, which is
-what the registers panel shows for that register.
+Print -1 with service 34 and it comes out as `0xffffffff`, which is exactly what the registers panel
+shows for that register: these three services show you the bits, and only service 1 puts a minus
+sign on anything.
 
 ## Reading
 
@@ -135,10 +138,9 @@ The reading services are:
 - **8** reads a whole line into the buffer at `a0`, up to `a1` characters, and keeps the newline. The
   buffer is yours, and `.space` is how you reserve it.
 
-The answer lands in `a0`, and the `add t0, a0, a0` above takes it out of there before the next
-`li a0` of a printing service overwrites it. The service number is safe in `a7` whatever you do with
-`a0`, which is where MIPS is more awkward: there both live in `$v0` and the answer is destroyed by
-the line that asks the next question.
+The answer lands in `a0`, and the `add t0, a0, a0` takes it out of there before the next `li a0` of
+a printing service lands on top of it. Getting the answer out of `a0` before doing anything else is
+the habit to form.
 
 ## The clock
 
@@ -172,10 +174,10 @@ main:
     ecall
 ```
 
-The console shows `500 ms of program time`. Service 30 counts from the **start of the run** here,
-where RARS counts from 1 January 1970, and a program that measures how long something took subtracts
-two readings, which works the same either way. It answers in two registers, the low word in `a0` and
-the high word in `a1`.
+The console shows `500 ms of program time`. Service 30 counts from the **start of the run**, and it
+answers in two registers, the low word in `a0` and the high word in `a1`. Whatever a clock counts
+from, a program that wants to know how long something took subtracts two readings of it, which is
+what the `sub` above does.
 
 Service 32 waits for `a0` milliseconds of program time. The wait costs no instructions, so a program
 that idles on the keyboard never reaches the Playground's two million, and the editor stays
@@ -209,27 +211,22 @@ not 503.
 |      43 | a random float                     | `a0`                                      | `f0`               |
 |      44 | a random double                    | `a0`                                      | `f0`               |
 |      93 | end the program with a code        | `a0`                                      |                    |
-|   50-60 | RARS's dialog boxes                | see the documentation page                |                    |
+|   50-60 | pop up dialog boxes                | see the documentation page                |                    |
 
 The same table with a paragraph on each service is on the
 [RISC-V ecall documentation page](/documentation/risc-v/syscall).
 
-Service 9 hands out memory from the heap, which starts at `0x10040000`, and it never gives any back:
-there is no free, and a program that asks in a loop runs out. Services 50 to 60 are RARS's pop up
-dialogs, and here they read from and write to the console like everything else, since this editor has
-one place for input and one for output.
-
-The numbers are close to MIPS's and they are not the same list. Ending with a code is 93 here and 17
-on MIPS, and the four file services are 1024, 63, 64 and 57 where MIPS has 13 to 16. A program moved
-between the two courses needs its `ecall` numbers checked one at a time, and the register the number
-goes in changed from `$v0` to `a7`.
+Service 9 hands out memory from the heap, which starts at `0x10040000`. There is no service that
+gives it back, so a program that asks in a loop will eventually run out. Services 50 to 60 are the
+dialog box services, and here they read from and write to the console like everything else, because
+this editor has one place for input and one for output.
 
 `ecall` with a number nothing answers to ends the run with
 `invalid or unimplemented syscall service: 99`, naming the number. The four file services are the
 ones this editor does not have: it has no file system, so `open`, `read`, `write` and `close` stop
 the program with `Handler openFile is not implemented`.
 
-## Your turn
+## Ask for something yourself
 
 Print `The answer is 42` and end the program, with nothing else in the output. The string is written
 for you and the number is not part of it, so it takes two services.

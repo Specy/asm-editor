@@ -6,10 +6,6 @@ Bubble sort left an array in order. This is what being in order is worth: every 
 away half of what is left, so an array of a thousand elements takes about ten reads and one of a
 million takes about twenty.
 
-**You need to know:** the "Arrays and strings" lecture and the "Bubble sort" Example. What is new
-here is a loop that jumps around its array instead of walking it, which is why the element is reached
-through an index rather than through a pointer that steps.
-
 ```riscv|playground|memory|allow-open
 .eqv COUNT, 12
 
@@ -43,28 +39,24 @@ found:
 search_done:
 ```
 
-`srli t5, t5, 1` is the halving: shifting a number one place right divides it by two and throws the
-remainder away, which is the rounding down that `(low + high) / 2` wants. `srli` is the shift that
-brings zeroes in at the top, which is right here because an index is never negative; `srai` is the
-one for a number that can be.
+`srli t5, t5, 1` is the halving. Shifting right by one divides by two and throws the remainder away,
+which is exactly the rounding down that the midpoint of a range wants. `srli` is the right shift for
+an index, since an index is never negative.
 
-`slli t6, t5, 2` turns the index into a byte offset, since the elements are words. That is the whole
-of the difference between `numbers[mid]` in C and the two instructions here: C knows how big an
-element is, and `offset(base)` adds one register to one constant and scales nothing.
+`slli t6, t5, 2` then turns that index into a byte offset, because the elements are words. Those two
+lines, a shift and an add, are every read of an element in the program.
 
-`bgt t2, t3, search_done` is a pseudo-instruction and the assembler writes it as
-`blt t3, t2, search_done`, the same encoding with its two registers the other way round. It borrows
-no register to do that, so the three comparisons in this loop are three instructions and there is
-nothing hidden in them.
+Here is the range closing on the answer:
 
-`addi t2, t5, 1` writes `low` from `mid` and adds one in the same instruction, which is what three
-operands buy you: the M68K copies `d4` into `d1` and then increments it.
+| probe | `low` | `high` | `mid` | `numbers[mid]` | what it decides    |
+| ----- | ----- | ------ | ----- | -------------- | ------------------ |
+| 1     | 0     | 11     | 5     | 23             | too small, low = 6 |
+| 2     | 6     | 11     | 8     | 72             | too small, low = 9 |
+| 3     | 9     | 11     | 10    | 100            | too big, high = 9  |
+| 4     | 9     | 9      | 9     | 91             | found it           |
 
-The four probes are 23, 72, 100 and finally 91. Each one either matches, or moves `low` past the
-middle, or moves `high` below it, and the loop ends when `low` walks past `high`. `t4` comes out at
-`00000009`, which is the index of 91, and `t2`, `t3` and `t5` all end at 9 as well, which is the
-range having closed onto one element. The whole search is 46 instructions.
+Four reads out of twelve elements, and the whole search is 46 instructions.
 
-Try changing `li t1, 91` to `li t1, 90`, which is not in the array. `t4` stays `FFFFFFFF`, the -1 the
-`li` put there before the loop started, because a search that finds nothing has to say so and 0 is a
-perfectly good index.
+Search for a number that is not in the array, 90 say, and `t4` stays at `FFFFFFFF`. That is the -1
+the `li` put there before the loop, and -1 is used rather than 0 because 0 is a perfectly good index
+of a real element.

@@ -2,23 +2,18 @@ Every number in this course so far has been an integer. This lecture is the othe
 registers and the set of instructions that work on it, which RISC-V keeps separate from the integer
 side on purpose.
 
-## Extensions, where other machines had a coprocessor
+## Two extensions, and why they are optional
 
-When a processor could not do floating point in hardware, the answer used to be a second chip. The
-8087 sat beside the 8086 from 1978 and watched the same instruction stream, carrying out the
-instructions it recognised while the main chip waited; the R2010 did the same for MIPS. Each had
-registers the main chip could not name, and each was reached through instructions that moved values
-across the boundary. That is a **coprocessor**, and MIPS still spells the boundary into the
-instruction names, `mtc1` and `mfc1` for move to and from coprocessor 1.
+Arithmetic on fractions costs a great deal more hardware than arithmetic on whole numbers, and
+plenty of processors are built into things that never need it: a washing machine controller, a
+sensor, a keyboard. So RISC-V leaves it out of the base and offers it as two named extensions. **F**
+adds 32 floating point registers and single precision arithmetic. **D** widens those registers to 64
+bits and adds double precision. A chip with neither is still a RISC-V chip, and the assembler here
+has both.
 
-RISC-V was designed when nobody builds a separate chip any more, so it dropped the idea and kept the
-consequence. The base integer instruction set is **RV32I**, and floating point is two optional
-**extensions**: **F** adds 32 registers and single precision arithmetic, **D** widens those registers
-to 64 bits and adds double precision. A chip that has neither is still a RISC-V chip; the editor's
-target has both, and so does anything running Linux.
-
-What survives of the coprocessor is what mattered: a second register file, its own instructions, and
-two instructions that move raw bits from one file to the other.
+Being a separate extension has a visible consequence: floating point gets a **second set of
+registers** of its own, with its own instructions, and two instructions whose only job is to carry
+raw bits between the two sets.
 
 ## How a number is stored
 
@@ -60,11 +55,22 @@ come first, then `fs0` and `fs1`, then `fa0` to `fa7`, then the rest. Its Format
 one as a double, as a single or as raw hex, because nothing in a register records which of the three
 the program meant.
 
-With the D extension every register is **64 bits**, wide enough for a double. A single stored in one
-is **NaN boxed**: the value sits in the low 32 bits and the upper 32 are all ones, which as a double
-is a NaN. That way an instruction that reads a register as a double can tell that what is in it is
-really a single and produce a NaN rather than a wrong answer. It is also why the panel opens on the
-Double format: in Single a register holding a double reads as NaN.
+With the D extension every one of those registers is **64 bits** wide, because that is what a double
+needs. Which raises a question: a single is only 32 bits, so what goes in the other half?
+
+Zeroes would be the obvious answer and they are the wrong one. Nothing in a register records whether
+the program meant a single or a double, so if the top half were zeroes, an instruction that read the
+register as a double would find a perfectly plausible number there and carry on with it. You would
+get a wrong answer and no hint that anything had happened.
+
+So a single is stored with the top 32 bits **all ones**, and those bits read as a double are a NaN,
+a value that is not a number. Anything that then treats it as a double produces a NaN, which spreads
+through every calculation it touches and is impossible to mistake for an answer. The technique has a
+name, **NaN boxing**: a value wrapped in a box that is obviously rubbish if you open it the wrong
+way.
+
+It is also why the registers panel opens on the Double format. Read a register holding a double in
+Single and you get a NaN, for exactly the same reason in reverse.
 
 ## Loading, storing and arithmetic
 
@@ -148,7 +154,7 @@ the family.
 
 Which way a conversion rounds is written on the instruction. Leave it off and it follows the rounding
 mode in `frm`, which starts as round to nearest, so `fcvt.w.s` turns 2.6 into 3. Write `rtz`, round
-towards zero, and it truncates, which is what C's `(int)` cast does.
+towards zero, and it truncates instead, throwing the fraction away and keeping the whole part.
 
 ```riscv|playground|fpu
 .data
@@ -162,7 +168,7 @@ main:
     fcvt.s.w ft0, t1        # 7.0, which is 40E00000
     fsqrt.s ft1, ft0        # 2.6457...
     fcvt.w.s t2, ft1        # back to an integer: 3, rounded to nearest
-    fcvt.w.s t3, ft1, rtz   # or 2, truncated, which is what C does
+    fcvt.w.s t3, ft1, rtz   # or 2, truncated
     fmv.x.w t4, ft1         # or the raw bits, unconverted
 
     li a7, 10
@@ -174,10 +180,10 @@ second was told not to. `t4` holds `402953FD`, the bits of 2.6457 rather than it
 
 ## Comparing writes an integer register
 
-MIPS gives its floating point unit eight condition flags and a branch instruction that reads them.
-x86 writes the ordinary flags and reads them with `jb` and `ja`. RISC-V has neither: a floating point
-comparison writes **1 or 0 into an integer register**, exactly as `slt` does for integers, and the
-branch that follows is the ordinary `bnez`.
+A floating point comparison writes **1 or 0 into an integer register**, exactly the way `slt` does
+for whole numbers, and the branch after it is the ordinary `bnez` you already know. The two sets of
+registers meet here: the question is about floating point values, the answer is an integer, and no
+new branch instruction is needed.
 
 - **`flt.s t0, ft0, ft1`** sets `t0` to 1 when `ft0 < ft1`.
 - **`fle.s`** and **`feq.s`** are the other two.
@@ -211,13 +217,9 @@ done:
     ecall
 ```
 
-`t1` is 1, `t2` is 0, `t3` is 1 and `t4` is 100.
-
-`feq.s ft0, ft0` asking whether a number equals itself is not a silly question. It is false for a NaN,
-and it is the standard way of testing for one in a language with no `isnan`.
-
-Keeping the answer in an integer register is what lets the same `beq`, `bne` and `bnez` serve both
-halves of the machine, which is the whole reason RISC-V has no flags anywhere.
+`feq.s ft0, ft0`, asking whether a number is equal to itself, is not the silly question it looks
+like. It comes out false for a NaN and true for everything else, which makes it the way you test for
+one.
 
 ## The fcsr
 

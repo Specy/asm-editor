@@ -1,6 +1,6 @@
 {
     "name": "The 16 registers and their halves",
-    "description": "The sixteen general registers, the four names each of them answers to, the rule that a 32 bit write clears the top half, and the instructions that use rax, rdx and rcx without naming them.",
+    "description": "The sixteen general registers, the four names each of them answers to, why a 32 bit write clears the top half when a byte write does not, and the instructions that use rax, rdx and rcx without naming them.",
     "order": 1,
     "topic": "registers"
 }

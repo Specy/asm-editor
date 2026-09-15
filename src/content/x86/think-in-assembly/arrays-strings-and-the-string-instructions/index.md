@@ -1,6 +1,6 @@
-The loops lecture walked an array with an index. This one is the other way of walking it, with a
-pointer, and the family of instructions x86 has for moving bytes around that nothing else in this
-editor has.
+There are two ways to get from one element of an array to the next. You can count, and work out an
+address from the count every time. Or you can keep the address itself and move it along. Both are
+written here, because x86 has a family of instructions that only works with the second.
 
 ## An array is a label and a size
 
@@ -17,7 +17,7 @@ _start:
     xor rax, rax                ; the total
     xor rcx, rcx                ; the index
 .add:
-    add rax, [numbers + rcx*8]  ; total += numbers[i]
+    add rax, [numbers + rcx*8]  ; add element number rcx
     inc rcx
     cmp rcx, COUNT
     jb .add
@@ -28,8 +28,9 @@ _start:
     syscall
 ```
 
-`r8` comes out at `6C`, which is 108. `COUNT` is worked out by the assembler from the bytes the `dq`
-line produced, so adding a seventh number to the list changes the answer without changing the loop.
+The loop never mentions the number six. `COUNT` is worked out by the assembler from the bytes the
+`dq` line actually produced, so adding a seventh number to the list changes the answer and nothing
+else.
 
 ## The same loop with a pointer
 
@@ -45,14 +46,14 @@ numbers_end:
 
 section .text
 _start:
-    lea rsi, [numbers]          ; p = numbers
-    lea rdi, [numbers_end]      ; the address one past the last element
+    lea rsi, [numbers]          ; the address of the first element
+    lea rdi, [numbers_end]      ; and of one past the last
     xor rax, rax
 .add:
-    add rax, [rsi]              ; total += *p
-    add rsi, 8                  ; p++, and the 8 is the size of an element
+    add rax, [rsi]              ; add whatever rsi is pointing at
+    add rsi, 8                  ; and step it on by one element
     cmp rsi, rdi
-    jb .add                     ; while (p < end)
+    jb .add                     ; until it reaches the end
     mov r8, rax
 
     mov rax, 60
@@ -60,13 +61,13 @@ _start:
     syscall
 ```
 
-`numbers_end:` is a label with nothing under it, so it holds the address the next thing would have
-gone at, which is one past the array. That is C's `numbers + 6`, the pointer you are allowed to
-compare against and not to read.
+`numbers_end:` is a label with nothing under it, so it holds the address the next item would have gone
+at, which is one byte past the end of the array. It is an address you compare against and never read
+from, and having the assembler work it out means the loop stays right when the array changes size.
 
-Both loops do the same work. The index form is easier to read and lets you reach `numbers[i-1]` on
-the way past; the pointer form is what the string instructions below need, because they only know how
-to walk forwards.
+Both loops do the same work. The index form is easier to read and lets you look back at the previous
+element on the way past. The pointer form is what the string instructions below need, because they
+have no notion of an index at all.
 
 ## A string is bytes and a rule for where it ends
 
@@ -78,8 +79,9 @@ fixed:  db "hello"              ; five bytes, and the length has to be kept else
 LEN     equ $ - fixed
 ```
 
-`db` with a quoted string writes one byte per character and nothing else, so the terminator is yours
-to write. The MIPS and RISC-V assemblers have `.asciiz`, which adds it; NASM does not.
+A quoted string in a `db` line is one byte per character and nothing else. NASM will not add a
+terminator for you, so if the code that reads the string is going to stop at a zero, the zero has to
+be in the `db` line where you can see it.
 
 Walking one is a loop that stops on the zero:
 
@@ -108,8 +110,8 @@ _start:
     syscall
 ```
 
-`r8` is 5. `test al, al` sets `ZF` when `al` is zero, which is the cheapest way x86 asks that
-question.
+The stopping condition is one instruction. `test al, al` sets `ZF` when `al` is zero and writes no
+register, so the byte just loaded is examined and left exactly as it was.
 
 ## The string instructions
 
@@ -167,13 +169,14 @@ Type `402010` into the memory panel, which is where `dest` starts. The sixteen b
 68 65 6C 6C 6F 00 00 00   41 41 41 41 00 00 00 00
 ```
 
-`rep movsb` is `memcpy` in two bytes of code, and it is the fastest way to copy memory on a modern
-x86 because the processor recognises the pattern and moves whole cache lines at a time.
+`rep movsb` copies a block of memory in two bytes of code, and on a current processor it is the
+fastest way to do it. The hardware recognises the pattern and moves whole cache lines at a time
+rather than genuinely repeating a one byte copy `rcx` times.
 
-## strlen in four instructions
+## Finding the end of a string in four instructions
 
 `repne scasb` scans forward until the byte at `[rdi]` equals `al`, or until `rcx` runs out. Set `al`
-to zero and `rcx` to something huge and it finds the terminator.
+to zero and `rcx` to something huge and it stops on the terminator.
 
 ```x86|playground|no-flags
 default rel
@@ -199,11 +202,28 @@ _start:
     syscall
 ```
 
-`r8` is 5. The arithmetic at the end is the awkward part: `rcx` counted **down** from `-1`, so `not
-rcx` turns what is left into how many steps were taken, and the `dec` drops the terminator the scan
-stopped on. Every C library's `strlen` for x86 has some version of those two lines.
+`r8` is 5, and the two lines that got it there deserve taking apart, because `not` followed by `dec`
+looks like nothing at all to do with counting.
 
-Try changing `db "hello", 0` to a longer string and watch `r8` follow it.
+`rcx` started at -1, which is `FFFFFFFFFFFFFFFF`, every bit set. The repeat prefix takes one off it
+per byte examined. So after the scan has looked at `k` bytes, `rcx` holds `-1 - k`:
+
+| bytes examined | the byte | `rcx` afterwards   | as a number |
+| -------------- | -------- | ------------------ | ----------- |
+| 0              |          | `FFFFFFFFFFFFFFFF` | -1          |
+| 1              | `h`      | `FFFFFFFFFFFFFFFE` | -2          |
+| 2              | `e`      | `FFFFFFFFFFFFFFFD` | -3          |
+| 3              | `l`      | `FFFFFFFFFFFFFFFC` | -4          |
+| 4              | `l`      | `FFFFFFFFFFFFFFFB` | -5          |
+| 5              | `o`      | `FFFFFFFFFFFFFFFA` | -6          |
+| 6              | the zero | `FFFFFFFFFFFFFFF9` | -7          |
+
+The count you want is in there, upside down. Getting it out is where `not` comes in, and the reason it
+works is two's complement: flipping every bit of a number `n` gives you `-n - 1`. Flipping `-1 - k`
+therefore gives `-(-1 - k) - 1`, which is just `k`. The scan looked at six bytes, so `not rcx` leaves 6.
+
+Six is one too many, because the last of those six was the terminator and the terminator is not part
+of the string. That is the `dec`. Five characters, which is what `r8` shows.
 
 ## Your turn
 

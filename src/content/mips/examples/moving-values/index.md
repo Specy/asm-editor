@@ -3,13 +3,6 @@ and the answer stays in `$t2`. Nothing is read from memory and nothing branches:
 register from the first instruction to the last, which is what the registers panel next to the
 program shows you.
 
-This is the first program of the ladder, and the ones after it are built out of the same two steps:
-a number into a register, and an instruction that reads two registers and writes a third.
-
-**You need to know:** the "Getting started with MIPS" lecture and the "The 32 registers and their
-names" lecture. What is new here is the destination being an operand of its own, so an `add` can
-leave both of the numbers it read exactly as they were.
-
 ```mips|playground|allow-open
 .text
 main:
@@ -24,18 +17,19 @@ main:
 ```
 
 `li $t0, 30` puts the number 30 into `$t0`, and there is no `#` in front of it: an operand that is a
-number is a number, and an operand that is a register has a `$`. The two `add` instructions are one
-C line, `perimeter = 2 * (width + height)`, and `add $t2, $t2, $t2` adds a register to itself, which
-is how you double a number without a multiplication.
+number is a number, and an operand that is a register has a `$`. The two `add` instructions between
+them work out twice the width plus twice the height, and `add $t2, $t2, $t2` adds a register to
+itself, which is how you double a number without a multiplication.
 
-The M68K writes that pair as a copy and two adds, because an `add.l d1, d0` has two operands and one
-of them has to be the destination. Here the destination is named separately, so `add $t2, $t0, $t1`
-leaves 30 in `$t0` and 12 in `$t1` and nothing else moves.
+The reason the perimeter fits in two instructions is that `add $t2, $t0, $t1` names its destination
+separately. `$t0` finishes holding 30 and `$t1` holding 12, exactly as they started, so the width
+and the height are still there to be used again. On a machine where one operand had to double as the
+destination, that same sum would have cost a copy first.
 
-`$t2`, `$t3` and `$t4` all come out at `00000054`, which is 84. `move $t3, $t2` is a
-pseudo-instruction and the line under it is what the assembler turns it into: adding `$zero`, which
-always reads 0, copies a register.
+`$t2`, `$t3` and `$t4` all hold the same answer, by three routes. `move $t3, $t2` is a
+pseudo-instruction, and `add $t4, $t2, $zero` on the line under it is exactly what the assembler
+turns it into: adding a register that always reads 0 copies whatever you added it to.
 
-Try changing `sub $t5, $t0, $t1` to `sub $t5, $t1, $t0`. `$t5` comes out at `FFFFFFEE` instead of
-`00000012`, which is -18: the order of the two operands after the destination decides which way
-round the subtraction goes, and the registers panel shows you the bits either way.
+`sub $t5, $t0, $t1` is 30 minus 12. Write the two sources the other way round and you get -18, which
+the panel shows as `FFFFFFEE`: the destination is fixed as the first operand, but the order of the
+two after it decides which way round the subtraction goes.

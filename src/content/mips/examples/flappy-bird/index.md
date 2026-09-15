@@ -5,13 +5,6 @@ another tap starts the next one.
 
 **Click the Screen panel before you press a key**, the same as in Move a square with the keyboard.
 
-**You need to know:** everything above it on the ladder. The keyboard is polled the way Move a square
-with the keyboard polls it, only what changed is redrawn the way A bouncing ball does it, and the
-pipes are an array of records walked with a pointer. What is new is the **state machine** a game is,
-the **sixteenths of a row** the bird's height is measured in, because a bird that can only move in
-whole rows cannot accelerate smoothly, and a grid painted **one column at a time** out of the world
-the program keeps in memory.
-
 ```mips|playground|open-screen|console|no-registers|allow-open
 # @screen unit=4 width=256 height=256 base=display
 .eqv MMIO 0xffff0000
@@ -483,7 +476,7 @@ exactly where a fourth pipe would have been and the spacing never drifts. The th
 record is whether it has been counted, and it goes up the score, and prints a line, when the pipe's
 right edge passes `BIRDX`.
 
-Nothing is stored about the picture. `world_column` is given a column and works out from the pipe
+The picture itself is never stored. `world_column` is given a column and works out from the pipe
 records what colour every row of it should be: the pipe down from the top, the gap, the pipe down to
 the ground, then the grass and the sand. That is what makes a frame cheap, because only two columns
 per pipe can have changed, the one the pipe has just come into and the one it has just left, and
@@ -502,10 +495,10 @@ generator. `$s0` is the one saved register the loops have left, so the three sub
 pointer of their own save it on the stack next to `$ra` and put it back, which is the calling
 convention doing the job it is there for.
 
-The score goes to the console because there is nowhere else to put it. The M68K version of this game
-draws it onto the screen with a task that puts text at a pixel position, and the bitmap display has
-no text of any kind, which is also why the end of a game is the ground turning `DEADGROUND` and not
-the words GAME OVER.
+The score goes to the console because the screen has no writing on it: there is no way to put text
+at a position on the grid, only coloured cells. That is also why the end of a game is the ground
+turning `DEADGROUND` rather than the words GAME OVER, and why a game written on this screen says
+what it means with colour.
 
 `random_gap` is a 32 bit **xorshift**. Three shifts and three `xor` instructions turn a number into
 the next one of a sequence, its high bits are the ones worth using, and the remainder of a `divu` by
@@ -513,6 +506,6 @@ the next one of a sequence, its high bits are the ones worth using, and the rema
 30 on the frame the first flap happens, so the course depends on when you started playing instead of
 on a number written into the program.
 
-Try changing `.eqv HALFGAP 9` to `6` and playing again. A gap is measured from its middle in both
-directions, by the drawing and by the hit test alike, so that one number is the whole of the
-difficulty.
+Change `.eqv HALFGAP 9` to `6` and play again. A gap is measured outwards from its middle, and both
+the drawing and the hit test measure it the same way, so that single number is the entire difficulty
+setting of the game.

@@ -1,12 +1,11 @@
-A number in a register, printed as digits, in any base up to 36. `write` sends bytes and nothing else,
-so a program that wants to print 12345 has to produce the five characters itself.
+`write` sends bytes. A register holding 12345 contains no bytes that a terminal would recognise as
+`1`, `2`, `3`, `4` and `5`, so a program that wants to print a number has to manufacture those five
+characters itself.
 
-The method is repeated division. Dividing by the base gives a quotient and a remainder, the remainder
-is the last digit, and doing it again to the quotient gives the one before it. So the digits arrive
-**backwards**, and the program writes them backwards into the end of a buffer.
-
-**You need to know:** the "Arithmetic, logic and bits" lecture and the "syscall and the Linux ABI"
-lecture. What is new here is a subroutine that prints, and a buffer filled from the far end.
+The method is repeated division, and it produces the digits in the wrong order. Divide 12345 by ten
+and the remainder is 5, which is the **last** digit. Divide the quotient by ten and the remainder is 4,
+the one before it. Keep going and the digits come out backwards, which is why this program fills its
+buffer from the far end and works towards the front.
 
 ```x86|playground|console|allow-open
 default rel
@@ -71,22 +70,30 @@ _start:
     syscall
 ```
 
-The console reads `12345`, then `3039`, then `11000000111001`: one number written three ways.
+The console reads `12345`, then `3039`, then `11000000111001`. One number, three bases, one
+subroutine, and the only thing that changed between the three calls was `rsi`.
 
-`rcx` starts at the address **after** the buffer and moves down, so the digits end up in the right
-order with no reversing afterwards. When the loop stops, `rcx` points at the first character and
-`buffer + 64` minus `rcx` is how many there are, which is exactly what `write` wants.
+Walk the buffer. `rcx` starts at `buffer + 64`, one byte **past** the end, and every digit produced
+moves it down by one and writes there. So the first digit produced, the last digit of the number, ends
+up at the highest address; the last one produced ends up at the lowest; and when the loop finishes,
+`rcx` is pointing at the first character of the answer with the rest of them in order in front of it.
+Nothing has to be reversed afterwards. `buffer + 64` minus `rcx` is then the length, which is precisely
+what `write` wants next.
 
-`div rsi` reads `rdx:rax` and writes the quotient to `rax` and the remainder to `rdx`, so one
-instruction produces both halves of what the loop needs. The `xor rdx, rdx` at the top of each pass
-is not optional: `rdx` holds the remainder from the pass before, and leaving it there makes the
-dividend enormous and stops the program with a divide error.
+```
+ buffer                                        buffer + 64
+   |                                                |
+   |                             [ 1 2 3 4 5 ]      |
+                                 ^
+                                rcx when the loop stops
+```
 
-`digits` turns a remainder into a character. For base 10 the first ten bytes would do, and having all
-thirty six is what makes the base an argument rather than a constant.
+`div rsi` produces both halves of what the loop needs from one instruction: the quotient in `rax` to
+go round again with, the remainder in `rdx` to turn into a character. The `xor rdx, rdx` at the top of
+each pass is not optional, because `rdx` is still holding the remainder that pass produced, and
+leaving it there makes the next dividend astronomically large and ends the program on a divide error.
 
-The zero case is separate because the loop is a `do while` that runs at least once only when the
-value is not zero already. Without those three lines, `print_number(0, 10)` prints nothing at all.
-
-Try changing the base to 36 and the number to 1295. The answer is `zz`, the largest two digit number
-that base has.
+`digits` is what turns a remainder into a character. Remainder 5 picks up the byte at `digits + 5`,
+which is `'5'`. Remainder 11 picks up `'b'`. Having all thirty six of them there is the only reason the
+base can be an argument instead of a constant. Ask for base 36 with the number 1295 and the answer is
+`zz`, which is the largest two digit number that base has.

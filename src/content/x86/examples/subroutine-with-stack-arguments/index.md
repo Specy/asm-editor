@@ -1,10 +1,9 @@
-A subroutine with seven arguments. Six of them arrive in registers, and the seventh has nowhere to go
-but the stack, which is what makes this program show a whole stack frame: a saved frame pointer, room
-for locals, a saved register and an argument reached from above.
+Six registers carry six arguments, so a subroutine with seven has a problem. The seventh goes on the
+stack, and once anything is on the stack the subroutine needs a way to find it again while `rsp` moves
+around underneath.
 
-**You need to know:** the "The stack, push and pop" lecture and the "call, ret and the System V
-convention" lecture. What is new here is `rbp` as a frame pointer and the offsets that reach either
-side of it.
+That is what makes this program worth reading: it builds a complete stack frame, and you can watch the
+whole of it at once in the Stack tab of the memory panel.
 
 ```x86|playground|memory|allow-open
 default rel
@@ -50,23 +49,30 @@ _start:
     syscall
 ```
 
-`r12` comes out at `1C`, which is 28.
+Set a breakpoint on the `mov rax, rbx` line and open the **Stack** tab. Six qwords are laid out there,
+and every one of them was put there by an instruction you can point at:
 
-`[rbp + 16]` is the seventh argument. Count what is between: `[rbp]` holds the caller's `rbp`, just
-pushed; `[rbp + 8]` holds the return address, pushed by `call`; and the argument the caller pushed is
-the next thing up. Locals go the other way, below `rbp`, which is why the first one is `[rbp - 8]`.
+|              | holds                  | put there by  |
+| ------------ | ---------------------- | ------------- |
+| `[rbp + 16]` | 7, the last argument   | `push 7`      |
+| `[rbp + 8]`  | the return address     | `call sum7`   |
+| `[rbp]`      | the caller's `rbp`     | `push rbp`    |
+| `[rbp - 8]`  | the running total      | `sub rsp, 16` |
+| `[rbp - 16]` | a second local, unused | `sub rsp, 16` |
+| `[rbp - 24]` | the saved `rbx`        | `push rbx`    |
 
-`leave` is one instruction for `mov rsp, rbp` and `pop rbp`, and it undoes the `sub rsp, 16` without
-having to remember the 16. The `push rbx` after the `sub` is popped by hand before it, because
-`leave` would throw it away along with the locals.
+`rbp` sits in the middle of that, which is the point of it. `rsp` is down at the bottom and moves
+every time anything is pushed; `rbp` has not moved since the second instruction of the subroutine, so
+`[rbp - 8]` names the same slot from the first line of the body to the last.
 
-`add rsp, 8` after the `call` is the caller taking its own argument off. System V puts that job on
-the caller, which is what makes a function with a variable number of arguments possible: `printf`
-cannot know how many were pushed, and it does not have to.
+The order of the teardown is worth noticing. `pop rbx` comes **before** `leave`, not after, because
+`leave` sets `rsp` back to `rbp` in one go and would sail straight past the saved `rbx` without
+restoring it. Anything pushed after the frame is set up has to be popped before the frame comes down.
 
-Set a breakpoint on the `mov rax, rbx` line and look at the **Stack** tab of the memory panel. The
-seventh argument, the return address and the saved `rbp` are three qwords in a row, and the two
-locals and the saved `rbx` are under them.
+`add rsp, 8` after the `call` is the caller taking its own argument off again. The convention puts
+that job on the caller rather than the callee, and the reason is subroutines that take a variable
+number of arguments: the callee often cannot know how many were pushed, and this way it does not have
+to.
 
-Try deleting the `push rbx` and the `pop rbx`. The answer is still 28, and `rbx` in the caller is
-gone, which is the bug that shows up much later in a bigger program.
+Delete the `push rbx` and the `pop rbx` and the answer is still 28. `rbx` in the caller is destroyed,
+though, and nothing in this program notices, which is exactly how that bug behaves in a large one.

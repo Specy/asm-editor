@@ -3,12 +3,8 @@ and the answer stays in `d2`. Nothing is read from memory and nothing branches: 
 register from the first instruction to the last, which is what the registers panel next to the
 program shows you.
 
-This is the first program of the ladder, and the ones after it are built out of the same three
-moves: a number into a register, a register into another register, and an `add`.
-
-**You need to know:** the "Getting started with M68K" lecture and the "Data and address registers"
-lecture. What is new here is the size on the last instruction, `.b` writes one byte of a register
-and leaves the three bytes above it exactly as they were.
+Three moves and an `add` is the whole program, and a surprising amount of what follows is built out
+of those.
 
 ```m68k|playground|no-flags|allow-open
     move.l #30, d0      ; width = 30
@@ -21,15 +17,14 @@ and leaves the three bytes above it exactly as they were.
     move.b d2, d3           ; only the lowest byte of d3 is written
 ```
 
-The `#` in `move.l #30, d0` means the number 30 itself; without it the instruction reads four bytes
-from address 30 instead. The copy into `d2` and the two adds after it are one C line,
-`perimeter = 2 * (width + height)`, written one operation at a time, because an M68K instruction has
-two operands and the one on the right is the one that gets written. `add.l d2, d2` adds `d2` to
-itself, which is how you double a number without a multiplication.
+The `#` in `move.l #30, d0` means the number 30 itself. Without it, the instruction would read four
+bytes from address 30 instead.
 
-`d2` comes out at `00000054`, which is 84, and `d3` at `FFFFFF54`. The `54` is the perimeter and the
-`FFFFFF` is what `d3` was already holding: the size on the instruction is the only thing that
-decided how much of the register changed.
+Doubling `width + height` would be one line of arithmetic written anywhere else. Here it is three
+instructions, because an M68K instruction has two operands and the one on the right is the one that
+gets written, so every step has to name where its answer goes. `add.l d2, d2` adds `d2` to itself,
+which is how you double a number without a multiplication.
 
-Try changing `move.b d2, d3` to `move.l d2, d3`. `d3` comes out at `00000054` with the `FFFFFF`
-gone, because a long is the whole register.
+The last two lines are the interesting pair. `d3` comes out at `FFFFFF54`: the `54` is the perimeter
+and the `FFFFFF` above it is what `d3` was already holding, untouched. The `.b` is the only thing in
+that instruction that decided how much of the register changed.

@@ -1,27 +1,29 @@
-The instruction set lecture wrote an instruction's operands as `destination` and `source` without
-saying what can go in them. This is what can, and the way an operand is written is its **addressing
-mode**. MIPS has three, which is fewer than any other machine in this editor.
+An operand can be written in three different ways, and which one you used is called the operand's
+**addressing mode**. Three is the whole list:
 
-| mode             | written  | in C               |
-| ---------------- | -------- | ------------------ |
-| register         | `$t0`    | `x`                |
-| immediate        | `7`      | `7`                |
-| base plus offset | `4($t0)` | `p[1]`, `*(p + 1)` |
+| mode             | written  | what the CPU does with it                          |
+| ---------------- | -------- | -------------------------------------------------- |
+| register         | `$t0`    | reads the register                                 |
+| immediate        | `7`      | reads the number out of the instruction            |
+| base plus offset | `4($t0)` | adds 4 to `$t0` and goes to memory at that address |
 
-The first two name a value the CPU already has or the assembler already knows. The third names an
-address, and only a load or a store may use it.
+The first two hand the CPU a value it already has. The third hands it an address, and only a load or
+a store is allowed to use it.
 
 ## Arithmetic never reaches memory
 
-MIPS is a **load/store architecture**, which means exactly this: `lw`, `lh`, `lb`, `lbu`, `lhu`,
-`sw`, `sh` and `sb` are the only instructions that touch memory, and everything else works on
-registers. There is no `add` that reads a variable, no `cmp` against a word in memory, no
-increment of a counter that lives at an address.
+MIPS is a **load/store architecture**, and the phrase means exactly one thing: `lw`, `lh`, `lb`,
+`lbu`, `lhu`, `sw`, `sh` and `sb` are the only instructions that touch memory. Every other
+instruction in the machine reads registers and writes registers, full stop.
 
-So the shape of every program that works on data in memory is the same three steps: load it into a
-register, do the work there, store it back. On the M68K, where `add.l total, d0` adds the long at a
-label straight into a register, that is one instruction; here it is three, and the reason the design
-went that way is that a load can take many cycles and an `add` takes one, so the two are kept apart.
+So a program that works on data in memory always has the same three steps in it. Load the value into
+a register, do the arithmetic there, store the answer back.
+
+Three steps for something that sounds like one is a deliberate trade. A load may take many cycles,
+because it might have to wait on memory, and an `add` takes one. Keeping them in separate
+instructions means the slow thing is visible in the program, so a compiler can start the load early
+and fill the wait with useful work, instead of every arithmetic instruction having to be prepared
+for a long stall.
 
 ## offset(base)
 
@@ -38,9 +40,9 @@ main:
     li $t0, 7               # immediate
     move $t1, $t0           # register
     la $t2, numbers         # the address of the label, nothing read
-    lw $t3, 0($t2)          # numbers[0]
-    lw $t4, 4($t2)          # numbers[1]
-    addi $t7, $t2, 12       # a pointer at numbers[3]
+    lw $t3, 0($t2)          # the first element
+    lw $t4, 4($t2)          # the second
+    addi $t7, $t2, 12       # an address three words along
     lw $t8, -4($t7)         # and one word back from it
 ```
 
@@ -53,16 +55,18 @@ The four words sit at `0x10010000`, where `.data` puts the first label:
 | `0x10010008` | `0000001E` | `numbers[2]`  |
 | `0x1001000C` | `00000028` | `numbers[3]`  |
 
-`$t3` comes out at 10 and `$t4` at 20. `$t7` is `1001000C`, and `$t8` is 30, because the offset may
-be negative and `-4($t7)` is one word back.
+`$t8` is the line to look at. `$t7` holds the address of the fourth element, and `-4($t7)` walks
+back one word from it to find the third, because the offset is signed and may be negative.
 
-Two things the mode cannot do. It cannot add two registers, so there is no `lw $t0, ($t1 + $t2)`. And
-it cannot scale anything, so an index has to be turned into a byte offset by your own code.
+The mode takes exactly one register and exactly one constant, which rules out two things you might
+reach for. You cannot add two registers inside it, so `lw $t0, ($t1 + $t2)` does not exist. And it
+does not scale, so turning an index into a byte offset is your program's job.
 
 ## Indexing an array
 
-C hides the size of an element: `numbers[i]` means the address of `numbers` plus `i` times four,
-because the elements are 4 byte words. MIPS makes you write both halves of that.
+An array in memory is a run of bytes and nothing more. Element number `i` of `numbers` is at the
+address of `numbers` plus `i` times the size of one element, and here the elements are 4 byte words,
+so it is `i` times four. Both halves of that are yours to write.
 
 ```mips|playground|memory
 .data
@@ -72,23 +76,22 @@ numbers: .word 10, 20, 30, 40
 main:
     la $t0, numbers
     li $t1, 2               # i = 2
-    sll $t2, $t1, 2         # i * 4, the size of a word
-    add $t3, $t0, $t2       # &numbers[i]
-    lw $t4, 0($t3)          # numbers[i]
-    lw $t5, 4($t3)          # numbers[i + 1]
+    sll $t2, $t1, 2         # i * 4, one word per element
+    add $t3, $t0, $t2       # base + offset, the element address
+    lw $t4, 0($t3)          # element i
+    lw $t5, 4($t3)          # and the one after it
     li $t6, 99
-    sw $t6, 0($t3)          # numbers[i] = 99
+    sw $t6, 0($t3)          # write 99 over element i
 ```
 
-`$t4` comes out at 30 and `$t5` at 40, and after the `sw` the word at `0x10010008` reads `00000063`,
-which is 99. `sll $t2, $t1, 2` is the multiplication by 4: shifting left by 2 multiplies by 4, and
-every size on this machine is a power of two, so a shift is always what you want here.
+`sll $t2, $t1, 2` is the multiplication. Shifting a number left by one place doubles it, so
+shifting left by two places multiplies by four, and every size on this machine is a power of two, so
+a shift is always the right tool for this. Then `add $t3, $t0, $t2` turns the byte offset into a
+real address.
 
-Once the address is in a register, the constant offset does the rest of the work: `0($t3)` and
-`4($t3)` are two neighbouring elements out of one computed address, and a loop over pairs pays for
-the arithmetic once.
-
-Try changing `li $t1, 2` to `li $t1, 0` and watching which word changes instead.
+Once that address is in a register, the constant offset does the rest of the work for free. `0($t3)`
+and `4($t3)` read two neighbouring elements out of one piece of arithmetic, so a loop that handles
+elements in pairs pays for the `sll` and the `add` once instead of twice.
 
 ## The assembler's label forms
 
@@ -112,9 +115,10 @@ main:
 editor prints what they became: two instructions for the first three, three for the last, and every
 one of them writes `$at`.
 
-That is the trade. `lw $t1, numbers` reads like C and costs two instructions and `$at` every time it
-runs, so inside a loop you do the `la` once, before the loop, and use `offset(base)` inside it.
-`la` is the one you will write most, because a pointer in a register is what the loop wants.
+So there is a trade. `lw $t1, numbers` is shorter to read and costs two instructions and `$at`
+**every time it runs**, which is fine once and wasteful ten thousand times. Inside a loop you do the
+`la` once before the loop starts and use `offset(base)` in the body. That is why `la` is the form
+you will write most: what a loop wants is an address sitting in a register.
 
 ## Walking with a pointer
 
@@ -127,25 +131,29 @@ numbers: .word 10, 20, 30, 40, 50
 
 .text
 main:
-    la $t0, numbers         # p = numbers
-    li $t1, 0               # sum = 0
-    li $t2, 5               # left = 5
+    la $t0, numbers         # the address we are standing on
+    li $t1, 0               # the running total
+    li $t2, 5               # how many are left to do
 loop:
-    lw $t3, 0($t0)          # *p
-    add $t1, $t1, $t3       # sum += *p
-    addi $t0, $t0, 4        # p++, which on a word is four bytes
-    addi $t2, $t2, -1       # left--
+    lw $t3, 0($t0)          # the element under the pointer
+    add $t1, $t1, $t3       # add it to the total
+    addi $t0, $t0, 4        # step the pointer on by one word
+    addi $t2, $t2, -1       # one fewer left
     bnez $t2, loop
 ```
 
-`$t1` comes out at `00000096`, which is 150, and `$t0` at `10010014`, twenty bytes on and one word
-past the last element. The `addi $t0, $t0, 4` is C's `p++` written out, because C hides the size of
-what a pointer points at and assembly does not.
+The total in `$t1` is 150. `$t0` finishes at `10010014`, which is twenty bytes past where it
+started: one word beyond the last element, pointing at memory the array does not own. A pointer that
+ends up just past the end is normal, and reading through it is not.
 
-The other way to write that loop keeps `$t0` at the base and computes `sll` and `add` on every pass,
-which is four instructions instead of one and gives you the index in a register. Use the pointer when
-you touch every element in order, and the index when you need the index itself, or when the loop
-jumps around the array the way a binary search does.
+The step is `addi $t0, $t0, 4` and not `addi $t0, $t0, 1`, because the pointer counts bytes and the
+elements are four bytes each. That is the one mistake worth expecting; a program that steps by 1
+reads the same word four times over with the bytes shifted along.
+
+There is another way to write the same loop: keep `$t0` at the base and redo the `sll` and `add`
+from an index on every pass. That is more instructions per element and it hands you the index, which
+sometimes you need. Walk with a pointer when you visit every element in order; keep an index when
+you need the number itself, or when the loop jumps around the array the way a binary search does.
 
 ## Branches and jumps are addressed differently
 
@@ -190,8 +198,8 @@ main:
     li $t1, 2           # i = 2
     la $t2, numbers     # the base
     sll $t3, $t1, 2     # i * 4
-    add $t3, $t2, $t3   # &numbers[i]
-    lw $t0, 0($t3)      # numbers[i]
+    add $t3, $t2, $t3   # the address of element i
+    lw $t0, 0($t3)      # and there it is
 ```
 
 </details>
@@ -229,9 +237,9 @@ main:
     li $t1, 3           # i = 3
     la $t2, numbers
     sll $t3, $t1, 2     # i * 4
-    add $t3, $t2, $t3   # &numbers[i]
+    add $t3, $t2, $t3   # the address of element i
     li $t4, 99
-    sw $t4, 0($t3)      # numbers[i] = 99
+    sw $t4, 0($t3)      # 99 over element i
 ```
 
 </details>

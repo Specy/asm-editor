@@ -3,12 +3,8 @@ way on its own, coming back in at the opposite edge when it leaves the grid. **C
 first**: the screen only gets the keyboard when it has the focus, and a ring around it says so while
 it does.
 
-A bouncing ball drew a picture that changed on its own. This one asks the keyboard, once per frame,
-whether anything has been typed, and the answer changes what every frame after it will look like.
-
-**You need to know:** the "A bouncing ball" Example and the "The bitmap display and the keyboard
-registers" lecture. What is new here is the two receiver registers at `0xffff0000`, one whose bit 0
-says a character is waiting and one that hands it over.
+A picture that changes on its own needs nothing from outside. This one asks the keyboard once per
+frame whether anything has been typed, and what comes back changes every frame after it.
 
 ```riscv|playground|open-screen|no-registers|allow-open
 # @screen unit=8 width=256 height=256 base=display
@@ -140,17 +136,16 @@ Polling once a frame is enough, because what is not read stays in the queue. Rea
 is not empty", so a key pressed between two polls is still waiting at the next one and nothing is
 lost.
 
-The four key codes are loaded into `s8` to `s11` before the loop and never touched again. MIPS writes
-`bne $t5, 'a', not_a` and lets its assembler put the 97 into `$at` for you, one hidden instruction per
-key per frame; RISC-V has no such register, so a branch against a character is a `li` you write, and
-the place for it is outside the loop.
+The four key codes are loaded into `s8` to `s11` once, before the loop, and never touched again. A
+comparison against `'a'` needs the 97 in a register of its own, and the cheap place to load it is
+outside the loop, where it happens once instead of once a frame.
 
-The M68K asks a different question. Its task 19 takes four key codes and answers with which of them
-are held **down at this instant**, so a program there can tell that a key is still being held and that
-another was let go. The receiver here has no such notion: it hands over characters that were typed,
-one at a time, with no key code, no key up and no way to ask what is down now. That is why this
-program is written around a direction that persists, and why it takes `w`, `a`, `s` and `d` and not
-the arrow keys, which send nothing a receiver can carry.
+The receiver hands over **characters that were typed**, one at a time, and that is all it knows. It
+cannot tell you that a key is being held down now, or that one has just been let go. So a program
+here cannot ask "is `d` down?" every frame; it can only be told "a `d` arrived". That single fact
+decides the shape of this program: the key sets a direction that persists, and the square keeps
+moving until a different key changes it. It is also why the controls are `w`, `a`, `s` and `d`
+rather than the arrow keys, which send nothing a receiver can carry.
 
 The keys do not move the square, they write `s4` and `s5`, and the code under them moves it. That
 separation is what makes the square keep going after you let go of the key, and it is how anything
@@ -160,9 +155,8 @@ Setting the other step to 0 next to each direction is what keeps the movement to
 Take the four `li s5, 0` and `li s4, 0` lines out and pressing `d` and then `w` leaves both steps set,
 and the square goes diagonally.
 
-One frame is about 154 instructions, so the `runFor` of 100000 is around six hundred and fifty of
-them. A testcase cannot type into the receiver, so the keys are yours to try by hand.
+A testcase cannot type into the receiver, so the keys are yours to try by hand.
 
-Try changing `li s2, 0` under `ble s2, s7, x_low` to `li s2, LAST`. The square stops against the right
-edge instead of coming back in at the left, which is the same two instructions doing clamping instead
-of wrapping.
+The wrapping at the edges is two instructions, and changing which value they write is the difference
+between two behaviours you would describe very differently: `li s2, 0` sends the square back in at
+the far side, `li s2, LAST` stops it dead against the edge.

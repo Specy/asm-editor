@@ -1,6 +1,6 @@
 {
-    "name": "Comparing without flags",
-    "description": "RISC-V has no condition code register, so a comparison either is the branch or leaves a 1 or a 0 in a register you named. The six real branches that each compare two registers, slt and its family, and the carry bit you have to work out yourself.",
-    "order": 7,
-    "topic": "flags"
+    "name": "Asking a question with a branch",
+    "description": "One instruction compares two registers and jumps, so a condition needs nothing set up first and leaves nothing behind. The six real branches, the ones the assembler builds out of them, and slt for when you want the answer as a number instead of a jump.",
+    "order": 6,
+    "topic": "branching"
 }

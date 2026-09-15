@@ -1,6 +1,6 @@
 {
     "name": "The flags register",
-    "description": "What each of the seven flags records, which instructions write them and which leave them alone, and why one cmp answers both the signed and the unsigned question.",
+    "description": "The bits arithmetic leaves behind, which instructions write them and which leave them alone, why the signed less-than condition is SF against OF worked out on paper, and why one cmp answers both the signed and the unsigned question.",
     "order": 6,
     "topic": "flags"
 }

@@ -1,15 +1,15 @@
-[Assembly basics](/learn/courses/assembly-basics) went through registers, memory, branching and the
-stack once, using whichever language made each point clearest. From here on there is one language,
-x86.
+This course writes one language, x86, and runs the programs you write as real Linux programs. If you
+have never written assembly at all, [Assembly basics](/learn/courses/assembly-basics) covers
+registers, memory, branching and the stack quickly and comes first.
 
 ## The machine
 
-**x86** is the family that started with the Intel 8086 in 1978, a 16 bit chip whose cut down cousin
-the 8088 went into the IBM PC in 1981. The 80386 of 1985 widened it to 32 bits, and AMD widened it
-again to 64 in 2003, a design Intel then adopted as its own. Every widening kept the older
-instructions working, which is why the machine you write for today still has an accumulator called
-`ax` inside a register called `rax`. This course writes **x86-64**, the 64 bit form, which is what
-desktop and server processors run. It works with:
+**x86** started with the Intel 8086 in 1978, a 16 bit chip whose cut down cousin the 8088 went into
+the IBM PC in 1981. The 80386 of 1985 widened it to 32 bits, and AMD widened it again to 64 in 2003,
+a design Intel then adopted as its own. Every widening kept the older instructions working, which is
+why the machine you write for today still has an accumulator called `ax` living inside a register
+called `rax`. What you write here is **x86-64**, the 64 bit form, which is what desktop and server
+processors run. It gives you:
 
 - **Sixteen general purpose registers**, 64 bits each: `rax`, `rbx`, `rcx`, `rdx`, `rsi`, `rdi`,
   `rbp`, `rsp` and `r8` to `r15`. Any of them can hold a number or an address, and `rsp` is the stack
@@ -20,12 +20,13 @@ desktop and server processors run. It works with:
   writes it by name, the jumps and calls write it.
 - **Memory**, one large array of bytes with a 64 bit address. Your code lands at `0x401000` and your
   data just after it at `0x402000`.
-- **The flags**, `CF`, `PF`, `AF`, `ZF`, `SF`, `DF` and `OF`, in a register of their own. Arithmetic
-  and comparisons write them, the conditional jumps read them.
+- **The flags**, a register of single bits that arithmetic writes and the conditional jumps read.
 
-x86 is **not** a load/store architecture. `add rax, [total]` reads memory, adds and writes the
-register in one instruction, where MIPS and RISC-V would need a load first. Most instructions take
-one operand in memory, and the one rule is that two of them cannot be.
+An **operand** is one of the things an instruction works on, the parts after the mnemonic. x86 lets
+an operand be a register, a number, or a place in memory, and it lets an instruction work on memory
+without loading it first: `add rax, [total]` reads eight bytes from `total`, adds them to `rax` and
+writes `rax`, all in one instruction. The one restriction is that two operands cannot both be in
+memory.
 
 It is **little endian**: the lowest byte of a number goes at the lowest address, so a quadword you
 wrote as `0x1122334455667788` reads in memory as `88 77 66 55 44 33 22 11`.
@@ -34,15 +35,16 @@ wrote as `0x1122334455667788` reads in memory as `88 77 66 55 44 33 22 11`.
 
 Two separate programs stand between what you type and what runs.
 
-The assembler is **NASM**, the Netwide Assembler, and its syntax is what this course writes.
-The other common way of writing x86 is the AT&T syntax that `gas` and the output of `gcc -S` use,
-where the operands are the other way round and registers carry a `%`. Both describe the same
-machine, and a line you read on the internet may be in either.
+The assembler is **NASM**, the Netwide Assembler, and its syntax is what this course writes. There is
+a second way of writing x86 down, the AT&T syntax that `gas` and the output of `gcc -S` use, where
+the operands are the other way round and every register carries a `%`. Both describe the same
+machine, and a line of x86 you find on the internet may be in either, so it is worth being able to
+recognise which one you are looking at.
 
 The simulator is **blink**, which emulates a 64 bit Linux program rather than a bare machine. That is
 the one thing to hold on to: your program is a Linux process. It starts at a label called `_start`,
-and printing, reading and stopping go through the instruction `syscall`, which is taught in the
-"Talking to the outside world" module of this course. Until then, programs show what they did in the
+and printing, reading and stopping all go through one instruction, `syscall`, which has a lecture of
+its own in the "Talking to the outside world" module. Until then, programs show what they did in the
 registers and the memory.
 
 ## How a program is written down
@@ -91,7 +93,7 @@ _start:
     add rbx, rax        ; y = y + x
 
     mov rax, 60         ; syscall 60: exit
-    xor rdi, rdi        ; with status 0
+    mov rdi, 0          ; with status 0
     syscall
 ```
 
@@ -100,38 +102,36 @@ _start:
 on the **left** is the destination, the one that gets written. So `rbx` ends at 42 and `rax` is
 untouched by the addition.
 
-The left operand being the destination is the biggest difference from the M68K, where `add.l d1, d0`
-writes `d0`, and from the AT&T syntax, where the same instruction is written `addq %rax, %rbx`.
+That rule is worth saying out loud once, because it decides how every line in this course reads. The
+left operand is written, the right one is only read, and an instruction with one operand writes that
+one.
 
 **Build** assembles what you wrote and points the simulator at the first instruction, **Run** runs
 the program to the end, and **Step** runs one instruction at a time. The `rip` register at the bottom
 of the panel is the address of the instruction that runs next, and it starts at `0x401000`.
 
-Try changing `add rbx, rax` to `add rax, rbx` and see the answer come out in `rax` instead, where the
-exit lines then overwrite it.
-
 ## The three lines that stop it
 
 ```
     mov rax, 60
-    xor rdi, rdi
+    mov rdi, 0
     syscall
 ```
 
-Those three lines are a request to Linux: `rax` holds the number of the call, 60 is `exit`, `rdi`
-holds its one argument, the status the program exits with, and `syscall` hands the request over.
-`xor rdi, rdi` is the usual way of writing `mov rdi, 0`, because exclusive-or of a register with
-itself is zero and the instruction is two bytes shorter.
+Your program is a Linux process, and a process does not stop by running out of instructions. It has
+to ask to be stopped. Those three lines are that request: `rax` says which request it is, 60 meaning
+"exit", `rdi` carries the one thing `exit` needs to know, the status the program finishes with, and
+`syscall` hands the whole thing to Linux. Zero is the status that means nothing went wrong.
 
-Every program in this course ends with those three lines, and the "syscall and the Linux ABI" lecture
-is where the rest of the calls are. A program that reaches the end of its code without them carries
-on into whatever bytes come next in memory, which is not an ending, and this simulator stops quietly
-when that happens. Write the exit.
+Every program in this course finishes by asking to exit, and the "syscall and the Linux ABI" lecture
+is where the rest of the requests are. A program that reaches the end of its code without asking
+carries on into whatever bytes come next in memory and tries to run them as instructions, so write
+the exit even in a program that does nothing.
 
-`default rel` at the top is the other line you will see in every program: it tells NASM to reach data
-by an offset from `rip` instead of by an absolute address, which is what 64 bit code does. Leave it
-out and NASM still assembles, with a warning on the first `[label]` it meets. "Effective addresses"
-explains what the two actually assemble to.
+`default rel` at the top is the other line you will see in every program. It tells NASM to reach data
+by an offset from `rip` rather than by an absolute address, which is what 64 bit code does and what
+"Effective addresses" explains. Leave it out and NASM still assembles, with a warning on the first
+`[label]` it meets.
 
 ## Four names for one register
 
@@ -151,25 +151,24 @@ _start:
     mov eax, 0x44444444             ; and this one clears the top half
 
     mov rax, 60
-    xor rdi, rdi
+    mov rdi, 0
     syscall
 ```
 
-`al` and `ax` behave the way the M68K's `.b` and `.w` do: they touch the low end of the register and
-leave everything above it alone, so after the second line `rax` reads `AABBCCDDEEFF0022`.
+The first three lines behave the way you would guess. `al` and `ax` reach the low end of `rax` and
+leave everything above alone, so after `mov al, 0x22` the register reads `AABBCCDDEEFF0022`.
 
-`eax` does not. **Writing a 32 bit register zeroes the top 32 bits**, so `rax` comes out at
-`0000000044444444` and not `AABBCCDD44444444`. That rule is x86-64's own, it applies to every 32 bit
-destination and to no other width, and it catches everybody once. `mov eax, eax` is the shortest way
-to throw away the top half of a register on purpose.
-
-Try putting `mov al, 0x22` back at the end and watch `rax` become `0000000044444422`.
+`eax` does not. **Writing a 32 bit register zeroes the top 32 bits**, so the last line leaves `rax`
+at `0000000044444444` and not `AABBCCDD44444444`. The rule is x86-64's own, it applies to every 32
+bit destination and to no other width, and it catches everybody once. Put `mov al, 0x22` back at the
+end and watch `rax` become `0000000044444422`: the byte write goes into a register whose top half is
+already gone.
 
 ## The flags panel
 
-The flags sit just above the registers. `cmp` subtracts its right operand from its left, throws the
-answer away and keeps only what the answer did to the flags. `ZF` goes to 1 when the two were equal,
-which is what `je` and `jne` read.
+The flags sit just above the registers, one bit each, and they are how one instruction tells the next
+one what happened. `cmp` subtracts its right operand from its left, throws the answer away and keeps
+only what the answer did to the flags. `ZF` goes to 1 when the two were equal.
 
 ```x86|playground
 default rel
@@ -183,32 +182,31 @@ _start:
     cmp rbx, 5          ; compare y with 5
 
     mov rax, 60
-    xor rdi, rdi
+    mov rdi, 0
     syscall
 ```
 
-Step through it and watch `ZF`: it goes to 1 after the first `cmp` and back to 0 after the second
-one. Do not run to the end to read it, the `xor rdi, rdi` of the exit is an instruction like any
-other and sets `ZF` itself.
+Step through it and watch `ZF` go to 1 after the first `cmp` and back to 0 after the second. The two
+`mov` lines in between leave it alone, which is the other half of the arrangement: a flag stays as it
+was until something writes it.
 
 ## The panels
 
 The **registers panel** lists the sixteen general registers with `rip` under them, and the **B**,
 **W**, **L** and **D** buttons in its header cut each one into bytes, words, dwords or the whole 64
-bits. Two tabs beside it, **SSE** and **x87**, hold the floating point registers, which the "Floating
-point: x87 and SSE" lecture uses.
+bits. Two tabs beside it, **SSE** and **x87**, hold the floating point registers.
 
-Registers do not all start at zero here, the way they do in the other simulators of this editor.
-Linux hands a program a stack pointer in `rsp` and leaves a few other registers holding whatever the
-loader left, so a fresh `rdx` reads as an address rather than as nothing.
+Registers do not all start at zero. Linux hands a program a stack pointer in `rsp` and leaves a few
+others holding whatever the loader left behind, so a fresh `rdx` reads as an address rather than as
+nothing. Anything your program depends on, your program has to put there.
 
 The **memory panel** shows the bytes at whatever address you type into it. `0x401000` is your code,
 `0x402000` your data, and the stack is at the top, which is where the panel opens because it follows
 `rsp`.
 
 The **console** below the editor is where a program prints, which needs `syscall` and waits for the
-outside-world module. There is no screen panel in x86: blink emulates a Linux process, and a Linux
-process has no pixels of its own to draw on.
+outside-world module. There is no screen panel: blink emulates a Linux process, and a Linux process
+has no pixels of its own to draw on.
 
 ## Your turn
 
@@ -225,7 +223,7 @@ _start:
     ; your code here
 
     mov rax, 60
-    xor rdi, rdi
+    mov rdi, 0
     syscall
 ```
 
@@ -249,7 +247,7 @@ _start:
     mov rcx, 100        ; the whole of rcx
 
     mov rax, 60
-    xor rdi, rdi
+    mov rdi, 0
     syscall
 ```
 

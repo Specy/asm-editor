@@ -1,6 +1,5 @@
-Loops have been counting with `inc` and `add` without much said about them. This lecture is the rest
-of the arithmetic: the two multiplications, the division that needs a register filled first, and what
-the logic and shift instructions are for.
+Addition and subtraction have been quietly doing their job since the first page. Multiplication and
+division are where x86 stops being obvious, because both of them use registers you did not name.
 
 ## Adding and subtracting
 
@@ -18,16 +17,17 @@ the logic and shift instructions are for.
 Every one of them writes the flags, so an overflow is recorded and nothing stops. `inc` and `dec`
 leave `CF` alone on purpose and write the others.
 
-`adc` and `sbb` are add and subtract **with carry**: they add `CF` in as well, which is how you add
-two numbers wider than a register, a qword at a time from the bottom up.
+`adc` and `sbb` are add and subtract **with carry**: they add `CF` in as well. That is how you add two
+numbers wider than a register, a qword at a time from the bottom up, with each `adc` picking up the
+carry the one below it produced.
 
 ## Two multiplications
 
-`mul` is unsigned and `imul` is signed, and they are different instructions because the high half of
-the answer differs.
+`mul` is unsigned and `imul` is signed, and they have to be two instructions rather than one because
+the high half of the answer comes out differently.
 
-`mul rbx` takes one operand, multiplies `rax` by it and puts a **128 bit** answer in `rdx:rax`, the
-high half in `rdx`. `imul` has that form too, and two more that are easier to use:
+`mul rbx` takes one operand, multiplies `rax` by it and puts a **128 bit** answer across `rdx` and
+`rax`. `imul` has that form too, and two more that are much easier to live with:
 
 ```
     imul rax, rbx           ; rax = rax * rbx, keeping the low 64 bits
@@ -60,16 +60,33 @@ _start:
     syscall
 ```
 
-`r10` comes out at `FFFFFFFFFFFFFFFE` and `r11` at 1: the answer is `0x1FFFFFFFFFFFFFFFE`, and the
-bit that did not fit in `rax` is in `rdx`. `CF` and `OF` are set to say the low half alone is not the
-answer.
+The last one is the interesting case. `0xFFFFFFFFFFFFFFFF` doubled is `0x1FFFFFFFFFFFFFFFE`, which is
+65 bits wide. `r10` gets the low 64 of it and `r11` gets the bit that fell off the top, so neither
+register holds the answer and the two together do. `CF` and `OF` are both set, which is the processor
+telling you that the low half alone would be a lie.
 
 ## One division, and it reads two registers
 
-`div` and `idiv` take one operand, the divisor, and read a dividend **twice as wide** out of
-`rdx:rax`. They write the quotient to `rax` and the remainder to `rdx`.
+`div` and `idiv` take one operand, the divisor, and they do **not** take a dividend. They read it out
+of `rdx` and `rax` together, as one number twice as wide as the divisor, and they write the quotient
+to `rax` and the remainder to `rdx`.
 
-So the line before a division is never optional:
+This is the single most common way a working x86 program breaks, so it is worth drawing. To compute
+`17 / 5` you have to arrange this:
+
+```
+       rdx                  rax
+  [ 0000000000000000 ][ 0000000000000011 ]   the dividend, 0x11 = 17, across both
+                            rbx
+                     [ 0000000000000005 ]   the divisor
+```
+
+The high half is not optional and it is not ignored. Whatever happens to be in `rdx` when the `div`
+runs becomes the top 64 bits of the number being divided. Leave yesterday's remainder there and you
+have not divided 17 by 5, you have divided some enormous number by 5, and the quotient will not fit in
+`rax`.
+
+So the line before a division is part of the division:
 
 - **`xor rdx, rdx`** before a `div`, because an unsigned number is widened with zeroes.
 - **`cqo`** before an `idiv`, because a signed one is widened with copies of its sign bit.
@@ -99,17 +116,20 @@ _start:
     syscall
 ```
 
-`r10` reads `FFFFFFFFFFFFFFFD`, which is -3, and `r11` reads -2: C's integer division rounds towards
-zero and takes the sign of the dividend for the remainder, and `idiv` is where that rule comes from.
+`r10` reads `FFFFFFFFFFFFFFFD`, which is -3, and `r11` reads -2. `idiv` rounds towards zero rather
+than downwards, and gives the remainder the same sign as the dividend, so -17 divided by 5 is -3
+remainder -2 and not -4 remainder 3. Most programming languages inherited that rule from this
+instruction.
 
-Leave out the `cqo` and `rdx` still holds 2 from the division above, so the dividend becomes an
-enormous number and the quotient does not fit in `rax`. That is a **divide error**, and unlike an
-overflow it does stop the program, with no message: the run simply ends on the `idiv`. Division by
-zero does the same. Try deleting the `cqo` line and pressing Run.
+Now break it. Delete the `cqo` line and press Run. `rdx` still holds 2 from the division above, the
+dividend becomes 2 times `2^64` plus -17, and the quotient of that has no chance of fitting in `rax`.
+The processor raises a **divide error** and, unlike an overflow, this one really does stop the
+program: the run ends on the `idiv` with no message at all. Dividing by zero ends it the same way.
 
 ## Logic
 
-`and`, `or`, `xor` and `not` work bit by bit on the whole operand.
+`and`, `or`, `xor` and `not` work one bit at a time, each bit of the answer depending only on the bits
+in the same position in the operands.
 
 | written         | keeps                                    |
 | --------------- | ---------------------------------------- |
@@ -118,8 +138,9 @@ zero does the same. Try deleting the `cqo` line and pressing Run.
 | `xor rax, mask` | flips the bits set in `mask`             |
 | `not rax`       | flips all of them, and writes no flags   |
 
-A **mask** is a number written for its bits rather than its value. `and rax, 0xFF` keeps the low
-byte, `or rax, 0x80` sets bit 7, `xor rax, 0xFF` flips the low eight bits.
+A **mask** is a number written for the shape of its bits rather than for its value. `and rax, 0xFF`
+keeps the low byte and clears the rest, `or rax, 0x80` sets bit 7 without disturbing anything, and
+`xor rax, 0xFF` flips the low eight bits.
 
 ```x86|playground
 default rel
@@ -148,10 +169,9 @@ _start:
     syscall
 ```
 
-`r8` is `C`, `r9` is `CF`, `r10` is `33` and `r11` is `FFFFFFFFFFFFFF33`.
-
-`xor rax, rax` is the special case: a register exclusive-ored with itself is zero, which is why it is
-the standard way to clear one.
+`r11` is `FFFFFFFFFFFFFF33` rather than `33`, because `not` flipped all sixty four bits and the
+fifty six zeroes above the byte you were looking at all became ones. Masks are how you avoid that:
+`and` and `or` touch only the bits you name.
 
 ## Shifts
 
@@ -192,14 +212,14 @@ _start:
     syscall
 ```
 
-`r9` is `FFFFFFFFFFFFFFFC`, which is -4. `r10` is `3FFFFFFFFFFFFFFC`, the same bits shifted with
-zeroes coming in, which is the right answer for an unsigned reading of the same register and a wrong
-one for a signed division. Picking `shr` where `sar` was meant is the shift version of picking `jb`
-where `jl` was meant.
+The two middle lines are the same number shifted the same distance and they disagree completely. `r9`
+is `FFFFFFFFFFFFFFFC`, which is -4, because `sar` fed copies of the sign bit in at the top. `r10` is
+`3FFFFFFFFFFFFFFC`, because `shr` fed zeroes in instead, and a zero in the top bit means the number
+is no longer negative. Both answers are right for the reading of `-16` they assumed, and picking the
+wrong one of the two is the shift version of picking `jb` where you wanted `jl`.
 
-A shift is much faster than `imul` and `div`, so a compiler turns `x * 8` into `shl` and `x / 8` into
-`sar` on sight. `sar` is not exactly C's division for negative numbers, since it rounds towards
-negative infinity where C rounds towards zero, so a compiler adds a correction.
+A shift costs a fraction of what a division costs, so a compiler turns a divide by 8 into `sar` and a
+multiply by 8 into `shl` on sight.
 
 ## Testing one bit
 
@@ -211,9 +231,9 @@ Three ways, and all three write `ZF`:
     and rax, 8              ; the same as test, but it writes rax too
 ```
 
-`bt` puts the bit in `CF`, and `bts`, `btr` and `btc` read it and then set, clear or flip it, which
-is how you work with an array of bits. `test` is what you write when the value is a flag and you only
-want to know.
+`bt` puts the bit into `CF` instead, and `bts`, `btr` and `btc` read it and then set, clear or flip
+it, which is how a program works through an array of single bits. `test` is what you write when the
+value is a set of flags and you only want to know.
 
 ```x86|playground
 default rel
@@ -233,7 +253,7 @@ _start:
     syscall
 ```
 
-`r8` and `r9` both come out at 1, from two different flags.
+`r8` and `r9` both come out at 1, and they were read out of two different flags.
 
 ## Your turn
 

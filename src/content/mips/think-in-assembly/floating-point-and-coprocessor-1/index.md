@@ -1,29 +1,27 @@
-Every number in this course so far has been an integer, and every instruction that touched one was a
-MIPS instruction. This lecture is the other kind of number, and the other set of registers and
-instructions that work on it.
+Every number so far has been a whole one. `li $t0, 3` and `li $t0, 4` work; there is no value you
+can put in `$t0` that means 3.75, because a 32 bit integer register counts and does not measure.
 
-## What a coprocessor is
+Measuring gets a second set of registers and its own instructions, which look like this:
 
-The first MIPS chips could add integers and nothing else. Floating point was done in software, a few
-hundred instructions per multiplication, which was far too slow for the graphics and engineering work
-the machines were sold for.
+```
+    add.s $f4, $f0, $f2
+```
 
-The answer was a second chip: the **R2010**, sitting beside the R2000 and watching the same
-instruction stream. Instructions it recognised it carried out itself while the main chip waited;
-everything else it ignored. It had its own registers, which the main chip could not name, and its own
-arithmetic.
+Same three operand shape you already know, a different bank of registers, and a suffix saying what
+kind of number it is working on.
 
-That is what a **coprocessor** is, and MIPS numbers them. **Coprocessor 0** is the one the
-"Exceptions, coprocessor 0 and interrupts" lecture uses, holding the registers that describe a fault.
-**Coprocessor 1** is the floating point unit. Later chips put it on the same die and it stopped being
-a separate part, and the numbering and the instructions stayed exactly as they were, which is why the
-instructions that move a value across the boundary are still spelled `mtc1` and `mfc1`, move to and
-move from coprocessor 1.
+They are separate for a reason that is now historical. The first MIPS chips did integers and nothing
+else, and floating point was done in software, a few hundred instructions per multiplication, which
+was hopeless for the graphics and engineering work the machines were sold for. So a second chip, the
+**R2010**, sat beside the main one watching the same stream of instructions: the ones it recognised
+it carried out while the main chip waited, and the rest it ignored. It had its own registers, which
+the main chip could not name.
 
-x86 went the same way, from the 8087 chip of 1978 to the unit inside every processor since the 486,
-and its `f` instructions are still called x87. RISC-V made its floating point an optional extension
-with its own registers instead. The idea is the same in all three: a second register file, its own
-instructions, and a boundary you have to move values across.
+That arrangement is what **coprocessor** means, and MIPS numbers them. Coprocessor 1 is the floating
+point unit, and coprocessor 0 is the one that holds the registers describing a fault, which the last
+lecture of this course uses. Everything went onto one piece of silicon decades ago and the names
+never changed, which is why the instructions that carry a value between the two banks are still
+spelled `mtc1` and `mfc1`, move to and move from coprocessor 1.
 
 ## How a number is stored
 
@@ -100,12 +98,14 @@ main:
     syscall
 ```
 
-The FPU tab shows `$f4` at `3.75`, `$f6` at `0.75` and the rest. Switch its Format to Hex and `$f4`
-reads `40700000`, which is the same 3.75 written as the bits the register actually holds.
+The FPU tab shows `$f4` at `3.75` and `$f6` at `0.75`. Now switch its Format to Hex: `$f4` reads
+`40700000`. That is the same 3.75, and it is what the register has been holding all along. The
+Format selector changes how the panel reads the bits and changes nothing in the machine, because
+nothing in the register records which of the three readings you meant.
 
-The three operand shape is the one you know from the integer instructions: the destination first,
-then the two operands. `l.s` and `s.s` are the floating point load and store, and their addressing
-mode is `offset(base)` like `lw` and `sw`.
+The shape is the one you already know: destination first, then the two operands. `l.s` and `s.s`
+are the floating point load and store, and they address memory as `offset(base)`, exactly like `lw`
+and `sw`.
 
 Doubles are the same instructions with `.d`, and their registers move in twos.
 
@@ -161,24 +161,29 @@ main:
     syscall
 ```
 
-`$t1` comes out at 3, not 2. `cvt.w.s` rounds to nearest, so a conversion that should truncate the
-way C's `(int)` cast does needs `trunc.w.s` instead. `ceil.w.s` and `floor.w.s` are the other two.
+`$t1` is 3, not 2. The square root of 7 is about 2.65, and `cvt.w.s` rounds to nearest rather than
+throwing the fraction away, which is the opposite of what most people expect a conversion to do. When
+you want the fraction thrown away, `trunc.w.s` is the instruction. `ceil.w.s` and `floor.w.s` round
+the two other ways.
 
-`$f0` after the `mtc1` reads `00000007` in the Hex format and an extremely small number in the Single
-one, because the bit pattern of the integer 7 is also a valid float, a denormal a hair above zero.
-The bits did not change; only the instruction that read them did.
+`$f0` after the `mtc1` is worth a look on both formats. In Hex it reads `00000007`. In Single it
+reads an absurdly small number, a hair above zero, because the bit pattern of the integer 7 is also
+a perfectly valid float and happens to mean that. Nothing changed the bits. The two lines of the
+program did two different things because `mtc1` copies and `cvt.s.w` converts, and telling those
+apart is most of what goes wrong on this page.
 
 ## Comparing
 
-This is where the floating point unit differs most from everything else in MIPS. The integer side has
-no flags at all and compares with `slt` and `beq`. Coprocessor 1 **does** have flags, eight of them,
-and comparing takes two instructions.
+Comparing two floats works differently from anything else you have written. Coprocessor 1 keeps
+eight **condition flags** of its own, and a comparison writes one of them rather than writing a
+register, so asking a question takes two instructions: one to compare, one to branch on the result.
 
-- **`c.lt.s $f0, $f2`** sets condition flag 0 when `$f0 < $f2`.
-- **`bc1t label`** branches when flag 0 is set, and **`bc1f`** when it is clear.
+- **`c.lt.s $f0, $f2`** sets condition flag 0 when `$f0` is less than `$f2`, and clears it
+  otherwise.
+- **`bc1t label`** branches when flag 0 is set, and **`bc1f label`** when it is clear.
 
-The comparisons are `c.eq`, `c.lt` and `c.le`, each in `.s` and `.d`. There is no `c.gt`: swap the
-operands and use `c.lt`.
+The three comparisons are `c.eq`, `c.lt` and `c.le`, each in a `.s` and a `.d` form. For "greater
+than", swap the operands and use `c.lt`, the same trick the integer branches use.
 
 ```mips|playground|fpu
 .data
@@ -211,15 +216,16 @@ done:
     syscall
 ```
 
-`$t0` and `$t1` both come out at 1. The FPU tab shows the eight condition flags in its own row above
-the registers, and the one that moves is flag 0.
+`$t0` and `$t1` both end at 1. Step through it with the FPU tab open: the eight condition flags are
+in their own row above the registers, and the one that flickers is flag 0.
 
-`c.eq.s $f0, $f0` asking whether a number equals itself is not a silly question. It is false for a
-NaN, and it is the standard way of testing for one in a language that has no `isnan`.
+`c.eq.s $f0, $f0` asks whether a number is equal to itself, which sounds like a waste of an
+instruction and is not. A NaN is the one value for which the answer is no, so this is how a program
+tests whether a calculation produced one.
 
-There are eight flags because a comparison can name one: `c.lt.s 1, $f2, $f0` writes flag 1, and
-`bc1t 1, label` reads it. That lets two comparisons be in flight at once, which mattered on a
-processor deep enough to be waiting for the first one.
+The eight flags exist because a comparison may name which one it writes: `c.lt.s 1, $f2, $f0` writes
+flag 1, and `bc1t 1, label` reads flag 1. Two comparisons can then be under way at once without
+overwriting each other.
 
 ## Passing a float to a subroutine
 
@@ -251,8 +257,9 @@ hypot_squared:
     jr $ra
 ```
 
-`$f2` comes out at `5`. `$f4` is a temporary the subroutine used and did not restore, which is what
-the convention allows; a subroutine that wanted `$f20` upwards would have to save it.
+`$f2` is 5.0, which is right for sides of 3 and 4. Notice that `hypot_squared` used `$f4` for its
+working and never put it back: `$f4` is a temporary and the convention allows exactly that. Had it
+wanted `$f20` or above, it would have owed the caller a save and a restore.
 
 Printing a float is `syscall` service 2 with the value in `$f12`, and a double is service 3. Both are
 in the "syscall" lecture with the rest.

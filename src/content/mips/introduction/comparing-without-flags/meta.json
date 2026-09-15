@@ -1,6 +1,6 @@
 {
-    "name": "Comparing without flags",
-    "description": "MIPS has no condition code register, so a comparison either happens inside the branch or leaves a 1 or a 0 in a register you named. The six real branches, slt and its family, and the conditions the assembler builds out of them.",
-    "order": 6,
+    "name": "Comparing two numbers",
+    "description": "Two ideas cover every question a program asks about numbers: a branch that compares and jumps in one instruction, and slt, which writes the answer into a register so you can use it later. Everything else is built out of those.",
+    "order": 7,
     "topic": "flags"
 }

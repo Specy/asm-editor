@@ -6,12 +6,6 @@ the board turns dark red when you lose.
 **Click the Screen panel before you press a key**, the same as in Move a square with the keyboard,
 and press Run again to play another game.
 
-**You need to know:** everything above it on the ladder. The body is an array walked with a pointer
-and moved with a loop, the drawing and the generator are subroutines, the keyboard is polled the way
-Move a square with the keyboard polls it, and only what changed is redrawn the way A bouncing ball
-does it. What is new is the board kept as **cells**, one byte for the column and one for the row
-packed into a word, which becomes an address only at the moment something is drawn.
-
 ```mips|playground|open-screen|console|no-registers|allow-open
 # @screen unit=16 width=512 height=512 base=display
 .eqv MMIO 0xffff0000
@@ -305,30 +299,33 @@ instructions turn a number into the next one of a sequence, which is as random a
 clock and no dice can be. Both coordinates are `andi` with 31, since 32 is a power of two and the
 low five bits of any number are already a column.
 
-Three `sw` instructions reach the screen in a frame and two of them change anything: the cell the
-tail left, the cell the head arrived in, and the food, which is repainted whether it moved or not.
-The M68K version of this game redraws every segment of the snake into an off screen image and shows
-the whole image at once, because that machine has a task for drawing off screen; the bitmap display
-is the picture itself, so the cheapest correct frame is the one that writes the fewest words. A
-frame here is about 120 instructions, where clearing the board and redrawing everything would be
-four thousand.
+Three `sw` instructions reach the screen in a frame and only two of them change anything: the cell
+the tail left, the cell the head arrived in, and the food, which is repainted whether it moved or
+not. A snake of any length costs the same three, because the middle of it did not move.
 
-The score is printed to the console, and it is printed there because there is nowhere else to put
-it. The M68K draws it onto the screen with a task that puts text at a pixel position; the bitmap
-display has no text of any kind. Apart from the wait that paces a frame, every `syscall` in this
-program is printing or the exit at the end.
+That is the whole reason the game is playable. These words in memory are the picture, so the
+cheapest correct frame is the one writing the fewest of them, and a frame here is about 120
+instructions. Clearing the board and redrawing every segment would be four thousand, and the
+Playground's budget would be gone in a few seconds of play.
 
-`fill_grid` and `draw_cell` both read the colour out of `$s0` and the base of the grid out of `$s1`,
-and `draw_cell` promises to destroy `$t0` and `$t1` and nothing else, which is what lets the loop
-that draws the starting body keep its pointer in `$s2` and the caller keep the head in `$s4`. Those
-comments above the labels are the whole of the agreement, and this program has four of them.
+The score goes to the console, because the screen has no writing on it. There is no way to put text
+at a position on the grid, so a number on screen would have to be drawn out of coloured cells. Apart
+from the wait that paces a frame, every `syscall` in this program is either printing the score or
+the exit at the end.
+
+`fill_grid` and `draw_cell` both read the colour out of `$s0` and the base of the grid out of
+`$s1`, and `draw_cell` promises to destroy `$t0` and `$t1` and nothing else. That promise is what
+lets the loop drawing the starting body keep its pointer in `$s2` across every call, and lets the
+caller keep the head in `$s4`. The promise lives in a comment above the label and nowhere else, and
+this program makes four of them.
 
 With nobody typing, the snake runs straight to the right, eats the food on the way, and hits the
 wall 26 frames later, and the red board and the console line are done by about 11500 instructions.
 That is the game the verification run plays. The `runFor` of 100000 is the budget the Playground
 gets before it stops; a game you are playing ends when you make it end.
 
-Try changing `seed: .word 0x1F123BB5` to `0x2545F491`. The first food is written into the data
-section and does not move, but the one after it falls at column 26 of row 11 instead of column 7 of
-row 8. The sequence is fixed by where it starts, so the same program run twice gives the same game
-twice, which is what makes a program with a generator like this one debuggable at all.
+The seed at the top of the data section decides everything the generator will ever produce. Change
+`seed: .word 0x1F123BB5` to `0x2545F491` and the second piece of food falls at column 26 of row 11
+instead of column 7 of row 8, while the first one, written into the data section by hand, does not
+move at all. The same seed gives the same game twice over, which is the only reason a program built
+on a generator like this can be debugged.

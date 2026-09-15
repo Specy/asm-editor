@@ -1,46 +1,36 @@
-The flags lecture set `ZF` and read it with `setcc`. This one uses the same flags to change where the
-program goes next, which is how an `if` in C becomes assembly.
+A program that always runs its instructions in order can compute one thing. To compute anything that
+depends on its input, it has to be able to skip some instructions and run others, and on x86 that
+means one idea: an instruction that changes `rip` only when the flags say so.
 
 ## A jump writes rip
 
-`jmp label` sets `rip` to the address of `label`, so the next instruction is the one there. That is
-the whole of an unconditional jump.
+`jmp label` sets `rip` to the address of `label`, so the next instruction to run is the one there.
 
-A **conditional** jump does the same thing only when the flags say so. There are sixteen of them, one
-per condition, and they read the flags some earlier instruction left behind. Nothing connects them
-except order: `cmp` writes the flags, `jl` reads them, and any instruction between the two that
-writes flags breaks the pair.
+A **conditional** jump does the same thing, but only when the flags are in a particular state. There
+are sixteen of them, one per condition, and they read flags that some earlier instruction left
+behind. Nothing links the two instructions except order:
 
 ```
     cmp rax, rbx        ; sets the flags from rax - rbx
     jl smaller          ; goes to smaller when rax < rbx, signed
 ```
 
+That looseness is worth being careful about. Any instruction between the `cmp` and the `jl` that
+writes flags breaks the pair, and the program will still assemble and still run. It will just jump on
+the wrong question.
+
 ## An if in three pieces
 
-In C:
+Say you want one of two values in `rax`: 100 when `x` is greater than `y`, and 200 otherwise.
 
-```c
-if (x > y) {
-    result = 100;
-} else {
-    result = 200;
-}
-```
+Assembly has no `if`, so you build one out of a comparison, a jump and two labels. The shape is
+always the same three pieces: jump away when the test **fails**, do the "it passed" work, jump over
+the alternative, and put the alternative under a label.
 
-Flattened into gotos, which is what assembly can express:
-
-```c
-    if (x <= y) goto else_part;
-    result = 100;
-    goto done;
-else_part:
-    result = 200;
-done:
-```
-
-The condition is **inverted**. The C source says what to do when the test passes; the assembly jumps
-away when it fails, because the code that follows the branch is the "it passed" path.
+The inversion in that first piece is the part that catches people. You want to do something when
+`x > y`, and the instruction you write is `jle`, less or equal, the opposite. The reason is that the
+"it passed" work is going to sit directly after the jump, where it runs when the jump is not taken.
+So the jump has to be the one that leaves.
 
 ```x86|playground|memory
 default rel
@@ -55,7 +45,7 @@ section .text
 _start:
     mov rax, [x]
     cmp rax, [y]            ; x - y, and only the flags are kept
-    jle .else               ; if (x <= y) goto else
+    jle .else               ; x is not greater, so go to the other branch
 
     mov qword [result], 100
     jmp .done
@@ -68,42 +58,46 @@ _start:
     syscall
 ```
 
-`result` comes out at 200, because 7 is not greater than 12. Type `402010` into the memory panel to
-see it, or change `x` to 20 and watch it become 100.
+Type `402010` into the memory panel to see `result`, or set `x` to 20 and watch which branch runs.
 
-`cmp rax, [y]` reads memory as its second operand, which x86 allows and a load/store architecture
-would not. The other operand has to be a register, so `mov rax, [x]` on the line before is not
-avoidable.
+The `jmp .done` is easy to forget and the program that forgets it falls straight from the end of one
+branch into the beginning of the other, running both. There is no `}` to stop it; the label `.else:`
+is a name for an address and nothing more.
+
+`cmp rax, [y]` takes its second operand straight out of memory, which saves a line. The other operand
+still has to be a register, which is why `mov rax, [x]` on the line before is not avoidable.
 
 ## Which jump to write
 
-Sixteen conditions, in the pairs you will use:
+| jump          | jumps when                    |
+| ------------- | ----------------------------- |
+| `je` / `jz`   | equal, or the result was zero |
+| `jne` / `jnz` | not equal                     |
+| `jl` / `jnge` | less, **signed**              |
+| `jle`         | less or equal, signed         |
+| `jg` / `jnle` | greater, signed               |
+| `jge`         | greater or equal, signed      |
+| `jb` / `jc`   | below, **unsigned**           |
+| `jbe`         | below or equal, unsigned      |
+| `ja`          | above, unsigned               |
+| `jae` / `jnc` | above or equal, unsigned      |
+| `js` / `jns`  | negative, not negative        |
+| `jo` / `jno`  | overflowed, did not           |
 
-| jump          | jumps when                    | reads                        |
-| ------------- | ----------------------------- | ---------------------------- |
-| `je` / `jz`   | equal, or the result was zero | `ZF = 1`                     |
-| `jne` / `jnz` | not equal                     | `ZF = 0`                     |
-| `jl` / `jnge` | less, **signed**              | `SF` is not `OF`             |
-| `jle`         | less or equal, signed         | `ZF = 1` or `SF` is not `OF` |
-| `jg` / `jnle` | greater, signed               | `ZF = 0` and `SF = OF`       |
-| `jge`         | greater or equal, signed      | `SF = OF`                    |
-| `jb` / `jc`   | below, **unsigned**           | `CF = 1`                     |
-| `jbe`         | below or equal, unsigned      | `CF = 1` or `ZF = 1`         |
-| `ja`          | above, unsigned               | `CF = 0` and `ZF = 0`        |
-| `jae` / `jnc` | above or equal, unsigned      | `CF = 0`                     |
-| `js` / `jns`  | negative, not negative        | `SF`                         |
-| `jo` / `jno`  | overflowed, did not           | `OF`                         |
+Which flags each of those reads, and why the signed ones read two flags instead of one, is worked out
+in "The flags register".
 
-The four words are the ones to remember: **less** and **greater** are the signed pair, **below** and
+The four words are what to remember: **less** and **greater** are the signed pair, **below** and
 **above** the unsigned one. A length, an index and an address are unsigned, so a loop over an array
-wants `jb`; a temperature or a difference is signed and wants `jl`.
+wants `jb`. A temperature or a difference between two measurements is signed and wants `jl`.
 
-`jrcxz` is the one that reads a register instead of the flags, jumping when `rcx` is zero. Its 16
-and 32 bit spellings, `jcxz` and `jecxz`, are build errors in 64 bit mode.
+`jrcxz` is the odd one out, reading a register rather than the flags and jumping when `rcx` is zero.
+Its 16 and 32 bit spellings, `jcxz` and `jecxz`, are build errors in 64 bit mode.
 
-## Two conditions
+## Two conditions at once
 
-C's `&&` and `||` become two jumps. `if (x > 0 && x < 100)` is "jump away if either test fails":
+"Is `x` above 0 and below 100" is two comparisons, and the way to write it is to jump away as soon as
+either one fails.
 
 ```x86|playground
 default rel
@@ -126,17 +120,24 @@ _start:
     syscall
 ```
 
-`rbx` comes out at 1. Try `mov rax, 500` and it stays 0, and try `mov rax, -3` and it stays 0 as
-well, having failed at the first `cmp` instead of the second. This is what a C compiler means by
-short circuit evaluation: the second test is not even reached when the first one decides the answer.
+Set `rax` to 500 and `rbx` stays 0, having failed the second test. Set it to -3 and `rbx` stays 0
+again, but this time the second `cmp` never ran at all: the first jump had already decided the
+answer. That is **short circuit** evaluation, and in assembly you do not have to ask for it. It falls
+out of the fact that a jump means the following instructions do not happen.
 
-`||` is the same shape with the jumps going the other way, to a label that sets the answer to 1.
+"Or" is the same shape with the jumps going the other way, to a label that sets the answer to 1.
 
 ## A branch you can avoid
 
-A conditional jump the processor guesses wrong costs it the work it had already started on the wrong
-path. For a branch that just picks one of two values there are two ways to write the same thing
-without a jump at all:
+A modern processor does not wait to find out where a conditional jump is going. It guesses, starts
+running the instructions down the path it guessed, and keeps the work if the guess was right. That is
+**branch prediction**, and it is why branches are nearly free most of the time. When the guess is
+wrong the processor has to throw away everything it started and begin again at the right address,
+which costs it the equivalent of a dozen or more instructions.
+
+Guesses are right when a branch is predictable, a loop that runs a thousand times and exits once. They
+are wrong about half the time when a branch depends on unpredictable data. So for a branch that just
+picks one of two values there is a way to write the same thing with no branch at all:
 
 ```x86|playground|no-flags
 default rel
@@ -147,7 +148,7 @@ _start:
     mov rax, 7
     mov rbx, 12
 
-    ; the branching way: rcx = max(rax, rbx)
+    ; the branching way: rcx = the larger of rax and rbx
     mov rcx, rax
     cmp rbx, rcx
     jle .keep
@@ -164,11 +165,12 @@ _start:
     syscall
 ```
 
-`rcx` and `rdx` both come out at 12. `cmovg` always runs, and only sometimes writes.
+`cmovg` always runs and only sometimes writes, so there is no path for the processor to guess about.
 
-The catch is that `cmov` reads both operands whatever the condition says, so it cannot replace a
-branch that is guarding something, such as a load through a pointer that might be null. A `jcc`
-protects the instructions after it; a `cmov` does not protect anything.
+It cannot replace every branch. `cmov` reads both of its operands whatever the condition turns out to
+be, so it cannot guard anything: a `cmov` that loads through a pointer loads through that pointer even
+when the condition says the pointer is not valid. A conditional jump protects the instructions after
+it, and a `cmov` protects nothing.
 
 ## Your turn
 

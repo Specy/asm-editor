@@ -1,12 +1,6 @@
-Two subroutines that call themselves. `fact` calls itself once per level and `fib` calls itself twice,
-which makes the second one a tree of calls rather than a chain.
-
-Recursion needs nothing the machine does not already have. Every `call` pushes its own return address,
-so the depth is a stack of addresses, and anything else a level needs to survive its own call goes on
-the same stack.
-
-**You need to know:** the "call, ret and the System V convention" lecture. What is new here is a
-subroutine that calls itself, and the push that keeps an argument alive across that call.
+Two recursive subroutines side by side, and the difference between them is worth more than either one
+on its own. `fact` calls itself once per level, so the calls make a chain ten deep. `fib` calls itself
+twice, so the calls make a tree, and a tree is a very different thing to pay for.
 
 ```x86|playground|memory|allow-open
 default rel
@@ -64,21 +58,25 @@ _start:
     syscall
 ```
 
-Type `402000` into the memory panel. `fact_out` holds `375F00`, which is 3628800, and `fib_out` holds
-`37`, which is 55.
+Type `402000` into the memory panel and both answers are there: `375F00` is 3628800, and `37` is 55.
 
-`push rdi` is there because `rdi` is caller saved and the thing being called is `fact` itself, which
-is free to destroy it. Delete the push and the pop and the answer becomes 1: `rdi` comes back as 0
-from the bottom of the recursion and every multiplication after that is by zero.
+Both subroutines had the same problem to solve. `fact` needs `n` again after its own call has
+returned, and `fib` needs the first result again after its **second** call has returned. Neither value
+can stay where it is, because the thing about to run is a subroutine with exactly the same instructions
+in it, which will write exactly the same registers. So both go on the stack, and the recursion works
+because each level gets its own eight bytes without anybody arranging it.
 
-`fib` pushes `rbx` as well, because it needs a value to survive the **second** call and `rbx` is
-callee saved, so keeping it there is the convention's way of saying "this will still be here
-afterwards". Since `fib` is itself a callee, it saves `rbx` on the way in and restores it on the way
-out, which is the same promise being kept one level up.
+The two chose different registers to protect, and the reasons are different. `fact` pushes `rdi`
+because `rdi` is caller saved: the convention says the callee may destroy it, so the caller protects it,
+and here the caller and the callee are the same subroutine. `fib` pushes `rbx` because `rbx` is callee
+saved: it wants a register the call will leave alone, and the price of using one is saving it on the
+way in and restoring it on the way out, which is the same promise it is relying on from the level
+below.
 
-`fib(10)` makes 177 calls for an answer a loop would reach in ten passes. That is what a tree of
-calls costs, and it is why `fib` written this way is the standard example of when not to use
-recursion.
+Delete `fact`'s push and pop and the answer becomes 1. `rdi` comes back from the bottom of the
+recursion holding 0, so every multiplication on the way out is by zero except the very last.
 
-Try `mov rdi, 20` before the `call fib`. The answer is 6765 and the run takes noticeably longer,
-because the number of calls roughly doubles with every step of `n`.
+Now count what `fib` costs. `fib(10)` makes 177 calls to produce a number a loop would reach in ten
+passes, because the tree recomputes `fib(3)` again and again on different branches. Change the `10`
+before `call fib` to `20` and the run takes noticeably longer: the number of calls roughly doubles for
+every step of `n`, so 30 would be a minute of work for a number you can write down in four digits.

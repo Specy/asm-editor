@@ -1,23 +1,22 @@
-Every lecture so far has used `mov`, `add` and `cmp` without saying what an x86 instruction is
-allowed to look like. This one is the shape of the whole set: how many there are, what an operand may
-be, and where the size and the condition come from.
+You can write real x86 programs with about sixty instructions. The full set is far larger than that,
+and the gap between the two numbers is worth understanding before it frightens you off.
 
 ## How many there are
 
-The assembler in this editor accepts about **2600 mnemonics**. That number is not a measure of how
-much you have to learn. Most of it is the vector extensions, SSE and AVX and AVX-512, where one idea
-appears once per width and once per data type, so a single operation contributes dozens of names.
+Most of what a complete x86 reference lists is the vector extensions, SSE and AVX and AVX-512, where
+a single idea appears once per width and once per data type. "Add two numbers" turns into dozens of
+separate names that way, and none of them is a new idea to learn.
 
 The integer instructions a program like the ones in this course uses are around sixty, and the
 [instruction reference](/documentation/x86/instruction) lists them with the operand forms this
-assembler really accepts. Everything else is reachable from the
-[complete documentation](/documentation/x86/all) when you meet it.
+assembler really accepts. The rest is reachable from the
+[complete documentation](/documentation/x86/all) on the day you need it.
 
-x86 is a **CISC** design, complex instruction set, and the initials mean two concrete things here.
+x86 is a **CISC** design, complex instruction set, and that means two concrete things here.
 Instructions are not all the same length: they run from one byte to fifteen, so you cannot tell where
-the next one starts without decoding this one. And a single instruction can do a lot, `movsb` copies
-a byte, steps two pointers and can repeat itself a million times, all in two bytes of code. MIPS and
-RISC-V are the other design, where every instruction is four bytes and does one thing.
+the next one starts without decoding this one first. And a single instruction may do a great deal.
+`movsb` copies a byte, steps two pointers and, with a prefix in front of it, repeats itself a million
+times, all from two bytes of code.
 
 ## The shape of a line
 
@@ -25,15 +24,12 @@ RISC-V are the other design, where every instruction is four bytes and does one 
 mnemonic destination, source
 ```
 
-The destination is on the left and it is the operand that gets written. That is the NASM and Intel
-order. The AT&T syntax that `gcc -S` produces writes the same instruction the other way round with a
-`%` on every register, so `add rbx, rax` there is `addq %rax, %rbx`. Nothing about the machine
-changes, only the writing.
-
-An operand is one of three things:
+The destination is on the left and it is the operand that gets written. An operand is one of three
+things:
 
 - A **register**: `rax`, `bl`, `r9d`.
-- An **immediate**, a number written into the instruction itself: `5`, `0x40`, `'A'`.
+- An **immediate**, a number written into the instruction itself rather than fetched from anywhere:
+  `5`, `0x40`, `'A'`.
 - A **memory reference** in square brackets: `[total]`, `[rbx]`, `[rbx + rcx*8 + 4]`. What may go
   inside the brackets is the "Effective addresses" lecture.
 
@@ -46,15 +42,14 @@ The rule that shapes everything is that **at most one operand can be in memory**
     mov [a], [b]            ; two memory operands: not an instruction
 ```
 
-Copying one variable to another takes two instructions, through a register. That is one of the very
-few restrictions on which operands go where, and it is what separates x86 from an architecture where
-memory is only reachable through loads and stores: there `add rax, [total]` would be two instructions
-as well.
+Copying one variable to another therefore takes two instructions and a register to pass through. That
+is the only real restriction on which operands go where, and everything else about memory operands is
+allowed: `add rax, [total]`, `cmp rax, [limit]` and `imul rcx, [scale]` are all single instructions.
 
 ## The size is in the operands
 
-There is no `.b` or `.l` on an x86 mnemonic, and no `lw` beside an `lb`. `mov` moves one byte or
-eight depending on what you name:
+There is no `.b` or `.l` on an x86 mnemonic. `mov` moves one byte or eight depending on what you
+name:
 
 ```
     mov al, 1               ; one byte
@@ -83,23 +78,27 @@ Five instructions, one mnemonic. The assembler picks the encoding, and the
 
 ## cc, the family that is one instruction sixteen times
 
-`jcc`, `setcc` and `cmovcc` are not three instructions, they are three instructions crossed with
-sixteen conditions. The `cc` is a suffix naming which flags to look at:
+`jcc`, `setcc` and `cmovcc` are not three instructions. They are three instructions crossed with
+sixteen conditions, and the `cc` in the name is where the condition goes.
 
-| suffix     | true when       | reads                  |
-| ---------- | --------------- | ---------------------- |
-| `e`, `z`   | equal, zero     | `ZF = 1`               |
-| `ne`, `nz` | not equal       | `ZF = 0`               |
-| `l`        | less, signed    | `SF` is not `OF`       |
-| `g`        | greater, signed | `ZF = 0` and `SF = OF` |
-| `b`        | below, unsigned | `CF = 1`               |
-| `a`        | above, unsigned | `CF = 0` and `ZF = 0`  |
-| `s`        | negative        | `SF = 1`               |
-| `o`        | overflowed      | `OF = 1`               |
+| suffix     | means                         |
+| ---------- | ----------------------------- |
+| `e`, `z`   | equal, or the result was zero |
+| `ne`, `nz` | not equal                     |
+| `l`        | less, signed                  |
+| `g`        | greater, signed               |
+| `b`        | below, unsigned               |
+| `a`        | above, unsigned               |
+| `s`        | negative                      |
+| `o`        | overflowed                    |
 
 So `jne` is jump if not equal, `setl` writes 1 or 0 into a byte if less, and `cmovg` copies a
-register only if greater. The full list, with `ge`, `le`, `ae`, `be` and the parity ones, is on the
+register only if greater. Adding `e` to `l`, `g`, `b` or `a` gives you the "or equal" version, `jle`
+through `jae`. All sixteen are on the
 [registers and flags page](/documentation/x86/registers).
+
+Where does the condition come from? From an earlier instruction, through the flags. "The flags
+register", two lectures from here, is what each of those words actually means in bits.
 
 ```x86|playground
 default rel
@@ -119,16 +118,16 @@ _start:
     cmovl rcx, rdx          ; less, so rcx takes 222
 
     mov rax, 60
-    xor rdi, rdi
+    mov rdi, 0
     syscall
 ```
 
-`r8` comes out at 1 and `r9` at 0 from the same comparison, because the first asked a signed question
-and the second an unsigned one. `rcx` comes out at 222.
+One `cmp` and two different answers out of it, because `setl` asked a signed question and `seta` an
+unsigned one about the same two numbers.
 
-`setcc` writes **one byte**, so `setl rax` is not a form and `setl al` followed by `movzx rax, al` is
-how you get a full register. `cmovcc` is a move that happens or does not, with no jump anywhere, which
-matters because a jump the processor guesses wrong about costs more than the move ever would.
+`setcc` writes **one byte**, so `setl rax` is not a form. `setl al` followed by `movzx rax, al` is how
+you get a full register out of it. `cmovcc` is a move that happens or does not happen, with no jump
+anywhere in the program, and the branching lecture is where that turns out to matter.
 
 ## Your turn
 
@@ -146,7 +145,7 @@ _start:
     ; your code here
 
     mov rax, 60
-    xor rdi, rdi
+    mov rdi, 0
     syscall
 ```
 
@@ -170,7 +169,7 @@ _start:
     setg cl             ; signed greater, one byte of answer
 
     mov rax, 60
-    xor rdi, rdi
+    mov rdi, 0
     syscall
 ```
 

@@ -1,6 +1,6 @@
 {
     "name": "cmp and the conditional jumps",
-    "description": "An if in C, flattened into a compare and a jump with the condition inverted, the sixteen conditions and which four words separate the signed ones from the unsigned, and the branch cmov can replace.",
+    "description": "Building an if out of a compare and a jump, why the condition comes out inverted, the sixteen conditions and which four words separate the signed ones from the unsigned, and the branch a cmov can replace.",
     "order": 0,
     "topic": "branching"
 }

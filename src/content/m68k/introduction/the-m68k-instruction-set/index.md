@@ -1,5 +1,4 @@
-Every program so far has been written in the same shape, and this is it: an M68K instruction is a
-mnemonic, an optional size, and at most two operands:
+Every M68K instruction has the same shape: a mnemonic, an optional size, and at most two operands.
 
 ```
     mnemonic.size source, destination
@@ -21,27 +20,24 @@ the one taken away.
 ```
 
 `d0` comes out at 7 and `d3` at `FFFFFFF9`, which is -7: the same two numbers, subtracted the other
-way round. MIPS and RISC-V name all three registers (`sub t0, t1, t2`), so nothing of theirs is
-overwritten unless you say so; on the M68K one of the two operands always is.
+way round. With only two operands there is nowhere else for the answer to go, so the destination is
+always destroyed. When you still need what was in it, copy it somewhere before you compute.
 
 ## The families
 
-About fifty base mnemonics, in nine groups. You will use the first two lines of this table for most of
-what you write.
+There are about fifty base mnemonics. Almost everything in this course is built from these:
 
-| what it does         | the instructions                                                                           |
-| -------------------- | ------------------------------------------------------------------------------------------ |
-| move data            | `move`, `movea`, `moveq`, `movem`, `movep`, `lea`, `pea`, `exg`, `swap`, `clr`             |
-| arithmetic           | `add`, `sub`, `addx`, `subx`, `muls`, `mulu`, `divs`, `divu`, `neg`, `negx`, `ext`, `extb` |
-| decimal arithmetic   | `abcd`, `sbcd`, `nbcd`                                                                     |
-| logic                | `and`, `or`, `eor`, `not`                                                                  |
-| shifts and rotates   | `lsl`, `lsr`, `asl`, `asr`, `rol`, `ror`, `roxl`, `roxr`                                   |
-| single bits          | `btst`, `bset`, `bclr`, `bchg`, `tas`                                                      |
-| compare and test     | `cmp`, `cmpa`, `cmpi`, `cmpm`, `tst`, `chk`                                                |
-| go somewhere else    | `bra`, `b<cc>`, `db<cc>`, `dbra`, `s<cc>`, `jmp`, `jsr`, `bsr`, `rts`, `rtr`               |
-| exceptions and other | `trap`, `trapv`, `illegal`, `link`, `unlk`, `nop`                                          |
+| what it does       | the ones you will use                                                 |
+| ------------------ | --------------------------------------------------------------------- |
+| move data          | `move`, `moveq`, `movem`, `lea`, `pea`, `exg`, `swap`, `clr`          |
+| arithmetic         | `add`, `sub`, `muls`, `mulu`, `divs`, `divu`, `neg`, `ext`            |
+| logic and bits     | `and`, `or`, `eor`, `not`, `btst`, `bset`, `bclr`, `bchg`             |
+| shifts and rotates | `lsl`, `lsr`, `asl`, `asr`, `rol`, `ror`                              |
+| compare and test   | `cmp`, `tst`                                                          |
+| go somewhere else  | `bra`, `b<cc>`, `dbra`, `db<cc>`, `s<cc>`, `jmp`, `jsr`, `bsr`, `rts` |
+| the rest           | `trap`, `link`, `unlk`, `nop`                                         |
 
-The whole list, with the addressing modes and sizes each one takes and the flags it writes, is on the
+The full list, with the operands and sizes each one takes and the flags it writes, is on the
 [M68K documentation pages](/documentation/m68k), and every instruction there has a program you can
 run.
 
@@ -56,7 +52,7 @@ want. Learn the five and a name you have never seen becomes readable.
 - **`i`, immediate.** `addi`, `subi`, `andi`, `ori`, `eori`, `cmpi` take a plain number as their
   source. `add` takes one too, so `add.l #5, d0` and `addi.l #5, d0` are the same thing written twice.
 - **`q`, quick.** `addq` and `subq` take a source between 1 and 8 and fit in a shorter encoding;
-  `moveq` takes one between -128 and 255 (128 through 255 are unsigned spellings of negative bytes).
+  `moveq` takes one between -128 and 255, which is the whole of one byte read either way.
 - **`m`, memory.** `cmpm` compares two memory operands, which the plain `cmp` cannot.
 - **`s` and `u`, signed and unsigned.** `muls` against `mulu`, `divs` against `divu`.
 
@@ -102,9 +98,9 @@ subject of "The condition code register", later in this course.
     sf d6               ; always $00
 ```
 
-`d1`, `d4` and `d5` come out at `000000FF`, `d2` and `d6` at `00000000`. `s<cc>` writes one byte and
-leaves the rest of the register alone, which is why the answers are `FF` rather than `FFFFFFFF`. It
-is how you turn a comparison into a value without a branch, the way `x = (a == b)` does in C.
+`s<cc>` writes one byte and leaves the rest of the register alone, which is why the answers come out
+as `FF` and not `FFFFFFFF`. It is how you turn the answer to a question into a value you can then
+compute with, without jumping anywhere.
 
 The shifts and rotates glue a letter on the same way, `l` for left and `r` for right: `ls<d>` is the
 logical shift, `as<d>` the arithmetic one, `ro<d>` the rotate.
@@ -120,25 +116,27 @@ logical shift, `as<d>` the arithmetic one, `ro<d>` the rotate.
     ror.l #1, d3        ; rotate right: the bottom bit goes to the top
 ```
 
-`d0` is 16, `d1` is 8, `d2` is `00000003` and `d3` is `C0000000`. A shift drops the bit that falls
-off the end, a rotate puts it back in at the other end.
+A shift drops the bit that falls off the end. A rotate puts it back in at the other end, which is
+why `d2` and `d3` still have exactly two bits set between them after the rotates, and `d0` and `d1`
+do not.
 
 ## What the assembler does with all this
 
-It turns each mnemonic into the opcode for the exact combination you wrote, and the combination
-matters: `move.l d0, d1`, `move.l #5, d1` and `move.l (a0), d1` are three different encodings of one
-mnemonic. It works out the expressions, replaces labels with addresses, and swaps in the `a` versions
-when the destination is an address register.
+One mnemonic is many instructions underneath. `move.l d0, d1`, `move.l #5, d1` and `move.l (a0), d1`
+are three different numbers in the built program, and the assembler works out which from the operands
+you wrote. It also computes the expressions, replaces labels with the addresses they turned out to
+have, and swaps in the `a` versions when the destination is an address register.
 
-What it will not do is guess. Each operand of each instruction accepts a fixed set of addressing
-modes, and the documentation page of an instruction lists them: `swap` takes `Dn` and nothing else,
-`lea` takes an address and `An`, `eor` needs a data register as its source. An operand outside that
-set is a build error naming the line, not an instruction that quietly does something else.
+What it will not do is guess. Each operand of each instruction accepts a fixed set of things, listed
+on that instruction's documentation page: `swap` takes a data register and nothing else, `lea` takes
+an address and an address register, `eor` needs a data register as its source. Hand one something
+outside that set and you get a build error naming the line, not an instruction that quietly does
+something else.
 
 ## Your turn
 
-Two instructions, no branch. The test starts `d0` and `d1` both at 7, and wants `$FF` in `d2` when
-the two registers are equal.
+Two instructions and no branch anywhere. `d0` and `d1` both start at 7; put `$FF` in `d2` if they
+are equal.
 
 ```m68k|playground|exercise
 * your code here
@@ -161,8 +159,8 @@ the two registers are equal.
 
 </details>
 
-The second one starts `d0` at `$00001234`. Leave `d0` multiplied by 8 in `d1`, using a shift, and
-`d0` with its two words exchanged in `d2`.
+Now two answers from one register. `d0` starts at `$00001234`. Put `d0` multiplied by 8 into `d1`,
+using a shift rather than a multiply, and `d0` with its two words exchanged into `d2`.
 
 ```m68k|playground|exercise
 * your code here

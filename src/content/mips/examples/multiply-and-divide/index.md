@@ -2,13 +2,8 @@ Two unit conversions, one in each direction. The first turns 365 days into hours
 the second turns 1000 seconds into 16 minutes and 40 seconds with a `div`, which answers both
 questions at once.
 
-Every program up to here added and subtracted. These two instructions are the ones with rules of
-their own, and the rules are about where the answer lands: neither of them writes a register you
-named.
-
-**You need to know:** the "Arithmetic, logic and bits" lecture. What is new here is `hi` and `lo`,
-two registers outside the 32 that only multiplication and division write, and the `mfhi` and `mflo`
-instructions that copy them into a register you can use.
+Multiplication and division are the two instructions with rules of their own, and the rules are all
+about where the answer lands: neither of them writes a register you named.
 
 ```mips|playground|allow-open
 .text
@@ -29,14 +24,13 @@ main:
 ```
 
 `mult` multiplies two whole 32 bit registers and writes the 64 bit product into the pair, the top
-half in `hi` and the bottom half in `lo`. `$t2` comes out at `00002238`, which is 8760, and `$t3` at
+half in `hi` and the bottom half in `lo`. `$t2` holds 8760, the whole answer, and `$t3` is
 0, because 8760 needs 14 bits and there is nothing to put above them.
 
 `div` writes the same pair with the **quotient in `lo`** and the **remainder in `hi`**, so one
-instruction answers "how many whole minutes" and "how many seconds are left" together. `$t6` is 16
-and `$t7` is 40. The M68K packs those two answers into the two halves of one register and needs a
-`swap` and two masks to get at them; here they are in two registers already and the only cost is one
-`mfhi` or `mflo` each.
+instruction answers "how many whole minutes" and "how many seconds are left over" at the same time.
+`$t6` is 16 and `$t7` is 40. Getting either of them costs one `mflo` or `mfhi`, and taking both
+costs both: there is no way to reach `hi` or `lo` except through those two instructions.
 
 Read them before the next multiplication or division. `hi` and `lo` hold whatever the last one left
 there, and they are at the bottom of the registers panel with `pc`, which is where you can watch
@@ -51,6 +45,7 @@ answer fits in a word, which is nearly always, it is the one to write.
 `rem $t2, $t0, $t1` are pseudo-instructions that build the check in and stop the program with
 `break instruction executed` instead.
 
-Try changing `li $t0, 365` to `li $t0, 65901`. `$t2` comes out at `00182238`, which is 1581624, the
-right answer for 65901 times 24. The M68K's `mulu` answers 8760 to that same change, because it only
-reads the low 16 bits of its operand; `mult` reads all 32 of them.
+Change `li $t0, 365` to `li $t0, 65901` and the answer in `$t2` becomes 1581624, which is right.
+That number needs 21 bits, so it still fits in `lo` alone and `hi` is still 0. Push the operands
+higher and the day comes when `hi` is not 0 any more, and a program that only ever reads `lo` is
+then quietly answering with the bottom half of the truth.

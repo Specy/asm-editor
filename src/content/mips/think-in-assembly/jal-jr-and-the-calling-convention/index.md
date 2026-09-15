@@ -1,7 +1,14 @@
-`jal label` writes the address of the next instruction into `$ra` and jumps to the label. `jr $ra`
-jumps back to it. That pair is the whole of calling and returning on MIPS, and it touches no memory
-at all: on the M68K a `bsr` pushes the return address and an `rts` pops it, and here it goes in a
-register.
+Calling a subroutine means going somewhere and then coming back, and coming back is the hard half:
+the code you jump to has to be told where to return, and it can be called from twenty different
+places.
+
+MIPS answers with one instruction and one register. `jal label` jumps to the label and, on the way,
+writes the address of the instruction **after** the call into `$ra`, register `$31`. `jr $ra` jumps
+to whatever address is in `$ra`. Nothing is pushed, nothing is popped, and memory is not touched at
+all, which makes a call about as cheap as a jump.
+
+Everything else on this page is the agreement built on top of that: which registers carry arguments
+in, which carry answers out, and who is responsible for what when the call returns.
 
 ## A subroutine that calls nothing
 
@@ -12,8 +19,8 @@ leaves in `$v0`.
 .text
 .globl main
 main:
-    li $a0, 10              # x = 10
-    jal triple              # x = triple(x)
+    li $a0, 10              # the argument
+    jal triple              # go and come back
     move $s0, $v0
     li $v0, 10
     syscall
@@ -25,12 +32,20 @@ triple:
     jr $ra
 ```
 
-`$s0` comes out at 30. Step through it and watch `$ra`: it is 0 until the `jal`, then `00400008`,
-the address of the `move` that follows the call, and the `jr $ra` puts the `pc` back there.
+Step through it with your eye on `$ra`. It is 0 to begin with, because nothing has called `main`.
+The `jal` sets it to `00400008`, which is the address of the `move` on the line after the call.
+Then `jr $ra` puts that address into `pc`, and the next instruction to run is the `move`.
 
-The `li $v0, 10` and `syscall` before `triple:` are what stop the program. Take them out and it walks
-into the subroutine, runs it, and the `jr $ra` jumps back to the `move` it has already done, round
-and round until the Playground gives up.
+| where you are        | `pc` points at             | `$ra` holds |
+| -------------------- | -------------------------- | ----------- |
+| before the call      | the `jal` itself           | `00000000`  |
+| just after the `jal` | the first line of `triple` | `00400008`  |
+| just after the `jr`  | the `move`, at `00400008`  | `00400008`  |
+
+The `li $v0, 10` and `syscall` before `triple:` are what stop the program. Take them out and
+execution walks straight into the subroutine, runs it, and hits `jr $ra` with `$ra` still pointing
+at the `move`, so it returns to a `move` it already did, and goes round until the Playground gives
+up.
 
 `triple` is a **leaf**: it calls nothing, so `$ra` is safe for as long as it runs and the subroutine
 needs no stack, no saving and no prologue. Most small subroutines are leaves, and that is what makes
@@ -69,32 +84,56 @@ doubled:
     jr $ra
 ```
 
-`$s0` comes out at 20. Take the two `$ra` lines out and run it again: the second `jal doubled`
-overwrites `$ra` with an address inside `quadruple`, so the `jr $ra` at the end returns into the
-middle of `quadruple` instead of into `main`, and the program loops.
+`$s0` is 20. Now take the two `$ra` lines out and run it again. The second `jal doubled` overwrites
+`$ra` with an address inside `quadruple`, so the `jr $ra` at the end returns into the middle of
+`quadruple` instead of into `main`, and the program goes round for ever.
 
-Those four lines around the body are the **prologue** and the **epilogue**, and they are what a C
-compiler writes for every function that calls another one.
+The pair of lines at the top that makes room and saves is the **prologue**; the pair at the bottom
+that restores and gives the room back is the **epilogue**. A leaf needs neither. Anything that calls
+something else needs both.
 
 ## Who preserves what
 
-The convention names two groups of registers, and the whole point of the split is that a caller and a
-subroutine written by two different people still work together.
+Two people write two subroutines and never speak. One of them calls the other. Which registers is
+the called one allowed to scribble on?
 
-| registers                                    | who keeps them                         |
+Guessing wrong in either direction is expensive: if nobody is allowed to touch anything, every
+subroutine saves all 32 registers on entry, and if anybody may touch anything, every caller saves
+all 32 before every call. So the convention splits them down the middle.
+
+| registers                                    | who is responsible for keeping them    |
 | -------------------------------------------- | -------------------------------------- |
 | `$t0` to `$t9`, `$a0` to `$a3`, `$v0`, `$v1` | the **caller**, if it still wants them |
 | `$s0` to `$s7`, `$sp`, `$fp`, `$ra`          | the **subroutine**, before it returns  |
 
-So a subroutine may write any `$t` register it likes without telling anyone, and must put back any
-`$s` register it touches. A caller holding something in `$t3` across a call has to save it itself.
+The first row is called **caller-saved**, and it means a subroutine may write any `$t` register it
+likes without telling anyone. If you are holding something in `$t3` and you make a call, saving it
+is your problem.
+
+The second row is **callee-saved**: a subroutine that wants `$s3` for its own working has to put the
+caller's `$s3` on the stack on the way in and hand it back untouched on the way out.
+
+That choice is what tells you which bank to use. Anything you need only between two calls goes in a
+`$t`; anything that has to survive a call goes in an `$s`, and then you pay for it in your own
+prologue.
+
+The rest of the names divide the same way:
+
+- **`$a0` to `$a3`** carry the first four arguments in, and they are caller-saved: once a subroutine
+  has read its arguments it may use those four registers as scratch.
+- **`$v0` and `$v1`** carry the answer out, `$v0` alone unless the answer needs 64 bits. `$v0` also
+  carries the service number into a `syscall`, which is why the number you want back has to be moved
+  out of `$v0` before you end a program.
+- **`$k0` and `$k1`** are not yours in either direction. They belong to the exception handler, which
+  can start running between any two of your instructions and uses them without saving anything, so a
+  value left in `$k0` is a value somebody else may overwrite at a moment nobody chose.
 
 ```mips|playground|memory
 .text
 .globl main
 main:
-    li $t0, 111             # a temporary
-    li $s0, 222             # a saved register
+    li $t0, 111             # a temporary, ours to lose
+    li $s0, 222             # a saved register, ours to keep
     li $a0, 3
     jal scribble
     move $t1, $t0           # what is left of the temporary
@@ -114,11 +153,15 @@ scribble:
     jr $ra
 ```
 
-`$t1` comes out at 999 and `$s1` at 222. The subroutine destroyed the caller's `$t0` and was entitled
-to; it destroyed the caller's `$s0` too, and put it back, which is why `main` still has its 222.
+`$t1` is 999 and `$s1` is 222. `scribble` destroyed the caller's `$t0` and was entitled to. It
+destroyed the caller's `$s0` as well, but saved it first and put it back, which is why `main` still
+has its 222 afterwards.
 
-Nothing in the machine enforces any of this. It is what the comment above the label says, and the
-reason to follow the standard one rather than invent your own is that every other MIPS program does.
+The machine enforces none of this. There is no instruction that checks it and no error message when
+you get it wrong; what you get instead is a value that was correct a moment ago and is now not. The
+reason to follow the standard agreement rather than one of your own is that every other MIPS program
+already follows it, including any code you copy in and the handler in the last module of this
+course.
 
 ## Arguments past the fourth
 
@@ -156,8 +199,8 @@ sum6:
     jr $ra
 ```
 
-`$s0` comes out at 21, which is 1 to 6 added up. While `sum6` runs, `$sp` is at `0x7FFFEFF4` and the
-stack holds:
+`$s0` is 21, which is 1 to 6 added up. While `sum6` runs, `$sp` is at `0x7FFFEFF4` and the stack
+holds:
 
 |      address |    value    | reached as | what it is |
 | -----------: | :---------: | ---------- | ---------- |
@@ -193,11 +236,11 @@ factorial:
     sw $ra, 4($sp)          # this call's return address
     sw $a0, 0($sp)          # and its own n
     li $t0, 2
-    blt $a0, $t0, base      # if(n < 2) return 1
+    blt $a0, $t0, base      # below 2, the answer is just 1
     addi $a0, $a0, -1
-    jal factorial           # $v0 = factorial(n - 1)
+    jal factorial           # the answer for n - 1 comes back in $v0
     lw $a0, 0($sp)          # our n back, since the call destroyed $a0
-    mul $v0, $v0, $a0       # n * factorial(n - 1)
+    mul $v0, $v0, $a0       # times our own n
     j fret
 base:
     li $v0, 1
@@ -207,8 +250,9 @@ fret:
     jr $ra
 ```
 
-`$s0` comes out at `00000078`, which is 120. At the deepest point, with `$a0` down to 1, the stack
-holds five frames of eight bytes each:
+`$s0` is 120, which is 5 factorial. The interesting part is what the stack looked like on the way
+there. At the deepest point, with `$a0` down to 1, five copies of the same two words are stacked up,
+eight bytes per call:
 
 |      address |    value    | what it is                             |
 | -----------: | :---------: | -------------------------------------- |
@@ -240,11 +284,10 @@ through this program is `factorial` five times over.
 program calls a function pointer or a routine out of a table. `la $t0, triple` and `jalr $t0` do what
 `jal triple` does, with the address worked out while the program runs.
 
-## Your turn
+## Write two subroutines
 
 Write a subroutine called with `jal` that squares the number in `$a0` and leaves the answer in `$v0`,
-and a caller that copies that answer into `$s0` before ending the program. The test starts `$a0` at
-7, so `$s0` comes out at 49.
+and a caller that copies that answer into `$s0` before ending the program. The test starts `$a0` at 7.
 
 The copy is not busywork. `$v0` is both the register a subroutine answers in and the register the
 `syscall` number goes in, so the `li $v0, 10` that ends a program destroys the answer, and anything

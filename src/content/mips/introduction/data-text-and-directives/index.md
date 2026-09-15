@@ -1,7 +1,9 @@
-A program is instructions and the data they work on, and something has to say which lines are which.
-The M68K assembler has no answer to that: it walks your source from top to bottom and puts each line
-at the next free address. MIPS has **sections**, so the two are separated by name and land in
-different parts of memory.
+A program is two different things written in one file: instructions, and the data those
+instructions work on. They want to live in different parts of memory, and they cannot simply take
+turns down the page, because the CPU runs whatever it finds next and a word of data would be run as
+an instruction.
+
+So the assembler wants to be told which is which, and the way you tell it is with **sections**.
 
 ## .data and .text
 
@@ -35,25 +37,28 @@ main:
     syscall
 ```
 
-`$t0` comes out at `10010000`, `$t1` at `10010004` and `$t2` at `10010014`. Open the memory panel at
-`10010000` and the first bytes are `48 69 00 00`, the two characters of `"Hi"`, its terminator and
-the byte the `.align 2` skipped over.
+Open the memory panel at `10010000` and the first four bytes are `48 69 00 00`: the two characters
+of `"Hi"`, the zero byte that ends the string, and one spare byte the `.align 2` skipped over to get
+back to a multiple of four. The three addresses in `$t0`, `$t1` and `$t2` are where the three labels
+landed.
 
-That is the shape of every MIPS program in this course: constants at the top, a data section, then a
-text section with `main` in it and a `syscall` at the end.
+The last two lines are how a MIPS program stops. `li $v0, 10` puts the number 10 in `$v0` and
+`syscall` hands control to the environment, which reads that 10 as "this program is finished". The
+"Talking to the outside world" module explains the mechanism; until then, treat those two lines as
+the way you end a program.
 
 ## The data directives
 
-| directive           | what it writes                                         |
-| ------------------- | ------------------------------------------------------ |
-| `.word 1, 2, 3`     | one 4 byte word per value, aligned to a multiple of 4  |
-| `.half 1, 2`        | one 2 byte half per value, aligned to a multiple of 2  |
-| `.byte 1, 2, 3`     | one byte per value, anywhere                           |
-| `.ascii "Hi"`       | the characters, with **no** terminator                 |
-| `.asciiz "Hi"`      | the characters and a zero byte after them              |
-| `.space 8`          | that many bytes, left at zero and not aligned          |
-| `.align n`          | moves the next thing up to a multiple of 2 to the `n`  |
-| `.float`, `.double` | floating point numbers, which this course does not use |
+| directive           | what it writes                                           |
+| ------------------- | -------------------------------------------------------- |
+| `.word 1, 2, 3`     | one 4 byte word per value, aligned to a multiple of 4    |
+| `.half 1, 2`        | one 2 byte half per value, aligned to a multiple of 2    |
+| `.byte 1, 2, 3`     | one byte per value, anywhere                             |
+| `.ascii "Hi"`       | the characters, with **no** terminator                   |
+| `.asciiz "Hi"`      | the characters and a zero byte after them                |
+| `.space 8`          | that many bytes, left at zero and not aligned            |
+| `.align n`          | moves the next thing up to a multiple of 2 to the `n`    |
+| `.float`, `.double` | one 4 byte or one 8 byte floating point number per value |
 
 ```mips|playground|memory
 .data
@@ -120,26 +125,28 @@ main:
     syscall
 ```
 
-`$t0` and `$t2` both come out at 4, and they got there in completely different ways: `SIZE` became a
-`4` inside the instruction, while `values` became the address `0x10010000` and the instruction went
-to memory for what was there. `$t3` is 16.
+`$t0` and `$t2` both end up holding 4, and they got there in completely different ways. `SIZE`
+became a literal `4` sitting inside the `li` instruction, so nothing was read from anywhere.
+`values` became the address `0x10010000`, and the `lw` went out to memory to see what was there.
+One of those numbers is in your program and the other is in your data, and `.eqv` is how you choose.
 
 The assembler does no arithmetic. `li $t0, SIZE*4` is a build error and `.word 2+3` writes two words,
 a 2 and a 3, so a name multiplied by something has to be multiplied by the program, as the `sll`
 above does. The one exception is an address: `lw $t2, values+4` means four bytes past the label, and
 that the assembler will work out.
 
-Use `.eqv` for anything you would write as a `#define` in C: the length of an array, the size of an
-element, a syscall number, a screen width.
+`.eqv` is for anything that is a fixed number your program should not have scattered through it in
+raw form: the length of an array, the size of one element, a service number, the width of the
+screen. Change the number at the top and every use of it changes.
 
 ## Where a program starts, and where it stops
 
-Execution begins at the **first instruction in `.text`**, whatever it is called. Put a subroutine at
-the top of your file and the program runs the subroutine, hits its `jr $ra` with `$ra` still 0, and
-ends with `invalid program counter value: 0x00000000`.
+Execution begins at the **first instruction in `.text`**, whatever that instruction happens to be.
+Put a subroutine at the top of your file and the program runs the subroutine, which is not what you
+meant, and then runs off the end of it in an interesting way.
 
-`.globl main` fixes that. It marks the label `main` as global, and a global `main` becomes the entry
-point wherever in the file it is written.
+`.globl main` fixes it. It marks the label `main` as global, and a global `main` becomes the entry
+point wherever in the file you wrote it.
 
 ```mips|playground
 .text
@@ -157,9 +164,16 @@ main:
     syscall
 ```
 
+`jal helper` is a call: it jumps to `helper` and leaves behind the address to come back to, in the
+register called `$ra`. `jr $ra` at the end of `helper` jumps to that address. Both of those get a
+lecture of their own later; here they are just something for `main` to do.
+
 `$t0` is 1, `$t9` is 111 and `$t1` is 2, so `main` ran first and `helper` ran when it was called.
-Delete the `.globl main` line and press Run: the program starts at `helper`, and the `jr $ra` on its
-second line jumps to address 0.
+
+Now delete the `.globl main` line and press Run. The program starts at `helper` instead, and nobody
+called it, so `$ra` is still 0, and its `jr $ra` jumps to address 0. The run ends with
+`invalid program counter value: 0x00000000`, which is the message you get whenever a program returns
+to a place it was never called from.
 
 The other end matters as much. **A MIPS program ends with `li $v0, 10` and `syscall`**, and without
 it execution carries straight on into whatever is written next. If that is a subroutine, the program
@@ -173,11 +187,10 @@ subroutine ends with those two lines before the first one.
 - **`.extern name size`** declares a label defined somewhere else and reserves `size` bytes for it in
   the global data area, which is what `$gp` points near.
 - **`.ktext`** and **`.kdata`** are the kernel forms of `.text` and `.data`, and `.ktext 0x80000180`
-  is where an exception handler goes. "Exceptions, coprocessor 0 and interrupts" uses them.
+  is where an exception handler goes. "Exceptions and coprocessor 0" uses them.
 - **`.macro`** and **`.end_macro`** define a name that expands into the lines between them, with `%`
   in front of each parameter.
-- **`.include "file.asm"`** pulls in another file, which this editor's single-file projects have no
-  use for.
+- **`.include "file.asm"`** pastes in another source file at that point.
 
 ```mips|playground
 .macro double(%reg)
@@ -193,11 +206,12 @@ main:
     syscall
 ```
 
-`$t0` comes out at 20. A macro is copied into the program at every use, so those two lines are two
-`add` instructions, and a macro that took ten lines would be ten instructions each time. A
-subroutine is the alternative that costs one call.
+`$t0` finishes at 20, doubled twice. A macro is **copied** into the program at every use, so those
+two `double($t0)` lines are two `add` instructions sitting in memory, and a macro of ten lines used
+five times is fifty instructions. A subroutine is the other way round: one copy of the body, and the
+cost of a call each time you use it.
 
-## Your turn
+## Two to write
 
 Write a data section holding the three words 100, 200 and 300 at `values`, followed by eight bytes of
 room at `room`, and leave the address of `room` in `$t0`. Three words take twelve bytes, so it comes

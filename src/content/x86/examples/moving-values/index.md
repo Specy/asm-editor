@@ -1,13 +1,7 @@
-The first program of the ladder. It puts numbers in registers, moves one register into another, reads
-a number out of memory, multiplies and writes the answer back. Everything it does is visible in the
-registers panel, with the one memory write in the memory panel at `0x402000`.
-
-Three places a value can come from: an **immediate**, a number written into the instruction itself; a
-**register**; and **memory**, named by a label in square brackets. `mov` reaches all three, which is
-what makes it the instruction x86 programs are mostly made of.
-
-**You need to know:** the "Getting started with x86" lecture. What is new here is reading and writing
-memory with a label, which the "Memory, little endian and sizes" lecture goes into.
+This is the first program of the ladder, and it exists to show where a value can come from. There are
+three places: an **immediate**, which is a number written into the instruction itself; another
+**register**; and **memory**, named by a label in square brackets. One instruction, `mov`, reaches all
+three, which is why most lines of most x86 programs are a `mov`.
 
 ```x86|playground|memory|allow-open
 default rel
@@ -31,18 +25,19 @@ _start:
     syscall
 ```
 
-`rbx` comes out at `F`, which is 15, and `rcx` at `69`, which is 105. Type `402000` into the memory
-panel and the eight bytes there read `69 00 00 00 00 00 00 00`, little endian for the same 105.
+Type `402000` into the memory panel and the eight bytes there read `69 00 00 00 00 00 00 00`, which
+is the answer stored little endian, lowest byte first.
 
-`rax` ends at `3C`, not 10, because the exit at the bottom needs `rax` for the call number. Those
-three lines are the request that stops the program, and the "syscall and the Linux ABI" lecture is
-where they are explained.
+`rax` is the one register that does not end where the program left it. It holds 10 for two
+instructions and then the exit at the bottom takes it for the call number, so what you read in the
+panel at the end is `3C`, which is 60. A register belongs to whoever wrote it most recently.
 
-The one rule about where operands may live shows up here. Every line has at most one operand in
-square brackets, and that is not an accident: **two memory operands are not an instruction**, so
-copying `value` into another variable would be a load into a register and then a store, two lines
-where C writes one. What x86 does allow, and a load/store architecture does not, is the single
-bracket: `imul rcx, [value]` would have multiplied straight out of memory.
+Look down the six working lines and count the square brackets. There is never more than one pair on a
+line, and that is not an accident: **two memory operands are not an instruction**, so copying `value`
+into a second variable would take two lines and a register in between. One pair is allowed anywhere,
+though, so `imul rcx, [value]` would have multiplied straight out of memory and saved a line.
 
-Try changing `mov rcx, [value]` to `lea rcx, [value]`. `rcx` then holds `402000`, the **address** of
-the variable instead of what is in it, and the multiplication turns into arithmetic on an address.
+Change `mov rcx, [value]` to `lea rcx, [value]` and the program still runs, still multiplies, and
+produces nonsense. `rcx` now holds `402000`, the address the variable lives at rather than the 7
+inside it, and the multiplication that follows is arithmetic on an address. The brackets are the whole
+difference between the two lines.

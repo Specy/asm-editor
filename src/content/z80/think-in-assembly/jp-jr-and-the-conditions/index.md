@@ -1,58 +1,48 @@
-The F register lecture showed `cp` writing the flags and one jump reading them. Let's now write the
-control flow of a real program out of those two, starting from the C.
+Here is something to write: a number starts at 50, and it should end up at 100 if it is 10 or more
+and at 200 if it is smaller.
 
-## An if, flattened
+There is nothing in assembly that groups instructions together. No braces, no blocks, and the
+indentation means nothing to the assembler. A program is a list of instructions and the CPU walks
+down it, one after another, for ever. The only way to not run something is to jump over it.
 
-Say we want this:
-
-```c
-int x = 50;
-if (x >= 10) {
-    x = 100;
-} else {
-    x = 200;
-}
-```
-
-Assembly runs top to bottom and jumps, so the first step is to write the `if` as a `goto`, the way
-the general course did. Flip the condition and jump over the true branch:
-
-```c
-    int x = 50;
-    if (x < 10) goto smaller;
-    x = 100;
-    goto done;
-smaller:
-    x = 200;
-done:
-```
-
-Every line of that has an instruction. `x` lives in `a`, the `if` is a `cp` and a conditional jump,
-and the two `goto`s are unconditional jumps.
+So every choice in assembly comes out the same shape: test, then jump over the part you do not want.
+And the part you do want has to end with a jump of its own, or the CPU carries straight on into the
+other one.
 
 ```z80|playground
     .org 0x8000
     ld a, 50        ; x = 50
     cp 10           ; compare x with 10
-    jr c, smaller   ; if(x < 10) goto smaller
-    ld a, 100       ; x = 100
-    jr done         ; goto done
+    jr c, smaller   ; if a is less than 10, skip the next two lines
+    ld a, 100       ; the 10-or-more answer
+    jr done         ; and jump over the other arm
 smaller:
-    ld a, 200       ; x = 200
+    ld a, 200       ; the smaller answer
 done:
     halt
 ```
 
-`a` comes out at `64`, which is 100. `cp 10` computes `a - 10` and throws the answer away, and `C` is
-set when that subtraction borrowed, which is when `a` was the smaller of the two. So `jr c` is
-"jump if `a` was less than 10", reading them as unsigned numbers.
+Follow the two paths through it:
 
-Try changing `ld a, 50` to `ld a, 5` and running again: the jump is taken and `a` comes out at `C8`,
-which is 200.
+```
+        ld a, 50
+        cp 10
+        jr c, smaller  ------+   taken only when a is less than 10
+        ld a, 100            |
+        jr done  ---------+  |   jumps over the other arm
+smaller:                  |  |
+        ld a, 200  <------|--+
+done:                     |
+        halt       <------+
+```
 
-`smaller` and `done` are labels, which is to say addresses, and `jr done` on the fifth line exists
-for the same reason the `goto done` does in the C: without it the program would fall into the `else`
-branch and run both.
+`cp 10` computes `a - 10`, throws the answer away and keeps only what the subtraction did to the
+flags. `C` is set when that subtraction had to borrow, which is exactly when `a` was the smaller of
+the two, so `jr c` means "jump if `a` was less than 10", reading both as unsigned numbers.
+
+`smaller` and `done` are labels, which is to say names for addresses. The `jr done` in the middle is
+the instruction people leave out: without it the program finishes the first arm and then walks
+straight into the second one, so `a` ends up at 200 no matter what the comparison said.
 
 ## Two jumps
 
@@ -109,7 +99,7 @@ jumps and no second comparison. This one asks all three questions in a row.
     .org 0x8000
     ld a, 0
     or a            ; the flags now describe a
-    jp z, zero      ; if(a == 0) goto zero
+    jp z, zero      ; a was zero: go to the zero case
     ld b, 1
     jp checked
 zero:
@@ -142,9 +132,9 @@ done:
 second has a `jr` form here, so both of those jumps had to be `jp`; the three way comparison at the
 end tests `Z` and `C`, which `jr` can do.
 
-Try changing `ld a, 5` to `ld a, 3` and then to `ld a, 9`, and watch `d` come out at 2 and 1. The
-order matters: `jr z` has to come first, because a `cp` of two equal numbers leaves `C` at 0, so with
-the two jumps the other way round the equal case would fall through into the "larger" branch.
+The order of the last two jumps matters, and getting it wrong is a quiet bug. `jr z` has to come
+first, because a `cp` of two equal numbers leaves `C` at 0. Write them the other way round and the
+`jr nc` catches the equal case on its way past, so "equal" reports itself as "larger".
 
 ## Branching on one bit
 
@@ -162,9 +152,6 @@ the two jumps the other way round the equal case would fall through into the "la
 done:
     halt
 ```
-
-`b` comes out at `01`. Try changing `bit 0, a` to `bit 1, a`: bit 1 of `0b101` is 0, `Z` goes to 1,
-the jump is taken and `b` stays 0.
 
 `or a` is the same idea for the whole register. It leaves `a` alone and sets `Z` from it, so
 `or a` and `jr z` is how a program asks "is `a` zero", and it is one byte where `cp 0` is two.
@@ -188,11 +175,12 @@ second:
 `a` comes out at `07`. `jp (ix)` and `jp (iy)` do the same with the index registers, and there is no
 conditional form of any of the three.
 
-That is a function pointer in C, `f()` where `f` is a variable, and it is also how a `switch` is
-written when the cases are dense: put the addresses in a table with `.dw`, index into it, load the
-address into `hl` and `jp (hl)`. The `jump-table` Example of this course does exactly that.
+This is how you choose between many destinations without a chain of comparisons. Put the addresses
+in a table with `.dw`, use the number you are switching on as the index into that table, load the
+address it holds into `hl`, and `jp (hl)`. One lookup, however many cases there are. The Jump table
+Example does exactly that.
 
-## Your turn
+## Two branches to write
 
 The test starts `a` at 200. Leave 1 in `b` if `a` is 100 or more, and 2 if it is less, reading `a` as
 an unsigned number. One `cp` and one conditional jump.

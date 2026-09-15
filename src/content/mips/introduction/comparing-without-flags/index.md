@@ -1,14 +1,30 @@
-There is no flags register on MIPS. No zero bit, no carry bit, no sign bit, no status register
-anywhere: the panel the M68K and Z80 courses put above the registers is missing from every program on
-this page because there is nothing to show in it.
+Every program has to ask questions about numbers and do different things with the answers. Is this
+one equal to that one. Is it bigger. Have we run off the end of the array yet. MIPS answers all of
+them with two ideas, and this page is both of them.
 
-That changes how a condition is written. On the M68K a `cmp` throws its answer away and leaves five
-bits behind, and the branch on the next line reads them. Here a comparison either **is** the branch,
-or it writes its answer into a register you named, the same as any other instruction.
+The first is that some questions come with the decision built in:
 
-## The branches that compare for you
+```
+    beq $t0, $t1, same_thing
+```
 
-Six real branch instructions, and between them they cover equality and everything against zero.
+"If `$t0` and `$t1` hold the same bits, carry on at `same_thing`; otherwise carry on at the next
+line." One instruction, asked and acted on.
+
+The second is that a comparison does not have to be a jump at all. It can be an instruction like any
+other, reading two registers and writing a number into a third:
+
+```
+    slt $t2, $t0, $t1
+```
+
+That one leaves 1 in `$t2` if `$t0` is less than `$t1`, and 0 if it is not. Nothing jumps. The
+answer is now a value, and you can branch on it later, add it up, store it, or pass it to a
+subroutine. Everything else on this page is built out of those two instructions.
+
+## The branches that ask and jump
+
+Six real branch instructions, covering equality and every comparison against zero.
 
 | written               | branches when               |
 | --------------------- | --------------------------- |
@@ -19,9 +35,10 @@ Six real branch instructions, and between them they cover equality and everythin
 | `bgtz $t0, label`     | `$t0` > 0, signed           |
 | `bgez $t0, label`     | `$t0` >= 0, signed          |
 
-`beq` and `bne` are the only two that look at two registers, and all they ask is whether the bits are
-the same, which needs no notion of signed or unsigned. The other four compare one register with zero,
-and there they do read it as a signed number.
+`beq` and `bne` compare two registers, and all they ask is whether the 32 bits are identical, so it
+makes no difference whether you meant them as signed or unsigned numbers. The other four compare one
+register against zero, and there the question does depend on the reading, so those four take the
+signed one.
 
 ```mips|playground
 .text
@@ -46,26 +63,26 @@ e5:
     li $s5, 9
 ```
 
-`$s0` and `$s3` come out at 1, because those two branches were not taken and the line under each of
-them ran. `$s1`, `$s2` and `$s4` stay 0. Step through it and watch the `pc` register jump over the
-lines the taken branches skipped.
+Every `li $s..., 1` in that program is the line **after** a branch, so it runs only when the branch
+above it was not taken. `$s0` and `$s3` end up at 1, and the other three stay at 0. Step through it
+and watch `pc` skip over the lines that a taken branch jumped past.
 
-## slt, a comparison that is a value
+That shape, a branch followed by the code for when the branch was **not** taken, is the shape of
+every `if` you will write, and it takes a little getting used to: the condition you write is the one
+that goes somewhere else.
 
-`slt $t2, $t0, $t1` means **set on less than**: it writes 1 into `$t2` when `$t0` is less than `$t1`
-and 0 when it is not. That is C's `t2 = (t0 < t1)`, and it is where every comparison MIPS does not
-have as a branch comes from.
+## slt, a comparison you can hold on to
 
-Four of them:
+`slt` is short for **set on less than**. `slt $t2, $t0, $t1` writes 1 into `$t2` when `$t0` is less
+than `$t1`, and 0 when it is not, and goes on to the next line either way.
 
-- **`slt $rd, $rs, $rt`**, signed, both operands registers.
-- **`sltu $rd, $rs, $rt`**, the same read as unsigned numbers.
-- **`slti $rd, $rs, imm`** and **`sltiu $rd, $rs, imm`**, with a constant on the right.
+There are four of them: `slt` and `sltu` compare two registers, signed and unsigned, and `slti` and
+`sltiu` do the same with a constant on the right instead of a second register.
 
 ```mips|playground
 .text
 main:
-    li $t0, -1              # FFFFFFFF: -1 signed, 4294967295 unsigned
+    li $t0, -1              # FFFFFFFF
     li $t1, 1
     slt $t2, $t0, $t1       # is -1 less than 1?
     sltu $t3, $t0, $t1      # is 4294967295 less than 1?
@@ -74,17 +91,26 @@ main:
     slt $t6, $t1, $t0       # and the operands the other way round
 ```
 
-`$t2` and `$t4` come out at 1, `$t3`, `$t5` and `$t6` at 0. The same two registers, the same
-question, and the signed and unsigned instructions disagree about the answer, because `FFFFFFFF` is
-two different numbers depending on who is reading it.
+`$t2` and `$t4` come out at 1 and the other three at 0. The first two lines are worth staring at:
+same two registers, same question in English, opposite answers. `FFFFFFFF` is -1 to `slt` and
+4294967295 to `sltu`, and neither of them is making a mistake.
 
-`slt` writes a whole word holding 0 or 1, not a byte and not all ones. That matters when you use the
-answer as a number: `add $t3, $t3, $t2` after a `slt` counts how many times the condition held.
+One detail that matters when you use the answer as a number rather than as a condition: `slt` writes
+a whole 32 bit word holding exactly 0 or exactly 1. So `add $t9, $t9, $t2` after a `slt` counts the
+number of times the condition held, and a sequence of `slt` results can be added, shifted or stored
+like any other integer.
 
-## The branches the assembler builds
+## The comparisons the assembler builds for you
 
-`blt`, `bgt`, `ble`, `bge` and their unsigned forms are pseudo-instructions, and each is an `slt`
-into `$at` and a branch on the result.
+Six branches and four `slt`s do not include "branch if `$t0` is less than `$t1`", which is a thing
+programs want on nearly every page. You can still write it:
+
+```
+    blt $t0, $t1, label
+```
+
+`blt` is a pseudo-instruction. The assembler puts the comparison and the branch together out of the
+parts that do exist: an `slt` into `$at`, then a `bne` against `$zero` to jump when the answer was 1.
 
 | you write                      | what it becomes                                  |
 | ------------------------------ | ------------------------------------------------ |
@@ -92,13 +118,18 @@ into `$at` and a branch on the result.
 | `bge $t0, $t1, label`          | `slt $at, $t0, $t1` then `beq $at, $zero, label` |
 | `bgt $t0, $t1, label`          | `slt $at, $t1, $t0` then `bne $at, $zero, label` |
 | `ble $t0, $t1, label`          | `slt $at, $t1, $t0` then `beq $at, $zero, label` |
-| `bltu`, `bgeu`, `bgtu`, `bleu` | the same with `sltu`                             |
+| `bltu`, `bgeu`, `bgtu`, `bleu` | the same four with `sltu`                        |
 | `beqz $t0, label`              | `beq $t0, $zero, label`, one instruction         |
 | `bnez $t0, label`              | `bne $t0, $zero, label`, one instruction         |
 
-Two patterns are in that table and they are worth reading off it. **Greater than** is less than with
-the operands swapped, since `a > b` is `b < a`. And **greater or equal** is the negation of less
-than, so the same `slt` is branched on with `beq` instead of `bne`.
+Two tricks are doing all the work in that table, and they are worth learning as tricks rather than
+as rows, because you will need them by hand the first time you write a loop condition that does not
+fit one of the names:
+
+- **Greater than is less than backwards.** "`a` > `b`" and "`b` < `a`" are the same question, so
+  `bgt` is `blt` with the operands swapped.
+- **Greater or equal is the opposite of less than.** So it is the same `slt`, branched on with `beq`
+  instead of `bne`.
 
 ```mips|playground
 .text
@@ -115,16 +146,17 @@ again:
     li $s2, 1
 ```
 
-`$s0` and `$s1` both stay 0 and `$s2` comes out at 1: the pseudo-instruction and the two real ones
-below it do the same thing. Click on the `blt` line after building and the editor prints exactly
-those two instructions underneath.
+Neither `li $s..., 99` runs: the pseudo-instruction and the two real instructions below it do the
+same thing, in the same number of cycles, because they **are** the same two instructions. Build the
+program and click on the `blt` line and the editor prints them underneath it.
 
-Writing `blt` is fine, and knowing it costs `$at` is what stops you from keeping something there.
+Write `blt`. It reads better. Just remember it has spent `$at`, so nothing of yours can be living
+there.
 
-## Picking the wrong family
+## Signed or unsigned is your decision
 
-`0xFFFFFFFF` is 4294967295 unsigned and -1 signed. Compared against 1, one of those is bigger and the
-other is smaller, so `bltu` and `blt` disagree about the same two registers.
+`0xFFFFFFFF` is 4294967295 read one way and -1 read the other. Against 1, one of those is larger and
+one is smaller, so `blt` and `bltu` will genuinely disagree about the same two registers.
 
 ```mips|playground
 .text
@@ -140,33 +172,26 @@ unsigned_smaller:
     li $s2, 9
 ```
 
-`$s0` stays 0 and `$s1` comes out at 1, from the same two registers. The rule of thumb: addresses,
-sizes and counts of bytes are **unsigned**, so compare them with `sltu`, `bltu` and `bgeu`.
-Differences, coordinates and anything that can go below zero are **signed**.
+`$s0` stays 0 and `$s1` ends at 1, from one pair of registers and two instructions that differ by a
+letter. Nothing in the register says which one you meant, so picking the family is a decision you
+have to make every time, and the rule of thumb is short:
 
-## The conditions of a flags machine, written here
+- addresses, sizes, lengths and counts of bytes are **unsigned**, so use `sltu`, `bltu`, `bgeu`;
+- differences, coordinates, temperatures and anything that can legitimately go below zero are
+  **signed**.
 
-Everything the M68K's fourteen conditions do has a shape on MIPS:
+The classic bug is comparing an address with `blt`. Addresses near the top of memory have their top
+bit set, so the signed comparison reads them as large negative numbers and the loop ends
+immediately or never.
 
-| in C                  | on MIPS                                       |
-| --------------------- | --------------------------------------------- |
-| `if (a == b)`         | `beq $a, $b, label`                           |
-| `if (a != b)`         | `bne $a, $b, label`                           |
-| `if (a < b)` signed   | `slt $at, $a, $b` and `bne $at, $zero, label` |
-| `if (a < b)` unsigned | `sltu` and the same branch                    |
-| `if (a == 0)`         | `beq $a, $zero, label`                        |
-| `if (a < 0)`          | `bltz $a, label`                              |
-| `x = (a < b)`         | `slt $x, $a, $b`, with nothing to branch on   |
-| `if (a & 8)`          | `andi $at, $a, 8` and `bne $at, $zero, label` |
+## Did that addition wrap?
 
-The last row is the one with no instruction of its own. `btst` on the M68K tests one bit and sets a
-flag; here you compute the `and` into a register and branch on whether it came out zero.
+`addu` never complains, it just wraps: add 2 to `0xFFFFFFFF` and you get 1. Sometimes a program
+needs to know that happened, and the way to find out is to ask a question about the answer.
 
-## The carry that is not there
-
-An unsigned addition that does not fit sets the carry flag on a machine that has one. MIPS has
-neither the flag nor a trap for it, since `addu` wraps silently, so a program that needs to know
-works it out: **when an unsigned sum wraps, it comes out smaller than either operand**.
+**An unsigned sum that wrapped comes out smaller than the number you added to.** It has to: wrapping
+means the true answer was too big for 32 bits, so what is left after the top bit falls off is less
+than either operand. That is a comparison, and comparisons are `sltu`.
 
 ```mips|playground
 .text
@@ -181,23 +206,24 @@ main:
     sltu $t7, $t6, $t4      # 0
 ```
 
-`$t2` comes out at 1 and `$t3` at 1, which is the carry the hardware did not keep. `$t6` is 7 and
-`$t7` is 0. Signed overflow, the same question asked of signed numbers, MIPS does answer: `add` and
-`addi` raise an arithmetic overflow exception where `addu` and `addiu` wrap.
+`$t3` is 1 and `$t7` is 0, and those two bits are worked out by your program rather than remembered
+by the hardware. The signed version of the same question MIPS does answer for you: `add` and `addi`
+stop the program with an arithmetic overflow where `addu` and `addiu` wrap quietly.
 
-## Nothing gets in the way
+## The answer keeps until you want it
 
-On a flags machine an instruction between the comparison and the branch destroys the comparison,
-because a `move` writes the flags too. Here the answer to a comparison is a word in a register you
-chose, so it survives anything that does not write that register, and you can compute an address,
-load something or call a subroutine between the `slt` and the branch that reads it.
+Because the result of a comparison is an ordinary word in a register you chose, it stays there. You
+can do the `slt` at the top of a loop, load something, work out an address, even call a subroutine,
+and then branch on the answer ten lines later. It survives everything that does not write that
+particular register.
 
-The one register that is not safe is `$at`, which every pseudo-instruction in between will take.
+The one register that is not safe for it is `$at`, since any pseudo-instruction in between takes
+`$at` for itself.
 
-## Your turn
+## Three to work out
 
 The test starts `$t0` at -5 and `$t1` at 3, and wants the larger of the two, read as **signed**
-numbers, in `$t2`. Use `slt` and a real branch, without `blt` or `bgt`.
+numbers, in `$t2`. Use `slt` and a real branch, not `blt` or `bgt`.
 
 ```mips|playground|exercise
 .text
@@ -227,10 +253,9 @@ done:
 
 </details>
 
-The second one starts `$t0` at -1 and `$t1` at 1, and asks the same question twice without branching.
-Leave 1 in `$t2` when `$t0` is the higher of the two read as **unsigned** numbers, and 1 in `$t3`
-when it is the greater read as **signed**. Since `$t0` is `FFFFFFFF`, `$t2` comes out at 1 and `$t3`
-at 0.
+The second one asks the same question twice and forbids branching at all. `$t0` starts at -1 and
+`$t1` at 1. Leave 1 in `$t2` if `$t0` is the higher of the two read as **unsigned**, and 1 in `$t3`
+if it is the greater read as **signed**. One of those is true and the other is not.
 
 ```mips|playground|exercise
 .text
@@ -253,6 +278,41 @@ main:
 main:
     sltu $t2, $t1, $t0      # a > b is b < a
     slt $t3, $t1, $t0       # the same swap, read as signed
+```
+
+</details>
+
+The third asks a question with two halves. `$t0` starts at 15, and you want 1 in `$t2` when `$t0` is
+between 10 and 20 inclusive, and 0 when it is outside that range. No branches: work out the two
+conditions as values and combine them.
+
+Two hints. `slti $t1, $t0, 10` leaves 1 when `$t0` is **below** 10, which is the opposite of what
+you want, and `xori $t1, $t1, 1` turns a 1 into a 0 and a 0 into a 1. And "both of these are true"
+is an `and`, because each condition is already a 1 or a 0.
+
+```mips|playground|exercise
+.text
+main:
+    # your code here
+```
+
+```testcase
+{
+    "startingRegisters": { "$t0": 15 },
+    "expectedRegisters": { "$t2": 1 }
+}
+```
+
+<details>
+<summary>Show solution</summary>
+
+```mips|playground|solution
+.text
+main:
+    slti $t1, $t0, 10       # 1 when below 10
+    xori $t1, $t1, 1        # flipped, so 1 when 10 or more
+    slti $t2, $t0, 21       # 1 when 20 or less
+    and $t2, $t1, $t2       # 1 only when both held
 ```
 
 </details>

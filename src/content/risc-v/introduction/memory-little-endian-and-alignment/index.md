@@ -5,7 +5,8 @@ instructions.
 ## The address space
 
 An address is 32 bits, so it runs from `0x00000000` to `0xFFFFFFFF`: four gigabytes. Nothing in the
-hardware divides that up, and this simulator follows RARS in putting each thing at a fixed address:
+hardware divides that up into regions. The division below is a decision somebody made about where to
+put things, and this simulator's choices are the usual ones:
 
 | from         | what is there                                                |
 | ------------ | ------------------------------------------------------------ |
@@ -18,9 +19,9 @@ hardware divides that up, and this simulator follows RARS in putting each thing 
 | `0xFFFF0000` | the memory-mapped devices, the screen and the keyboard       |
 
 A byte nobody has written reads **0** here. Open the memory panel of any program on this page, look
-anywhere your program did not touch, and every byte is `00`. That is this simulator's choice, and
-the M68K's is the opposite, so a program that reads uninitialised memory behaves differently on the
-two.
+somewhere your program never touched, and every byte is `00`. Do not build anything on that. It is
+this simulator being tidy, not a rule of the machine, and a program that reads memory it never wrote
+is relying on luck.
 
 The instructions are the one region you cannot read. `li t0, 0x00400000` and then `lw t1, 0(t0)`
 ends the run with
@@ -31,10 +32,6 @@ Cannot read directly from text segment!0x00400000
 
 The assembled program is there, at four bytes per instruction, and this simulator keeps it where a
 load cannot reach it. Everything else in the table is memory like any other.
-
-There is no kernel region in that table. MIPS puts an exception handler at a fixed address in a
-segment of its own, and RISC-V does not: a handler here is ordinary code in `.text` whose address
-your program writes into a control register, which "Exceptions, CSRs and interrupts" gets to.
 
 ## Little endian
 
@@ -72,9 +69,9 @@ main:
 round, and `s0` at `12345678`, the whole word as you wrote it. A load of a word or a half puts the
 bytes back in order; only reading them one at a time shows you which way they are stored.
 
-The M68K is big endian and stores the same word as `12 34 56 78`. Nothing about a program that only
-reads and writes whole words changes between the two. What changes is a program that takes a word
-apart a byte at a time, which is what the table above does.
+Which way round the bytes go only ever matters to a program that takes a word apart a byte at a
+time, the way the table above does. Read and write whole words and you will never notice, because
+whatever `sw` put down `lw` picks back up in the same order.
 
 ## The size is in the instruction's name
 

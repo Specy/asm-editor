@@ -1,12 +1,6 @@
-The first program of the ladder that anybody outside the editor could see the result of. It prints two
-lines and stops, and the answer is in the console panel under the program instead of in a register.
-
-Everything up to here left its result in the registers or in memory, because printing is a request to
-the operating system and x86 has one instruction for making requests. This is that instruction.
-
-**You need to know:** the "syscall and the Linux ABI" lecture. What is new here is the whole shape of
-a request: the call number in `rax`, the arguments in `rdi`, `rsi` and `rdx`, and `syscall` handing it
-over.
+Every program in this ladder so far has left its answer in a register or in memory, where only you can
+see it. This one puts its answer in the console, which means it has to go outside the program
+altogether, and going outside the program takes exactly one instruction.
 
 ```x86|playground|console|no-registers|allow-open
 default rel
@@ -37,22 +31,19 @@ _start:
     syscall
 ```
 
-`syscall` takes no operands at all. Everything about the request is in the registers before it runs,
-which is why each block here is four `mov` lines and then the instruction. The M68K writes the same
-request as a task number in `d0.b` and a `trap #15`; MIPS puts a service number in `$v0` and runs
-`syscall`. The shape is the same and only the register names and the numbers differ.
+`syscall` takes no operands at all, which is why each of the three blocks here is a run of `mov` lines
+and then one bare instruction. Every part of the request is in a register before it runs: what is being
+asked for, where to send it, what to send, and how much.
 
-`write` prints **exactly** the bytes you point it at. There is no terminator and nothing is added for
-you, so the newline is the `, 10` at the end of each string and the length is counted by the assembler
-with `$ - greeting`. That is the difference from MIPS and RISC-V, where `.asciiz` adds a zero and the
-print service walks the string until it finds it.
+`write` sends **exactly** the bytes you point it at and nothing else. It does not look for a
+terminator, it does not stop at one if it finds one, and it adds nothing to the end. So the line break
+after `Hello, world!` is the `, 10` you can see in the `db` line, and the length is whatever
+`$ - greeting` came out as. Take the `, 10` out of the first string and the console reads
+`Hello, world!The answer is 42` on one line.
 
-There is nothing that prints a number, either. `The answer is 42` is a string with the digits already
-in it, and turning a number in a register into digits is a program of its own, which is the next
-Example.
+Nothing here prints a number, either. `The answer is 42` is a string that has the characters `4` and
+`2` in it already, and a register holding the value 42 has nothing in common with those two bytes.
+Turning one into the other is a program of its own, and it is the next Example.
 
-`mov rax, 60` and `syscall` is `exit`, and it is what stops the program. Take those three lines out
-and execution carries on into whatever bytes follow them in memory.
-
-Try changing `greeting: db "Hello, world!", 10` to `db "Hello, world!"`. The console reads
-`Hello, world!The answer is 42` on one line, because nothing prints a newline for you.
+`mov rax, 60` and `syscall` is the request to exit, and it is the only thing that stops the program.
+Take the last three lines out and execution carries straight on into whatever bytes follow them.

@@ -1,15 +1,16 @@
-Every program so far left its answer in a register or in memory. To print a line or read what you
-typed, an M68K program runs `trap #15`, a MIPS program runs `syscall` and a RISC-V program runs
-`ecall`. **The Z80 has no such instruction.** There is nothing in the instruction set that means "ask
-the environment for something", and there never was.
+Every program so far left its answer in a register or in memory, where only you and the panels could
+see it. Printing a line, or reading what you typed, means getting a byte out of the CPU and into
+something else entirely.
 
-What it has instead is a second address space.
+There is nothing in the Z80's instruction set that means "ask the environment for something", and
+there never was. What it has instead is a second address space.
 
 ## The I/O address space
 
-Alongside the 64 KB of memory the Z80 has **256 I/O ports**, numbered `0x00` to `0xFF`, and they are
-not memory: no `ld` reaches them, no address in the 64 KB overlaps with them, and the CPU raises a
-different signal on the bus when it talks to one. Two instructions reach them and nothing else does.
+Alongside the 64 KB of memory the Z80 has **256 I/O ports**, numbered `0x00` to `0xFF`. They are not
+memory. No `ld` reaches them, no address in the 64 KB overlaps with them, and the CPU announces on
+its pins that this access is to a port and not to RAM, so a device knows when it is being spoken to.
+Two instructions reach them and nothing else does.
 
 - **`out (n), a`** writes `a` to port `n`.
 - **`in a, (n)`** reads port `n` into `a`.
@@ -19,13 +20,21 @@ There is a second form where the port number comes from a register:
 - **`out (c), r`** writes register `r` to the port whose number is in **`c`**.
 - **`in r, (c)`** reads that port into `r`, and any 8 bit register can be the destination.
 
-The number in the parentheses is the low byte of the address bus. The **high byte** is `a` in the
-first form and **`b`** in the second, and this editor uses that: a port that needs a parameter takes
-it in `b`, and one port takes a whole 16 bit value that way.
+Here is a detail that looks like trivia and is not, because two of this editor's ports depend on it.
 
-That is port-mapped I/O, the sibling of memory-mapped I/O from the general course, and it is what x86
-uses too. Which device sits behind which number is decided by whoever built the machine, and this
-editor's map is what the rest of this module is about.
+When the CPU reads or writes anything, it puts the address on sixteen wires that run out of the chip
+to the rest of the machine. Those wires are the **address bus**. A port number is only eight bits,
+so it goes on the low eight wires, and the other eight are left carrying something.
+
+What they carry is not nothing. In the `out (n), a` form the high eight wires carry `a`; in the
+`out (c), r` form they carry **`b`**. A device that wants to look can read all sixteen. This editor
+does look, so a port that needs a second parameter takes it in `b`, and one port uses those spare
+eight wires to carry the high half of a 16 bit number.
+
+That arrangement has a name, **port-mapped I/O**: devices live at their own numbers in their own
+space, rather than being wired into unused corners of memory. Which device sits behind which number
+is decided by whoever built the machine, and this editor's map is what the rest of this module is
+about.
 
 ## Why ports and not a system call convention
 
@@ -59,13 +68,13 @@ A string is bytes and the character port takes one byte, so printing is the stri
 
 ```z80|playground|console|no-registers|no-flags
     .org 0x8000
-    ld hl, message  ; p = message
+    ld hl, message  ; hl = the start of the string
 print:
-    ld a, (hl)      ; c = *p
+    ld a, (hl)      ; the byte hl points at
     or a            ; the terminator?
     jr z, done
-    out (0x10), a      ; putchar(c)
-    inc hl          ; p++
+    out (0x10), a      ; send it to the console
+    inc hl          ; on to the next byte
     jr print
 done:
     halt
@@ -102,7 +111,7 @@ The same byte written to four different ports prints four different things.
 
     ld hl, 1000     ; a number no byte can hold
     ld b, h         ; the high byte goes on the address bus
-    ld c, 4         ; the port number
+    ld c, 0x14      ; the port number
     out (c), l      ; and the low byte is the payload
     ld a, 10
     out (0x10), a      ; a newline
@@ -113,13 +122,11 @@ The console reads `200 -56 C8 1000`. One byte, three ports, three answers, and c
 choosing how the bits are read, which is the same choice the numbers lecture made about `C` and
 `P/V`.
 
-Try changing the three `ld a, 200` to `ld a, 100` and the second one prints `100` as well, because
-100 has its top bit clear and reads the same either way.
-
-The last four instructions are port `0x14`, which is where the high byte of the address bus earns its
-keep. In the `out (c), r` form the address bus carries `b` on the high half, so `b` and the byte
-written are the two halves of one 16 bit number, and three instructions and one `out` print anything
-up to 65535. It is the only port that reads the high byte of the address.
+The last four instructions are port `0x14`, and they are where those spare eight wires earn their
+keep. An `out` carries one byte of payload, which is not enough for a number like 1000. So `ld b, h`
+puts the high half of `hl` on the high wires of the address bus, `out (c), l` sends the low half as
+the payload, and the port puts the two together. Three instructions and one `out` print anything up
+to 65535, and it is the only port that reads the high half of the address.
 
 ## Reading
 
@@ -129,9 +136,9 @@ under the console, press Enter, and the run carries on inside that one instructi
 
 ```z80|playground|console|no-flags
     .org 0x8000
-    in a, (0x11)       ; x = readNumber()
+    in a, (0x11)       ; a whole line, read as a number
     ld b, a
-    in a, (0x11)       ; y = readNumber()
+    in a, (0x11)       ; and a second one
     add a, b        ; x + y
     out (0x11), a
     ld a, 10
@@ -155,7 +162,7 @@ line ends with a newline character, `0x0A`, so a program reads until it sees one
     .org 0x8000
     ld b, 0         ; n = 0
 read:
-    in a, (0x10)       ; c = getchar()
+    in a, (0x10)       ; one character of the typed line
     cp 10           ; the newline at the end of the line
     jr z, done
     inc b           ; n++
@@ -174,11 +181,14 @@ done:
 
 Type `hi there` and press Enter: the console shows `8`, the eight characters before the newline.
 
-## Ports nobody is behind
+## What happens at a port with nothing behind it
 
-Only the numbers this editor maps do anything. Every other port is an **empty bus**, which is exactly
-what a real Z80 sees when no device answers: a write goes nowhere and a read comes back `FF`, because
-that is what an undriven bus reads as.
+Only the numbers this editor maps do anything. Write to any of the other ones and the byte simply
+goes nowhere; read from one and `FF` comes back.
+
+That is not the editor being tidy, it is what a real machine does. A port is a request shouted at
+whatever hardware is listening, and if nothing answers, the wires the answer would have come back on
+are left floating high, which reads as all ones.
 
 ```z80|playground|console|no-flags
     .org 0x8000
@@ -192,11 +202,11 @@ I/O quietly doing nothing, instead of stopping with an error.
 
 ## Ending a program
 
-The Z80's four endings from the first lecture are still the only ones: `halt`, a top level `ret`,
-`ei` and `halt`, or running off the end of the code. There is no "terminate" port and no task 9 to
-call, because ending a program is not something a device does.
+The four endings from the first lecture are still the only ones: `halt`, a top level `ret`, `ei` and
+`halt`, or running off the end of the code. There is no "stop the program" port, because stopping is
+not something a device does to you.
 
-## Your turn
+## Two to print
 
 Print `The answer is 42` with no newline after it. The string is written for you at `0x9000`, and the
 number is not part of it: print the string a character at a time, then the 42 with the unsigned

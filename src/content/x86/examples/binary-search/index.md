@@ -1,12 +1,10 @@
-Six sorted numbers and one to look for. The program halves the range it is searching every pass,
-which finds an element of a million in twenty comparisons where walking the array would take half a
-million.
+Every pass of this loop throws away half of what is left to search. Six numbers is too few to be
+impressive; the same twenty passes would find one element among a million, where walking the array
+would average half a million comparisons.
 
-Binary search only works on a **sorted** array, and every line of it is index arithmetic: a low, a
-high, and a middle worked out from the two.
-
-**You need to know:** the "Loops" lecture and the "Effective addresses" lecture. What is new here is
-a loop whose counter moves by more than one, and the shift that divides by two.
+The price is that the array has to be **sorted** first, and nothing in the program checks that it is.
+Give it an unsorted array and it will not fail, it will simply report that things are missing when
+they are not.
 
 ```x86|playground|memory|allow-open
 default rel
@@ -49,19 +47,26 @@ _start:
     syscall
 ```
 
-`r8` comes out at 4, the index of 23.
+Three registers hold the whole state of the search: `rsi` is the low end of the range still worth
+looking at, `rdi` is the high end, and `rcx` is the middle of the two. Follow it looking for 23.
 
-`shr rcx, 1` is the division by two. It is the unsigned shift, which is right because `low + high` is
-a sum of two indexes and cannot be negative; `sar` would be the one to use for a value that could be.
+| pass | `rsi` | `rdi` | `rcx` | the element there | so          |
+| ---- | ----- | ----- | ----- | ----------------- | ----------- |
+| 1    | 0     | 5     | 2     | 15                | look higher |
+| 2    | 3     | 5     | 4     | 23                | found       |
 
-The `dec rdi` and the `inc rsi` are what stop the loop looping for ever. The middle element has
-already been compared and found wrong, so the next range must exclude it; a version that wrote
-`mov rdi, rcx` without the `dec` would keep choosing the same middle whenever `high` and `low` are
-next to each other.
+Two passes for an array of six. Looking for 4 also takes two, and looking for 42 takes three.
 
-`ja` compares the two indexes as unsigned numbers, and `low` going past `high` is how the search says
-the element is not there. Try changing `mov rdx, 23` to `mov rdx, 9`, which is not in the array: the
-range narrows to nothing and `r8` stays at `FFFFFFFFFFFFFFFF`.
+`shr rcx, 1` is the division by two that finds the middle. It is the **unsigned** shift, which is
+correct here because `low + high` is a sum of two indexes and cannot come out negative. `sar` would be
+the one for a value that could.
 
-Try looking for `4` and for `42`, the first and last elements. Both are found, in three passes and
-two, which is the point of the whole thing.
+The `inc rsi` and the `dec rdi` are the two instructions that keep this from looping for ever, and
+they are easy to leave out. The middle element has just been compared and found wrong, so it must not
+be in the range the next pass searches. Write `mov rdi, rcx` without the `dec` and the range stops
+shrinking as soon as `low` and `high` are next to each other: the same middle is chosen, the same
+comparison fails, and the program hangs.
+
+`ja` compares the two indexes as unsigned numbers, and `low` overtaking `high` is how the search
+reports that the element is not there. Look for 9, which is not in the array, and the range narrows
+until `rsi` passes `rdi` and `r8` is left at -1.

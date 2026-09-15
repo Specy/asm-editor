@@ -1,94 +1,60 @@
-The keyboard and the mouse in the previous lecture were **polled**: the program went and looked, over
-and over, and burned the whole CPU doing it. The other way round is an **interrupt**, where the device
-says something and the program that was running is stopped in the middle to deal with it.
+Every program on the previous page **polled**: it went and looked at the keyboard, over and over,
+thousands of times a second, and most of the looks found nothing. That works, and it burns the whole
+CPU doing it.
 
-The Z80 has two wires for that, and no others. It has no exception mechanism at all: no illegal
-instruction trap, no division by zero (there is no division), no alignment fault, no privileged mode
-and no supervisor bit. Every undefined opcode does something, and nothing a program can do to itself
-takes the program counter away from it.
+The other arrangement is an **interrupt**. The device makes a noise on a wire, the CPU finishes
+whatever instruction it is in the middle of, puts the program counter on the stack and jumps to a
+handler. The program that was running is stopped without being asked and never knows it happened. A
+machine built this way can sit doing nothing at all until a key is pressed.
 
-## The two lines
+**Nothing here will ever raise one.** No key, no mouse button, no timer and no port pulls either of
+the Z80's interrupt wires, and that is deliberate: the peripherals in this editor are polled, the
+port map is the whole agreement between your program and the outside world, and a run stays a plain
+sequence of instructions you can step through and undo
+([ADR 0002](https://github.com/Specy/asm-editor/blob/main/docs/adr/0002-z80-console-ports.md)).
 
-- **INT**, the maskable interrupt. A device pulls it low, and the CPU takes notice at the end of the
-  current instruction, but only if interrupts are enabled.
-- **NMI**, the non-maskable interrupt. The same thing, except that no program can turn it off: the
-  CPU pushes the program counter and calls address `0x0066`, always. It is for the things a machine
-  cannot afford to miss, like the power supply saying it is about to fail.
+So this lecture is short. A few of the things on it you will actually use, and the rest is here
+because you will meet it in Z80 code written for real machines and should not have to guess what it
+is doing.
 
-Two flip-flops inside the CPU hold the state. **IFF1** says whether INT is listened to, and **IFF2**
-is a place to keep a copy of IFF1 while an NMI is being handled, so that the NMI handler can put it
-back.
+## halt, which you have been writing since the first lecture
 
-- **`di`** clears both: interrupts off.
-- **`ei`** sets both: interrupts on.
+`halt` does not stop a real Z80. It parks the CPU: the chip keeps fetching, doing nothing, until an
+interrupt arrives, and then the handler runs and control returns to the instruction after the
+`halt`. That is the idle loop of a machine waiting for you to type something, and it is what a home
+computer was doing for almost all of the time it was switched on.
 
-`ei` has a detail that catches everyone. It takes effect **after the instruction that follows it**,
-not immediately, so `ei` / `ret` returns before any interrupt can arrive and the handler's own return
-is never interrupted. That one instruction of delay is deliberate hardware behaviour.
+With no interrupts to wait for, a `halt` is a program that has finished, and that is exactly how the
+editor treats it: the run stops and the program is reported as terminated. It is the reason every
+program in this course ends with one.
 
-## The three modes
+## di and ei
 
-When INT is taken, what happens next depends on which of three modes the program selected with the
-`im` instruction.
+Interrupts can be switched off. `di` turns them off, `ei` turns them back on, and a program does the
+first before touching anything a handler also touches, because a handler arriving halfway through an
+update leaves the update half done.
 
-| written | what the CPU does when INT is taken                                               |
-| ------- | --------------------------------------------------------------------------------- |
-| `im 0`  | reads one instruction off the data bus and executes it, usually an `rst n`        |
-| `im 1`  | calls address `0x0038`, always, whatever the device is                            |
-| `im 2`  | reads a byte from the device, joins it to `i`, and calls the address stored there |
+`ei` has one detail that catches everybody: it takes effect **after the instruction that follows
+it**, not immediately. So `ei` then `ret` gets the return done before any interrupt can arrive,
+which means a handler's own exit can never be interrupted. That delay is in the hardware, not the
+assembler.
 
-**Mode 0** is the 8080's way: the device puts a whole instruction on the bus, and since `rst n` is one
-byte and calls one of the eight low addresses, that is what a device usually supplies. Mode 0 is why
-those eight addresses are reserved.
+Here, `di` and `ei` assemble and run and change nothing you can observe, because there is nothing to
+enable.
 
-**Mode 1** is what most home computers used, because it needs no hardware on the device's side: one
-handler at `0x0038`, and if there is more than one device it works out which by asking each of them.
+## A handler has to leave no trace
 
-**Mode 2** goes through a table. The `i` register holds a byte, the device supplies another, and the
-CPU reads a **16 bit address** from the table at `i` times 256 plus the device's byte, then calls that
-address. So `i` picks a 256 byte page of memory to be a table of handler addresses, and every device
-gets its own handler with no asking around.
+This part is worth your attention even with no interrupts in sight, because it is the clearest
+example of a rule that applies to any subroutine called from somewhere unexpected.
 
-```z80|playground|memory|no-flags
-    .org 0x8000
-    di              ; interrupts off while the table is being set up
-    ld a, 0x90
-    ld i, a         ; the vector table lives in page 0x90
-    im 2            ; mode 2: the device supplies the low byte
-    ei              ; and interrupts back on
+A handler runs between two instructions of a program that knows nothing about it. If the handler
+uses `hl`, the interrupted program comes back to find `hl` holding something it never put there, and
+whatever it was in the middle of is now wrong. So the handler has to give back every register it
+touches.
 
-    call tick       ; nothing here will ever call it, so call it by hand
-    halt
-
-; the handler a device's byte would send the CPU to
-tick:
-    ld a, (counter)
-    inc a
-    ld (counter), a
-    ei
-    reti
-
-    .org 0x9000
-vectors: .dw tick, tick, tick, tick
-counter: .db 0
-```
-
-Type `9000` into the memory panel. The four vectors read `0C 80` four times, which is the address of
-`tick` written little endian, and after the run `counter` holds 1 because the `call` ran the handler.
-
-`i` is not in the registers panel, and `ld a, i` is how a program reads it back.
-
-## Returning from a handler
-
-- **`reti`** returns from a maskable interrupt. It pops the address the way `ret` does, and it also
-  puts a pattern on the bus that lets a Zilog peripheral chip know its interrupt has been dealt with.
-- **`retn`** returns from an NMI, and copies IFF2 back into IFF1, so interrupts go back to whatever
-  they were before the NMI arrived.
-
-A handler runs between two instructions of a program that knows nothing about it, so it has to give
-back every register it touches. Pushing four pairs and popping them again is over eighty clock cycles,
-and this is the reason the **shadow set** from the registers lecture exists: `ex af, af'` and `exx`
-together are eight cycles and hand the handler a whole private set.
+The obvious way is to push each pair and pop it again, and on this machine that is slow: four pairs
+in and out is over eighty **clock cycles**, which are the ticks of the CPU's clock that every
+instruction is measured in. This is what the shadow set from the registers lecture is for.
 
 ```z80|playground|no-flags
     .org 0x8000
@@ -112,22 +78,23 @@ handler:
     reti
 ```
 
-`a` comes out at `44`, `bc` at `1111`, `de` at `2222` and `hl` at `3333`, exactly as the program left
-them, while `af'` reads `8800` and `hl'` reads `9999`, which is what the handler was working on. Eight
-clock cycles of saving, in two instructions.
+The handler does real work on `hl` and `a` in the middle, and the caller's `bc`, `de`, `hl` and `a`
+still come out as `1111`, `2222`, `3333` and `44`. Look at `af'` and `hl'` in the panel and the
+handler's own values are sitting there, `8800` and `9999`, where they will stay until the next
+`exx`. Two instructions of saving, eight clock cycles, instead of eighty.
 
-## halt
+`reti` is the return an interrupt handler uses. Here it pops an address off the stack and jumps to
+it, which is to say it behaves exactly like `ret`; on real hardware it also signals Zilog's own
+peripheral chips that their interrupt has been dealt with. `retn`, the one an unmaskable handler
+uses, is the same story.
 
-On a real Z80, `halt` does not stop the CPU. It executes `nop` over and over, keeping the memory
-refresh going, until an interrupt arrives; the handler runs and the `ret` from it lands on the
-instruction after the `halt`. So `ei` and then `halt` is the idle loop of a program waiting for a
-device, and it is exactly how a machine sat there doing nothing while you were not typing.
+## The r register, and free random numbers
 
-`di` and then `halt` is the other case: no interrupt can arrive, so the CPU sits there until somebody
-pulls the power. That is the closest a Z80 comes to an instruction that means "the program is over".
-
-The `r` register is a side effect of that refresh. Its low seven bits count up on every instruction
-fetch, and reading it is the classic cheap random number on this machine.
+A real Z80 spends part of every instruction refreshing the memory chips, and it keeps the counter
+for that in a register called `r`, whose low seven bits step on with every instruction fetched. It
+was never meant to be useful to a program. It became the standard cheap source of randomness on this
+machine anyway, because its value depends on how long the program has been running, which is
+something nobody can predict.
 
 ```z80|playground|no-flags
     .org 0x8000
@@ -141,69 +108,34 @@ fetch, and reading it is the classic cheap random number on this machine.
     halt
 ```
 
-`b` comes out at `02` and `c` at `08`, six fetches apart. `r` is not in the registers panel either,
-and `ld a, r` is the only way to see it.
+`b` and `c` come out six apart, which is how many instructions were fetched between the two reads.
+`r` is not in the registers panel, and `ld a, r` is the only way to look at it.
 
-## What this editor does
+## The parts you will see in other people's code
 
-**Nothing in this editor ever raises an interrupt.** No key, no mouse button, no timer and no port
-pulls INT or NMI. So:
+Three things belong to interrupts and do nothing here, and they are listed so you recognise them
+rather than so you use them.
 
-- `di`, `ei` and all three `im` forms assemble and execute, and change nothing you can observe.
-- `i` and `r` are real registers here, written by `ld i, a` and read by `ld a, i`, and no interrupt
-  ever reads the table `i` points at.
-- `reti` and `retn` behave exactly like `ret`: they pop an address off the stack and jump to it.
-- `halt` ends the run and the editor reports the program as terminated, whether interrupts are
-  enabled or not, because a Z80 waiting for an interrupt that will never come is a program that has
-  finished.
+`im 0`, `im 1` and `im 2` pick what the CPU does when an interrupt arrives. The one you will see
+most is `im 1`, which jumps to the fixed address `0x0038`; `im 2` instead reads a 16 bit address out
+of a table, using the `i` register to say which 256 byte stretch of memory that table is in, so each
+device can have a handler of its own. That is a **vector table**, and dispatching through one is a
+useful trick in its own right, interrupts or not, which is what the exercise below is about.
 
-That was decided on purpose
-([ADR 0002](https://github.com/Specy/asm-editor/blob/main/docs/adr/0002-z80-console-ports.md)): the
-peripherals here are polled, the port map is the whole I/O contract, and a run stays a plain sequence
-of instructions you can step through and undo. The other courses say the same thing in their own
-words, since none of the simulators in this editor delivers a device interrupt.
+`i` and `r` are real registers here and hold whatever you put in them. `ld i, a` writes `i` and `ld
+a, i` reads it back, but no interrupt will ever come along to read the table it points at.
 
-So the code on this page is the shape a real handler takes, and you can build it, step it and read
-what it leaves behind, which is what the `call` in each program is standing in for.
+The [instruction reference](/documentation/z80/instruction) has the exact behaviour of each of
+these.
 
-## Your turn
+## One to write
 
-Set up interrupt mode 2 with its vector table in page `0x90`: turn interrupts off, put `0x90` in the
-`i` register, select the mode, turn interrupts back on, and finally read `i` back into `b` so the test
-can see it.
+Three handlers sit in memory with a table of their addresses at `0x9000`. The test starts `a` at 2,
+which is the byte a device would have supplied, and wants the handler at that index reached, so `bc`
+comes back at 300.
 
-```z80|playground|exercise
-    .org 0x8000
-    ; your code here
-    halt
-```
-
-```testcase
-{
-    "expectedRegisters": { "bc": "0x9000" }
-}
-```
-
-<details>
-<summary>Show solution</summary>
-
-```z80|playground|solution
-    .org 0x8000
-    di              ; off while the table is being set up
-    ld a, 0x90
-    ld i, a         ; the page the vector table is in
-    im 2
-    ei              ; and back on
-    ld a, i         ; read it back
-    ld b, a
-    halt
-```
-
-</details>
-
-The second one hands you three handlers and a mode 2 vector table at `0x9000`. The test starts `a` at
-2, the byte a device would have put on the bus, and wants the handler at that index reached, so `bc`
-comes back at 300. Scale the index, add the table's address, load the 16 bit address stored there and
+The index has to be doubled first, because each entry in the table is two bytes and `a` counts
+entries rather than bytes. Then add the table's address, load the 16 bit address stored there, and
 jump to it.
 
 ```z80|playground|memory|exercise

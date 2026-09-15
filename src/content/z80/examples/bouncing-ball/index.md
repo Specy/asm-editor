@@ -6,10 +6,6 @@ Drawing shapes on the screen drew one picture and stopped. This one draws a new 
 fifty times a second, which brings two problems with it: the reader must never see a half drawn
 frame, and the ball must move at the same speed whatever the machine underneath is doing.
 
-**You need to know:** the "Drawing shapes on the screen" Example and the "The screen, keyboard and
-mouse through ports" lecture. What is new here is double buffering, command 11 sends every drawing
-to an off-screen copy and command 13 shows the whole of it at once.
-
 ```z80|playground|open-screen|no-registers|no-flags|allow-open
 P_PEN   equ 0x20
 P_FILL  equ 0x21
@@ -131,9 +127,9 @@ does not take a minute.
 
 Port `0x52` is the same clock read a different way: it gives one byte of the hundredths of a second
 since the run started, and **`b` chooses which byte**, so `ld b, 0` asks for the lowest eight bits.
-That byte is the width of the bar, and it wraps at 256 all by itself because the Screen is 256
-pixels wide and a byte counts exactly that far. The M68K has to divide its clock by 640 to get the
-same effect.
+That byte is the width of the bar, and it wraps back round to zero all by itself, because a byte
+counts to 255 and the Screen is 256 pixels wide. No arithmetic is needed to keep the bar on screen:
+the size of the register does it.
 
 The ball's position and step are four bytes in memory, because the drawing already uses `a` for
 every `out`, `b` and `c` for the time port and `e` to carry the bar's width across it.
@@ -145,6 +141,3 @@ way it was going.
 fails it the obvious way, and a step that would take `x` below zero wraps the byte round past 250,
 which fails it as well. `LIMITX equ 256 - SIZE` is worked out by the assembler out of the Screen
 width and the ball, so neither number appears anywhere else.
-
-Try changing `SIZE equ 24` to `SIZE equ 60`. The ball is more than twice as wide and turns round
-earlier at every edge, because both limits are worked out from that one line.

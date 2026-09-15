@@ -1,26 +1,11 @@
 A loop is a conditional jump that goes backwards. Everything the last lecture said about `cmp` and
-`jcc` still holds, and this lecture is the three shapes a loop comes in and the one instruction x86
-has that is a loop on its own.
+`jcc` still holds; the only new thing is that the label is above the jump instead of below it.
 
-## while
+## Testing at the top
 
-```c
-int i = 0;
-while (i < 10) {
-    i++;
-}
-```
-
-The flattened form tests at the top and jumps out when the test fails:
-
-```c
-    i = 0;
-while_start:
-    if (i >= 10) goto while_end;
-    i++;
-    goto while_start;
-while_end:
-```
+The most familiar shape tests before it does anything, so a loop whose condition is false at the
+start runs its body zero times. That needs two jumps: one at the top that leaves when the test fails,
+and one at the bottom that goes back to the top unconditionally.
 
 ```x86|playground|no-flags
 default rel
@@ -28,11 +13,11 @@ global _start
 
 section .text
 _start:
-    xor rcx, rcx                ; i = 0
+    xor rcx, rcx                ; the counter, starting at 0
 .while:
     cmp rcx, 10
-    jae .done                   ; if (i >= 10) goto done, unsigned
-    inc rcx                     ; i++
+    jae .done                   ; leave once it reaches 10
+    inc rcx                     ; the body
     jmp .while
 .done:
 
@@ -41,17 +26,22 @@ _start:
     syscall
 ```
 
-`rcx` comes out at 10. `xor rcx, rcx` is how x86 writes `mov rcx, 0`: it is shorter, and the
-processor recognises it as "this register now depends on nothing".
+`rcx` comes out at 10, one past the last value the body saw, which is where a counting loop always
+leaves its counter.
 
-`jae` and not `jge`, because a counter is never negative and unsigned is the right question to ask
-about it. `inc rcx` and not `add rcx, 1`, because it is one byte shorter and it leaves `CF` alone,
-which matters when the loop body is adding things up with a carry.
+Two small choices in there are worth copying. `jae` rather than `jge`, because a counter is never
+negative and the unsigned question is the right one to ask about it. And `inc rcx` rather than
+`add rcx, 1`, because `inc` is a byte shorter and leaves `CF` alone, which matters when the loop body
+is adding numbers up with a carry running between passes.
 
-## do while
+`xor rcx, rcx` is the usual way of writing `mov rcx, 0`. It is shorter, and it is also one of the
+patterns the processor recognises as producing a value that depends on nothing that came before, for
+the reason "The 16 registers and their halves" went through.
 
-A `do while` tests at the bottom, so it runs its body at least once and needs one jump instead of
-two.
+## Testing at the bottom
+
+Move the test to the bottom and the body always runs at least once, which is fine when you already
+know there is at least one pass to do. That shape needs only one jump.
 
 ```x86|playground|no-flags
 default rel
@@ -64,26 +54,22 @@ _start:
 .body:
     add rax, rcx                ; total += count
     dec rcx                     ; count--
-    jnz .body                   ; while (count != 0)
+    jnz .body                   ; go again unless the count hit zero
 
     mov rax, 60
     xor rdi, rdi
     syscall
 ```
 
-`dec rcx` sets `ZF` when the answer is zero, so `jnz` needs no `cmp` at all: the decrement has
-already asked the question. Counting **down to zero** instead of up to a limit is the usual shape in
-assembly for exactly this reason, and it is why a hand written loop often runs its passes backwards.
+There is no `cmp` anywhere in that loop, and the absence is the point. `dec rcx` sets `ZF` itself when
+its answer is zero, so the decrement has already asked the question the jump wants answered. A loop
+that counts **down to zero** gets its test for free; a loop that counts up to a limit has to compare
+against the limit every pass. That is why so much hand written assembly runs its passes backwards even
+when the order does not matter.
 
-## for, over an array
+## Walking an array
 
-A `for` over an array keeps an index and uses it to reach the elements.
-
-```c
-for (int i = 0; i < 10; i++) {
-    numbers[i] = i + 1;
-}
-```
+Counting from 0 to 9 is more useful when the counter doubles as an index.
 
 ```x86|playground|memory|no-flags
 default rel
@@ -94,14 +80,14 @@ numbers:    resq 10
 
 section .text
 _start:
-    xor rcx, rcx                ; i = 0
+    xor rcx, rcx                ; the index
 .fill:
     mov rax, rcx
-    inc rax                     ; the value to store, i + 1
-    mov [numbers + rcx*8], rax  ; numbers[i] = i + 1
-    inc rcx                     ; i++
+    inc rax                     ; the value to store, one more than the index
+    mov [numbers + rcx*8], rax
+    inc rcx                     ; on to the next
     cmp rcx, 10
-    jb .fill                    ; while (i < 10)
+    jb .fill
 
     mov rax, 60
     xor rdi, rdi
@@ -111,13 +97,14 @@ _start:
 Type `402000` into the memory panel and the ten qwords read 1 to 10, each one as eight little endian
 bytes.
 
-`[numbers + rcx*8]` is the whole of the indexing: the scale of 8 is the size of one element, and the
-processor multiplies it out as part of forming the address. Try changing the array to `resd 10`, the
-store to `mov [numbers + rcx*4], eax` and the scale to 4, and the same loop fills dwords.
+`[numbers + rcx*8]` is the whole of the indexing. The scale of 8 is the size of one element, and the
+processor multiplies it out as part of working out the address, so there is no separate line turning
+an index into an offset. Change the array to `resd 10`, the store to `mov [numbers + rcx*4], eax` and
+the scale to 4, and the same loop fills dwords instead.
 
 ## The loop instruction
 
-x86 has an instruction that is a countdown loop by itself. `loop label` decrements `rcx` and jumps to
+x86 has an instruction that is a countdown loop on its own. `loop label` decrements `rcx` and jumps to
 `label` if the answer is not zero.
 
 ```x86|playground|no-flags
@@ -137,13 +124,11 @@ _start:
     syscall
 ```
 
-`rax` comes out at 15, which is 5 + 4 + 3 + 2 + 1.
-
-Three things about it. The counter is always `rcx`, so a loop body that needs `rcx` for something
-else has to save it. The jump it takes is a short one, reaching at most 127 bytes away, so a long
-body makes it a build error. And on modern processors it is **slower** than the `dec` and `jnz` pair
-it replaces, which is why compilers stopped emitting it decades ago. It is two bytes, it reads
-clearly, and the previous playground is what production code looks like.
+Three things constrain it. The counter is always `rcx`, so a body that needs `rcx` for anything else
+has to save it first. The jump it takes is a short one, reaching at most 127 bytes, so a long body
+turns into a build error. And on current processors it is **slower** than the `dec` and `jnz` pair it
+replaces, which is why compilers stopped emitting it decades ago. It is two bytes and it reads
+clearly, but the loop in the section above is what production code looks like.
 
 ## Nested loops
 
@@ -174,13 +159,14 @@ _start:
 ```
 
 `rax` comes out at 12, three times four. The `xor rdx, rdx` is inside the outer loop and outside the
-inner one, which is the only thing that makes it a nested loop instead of one long one.
+inner one, and moving it up two lines is all it takes to turn this into one flat loop that counts to
+four and stops.
 
 ## Your turn
 
 Add up the numbers from 1 to `rcx` and leave the total in `rax`. The test sets `rcx` to 10, so the
-answer is 55. Guard the loop so that a count of zero leaves the total at zero instead of counting
-down past it.
+answer is 55. Guard the loop so that a count of zero leaves the total at zero instead of counting down
+past it. The exit in this one carries the answer out in `rdi`, which is what the test reads.
 
 ```x86|playground|exercise
 default rel

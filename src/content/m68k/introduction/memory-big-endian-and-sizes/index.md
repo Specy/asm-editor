@@ -1,5 +1,6 @@
-Sixteen registers hold sixteen longs, and a program has more than that to keep. Everything else lives
-in memory, which the M68K reaches with an address.
+Sixteen registers hold sixteen longs, and that is all the CPU can hold at once. Anything a program
+has beyond those sixteen, an array, a string, a screen full of pixels, is out in memory, and the only
+way to reach it is to name the address it sits at.
 
 ## The address space
 
@@ -7,10 +8,10 @@ An address on the M68K is **24 bits**, so it runs from `$000000` to `$FFFFFF`: 1
 megabytes. Addresses are still carried in 32 bit registers, and the top byte is ignored, which is why
 `a0` can read `01000000` while the byte it points at is at `$000000`.
 
-A byte nobody has written reads `$FF` in this editor. Open the memory panel of any program on this
-page, look anywhere your program did not touch, and that is what you see: not zero, `FF`. Memory
-starts as whatever it starts as, and the only bytes you can make a claim about are the ones your
-program or the assembler put there.
+A byte nobody has written reads `$FF` here. Open the memory panel of any program on this page, look
+anywhere your program did not touch, and that is what you see: not zero, `FF`. So a byte you have not
+written yourself is not a zero waiting for you, and a program that reads one gets 255 and carries on
+as if you meant it.
 
 Three regions get used, and nothing in the hardware separates them:
 
@@ -58,9 +59,10 @@ value: ds.l 1
 assembles and puts `$2001` in the instruction. Any expression of numbers and labels can go there,
 `value+4`, `$FF*2`, `end-start`.
 
-Little endian machines store the same long as `78 56 34 12`, so a byte read from the front of it
-gives `78` instead. This is the one thing that has to be re-learned when you move to MIPS or RISC-V,
-and it changes nothing about a program that only ever reads and writes whole longs.
+The opposite arrangement is called **little endian**, and it would store the same long as
+`78 56 34 12`, so a byte read off the front would give `78`. The difference only ever shows up when
+you take a number apart: a program that writes longs and reads longs cannot tell which one it is
+running on.
 
 ## A size decides how many bytes
 
@@ -78,12 +80,12 @@ two or four, starting at the address you named and going up.
 value: ds.l 1
 ```
 
-`d0` is `00000012`, `d1` is `00001234`, `d2` is `12345678` and `d3` is `00005678`. Every one of them
-read from `$2000` or `$2002` and they came out different, because the size is part of the
-instruction and nothing in memory records how wide the thing there was meant to be.
+Four reads, two addresses, four different answers. Nothing at `$2000` says how wide the thing living
+there is meant to be; the size on the instruction is the only thing that decides, and it decides
+every time.
 
 Reading into a register only writes the low end of it, the same way it does between registers: after
-`move.b value, d0` the three bytes above `12` in `d0` are whatever `d0` held before.
+`move.b value, d0` the three bytes above the `12` in `d0` are whatever `d0` held before.
 
 ## Odd addresses stop the program
 
@@ -125,8 +127,8 @@ once yourself. Then change it to `move.b counts, d0` and it runs.
 
 ## Your turn
 
-The data block below is already at `$2000` and holds one long. Write the number `$12345678` into it,
-then read back its **first byte** into `d0`, which on a big endian machine is the `$12`.
+The long at `$2000` below is yours to fill. Write `$12345678` into it, then read back the byte at
+the **lowest** of its four addresses. Big endian says that byte is the `$12`.
 
 ```m68k|playground|memory|exercise
 * your code here

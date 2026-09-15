@@ -1,11 +1,11 @@
 A division by zero, a write to an address that is not yours and a `syscall` all do the same thing to
 the instruction pointer: they take it away from your program and give it to somebody else's code.
-This lecture is the machinery behind that, and what a Linux program sees of it.
 
-Three words, which Assembly basics set out. An **exception** is the processor refusing to carry out
-the instruction it is on, caused by your program at an instruction you chose. An **interrupt** comes
-from a device between two instructions and has nothing to do with which two they were. A **trap** is
-an instruction you ran on purpose to hand control over, which on x86 is `int` or `syscall`.
+Three words for three ways that happens. An **exception** is the processor refusing to carry out the
+instruction it is on, caused by your own program at an instruction you chose, which means it happens
+at a predictable place. An **interrupt** comes from a device, arrives between two instructions, and
+has nothing to do with which two they were. A **trap** is an instruction you ran deliberately to hand
+control over, which on x86 means `int` or `syscall`.
 
 ## The interrupt descriptor table
 
@@ -162,10 +162,10 @@ Vector 3 is the breakpoint, and it has a one byte encoding, `CC`, spelled `int3`
 breakpoint by writing that byte over the first byte of an instruction, catching the `SIGTRAP`, and
 putting the original byte back. One byte, so it fits over any instruction however short.
 
-The breakpoints in this editor are not that. They are the emulator checking an address before each
-instruction, which is why setting one changes nothing about the bytes of your program. `int3` and
-`hlt` both stop the emulator itself here instead of the program, so neither belongs in a program you
-run in this editor.
+The breakpoints you set in the editor are not that. They are the emulator checking an address before
+each instruction, which is why setting one changes nothing about the bytes of your program. `int3`
+and `hlt` both stop the emulator itself rather than the program, so neither belongs in a program you
+run here.
 
 ## What this emulator does not have
 
@@ -174,12 +174,12 @@ never fire, nothing arrives between two instructions, and a program here is only
 something it did itself.
 
 **No handler runs.** `rt_sigaction` is in blink's table of calls, and a program that installs a
-handler and then faults does not reach it. So the fault table above describes the machine and not
-anything you can catch here. MIPS and RISC-V in this editor differ: a handler you write there really
-does run.
+handler and then faults does not reach it. The signal table above describes a real Linux and not
+anything you can catch in here.
 
-**The run ends silently.** Every other simulator here prints a message naming what went wrong. This
-one stops, and the line `rip` is parked on is the whole of the diagnosis.
+**The run ends silently.** Nothing prints a message naming what went wrong. The line `rip` is parked
+on is the whole of the diagnosis, which is why the first thing to do when a run stops early is to
+read `rip` and find that line.
 
 ## Your turn
 

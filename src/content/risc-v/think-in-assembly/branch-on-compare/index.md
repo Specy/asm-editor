@@ -1,103 +1,79 @@
-An `if` in C becomes a `goto`, and on RISC-V a `goto` becomes one instruction, because the comparison
-happens inside the branch. There is no flag to set first and nothing between the two lines to get in
-the way.
+A branch takes a question and turns it into a jump, and that is all the machinery you get. There is
+no `if` and no `else` anywhere in the instruction set: what there is, is a jump that happens
+sometimes, and everything else is how you arrange your code around it.
 
-## The condition you write is the one you invert
+## Jump over the part that must not run
 
-Flattening an `if` was the Assembly basics lecture on branching, and the shape it arrived at is
-this: jump **over** the true branch when the condition is false.
+Here is a decision written the way you would say it out loud:
 
-```c
-int x = 50;
-if (x > 10) {
-    x = 100;
-} else {
-    x = 200;
-}
+```
+x is 50
+if x is greater than 10, make x 100
+otherwise, make x 200
 ```
 
-```c
-    int x = 50;
-    if (x <= 10) goto else_branch;
-    x = 100;
-    goto end;
-else_branch:
-    x = 200;
-end:
-```
-
-The `>` in the C became a `<=` in the flat version, because the branch is taken when the `if` is
-**not**. In RISC-V that inverted condition is the mnemonic you write:
+The machine cannot do "otherwise". It can only fall into the next instruction or jump somewhere. So
+the code is laid out as two blocks, one after the other, and the branch **skips over** the first one
+when it should not run:
 
 ```riscv|playground
 .text
 main:
-    li t0, 50           # x = 50
+    li t0, 50
     li t1, 10
-    ble t0, t1, else    # if(x <= 10) goto else
-    li t0, 100          # x = 100
+    ble t0, t1, else    # if x is NOT greater than 10, skip the next two lines
+    li t0, 100
     j end
 else:
-    li t0, 200          # x = 200
+    li t0, 200
 end:
 ```
 
-`t0` comes out at 100. Change `li t0, 50` to `li t0, 5` and it comes out at 200 instead.
+Notice what happened to the condition. You wrote "greater than", the branch says `ble`, less than or
+equal. The branch is taken when the `if` is **false**, because being taken means skipping the body.
+Getting this backwards is the classic mistake, and the symptom is a program that does exactly the
+wrong one of two things.
 
-The `j end` is the flat version's `goto end`, and leaving it out is the most common bug in hand
-written control flow: the program runs the true branch, walks straight into the false one and the
-second answer wins.
+The `j end` matters just as much. Without it, the code that just set `t0` to 100 carries straight on
+into the line that sets it to 200, because the two blocks are simply one after the other in memory
+and nothing separates them. Delete that line and run it: the answer comes out 200 whatever `t0`
+started at.
 
-## Which branch says which condition
+## Which branch for which question
 
-Six of these are real instructions and the other four are the same six with the operands swapped,
-which "Comparing without flags" takes apart. What matters when you are writing a program is the
-table.
+| the question you are asking | signed        | unsigned   |
+| --------------------------- | ------------- | ---------- |
+| are they equal              | `beq a, b, l` | the same   |
+| are they different          | `bne a, b, l` | the same   |
+| is `a` below `b`            | `blt`         | `bltu`     |
+| is `a` below or equal       | `ble`         | `bleu`     |
+| is `a` above `b`            | `bgt`         | `bgtu`     |
+| is `a` above or equal       | `bge`         | `bgeu`     |
+| is `a` zero                 | `beqz a, l`   | the same   |
+| is `a` not zero             | `bnez a, l`   | the same   |
+| is `a` negative             | `bltz a, l`   | never true |
+| is `a` positive             | `bgtz a, l`   | `bnez`     |
 
-| the C condition | signed            | unsigned   |
-| --------------- | ----------------- | ---------- |
-| `a == b`        | `beq a, b, label` | the same   |
-| `a != b`        | `bne a, b, label` | the same   |
-| `a < b`         | `blt`             | `bltu`     |
-| `a <= b`        | `ble`             | `bleu`     |
-| `a > b`         | `bgt`             | `bgtu`     |
-| `a >= b`        | `bge`             | `bgeu`     |
-| `a == 0`        | `beqz a, label`   | the same   |
-| `a != 0`        | `bnez a, label`   | the same   |
-| `a < 0`         | `bltz a, label`   | never true |
-| `a > 0`         | `bgtz a, label`   | `bnez`     |
+Each of those is one instruction and each takes a label, with the assembler working out the
+distance. A branch reaches about 4 kilobytes in either direction, which is a thousand instructions,
+so in practice you write the label and forget about it. If you ever do go past that, the build says
+`Branch target word address beyond 12-bit range`, and the fix is to branch to a nearby `j`, which
+reaches a megabyte.
 
-Every one of them is one instruction and every one takes a **label**, and the assembler works out
-the distance. A branch reaches about 4 kilobytes either way, which is a thousand instructions, so in
-practice you write the label and forget about it. Past that the build says
-`Branch target word address beyond 12-bit range` and you jump to a `j` instead, which reaches a
-megabyte.
+## Comparing against a number
 
-The right hand column is the reminder to pick the family your numbers belong to. An address or a
-count of bytes compared with `blt` is being read as a signed number, and one of them above two
-billion comes out negative.
-
-## else if
-
-`else if` is a second comparison at the label the first branch fell through to, and every answer ends
-with a jump to the end.
-
-```c
-char grade;
-if (score >= 90)      grade = 'A';
-else if (score >= 60) grade = 'B';
-else                  grade = 'C';
-```
+A branch compares two registers. Not a register and a number: two registers. So every comparison
+against a constant costs a `li` in front of it to get the constant into a register first.
 
 ```riscv|playground
 .text
 main:
-    li t0, 75           # score = 75
+    li t0, 75           # the score
     li t1, 90
-    bge t0, t1, grade_a # if(score >= 90) goto grade_a
+    bge t0, t1, grade_a
     li t1, 60
-    bge t0, t1, grade_b # if(score >= 60) goto grade_b
-    li t2, 'C'          # grade = 'C'
+    bge t0, t1, grade_b
+    li t2, 'C'
     j done
 grade_a:
     li t2, 'A'
@@ -107,86 +83,51 @@ grade_b:
 done:
 ```
 
-`t2` comes out at `00000042`, which is `0x42`, the ASCII code of `B`. The `li t1, 90` and
-`li t1, 60` are there because every RISC-V branch compares two **registers**: there is no branch with
-a constant in it, and the assembler will not put one there for you, so a comparison against a number
-costs a `li` first.
+That is a chain: each test is at the label the previous one fell through to, and each answer ends by
+jumping to the end. `t2` comes out at `00000042`, the ASCII code of `B`, because 75 failed the first
+test and passed the second.
 
-Try changing `li t0, 75` to `li t0, 95` and to `li t0, 12` and watching `t2`.
+The two `li t1` lines are the price of the rule above. They are also the reason to hoist a constant
+out of a loop when the same comparison runs over and over: inside a loop that `li` runs every pass,
+outside it runs once.
 
-## An if with no branch at all
+## A condition the machine will not answer for you
 
-MIPS has `movn` and `movz`, which copy a register only if a third one is or is not zero, so a
-two-way choice between two values needs no jump. **RISC-V has no conditional move**, so the same
-thing is done with arithmetic: `slt` gives you a 0 or a 1, `sub` from `zero` turns that into a mask
-of all zeroes or all ones, and two `xor`s pick between the operands.
-
-```riscv|playground
-.text
-main:
-    li t0, -5
-    li t1, 3
-    slt t2, t0, t1      # 1 when t0 is the smaller
-    sub t3, zero, t2    # 00000000 or FFFFFFFF, a mask
-    xor t4, t0, t1      # the bits the two differ in
-    and t4, t4, t3      # kept when the mask is all ones, dropped when it is 0
-    xor t4, t4, t0      # so this is t0, or t0 flipped into t1
-```
-
-`t2` comes out at 1, `t3` at `FFFFFFFF` and `t4` at 3, the larger of the two. The `xor`, `and`, `xor`
-is the standard trick for choosing without jumping: `a ^ ((a ^ b) & mask)` is `a` when the mask is
-zero and `b` when it is all ones.
-
-Five instructions where a branch takes three, so this is what you write when the jump itself is what
-you are trying to avoid, which on a real pipelined chip is a branch the CPU cannot predict. When you
-only want the 0 or the 1, `slt` on its own is already the whole `if`.
-
-## Testing one bit
-
-The M68K has `btst`, which tests a bit and sets a flag. RISC-V has no such instruction and no such
-flag, so you compute the `and` into a register and branch on whether it came out zero.
+Add two unsigned numbers and the answer can be too big to fit. Nothing is raised, nothing is
+recorded, and the sum simply wraps round. If your program needs to know, it has to look at the
+answer, and the fact to lean on is this: **an unsigned sum that wrapped comes out smaller than
+either of the numbers you added**.
 
 ```riscv|playground
 .text
 main:
-    li t0, 10           # 1010 in binary
-    andi t1, t0, 8      # keep bit 3
-    beqz t1, clear
-    li t2, 1            # bit 3 was set
-    j done
-clear:
-    li t2, 0
-done:
-    andi t3, t0, 1      # bit 0, which is 0 in 1010
-    bnez t3, odd
-    li t4, 0            # so the number is even
-    j finished
-odd:
-    li t4, 1
-finished:
+    li t0, 0xFFFFFFFF
+    li t1, 2
+    add t2, t0, t1      # wraps round to 1
+    sltu t3, t2, t0     # 1: the sum is below an operand, so it wrapped
+    li t4, 5
+    li t5, 2
+    add t6, t4, t5      # 7, no wrap
+    sltu s0, t6, t4     # 0
 ```
 
-`t2` comes out at 1, because bit 3 of 1010 is set, and `t4` at 0, because bit 0 is not. `andi` with a
-single bit set is C's `x & 8`, and `beqz` on the answer is C's `if (!(x & 8))`. The constant of
-`andi` is 12 bits, so a bit above 11 has to go into a register with `li` first, or be brought down
-with a shift.
-
-For a bit whose position the program worked out, shift instead: `srl t1, t0, t2` brings bit `t2` down
-to the bottom and `andi t1, t1, 1` keeps it.
+One `sltu` recovers, from the answer itself, a fact the hardware never recorded. Signed overflow is
+the same kind of reasoning from different evidence: a signed sum has overflowed exactly when both
+numbers you added had the same sign and the answer came out with the other one.
 
 ## j, jal and jr
 
-Three ways to go somewhere unconditionally, and all three are the same two instructions underneath.
+Three ways to go somewhere with no question attached, and underneath they are two instructions.
 
-- **`j label`** is `jal zero, label`: jump, and throw the return address away.
-- **`jal label`** is `jal ra, label`: jump, and write the address of the next instruction into `ra`,
-  which is a call.
-- **`jr t0`** is `jalr zero, t0, 0`: jump to the address **in a register**, which is how a subroutine
-  returns (`ret` is `jr ra` with the register spelled out) and how a program jumps through a table of
-  addresses it computed.
+- **`j label`** is `jal zero, label`: jump, and throw away the note of where you came from.
+- **`jal label`** is `jal ra, label`: jump, and put the address of the next instruction into `ra`,
+  which is how a subroutine gets called. Its own lecture comes later.
+- **`jr t0`** is `jalr zero, t0, 0`: jump to the address held **in a register**, which is what you
+  need when the destination was worked out while the program ran.
 
-A label is an address like any other, so a `.word` can hold one, and `lw` and `jr` between them turn
-a `switch` into a table lookup.
+That last one is worth a program of its own, because it is how a choice between many cases is made
+without testing them one at a time. A label is an address, and an address fits in a `.word`, so a
+list of labels is a table you can index.
 
 ```riscv|playground|memory
 .data
@@ -194,11 +135,11 @@ table: .word case0, case1, case2
 
 .text
 main:
-    li t0, 2            # i = 2
+    li t0, 2            # which case we want
     la t2, table
-    slli t3, t0, 2      # i * 4, since a table entry is a word
+    slli t3, t0, 2      # times 4, since a table entry is a word
     add t3, t2, t3
-    lw t4, 0(t3)        # the address of the case
+    lw t4, 0(t3)        # the address stored there
     jr t4
 case0:
     li t1, 10
@@ -211,13 +152,14 @@ case2:
 done:
 ```
 
-`t1` comes out at 30 and `t4` at `0040002C`, the address of `case2`, which the assembler wrote into
-the third word of `table` and the program read back out. Try changing `li t0, 2` to `li t0, 0` and
-watching `t1` come out at 10.
+`t4` comes out at `0040002C`, the address of `case2`, which the assembler wrote into the third word
+of the table and the program read back out. Put 0 in `t0` instead and the same five instructions
+land somewhere else entirely.
 
-A jump table is one load and one jump whatever the number of cases, where a chain of `bge` costs two
-instructions per case it walks past. What it does not do is check the index: a `t0` of 7 reads a
-word past the end of the table and jumps to whatever was there.
+One load and one jump, whatever the number of cases, where a chain of `bge` costs two instructions
+for every case it walks past. What the table does not do is check the index: put 7 in `t0` and the
+program reads a word from past the end of the table and jumps to whatever happened to be there.
+Checking the range is yours, and it is one `bgeu` in front of the lookup.
 
 ## Your turn
 
@@ -243,8 +185,8 @@ main:
 ```riscv|playground|solution
 .text
 main:
-    bltz t0, negative   # if(x < 0)
-    bgtz t0, positive   # if(x > 0)
+    bltz t0, negative
+    bgtz t0, positive
     li t1, 0            # what is left is zero
     j done
 negative:
@@ -296,8 +238,8 @@ table: .word case0, case1, case2
 .text
 main:
     la t2, table
-    slli t3, t0, 2      # i * 4
-    add t3, t2, t3      # &table[i]
+    slli t3, t0, 2      # the index times four
+    add t3, t2, t3      # the entry's address
     lw t4, 0(t3)        # the address it holds
     jr t4
 case0:

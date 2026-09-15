@@ -1,6 +1,7 @@
-On a 32 bit machine a register holds any number a beginner is likely to write. On the Z80 a register
-holds a byte, 256 different patterns, and running out of room is something that happens on the third
-line of a program rather than in a lecture about edge cases. Let's go through what fits where.
+A Z80 register holds a byte. That is 256 different patterns and nothing more, so a number over 255
+does not fit anywhere in the CPU without being split in half. On this machine running out of room is
+not a corner case you meet eventually, it is something that happens on the third line of a program,
+and knowing exactly what fits where saves you from writing code that is quietly wrong.
 
 ## What a byte holds
 
@@ -53,9 +54,6 @@ but read as signed the answer wrapped from +127 round to -128 and `P/V` is 1 ins
 **signed** answer to the same question. The same addition sets both every time, and picking the one
 that matches what your numbers mean is on you.
 
-Try changing the second pair to `ld a, 200` and `add a, 100`. `a` comes out at `2C`, which is 44, and
-`C` goes to 1, because 300 needs nine bits.
-
 ## Sixteen bits, when eight will not do
 
 The way out is a pair, which holds 0 to 65535 unsigned or -32768 to 32767 signed. There is one 16 bit
@@ -84,8 +82,7 @@ unsigned that is two instructions, `ld l, a` and `ld h, 0`, and you are done.
 
 If it is signed it is not, because -5 in one byte is `FB` and -5 in two bytes is `FFFB`: the three
 `F`s have to be put there. Filling the high byte with copies of the sign bit is called **sign
-extension**, and the M68K has `ext` for it and RISC-V does it inside every `lb`. The Z80 has no
-instruction for it at all, so you write it out.
+extension**, and there is no instruction for it, so you write it out.
 
 The two ways of doing it are in here. Build it and press **Step** through both halves.
 
@@ -108,8 +105,7 @@ tested:
 ```
 
 `hl` comes out at `FFFB` and so does `de`, which is -5 in sixteen bits, twice. The first half tests
-the sign bit and picks one of two values for `h`. Try changing its `ld a, 0xFB` to `ld a, 0x7B` and
-running again: the branch is taken, `h` stays 0, and `hl` is `007B`, which is 123.
+the sign bit and picks one of two values for `h`.
 
 The second half is what Z80 programmers write instead, and you will meet it in other people's code.
 `rla` shifts `a` left through the carry, so bit 7 lands in `C`. `sbc a, a` subtracts `a` from itself
@@ -118,13 +114,13 @@ and then subtracts the carry, so the answer is 0 minus `C`, which is `00` when t
 
 ## Two decimal digits in a byte
 
-There is a third way to read a byte, and the Z80 has an instruction for it that most machines do not.
-**Binary coded decimal** puts one decimal digit in each half of the byte, so `0x27` means the number
-27 and not 39. It was how a machine with no division kept a score or a clock, since printing a BCD
-byte is two nibbles and two `add a, '0'`.
+There is a third way to read a byte, and it exists because this machine cannot divide. Printing a
+number in decimal normally means dividing it by ten over and over, which here is a loop. So a
+program that has to show a score or a clock often keeps it in **binary coded decimal** instead: one
+decimal digit in each half of the byte, so `0x27` means twenty-seven and not thirty-nine. Printing
+that is two halves and two additions, no division anywhere.
 
-Adding two BCD bytes with a plain `add` gives the wrong answer, because the CPU carries at 16 and not
-at 10. `daa`, decimal adjust accumulator, fixes `a` up afterwards.
+The cost is that a plain `add` gets it wrong, because the CPU carries at 16 and the digits carry at 10. `daa`, decimal adjust accumulator, is the one instruction that fixes `a` up afterwards.
 
 ```z80|playground
     .org 0x8000
@@ -138,22 +134,23 @@ at 10. `daa`, decimal adjust accumulator, fixes `a` up afterwards.
 ```
 
 `b` comes out at `3C` and `a` at `42`. `0x27` plus `0x15` really is `0x3C` in binary, and 27 plus 15
-really is 42, and `daa` is what turns the first into the second by adding six to a nibble that went
-past nine. It works out what to add from two flags, `H` and `N`, which is what those two flags are in
+really is 42, and `daa` turns the first into the second by adding six to any half of the byte that
+has gone past nine. It works out what to add from two flags, `H` and `N`, which is what those two flags are in
 the register for, and the flags lecture comes back to them.
 
 ## Writing numbers down
 
 Every literal in this course is one of these, and they all mean the same 31:
 
-| written      | base                            |
-| ------------ | ------------------------------- |
-| `31`         | decimal                         |
-| `0x1F`       | hexadecimal, the C spelling     |
-| `$1F`        | hexadecimal, the M68K spelling  |
-| `1Fh`        | hexadecimal, the Zilog spelling |
-| `0b00011111` | binary                          |
-| `0o37`       | octal                           |
+| written      | base                                        |
+| ------------ | ------------------------------------------- |
+| `31`         | decimal                                     |
+| `0x1F`       | hexadecimal                                 |
+| `0b00011111` | binary                                      |
+| `1Fh`        | hexadecimal again, Zilog's own old spelling |
+
+These pages write `0x1F`. The assembler also takes `$1F` and `0o37` for octal, which you will meet
+in listings older than the editor and never need to write yourself.
 
 `'A'` is the character code 65, and `"A"` is the same byte. A leading zero means nothing here, `037`
 is decimal 37, not octal.
@@ -162,7 +159,7 @@ Hexadecimal is what you will read most, because one hex digit is exactly four bi
 into `1111` and `1011` in your head and `0x27` is the BCD 27 by eye. Binary is for masks, where the
 bit positions are the point: `0b00010000` says "bit 4" far more clearly than 16 does.
 
-## Your turn
+## Two to work out
 
 The test starts `a` at `0xFB`, which is -5 as a signed byte. Leave the same number in `hl` as a
 signed 16 bit value, which is `FFFB`. Either of the two ways above will do.

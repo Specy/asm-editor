@@ -1,6 +1,6 @@
 {
     "name": "Memory, little endian and sizes",
-    "description": "Where a program's code, data and stack live, what little endian looks like in the memory panel, why an unaligned load is fine here, and the size word you have to write when the operands do not say it.",
+    "description": "Where a program's code, data and stack live, what little endian looks like in the memory panel, what an unaligned load costs, and the size word you have to write when the operands do not say it.",
     "order": 2,
     "topic": "memory"
 }

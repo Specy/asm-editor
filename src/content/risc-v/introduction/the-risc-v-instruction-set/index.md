@@ -5,9 +5,9 @@ mnemonic and up to three operands, and the first of them is the one that gets wr
     mnemonic destination, source, source
 ```
 
-`add t2, t0, t1` reads `t0` and `t1`, adds them and writes `t2`, leaving both sources as they were.
-That is the difference from the M68K, where `add.l d1, d0` has to overwrite `d0` because there are
-only two operands and one of them is the destination.
+`add t2, t0, t1` reads `t0` and `t1`, adds them and writes `t2`, leaving both sources exactly as
+they were. Naming the destination separately is what lets you keep a value and use it at the same
+time.
 
 ```riscv|playground
 .text
@@ -20,9 +20,8 @@ main:
     sub t5, t1, t0      # and the other way round
 ```
 
-`t2` and `t3` both come out at 10, `t4` at 4 and `t5` at `FFFFFFFC`, which is -4. The order of the
-two sources matters for everything that is not addition, and the rule is the same one C uses: the
-operand you read first is the one being subtracted from.
+`t5` comes out at `FFFFFFFC`, which is -4: the order of the two sources matters for everything that
+is not addition, and the first one is the one being subtracted from.
 
 ## A base and its extensions
 
@@ -30,20 +29,19 @@ RISC-V is not one instruction set, it is a small one with optional pieces bolted
 has a letter. The base is **`I`**, the integer instructions, and RV32I is the whole of it: about
 forty instructions, with no multiplication, no division and no floating point.
 
-| letter  | what it adds                                                 | in this editor |
-| ------- | ------------------------------------------------------------ | -------------- |
-| `I`     | the base: arithmetic, logic, shifts, loads, stores, branches | yes            |
-| `M`     | `mul`, `mulh`, `div`, `rem` and their unsigned forms         | yes            |
-| `F`     | 32 bit floating point, the `f0` to `f31` registers           | yes            |
-| `D`     | 64 bit floating point                                        | yes            |
-| `Zicsr` | `csrrw` and the rest, which reach the control registers      | yes            |
-| `A`     | atomic read-modify-write, for more than one processor        | no             |
-| `C`     | 16 bit compressed forms of common instructions               | no             |
+| letter  | what it adds                                                            | here |
+| ------- | ----------------------------------------------------------------------- | ---- |
+| `I`     | the base: arithmetic, logic, shifts, loads, stores, branches            | yes  |
+| `M`     | `mul`, `mulh`, `div`, `rem` and their unsigned forms                    | yes  |
+| `F`     | 32 bit floating point, the `f0` to `f31` registers                      | yes  |
+| `D`     | 64 bit floating point                                                   | yes  |
+| `Zicsr` | the instructions that reach the control registers                       | yes  |
+| `A`     | read and write in one uninterruptible step, for more than one processor | no   |
+| `C`     | 16 bit compressed forms of common instructions                          | no   |
 
 So the machine this editor runs is **RV32IMFD** with the control registers, and a chip that only
 implements RV32I would refuse the `mul` in your program. That is what the letters after the name of
-a real RISC-V chip are telling you. This course uses `I`, `M` and, in the last lecture, the control
-registers; the floating point registers are there in the Core and no page here uses them.
+a real RISC-V chip are telling you. Most of this course stays inside `I` and `M`; `F` and `D` get a lecture of their own later on.
 
 The names of the two 64 bit variants work the same way, so RV64I is the base with 64 bit registers
 and RV64IM adds multiplication to it. "Going 64-bit" is the lecture.
@@ -94,9 +92,9 @@ About fifty instructions in the base and the M extension, in six groups.
 belong to the outside-world module. The whole list, with what each instruction reads and writes, is
 on the [RISC-V documentation pages](/documentation/risc-v).
 
-Six branches and no more. There is no `bgt` and no `ble` in the hardware, because `a > b` is `b < a`
-with the operands swapped, and the assembler does the swapping. "Comparing without flags" is where
-that is taken apart.
+There are six branches in the hardware and the assembler makes the rest out of them, since `a > b`
+is `b < a` with the operands swapped. "Asking a question with a branch" is where they are taken
+apart.
 
 ```riscv|playground
 .text
@@ -111,41 +109,37 @@ main:
     andi s0, t2, 0xFF   # register and constant
 ```
 
-`t2` and `t3` both come out at `00000010`, which is 16, `t4` at 4 and `t5` at 1. `t6` is 0, because
-16 and 1 have no bit in common, and `s0` is 16.
+The two shifts of `t0` land on the same answer whether the amount was written into the instruction
+or read out of a register. `t6` is 0, because 16 and 1 have no bit in common for the `and` to
+keep.
 
-The `i` on the end of a mnemonic means **immediate**, a constant where the plain form takes a
-register, and it is the only letter glued onto a RISC-V name apart from the `u` of `sltu`, `divu`,
-`lbu` and `bltu`, which says the operands are read as unsigned numbers. That is the whole naming
-scheme, which is a smaller thing to learn than the M68K's sizes or the MIPS `u` that means two
-different things.
+There are only two letters ever glued onto an instruction name. An `i` on the end means
+**immediate**, a constant written into the instruction where the plain form would read a second
+register. A `u` means the operands are read as unsigned numbers. That is the whole naming scheme:
+`sltiu` is "set less than, immediate, unsigned" and there is nothing else to decode.
 
-## Instructions that are not instructions
+## Shorthands the assembler expands
 
-`li`, `la`, `mv`, `ret`, `call`, `j`, `bgt` and about thirty more are **pseudo-instructions**: names
-the assembler accepts and turns into one or more real ones. Most of them are one real instruction
-with `zero` in an operand, which "The 32 registers and their names" listed.
+`li`, `la`, `mv`, `ret`, `call`, `j` and `bgt` are not instructions the processor has. They are
+**pseudo-instructions**: names the assembler accepts and quietly replaces with one or more real
+ones. Most of them turn out to be an ordinary instruction with `zero` in one operand.
+
+The registers lecture listed the ones built on `zero`, `mv` and `neg` and `j` and `ret` among them.
+These are the rest, the ones that either cost more than one instruction or swap their operands
+round:
 
 | you write           | what the assembler makes of it         |
 | ------------------- | -------------------------------------- |
-| `mv t1, t0`         | `add t1, zero, t0`                     |
 | `not t1, t0`        | `xori t1, t0, -1`                      |
-| `neg t1, t0`        | `sub t1, zero, t0`                     |
-| `li t0, 5`          | `addi t0, zero, 5`                     |
 | `li t0, 100000`     | `lui t0, 24` and `addi t0, t0, 0x6a0`  |
 | `la t0, label`      | `auipc t0, ...` and `addi t0, t0, ...` |
-| `j label`           | `jal zero, label`                      |
-| `ret`               | `jalr zero, ra, 0`                     |
-| `jal label`         | `jal ra, label`                        |
 | `call label`        | `auipc t1, ...` and `jalr ra, t1, ...` |
 | `bgt t0, t1, label` | `blt t1, t0, label`                    |
 | `ble t0, t1, label` | `bge t1, t0, label`                    |
-| `nop`               | `addi zero, zero, 0`                   |
 
-Two of those are the ones to remember. **`ret` is `jalr zero, ra, 0`**: jump to the address in `ra`
-and throw the return address away, since a return has nowhere to come back from. And `bgt` and its
-three friends are **one** real instruction each, where the MIPS assembler needs two and a scratch
-register, because RISC-V has branches that compare two registers directly.
+The one to remember is **`ret`, which is `jalr zero, ra, 0`**: jump to the address held in `ra`, and
+write the new return address into `zero`, which is to say throw it away, because a return has
+nowhere to come back from.
 
 ```riscv|playground
 .text
@@ -173,29 +167,6 @@ Build it and click on a line: the editor prints the instructions it was assemble
 and only lines that became more than one get a note. The reason to know which is which is that a
 pseudo-instruction can cost you two instructions where you thought you were writing one, and `call`
 can cost you `t1`.
-
-## No delay slot
-
-A MIPS chip runs the instruction after a jump whether or not the jump was taken, and printed MIPS
-code is full of `nop`s under its branches because of it. **RISC-V has no delay slot.** The
-architecture never had one, so a jump goes where it says and the line under it does not run.
-
-```riscv|playground
-.text
-main:
-    li t0, 1
-    j skip
-    li t0, 99           # never runs
-skip:
-    li t1, 5
-    beq zero, zero, done
-    li t1, 77           # nor this
-done:
-    li t2, 7
-```
-
-`t0` comes out at 1, `t1` at 5 and `t2` at 7. Write your branches as they read, and put nothing
-under them that you do not mean.
 
 ## Your turn
 

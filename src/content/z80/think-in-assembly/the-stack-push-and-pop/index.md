@@ -1,6 +1,6 @@
-The general course described the stack as a region of memory that you push values onto and pop them
-back off, with one register keeping track of the top. On the Z80 that register is `sp`, it starts at
-`0xFFFF`, and there are exactly two instructions.
+The stack is a region of memory that you put values onto and take them back off, with one register
+keeping track of where the top currently is. On the Z80 that register is `sp`, it starts at
+`0xFFFF`, and there are exactly two instructions that use it.
 
 ## push and pop
 
@@ -173,7 +173,7 @@ reach the top of the stack without disturbing what is under it.
 Type `8ff8` into the memory panel. `hl` comes out at `ABCD`, the value that was on the stack, and
 `de` at `1234`, the value that went onto it. `sp` is back at `9000`.
 
-## Your turn
+## Your turn on the stack
 
 The test starts `bc` at `0x1111` and `de` at `0x2222`. Swap them, using only the stack: four
 instructions and no `ld`.

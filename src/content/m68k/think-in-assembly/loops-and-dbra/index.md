@@ -1,59 +1,51 @@
-A loop is a comparison, a branch out of it and a jump backwards, which we can now write. The M68K
-also has one instruction that does the counting and the jumping together, and it is the one you will
-actually use.
-
-## The loop written out
-
-Adding up the numbers from 1 to 10, in C, then flattened, then assembled:
-
-```c
-int sum = 0;
-for (int i = 1; i <= 10; i++) sum += i;
-```
+A loop is three things you can already write: a comparison, a branch out when it is time to stop, and
+a jump backwards. Here is one that adds up the numbers from 1 to 10.
 
 ```m68k|playground|no-flags
-    clr.l d0            ; sum = 0
-    move.l #1, d1       ; i = 1
+    clr.l d0            ; the running total, starting at 0
+    move.l #1, d1       ; the number we are on
 while_start:
-    cmp.l #10, d1       ; while(i <= 10)
+    cmp.l #10, d1       ; have we gone past 10?
     bgt while_end
-    add.l d1, d0        ; sum += i
-    addq.l #1, d1       ; i++
+    add.l d1, d0        ; add it to the total
+    addq.l #1, d1       ; and move on to the next number
     bra while_start
 while_end:
 ```
 
-`d0` comes out at `00000037`, which is 55, and `d1` at 11, one past the last value it used. Four of
-those seven instructions are the loop machinery and one is the work.
+`d0` comes out at `00000037`, which is 55. Count the lines, though. Four of those seven instructions
+exist only to run the loop and one of them does the work.
 
 `clr.l d0` is `move.l #0, d0` written shorter, and `addq.l #1, d1` is `add.l #1, d1` in a shorter
-encoding, which is what `addq` is for: adding a number from 1 to 8, which is what a loop counter
-does.
+encoding, which is what `addq` is for: adding a number from 1 to 8, which is exactly what a loop
+counter does.
 
 ## dbra does the counting
 
-`dbra dn, label` subtracts 1 from the low word of `dn` and branches to the label unless the result is
--1. One instruction replaces the `subq` and the `bne`, and the loop becomes:
+Most loops do not care what the counter holds, only that they go round a fixed number of times. The
+M68K has one instruction for that whole case. `dbra dn, label` subtracts 1 from the low word of `dn`
+and branches to the label unless the result is -1, which replaces the `subq` and the `bne` with a
+single line:
 
 ```m68k|playground|no-flags
     clr.l d0            ; sum = 0
     move.w #9, d1       ; ten times round
     move.l #10, d2      ; the number to add this time
 loop:
-    add.l d2, d0        ; sum += n
-    subq.l #1, d2       ; n--
+    add.l d2, d0        ; add it in
+    subq.l #1, d2       ; and count the number down
     dbra d1, loop
 ```
 
-`d0` is 55 again. Two things about that counter:
+`d0` is 55 again. Two things about that counter will bite you.
 
 **It runs one more time than the number you put in it.** `dbra` stops at -1, not at 0, so a counter
 of 9 gives ten passes: 9, 8, 7, down to 0, and then the pass that takes it to -1 and falls through.
 Write `move.w #count-1, d1` when you know how many times you want, and let the assembler do the
 subtraction.
 
-**It is a word.** `dbra` reads and writes only the low 16 bits of the register, so the most a single
-`dbra` loop can run is 65536 times, and whatever is in the high word is left there and ignored.
+**It is a word.** `dbra` reads and writes only the low 16 bits of the register. Whatever is in the
+high word is left there and ignored, and the most a single `dbra` loop can run is 65536 times.
 
 ```m68k|playground|no-flags
     move.l #$FFFF0003, d1   ; only the low word is the count
@@ -63,18 +55,18 @@ loop:
     dbra d1, loop
 ```
 
-The loop runs four times, so `d0` comes out at 4, and `d1` ends at `FFFFFFFF`: the low word walked
-down to `FFFF`, which is the word -1, and the `FFFF` above it was never touched. This is why the
-counter of a `dbra` loop is set with `move.w` and read as a word.
+The loop runs four times, from a register that looks like it holds over four billion. `d1` ends at
+`FFFFFFFF`: the low word walked down to `FFFF`, which is the word -1, and the `FFFF` above it was
+never touched. This is why the counter of a `dbra` loop is set with `move.w` and read as a word.
 
-After the loop, the counter is `$FFFF` and not zero, which catches people who then want to reuse the
-register.
+After the loop the counter is `$FFFF` and not zero, which catches people who then want to reuse the
+register for something else.
 
 ## db\<cc\> leaves the loop early
 
 `dbra` is the plain member of a family. `db<cc> dn, label` takes a condition, and it goes round again
-only when the condition is **false** and the counter has not run out. So `dbeq` means "keep going
-until something is equal or we run out of elements", which is a search.
+only when the condition is **false** and the counter has not run out. Two ways to stop, one
+instruction. That is a search: keep looking until you find it or run out of things to look at.
 
 ```m68k|playground|memory
     lea numbers, a0
@@ -89,21 +81,21 @@ loop:
 numbers: dc.l 10, 20, 30, 40, 50, 60
 ```
 
-The 30 is the third element, so the loop goes round three times and stops. `d1` comes out at 3,
-`a0` at `0000200C`, four bytes past the element that matched, and `d3` at `000000FF`.
+The 30 is the third element, so the loop goes round three times and stops, leaving `a0` at
+`0000200C`, four bytes past the element that matched.
 
-`d3` is `$FF` because `db<cc>` writes no flags at all: the `Z` that `seq` reads is still the one the
-last `cmp` left. That is how you tell the two ways out of the loop apart, since `dbeq` falls through
-both when it found something and when it ran out. The other way to tell is the counter, which is
-`$FFFF` only when the loop ran out.
+Then there is the question of which of the two ways out it took, because `dbeq` falls through both
+when it found something and when it gave up. The `seq d3` answers it, and the reason it can is that
+`db<cc>` writes no flags at all: the `Z` it read is still sitting there untouched for `seq` to read
+again. The other way to tell is the counter, which is `$FFFF` only when the loop ran out.
 
 `dbne` is the same idea for "keep going while they are equal", and every condition of the branch
 family has a `db` version.
 
 ## Nested loops
 
-Nothing new: an inner loop is a loop between two lines of the outer one, with its own counter in its
-own register, reset at the top of every outer pass.
+An inner loop is a loop between two lines of the outer one, with its own counter in its own register,
+reset at the top of every outer pass.
 
 ```m68k|playground|no-flags
     clr.l d0            ; total = 0
@@ -116,19 +108,22 @@ inner:
     dbra d1, outer
 ```
 
-`d0` comes out at 12, which is 3 times 4. The `move.w #3, d2` has to be **inside** the outer loop:
-put it above `outer:` and the inner counter is `$FFFF` on the second pass, which makes the inner loop
-run 65536 times. Try moving that line up one and pressing Run to watch it happen.
+`d0` comes out at 12, which is 3 times 4.
 
-The Playground stops a program after two million instructions and says so, with "Execution limit of
-2000000 instructions reached (maybe an infinite loop?)". That message is what a loop with a broken
-counter looks like, and it is the reason `dbra` reads its counter as a word rather than a long: a
-long counter that starts wrong runs for four billion passes.
+The `move.w #3, d2` has to be **inside** the outer loop. Move that one line up above `outer:` and
+run it: on the second outer pass the inner counter is `$FFFF`, left there by the first pass, so the
+inner loop runs 65536 times instead of 4. The program still finishes, and the answer is wrong by a
+lot.
+
+The Playground gives up after two million instructions and says so, with "Execution limit of 2000000
+instructions reached (maybe an infinite loop?)". That message is what a loop whose counter never
+reaches -1 looks like. The two usual causes are the one above, a counter set outside the loop it
+belongs to, and a `dbra` on a register that something inside the loop also writes.
 
 ## Your turn
 
-Add up the numbers from 1 to 10 with a `dbra` loop and leave 55 in `d0`. The counter belongs in a
-data register of your choice, and `d0` starts at 0 in the test.
+Add up the numbers from 1 to 10 with a `dbra` loop and leave 55 in `d0`. `d0` starts at 0, and the
+counter goes in whichever data register you like.
 
 ```m68k|playground|exercise
 * your code here
@@ -148,16 +143,18 @@ data register of your choice, and `d0` starts at 0 in the test.
     move.w #9, d1       ; ten passes
     move.l #10, d2      ; the number to add this time
 loop:
-    add.l d2, d0        ; sum += n
-    subq.l #1, d2       ; n--
+    add.l d2, d0        ; add it in
+    subq.l #1, d2       ; and count it down
     dbra d1, loop
 ```
 
 </details>
 
-The second one starts `d0` at 64 and wants to know how many times it can be halved before it reaches
+For the second, `d0` starts at 64. Count how many times it can be halved before it gets down to 1,
+and leave that count in `d1`. For 64 the answer is 6.
 
-1. Leave that count in `d1`, which for 64 is 6.
+This one does not know in advance how many passes it needs, so `dbra` is the wrong tool and it wants
+a comparison and a branch instead.
 
 ```m68k|playground|exercise
 * your code here
@@ -174,12 +171,12 @@ The second one starts `d0` at 64 and wants to know how many times it can be halv
 <summary>Show solution</summary>
 
 ```m68k|playground|solution
-    clr.l d1            ; count = 0
+    clr.l d1            ; nothing counted yet
 loop:
-    cmp.l #1, d0        ; while(d0 > 1)
+    cmp.l #1, d0        ; down to 1 yet?
     bls done
-    lsr.l #1, d0        ; d0 /= 2
-    addq.l #1, d1       ; count++
+    lsr.l #1, d0        ; halve it
+    addq.l #1, d1       ; and count that
     bra loop
 done:
 ```

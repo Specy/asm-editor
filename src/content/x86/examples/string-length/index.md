@@ -1,11 +1,8 @@
-A string in memory and its length in a register. The program does it twice, once with an ordinary
-loop and once with the string instruction built for it, and both answers land side by side.
+The same job done twice in one program: eight instructions of ordinary loop, and four instructions
+using the hardware built for it. Both answers land in adjacent registers so you can see them agree.
 
-A string here is bytes and a rule: the reading stops at the first zero. Nothing records the length
-anywhere, so finding it means walking the string until the terminator turns up.
-
-**You need to know:** the "Arrays, strings and the string instructions" lecture. What is new here is
-`repne scasb` and the two lines of arithmetic that turn what it leaves in `rcx` into a length.
+Nothing anywhere records how long the string is. There are bytes, and a rule that says the reading
+stops at the first zero, so finding the length means going and looking.
 
 ```x86|playground|memory|allow-open
 default rel
@@ -40,16 +37,20 @@ _start:
     syscall
 ```
 
-Both `r8` and `r9` come out at 8.
+Both `r8` and `r9` come out at 8, and the `not rcx` and `dec rcx` that get `r9` there are taken apart
+line by line in the "Arrays, strings and the string instructions" lecture.
 
-`cmp byte [rsi + rcx], 0` needs the word `byte` because neither operand says a size: a memory operand
-is an address and `0` is a number. Without it the assembler picks one, and picking it yourself is the
-habit to keep.
+`cmp byte [rsi + rcx], 0` needs the word `byte` spelling out the size, because neither operand carries
+one: a memory operand is an address and `0` is a number, and a comparison has to know how wide the
+thing it is comparing is. Leave it out and NASM picks for you.
 
-`repne scasb` compares `al` with the byte at `[rdi]`, steps `rdi` and counts `rcx` **down**, stopping
-when the bytes match. So `rcx` finishes at `-1` minus the number of steps taken, `not rcx` turns that
-into the number of steps, and the `dec` drops the terminator the scan stopped on. Every C library's
-`strlen` for x86 is some version of those two lines.
+The two versions are not the same speed, and not in the direction you would guess. The hand written
+loop is one comparison and one branch per character. `repne scasb` is two bytes of instruction, but a
+repeated `scasb` examines one byte per step and cannot be turned into anything wider, so on a current
+processor a short hand written loop often beats it. `rep movsb` is the exception in this family: it is
+the one the hardware genuinely optimises.
 
-Try changing the string. Both answers follow it, and a string with no `, 0` at the end makes both
-loops run on into whatever the assembler put next.
+Now break it. Take the `, 0` off the end of `text` and run again. Neither loop stops where the string
+does, because neither of them can: they are looking for a zero byte, the zero byte is gone, and they
+will keep reading through whatever the assembler happened to put next until they find one. A string is
+its terminator.

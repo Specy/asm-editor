@@ -1,7 +1,7 @@
-The stack lecture of Assembly basics pushed by hand, moving a stack pointer and then writing at it.
-That is what RISC-V does, because RISC-V has no push instruction and no pop instruction: `sp` is
-`x2`, one of the 32 ordinary registers, and everything about the stack is a convention plus two
-instructions you already know.
+The stack is a region of memory, and `sp` is an ordinary register: `x2`, one of the 32, with nothing
+special about it at all except that everybody agrees what it is for. Pushing a value onto the stack
+is two instructions you already know, and popping it is the same two the other way round. All of the
+rest is agreement.
 
 ## A push is a subtraction and a store
 
@@ -98,9 +98,9 @@ The offsets are yours to choose and the only rule is that the same one is used t
 restore. This is exactly what a subroutine does on entry and exit, and "jal, ret and the calling
 convention" writes that out.
 
-The RISC-V ABI asks for more than the alignment the instructions need: it says `sp` should be a
-multiple of **16** whenever one subroutine calls another, so that a value of any size can be put on
-the stack without a fault. This simulator only enforces the multiple of 4 that `sw` needs, so the
+The calling convention asks for more than the alignment the instructions strictly need. It says `sp`
+should be a multiple of **16** whenever one subroutine calls another, so that a value of any size
+can be put on the stack without falling foul of an alignment rule. This simulator only enforces the multiple of 4 that `sw` needs, so the
 `-12` above runs, and a compiler would have written `-16` and left four bytes unused.
 
 ## Room of your own

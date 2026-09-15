@@ -10,10 +10,13 @@ is `syscall`.
 2. put the **arguments** in `$a0`, and in `$a1` and `$a2` for the services that take more,
 3. run `syscall`.
 
-Anything the service answers with comes back in `$v0`, or in `$a0` for a few of them. There is one
-`syscall` instruction and about thirty services behind it, and which number means what is the
-environment's choice, not the CPU's: MARS decided that 4 prints a string, and a MIPS chip in a router
-knows nothing about it.
+Anything the service answers with comes back in `$v0`, or in `$a0` for a few of them.
+
+There is one `syscall` instruction and about thirty services behind it. Which number means what is
+not part of the MIPS architecture at all: the instruction's whole job is to stop your program and
+hand control to whatever is running it, and the numbering is that environment's business. Here,
+4 prints a string. The same instruction on a MIPS chip running a router would be answered by its
+operating system with a completely different list.
 
 ## Printing
 
@@ -44,8 +47,9 @@ The console panel below the editor shows `Hello, world!` and then `42`. Service 
 from `$a0` until it reads a zero byte, which is why `.asciiz` and not `.ascii`. Service 1 reads `$a0`
 as a **signed** 32 bit number, so `li $a0, -1` prints `-1`.
 
-`\n` inside a string is a newline, and `'\n'` as a character literal is the same byte, which is 10.
-Nothing prints a newline for you: service 4 prints exactly the bytes you gave it.
+`\n` inside a string is a newline, and `'\n'` as a character literal is the same byte, code 10.
+Service 4 prints exactly the bytes you gave it and not one more, so every line break in your output
+is a byte you put there.
 
 `li $v0, 10` and `syscall` is service 10, **exit**. Without it the program carries on into whatever
 follows, which is why every program on this page ends with those two lines.
@@ -80,12 +84,13 @@ main:
     syscall
 ```
 
-The console reads `0x000000ff 00000000000000000000000000000101 4294967295`. All three of those pad to
-the full width of a word, so 255 comes out as eight hex digits and 5 as thirty two binary ones, and
-service 36 prints the same bits service 1 would have printed as `-1`.
+The console reads `0x000000ff 00000000000000000000000000000101 4294967295`. All three pad out to the
+full width of a register, so 255 arrives as eight hex digits and 5 as thirty two binary ones.
 
-Try changing `li $a0, 255` to `li $a0, -1` and running again: service 34 prints `0xffffffff`, which
-is what the registers panel shows for that register.
+The last one is the one to look at. `li $a0, -1` followed by service 36 printed 4294967295, and the
+same register printed by service 1 would have said `-1`. Same bits, two services, two correct
+answers, which is the signed and unsigned business from "Words, halves and bytes" turning up in your
+output.
 
 ## Reading
 
@@ -167,18 +172,18 @@ main:
     syscall
 ```
 
-The console shows `500 ms of program time`. Service 30 counts from the **start of the run** here,
-where MARS counts from 1 January 1970, and a program that measures how long something took subtracts
-two readings, which works the same either way. It answers in two registers, the low word in `$a0` and
-the high word in `$a1`.
+The console shows `500 ms of program time`. Service 30 counts milliseconds from the **start of the
+run**, and answers in two registers, the low word in `$a0` and the high word in `$a1`. What you
+almost always want from it is the difference between two readings, as the program above does, and a
+difference does not care where the counting started.
 
-Service 32 waits for `$a0` milliseconds of program time. The wait costs no instructions, so a program
-that idles on the keyboard never reaches the Playground's two million, and the editor stays
-responsive so Stop still answers. In a testcase both of them run on a virtual clock that starts at
-zero and only moves through the program's own waits, which is why the number above is exactly 500 and
-not 503.
+Service 32 waits for `$a0` milliseconds. The wait costs no instructions at all, which matters more
+than it sounds: a program sitting in a loop waiting for a key would otherwise burn through the
+Playground's two million instruction budget doing nothing, and it would also lock the editor up so
+that Stop could not answer. In a testcase the clock is virtual, starting at zero and moving only
+through the program's own waits, which is why the number above is exactly 500 rather than 503.
 
-## The whole table
+## Every service
 
 | service | what it does                       | reads                                       | answers             |
 | ------: | ---------------------------------- | ------------------------------------------- | ------------------- |
@@ -204,22 +209,23 @@ not 503.
 |      42 | a random integer under a limit     | `$a0` = which generator, `$a1` = the limit  | `$a0`               |
 |      43 | a random float                     | `$a0`                                       | `$f0`               |
 |      44 | a random double                    | `$a0`                                       | `$f0`               |
-|   50-59 | MARS's dialog boxes                | see the documentation page                  |                     |
+|   50-59 | dialog box input and output        | see the documentation page                  |                     |
 
 The same table with a paragraph on each service is on the
 [MIPS syscall documentation page](/documentation/mips/syscall).
 
-Service 9 hands out memory from the heap, which starts at `0x10040000`, and it never gives any back:
-there is no free, and a program that asks in a loop runs out. Services 50 to 59 are MARS's pop up
-dialogs, and here they read from and write to the console like everything else, since this editor has
-one place for input and one for output.
+Service 9 hands out memory from the **heap**, a region starting at `0x10040000` that exists to be
+handed out in pieces while a program runs. It is one way traffic: there is no service that gives a
+piece back, so a program that asks in a loop eventually runs out. Services 50 to 59 are the dialog
+box family, and they read and write the console here, since the console is the one place input and
+output go.
 
 `syscall` with a number nothing answers to ends the run with
-`invalid or unimplemented syscall service: 99`, naming the number. The four file services, 13 to 16,
-are the ones this editor does not have: it has no file system, so `open`, `read`, `write` and `close`
-stop the program with `Handler openFile is not implemented`.
+`invalid or unimplemented syscall service: 99`, naming the number you asked for. Services 13 to 16
+are the file services, `open`, `read`, `write` and `close`, and there is no file system behind them
+here, so each stops the program with `Handler openFile is not implemented`.
 
-## Your turn
+## Two to print
 
 Print `The answer is 42` and end the program, with nothing else in the output. The string is written
 for you and the number is not part of it, so it takes two services.

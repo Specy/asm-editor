@@ -1,18 +1,13 @@
-The stack lecture said that `call` pushes an address and `ret` pops it. This lecture is the rest of
-what a function call is: where the arguments go, where the answer comes back, which registers a
-subroutine is allowed to destroy, and what a stack frame is.
+A subroutine is a piece of code you can run from several places and come back from. The coming back
+is the hard half: the code has to end up at whichever of those places called it this time, and it
+cannot know which one that is when it is written.
 
 ## call and ret
 
-In C you call a function and it returns to where it was called from. In x86 the call is `call` and
-the return is `ret`, and the address to return to lives on the stack.
+The answer is to leave a note on the stack.
 
 - **`call label`** pushes the address of the instruction after it, then jumps to `label`.
-- **`ret`** pops an address off the stack into `rip`.
-
-Nothing checks that what `ret` pops is a return address. A subroutine that pushes something and
-forgets to pop it returns to whatever it pushed, which is the single most common way a program in
-assembly goes wrong.
+- **`ret`** pops an address off the stack and puts it in `rip`.
 
 ```x86|playground|no-flags
 default rel
@@ -36,26 +31,33 @@ _start:
     syscall
 ```
 
-Step through it and watch `rsp` and `rip` together. The `call` drops `rsp` by 8 and puts `0x401010`
-or thereabouts on the stack; the `ret` takes it back off and `rip` lands on `mov r12, rax`.
+Step through it with `rsp` and `rip` both in view. The `call` drops `rsp` by 8 and writes `0x401010`
+or thereabouts into the slot it just made; `ret` reads that address back out, puts it in `rip`, and
+`rsp` climbs back to where it was.
 
-The subroutine is written **above** `_start` here. Order in the file does not matter to the
-assembler, and it matters to the program only in that a subroutine written below `_start` would be
-run into by anything that reached the end of `_start` without an `exit`.
+Notice what is not happening. Nothing marks that slot as a return address, and `ret` does not check
+anything: it takes whatever eight bytes `rsp` points at and jumps there. A subroutine that pushes
+something and forgets to pop it will `ret` to the value it pushed, and the program will run off into
+memory that was never code. That is worth knowing early, because the symptom looks nothing like the
+cause.
+
+The subroutine is written **above** `_start` here. Order in the file does not matter to the assembler,
+and it matters to the program only in that a subroutine written below `_start` would be run into by
+anything that reached the end of `_start` without exiting.
 
 ## The System V convention
 
-`rdi` and `rsi` in that program are not the hardware's choice. They are the **System V AMD64 ABI**,
-the agreement every Linux compiler, library and program follows so that code from different sources
-can call each other.
+`rdi` and `rsi` in that program are not the hardware's choice. They come from the **System V AMD64
+ABI**, an **application binary interface**: a written agreement about the things two pieces of
+machine code have to settle between them before they can call each other, such as which register
+carries the first argument and who is allowed to destroy what. Every Linux compiler, library and
+program follows the same one, which is why code from different sources fits together at all.
 
-| what                            | where                                  |
-| ------------------------------- | -------------------------------------- |
-| integer arguments 1 to 6        | `rdi`, `rsi`, `rdx`, `rcx`, `r8`, `r9` |
-| floating point arguments 1 to 8 | `xmm0` to `xmm7`                       |
-| further arguments               | on the stack, pushed in reverse order  |
-| the return value                | `rax`, or `rdx:rax` for 128 bits       |
-| a floating point return         | `xmm0`                                 |
+| what                     | where                                  |
+| ------------------------ | -------------------------------------- |
+| integer arguments 1 to 6 | `rdi`, `rsi`, `rdx`, `rcx`, `r8`, `r9` |
+| further arguments        | on the stack, pushed in reverse order  |
+| the return value         | `rax`, or `rdx:rax` for 128 bits       |
 
 And the registers split in two, by who is responsible for a value surviving a call:
 
@@ -65,11 +67,12 @@ And the registers split in two, by who is responsible for a value surviving a ca
 | caller saved | `rax`, `rcx`, `rdx`, `rsi`, `rdi`, `r8` to `r11` | a subroutine may destroy them, so save them first if you need them |
 
 Read the second table as advice about your own code. If a value has to survive a `call`, keep it in
-`rbx` or `r12` to `r15` and let the subroutine worry about it; if it is scratch, use `rax` or `rcx`
+`rbx` or `r12` to `r15` and let the subroutine worry about it. If it is scratch, use `rax` or `rcx`
 and expect it to be gone afterwards.
 
-The Windows convention is different, using `rcx`, `rdx`, `r8` and `r9` for arguments. Same processor,
-different agreement, which is why an object file from one system does not link against the other.
+There is nothing inevitable about any of it. Windows settled on a different set of registers for the
+same processor, which is why an object file built for one system will not link against the other even
+though the instructions inside it are identical.
 
 ## A subroutine that saves what it uses
 
@@ -99,14 +102,41 @@ _start:
     syscall
 ```
 
-`r12` comes out at 42 and `r13` at 999. Delete the `push rbx` and the `pop rbx` and `r13` becomes 3:
-the subroutine still returns the right answer and has quietly destroyed something that was not its
-to destroy.
+Delete the `push rbx` and the `pop rbx` and `r13` comes back as 3. The subroutine still returns the
+right answer, and it has quietly destroyed something that was not its to destroy, in a way that will
+surface somewhere else entirely.
+
+## The stack frame
+
+A subroutine with local variables has a problem: it keeps them on the stack, and the stack pointer
+moves. Every push, every call, and `[rsp + 8]` means something different from what it meant two lines
+ago.
+
+The usual fix is to take a copy of `rsp` at the start and never move the copy. That copy is the
+**frame pointer**, and by convention it lives in `rbp`:
+
+```
+    push rbp                ; save the caller's frame pointer
+    mov rbp, rsp            ; this frame starts here
+    sub rsp, 32             ; room for local variables
+    ...
+    mov rsp, rbp            ; throw the locals away
+    pop rbp                 ; and give the caller's frame pointer back
+    ret
+```
+
+`rbp` now stays still for the whole subroutine, so everything the subroutine owns has a fixed name:
+`[rbp - 8]` is the first local variable and stays the first local variable however much `rsp` moves
+underneath it.
+
+The two lines that take the frame down are so common they have an instruction of their own.
+**`leave`** is exactly `mov rsp, rbp` followed by `pop rbp`, in one byte. (`enter` exists for the two
+lines at the top, and nobody uses it, because writing them out is faster.)
 
 ## Arguments that do not fit in registers
 
-The seventh argument onwards goes on the stack, pushed in **reverse** order so that the seventh ends
-up nearest the top. The caller puts them there and the caller takes them off again.
+Six registers carry six arguments. The seventh goes on the stack, pushed by the caller before the
+`call` and taken off again by the caller afterwards.
 
 ```x86|playground|no-flags
 default rel
@@ -139,57 +169,31 @@ _start:
     syscall
 ```
 
-`r12` is 8, which is 1 + 7.
+Why `[rbp + 16]`? Count upwards from `rbp` and everything is where the two instructions before it put
+it.
 
-Why `[rbp + 16]`? Count what is between `rbp` and the argument. Inside the subroutine, after
-`push rbp`, the stack reads:
+| where        | holds                                       | put there by  |
+| ------------ | ------------------------------------------- | ------------- |
+| `[rbp + 16]` | the seventh argument                        | `push 7`      |
+| `[rbp + 8]`  | the return address                          | `call`        |
+| `[rbp]`      | the caller's `rbp`                          | `push rbp`    |
+| `[rbp - 8]`  | the first local variable, if there were one | `sub rsp, 32` |
 
-| where        | holds                                      |
-| ------------ | ------------------------------------------ |
-| `[rbp]`      | the caller's `rbp`, just pushed            |
-| `[rbp + 8]`  | the return address, pushed by `call`       |
-| `[rbp + 16]` | the seventh argument, pushed by the caller |
+Arguments are above `rbp` because they were pushed before the frame existed, and locals are below it
+because they were made after. Eight bytes for the saved `rbp`, eight for the return address, and the
+argument is the next thing up.
 
-Eight bytes for the saved `rbp`, eight for the return address, and the argument is next.
-
-## The stack frame
-
-`rbp` in that subroutine is the **frame pointer**: a register that stays still while `rsp` moves, so
-that everything the subroutine owns can be named as a fixed offset from it. The three lines that set
-it up and the two that take it down are the same in every function a C compiler writes:
-
-```
-    push rbp                ; save the caller's frame pointer
-    mov rbp, rsp            ; this frame starts here
-    sub rsp, 32             ; room for local variables
-    ...
-    mov rsp, rbp            ; throw the locals away
-    pop rbp                 ; and restore the caller's frame pointer
-    ret
-```
-
-`leave` is one instruction for the last two lines, `mov rsp, rbp` and `pop rbp`. `enter` exists for
-the first two and nobody uses it, because it is slower than writing them out.
-
-Locals live **below** `rbp` and arguments **above** it:
-
-| where        | holds                       |
-| ------------ | --------------------------- |
-| `[rbp + 16]` | the seventh argument and up |
-| `[rbp + 8]`  | the return address          |
-| `[rbp]`      | the caller's saved `rbp`    |
-| `[rbp - 8]`  | the first local variable    |
-| `[rbp - 16]` | the second                  |
-
-None of this is required by the hardware. A function that never moves `rsp` can reach its locals from
-`rsp` directly and keep `rbp` as one more general register, which is what a compiler does with
-optimisation turned on. The frame pointer earns its place when a debugger has to walk the call stack,
-because the chain of saved `rbp` values is the list of who called whom.
+None of this is required by the hardware. A subroutine that never moves `rsp` after it starts can
+reach its locals from `rsp` directly and keep `rbp` as one more general register, which is what a
+compiler does with optimisation turned on. The frame pointer earns its place when something has to
+walk back through the calls: each saved `rbp` points at the one below it, so the chain of them is the
+list of who called whom, which is where a debugger's backtrace comes from.
 
 ## Recursion
 
-A subroutine that calls itself needs nothing special. Every call pushes its own return address, and
-anything else the subroutine wants to survive its own call goes on the stack too.
+A subroutine that calls itself needs nothing new. Every call pushes its own return address, so the
+addresses stack up naturally, and anything else a level wants to survive its own call goes on the
+stack beside them.
 
 ```x86|playground|no-flags
 default rel
@@ -220,15 +224,14 @@ _start:
     syscall
 ```
 
-`r12` comes out at `78`, which is 120.
+`push rdi` is there because `rdi` is caller saved, and the thing being called is `fact` itself, which
+is therefore free to destroy it. Delete the push and the pop and the answer becomes 1: `rdi` comes
+back as 0 from the bottom of the recursion, and every multiplication on the way out is by zero except
+the last.
 
-`push rdi` is there because `rdi` is caller saved: `fact` is free to destroy it, and `fact` is what
-is being called. Deleting the push and the pop gives 1, since `rdi` comes back as 0 from the bottom
-of the recursion and every multiplication is by zero except the last.
-
-Each level of the recursion uses 16 bytes of stack, 8 for the return address and 8 for the saved
-`rdi`. Call it with `rdi` at a million and the stack runs into memory that is not mapped, the program
-stops, and that is what a stack overflow is.
+Each level uses 16 bytes of stack, 8 for the return address and 8 for the saved `rdi`. Call it with
+`rdi` at a million and the stack grows down into memory that has nothing mapped in it, the program
+stops on the store, and that is what a stack overflow is.
 
 ## Your turn
 
