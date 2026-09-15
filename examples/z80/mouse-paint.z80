@@ -6,17 +6,17 @@
 ;
 ; Screen: 256 by 192, the default. Press Stop to end it.
 
-P_PEN   equ 0x10        ; a filled shape is outlined with the pen
-P_FILL  equ 0x11
-P_X     equ 0x13
-P_Y     equ 0x14
-P_X2    equ 0x15
-P_Y2    equ 0x16
-P_CMD   equ 0x17
-P_MX    equ 0x30        ; pointer X of the view in B
-P_MY    equ 0x31
-P_MBTN  equ 0x32        ; buttons and modifiers of that view
-P_FRAME equ 0x41
+P_PEN   equ 0x20        ; a filled shape is outlined with the pen
+P_FILL  equ 0x21
+P_X     equ 0x23
+P_Y     equ 0x24
+P_X2    equ 0x25
+P_Y2    equ 0x26
+P_CMD   equ 0x27
+P_MX    equ 0x40        ; pointer X of the view in B
+P_MY    equ 0x41
+P_MBTN  equ 0x42        ; buttons and modifiers of that view
+P_FRAME equ 0x51
 
 C_RECT  equ 4
 C_CLEAR equ 9

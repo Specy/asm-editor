@@ -1,0 +1,6 @@
+{
+    "name": "SSE and packed arithmetic",
+    "description": "Sixteen flat 128 bit registers, the two letters that say how much of one an instruction means, converting between integers and doubles, the NaN case no integer comparison has, and doing four numbers at a time.",
+    "order": 7,
+    "topic": "sse"
+}

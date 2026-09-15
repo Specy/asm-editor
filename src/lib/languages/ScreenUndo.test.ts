@@ -28,12 +28,12 @@ const programs = [
         setup: [
             '    org $8000',
             '    ld a, $e0',
-            '    out ($10), a',
+            '    out ($20), a',
             '    ld a, 0',
-            '    out ($13), a',
-            '    out ($14), a'
+            '    out ($23), a',
+            '    out ($24), a'
         ],
-        draw: '    out ($17), a',
+        draw: '    out ($27), a',
         end: ['    halt'],
         loop: '    jp draw'
     },
@@ -223,13 +223,13 @@ describe.each(programs.slice(0, 2))('$name drawing history boundaries', (program
                   ]
                 : [
                       '    ld a,11',
-                      '    out ($17),a',
+                      '    out ($27),a',
                       '    ld a,3',
-                      '    out ($10),a',
+                      '    out ($20),a',
                       '    ld a,0',
-                      '    out ($17),a',
+                      '    out ($27),a',
                       '    ld a,13',
-                      '    out ($17),a'
+                      '    out ($27),a'
                   ]
         const code = [
             ...program.setup,
@@ -273,7 +273,7 @@ describe.each(programs.slice(0, 2))('$name drawing history boundaries', (program
 
     it('keeps a whole input echo attached to the input instruction after Run', async () => {
         const input =
-            program.name === 'M68K' ? ['    move.b #4,d0', '    trap #15'] : ['    in a,($01)']
+            program.name === 'M68K' ? ['    move.b #4,d0', '    trap #15'] : ['    in a,($11)']
         const code = [
             ...program.setup,
             ...input,
@@ -315,7 +315,7 @@ it('restores Z80 drawing coordinates before drawing again after undo', async () 
     const code = [
         ...program.setup,
         '    ld a,7',
-        '    out ($13),a',
+        '    out ($23),a',
         '    ld a,0',
         program.draw,
         'finish: nop',

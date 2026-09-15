@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { M68KEmulator } from '$lib/languages/M68K/M68KEmulator.svelte'
+import type { Testcase } from '$lib/Project.svelte'
 import { M68K_TRAP_DOCS, screenColorOf } from '$lib/languages/M68K/M68K-traps'
 import { Keyboard } from '$lib/languages/peripherals/Keyboard'
 import { KEY_CODES, letterKeyCode } from '$lib/languages/peripherals/keyCodes'
@@ -54,6 +55,70 @@ function pixelAt(emulator: Awaited<ReturnType<typeof run>>, x: number, y: number
     const pixels = screen.visiblePixels
     return (pixels[offset] << 16) | (pixels[offset + 1] << 8) | pixels[offset + 2]
 }
+
+describe('M68K diagnostics', () => {
+    it('preserves the Core hint in the text shown by diagnostic renderers', async () => {
+        const emulator = M68KEmulator('    mova d0,d1')
+        const [diagnostic] = await emulator.check()
+
+        expect(diagnostic.hint).toContain('Did you mean `move`?')
+        expect(diagnostic.formatted).toBe(`${diagnostic.message}\n${diagnostic.hint}`)
+        emulator.dispose()
+    })
+})
+
+describe('M68K Project Files', () => {
+    it('assembles included source with its own file identity', async () => {
+        const sources = {
+            entry: 'src/main.m68k',
+            files: {
+                'src/main.m68k': {
+                    encoding: 'plain' as const,
+                    content: '    org $1000\n    include "lib/helper.m68k"\n'
+                },
+                'src/lib/helper.m68k': {
+                    encoding: 'plain' as const,
+                    content: '    moveq #7,d0\n'
+                }
+            }
+        }
+        const emulator = M68KEmulator(sources)
+        await emulator.compile(0, sources)
+        expect(emulator.currentFile).toBe('src/lib/helper.m68k')
+        expect(emulator.buildArtifacts).toEqual([
+            {
+                file: 'src/lib/helper.m68k',
+                line: 0,
+                address: 0x1000n
+            }
+        ])
+        await emulator.step()
+        expect(registerOf(emulator, 'D0')).toBe(7n)
+        emulator.dispose()
+    })
+
+    it('incbin embeds exact UTF-8 bytes independently of their storage encoding', async () => {
+        for (const note of [
+            { encoding: 'plain' as const, content: 'è' },
+            { encoding: 'base64' as const, content: 'w6g=' }
+        ]) {
+            const sources = {
+                entry: 'main.m68k',
+                files: {
+                    'main.m68k': {
+                        encoding: 'plain' as const,
+                        content: '    org $1000\n    incbin "note.txt"\n'
+                    },
+                    'note.txt': note
+                }
+            }
+            const emulator = M68KEmulator(sources)
+            await emulator.compile(0, sources)
+            expect(emulator.readMemoryBytes(0x1000n, 2)).toEqual(new Uint8Array([0xc3, 0xa8]))
+            emulator.dispose()
+        }
+    })
+})
 
 function inkCount(emulator: Awaited<ReturnType<typeof run>>): number {
     const pixels = emulator.peripherals.screen.visiblePixels
@@ -720,5 +785,35 @@ describe('examples/m68k', () => {
         expectStoppedAtLimit(emulator)
         //a disc of the brush radius around the pointer, in the aqua the program picks
         expect(pixelAt(emulator, 200, 150)).toBe(0x00ffff)
+    })
+})
+
+describe('M68K testcases', () => {
+    /**
+     * `simhalt` pauses the Core rather than terminating it, and an interactive Run stops there. A
+     * Testcase used to resume past it and assert against whatever followed — which in the usual
+     * EASy68K layout is the program's subroutines.
+     */
+    it('stops at simhalt instead of running into the code after it', async () => {
+        const code = `${ORG}start:
+    move.w #1,d0
+    simhalt
+after:
+    move.w #99,d1
+    simhalt
+`
+        const testcase: Testcase = {
+            input: [],
+            expectedOutput: '',
+            startingRegisters: {},
+            expectedRegisters: { D0: 1n, D1: 0n },
+            startingMemory: [],
+            expectedMemory: []
+        }
+        const emulator = M68KEmulator(code)
+        await emulator.check()
+        const [result] = await emulator.test(code, [testcase], INSTRUCTION_LIMIT, 100)
+        expect(result.errors).toEqual([])
+        expect(result.passed).toBe(true)
     })
 })

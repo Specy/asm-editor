@@ -1,18 +1,20 @@
-The previous lectures used maybe twenty instructions. There are 68 mnemonics in this assembler and
-1296 assemblable forms of them, because on the Z80 every combination of registers is a separate
-opcode: `ld b, c` and `ld b, d` are two different bytes, and `ld` alone accounts for hundreds of
-them.
+The lectures so far have used about twenty instructions, and if you open the full list you will find
+well over a thousand entries. That number is much less frightening than it looks, because almost all
+of it is repetition: every combination of registers is its own entry, so `ld b, c` and `ld b, d`
+count as two, and `ld` on its own runs to hundreds.
 
-You do not learn 1296 of anything. What you learn is the shape and the families, and then the
-[instruction reference](/documentation/z80/instruction) answers the rest.
+Nobody learns a list like that. What you learn is the shape one instruction takes and the handful of
+families they fall into, and then the [instruction
+reference](/documentation/z80/instruction) answers everything else when you need it.
 
 ## The shape
 
 A Z80 instruction is **one to four bytes**, and the first byte is usually the whole opcode. The
 operands are what make it longer: an 8 bit immediate adds one byte, a 16 bit address adds two.
 
-Four opcode bytes are **prefixes**, which is how a machine with 256 opcodes ends up with 1296
-instructions. A prefix says "read the next byte from a different table":
+One byte holds 256 different values, so a machine whose opcodes are one byte can have at most 256
+instructions. The Z80 has far more than that, and the trick is four **prefix** bytes. A prefix does
+not do anything itself; it says "read the next byte from a different table":
 
 | prefix | what it selects                                              |
 | ------ | ------------------------------------------------------------ |
@@ -55,9 +57,10 @@ index registers are slower.
 | input and output      | `in`, `out`, `ini`, `ind`, `inir`, `indr`, `outi`, `outd`, `otir`, `otdr`      |
 | CPU control           | `nop`, `halt`, `di`, `ei`, `im`, `scf`, `ccf`                                  |
 
-Two of those families have no equivalent in the M68K, MIPS or RISC-V courses. **Input and output** is
-a whole address space of its own, reached with `in` and `out`, and it is where printing lives on this
-machine, taught in the last module. **Block** instructions do a whole loop in one instruction.
+Two of those families are worth naming now, because they are where this machine surprises people.
+**Input and output** is a second address space of its own, reached only with `in` and `out`, and it
+is where printing lives; the last module of this course is about it. **Block** instructions do a
+whole loop in a single instruction.
 
 ## The block instructions read as three letters
 
@@ -88,8 +91,6 @@ dest:   .ds 4
 Type `800b` into the memory panel's address box and run it. The four bytes appear after the four
 originals, `bc` comes out at 0, and `hl` and `de` are both one past the end of what they touched.
 
-Try changing `ld bc, 4` to `ld bc, 2` and see only the first two bytes arrive.
-
 ## The letters on the end of a mnemonic
 
 Most of the odd looking names are an abbreviation plus a suffix, and the suffix is doing the work:
@@ -119,9 +120,10 @@ Most of the odd looking names are an abbreviation plus a suffix, and the suffix 
     halt
 ```
 
-`b` and `c` both come out at `03` and `a` at `F0`. The two rotates landed on the same answer here
-because the carry happened to be 1 and the bit that fell off was 1 as well. Try changing `scf` to
-`ccf`, which flips the carry to 0: `c` comes out at `02` and `b` is still `03`.
+`b` and `c` both come out at `03` and `a` at `F0`. The two rotates landing on the same answer is an
+accident of this input: the carry happened to be 1 and the bit that fell off the end was 1 as well,
+so it made no difference which of them came round. Replace the `scf` with `ccf` so the carry is 0
+instead and they part company, `c` coming out at `02` while `b` stays `03`.
 
 ## Names to recognise
 
@@ -148,14 +150,13 @@ it in other people's code and do not write it in yours.
 
 ## Undocumented instructions
 
-Zilog's manual does not list every opcode the silicon implements. `sll` (shift left and put a 1 in at
-the bottom) has an opcode and no documentation, and so do `ixh`, `ixl`, `iyh` and `iyl`, the two
-halves of the index registers used as 8 bit registers. Of the 1296 forms in this assembler, 482 are
-undocumented in that sense.
+Zilog's manual does not list every opcode the silicon actually implements. `sll`, which shifts left
+and puts a 1 in at the bottom, works on every Z80 ever made and appears in no official document, and
+so do `ixh` and `ixl`, the two halves of `ix` used as ordinary 8 bit registers.
 
-This emulator executes them, and the
-[instruction reference](/documentation/z80/instruction) marks them with a badge. Real programs used
-them, so a program you find in a magazine listing may well contain one, and it will run here.
+People found them, used them, and printed programs containing them in magazines. This emulator runs
+them and the instruction reference marks them with a badge, so a listing you type in from somewhere
+will work here.
 
 ## Your turn
 

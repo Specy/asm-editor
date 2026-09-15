@@ -1,34 +1,36 @@
-An **addressing mode** is how an instruction names the thing it works on. The general course listed
-five of them and said each language spells them differently. Here are the Z80's, which are seven, and
-the one it does not have, which shapes more of your code than any of the seven.
+Every instruction has to say what it works on, and there is more than one way to say it. `ld a, 7`
+names a number outright. `ld a, (hl)` names no number at all; it points at a register that holds an
+address, and the value is fetched from there when the instruction runs. Those are two different
+**addressing modes**, and the Z80 has seven of them.
+
+Learning them is not bookkeeping. Which modes exist is what decides whether a piece of code is three
+instructions or ten, and the one mode this machine does not have shapes more of your code than any
+of the seven it does.
 
 ## The seven
 
-| mode              | written        | in C           | what the CPU does                                  |
-| ----------------- | -------------- | -------------- | -------------------------------------------------- |
-| immediate         | `7`, `0x1234`  | `x = 7`        | the number is inside the instruction               |
-| register          | `a`, `hl`      | `x = y`        | there is no address, the value is in the CPU       |
-| register indirect | `(hl)`         | `x = *p`       | the address is in the pair, read when it runs      |
-| extended          | `(0x9000)`     | `x = total`    | the address is inside the instruction              |
-| indexed           | `(ix+2)`       | `x = p->field` | the address is `ix` plus a byte in the instruction |
-| relative          | `jr loop`      | `goto loop`    | the target is `pc` plus a signed byte              |
-| implied           | `and b`, `daa` |                | the operand is not written, `a` is understood      |
+| mode              | written        | where the value comes from                                      |
+| ----------------- | -------------- | --------------------------------------------------------------- |
+| immediate         | `7`, `0x1234`  | the number is part of the instruction itself                    |
+| register          | `a`, `hl`      | it is already in the CPU, and no memory is touched              |
+| register indirect | `(hl)`         | from memory, at whatever address the pair holds when it runs    |
+| extended          | `(0x9000)`     | from memory, at a fixed address written into the instruction    |
+| indexed           | `(ix+2)`       | from memory, at `ix` plus a fixed offset in the instruction     |
+| relative          | `jr loop`      | the jump target is the program counter plus a small signed step |
+| implied           | `and b`, `daa` | the second value is not written down, because it is always `a`  |
 
-The Z80's own manual counts a couple more (bit addressing for `bit 3, a`, and the eight fixed
-addresses of `rst`), and those two are really the operand being written into the opcode.
-
-Build this one, open the memory panel and press **Step** through it.
+Open the memory panel and step through this one. Every line is labelled with the mode it uses.
 
 ```z80|playground|memory|no-flags
     .org 0x8000
-    ld a, 7             ; immediate:  x = 7
-    ld b, a             ; register:   y = x
-    ld a, (numbers)     ; extended:   z = numbers[0]
-    ld hl, numbers      ; immediate again, this time 16 bit: p = numbers
-    ld c, (hl)          ; indirect:   w = *p
+    ld a, 7             ; immediate:  the 7 is in the instruction
+    ld b, a             ; register:   no memory is touched
+    ld a, (numbers)     ; extended:   the address is in the instruction
+    ld hl, numbers      ; immediate again, 16 bits of it this time
+    ld c, (hl)          ; indirect:   the address is in hl
     ld ix, numbers
-    ld d, (ix+2)        ; indexed:    v = p[2]
-    ld (ix+2), a        ; and the same mode writing: p[2] = z
+    ld d, (ix+2)        ; indexed:    ix plus two, read
+    ld (ix+2), a        ; and the same mode, writing
     halt
 numbers: .db 10, 20, 30, 40
 ```
@@ -36,8 +38,6 @@ numbers: .db 10, 20, 30, 40
 `a` and `c` both come out at `0A`, one read through the address the assembler knew and one through
 the address in `hl`. `b` is 7 and `d` is `1E`, which is 30. The last instruction wrote 10 over
 `numbers[2]`, so the four bytes at `0x8015` read `0A 14 0A 28` when the program finishes.
-
-Try changing `ld d, (ix+2)` to `ld d, (ix+3)` and the read moves to the 40.
 
 ## Immediate, and what fits in one
 
@@ -63,8 +63,8 @@ the source in `hl` and the destination in `de`, doing the write through `a`.
 
 ## Extended, and who is allowed
 
-`(0x9000)` is an address written into the instruction, which is a global variable in C. The rule to
-remember is who can use it:
+`(0x9000)` is an address fixed at the moment the program is assembled, so an `equ` or a label works
+just as well as a number. The rule to remember is who is allowed to use it:
 
 ```z80|playground|memory|no-flags
     .org 0x8000
@@ -77,8 +77,8 @@ remember is who can use it:
 total:  .dw 0x1234
 ```
 
-`a` comes out at `34`, the low byte of the word at `total`, because `a` is one byte and the low byte
-is the one at the lower address. `hl` comes out at `1234`.
+`a` comes out at `34` rather than `12`: `a` is one byte, the word at `total` is two, and the byte it
+gets is the one at the lower address, which little endian makes the low half of the number.
 
 `ld b, (total)` is not an instruction and the build fails with "no variant found for ld". Among the 8
 bit registers only the accumulator can name an address directly, which is one of the reasons your
@@ -86,8 +86,10 @@ values keep passing through `a`.
 
 ## Indexed
 
-`(ix+dd)` is `ix` plus a **signed byte written into the instruction**, -128 to 127. In C that is
-`p->field`: a pointer to the start of a record and a fixed offset to one field of it.
+`(ix+dd)` is `ix` plus a **signed byte written into the instruction**, anywhere from -128 to 127.
+It exists for one job: a small bundle of related bytes, kept together in memory, where you want to
+reach one particular byte of it. Put the address of the bundle in `ix` once, and every field is a
+fixed distance from there.
 
 ```z80|playground|memory|no-flags
 X       equ 0
@@ -95,20 +97,20 @@ Y       equ 1
 LIVES   equ 2
 
     .org 0x8000
-    ld ix, player       ; p = &player
-    ld a, (ix+X)        ; a = p->x
-    add a, (ix+Y)       ; a = a + p->y
-    ld (ix+LIVES), 3    ; p->lives = 3
-    ld iy, enemy        ; a second record, in the other index register
-    ld b, (iy+X)        ; b = q->x
+    ld ix, player       ; ix = where the player's three bytes start
+    ld a, (ix+X)        ; a = the player's x
+    add a, (ix+Y)       ; plus the player's y
+    ld (ix+LIVES), 3    ; write 3 into the player's lives
+    ld iy, enemy        ; a second bundle, in the other index register
+    ld b, (iy+X)        ; b = the enemy's x
     halt
 
 player: .db 10, 20, 0
 enemy:  .db 90, 60, 0
 ```
 
-`a` comes out at `1E`, which is 30, and `b` at `5A`, which is 90. The `equ` lines are the field names,
-so the code reads as `p->x` instead of `(ix+0)`, and moving a field around means changing one line.
+The three `equ` lines at the top are what makes this readable. `(ix+X)` says what it is fetching;
+`(ix+0)` would not. And if the bytes are ever rearranged, only those three lines change.
 
 The displacement is a **constant**, decided when the program is assembled. You cannot write
 `(ix+e)` to index by a register, and the build fails if you try.
@@ -123,38 +125,35 @@ works the byte out from the label you wrote and reports an error when the target
 `jp` carries the full 16 bit address instead, and reaches anywhere. That makes `jr` two bytes and `jp`
 three, which is the trade, and the branching lecture goes through when to write which.
 
-## The mode the Z80 does not have
+## Reading `a[i]` when `i` is in a register
 
-There is no base plus index mode. On the M68K `(a0, d1)` reads the byte at `a0` plus whatever `d1`
-holds when the instruction runs; on MIPS and RISC-V you write the addition out and then load. The Z80
-has neither: `(hl+de)` is not an instruction, `(ix+e)` is not an instruction, and the only thing that
-gets added to an address is a constant.
+Every mode so far adds either nothing or a fixed number written into the instruction. None of them
+adds a value the program worked out while it was running, and that is exactly what an array index
+is: `i` changes every time round a loop. `(hl+de)` is not an instruction, and neither is `(ix+e)`.
 
-So `a[i]`, with `i` in a register, is written out:
+So the addition is written out, and then the result is read through `(hl)`:
 
 ```z80|playground|memory|no-flags
     .org 0x8000
     ld a, 2             ; i = 2
     ld e, a             ; the low half of the offset
     ld d, 0             ; and the high half, since a byte index is positive
-    ld hl, numbers      ; p = numbers
-    add hl, de          ; p = p + i
-    ld a, (hl)          ; x = *p, which is numbers[i]
+    ld hl, numbers      ; hl = the start of the array
+    add hl, de          ; hl = the start plus i
+    ld a, (hl)          ; and read what is there
     halt
 numbers: .db 10, 20, 30, 40
 ```
 
-`a` comes out at `1E`, which is `numbers[2]`. Four instructions where the M68K writes one, and this is
-the shape every indexed read on this machine takes: widen the index into a pair, `add hl, de`, then
-read through `(hl)`.
+`a` comes out at `1E`, the third number. Four instructions, and they are the shape every indexed read
+on this machine takes: widen the index into a pair, `add hl, de` to get the address, then read
+through `(hl)`. Worth learning as one move, because you will write it constantly.
 
 Elements bigger than a byte cost more, because the index has to be scaled first. `numbers` as an
 array of 16 bit words would need the index doubled, which is `add hl, hl` on the index before adding
 the base, or `sla e` and `rl d` on the pair.
 
-Try changing `ld a, 2` to `ld a, 3` and see 40 come out instead.
-
-## Your turn
+## Two reads to write
 
 The test starts `ix` at `0x9000`, where four bytes are waiting, 10, 20, 30 and 40. Leave the third of
 them in `a` in a single instruction.
@@ -180,7 +179,7 @@ them in `a` in a single instruction.
 
 ```z80|playground|solution|memory
     .org 0x8000
-    ld a, (ix+2)        ; the third byte of the record ix points at
+    ld a, (ix+2)        ; two along from where ix points
     halt
 ```
 
@@ -212,8 +211,8 @@ with the same four bytes there. Leave `numbers[a]`, which is 40, in `a`.
     .org 0x8000
     ld e, a             ; widen the index into de
     ld d, 0
-    add hl, de          ; p = p + i
-    ld a, (hl)          ; x = *p
+    add hl, de          ; the start plus the index
+    ld a, (hl)          ; and read it
     halt
 ```
 

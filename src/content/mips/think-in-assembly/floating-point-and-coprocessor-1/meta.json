@@ -1,0 +1,6 @@
+{
+    "name": "Floating point and coprocessor 1",
+    "description": "What a coprocessor is, how a float and a double are stored, the 32 $f registers and the even/odd pairing that holds a double, and the compare-then-branch pair that has no equivalent among the integer instructions.",
+    "order": 6,
+    "topic": "floating-point"
+}

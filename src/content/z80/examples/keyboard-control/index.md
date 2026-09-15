@@ -5,21 +5,17 @@ the Screen only gets the keyboard when it has the focus, and a ring around it sa
 A bouncing ball drew a picture that changed on its own. This one asks the keyboard, once per frame,
 what is being held down right now, and the answer changes what the next frame will look like.
 
-**You need to know:** the "A bouncing ball" Example and the "The screen, keyboard and mouse through
-ports" lecture. What is new here is port `0x21`, which answers 1 while the key whose code is in `b`
-is held down, and consumes nothing, so a key held for a second answers 1 every frame.
-
-```z80|playground|screen|no-registers|no-flags|allow-open
-P_CHAR  equ 0x00
-P_PEN   equ 0x10
-P_FILL  equ 0x11
-P_X     equ 0x13
-P_Y     equ 0x14
-P_X2    equ 0x15
-P_Y2    equ 0x16
-P_CMD   equ 0x17
-P_KEY   equ 0x21        ; 1 while the key whose code is in b is held down
-P_FRAME equ 0x41
+```z80|playground|open-screen|no-registers|no-flags|allow-open
+P_CHAR  equ 0x10
+P_PEN   equ 0x20
+P_FILL  equ 0x21
+P_X     equ 0x23
+P_Y     equ 0x24
+P_X2    equ 0x25
+P_Y2    equ 0x26
+P_CMD   equ 0x27
+P_KEY   equ 0x31        ; 1 while the key whose code is in b is held down
+P_FRAME equ 0x51
 
 C_RECT    equ 4
 C_CLEAR   equ 9
@@ -188,8 +184,7 @@ title:  .asciz "CLICK THE SCREEN, THEN STEER"
 The four polls all use the same `c`, since the port never changes, and only `b` is reloaded between
 them. `in a, (c)` is the form that has to be used here, because the key code travels on the high
 half of the address bus, which is `b`, and the short `in a, (n)` form puts `a` there instead. The
-codes are EASy68K's, the same table every language in this editor uses: left `0x25`, up `0x26`,
-right `0x27` and down `0x28`.
+arrow keys are `0x25` for left, `0x26` for up, `0x27` for right and `0x28` for down.
 
 The keys do not move the square, they write `dx` and `dy` in memory, and the code under them moves
 it. That separation is what makes the square keep going after you let go, and it is how anything
@@ -209,10 +204,6 @@ before double buffering is turned on and then never touched again. Command 11 ma
 image start as a copy of what is on screen, and every frame clears only the rectangle below the
 title, so those two rows survive for as long as the program runs.
 
-Polling every frame is enough for keys held down. What port `0x21` does not tell you is that a key
+Polling every frame is enough for keys held down. What port `0x31` does not tell you is that a key
 was pressed **again**, which is why a game that wants one action per press keeps the last answer and
-compares, or reads port `0x22`, the code of the last key pressed.
-
-Try changing the `xor a` under `off_right` to `ld a, RIGHT`. The square stops against the right edge
-instead of coming back in at the left, which is the same one instruction doing clamping instead of
-wrapping.
+compares, or reads port `0x32`, the code of the last key pressed.

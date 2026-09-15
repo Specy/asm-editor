@@ -232,7 +232,10 @@ export async function getTopicLinks(
     const courses = await getAllCourses()
     const bySlug = new Map(courses.map((course) => [course.slug, course]))
     const found = lectures
-        .filter((lecture) => lecture.topic === current.topic && lecture.lectureSlug !== lectureSlug)
+        //the course check below is what drops this Lecture itself; matching on the slug as well
+        //would drop every sibling of an Example, since an Example is spelled the same in every
+        //Course and `examples/snake` is its slug in all four
+        .filter((lecture) => lecture.topic === current.topic)
         .flatMap((lecture) => {
             const course = bySlug.get(lecture.courseSlug)
             if (!course || lecture.courseSlug === courseSlug) return []

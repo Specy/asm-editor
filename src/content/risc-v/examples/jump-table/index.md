@@ -6,10 +6,6 @@ The bigger of two numbers chose between two paths with a `blt`. A chain of those
 four cases and gets slower with every one you add, since a value at the bottom of the chain is
 compared against everything above it first. A table is looked up once whatever the value is.
 
-**You need to know:** the "Branch on compare" lecture and the "Loads, stores and immediates"
-lecture. What is new here is a jump to an address the program worked out, `jr t5` goes to whatever
-`t5` holds, which nothing in the source names.
-
 ```riscv|playground|allow-open
 .data
 table: .word add_op, sub_op, mul_op, div_op
@@ -45,21 +41,15 @@ gave that label. Put the memory panel on `10010000` and they read `00400024`, `0
 and `0040003C`, which are four addresses inside your own code. A label is nothing but an address, and
 this is what that sentence is for.
 
-The three instructions before the `jr` are C's `table[op]`: multiply the index by the size of an
-element with a shift, add it to the base, and read the word there. What comes out is an address, and
-`jr` is the same instruction that returns from a subroutine, since `ret` is `jalr zero, ra, 0` and
-`jr t5` is `jalr zero, t5, 0`. Writing `jalr t5` instead would make this four calls rather than a
-`switch`, because that form writes the return address into `ra` on the way.
+The three instructions before the `jr` are the lookup: scale the index by the size of an entry with
+a shift, add it to the base of the table, read the word that is there. What comes back is an
+address, and `jr t5` jumps to it. That is the same instruction a subroutine returns with: `ret` is
+`jalr zero, ra, 0` and `jr t5` is `jalr zero, t5, 0`, a jump whose destination is in a register and
+whose return address is thrown away. Write `jalr t5` instead and these stop being four branches and
+become four calls, because that form keeps the return address in `ra`.
 
-`t6` comes out at `00000012`, which is 18, and `t5` at `00400034`, the address of `mul_op`. Each arm
-ends with `j done` for the same reason the two halves of an `if` do: the arms are laid out one after
-another and nothing stops the program running into the next one.
+Each arm ends with `j done` for the same reason the two halves of a choice do: the arms are laid out
+one after another in memory, and nothing stops a program running out of one and into the next.
 
-All four arms are one real instruction each. `mul` and `div` are the M extension, which this
-simulator has, and they behave like any other instruction here; MIPS spells its three operand `div`
-as a pseudo-instruction that expands to four, a `bne` and a `break` checking the divisor before the
-real division.
-
-Try changing `li t2, 2` to `li t2, 3` and `t6` comes out at 2, which is 6 divided by 3. With `0` it
-comes out at 9 and with `1` at 3. Nothing else in the program moves, and there is no comparison
-anywhere in it to change.
+Put 0, 1 or 3 into `t2` instead and a different arm runs. Nothing else in the program changes, and
+there is no comparison anywhere in it that could be changed: the value itself did the choosing.

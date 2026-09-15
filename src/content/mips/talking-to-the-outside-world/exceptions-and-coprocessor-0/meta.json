@@ -1,0 +1,6 @@
+{
+    "name": "Exceptions and coprocessor 0",
+    "description": "What the CPU does between the instruction that failed and the next one it runs, and how a handler of your own picks the program back up. Coprocessor 0, reading the code out of Cause, eret, and why EPC has to be moved on.",
+    "order": 2,
+    "topic": "interrupts"
+}

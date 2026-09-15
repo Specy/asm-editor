@@ -6,10 +6,6 @@ Every loop up to here read an array once. This one reads it seven times, and the
 to be kept apart, which on this machine means keeping them in different registers for a reason the
 hardware imposes.
 
-**You need to know:** the "Loops and djnz" lecture and the "Fill an array with the numbers from 1 to
-10" Example. What is new here is nesting: the inner counter is set **inside** the outer loop,
-because it has to start again from the top on every pass.
-
 ```z80|playground|memory|no-flags|allow-open
 count equ 8
 
@@ -22,7 +18,7 @@ inner:
     ld a, (hl)          ; left = numbers[i]
     inc hl
     cp (hl)             ; left - right
-    jr c, in_order      ; if(left < right) leave them alone
+    jr c, in_order      ; already in order, so leave them
     ld d, (hl)          ; otherwise swap them
     ld (hl), a
     dec hl
@@ -61,6 +57,3 @@ first pass, the last two after the second, and so on.
 Run it with the memory panel on `9000` and the eight bytes read `01 04 08 0F 10 17 2A 63`, which is
 1, 4, 8, 15, 16, 23, 42 and 99. It took 245 instructions to sort eight numbers, and it would take
 about four times as many to sort sixteen, because both loops grow with the array.
-
-Try changing `jr c, in_order` to `jr nc, in_order`. The same program sorts the other way round,
-largest first, because the only thing that says which order you wanted is that one condition.

@@ -3,13 +3,9 @@ square them, and returns their sum in `$v0`. It needs a local variable to hold t
 while the second call runs, and that local lives on the stack too, in a frame the subroutine builds
 for itself.
 
-A subroutine with its arguments in registers passed everything in `$a0` and `$a1` and kept nothing.
-That works until a subroutine has to hold something across a call, because there is only one `$ra`
-and the call is free to destroy any temporary it likes.
-
-**You need to know:** the "The stack and `$sp`" lecture and the "jal, jr and the calling convention"
-lecture. What is new here is `$fp` as a frame pointer, it stays still while `$sp` keeps moving, so
-`0($fp)` names the same argument from the first instruction to the last.
+Passing everything in `$a0` and `$a1` and keeping nothing works right up until a subroutine has to
+hold something across a call of its own, because there is only one `$ra` and a call is free to
+destroy any temporary it likes.
 
 ```mips|playground|memory|allow-open
 .text
@@ -54,9 +50,11 @@ main:
     move $s1, $v0           # the answer
 ```
 
-There is no `link` here and no `unlk`. The M68K builds and takes down a frame with one instruction
-each; on MIPS the prologue is an `addi` that moves `$sp` down and a `sw` for everything the
-subroutine promised to give back, and the epilogue is the same lines the other way round.
+A frame is built and taken down by hand, out of instructions you already know. The prologue is one
+`addi` that moves `$sp` down far enough for everything the subroutine needs, and then one `sw` for
+each thing it promised to give back. The epilogue is the same lines in reverse: the loads, then the
+`addi` the other way. Nothing is hidden and nothing is automatic, so a frame that does not balance
+is a frame you wrote wrong.
 
 While the second `jal square` is running, the stack looks like this, with 🟢 on the stack pointer:
 
@@ -80,8 +78,10 @@ copy goes on the stack first.
 puts the caller's value back before returning; `$t0` in `main` it destroys freely, and that is why
 `main` reads the answer out of `$v0` and not out of anything it was holding.
 
-`$v0` and `$s1` both come out at `00000019`, which is 25, from 9 plus 16.
+`$v0` and `$s1` both hold 25, which is 9 plus 16.
 
-Try changing `addi $sp, $sp, 8` in `main` to `addi $sp, $sp, 4`. The answer is still right, and
-`$sp` ends at `7FFFEFF8` instead of `7FFFEFFC`: four bytes of stack the program will never get back,
-which in a loop is how a program runs out of it.
+Now change `addi $sp, $sp, 8` in `main` to `addi $sp, $sp, 4` and run it. The answer is still 25,
+which is the dangerous part: nothing looks wrong. But `$sp` ends at `7FFFEFF8` instead of
+`7FFFEFFC`, four bytes lower than it started, and those four bytes are gone for good. Put that same
+mistake inside a loop and the stack pointer walks steadily downwards until it reaches something it
+should not.

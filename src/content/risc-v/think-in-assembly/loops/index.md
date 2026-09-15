@@ -1,49 +1,42 @@
-A loop is a comparison, a branch out of it and a jump backwards, which we can now write. The M68K has
-`dbra`, one instruction that counts and jumps at once; RISC-V has nothing of the kind, so the counter
-and the branch are yours to write and how you write them decides how much the loop costs.
+A loop has three moving parts and you write all three yourself: something that changes on every
+pass, a test, and a jump backwards. There is no single instruction that counts and jumps, which
+means the cost of a loop is decided entirely by how you arrange those three.
 
 ## The loop written out
 
-Adding up the numbers from 1 to 10, in C, then flattened, then assembled:
+Adding up the numbers from 1 to 10. In words first:
 
-```c
-int sum = 0;
-for (int i = 1; i <= 10; i++) sum += i;
+```
+sum is 0, i is 1
+while i is not past 10:
+    add i to sum
+    add 1 to i
 ```
 
-```c
-    int sum = 0;
-    int i = 1;
-while_start:
-    if (i > 10) goto while_end;
-    sum += i;
-    i++;
-    goto while_start;
-while_end:
-```
+And the same thing with the "while" turned into a jump out and a jump back:
 
 ```riscv|playground
 .text
 main:
-    li t0, 0            # sum = 0
-    li t1, 1            # i = 1
+    li t0, 0            # the running total
+    li t1, 1            # the counter
     li t2, 10           # the bound, which has to be in a register
-while_start:
-    bgt t1, t2, while_end   # while(i <= 10)
-    add t0, t0, t1      # sum += i
-    addi t1, t1, 1      # i++
-    j while_start
-while_end:
+top:
+    bgt t1, t2, finished
+    add t0, t0, t1
+    addi t1, t1, 1
+    j top
+finished:
 ```
 
-`t0` comes out at `00000037`, which is 55, and `t1` at 11, one past the last value it used. The
-`j while_start` is what makes it a loop, and it is the same instruction an `if` uses to jump forward.
+`t0` comes out at `00000037`, which is 55, and `t1` at 11, one step past the last value it used.
+A loop is just a jump that goes backwards instead of forwards.
 
-`li t2, 10` is outside the loop because every RISC-V branch compares two registers: a bound that is a
-constant in the C has to be in a register in the assembly, and putting the `li` inside the loop would
-run it on every pass for nothing.
+`li t2, 10` sits above the loop because the branch needs the bound in a register, and loading it
+inside would repeat that work on every pass for nothing.
 
-That is four instructions a pass, three of them the machinery of the loop and one the work.
+Count the instructions in a pass: four, of which three are loop machinery and one is the actual
+work. That ratio is worth improving.
 
 ## The test at the bottom
 
@@ -62,9 +55,9 @@ loop:
     bnez t1, loop       # until it reaches zero
 ```
 
-`t0` is 55 again and `t1` ends at 0. Two things changed: the test moved to the bottom, and the
-counter runs **down to zero**, so the comparison is `bnez` against `zero` and no register holds the
-bound.
+`t0` is 55 again and `t1` ends at 0. Two things changed at once. The test moved to the bottom, which
+gets rid of the jump, and the counter runs **down** to zero, which gets rid of the register holding
+the bound: `bnez` compares against `zero`, and `zero` is always there.
 
 The test at the bottom is what to watch: the body runs once before anything is checked, so a loop
 written this way with a count of 0 runs once and then counts down through every negative number.
@@ -99,10 +92,10 @@ inner:
     bnez t1, outer
 ```
 
-`t0` comes out at 12, which is 3 times 4. The `li t2, 4` has to be **inside** the outer loop: move it
-above `outer:` and the inner counter is 0 on the second pass, so the first `addi` takes it to -1 and
-the loop runs four billion times. Try it and watch the Playground stop, silently, when its two
-million instructions run out.
+`t0` comes out at 12, which is 3 times 4. The `li t2, 4` has to be **inside** the outer loop, and
+this is the mistake everybody makes once. Move it above `outer:` and the inner counter is already 0
+when the second outer pass begins, so the first `addi` takes it to -1 and the loop counts down
+through four billion values before it reaches zero again. Try it.
 
 That silence is what an accidental infinite loop looks like here. There is no message: the program
 simply stops where it had got to, and the registers panel shows a counter at some enormous number.
@@ -119,27 +112,27 @@ end:
 
 .text
 main:
-    la t0, numbers      # p = numbers
-    la t1, end          # the address one past the last element
-    li t2, 0            # sum = 0
+    la t0, numbers      # where we are
+    la t1, end          # where to stop
+    li t2, 0            # the running total
 loop:
-    beq t0, t1, done    # while(p != end)
-    lw t3, 0(t0)        # *p
-    add t2, t2, t3      # sum += *p
-    addi t0, t0, 4      # p++
+    beq t0, t1, done    # arrived at the end?
+    lw t3, 0(t0)
+    add t2, t2, t3
+    addi t0, t0, 4      # on to the next word
     j loop
 done:
 ```
 
-`t2` comes out at `00000096`, which is 150, and `t0` and `t1` are both `10010014`, twenty bytes past
-the start. `end:` is a label with nothing under it, so it is the address the next thing would have
-gone at, which is one past the array. Add a sixth number to the `.word` line and the loop adds it
-without a single other change, which is what the counted version cannot do.
+`t0` and `t1` both finish at `10010014`. `end:` is a label with nothing under it, so it names the
+address the next thing would have been put at, which is one word past the array. Add a sixth number
+to the `.word` line and the loop picks it up with no other change anywhere, which is exactly what
+the counted version cannot do.
 
 `beq` between two pointers is exact, since the pointer lands on `end` and not past it. A `blt`
 against a length would work too, and `bltu` is the one to use there, because addresses are unsigned.
 
-## Your turn
+## Three loops to write
 
 Add up the numbers from 1 to 10 with a loop and leave 55 in `t0`. Both directions work; the one
 counting down is three instructions a pass and needs no register for the bound.
@@ -162,11 +155,11 @@ main:
 ```riscv|playground|solution
 .text
 main:
-    li t0, 0            # sum = 0
-    li t1, 10           # n = 10
+    li t0, 0
+    li t1, 10
 loop:
-    add t0, t0, t1      # sum += n
-    addi t1, t1, -1     # n--
+    add t0, t0, t1      # add the counter to the total
+    addi t1, t1, -1
     bnez t1, loop
 ```
 
@@ -194,14 +187,55 @@ main:
 ```riscv|playground|solution
 .text
 main:
-    li t1, 0            # count = 0
+    li t1, 0            # how many halvings so far
     li t2, 1
 loop:
-    ble t0, t2, done    # while(n > 1)
-    srli t0, t0, 1      # n /= 2
-    addi t1, t1, 1      # count++
+    ble t0, t2, done    # stop once it is down to 1
+    srli t0, t0, 1      # halve it
+    addi t1, t1, 1
     j loop
 done:
+```
+
+</details>
+
+The third one is the pointer walk, with no counter anywhere. The five words at `numbers` are
+followed by the label `end`, and their total belongs in `t2`.
+
+```riscv|playground|memory|exercise
+.data
+numbers: .word 3, 9, 27, 81, 243
+end:
+
+.text
+main:
+    # your code here
+```
+
+```testcase
+{
+    "expectedRegisters": { "t2": 363 }
+}
+```
+
+<details>
+<summary>Show solution</summary>
+
+```riscv|playground|memory|solution
+.data
+numbers: .word 3, 9, 27, 81, 243
+end:
+
+.text
+main:
+    la t0, numbers
+    la t1, end
+    li t2, 0
+loop:
+    lw t3, 0(t0)
+    add t2, t2, t3
+    addi t0, t0, 4
+    bne t0, t1, loop    # the test at the bottom, since there is always one element
 ```
 
 </details>

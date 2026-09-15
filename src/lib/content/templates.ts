@@ -2,7 +2,6 @@ import * as fs from 'node:fs/promises'
 import { join } from 'node:path'
 import { BASE_CODE } from '$lib/Config'
 import { extractPlaygrounds } from '$lib/content/playgrounds'
-import { X86_TEMPLATES } from '$lib/content/x86Templates'
 import type { AvailableLanguages } from '$lib/Project.svelte'
 
 /**
@@ -16,7 +15,9 @@ import type { AvailableLanguages } from '$lib/Project.svelte'
  *
  * The value of `template` is the order it appears in; the name and description are the Example's
  * own. Each of the six is spelled the same way in every Course, so the picker offers one list
- * whatever language is selected.
+ * whatever language is selected. x86 has four of the six: it has no Screen, and this editor cannot
+ * yet hand a typed line to an x86 program, so the drawing and the input programs have no x86
+ * Example to be flagged.
  *
  * Read from disk rather than bundled: the Examples are 492 KB of markdown and only ~30 short
  * programs are wanted, so this runs in the prerender of `/projects/create` and the page ships the
@@ -25,7 +26,6 @@ import type { AvailableLanguages } from '$lib/Project.svelte'
 
 const CONTENT = 'src/content'
 
-/** Courses whose Examples are mirrored program for program. x86 has no course; see x86Templates. */
 const BAREBONES_ID = 'barebones'
 
 export type ProjectTemplate = {
@@ -116,7 +116,7 @@ async function fromCourses(): Promise<ProjectTemplate[]> {
 export async function getProjectTemplates(): Promise<
     Record<AvailableLanguages, ProjectTemplate[]>
 > {
-    const fromContent = [...(await fromCourses()), ...X86_TEMPLATES]
+    const fromContent = await fromCourses()
     const languages = Object.keys(BASE_CODE) as AvailableLanguages[]
     const grouped = {} as Record<AvailableLanguages, ProjectTemplate[]>
 

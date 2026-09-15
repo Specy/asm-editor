@@ -1,27 +1,25 @@
-The instruction set lecture wrote an instruction's operands as `destination` and `source` without
-saying what can go in them. This is what can, and the way an operand is written is its **addressing
-mode**. RISC-V has three, which is fewer than any other machine in this editor.
+There are exactly three ways to write an operand, and the way an operand is written is called its
+**addressing mode**.
 
-| mode             | written | in C               |
-| ---------------- | ------- | ------------------ |
-| register         | `t0`    | `x`                |
-| immediate        | `7`     | `7`                |
-| base plus offset | `4(t0)` | `p[1]`, `*(p + 1)` |
+| mode             | written | what it means                            |
+| ---------------- | ------- | ---------------------------------------- |
+| register         | `t0`    | the value in that register               |
+| immediate        | `7`     | a number written into the instruction    |
+| base plus offset | `4(t0)` | the memory at the address `t0` plus four |
 
-The first two name a value the CPU already has or the assembler already knows. The third names an
-address, and only a load or a store may use it.
+The first two name something the processor already has in hand. The third names an address, and only
+a load or a store is allowed to use it.
 
-## Arithmetic never reaches memory
+## Everything happens in registers
 
-RISC-V is a **load/store architecture**, which means exactly this: `lw`, `lh`, `lb`, `lbu`, `lhu`,
-`sw`, `sh` and `sb` are the only instructions that touch memory, and everything else works on
-registers. There is no `add` that reads a variable, no comparison against a word in memory, no
-increment of a counter that lives at an address.
+Eight instructions touch memory: `lw`, `lh`, `lb`, `lbu`, `lhu`, `sw`, `sh` and `sb`. Every other
+instruction on the machine works on registers and nothing else, which is what the phrase **load/store
+architecture** means.
 
-So the shape of every program that works on data in memory is the same three steps: load it into a
-register, do the work there, store it back. On the M68K, where `add.l total, d0` adds the long at a
-label straight into a register, that is one instruction; here it is three, and the reason the design
-went that way is that a load can take many cycles and an `add` takes one, so the two are kept apart.
+So a program that works on data in memory always has the same shape. Load it into a register, do the
+work there, store it back. Three steps where you might have expected one, and the reason is
+underneath: reaching memory can take many times longer than an addition, so the design keeps the
+slow thing in instructions of its own where you can see it happening.
 
 ## offset(base)
 
@@ -57,13 +55,15 @@ The four words sit at `0x10010000`, where `.data` puts the first label:
 `t3` comes out at 10 and `t4` at 20. `t5` is `1001000C`, and `t6` is 30, because the offset may be
 negative and `-4(t5)` is one word back.
 
-Two things the mode cannot do. It cannot add two registers, so there is no `lw t0, (t1 + t2)`. And
-it cannot scale anything, so an index has to be turned into a byte offset by your own code.
+Two things the mode will not do for you. It will not add two registers together, so there is no
+`lw t0, (t1 + t2)`. And it will not scale anything, so turning an element number into a byte offset
+is your own code's job. That is the next section.
 
 ## Indexing an array
 
-C hides the size of an element: `numbers[i]` means the address of `numbers` plus `i` times four,
-because the elements are 4 byte words. RISC-V makes you write both halves of that.
+Asking for element number `i` of an array means going to the start of the array and moving `i`
+elements along, and the machine has no idea how big an element is. Both halves are yours to
+write.
 
 ```riscv|playground|memory
 .data
@@ -81,39 +81,42 @@ main:
     sw t6, 0(t3)        # numbers[i] = 99
 ```
 
-`t4` comes out at 30 and `t5` at 40, and after the `sw` the word at `0x10010008` reads `00000063`,
-which is 99. `slli t2, t1, 2` is the multiplication by 4: shifting left by 2 multiplies by 4, and
-every size on this machine is a power of two, so a shift is always what you want here.
+`slli t2, t1, 2` is the multiplication by four: shifting left by two places multiplies by four, and
+since every useful element size is a power of two, a shift is always the right instruction for this.
 
-Once the address is in a register, the constant offset does the rest of the work: `0(t3)` and
-`4(t3)` are two neighbouring elements out of one computed address, and a loop over pairs pays for
-the arithmetic once.
+Once the address is in a register, the constant offset does the rest of the work for free. `0(t3)`
+and `4(t3)` are two neighbouring elements from one piece of arithmetic, which is why a loop that
+handles elements in pairs is cheaper than two separate loops.
 
-Try changing `li t1, 2` to `li t1, 0` and watching which word changes instead.
+## Where la gets its address from
 
-## auipc, and how la works
+You have been writing `la t0, numbers` since the first lecture, and it is worth knowing what the
+assembler does with it, because the answer is not what you would guess.
 
-`la t0, numbers` looks like it should be a `lui` and an `addi` holding the address as a constant.
-It is not. It assembles into **`auipc`**, add upper immediate to `pc`, and an `addi`:
+A 32 bit address will not fit inside a 32 bit instruction, so `la` is always two instructions. The
+surprise is that neither of them contains the address. The pair assembles into **`auipc`**, add
+upper immediate to `pc`, and an `addi`:
 
 ```
 auipc t0, 0xfc10        # t0 = pc + 0xfc10000
 addi t0, t0, 0          # and the low 12 bits of the difference
 ```
 
-`auipc` adds a 20 bit constant, shifted up 12 places, to the address of the `auipc` itself. So the
-pair computes **the distance from here to the label** and adds it to where the program actually is,
-which means the same three instructions work wherever the program was loaded. That is why RISC-V has
-`auipc` at all, and it is what makes position independent code the default on this machine instead
-of something you ask for.
+`auipc` takes a 20 bit constant, shifts it up 12 places, and adds it to the address of the `auipc`
+instruction itself. So what those two lines actually work out is **the distance from here to the
+label**, added to wherever the program happens to be right now.
 
-The number in the disassembly, `0xfc10`, is the top 20 bits of `0x10010000` minus `0x00400000`,
-which is the distance from the instruction to the data section.
+The `0xfc10` in the expansion is the top 20 bits of `0x10010000` minus `0x00400000`, the gap between
+the instruction and the data section.
 
-## The assembler's label forms
+Working in distances rather than in fixed addresses means the same code still finds its data if the
+whole program is loaded somewhere else in memory, which is a thing that really happens once a
+program is more than one file. You get that for free here and never have to think about it.
 
-`lw t1, numbers` is not one of the three modes. It is a pseudo-instruction, and the assembler turns
-it into an `auipc` that puts the address in the destination register and a real `lw` through it.
+## Reaching a label directly
+
+`lw t1, numbers` is not one of the three modes, but the assembler accepts it and builds it out of an
+`auipc` that works the address out into the destination register and a real `lw` through that.
 
 ```riscv|playground|memory
 .data
@@ -127,18 +130,19 @@ main:
     sw t2, numbers, t3  # a store to a label names its own temporary
 ```
 
-`t1` comes out at 10 and, after the `sw`, the word at `0x10010000` reads `00000063`. The store is
-the one with an extra operand: a load can build the address in the register it is about to write,
-and a store has no such register, so **you name one**, and `t3` ends at `10010014` holding what the
-`auipc` computed, which the store's own offset of -20 then brings back down to `10010000`.
+Look at the third line, which has an operand more than a store should have. This is why: the address
+has to be built somewhere, and a load can build it in the very register it is about to fill, because
+that register's old value is about to be thrown away anyway. A store has no such register. It is
+reading a register, not writing one, so it needs you to **lend it one**, and `t3` is the one lent
+here. Afterwards `t3` holds `10010014`, the address the `auipc` worked out, which the store's own
+offset of -20 brought back down to `10010000`.
 
-Two things this assembler will not do that MIPS's will. `lw t1, numbers+8` is a build error, because
-a label in an operand is the label and nothing added to it. And there is no hidden scratch register
-anywhere in the three lines above, so nothing you were keeping got destroyed.
+One thing the assembler will not do is arithmetic on a label: `lw t1, numbers+8` is a build error,
+because a label in an operand is that label and nothing added to it.
 
-That is the trade. `lw t1, numbers` reads like C and costs two instructions every time it runs, so
-inside a loop you do the `la` once, before the loop, and use `offset(base)` inside it. `la` is the
-one you will write most, because a pointer in a register is what the loop wants.
+These label forms cost two instructions every time they run. Inside a loop, do the `la` once before
+the loop starts and use `offset(base)` inside it. That is why `la` is the form you will write most:
+a pointer sitting in a register is what a loop actually wants.
 
 ## Walking with a pointer
 
@@ -151,36 +155,36 @@ numbers: .word 10, 20, 30, 40, 50
 
 .text
 main:
-    la t0, numbers      # p = numbers
-    li t1, 0            # sum = 0
-    li t2, 5            # left = 5
+    la t0, numbers      # where we are in the array
+    li t1, 0            # the running total
+    li t2, 5            # how many are left
 loop:
-    lw t3, 0(t0)        # *p
-    add t1, t1, t3      # sum += *p
-    addi t0, t0, 4      # p++, which on a word is four bytes
-    addi t2, t2, -1     # left--
+    lw t3, 0(t0)        # the element we are on
+    add t1, t1, t3
+    addi t0, t0, 4      # on to the next word
+    addi t2, t2, -1
     bnez t2, loop
 ```
 
-`t1` comes out at `00000096`, which is 150, and `t0` at `10010014`, twenty bytes on and one word
-past the last element. The `addi t0, t0, 4` is C's `p++` written out, because C hides the size of
-what a pointer points at and assembly does not.
+`t0` finishes at `10010014`, twenty bytes along and one word past the last element. The
+`addi t0, t0, 4` is the step, and the 4 in it is the size of what is being stepped over: an array of
+bytes would step by 1, an array of halves by 2.
 
 The other way to write that loop keeps `t0` at the base and computes `slli` and `add` on every pass,
 which is two instructions more and gives you the index in a register. Use the pointer when you touch
 every element in order, and the index when you need the index itself, or when the loop jumps around
 the array the way a binary search does.
 
-## Branches and jumps are addressed differently
+## How a jump finds its target
 
-None of the three modes applies to the instruction stream. `beq t0, t1, label` holds a distance in
-bytes from the branch to the label, which reaches about 4 kilobytes either way. `jal label` holds a
-distance too, and reaches about a megabyte. `jalr t0, t1, 0` takes an address out of a register and
-adds a 12 bit offset to it, which is how a subroutine return and a jump table both work.
+Jumps work in distances rather than in any of the three modes above. `beq t0, t1, label` carries the
+number of bytes from the branch to the label, and reaches about 4 kilobytes either way. `jal label`
+carries a distance too, and reaches about a megabyte. `jalr t0, t1, 0` is the one that takes an
+address out of a register, which is how a return and a jump table both work.
 
-You write a label in all of them and the assembler works out the distance.
+In all of them you write a label and the assembler works the distance out.
 
-## Your turn
+## Reach into the array yourself
 
 The four words are at `0x10010000`. Leave `numbers[2]` in `t0`, working the address out at run time
 from the index in `t1` instead of writing the offset 8 yourself.

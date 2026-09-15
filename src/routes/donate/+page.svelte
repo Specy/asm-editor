@@ -11,10 +11,12 @@
     import Card from '$cmp/shared/layout/Card.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
     import { PAST_DONATIONS } from '$src/routes/donate/pastDonations'
+    import { resolve } from '$app/paths'
+    import type { ResolvedPathname } from '$app/types'
 
-    let previousPage: string = $state('/projects')
+    let previousPage: ResolvedPathname = $state(resolve('/projects', {}))
     afterNavigate(({ from }) => {
-        previousPage = from?.url.pathname ?? previousPage
+        previousPage = (from?.url.pathname as ResolvedPathname) ?? previousPage
     })
 </script>
 

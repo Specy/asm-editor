@@ -5,8 +5,10 @@ nothing.
 
 ## The size decides the shift
 
-`a[i]` in C is the base plus `i` times the size of an element. Here that multiplication is a shift
-you write: two places for a word, one for a half, none at all for a byte.
+Asking for element number `i` means going to the first address and moving `i` elements along, and
+moving along by an element means multiplying by its size. That multiplication is a shift you write
+out: two places for a word, one for a half, and none at all for a byte, which is already the unit an
+address counts in.
 
 ```riscv|playground|memory
 .data
@@ -51,13 +53,13 @@ text: .asciz "Assembly"
 
 .text
 main:
-    la t0, text         # p = text
-    li t1, 0            # n = 0
+    la t0, text         # where we are looking
+    li t1, 0            # how many characters so far
 loop:
-    lb t2, 0(t0)        # c = *p
-    beqz t2, done       # if(c == 0) stop
-    addi t0, t0, 1      # p++
-    addi t1, t1, 1      # n++
+    lb t2, 0(t0)        # the character there
+    beqz t2, done       # a zero byte ends the string
+    addi t0, t0, 1      # on to the next byte
+    addi t1, t1, 1      # and count it
     j loop
 done:
 ```
@@ -72,8 +74,9 @@ to 255.
 
 ## Copying one
 
-`strcpy` in C copies characters until it has copied the terminator. Copying it is the point: a copy
-without a terminator is not a string.
+Copying a string means copying characters until you have copied the terminator, and copying the
+terminator is the point rather than an afterthought: without it the copy is not a string, it is just
+some bytes that happen to look like one.
 
 ```riscv|playground|memory
 .data
@@ -82,13 +85,13 @@ dest:   .space 16
 
 .text
 main:
-    la t0, source       # p = source
-    la t1, dest         # q = dest
+    la t0, source       # where we are reading
+    la t1, dest         # where we are writing
 loop:
-    lb t2, 0(t0)        # c = *p
-    sb t2, 0(t1)        # *q = c
-    addi t0, t0, 1      # p++
-    addi t1, t1, 1      # q++
+    lb t2, 0(t0)        # the character there
+    sb t2, 0(t1)        # write it to the other string
+    addi t0, t0, 1      # step both pointers on
+    addi t1, t1, 1      # and the second one
     bnez t2, loop       # until the byte copied was the terminator
 ```
 
@@ -125,7 +128,7 @@ main:
     slli t3, t3, 1      # times 2, the size of a half
     la t4, grid
     add t4, t4, t3
-    lh t5, 0(t4)        # grid[row][col]
+    lh t5, 0(t4)        # the element itself
 ```
 
 `t5` comes out at 23, the last element of the last row, and `t3` at 22, which is the byte offset into
@@ -137,10 +140,7 @@ arithmetic assumes.
 When the width is a power of two, `slli` does it in one cheaper instruction, and the two shifts can
 be added together: a grid of 4 halves is `slli t3, t0, 3` for the row and then the column shifted by 1.
 
-Try changing `li t0, 2` to `li t0, 0` and `li t1, 3` to `li t1, 1`. `t5` comes out at 1, the second
-element of the first row.
-
-## Your turn
+## Two strings to walk
 
 `text` at `0x10010000` is a string with a zero at the end. Leave its length, not counting the
 terminator, in `t0`. For `"Assembly"` that is 8.
@@ -169,10 +169,10 @@ text: .asciz "Assembly"
 
 .text
 main:
-    la t1, text         # p = text
-    li t0, 0            # n = 0
+    la t1, text         # where we are looking
+    li t0, 0            # how many characters so far
 loop:
-    lb t2, 0(t1)        # c = *p
+    lb t2, 0(t1)        # the character there
     beqz t2, done
     addi t1, t1, 1
     addi t0, t0, 1
@@ -184,8 +184,7 @@ done:
 
 The second one turns `text` into upper case **in place**, so the memory at `0x10010000` ends up
 holding `HELLO` and its terminator. A lower case letter is `'a'` to `'z'` and subtracting 32 from its
-code gives the capital. Remember that a RISC-V branch compares two registers, so the two bounds go
-into registers before the loop.
+code gives the capital. The two bounds you compare against will each need a register of their own.
 
 ```riscv|playground|memory|exercise
 .data
@@ -215,12 +214,12 @@ main:
     li t3, 'a'
     li t4, 'z'
 loop:
-    lb t1, 0(t0)        # c = *p
+    lb t1, 0(t0)        # the character there
     beqz t1, done
     blt t1, t3, skip    # leave anything that is not a lower case letter
     bgt t1, t4, skip
     addi t1, t1, -32    # 'a' - 'A' is 32
-    sb t1, 0(t0)        # *p = c
+    sb t1, 0(t0)        # put it back
 skip:
     addi t0, t0, 1
     j loop

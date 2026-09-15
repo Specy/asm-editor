@@ -2,13 +2,9 @@ Twelve words laid out as three rows of four. The program reads one element by it
 then adds up a whole column, which means stepping through memory a row at a time instead of an
 element at a time.
 
-Every array up to here was one line of memory. A 2D array is the same line read in rows, and the two
-numbers you write in C as `grid[row][col]` have to be turned into one offset before anything can be
-read.
-
-**You need to know:** the "Arrays, strings and `(a0)+`" lecture and the "Addressing modes" lecture.
-What is new here is the stride, the distance in bytes between one row and the next, which is what
-walking a column adds every pass.
+Memory is one long line, so a grid is a fiction agreed between you and your own code. A row and a
+column have to be folded into a single offset before anything can be read, and it is the program that
+does the folding.
 
 ```m68k|playground|memory|no-flags|allow-open
 ROWS equ 3
@@ -54,5 +50,6 @@ Walking a **row** would be the same loop with `(a1)+` and no `add` at all, since
 row sit next to each other and the postincrement mode steps by the size of what it read. A column is
 the direction the array is not laid out in, and it costs one instruction per pass to say so.
 
-Try changing `move.l #1, d1` to `move.l #3, d1`. `d3` comes out at `00000190`, which is 400, and the
-column total in `d5` at `000001BC`, which is 444.
+Nothing here checks that the row and column you asked for are inside the grid. A column of 4 on a
+grid four wide reads the first element of the next row down, and it does it without complaint,
+because the arithmetic works perfectly well on an index nobody should have given it.

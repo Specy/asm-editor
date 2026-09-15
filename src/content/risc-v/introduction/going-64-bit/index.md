@@ -44,9 +44,10 @@ bottom four gigabytes of a 64 bit address.
 
 ## The w instructions
 
-A 32 bit `add` on a 64 bit machine is a real thing to want: C's `int` is 32 bits on almost every
-64 bit target, so `a + b` on two `int`s has to wrap at 32 bits and not at 64. RV64 gives you a
-second copy of the arithmetic for it, with a **`w`** on the end.
+Plenty of the values a program handles are 32 bits wide even when the registers are not: a count
+kept in a `.word`, an array index, a colour, anything that was stored as four bytes. Adding two of
+those together has to wrap at 32 bits, the way it would on a 32 bit machine, and not at 64. So RV64
+carries a second copy of the arithmetic with a **`w`** on the end for exactly that case.
 
 A `w` instruction reads the low 32 bits of its operands, computes a 32 bit answer, and **sign
 extends that answer into all 64 bits** of the destination. Sign extending is what keeps the two
@@ -83,61 +84,9 @@ main:
 which is the wrapped 32 bit product. `t6` and `s0` are `sext.w` and `zext.w`, the two instructions
 that do that widening to a value already in a register.
 
-So the rule for writing RV64 by hand: use the plain instruction when the value is an address or a
-64 bit number, and the `w` form when you are working on something that is 32 bits wide because C
-said so.
-
-## What this simulator gets wrong
-
-Two of the shift instructions are wrong here, and everything else on this page runs the way the
-specification says.
-
-**`slli`, `srli` and `srai` with a shift amount of 31 or less are carried out on the low 32 bits
-only, and the answer is sign extended.** The same shifts with an amount of 32 or more are carried
-out on all 64 bits and are right. The register forms, `sll`, `srl` and `sra`, are right at every
-amount.
-
-```riscv64|playground
-.text
-main:
-    li t0, 1
-    slli t1, t0, 32     # 32 or more, so all 64 bits: 0x100000000
-    slli t2, t0, 31     # 31 or less, so the low 32 and a sign: 0xFFFFFFFF80000000
-    li t3, 31
-    sll t4, t0, t3      # the register form, and the right answer: 0x80000000
-    li t5, 0x11223344
-    slli t6, t5, 8      # the top byte is shifted off the end and lost
-```
-
-`t1` is `0000000100000000`, which is 2 to the 32 and what the shift should give. `t2` is
-`FFFFFFFF80000000`, where a 64 bit shift of 1 by 31 is `0000000080000000`, and `t4` is that right
-answer out of the register form. `t6` is `0000000022334400`: the `11` at the top of `t5` was shifted
-out of a 32 bit register instead of moving up into the second half of a 64 bit one.
-
-`li` is built out of those shifts, so **a `li` of a constant that needs more than 32 bits comes out
-wrong**. Its expansion is a `lui`, an `addiw` and then a run of `slli` and `addi` pairs with shift
-amounts of 11 and 10, every one of them in the broken range.
-
-```riscv64|playground
-.text
-main:
-    li t0, 42                   # small constants are fine
-    li t1, 0x12345678           # so is anything that fits in 32 bits
-    li t2, 0x1122334455667788   # this one does not survive
-    li t3, 0x11223344
-    slli t3, t3, 32             # a shift of 32, so the top half lands correctly
-    li t4, 0x55667788
-    add t3, t3, t4              # and the bottom half is added in
-```
-
-`t0` is 42 and `t1` is `0000000012345678`, both right. `t2` comes out at `0000000055667788`, which
-is the bottom half of the number you asked for with nothing above it. `t3` is
-`1122334455667788`, the whole number, put together out of two `li`s that each fit in 32 bits, one
-`slli` of 32 and one `add`.
-
-That three line pattern is the workaround for any 64 bit constant, with one thing to watch: if the
-bottom half has its top bit set, the `li` that loads it sign extends and the `add` carries ones into
-the top half, so use `zext.w` on it before adding.
+So the rule when you write RV64 by hand: the plain instruction for an address or a genuinely 64 bit
+number, the `w` form when the value you are working on is 32 bits wide and should behave as though
+the register were too.
 
 ## Your turn
 
@@ -170,37 +119,8 @@ big: .dword 0x1122334455667788
 main:
     la t0, big
     ld t3, 0(t0)
-    srli t1, t3, 32     # 32 or more, so this shift is the 64 bit one
+    srli t1, t3, 32     # bring the top half down
     zext.w t2, t3       # the low word with the top half cleared
-```
-
-</details>
-
-The second one wants `0x00ABCDEF12345678` in `t0`, which `li` cannot give you. Build it out of two
-constants that each fit in 32 bits.
-
-```riscv64|playground|exercise
-.text
-main:
-    # your code here
-```
-
-```testcase
-{
-    "expectedRegisters": { "t0": "0x00ABCDEF12345678" }
-}
-```
-
-<details>
-<summary>Show solution</summary>
-
-```riscv64|playground|solution
-.text
-main:
-    li t0, 0x00ABCDEF
-    slli t0, t0, 32     # the top half into place
-    li t1, 0x12345678
-    add t0, t0, t1      # and the bottom half added in
 ```
 
 </details>

@@ -1,46 +1,43 @@
-A loop is a comparison, a branch out of it and a jump backwards, which we can now write. The M68K has
-`dbra`, one instruction that counts and jumps at once; MIPS has nothing of the kind, so the counter
-and the branch are yours to write and how you write them decides how much the loop costs.
+A loop is three things you already have: a test, a branch that leaves when the test says so, and a
+jump backwards to do it all again. MIPS gives you each of those separately and nothing that bundles
+them, so every loop you write is assembled out of those parts by hand. The interesting consequence
+is that you get to choose the shape, and the shapes are not equally cheap.
 
 ## The loop written out
 
-Adding up the numbers from 1 to 10, in C, then flattened, then assembled:
+Adding up the numbers from 1 to 10. In plain terms:
 
-```c
-int sum = 0;
-for (int i = 1; i <= 10; i++) sum += i;
 ```
-
-```c
-    int sum = 0;
-    int i = 1;
+        sum = 0
+        i = 1
 while_start:
-    if (i > 10) goto while_end;
-    sum += i;
-    i++;
-    goto while_start;
+        if i is greater than 10, jump to while_end
+        sum = sum + i
+        i = i + 1
+        jump to while_start
 while_end:
 ```
 
 ```mips|playground
 .text
 main:
-    li $t0, 0               # sum = 0
-    li $t1, 1               # i = 1
+    li $t0, 0               # the running total
+    li $t1, 1               # the counter, starting at 1
 while_start:
-    bgt $t1, 10, while_end  # while(i <= 10)
-    add $t0, $t0, $t1       # sum += i
-    addi $t1, $t1, 1        # i++
+    bgt $t1, 10, while_end  # past 10, so leave
+    add $t0, $t0, $t1       # add the counter to the total
+    addi $t1, $t1, 1        # next value
     j while_start
 while_end:
 ```
 
-`$t0` comes out at `00000037`, which is 55, and `$t1` at 11, one past the last value it used. The
-`j while_start` is what makes it a loop, and it is the same instruction an `if` uses to jump forward.
+`$t0` holds 55 and `$t1` finishes at 11, one past the last value it actually used, because the test
+that stopped the loop is the one that failed. Counters almost always end one step past the end and
+that is normal; reading `$t1` as "the last number added" is the mistake.
 
-`bgt $t1, 10, while_end` is a pseudo-instruction with a constant in it, so it costs three real
-instructions: an `addi` to put the 10 in `$at`, an `slt` and a `bne`. That makes six instructions a
-pass, four of them the machinery of the loop and one the work.
+Now count the cost. `bgt $t1, 10, while_end` has a constant in it, so it is a pseudo-instruction
+worth three real ones: an `addi` to get the 10 into `$at`, an `slt`, and a `bne`. Add the `add`, the
+`addi` and the `j` and every pass runs six instructions to do one instruction's worth of work.
 
 ## Counting down to zero
 
@@ -50,21 +47,21 @@ whose counter runs **down to zero** is half the size of the same loop counting u
 ```mips|playground
 .text
 main:
-    li $t0, 0               # sum = 0
-    li $t1, 10              # n = 10
+    li $t0, 0               # the running total
+    li $t1, 10              # how many are left
 loop:
-    add $t0, $t0, $t1       # sum += n
-    addi $t1, $t1, -1       # n--
+    add $t0, $t0, $t1       # add whatever is left
+    addi $t1, $t1, -1       # one fewer
     bnez $t1, loop          # until it reaches zero
 ```
 
-`$t0` is 55 again and `$t1` ends at 0, out of three instructions a pass instead of six. Two things
-changed: the test moved to the **bottom** of the loop, which makes it a `do while`, and it compares
-against zero, which needs no `slt` and no `$at`.
+`$t0` is 55 again, from three instructions a pass instead of six. Two things changed. The test moved
+to the **bottom** of the loop, so the body always runs at least once, and the test compares against
+zero, which needs no `slt` and no `$at`.
 
-The test at the bottom is what makes it cheaper and it is also what to watch: the body runs once
-before anything is checked, so a loop written this way with a count of 0 runs once and then counts
-down through every negative number. When the count can be zero, test it before you enter:
+The test at the bottom is the half that needs watching. If the count can legitimately be zero, this
+loop runs the body once anyway, then decrements past zero and counts down through every negative
+number until the instruction budget runs out. Guard it before you go in:
 
 ```
     beqz $t1, loop_end
@@ -72,36 +69,40 @@ loop:
     ...
 ```
 
-Counting down also means the counter is no longer the index. When the body needs to know which pass
-it is on, either count up and pay for the comparison, or keep a second register.
+Counting down costs you one thing: the counter is no longer the index. It says how many are left,
+not which one you are on. When the body needs the index, either count up and pay for the comparison,
+or keep a second register that counts the other way.
 
 ## Nested loops
 
-Nothing new: an inner loop sits between two lines of the outer one, with its own counter in its own
-register, reset at the top of every outer pass.
+An inner loop sits between two lines of the outer one, with its own counter in its own register,
+reset at the top of every outer pass. The reset is the whole difficulty.
 
 ```mips|playground
 .text
 main:
-    li $t0, 0               # total = 0
+    li $t0, 0               # the running total
     li $t1, 3               # rows left
 outer:
     li $t2, 4               # columns left, reset on every outer pass
 inner:
-    addi $t0, $t0, 1        # total++
+    addi $t0, $t0, 1        # one more cell visited
     addi $t2, $t2, -1
     bnez $t2, inner
     addi $t1, $t1, -1
     bnez $t1, outer
 ```
 
-`$t0` comes out at 12, which is 3 times 4. The `li $t2, 4` has to be **inside** the outer loop: move
-it above `outer:` and the inner counter is 0 on the second pass, so the first `addi` takes it to -1
-and the loop runs four billion times. Try it and watch the Playground stop, silently, when its two
-million instructions run out.
+`$t0` finishes at 12, which is 3 times 4.
 
-That silence is what an accidental infinite loop looks like here. There is no message: the program
-simply stops where it had got to, and the registers panel shows a counter at some enormous number.
+Move the `li $t2, 4` line above `outer:` and run it. The inner counter is 0 when the second outer
+pass begins, so the first `addi $t2, $t2, -1` takes it to -1, `bnez` is happy, and the inner loop
+counts down through four billion values. The Playground stops after two million instructions with no
+message at all. The program simply ends where it had got to, and `$t2` in the panel is some huge
+number.
+
+That silence is what an accidental infinite loop looks like here, so when a program stops for no
+apparent reason with a register full of nonsense, this is the first thing to suspect.
 
 ## Walking an array
 
@@ -115,27 +116,32 @@ end:
 
 .text
 main:
-    la $t0, numbers         # p = numbers
+    la $t0, numbers         # where we are standing
     la $t1, end             # the address one past the last element
-    li $t2, 0               # sum = 0
+    li $t2, 0               # the running total
 loop:
-    beq $t0, $t1, done      # while(p != end)
-    lw $t3, 0($t0)          # *p
-    add $t2, $t2, $t3       # sum += *p
-    addi $t0, $t0, 4        # p++
+    beq $t0, $t1, done      # reached the end, so stop
+    lw $t3, 0($t0)          # the element we are standing on
+    add $t2, $t2, $t3       # into the total
+    addi $t0, $t0, 4        # step on one word
     j loop
 done:
 ```
 
-`$t2` comes out at `00000096`, which is 150, and `$t0` and `$t1` are both `10010014`, twenty bytes
-past the start. `end:` is a label with nothing under it, so it is the address the next thing would
-have gone at, which is one past the array. Add a sixth number to the `.word` line and the loop adds
-it without a single other change, which is what the counted version cannot do.
+The trick is `end:`, a label with nothing underneath it. A label is the address the next thing would
+have been put at, so with nothing following the array, `end` is the address one past the last
+element. `$t0` and `$t1` both finish at `10010014`, which is that address: the pointer walked up to
+the boundary and stopped on it.
 
-`beq` between two pointers is exact, since the pointer lands on `end` and not past it. A `blt`
-against a length would work too, and `bltu` is the one to use there, because addresses are unsigned.
+Add a sixth number to the `.word` line and run it again. The total changes and not one other line of
+the program does, because the loop never knew how many elements there were. The counted version
+needs its `li` updated every time the data changes, and sooner or later somebody forgets.
 
-## Your turn
+`beq` between two pointers is exact here, since the pointer lands on `end` rather than stepping over
+it. Comparing against a length instead would also work, and there you want `bltu`, because addresses
+are unsigned and one near the top of memory reads as negative to a signed comparison.
+
+## Write two loops
 
 Add up the numbers from 1 to 10 with a loop and leave 55 in `$t0`. Both directions work; the one
 counting down is three instructions a pass.
@@ -158,18 +164,19 @@ main:
 ```mips|playground|solution
 .text
 main:
-    li $t0, 0               # sum = 0
-    li $t1, 10              # n = 10
+    li $t0, 0               # the running total
+    li $t1, 10              # how many are left
 loop:
-    add $t0, $t0, $t1       # sum += n
-    addi $t1, $t1, -1       # n--
+    add $t0, $t0, $t1       # add whatever is left
+    addi $t1, $t1, -1       # one fewer
     bnez $t1, loop
 ```
 
 </details>
 
 The second one starts `$t0` at 64 and asks how many times it can be halved before it reaches 1.
-Leave that count in `$t1`, which for 64 is 6, and use a shift for the halving.
+Leave that count in `$t1`, which for 64 is 6. Halve it with `srl`, the right shift that brings
+zeroes in at the top, which is the one you want for a number that is never negative.
 
 ```mips|playground|exercise
 .text
@@ -190,11 +197,11 @@ main:
 ```mips|playground|solution
 .text
 main:
-    li $t1, 0               # count = 0
+    li $t1, 0               # how many halvings so far
 loop:
-    ble $t0, 1, done        # while(n > 1)
-    srl $t0, $t0, 1         # n /= 2
-    addi $t1, $t1, 1        # count++
+    ble $t0, 1, done        # down to 1, so stop
+    srl $t0, $t0, 1         # one place right is half
+    addi $t1, $t1, 1        # count that one
     j loop
 done:
 ```

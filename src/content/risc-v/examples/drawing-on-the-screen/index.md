@@ -2,15 +2,11 @@ A picture in a handful of shapes: two rectangles for the sky and the ground, a d
 rectangle for the house, six rows of decreasing width for its roof and one more rectangle for the
 door. Press Run and watch the Screen panel next to the program.
 
-Print a string asked the environment for a line of text. The screen asks nothing of anybody. It is a
-block of memory, one word per pixel, and every shape on it is a loop of `sw` instructions that your
-program writes.
+Printing went through a service. The screen asks nothing of anybody: it is a block of memory, one
+word per pixel, and a shape on it is a loop of `sw` instructions. Nothing in the machine knows what
+a rectangle is, so `fill_rect` and `fill_disc` here are subroutines somebody had to write.
 
-**You need to know:** the "The bitmap display and the keyboard registers" lecture and the "A 2D
-array" Example. What is new here is a shape as a subroutine: `fill_rect` and `fill_disc` are the two
-the rest of the program calls, because nothing in the machine draws anything.
-
-```riscv|playground|screen|no-registers|allow-open
+```riscv|playground|open-screen|no-registers|allow-open
 # @screen unit=8 width=256 height=256 base=display
 .eqv SIDE, 32               # words across and down
 .eqv SKY, 0x0070B0E0
@@ -139,40 +135,39 @@ which is why `SIDE` is 32 and why `.space 4096` is exactly the right amount of r
 of four bytes each.
 
 A colour is the low 24 bits of a word, red in bits 23 to 16, green in 15 to 8 and blue in 7 to 0. So
-`0x0070B0E0` is `rgb(112, 176, 224)`, a pale blue, and the order is the `#RRGGBB` you write in CSS
-with a `0x` on the front. The M68K's screen takes the same three bytes the other way round.
+`0x0070B0E0` is a pale blue, 112 red, 176 green and 224 blue, written in the same order as the
+`#RRGGBB` of a web page.
 
-The address of the pixel at column `x` and row `y` is `base + (y * SIDE + x) * 4`, which is the two
-dimensional array of the Example before this one with an element size of four. Both subroutines here
-work that out the same way: `slli` by 5 for the `y * 32`, an `add` for the `x`, `slli` by 2 for the
-four bytes, and an `add` for the base.
+The address of the pixel at column `x` and row `y` is `base + (y * SIDE + x) * 4`: a grid held as one
+long line of words, exactly like the two dimensional array a couple of pages back, with four bytes
+to an element. Both subroutines work it out the same way, `slli` by 5 for the `y * 32`, an `add` for
+the `x`, `slli` by 2 to turn words into bytes, and an `add` for the base.
 
 `fill_rect` computes that address once per row and then walks along the row with `addi t2, t2, 4`,
 because the pixels of a row sit next to each other in memory. `fill_disc` computes it per pixel,
 because it only writes the ones it keeps. A cell is inside the disc when `dx * dx + dy * dy` is under
 `r * r`, which is Pythagoras with the square root left off both sides.
 
-`fill_disc` writes the address into `t4`, the register that was holding the squared distance a line
-earlier, and it has to: RISC-V has seven temporaries, `t0` to `t6`, and the loop is already using all
-seven. MIPS has ten of them, so its version of this subroutine gives the address one of its
-own. Once the `bge` has read `t4` the distance is finished with, so reusing it costs nothing but a
-comment.
+`fill_disc` builds the pixel address in `t4`, the same register that held the squared distance one
+line earlier. That is safe, and worth recognising as a habit rather than a trick: the `bge` above it
+is the last instruction that reads the distance, so from that point on `t4` holds a value nobody
+will ever look at again. A register whose value is dead is free to reuse, and in a loop that is
+already using `t0` to `t6` it is the only room there is.
 
-The grid's address is in `s0` and the colour in `s1`, and neither is an argument. The M68K's screen
-has a pen colour and a fill colour of its own that a task sets; here the hardware has no such thing,
-so this program keeps its own current colour in a saved register and every drawing subroutine reads
-it from there. `s0` to `s11` are the registers a subroutine has to give back, so `fill_rect` writing
-only `t` registers is what makes that work.
+The grid's address is in `s0` and the colour in `s1`, and neither is passed as an argument. There is
+no colour setting anywhere in the hardware, so this program keeps its own, in a register both
+drawing subroutines agree to read. `s0` to `s11` are the registers a subroutine must hand back
+unchanged, which is exactly the promise that makes the arrangement safe: `fill_rect` writes nothing
+but `t` registers, so `s1` survives every call.
 
 The whole picture is 6266 instructions out of the two million a Playground gets, and 1251 of those are
 the `sw` instructions themselves: a 32 by 32 grid is 1024 words, and the sky and the ground between
 them cover every one of those before anything else is drawn on top.
 
-There is no text in the picture. The M68K has a task that draws a string at a pixel position; the
-bitmap display has nothing of the kind, and a caption under a house has to be either drawn letter by
-letter out of pixels or printed to the console instead.
+The display draws pixels and nothing else, so a caption under the house would have to be built out
+of pixels letter by letter, or printed to the console instead.
 
-Try changing the sun's `li a0, 26` to `li a0, 29`, which moves its centre three cells right. Its
-right hand edge is cut off at column 31, and the cells that fell off it appear at the **left** of the
-next row down, because nothing between the coordinates and the `sw` checks that the column is still
-on the screen: a grid is one line of memory and column 32 of a row is column 0 of the next.
+Move the sun's centre three cells right, `li a0, 29` instead of 26, and watch what happens to its
+right hand edge: the cells that run off column 31 turn up at the **left** of the next row down.
+Nothing between the coordinates and the `sw` ever checks that a column is still on the screen. The
+grid is one line of memory, and column 32 of any row is simply column 0 of the row after it.

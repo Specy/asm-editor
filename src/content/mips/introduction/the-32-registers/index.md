@@ -1,30 +1,16 @@
-Getting started said MIPS has 32 registers, all 32 bits wide, and that every one of them can hold a
-number or an address. That is the whole of what the hardware knows about them, with two exceptions.
-Everything else on this page is a **convention**: a set of names people agreed on, which the
-assembler and every compiler follow, and which nothing in the machine enforces.
+The 32 registers are one piece of hardware: 32 slots, 32 bits each, all built the same way and all
+equally fast. The machine has opinions about exactly one of them. Everything else on this page,
+every name and every rule about who is allowed to use what, is an **agreement** between programs,
+written down by the people who built the first MIPS compilers and followed by everyone since.
 
-## The numbers and the names
+That matters more than it sounds. If you break the agreement, nothing stops you, nothing warns you,
+and the program works right up until it meets code somebody else wrote.
 
-Each register has a number, `$0` to `$31`, and that number is what goes into the instruction. The
-names are the assembler's, and `$t0` and `$8` are two spellings of one register.
+## Numbers first, names second
 
-| number      | name        | what it is for                                            |
-| ----------- | ----------- | --------------------------------------------------------- |
-| `$0`        | `$zero`     | always reads 0                                            |
-| `$1`        | `$at`       | the assembler's scratch register                          |
-| `$2`-`$3`   | `$v0`-`$v1` | values returned from a subroutine, and the syscall number |
-| `$4`-`$7`   | `$a0`-`$a3` | the first four arguments to a subroutine                  |
-| `$8`-`$15`  | `$t0`-`$t7` | temporaries, which a subroutine may destroy               |
-| `$16`-`$23` | `$s0`-`$s7` | saved, which a subroutine must give back unchanged        |
-| `$24`-`$25` | `$t8`-`$t9` | two more temporaries                                      |
-| `$26`-`$27` | `$k0`-`$k1` | the exception handler's, which it takes without asking    |
-| `$28`       | `$gp`       | global pointer                                            |
-| `$29`       | `$sp`       | stack pointer                                             |
-| `$30`       | `$fp`       | frame pointer                                             |
-| `$31`       | `$ra`       | return address, written by `jal`                          |
-
-Build this one and step through it. Every line names a register twice over, once by number and once
-by name.
+What actually goes into an instruction is a number from 0 to 31, five bits of it, which is the reason
+there are exactly 32 registers and not 40. The names are the assembler's doing, and `$t0` and `$8`
+are two spellings of one register.
 
 ```mips|playground
 .text
@@ -37,20 +23,22 @@ main:
     move $t4, $sp       # the same register under its other name
 ```
 
-`$t0` comes out at 10, `$t1` at 7 and `$t2` at 14, because `$8` and `$9` wrote the two registers
-`$t0` and `$t1` name. `$t3` and `$t4` are both `7FFFEFFC`, the stack pointer, read twice under its
-two spellings. Writing register numbers is legal and unreadable, and the reason to know it is that a
-MIPS instruction encoding has five bits per register and no idea what a `$t0` is.
+Step through it and watch `$t0` go to 10 on a line that never mentions `$t0`. You will not write
+register numbers, because nobody can read them, but knowing they are underneath explains things that
+otherwise look arbitrary, such as why a name like `$t8` sits between `$s7` and `$k0` rather than next
+to `$t7`.
 
-## $zero, the one that reads 0
+## $zero, the one the hardware cares about
 
-`$zero` is the first exception the hardware makes. It answers 0 to every read, and every write to it
-is carried out and thrown away.
+Register `$0`, spelled `$zero`, answers 0 to every read. Writes to it happen and are thrown away.
 
-That sounds like a wasted register until you count what it saves. A machine with a register that is
-always 0 needs no move instruction, no negate, no clear, no compare with zero and no unconditional
-jump, because all of them are the general instruction with `$zero` in one operand. The assembler
-gives you the short names and writes the real instruction underneath:
+A register permanently stuck at 0 sounds like 31 registers and a waste. It is the opposite: it is
+what lets the instruction set stay small. Adding `$zero` to something is a copy. Subtracting
+something from `$zero` is a negation. Branching when two copies of `$zero` are equal is a jump that
+always happens. So MIPS needs no move instruction, no negate, no clear and no unconditional jump,
+because each of those is an instruction it already has with `$zero` in one slot.
+
+You still get to write the short names. The assembler swaps them out for you:
 
 | you write         | the assembler writes      |
 | ----------------- | ------------------------- |
@@ -77,16 +65,58 @@ onwards:
     li $s1, 1
 ```
 
-`$t1` is 5, `$t2` is `FFFFFFFA`, `$t3` and `$t4` are both `FFFFFFFB`, which is -5, and `$t7` is 0.
-`$s0` stays 0 and `$s1` comes out at 1, because the `b` jumped over the line between them.
+`$t3` and `$t4` come out identical, which is the point of the pair: the second line is what the
+first one was all along.
 
-`$zero` is not in the registers panel: a row that always reads `00000000` says nothing.
+`$zero` has no row in the registers panel, since a row that always reads `00000000` says nothing.
+
+## The names you need for now
+
+Eighteen of the registers are general purpose scratch space, and you can pick any of them for
+anything today:
+
+| name           | what it is                                             |
+| -------------- | ------------------------------------------------------ |
+| `$t0` to `$t9` | ten of them, called **temporaries**                    |
+| `$s0` to `$s7` | eight of them, called **saved**                        |
+| `$sp`          | the stack pointer, which starts near the top of memory |
+| `$at`          | the assembler's, and the next section is about it      |
+
+Temporary and saved describe what happens to a register when your program calls a subroutine, and
+until this course has a subroutine that distinction has nothing to bite on. "jal, jr and the calling
+convention" is where it arrives and where it matters. Until then, treat all eighteen as scratch.
+
+The remaining names, `$v0`, `$v1`, `$a0` to `$a3`, `$k0`, `$k1`, `$gp`, `$fp` and `$ra`, each belong
+to a feature you have not met, and each of them turns up in the lecture that introduces its feature.
+The whole list, with the numbers, is on the [MIPS documentation pages](/documentation/mips).
+
+`$sp` is worth one program on its own, because the stack pointer behaves in a way that surprises
+people:
+
+```mips|playground
+.text
+main:
+    move $t0, $sp       # where the stack pointer starts
+    addi $sp, $sp, -8   # take eight bytes of stack
+    move $t1, $sp
+```
+
+`$t0` reads `7FFFEFFC`, near the very top of the address space. After the `addi`, `$sp` and `$t1`
+both read `7FFFEFF4`, which is eight **lower**. The stack grows downwards on this machine, so taking
+room on it means subtracting. That subtraction is the entire operation: nothing is allocated and
+nothing is cleared, and the eight bytes between the old `$sp` and the new one are yours from that
+instant onwards. "The stack and $sp" builds on it.
 
 ## $at, which the assembler is using
 
-`$at` is the second exception, and this one is the assembler's rather than the hardware's. A
-pseudo-instruction that needs a register to hold something halfway takes `$at`, without telling you
-and without putting anything back.
+Some of the lines you have been writing are not instructions. `li $t0, 100000` cannot be one: a MIPS
+instruction is 32 bits wide and has to spell out an operation and a register inside those bits, which
+leaves nowhere near enough room for a 32 bit constant. So the assembler quietly writes two
+instructions, one for each half of the number, and it needs a spare register to hold the half it has
+built so far.
+
+That spare register is `$at`, and a line like `li` that the assembler expands into real instructions
+is called a **pseudo-instruction**. It takes `$at` without asking and without putting anything back.
 
 ```mips|playground
 .data
@@ -105,89 +135,31 @@ main:
     move $t6, $at       # these two leave $at alone
 ```
 
-`$t0` comes out at `11111111` and `$t2` at `00010000`, which is the top half of 100000 that the
-assembler left behind. `$t4` is `10010000`, the address of `value`, because the `la` used `$at` the
-same way. `$t5` is `12345678`, put together by hand out of `lui` and `ori`, and `$t6` is still
-`10010000`, because those two real instructions touch nothing but what you named.
+`$t0` still has your `11111111` on the line after you put it there. Two lines later `$t2` has
+`00010000` instead, which is the top half of 100000 left behind by the first of the two instructions
+`li` turned into. Nothing in the program you wrote mentions `$at` on those lines, and it was
+overwritten anyway.
 
-Click on the line `li $t1, 100000` after building: the editor prints the instructions it was
-assembled into underneath, which is where `lui $at, 0x1` and `ori $t1, $at, 0x86a0` come from. It
-does that for every line that turned into more than one instruction, which is how you find out that
-a line you wrote is using `$at`.
+Build the program and click on the line `li $t1, 100000`. The editor prints the instructions it was
+really assembled into underneath it, `lui $at, 0x1` and `ori $t1, $at, 0x86a0`. It does this for
+every line that turned into more than one, which is how you find out which of your lines are quietly
+using `$at`.
 
-So `$at` is not yours. Use it and the next `li`, `la`, `blt`, `mul` or `rem` in the program takes it
-away. The `.set noat` directive tells the assembler to stop using it, and every pseudo-instruction
-that needs it stops working, so what people do instead is leave it alone.
-
-## Temporaries and saved registers
-
-`$t0` to `$t9` and `$s0` to `$s7` are eighteen registers with identical hardware and opposite
-agreements about what happens across a subroutine call.
-
-- A **temporary** may be destroyed by anything you call. If you have something in `$t3` and you call
-  a subroutine, assume `$t3` is rubbish afterwards. Keeping it is the **caller's** job, which is why
-  these are also called caller-saved.
-- A **saved** register must come back unchanged. A subroutine that wants `$s3` for its own work
-  saves the caller's `$s3` on the stack on entry and puts it back before returning, which makes
-  these callee-saved.
-
-In C those two categories are invisible: the compiler puts a variable that is only used between two
-calls in a temporary, and one that has to survive a call in a saved register, and it emits the saves
-for you. Here it is your agreement to keep, and there is nothing in the machine that will stop you
-breaking it. The "jal, jr and the calling convention" lecture writes both sides out.
-
-The rest of the list divides the same way:
-
-- **`$a0` to `$a3`** carry the first four arguments into a subroutine, and anything past four goes on
-  the stack. They are temporaries: a subroutine is free to use them for its own work once it has read
-  them.
-- **`$v0` and `$v1`** carry the answer back out. `$v0` alone for anything that fits in 32 bits, both
-  for a 64 bit answer. `$v0` also carries the service number into a `syscall`, which the outside-world
-  module uses on every line that prints.
-- **`$k0` and `$k1`** belong to the exception handler, which can start running between any two of
-  your instructions and uses them without saving them. A program that keeps something in `$k0` is
-  keeping it in a register somebody else writes at a time nobody chose.
-
-## The four the environment set up
-
-`$gp`, `$sp`, `$fp` and `$ra` are ordinary registers that already hold something when your program
-starts, or that one instruction writes for you.
-
-```mips|playground
-.text
-main:
-    move $t0, $sp       # where the stack pointer starts
-    move $t1, $gp       # and the global pointer
-    move $t2, $ra       # nothing has called us, so this is 0
-    addi $sp, $sp, -8   # take eight bytes of stack
-    move $t3, $sp
-```
-
-`$t0` comes out at `7FFFEFFC`, which is near the top of the address space, and `$t1` at `10008000`,
-which sits in the middle of the data segment. `$t2` is 0. After the `addi`, `$sp` and `$t3` both read
-`7FFFEFF4`, eight bytes lower, because **the stack grows downwards** and moving the pointer is all
-that taking room means.
-
-- **`$sp`** is the top of the stack. `lw` and `sw` through it are how a program keeps more than 32
-  values, and every subroutine that saves anything moves it.
-- **`$fp`** is a second pointer into the same frame, which stays still while `$sp` moves. Both are in
-  "The stack and $sp". Some manuals call it `$s8`, since it is a saved register like the eight before
-it; this assembler takes `$fp` and `$30` and not that name.
-- **`$gp`** points into the data segment so that a global can be read as `lw $t0, 0($gp)` with one
-  instruction instead of the two an `la` costs. MARS puts it at `0x10008000`.
-- **`$ra`** is written by `jal`, the call instruction, with the address to come back to. `jr $ra`
-  goes there.
+So `$at` is not yours to keep anything in. `li`, `la`, `blt`, `mul` and `rem` are the common
+offenders. There is a directive, `.set noat`, that tells the assembler to stop using it, at the price
+of every pseudo-instruction that needs it no longer working, and what people do in practice is
+simply leave the register alone.
 
 ## hi and lo
 
-Two more registers sit outside the 32, and only four instructions reach them. `mult` and `div` write
-them, `mfhi` and `mflo` read them into a register you name. They are at the bottom of the registers
-panel with `pc`, and "Arithmetic, logic and bits" is where they are used.
+Two more registers sit outside the 32, and only four instructions can reach them: `mult` and `div`
+write them, `mfhi` and `mflo` copy them into a register you name. They are at the bottom of the
+registers panel next to `pc`, and "Arithmetic, logic and bits" is where they earn their keep.
 
 ## Your turn
 
-The test starts `$t0` at 5. Leave a copy of it in `$s0` and its negation in `$s1`, which the panel
-shows as `FFFFFFFB`, using `$zero` in both instructions instead of a `move` or a `neg`.
+The test starts `$t0` at 5. Leave a copy of it in `$s0` and its negation in `$s1`, using `$zero` in
+both instructions rather than `move` or `neg`.
 
 ```mips|playground|exercise
 .text
@@ -214,8 +186,10 @@ main:
 
 </details>
 
-The second one wants `0x12345678` in `$t0` with `$at` left at 0, which rules out `li`. Two
-instructions: put the top half in place and then or the bottom half in.
+The second one wants `0x12345678` in `$t0` and `$at` left at 0, which rules out `li`, since `li`
+would route the number through `$at` on the way. Two real instructions do it: `lui` writes a 16 bit
+constant into the **top** half of a register and clears the bottom half, and `ori` can then or the
+bottom half in.
 
 ```mips|playground|exercise
 .text

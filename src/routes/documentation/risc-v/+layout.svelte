@@ -89,6 +89,12 @@
             title="Syscalls"
             onClick={() => (menuOpen = false)}
         />
+
+        <MenuLink
+            href="/documentation/risc-v/registers"
+            title="Registers"
+            onClick={() => (menuOpen = false)}
+        />
     </Column>
     <TogglableSection
         open={true}

@@ -21,6 +21,8 @@ export type ProjectSettingValues = {
      * ([ADR 0005](../../docs/adr/0005-restore-screen-state-on-undo.md)).
      */
     screenHistoryBudgetMb: number
+    /** Bytes retained to reverse FileSystem effects, in megabytes. */
+    fileSystemHistoryBudgetMb: number
 }
 
 export type ProjectSettingId = keyof ProjectSettingValues
@@ -61,6 +63,14 @@ export const PROJECT_SETTINGS: {
         //provisional default, see the measurement rows of docs/manual-verification.md
         defaultFor: () => 64,
         appliesTo: languageHasScreen,
+        accepts: wholeNumber
+    },
+    fileSystemHistoryBudgetMb: {
+        id: 'fileSystemHistoryBudgetMb',
+        name: 'FileSystem undo history budget (MB)',
+        type: 'number',
+        defaultFor: () => 64,
+        appliesTo: () => true,
         accepts: wholeNumber
     }
 }

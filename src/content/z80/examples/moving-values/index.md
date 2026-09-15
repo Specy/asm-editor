@@ -6,10 +6,6 @@ program shows you.
 This is the first program of the ladder, and the ones after it are built out of the same three
 moves: a number into a register, a register into another register, and an `add`.
 
-**You need to know:** the "Getting started with the Z80" lecture and the "Registers, pairs and the
-shadow set" lecture. What is new here is the last two instructions, `hl` is two registers at once
-and writing `l` leaves `h` exactly as it was.
-
 ```z80|playground|no-flags|allow-open
     .org 0x8000
     ld a, 30        ; width = 30
@@ -35,9 +31,5 @@ itself, which is how you double a number without a multiplication.
 what the high half of `hl` was already holding: `l` and `h` are one byte each, and naming one of
 them is what decided how much of the pair changed.
 
-The M68K writes a size on the instruction, `move.b` or `move.l`, to say the same thing. Here there
-are no sizes at all, because the registers you name say it for you: `ld l, a` moves one byte and
-`ld hl, 0xFF00` moves two.
-
-Try changing `ld l, a` to `ld h, a`. `hl` comes out at `5400`, with the perimeter in the high half
-and the `FF` gone, because `h` is the other one of the two registers the pair is made of.
+Nothing on an `ld` says how many bytes it moves, because the registers you name say it: `ld l, a`
+moves one byte and `ld hl, 0xFF00` moves two.

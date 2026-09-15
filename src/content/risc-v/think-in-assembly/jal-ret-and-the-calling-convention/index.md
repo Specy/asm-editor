@@ -1,13 +1,13 @@
 `jal label` writes the address of the next instruction into `ra` and jumps to the label. `ret` jumps
-back to it. That pair is the whole of calling and returning on RISC-V, and it touches no memory at
-all: on the M68K a `bsr` pushes the return address and an `rts` pops it, and here it goes in a
-register.
+back to it. That pair is the whole of calling and returning, and notice what it does not do: it
+never touches memory. The address to come back to goes in a register, which is fast, and which is
+the source of every complication on the rest of this page.
 
 Both of them are shorthand. `jal label` is `jal ra, label`, and the register it writes is an operand
 you are allowed to name; `ret` is `jalr zero, ra, 0`, which jumps to the address in `ra` and throws
 away the return address it would have written, because a return has nowhere to come back from.
 
-## A subroutine that calls nothing
+## A subroutine that is the end of the line
 
 The agreement in this course is the standard one: arguments arrive in `a0` to `a7`, the answer leaves
 in `a0`.
@@ -36,15 +36,16 @@ The `li a7, 10` and `ecall` before `triple:` are what stop the program. Take the
 into the subroutine, runs it, and the `ret` jumps back to the `mv` it has already done, round and
 round until the Playground gives up.
 
-`triple` is a **leaf**: it calls nothing, so `ra` is safe for as long as it runs and the subroutine
-needs no stack, no saving and no prologue. Most small subroutines are leaves, and that is what makes
-a register return address worth having.
+`triple` is a **leaf**, meaning it calls nothing itself. For as long as it runs, nothing can
+overwrite `ra`, so it needs no stack, no saving and no setting up. Most small subroutines are
+leaves, and they are what makes keeping the return address in a register worth doing.
 
-## There is only one ra
+## One ra, and two things that want it
 
-A subroutine that calls something else has a problem: the `jal` inside it overwrites `ra` with a new
-return address, and the one it needed is gone. So a subroutine that is not a leaf saves `ra` on the
-stack on the way in and loads it back on the way out.
+A subroutine that calls something else has a problem waiting for it. The `jal` inside it writes a
+new return address into `ra`, on top of the one it was going to need, and there is only the one
+register. So a subroutine that is not a leaf puts `ra` somewhere safe on the way in and picks it
+back up on the way out. The stack is where it goes.
 
 ```riscv|playground|memory
 .text
@@ -76,9 +77,9 @@ doubled:
 overwrites `ra` with an address inside `quadruple`, so the `ret` at the end returns into the middle
 of `quadruple` instead of into `main`, and the program loops.
 
-Those four lines around the body are the **prologue** and the **epilogue**, and they are what a C
-compiler writes for every function that calls another one. The frame is 16 bytes for one word,
-because the ABI asks for `sp` to stay a multiple of 16.
+Those four lines around the body have names: the **prologue** on the way in, the **epilogue** on the
+way out. The room claimed is 16 bytes for one word, because the convention asks that `sp` stay a
+multiple of 16 at every moment.
 
 Nothing had to be moved between the two calls, since the answer of `doubled` comes back in `a0` and
 `a0` is where the next call wants its argument.
@@ -135,8 +136,8 @@ does.
 
 ## Arguments past the eighth
 
-Eight registers hold eight arguments, twice what MIPS gives you. A ninth goes on the stack, and the
-**caller** puts it there and takes it back off.
+Eight registers hold eight arguments, which covers nearly everything you will write. A ninth goes on
+the stack, and it is the **caller** that puts it there and takes it back off afterwards.
 
 ```riscv|playground|memory
 .text
@@ -196,7 +197,7 @@ first.
 register doing two jobs at two moments. Loading the service number after the call is what keeps them
 apart.
 
-## Recursion needs nothing new
+## Recursion, with the same instructions
 
 A subroutine that calls itself gets a fresh frame at a fresh address every time, because every
 prologue subtracts from wherever `sp` happens to be. The same `0(sp)` in the source is a different
@@ -267,22 +268,20 @@ program calls a function pointer or a routine out of a table. `la t0, triple` an
 `jal triple` does, with the address worked out while the program runs.
 
 The full form is `jalr rd, rs, offset`, so `jalr ra, t0, 0` is the same instruction written out, and
-`ret` is that form with `zero` as the destination and `ra` as the source. One instruction covers the
-call through a pointer, the return and the tail call, which is what happens when you give a machine
-`zero` and let it stand in for the operands you did not need.
+`ret` is that form with `zero` as the destination and `ra` as the source: jump to the address in
+`ra`, and throw the new return address away instead of saving it.
 
 `call label` is the pseudo-instruction for a subroutine too far away for `jal` to reach, which is
 more than a megabyte. It costs two instructions and destroys `t1`, so inside a program you write here
 `jal` is the one to use.
 
-## Your turn
+## Write a subroutine
 
 Write a subroutine called with `jal` that squares the number in `a0` and leaves the answer in `a0`,
 then ends the program. The test starts `a0` at 7, so it comes out at 49.
 
-The answer stays in `a0` through the exit, which is the one place RISC-V is kinder than MIPS: there
-the answer and the service number share `$v0`, so an answer left in it is destroyed by the line that
-ends the program. Here the service number is in `a7` and `a0` is untouched.
+The answer can sit in `a0` right through the two lines that end the program, since the service
+number goes in `a7` and nothing on the way out touches `a0`.
 
 ```riscv|playground|exercise
 .text

@@ -20,7 +20,7 @@ export const MIPSLanguageConfiguration: languages.LanguageConfiguration = {
 
 export const MIPSLanguage = <languages.IMonarchLanguage>{
     defaultToken: '',
-    ignoreCase: false,
+    ignoreCase: true,
     tokenPostfix: '.mips',
 
     regEx: /\/(?!\/\/)(?:[^\/\\]|\\.)*\/[igm]*/,

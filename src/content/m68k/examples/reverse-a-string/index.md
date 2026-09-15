@@ -2,13 +2,9 @@ The string at `$2000` is turned back to front where it lies, with no second buff
 Two address registers start at the two ends and walk towards each other, swapping the bytes they
 point at until they meet.
 
-Length of a string walked to the terminator to measure something. This one walks to the terminator to
-find the far end and then does its work on the way back, so there are two pointers moving at once and
-neither of them is a counter.
-
-**You need to know:** the "Length of a string" Example and the "Addressing modes" lecture. What is
-new here is comparing two addresses, `cmp.l a0, a1` and a branch is what tells the loop that the two
-pointers have met.
+Doing it in place is what makes it interesting. There are two pointers moving at once, in opposite
+directions, and neither of them is a counter, so the loop has to work out for itself when they have
+met.
 
 ```m68k|playground|memory|no-flags|allow-open
     lea text, a0        ; left = text
@@ -46,5 +42,8 @@ that are never negative. The loop stops as soon as `a1` is no longer above `a0`,
 odd number of characters leaves its middle one alone, which is what you want.
 
 Run it with the memory panel on `2000` and the eight bytes read `79 6C 62 6D 65 73 73 41`, which is
-`ylbmessA`. Try changing the string to `dc.b 'Level', 0`: five characters, the `v` in the middle
-stays where it is, and the memory panel reads `leveL`.
+`ylbmessA`.
+
+An odd length is the case worth checking. Change the string to `dc.b 'Level', 0` and run it again:
+the two pointers land on the same byte rather than passing each other, the `v` in the middle is
+never swapped with anything, and the panel reads `leveL`.

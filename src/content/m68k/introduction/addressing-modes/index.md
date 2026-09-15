@@ -1,22 +1,13 @@
-The instruction set lecture wrote the two operands of an instruction as `source` and `destination`
-without saying what can go in them. This is what can, and the way an operand is written is its
-**addressing mode**. Here is the whole set, with the C that means the same thing.
+So far every operand has been a register or a number written into the instruction. That is enough
+for arithmetic and nothing else. The moment your data is an array in memory, you need to say things
+like "the long eight bytes past wherever `a0` is pointing", and you need to say them without knowing
+the address while you are writing the program.
 
-| mode                       | written     | in C                     |
-| -------------------------- | ----------- | ------------------------ |
-| data register              | `d0`        | `x`                      |
-| address register           | `a0`        | `p`                      |
-| immediate                  | `#7`        | `7`                      |
-| absolute                   | `numbers`   | `total`, a global's name |
-| indirect                   | `(a0)`      | `*p`                     |
-| indirect with displacement | `4(a0)`     | `p[1]`, `s->field`       |
-| indexed                    | `(a0, d1)`  | `p[i]`                   |
-| indexed with displacement  | `4(a0, d1)` | `p[i + 1]`               |
-| postincrement              | `(a0)+`     | `*p++`                   |
-| predecrement               | `-(a0)`     | `*--p`                   |
+The way an operand is written is called its **addressing mode**, and the M68K has ten of them. Three
+name something the CPU already has. Seven name an address, and the instruction goes to memory for
+whatever is there.
 
-The first three name a value the CPU already has or the assembler already knows. The rest name an
-address, and the instruction goes to memory for what is there.
+Throughout this page, `numbers` is an array of four longs and `numbers[2]` means its third element.
 
 ## Registers, numbers and one fixed address
 
@@ -34,7 +25,7 @@ That `#` is the whole difference between three useful instructions:
 
 ## The modes that go through an address register
 
-Build this one with the memory panel open and step through it. It uses every mode in the table once.
+Build this one with the memory panel open and step through it.
 
 ```m68k|playground|memory|no-flags
     move.l #7, d0           ; immediate
@@ -61,27 +52,27 @@ above it gets:
 | `$2008` | `0000001E` | `numbers[2]`  |
 | `$200C` | `00000028` | `numbers[3]`  |
 
-`d3` and `d4` both come out at `0000000A`, one through the address the assembler wrote into the
-instruction and one through the address that was in `a0` when the line ran. `d5` is `00000014`,
-because `4(a0)` is `a0` plus 4. `d7` is `0000001E`, because `(a0, d6)` is `a0` plus whatever `d6`
-holds, added while the instruction runs.
+`d3` and `d4` both fetch the first element, one through an address the assembler wrote into the
+instruction and one through an address that was sitting in `a0` when the line ran. That second way is
+the one that matters, because `a0` can change and the instruction cannot.
 
 The three that involve `a0` differ in where the offset comes from:
 
 - **`(a0)`** is the address in `a0`, nothing added.
-- **`4(a0)`** adds a **constant** the assembler wrote into the instruction. Use it when you know the
-  offset while you are writing the program: the second field of a record, `numbers[1]`.
-- **`(a0, d6)`** adds a **register**, so the offset can change while the program runs. Use it when
-  the offset is an index your program computed: `numbers[i]`.
+- **`4(a0)`** adds a **constant**, decided when you write the program and baked into the
+  instruction. That constant is called the **displacement**. Use it for an offset you already know:
+  the second field of a record, `numbers[1]`.
+- **`(a0, d6)`** adds a **register**, so the offset can be worked out while the program runs. Use it
+  when the offset is an index your program computed: `numbers[i]`.
 
-`4(a0, d6)` does both, constant plus register plus base. The index register can be a data or an
-address register, and `(sp, a0)` is as legal as `(a0, d6)`.
+`4(a0, d6)` does both at once: base, plus register, plus constant. The index register can be a data
+or an address register, and `(sp, a0)` is as legal as `(a0, d6)`.
 
 ## Indexing an array
 
-C hides the size of an element: `numbers[i]` in C means the address of `numbers` plus `i` times four,
-because the elements are 4 byte longs. The M68K adds `d1` to `a0` and nothing else, so scaling the
-index is your job, and a shift left by 2 is how it is done.
+There is one thing to watch. `(a0, d1)` adds `d1` to `a0` and does nothing else, so `d1` has to be a
+number of **bytes**, not a number of elements. The elements here are longs, four bytes each, so
+element `i` is at `i * 4`, and shifting left by 2 is how you multiply by 4.
 
 ```m68k|playground|memory|no-flags
     lea numbers, a0
@@ -96,18 +87,23 @@ index is your job, and a shift left by 2 is how it is done.
 numbers: dc.l 10, 20, 30, 40
 ```
 
-`d2` comes out at `0000001E`, which is 30, and `d3` at `00000028`, which is 40. The last line is the
-same mode used as a destination, and the long at `$2008` becomes `00000063`, which is 99. Try
-changing `move.l #2, d0` to `move.l #0, d0` and watching which long changes instead.
+Forget that shift and everything still assembles and still runs. Delete the `lsl.l #2, d1` and step
+through it: `d1` stays at 2, so the address comes out as `$2002`, two bytes into the first element,
+and the long read from there is the back half of `numbers[0]` joined to the front half of
+`numbers[1]`, which is `000A0000`. Nothing complained. The index was in the wrong units and the
+machine had no way of knowing.
+
+The last line is the same mode used as a destination, which is worth noticing: an addressing mode is
+a way of naming a place, and most places can be read from and written to.
 
 ## Postincrement and predecrement
 
-Two modes step the address register for you, by the **size of the instruction**: 1 for `.b`, 2 for
-`.w`, 4 for `.l`.
+Walking an array means adding the element size to a pointer on every pass, which is a whole extra
+instruction inside your loop. Two modes do it for you, stepping the address register by the **size of
+the instruction**: 1 for `.b`, 2 for `.w`, 4 for `.l`.
 
-- **`(a0)+`** reads or writes at `a0`, then adds the size to `a0`. It is `*p++` in C.
-- **`-(a0)`** subtracts the size from `a0` first, then reads or writes at the new address. It is
-  `*--p`.
+- **`(a0)+`** reads or writes at `a0`, then adds the size to `a0`.
+- **`-(a0)`** subtracts the size from `a0` first, then reads or writes at the new address.
 
 ```m68k|playground|memory|no-flags
     lea bytes, a0
@@ -125,29 +121,42 @@ last:   dc.l $AABBCCDD
 end:
 ```
 
-`d0` is 1 and `d1` is 2, and `a0` ends at `00002002`, two bytes on from where it started. `a1` ends
-at `00002006`, two bytes on from `$2004`, because the read was a word. `a2` started at `$200C`, the
-address of `end`, stepped back to `$2008` and read the long there, so `d3` is `AABBCCDD` and `a2` is
-`00002008`.
+`a0` ends at `00002002`, two bytes on from where it started, because two byte reads moved it by one
+each. `a1` ends at `00002006`, two on from `$2004`, because one word read moved it by two. And `a2`
+started at `$200C`, which is the address of `end`, stepped **back** to `$2008` and read the long
+there, which is why `-(a0)` is what you walk an array backwards with: it arrives at the last element
+without you having to work out where the last element is.
 
-Walking an array forwards is `(a0)+` in a loop, and walking it backwards is `-(a0)` in a loop, with
-no `add` of your own either way. `-(sp)` and `(sp)+` are the same two modes on `a7`, which is what
-makes them a push and a pop; that is the stack lecture.
+`-(sp)` and `(sp)+` are these same two modes applied to `a7`, which is what makes them a push and a
+pop. That is the stack lecture.
 
-## Not every instruction takes every mode
+## All ten, together
 
-The two operands of an instruction each accept their own set, and the sets are not the same. `swap`
-takes `Dn`. `lea` takes an address and an address register. `eor` insists on a data register as its
-source. `move` takes almost anything on the left and anything but an immediate on the right, since
-you cannot write into a number.
+| mode                       | written     | what it names                            |
+| -------------------------- | ----------- | ---------------------------------------- |
+| data register              | `d0`        | the register                             |
+| address register           | `a0`        | the register                             |
+| immediate                  | `#7`        | a number inside the instruction          |
+| absolute                   | `numbers`   | one address, fixed at assembly time      |
+| indirect                   | `(a0)`      | the address in `a0`                      |
+| indirect with displacement | `4(a0)`     | `a0` plus a constant                     |
+| indexed                    | `(a0, d1)`  | `a0` plus a register                     |
+| indexed with displacement  | `4(a0, d1)` | `a0` plus a register plus a constant     |
+| postincrement              | `(a0)+`     | the address in `a0`, then `a0` moves on  |
+| predecrement               | `-(a0)`     | `a0` moves back first, then that address |
 
-The documentation page of each instruction lists what its operands accept, written as `Dn`, `An`,
-`(An)`, `Im`, `ea` and `(An, Xn)`. An operand outside that set is a build error on that line.
+The two operands of an instruction each accept their own set of these, and the sets are not the same.
+`swap` takes a data register. `lea` takes an address and an address register. `eor` insists on a data
+register as its source. `move` takes almost anything on the left and anything but an immediate on the
+right, since you cannot write into a number.
+
+Each instruction's documentation page lists what its operands accept, written as `Dn`, `An`, `(An)`,
+`Im`, `ea` and `(An, Xn)`. Anything outside that set is a build error on that line.
 
 ## Your turn
 
-The four longs are at `$2000`, where the `org` puts them. Leave `numbers[2]` in `d0`, working the
-address out at run time with the indexed mode rather than writing `$2008` yourself.
+The four longs sit at `$2000`. Put `numbers[2]` in `d0`, and work the address out at run time with
+the indexed mode instead of writing `$2008` into your program.
 
 ```m68k|playground|memory|exercise
 * your code here
@@ -176,8 +185,8 @@ numbers: dc.l 10, 20, 30, 40
 
 </details>
 
-The second one wants the **address** of `numbers[3]` in `a1`, with nothing read from memory. It is
-`$200C`, and `lea` is the instruction that gets it there.
+This time the **address** of `numbers[3]`, in `a1`, with nothing read out of memory at all. It comes
+to `$200C`.
 
 ```m68k|playground|memory|exercise
 * your code here

@@ -2,13 +2,9 @@ The program asks for two numbers, waits while you type them, and prints their su
 console stops at the first prompt: type a number into the box under it, press Enter, and the run
 carries on inside that one `trap #15`.
 
-Print a string only talked. This one listens, which means the program stops in the middle of an
-instruction until somebody answers it, and what comes back is a number in a register rather than
-text you have to make sense of.
-
-**You need to know:** the "Print a string" Example and the "trap #15 and its tasks" lecture. What is
-new here is a task that answers, task 18 leaves the number that was typed in `d1.l`, so the register
-the program reads next is the one the environment wrote.
+Printing only talks. Reading listens, which means the program stops dead in the middle of an
+instruction until somebody answers, and what comes back is a number already in a register rather
+than text you have to make sense of yourself.
 
 ```m68k|playground|console|no-flags|allow-open
     lea first, a1
@@ -48,10 +44,10 @@ The `10` at the front of `second` and `answer` is a newline written as its ASCII
 you put one inside a string that a task prints. `dc.b 10, 'Second number: ', 0` is one string of
 seventeen bytes and the first of them is the line break.
 
-Type 17 and 25 and the console reads `The sum is 42`. Task 4 reads a **decimal** number and nothing
-else, and a line that is not one ends the run with `Expected a number, got "NaN"` under the editor.
-A program that wants to survive what people type reads the line with task 2 and looks at it itself.
+Task 4 reads a **decimal** number and nothing else. Type anything that is not one and the run ends
+with `Expected a number, got "NaN"` under the editor, so a program that has to survive whatever
+people type reads the line with task 2 and picks it apart itself.
 
-Try changing `add.l d1, d2` to `sub.l d1, d2`. With 17 and 25 the console reads `The sum is -8`,
-because task 17 prints `d1` as a **signed** long: the bits `FFFFFFF8` are -8 to it and 4294967288 to
-task 15.
+Change `add.l d1, d2` to `sub.l d1, d2` and type 17 and 25 again. The console reads `The sum is -8`.
+The same bits, `FFFFFFF8`, would have printed as 4294967288 through task 15, which reads them as
+unsigned. The register did not change; the task that printed it did.

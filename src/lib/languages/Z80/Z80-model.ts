@@ -144,79 +144,79 @@ export const Z80_PORTS = {
      * Keyboard instead, one keystroke at a time. Reads never fail: end of input only pauses the
      * program.
      */
-    CHAR: 0x00,
+    CHAR: 0x10,
     /**
      * Number port. Writing prints the byte as an unsigned decimal number (0 to 255). Reading asks
      * for a whole line, parses it as a decimal number (a leading minus sign is accepted) and
      * returns its low byte; a line that is not a number stops the program with an error.
      */
-    NUMBER: 0x01,
+    NUMBER: 0x11,
     /**
      * Signed number port. Writing prints the byte as a signed decimal number (-128 to 127).
      * Reading behaves like the `NUMBER` port.
      */
-    SIGNED: 0x02,
+    SIGNED: 0x12,
     /**
      * Hexadecimal port. Writing prints the byte as two upper case hexadecimal digits (no prefix).
      * Reading asks for a line, parses it as hexadecimal (an optional `0x`, `$` prefix or `h`
      * suffix is accepted) and returns its low byte; an invalid line stops the program with an error.
      */
-    HEX: 0x03,
+    HEX: 0x13,
     /**
      * 16 bit number port. Writing prints the unsigned decimal value of the 16 bit number whose
      * high byte is the high byte of the port address and whose low byte is the byte written. With
-     * `ld b,h` / `ld c,4` / `out (c),l` that prints HL. Reading behaves like the `NUMBER` port
+     * `ld b,h` / `ld c,0x14` / `out (c),l` that prints HL. Reading behaves like the `NUMBER` port
      * (only the low byte can be returned).
      */
-    WORD: 0x04,
+    WORD: 0x14,
 
     /** Pen color, one 3-3-2 byte: the color of lines, outlines, pixels and text. */
-    SCREEN_PEN_COLOR: 0x10,
+    SCREEN_PEN_COLOR: 0x20,
     /** Fill color, one 3-3-2 byte: the inside of filled shapes, the flood fill and the clear. */
-    SCREEN_FILL_COLOR: 0x11,
+    SCREEN_FILL_COLOR: 0x21,
     /** Pen width in pixels, 1 or more, for lines and outlines. */
-    SCREEN_PEN_WIDTH: 0x12,
+    SCREEN_PEN_WIDTH: 0x22,
     /** First X coordinate: the point of a pixel, the start of a line, a corner of a shape. */
-    SCREEN_X: 0x13,
+    SCREEN_X: 0x23,
     /** First Y coordinate. */
-    SCREEN_Y: 0x14,
+    SCREEN_Y: 0x24,
     /** Second X coordinate: the end of a line or the opposite corner of a shape. */
-    SCREEN_X2: 0x15,
+    SCREEN_X2: 0x25,
     /** Second Y coordinate. */
-    SCREEN_Y2: 0x16,
+    SCREEN_Y2: 0x26,
     /** Runs one drawing operation on the coordinates and colors already set; see `Z80_SCREEN_COMMANDS`. */
-    SCREEN_COMMAND: 0x17,
+    SCREEN_COMMAND: 0x27,
     /** Reads the color of the pixel at (X, Y) as a 3-3-2 byte. */
-    SCREEN_PIXEL: 0x18,
+    SCREEN_PIXEL: 0x28,
     /** Text cursor column, in 8 by 8 character cells: 0 to 31 on the default Screen. */
-    SCREEN_CURSOR_COLUMN: 0x19,
+    SCREEN_CURSOR_COLUMN: 0x29,
     /** Text cursor row, in 8 by 8 character cells: 0 to 23 on the default Screen. */
-    SCREEN_CURSOR_ROW: 0x1a,
+    SCREEN_CURSOR_ROW: 0x2a,
 
     /** 1 when a character typed on the Screen (or a testcase input line) is waiting, else 0. */
-    KEY_AVAILABLE: 0x20,
+    KEY_AVAILABLE: 0x30,
     /** 1 while the key whose code is in B is held down, else 0. */
-    KEY_STATE: 0x21,
+    KEY_STATE: 0x31,
     /** The code of the last key pressed, 0 before the first press. */
-    KEY_LAST_DOWN: 0x22,
+    KEY_LAST_DOWN: 0x32,
     /** The code of the last key released, 0 before the first release. */
-    KEY_LAST_UP: 0x23,
+    KEY_LAST_UP: 0x33,
 
     /** Mouse X in logical Screen pixels; B selects the view, see `Z80_MOUSE_VIEWS`. */
-    MOUSE_X: 0x30,
+    MOUSE_X: 0x40,
     /** Mouse Y in logical Screen pixels; B selects the view. */
-    MOUSE_Y: 0x31,
+    MOUSE_Y: 0x41,
     /** Buttons and modifiers of the selected view, see `Z80_MOUSE_FLAGS`. */
-    MOUSE_BUTTONS: 0x32,
+    MOUSE_BUTTONS: 0x42,
     /** The mouse event counter, a byte that wraps: how a program tells a new event from an old one. */
-    MOUSE_EVENTS: 0x33,
+    MOUSE_EVENTS: 0x43,
 
     /** Waits B hundredths of a second and answers 0; the GUI and Stop stay responsive meanwhile. */
-    TIME_WAIT: 0x40,
+    TIME_WAIT: 0x50,
     /** Waits for the next animation frame and answers 0: the pacing of an animated program. */
-    TIME_FRAME: 0x41,
+    TIME_FRAME: 0x51,
     /** One byte of the hundredths of a second since the run started; B selects the byte, 0 lowest. */
-    TIME_NOW: 0x42
+    TIME_NOW: 0x52
 } as const
 
 export type Z80PortName = keyof typeof Z80_PORTS
@@ -237,35 +237,35 @@ export const Z80_PORT_GROUP_DOCS: {
     {
         group: 'console',
         title: 'Console',
-        range: '0x00 - 0x04',
+        range: '0x10 - 0x14',
         description:
             'The Terminal: one port per output format, and the input reads that pause the program until a line (or a keystroke on the Screen) is available. What is printed here is also drawn at the Screen’s text cursor, in 8 by 8 cells.'
     },
     {
         group: 'screen',
         title: 'Screen',
-        range: '0x10 - 0x1A',
+        range: '0x20 - 0x2A',
         description:
             'Drawing. Set the colors and the coordinates, then write one command to the command port; every coordinate is a byte, so the Screen is at most 256 by 256 pixels and is 256 by 192 until the program resizes it. Colors are one 3-3-2 byte.'
     },
     {
         group: 'keyboard',
         title: 'Keyboard',
-        range: '0x20 - 0x23',
+        range: '0x30 - 0x33',
         description:
             'Input from the focused Screen, polled: whether a typed character is waiting (read it from the character port), whether a given key is held, and the last key pressed and released. Key codes are EASy68K’s, the same table every environment here uses: letters and digits are the ASCII code of their capital, 0x25 to 0x28 are the arrows left, up, right and down, 0x20 is the space bar and 0x0D is Enter.'
     },
     {
         group: 'mouse',
         title: 'Mouse',
-        range: '0x30 - 0x33',
+        range: '0x40 - 0x43',
         description:
             'Pointing input over the Screen, polled, in the same logical pixels drawing uses. B selects which of the three views a read answers with: the current state, the state at the last button release, or the state at the last button press.'
     },
     {
         group: 'time',
         title: 'Program time',
-        range: '0x40 - 0x42',
+        range: '0x50 - 0x52',
         description:
             'Waiting and elapsed time. A wait and a frame sync are reads that suspend the program without blocking the editor: the machine re-executes the `in` when the time has passed, so Stop still answers and the Screen still repaints. Testcases run on a virtual clock, where waits complete at once and time starts at zero.'
     }
@@ -291,7 +291,9 @@ export const Z80_SCREEN_COMMANDS = {
     RESIZE: 10,
     BUFFERING_ON: 11,
     BUFFERING_OFF: 12,
-    PRESENT: 13
+    PRESENT: 13,
+    MODE_CELLS: 14,
+    MODE_DRAWING: 15
 } as const
 
 export type Z80ScreenCommandName = keyof typeof Z80_SCREEN_COMMANDS
@@ -380,6 +382,18 @@ export const Z80_SCREEN_COMMAND_DOCS: {
         command: Z80_SCREEN_COMMANDS.PRESENT,
         description:
             'Shows the off-screen image. With double buffering off it only asks for a repaint.'
+    },
+    {
+        name: 'MODE_CELLS',
+        command: Z80_SCREEN_COMMANDS.MODE_CELLS,
+        description:
+            "The TRS-80's memory-mapped display: the Screen becomes 64 by 16 character cells and shows the kilobyte of memory at 0x3C00, one byte per cell. Characters 128 to 191 are 2 by 3 blocks, for 128 by 48 chunky pixels, and the keyboard matrix at 0x3800 answers reads. The drawing commands above are not available in this mode; a program draws by storing bytes. The same mode a `; @screen trs80` comment asks for before the program starts."
+    },
+    {
+        name: 'MODE_DRAWING',
+        command: Z80_SCREEN_COMMANDS.MODE_DRAWING,
+        description:
+            'Back to the drawing commands above. The image stays as it is until something draws on it, and memory at 0x3C00 becomes ordinary RAM again.'
     }
 ]
 
@@ -476,7 +490,7 @@ export const Z80_PORT_DOCS: Z80PortDoc[] = [
 loop:   ld a, (hl)
         or a
         jr z, done
-        out (0), a
+        out (0x10), a
         inc hl
         jr loop
 done:   halt
@@ -491,9 +505,9 @@ msg:    .asciz "Hello!", 10   ; 10 is the newline: strings keep \\n literally`,
         write: 'Prints the byte as an unsigned decimal number, 0 to 255.',
         read: 'Reads a line, parses it as a decimal number and returns its low byte. Stops the program with an error when the line is not a number.',
         example: `        .org 0x8000
-        in a, (1)       ; ask for a number
+        in a, (0x11)       ; ask for a number
         add a, a        ; double it
-        out (1), a      ; print it
+        out (0x11), a      ; print it
         halt`,
         exampleInput: ['21'],
         exampleOutput: '42'
@@ -508,7 +522,7 @@ msg:    .asciz "Hello!", 10   ; 10 is the newline: strings keep \\n literally`,
         example: `        .org 0x8000
         ld a, 5
         sub 10
-        out (2), a
+        out (0x12), a
         halt`,
         exampleOutput: '-5'
     },
@@ -521,7 +535,7 @@ msg:    .asciz "Hello!", 10   ; 10 is the newline: strings keep \\n literally`,
         read: 'Reads a line, parses it as a hexadecimal number (`0x`, `$` prefix or `h` suffix accepted) and returns its low byte.',
         example: `        .org 0x8000
         ld a, 255
-        out (3), a
+        out (0x13), a
         halt`,
         exampleOutput: 'FF'
     },
@@ -535,7 +549,7 @@ msg:    .asciz "Hello!", 10   ; 10 is the newline: strings keep \\n literally`,
         example: `        .org 0x8000
         ld hl, 1000
         ld b, h         ; high byte goes on the address bus
-        ld c, 4         ; port number
+        ld c, 0x14      ; port number
         out (c), l      ; prints HL
         halt`,
         exampleOutput: '1000'
@@ -549,13 +563,13 @@ msg:    .asciz "Hello!", 10   ; 10 is the newline: strings keep \\n literally`,
         read: 'The current pen color, back in 3-3-2.',
         example: `        .org 0x8000
         ld a, 0xE0      ; 111 000 00: pure red
-        out (0x10), a   ; pen color
+        out (0x20), a   ; pen color
         ld a, 100
-        out (0x13), a   ; X
+        out (0x23), a   ; X
         ld a, 50
-        out (0x14), a   ; Y
+        out (0x24), a   ; Y
         xor a           ; command 0: pixel
-        out (0x17), a
+        out (0x27), a
         halt`,
         exampleShows: 'one red pixel at (100, 50).'
     },
@@ -568,17 +582,17 @@ msg:    .asciz "Hello!", 10   ; 10 is the newline: strings keep \\n literally`,
         read: 'The current fill color, back in 3-3-2.',
         example: `        .org 0x8000
         ld a, 0x1C      ; 000 111 00: pure green
-        out (0x11), a   ; fill color
+        out (0x21), a   ; fill color
         ld a, 0xFF
-        out (0x10), a   ; white pen for the outline
+        out (0x20), a   ; white pen for the outline
         ld a, 20
-        out (0x13), a
-        out (0x14), a   ; from (20, 20)
+        out (0x23), a
+        out (0x24), a   ; from (20, 20)
         ld a, 80
-        out (0x15), a
-        out (0x16), a   ; to (80, 80), right and bottom excluded
+        out (0x25), a
+        out (0x26), a   ; to (80, 80), right and bottom excluded
         ld a, 4         ; command 4: filled rectangle
-        out (0x17), a
+        out (0x27), a
         halt`,
         exampleShows: 'a green square with a white outline, 60 by 60 pixels, at (20, 20).'
     },
@@ -591,16 +605,16 @@ msg:    .asciz "Hello!", 10   ; 10 is the newline: strings keep \\n literally`,
         read: 'The current pen width.',
         example: `        .org 0x8000
         ld a, 5
-        out (0x12), a   ; five pixels wide
+        out (0x22), a   ; five pixels wide
         ld a, 10
-        out (0x13), a
-        out (0x14), a   ; from (10, 10)
+        out (0x23), a
+        out (0x24), a   ; from (10, 10)
         ld a, 200
-        out (0x15), a
+        out (0x25), a
         ld a, 150
-        out (0x16), a   ; to (200, 150)
+        out (0x26), a   ; to (200, 150)
         ld a, 1         ; command 1: line
-        out (0x17), a
+        out (0x27), a
         halt`,
         exampleShows: 'a thick white diagonal line across the Screen.'
     },
@@ -613,17 +627,17 @@ msg:    .asciz "Hello!", 10   ; 10 is the newline: strings keep \\n literally`,
         read: 'The byte last written.',
         example: `        .org 0x8000
         ld a, 128
-        out (0x13), a
+        out (0x23), a
         ld a, 96
-        out (0x14), a   ; (128, 96), the middle of the default Screen
+        out (0x24), a   ; (128, 96), the middle of the default Screen
         ld a, 3         ; command 3: move to
-        out (0x17), a
+        out (0x27), a
         ld a, 200
-        out (0x13), a
+        out (0x23), a
         ld a, 20
-        out (0x14), a
+        out (0x24), a
         ld a, 2         ; command 2: line to
-        out (0x17), a
+        out (0x27), a
         halt`,
         exampleShows: 'a line from the middle of the Screen to (200, 20).'
     },
@@ -660,21 +674,21 @@ msg:    .asciz "Hello!", 10   ; 10 is the newline: strings keep \\n literally`,
         read: 'The number of the last command run, 0 before the first one.',
         example: `        .org 0x8000
         ld a, 0x03      ; 000 000 11: pure blue
-        out (0x11), a   ; fill color
+        out (0x21), a   ; fill color
         ld a, 9         ; command 9: clear to the fill color
-        out (0x17), a
+        out (0x27), a
         ld a, 0xFC      ; 111 111 00: yellow
-        out (0x11), a
+        out (0x21), a
         ld a, 60
-        out (0x13), a
+        out (0x23), a
         ld a, 40
-        out (0x14), a
+        out (0x24), a
         ld a, 196
-        out (0x15), a
+        out (0x25), a
         ld a, 152
-        out (0x16), a
+        out (0x26), a
         ld a, 6         ; command 6: filled ellipse
-        out (0x17), a
+        out (0x27), a
         halt`,
         exampleShows: 'a yellow ellipse with a white outline on a blue Screen.'
     },
@@ -687,14 +701,14 @@ msg:    .asciz "Hello!", 10   ; 10 is the newline: strings keep \\n literally`,
         read: 'The color of the pixel at (X, Y) as a 3-3-2 byte, read from the image being drawn on — the off-screen one while double buffering. Outside the Screen it reads as the background color.',
         example: `        .org 0x8000
         ld a, 0xE0
-        out (0x10), a   ; red pen
+        out (0x20), a   ; red pen
         ld a, 8
-        out (0x13), a
-        out (0x14), a   ; (8, 8)
+        out (0x23), a
+        out (0x24), a   ; (8, 8)
         xor a           ; command 0: pixel
-        out (0x17), a
-        in a, (0x18)    ; read the color back
-        out (3), a      ; print it as hexadecimal
+        out (0x27), a
+        in a, (0x28)    ; read the color back
+        out (0x13), a      ; print it as hexadecimal
         halt`,
         exampleOutput: 'E0'
     },
@@ -707,14 +721,14 @@ msg:    .asciz "Hello!", 10   ; 10 is the newline: strings keep \\n literally`,
         read: 'The column the text cursor is on.',
         example: `        .org 0x8000
         ld a, 12
-        out (0x19), a   ; column 12
+        out (0x29), a   ; column 12
         ld a, 8
-        out (0x1A), a   ; row 8
+        out (0x2A), a   ; row 8
         ld hl, msg
 loop:   ld a, (hl)
         or a
         jr z, done
-        out (0), a      ; the character port draws at the cursor
+        out (0x10), a      ; the character port draws at the cursor
         inc hl
         jr loop
 done:   halt
@@ -738,11 +752,11 @@ msg:    .asciz "HELLO"`,
         write: 'Ignored.',
         read: '1 when a character typed on the focused Screen is waiting to be read from the character port, else 0. During a testcase it answers for the scripted input instead, so a program that polls before reading works in both.',
         example: `        .org 0x8000
-wait:   in a, (0x20)    ; anything typed?
+wait:   in a, (0x30)    ; anything typed?
         or a
         jr z, wait      ; poll until there is
-        in a, (0x00)    ; take the character
-        out (0x00), a   ; print it
+        in a, (0x10)    ; take the character
+        out (0x10), a   ; print it
         halt`,
         exampleInput: ['hi'],
         exampleShows:
@@ -756,13 +770,13 @@ wait:   in a, (0x20)    ; anything typed?
         write: 'Ignored.',
         read: '1 while the key whose code is in B is held down, else 0. This is how a game reads WASD or the arrows: it never consumes anything, and a key held over several reads answers 1 every time.',
         example: `        .org 0x8000
-        ld c, 0x21      ; the key state port
+        ld c, 0x31      ; the key state port
         ld b, 0x27      ; the right arrow
 wait:   in a, (c)
         or a
         jr z, wait      ; poll until it is held
         ld a, 'R'
-        out (0), a
+        out (0x10), a
         halt`,
         exampleShows: 'an R printed once the right arrow is held down on the focused Screen.'
     },
@@ -774,10 +788,10 @@ wait:   in a, (c)
         write: 'Ignored.',
         read: 'The code of the last key pressed on the Screen, 0 before the first press. It persists, so a program that polls slowly still sees the key.',
         example: `        .org 0x8000
-loop:   in a, (0x22)    ; the last key pressed
+loop:   in a, (0x32)    ; the last key pressed
         or a
         jr z, loop
-        out (3), a      ; print its code in hexadecimal
+        out (0x13), a      ; print its code in hexadecimal
         halt`,
         exampleShows: 'the code of the first key pressed on the focused Screen, in hexadecimal.'
     },
@@ -797,19 +811,19 @@ loop:   in a, (0x22)    ; the last key pressed
         write: 'Ignored.',
         read: 'The X of the view selected by B (0 current, 1 last release, 2 last press), in logical Screen pixels from the left edge, independently of how the panel is zoomed.',
         example: `        .org 0x8000
-        ld c, 0x32      ; the buttons port
+        ld c, 0x42      ; the buttons port
         ld b, 0         ; view 0: the current state
 wait:   in a, (c)
         and 1           ; the left button
         jr z, wait
-        ld c, 0x30
+        ld c, 0x40
         in a, (c)       ; X
-        out (1), a
+        out (0x11), a
         ld a, ','
-        out (0), a
-        ld c, 0x31
+        out (0x10), a
+        ld c, 0x41
         in a, (c)       ; Y
-        out (1), a
+        out (0x11), a
         halt`,
         exampleShows:
             'the pointer position printed as "x,y" as soon as the left button is held over the Screen.'
@@ -846,11 +860,11 @@ wait:   in a, (c)
         write: 'Ignored.',
         read: 'Waits B hundredths of a second, then answers 0. The editor stays responsive and Stop still works: the machine simply re-executes the `in` when the time is up. In a testcase the wait completes at once.',
         example: `        .org 0x8000
-        ld c, 0x40
+        ld c, 0x50
         ld b, 25        ; a quarter of a second
         in a, (c)
         ld a, '!'
-        out (0), a
+        out (0x10), a
         halt`,
         exampleOutput: '!'
     },
@@ -864,9 +878,9 @@ wait:   in a, (c)
         example: `        .org 0x8000
         ld b, 10        ; ten frames
 loop:   push bc
-        in a, (0x41)    ; wait for the next frame
+        in a, (0x51)    ; wait for the next frame
         ld a, '.'
-        out (0), a
+        out (0x10), a
         pop bc
         djnz loop
         halt`,
@@ -880,13 +894,13 @@ loop:   push bc
         write: 'Ignored.',
         read: 'One byte of the number of hundredths of a second since the run started, selected by B: 0 the lowest byte, 3 the highest. A testcase reads a virtual clock that starts at zero and only moves when the program waits, so a test is reproducible.',
         example: `        .org 0x8000
-        ld c, 0x40
+        ld c, 0x50
         ld b, 10        ; wait a tenth of a second
         in a, (c)
-        ld c, 0x42
+        ld c, 0x52
         ld b, 0         ; the lowest byte of the elapsed hundredths
         in a, (c)
-        out (1), a
+        out (0x11), a
         halt`,
         exampleShows: 'the hundredths of a second the program has been running, about 10.'
     }

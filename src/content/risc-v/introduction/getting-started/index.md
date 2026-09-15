@@ -1,69 +1,67 @@
-[Assembly basics](/learn/courses/assembly-basics) went through registers, memory, branching and the
-stack once, using whichever language made each point clearest. From here on there is one language,
-RISC-V.
-
 ## The machine
 
-**RISC-V** is an instruction set, started in May 2010 at the University of California, Berkeley by
-Krste Asanović with Yunsup Lee and Andrew Waterman, and the fifth RISC design to come out of that
-group, which is where the number in the name comes from. Anybody may implement it without paying for
-a licence, and since 2015 the specification has been looked after by an organisation of its members
-rather than by one company. It works with:
+**RISC-V** is an instruction set. It was started in May 2010 at the University of California,
+Berkeley, by Krste Asanović with Yunsup Lee and Andrew Waterman, and it was the fifth RISC design to
+come out of that group, which is where the number in the name comes from. Anybody may build a chip
+that implements it without paying anyone for a licence, and since 2015 the specification has been
+looked after by an organisation of its members rather than by a single company.
 
-- **32 registers**, 32 bits each, and each of them has two names: a number, `x0` to `x31`, and an
-  ABI name, `zero`, `ra`, `sp`, `a0`, `t0`, `s0` and so on. `t0` and `x5` are two spellings of one
-  register.
-- **`zero`**, which is `x0`. It always reads 0 and cannot be written. You may name it in any
-  instruction, and the hardware answers 0 whatever you do to it.
-- **Memory**, one large array of bytes, reached with a 32 bit address. This editor puts your code at
-  `0x00400000` and your data at `0x10010000`, and the stack pointer starts at `0x7FFFEFFC`.
-- **No flags.** There is no zero bit, no carry bit and no status register. The flags panel the M68K
-  and Z80 courses show you is missing here because there is nothing to put in it, and comparisons
-  are done differently, which is a lecture of its own later on.
+What you get:
 
-RISC-V is a **load/store architecture**: arithmetic works on registers and nothing else, and the
-only instructions that touch memory are the loads and the stores. `lw t0, 0(t1)` reads a word into a
-register and `sw t0, 0(t1)` writes one back, and there is no `add` that reads memory.
+- **32 registers**, 32 bits each. Every one of them has two names: a number, `x0` to `x31`, and a
+  working name, `zero`, `ra`, `sp`, `a0`, `t0`, `s0` and so on. `t0` and `x5` are two spellings of
+  the same register, and this course uses the names.
+- **`zero`**, which is `x0`. It always reads 0 and writing to it does nothing at all. You are
+  allowed to name it anywhere, and it will keep answering 0.
+- **Memory**, one long array of bytes reached by a 32 bit address. This editor puts your code at
+  `0x00400000`, your data at `0x10010000`, and starts the stack pointer at `0x7FFFEFFC`.
+- **Branches that compare for themselves.** There is no status register holding the result of the
+  last comparison. A branch instruction names the two registers it wants compared and jumps or does
+  not jump, all in one go. That has a lecture of its own later.
 
-It is also **little endian**: the lowest byte of a number goes at the lowest address, so a word you
-wrote as `0x12345678` reads in memory as `78 56 34 12`.
+RISC-V is a **load/store architecture**, which means arithmetic works on registers and only on
+registers. The only two instructions that go anywhere near memory are the load and the store:
+`lw t0, 0(t1)` fetches a word into a register, `sw t0, 0(t1)` puts one back. There is no `add` that
+reaches into memory, so a number in memory always makes the same round trip in and out.
 
-The other thing to know before you write a line of it is that RISC-V is **a small base plus
-extensions**. The base is called **RV32I**, it has about forty instructions, and it has no
-multiplication and no division at all. `mul`, `div` and `rem` come from the **M extension**, which
-this assembler accepts, and "The RISC-V instruction set" says which letter each instruction you
-write belongs to.
+It is also **little endian**. The lowest byte of a number sits at the lowest address, so a word you
+wrote as `0x12345678` shows up in memory as `78 56 34 12`.
+
+The last thing to know before you write a line of it: RISC-V is **a small base plus extensions**.
+The base is called **RV32I**, it is about forty instructions, and it has no multiplication and no
+division in it at all. `mul`, `div` and `rem` come from the **M extension**, a named group of
+instructions a chip may or may not have, and which this assembler accepts. "The RISC-V instruction
+set" is the lecture that goes through the letters.
 
 ## The simulator
 
-There is no RISC-V chip in your browser, there is a simulator, and this one follows **RARS**, the
-RISC-V Assembler and Runtime Simulator written by Benjamin Landers, which is itself a translation of
-MARS, the MIPS simulator the MIPS course runs. Printing, reading input and asking for the time go
-through the instruction `ecall`, which is taught in the "Talking to the outside world" module of
-this course. Until then, programs show what they did in the registers and the memory.
+There is no RISC-V chip in your browser. There is a simulator, and it runs the same 32 bit RISC-V
+your program would be assembled for on real hardware. Printing, reading input and asking for the
+time all go through one instruction, `ecall`, which the "Talking to the outside world" module
+covers. Until then a program shows what it did in the registers and in memory.
 
-RISC-V comes in a 32 bit and a 64 bit form, and this editor has them as two separate languages:
-**RISC-V** is the 32 bit one and is what every page of this course uses, apart from "Going 64-bit",
-which is about the other. When you create a project you pick one of the two, and a program written
-for one does not always assemble in the other.
+RISC-V comes in a 32 bit and a 64 bit form, and the editor treats them as two separate languages.
+**RISC-V** is the 32 bit one, and it is what every page of this course uses apart from "Going
+64-bit". You pick one of the two when you create a project, and a program written for one does not
+always assemble in the other.
 
 ## How a program is written down
 
-A line is a label, an instruction, a directive, a comment, or nothing.
+A line is a label, an instruction, a directive, a comment, or nothing at all.
 
 - A **comment** starts at a `#` and runs to the end of the line.
 - A **label** goes at the start of the line and ends with a colon: `main:`. It is a name for the
-  address of whatever comes next, code or data. The colon is required, and a label may not be
-  spelled the same as a register, so `s1:` is a build error and `sum:` is fine.
-- A **directive** starts with a dot and is addressed to the assembler instead of the CPU. `.data`
-  and `.text` open the two sections, `.word` writes data, `.space` reserves room. They get a lecture
-  of their own, ".data, .text and directives", later in this course.
-- Everything else is **indented**, one instruction per line. Four spaces is what these courses use.
-- **Case does not matter** for the instruction names, so `ADD` and `add` are the same instruction.
-  Register names are lower case only: `T0` is a build error.
+  address of whatever comes next, code or data alike. The colon is required, and a label may not be
+  spelled the same as a register, so `s1:` will not build and `sum:` is fine.
+- A **directive** starts with a dot and is addressed to the assembler rather than to the processor.
+  `.data` and `.text` open the two sections, `.word` writes data, `.space` reserves room. They get a
+  lecture of their own.
+- Everything else is **indented**, one instruction per line. Four spaces is what this course uses.
+- **Case does not matter** for instruction names, so `ADD` and `add` are the same instruction.
+  Register names are lower case only, and `T0` will not build.
 
-Numbers can be written in three ways, and there is no `#` in front of them, since a `#` starts a
-comment:
+Numbers can be written three ways, and none of them takes a marker in front, since a `#` would start
+a comment:
 
 | written | means                 |
 | ------- | --------------------- |
@@ -71,71 +69,77 @@ comment:
 | `0x64`  | hex, the same 100     |
 | `'d'`   | the ASCII code of `d` |
 
-There is no binary literal: `0b1100100` does not assemble. Negative numbers are written with a
+There is no binary literal, so `0b1100100` does not assemble. Negative numbers are written with a
 minus, `-1`.
 
 ## Your first program
 
-This one puts two numbers in registers and adds them. Press **Build**, then **Run**, and read the
-answer in `t2` in the registers panel.
+Two numbers into registers, and add them. Press **Build**, then **Run**, and read `t2` in the
+registers panel.
 
 ```riscv|playground
 .text
 main:
-    li t0, 10           # x = 10
-    li t1, 32           # y = 32
-    add t2, t0, t1      # z = x + y
+    li t0, 10
+    li t1, 32
+    add t2, t0, t1      # read t0 and t1, write t2
 ```
 
-`li t0, 10` (load immediate) loads the number 10 into `t0`, and the line under it does the same with
-32 and `t1`. `add t2, t0, t1` reads the two registers on the right, adds them, and writes the answer
-into the one on the left, so `t2` comes out at 42 and neither of the other two is touched.
+`li t0, 10` is load immediate: put the number 10 into `t0`. "Immediate" is the word for a number
+written into the instruction itself rather than fetched from anywhere, and you will see it a lot.
+`add t2, t0, t1` reads the two registers on the right, adds them, and writes the answer into the one
+on the left. Neither `t0` nor `t1` is touched.
 
 **Build** assembles what you wrote and points the simulator at the first instruction, **Run** runs
-the program to the end, and **Step** runs one instruction at a time. The `pc` register at the bottom
-of the panel is the address of the instruction that runs next, and it starts at `0x00400000`.
+the whole program, and **Step** does one instruction at a time. The `pc` register at the bottom of
+the panel holds the address of the instruction that runs next, and it starts at `0x00400000`.
 
-Nothing in the program says "stop". The simulator ends a program when there is no next instruction
-to run, which here is the end of what you wrote. Real RISC-V programs end with an `ecall`, which the
-outside-world module teaches.
-
-Try changing `add t2, t0, t1` to `add t0, t0, t1` and see the answer come out in `t0` instead, on
-top of the 10 that was there.
+Nothing in the program says "stop". The simulator ends a run when there is no next instruction,
+which here is the end of what you wrote. A real RISC-V program ends by asking the outside world to
+end it, with an `ecall`.
 
 ## Three operands, destination first
 
-Nearly every RISC-V instruction names three registers: the one it writes and the two it reads. That
-is the biggest difference from the M68K, where `add.l d1, d0` overwrites `d0` because one of the two
-operands has to be the destination. Here nothing is overwritten unless you name it.
-
-The destination is the **first** operand, and the order of the other two matters for anything that
-is not addition.
+Nearly every instruction names three registers: the one it writes and the two it reads. The one it
+writes comes **first**, and nothing is overwritten unless you name it there. The order of the other
+two matters for anything that is not addition.
 
 ```riscv|playground
 .text
 main:
     li t0, 10
     li t1, 3
-    sub t2, t0, t1      # z = x - y
-    sub t3, t1, t0      # and the other way round
-    add t4, t0, zero    # a copy of x, since zero always reads 0
+    sub t2, t0, t1      # 10 - 3
+    sub t3, t1, t0      # 3 - 10
+    add t4, t0, zero    # a copy of t0, since zero always reads 0
     li t5, 7
     add zero, t5, t5    # this write goes nowhere
     add t6, zero, zero  # so zero is still 0
 ```
 
-`t2` comes out at 7 and `t3` at `FFFFFFF9`, which is -7: the same two numbers subtracted the other
-way round. `t4` is 10, because adding `zero` to a register copies it, which is how you move a value
-from one register to another. `t6` is 0, because the `add zero, t5, t5` above it was carried out and
-its answer thrown away.
+`t3` comes out at `FFFFFFF9`, which is -7. The bits of a negative number are worth a lecture on
+their own and get one; for now, the point is that the two source registers are not interchangeable.
 
-`zero` is not in the registers panel, since a row that always reads `00000000` tells you nothing.
+`add t4, t0, zero` is how a value moves from one register to another: add nothing to it and put the
+result somewhere else. There is no separate copy instruction underneath; this is it.
+
+The last two lines are there to be watched. `add zero, t5, t5` really does run, the processor really
+does work out 14, and then it throws the answer away because the destination is `zero`. Nothing
+warns you. A destination register you did not mean to write is one of the quieter bugs available to
+you here.
+
+`zero` is not in the registers panel, since a row that always reads `00000000` would tell you
+nothing.
+
+Naming the same register as a source and as the destination is allowed and common: write
+`add t0, t0, t1` and the answer lands on top of the 10 that was in `t0`. That is how a running total
+is kept.
 
 ## Memory needs a load and a store
 
-A number in memory is not an operand. To work on it you load it into a register, do the arithmetic
-there, and store it back. Build this one with the memory panel next to it, type `10010000` in its
-address box, then Run.
+A number in memory cannot be added to anything. To work on it you load it into a register, do the
+arithmetic there, and store it back. Build this one with the memory panel beside it and `10010000`
+typed into its address box, then Run.
 
 ```riscv|playground|memory
 .data
@@ -143,36 +147,36 @@ total: .word 25
 
 .text
 main:
-    li t0, 100          # x = 100
-    la t1, total        # p = &total
-    lw t2, 0(t1)        # y = *p
-    add t0, t0, t2      # x = x + y
-    sw t0, 0(t1)        # *p = x
+    li t0, 100
+    la t1, total        # the address of total, not the 25
+    lw t2, 0(t1)        # the word stored at that address
+    add t0, t0, t2
+    sw t0, 0(t1)        # and back where it came from
 ```
 
-`la t1, total` (load address) puts the **address** of `total` in `t1`, which comes out at
-`10010000`, the first address of the data section. `lw t2, 0(t1)` reads the word 4 bytes long at
-that address, so `t2` is 25. After the `sw` the four bytes at `0x10010000` read `7D 00 00 00`, which
-is 125 written the little endian way round.
+`la t1, total` is load address, and the difference between it and a load is the whole lesson of this
+section. `la` puts the **address** `10010000` into `t1`. `lw t2, 0(t1)` goes to that address and
+brings back what is there, the 25. A label on its own means an address; getting at the value costs
+an instruction.
 
-The `0(t1)` is the only addressing mode the loads and stores have: a register plus a constant. The
-constant is a byte offset, so `4(t1)` is the next word along and `-4(t1)` the one before it.
+After the `sw`, the four bytes at `0x10010000` read `7D 00 00 00`, which is 125 stored the little
+endian way round.
 
-Try changing `sw t0, 0(t1)` to `sw t0, 4(t1)` and watching which four bytes change in the panel.
+`0(t1)` is the only form a load or a store has: one register, plus a fixed number of bytes. The
+number is an offset in bytes, so `4(t1)` is the next word along and `-4(t1)` is the one before it.
 
 ## The panels
 
-The **registers panel** lists all 32 by their ABI names, with `pc` under them. The **B**, **W** and
-**L** buttons in its header cut each register into bytes, halves or one word, and hovering a value
-shows its signed and unsigned readings.
+The **registers panel** lists the registers by their working names, with `pc` under them, and leaves
+`zero` out. The **B**, **W** and **L** buttons in its header cut each register into bytes, halves or
+one whole word, and hovering over a value shows you its signed and unsigned readings.
 
-The **memory panel** shows the bytes at whatever address you type into it. `0x00400000` is the code,
-`0x10010000` is the data, and the stack is at the top of the address space.
+The **memory panel** shows the bytes at whatever address you type into it. `0x00400000` is your
+code, `0x10010000` is your data, and the stack is up at the top of the address space.
 
-The **screen panel** is a grid of pixels that a RISC-V program draws on by writing to memory, and a
-comment line beginning `# @screen` in your program says how big it is and where it lives. Both of
-those are the "The bitmap display and the keyboard registers" lecture. The **console** below the
-editor is where a program prints, which needs `ecall` and waits for the outside-world module.
+The **screen panel** is a grid of pixels that a program draws on by writing to memory, and a comment
+line beginning `# @screen` says how big it is and where it lives. The **console** below the editor
+is where a program prints. Both of those wait for later modules.
 
 ## Your turn
 
@@ -232,10 +236,10 @@ value: .word 10
 
 .text
 main:
-    la t1, value        # p = &value
-    lw t0, 0(t1)        # x = *p
-    addi t0, t0, 32     # x = x + 32
-    sw t0, 0(t1)        # *p = x
+    la t1, value        # the address
+    lw t0, 0(t1)        # the value there
+    addi t0, t0, 32
+    sw t0, 0(t1)        # put it back
 ```
 
 </details>

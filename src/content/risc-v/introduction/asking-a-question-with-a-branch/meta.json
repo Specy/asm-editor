@@ -1,0 +1,6 @@
+{
+    "name": "Asking a question with a branch",
+    "description": "One instruction compares two registers and jumps, so a condition needs nothing set up first and leaves nothing behind. The six real branches, the ones the assembler builds out of them, and slt for when you want the answer as a number instead of a jump.",
+    "order": 6,
+    "topic": "branching"
+}

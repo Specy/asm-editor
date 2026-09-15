@@ -1,0 +1,6 @@
+{
+    "name": "A 2D array",
+    "description": "Twelve numbers read as three rows of four, with row times COLS plus col working out where an element is, and loops along a row and down a column.",
+    "order": 16,
+    "topic": "two-dimensional-array"
+}

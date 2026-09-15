@@ -2,16 +2,11 @@ A ball crosses the screen and turns round at every edge, and a bar along the bot
 time the program has been running. It never stops on its own: press Run, watch it, and press Stop
 when you have had enough.
 
-Drawing shapes on the screen drew one picture and ended. This one draws a new picture fifteen or
-twenty times a second, which brings two problems with it: the reader must never see a half drawn
-frame, and the ball must move at the same speed whatever the machine underneath is doing.
+Drawing a new picture fifteen or twenty times a second brings two problems with it: the person
+watching must never see a half drawn frame, and the ball has to move at the same speed whatever the
+machine underneath is doing.
 
-**You need to know:** the "Drawing shapes on the screen" Example and the "The bitmap display and the
-keyboard registers" lecture. What is new here is the two clock services, service 30 answers with the
-milliseconds since the run started and service 32 lets that many pass, and a wait costs no
-instructions.
-
-```mips|playground|screen|no-registers|allow-open
+```mips|playground|open-screen|no-registers|allow-open
 # @screen unit=8 width=256 height=256 base=display
 .eqv SIDE 32                # words across and down
 .eqv BALL 4                 # the ball, in words
@@ -131,12 +126,15 @@ draw it where it is now, and let some program time pass. The grid is painted wit
 **once**, before the loop, and after that a frame writes only the sixteen cells the ball covers,
 twice over as it is erased and drawn again, and the thirty two of the bottom row.
 
-The M68K solves the flicker problem with double buffering: task 92 sends every drawing to an off
-screen image and task 94 shows the whole of it at once. The bitmap display has nothing of the kind.
-These words in memory are what you are looking at, and a `sw` changes the picture the moment it
-runs, so the way to keep a frame clean here is to write as few pixels as possible: erase what moved,
-draw it in its new place, and leave the rest of the grid alone. Repainting all 1024 words every
-frame would be visible as a flicker, and it would make a frame ten times as expensive.
+That is why a frame is cheap, and cheap is what it has to be. The words in memory **are** the
+picture: there is no second copy being prepared out of sight and shown all at once, so every `sw`
+changes what is on the screen the instant it runs. Repaint all 1024 words every frame and you are
+writing a whole screen while it is being looked at, which shows up as a flicker, and you are
+spending ten times as many instructions to do it.
+
+So the rule for an animation here is to write as few pixels as you can get away with: erase what
+moved, draw it where it now is, and leave every other word alone. The cost of a frame then depends
+on what changed rather than on how big the grid is.
 
 Service 32 waits for `$a0` milliseconds of **program time**. The wait costs no instructions at all,
 so a program that idles never reaches the Playground's two million, and the editor stays responsive
@@ -158,7 +156,8 @@ and the grid is 32, so a left edge of 27 puts its right edge on column 30.
 
 One frame is about 470 instructions, and a `runFor` of 200000 is 424 of them.
 
-Try changing `.eqv FRAME 60` to `.eqv FRAME 200`. The ball crawls, because it still moves one cell
-per frame and the frames are now a fifth of a second apart, while the bar along the bottom races:
-over the same 424 frames the program time goes from 25 seconds to 85, and the bar is drawn from
-program time.
+Change `.eqv FRAME 60` to `.eqv FRAME 200` and watch two things move at different speeds. The ball
+crawls, because it still moves one cell per frame and the frames are now a fifth of a second apart.
+The bar along the bottom races, because it is drawn from program time, and over the same 424 frames
+that has gone from 25 seconds to 85. One number changed the relationship between how often you draw
+and how fast time passes, which is the thing every animation has to get right.

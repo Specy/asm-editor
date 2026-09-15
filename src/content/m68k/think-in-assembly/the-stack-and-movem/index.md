@@ -1,6 +1,7 @@
-The stack lecture of Assembly basics pushed by hand, with a `sub #4, sp` and then a
-`move.l #$33333333, (sp)`. On the M68K you do not have to: `-(sp)` and `(sp)+` are the predecrement
-and postincrement addressing modes applied to `a7`, and they are a push and a pop.
+Pushing something onto the stack is two steps: move the stack pointer down to make room, then write
+into the room you just made. Popping is the two steps in reverse. You could write all four
+instructions out by hand, and you never have to, because `-(sp)` and `(sp)+` are the predecrement and
+postincrement modes applied to `a7` and they already do exactly that.
 
 ## Push and pop
 
@@ -19,20 +20,22 @@ The stack pointer starts at `$1000000`, one byte past the end of memory, and gro
     move.l (sp)+, d3    ; pop into d3
 ```
 
-Step through it and watch `a7` in the registers panel. Before the first push the stack is empty and
-`a7` holds `01000000` (🟢 is the stack pointer, `????????` is memory nobody has written):
+Step through it and watch `a7` in the registers panel. In the tables below, 🟢 marks the address the
+stack pointer is holding, and `FFFFFFFF` is memory nobody has written yet.
+
+Before the first push the stack is empty and `a7` holds `01000000`:
 
 |    address |  value   |
 | ---------: | :------: |
-|  `$FFFFF8` | ???????? |
-|  `$FFFFFC` | ???????? |
+|  `$FFFFF8` | FFFFFFFF |
+|  `$FFFFFC` | FFFFFFFF |
 | `$1000000` |    🟢    |
 
 `move.l d0, -(sp)` drops `a7` to `$FFFFFC` and writes there:
 
 |    address |    value    |
 | ---------: | :---------: |
-|  `$FFFFF8` |  ????????   |
+|  `$FFFFF8` |  FFFFFFFF   |
 |  `$FFFFFC` | 🟢 11111111 |
 | `$1000000` |             |
 
@@ -112,9 +115,9 @@ in one instruction.
 target: dc.l $DEADBEEF
 ```
 
-`d0` and `a0` both come out at `00002000` and `d1` at `DEADBEEF`. `(sp)` with no `+` and no `-` reads
-the top of the stack and leaves the pointer where it is, which is how you look at what you pushed
-without giving it up.
+`(sp)` with no `+` and no `-` reads the top of the stack and leaves the pointer where it is, which is
+how you look at what you pushed without giving it up: `d0` and `a0` both end holding `00002000`, and
+only one of those two lines moved `a7`.
 
 The other use of the stack is room. `sub.l #16, sp` takes sixteen bytes of scratch space, which you
 then reach as `(sp)`, `4(sp)`, `8(sp)` and `12(sp)`, and `add.l #16, sp` gives it back. Nothing
@@ -126,8 +129,8 @@ address is sitting under everything you pushed. That is the subject of the next 
 
 ## Your turn
 
-The test starts `d0` at `$11111111` and `d1` at `$22222222`, and wants them exchanged. Do it with
-the stack holding one of them, in three instructions, without `exg` and without a third register.
+Swap `d0` and `d1`, which start at `$11111111` and `$22222222`. No `exg`, no third register, and
+three instructions: the stack has to hold one of the two values while the other one moves.
 
 ```m68k|playground|exercise
 * your code here
@@ -151,9 +154,9 @@ the stack holding one of them, in three instructions, without `exg` and without 
 
 </details>
 
-The second one starts `d0`, `d1` and `d2` at 1, 2 and 3, and the three `move.l #$FF` lines in the
-middle are not yours to change. Save the three registers before them and put them back afterwards,
-in one instruction each way.
+The three `move.l #$FF` lines below are not yours to change; treat them as somebody else's code that
+you have to survive. `d0`, `d1` and `d2` start at 1, 2 and 3 and have to end there. Save them before
+and restore them after, using one instruction each way.
 
 ```m68k|playground|exercise
 * save d0, d1 and d2 here

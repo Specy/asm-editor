@@ -2,12 +2,8 @@
 turns a number into characters itself. Task 15 does the same job in one request; this is what it does
 inside, and it is the program every language writes once and then hides in a library.
 
-Read two numbers and print their sum handed a number to a task and got text back. Here the only task
-used is the one that prints a string, and everything between the number and the string is yours.
-
-**You need to know:** the "Multiply and divide, with the remainder" Example and the "trap #15 and
-its tasks" lecture. What is new here is that the digits come out backwards, the last one first, so
-the buffer is filled from its end towards its front with `-(a1)`.
+The only task this program uses is the one that prints a string. Everything between a number in a
+register and characters in a buffer is written out here.
 
 ```m68k|playground|console|no-flags|allow-open
     move.l #48879, d0       ; n = 48879
@@ -69,5 +65,4 @@ moved, so `bne` under it means "if there is anything left of `n`, go round again
 bytes because the longest answer is a 32 bit number in base 2, and after the binary run `a1` comes
 out at `00002011`, seventeen bytes down from `buffer_end`.
 
-Try changing `move.l #2, d1` to `move.l #36, d1`, the largest base the digits reach. The third line
-of the console becomes `11PR`.
+36 is as far as the digits reach, since after `9` there are only 26 letters to carry on with.

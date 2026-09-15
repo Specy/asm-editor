@@ -1,7 +1,8 @@
-The stack lecture of Assembly basics pushed by hand, moving a stack pointer and then writing at it.
-That is what MIPS does, because MIPS has no push instruction and no pop instruction: `$sp` is one of
-the 32 ordinary registers, and everything about the stack is a convention plus two instructions you
-already know.
+The stack on this machine is built out of parts you already have. `$sp` is register `$29`, an
+ordinary register in every respect, and the stack itself is ordinary memory near the top of the
+address space. There is no instruction named push and none named pop, and you will find you do not
+miss them: a push is an `addi` and an `sw`, which is two instructions you can already write, and
+being able to see both halves is what makes the rest of this page make sense.
 
 ## A push is a subtraction and a store
 
@@ -63,8 +64,9 @@ Type `7FFFEFF0` in the memory panel's address box after running and both words a
 
 ## One adjustment, several stores
 
-Nothing says a push has to be one word. Move `$sp` once by as much as you need and reach the room
-with different offsets, which costs one instruction instead of one per value.
+Since a push is just "move the pointer, then write", you can move the pointer once for several
+values and reach each of them with a different offset. Three registers saved this way cost one
+`addi` and three `sw`, instead of three of each.
 
 ```mips|playground|memory
 .text
@@ -109,25 +111,26 @@ of it is yours.
 .text
 main:
     addi $sp, $sp, -16      # a local array of four words
-    li $t1, 0               # i = 0
+    li $t1, 0               # which word we are filling
 fill:
-    sll $t2, $t1, 2         # i * 4
-    add $t2, $sp, $t2       # &local[i]
+    sll $t2, $t1, 2         # times 4, one word each
+    add $t2, $sp, $t2       # the address of that word
     addi $t3, $t1, 10       # the value to write
-    sw $t3, 0($t2)          # local[i] = 10 + i
+    sw $t3, 0($t2)          # and store it there
     addi $t1, $t1, 1
     blt $t1, 4, fill
-    lw $t4, 0($sp)          # local[0]
-    lw $t5, 12($sp)         # local[3]
+    lw $t4, 0($sp)          # the first word back
+    lw $t5, 12($sp)         # and the last
     addi $sp, $sp, 16       # and give the room back
 ```
 
-`$t4` comes out at 10 and `$t5` at 13. While the loop is running the four words are at `0x7FFFEFEC`
-to `0x7FFFEFF8`, and after the last `addi` they are still there and no longer yours: the next thing
-that takes room gets the same addresses and writes over them.
+`$t4` is 10 and `$t5` is 13, the first and last words of the four the loop filled in. While that
+loop runs, the four words live at `0x7FFFEFEC` to `0x7FFFEFF8`.
 
-That is what "the stack is memory and the pointer is the only record" means in practice. Reading
-below `$sp` reads whatever the code that used that room before you left behind.
+After the last `addi` they are still sitting in memory, unchanged, and they are no longer yours. The
+next piece of code that takes room gets the same addresses and writes over them. So reading below
+`$sp` is not an error and does not stop the program; it just hands you whatever the last user of
+that room left behind, which is the most confusing kind of bug to chase.
 
 ## Give every byte back
 
@@ -144,7 +147,7 @@ There is nothing to stop you breaking it. `$sp` is register `$29` and `add $sp, 
 as happily as any other addition. The Stack tab of the memory panel and the `$sp` row of the
 registers panel are how you check.
 
-## Your turn
+## One to try
 
 The test starts `$t0` at `0x11111111` and `$t1` at `0x22222222`, and wants them exchanged. Do it
 through the stack, without a third register.
@@ -170,55 +173,9 @@ main:
 main:
     addi $sp, $sp, -4
     sw $t0, 0($sp)      # push the old $t0
-    move $t0, $t1       # $t0 = $t1
-    lw $t1, 0($sp)      # $t1 = the old $t0
+    move $t0, $t1       # the new $t0 over the top
+    lw $t1, 0($sp)      # and the old one comes back into $t1
     addi $sp, $sp, 4
-```
-
-</details>
-
-The second one starts `$s0`, `$s1` and `$s2` at 1, 2 and 3, and the three `li` lines in the middle
-are not yours to change. Save the three registers before them and put them back afterwards, moving
-`$sp` once each way.
-
-```mips|playground|exercise
-.text
-main:
-    # save $s0, $s1 and $s2 here
-
-    li $s0, 0xFF
-    li $s1, 0xFF
-    li $s2, 0xFF
-
-    # and bring them back here
-```
-
-```testcase
-{
-    "startingRegisters": { "$s0": 1, "$s1": 2, "$s2": 3 },
-    "expectedRegisters": { "$s0": 1, "$s1": 2, "$s2": 3 }
-}
-```
-
-<details>
-<summary>Show solution</summary>
-
-```mips|playground|solution
-.text
-main:
-    addi $sp, $sp, -12      # room for three words
-    sw $s0, 0($sp)
-    sw $s1, 4($sp)
-    sw $s2, 8($sp)
-
-    li $s0, 0xFF
-    li $s1, 0xFF
-    li $s2, 0xFF
-
-    lw $s0, 0($sp)
-    lw $s1, 4($sp)
-    lw $s2, 8($sp)
-    addi $sp, $sp, 12       # and the room given back
 ```
 
 </details>

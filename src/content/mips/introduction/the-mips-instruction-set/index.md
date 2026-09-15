@@ -1,13 +1,14 @@
-Every program so far has been written in the same shape, and this is it: a MIPS instruction is a
-mnemonic and up to three operands, and the first of them is the one that gets written.
+Every program so far has been written in one shape, and this is it. A MIPS instruction is a
+**mnemonic**, which is the short name of the operation, followed by up to three **operands**, which
+are the things it works on. The first operand is the one that gets written.
 
 ```
     mnemonic destination, source, source
 ```
 
-`add $t2, $t0, $t1` reads `$t0` and `$t1`, adds them and writes `$t2`, leaving both sources as they
-were. That is the difference from the M68K, where `add.l d1, d0` has to overwrite `d0` because there
-are only two operands and one of them is the destination.
+`add $t2, $t0, $t1` reads `$t0` and `$t1`, adds them, and writes `$t2`. Both sources come out
+untouched, which means you can use a value twice without copying it first, and it means an
+instruction never quietly destroys something you still wanted.
 
 ```mips|playground
 .text
@@ -20,31 +21,43 @@ main:
     sub $t5, $t1, $t0       # and the other way round
 ```
 
-`$t2` and `$t3` both come out at 10, `$t4` at 4 and `$t5` at `FFFFFFFC`, which is -4. The order of the
-two sources matters for everything that is not addition, and the rule is the same one C uses: the
-operand you read first is the one being subtracted from.
+`$t4` and `$t5` are the pair to look at: 4 and `FFFFFFFC`, which is -4. Order matters for everything
+that is not addition, and the rule is that the operands read left to right in the order you would
+say the sum out loud. `sub $t4, $t0, $t1` is "`$t0` minus `$t1`".
 
-## Three encodings, all four bytes
+## Why a constant runs out of room
 
-Every MIPS instruction is exactly **32 bits**, which is the whole point of the design: the CPU knows
-where the next instruction begins before it has finished decoding this one. Those 32 bits are laid
-out in one of three ways.
+Four things about MIPS look arbitrary until you know one fact, and then all four follow from it:
 
-| type | fields                                                       | what it is for                                    |
+- there are 32 registers, not 16 and not 64;
+- a constant between -32768 and 65535 costs one instruction and anything bigger costs two;
+- `j` can reach a quarter of memory but not all of it;
+- a branch reaches about 32 kilobytes forwards or backwards and no further.
+
+The fact is that every MIPS instruction is exactly **32 bits** long. Not "up to" 32: exactly. The
+chip fetches four bytes, and it already knows where the next instruction starts before it has worked
+out what this one is.
+
+Thirty two bits is not much to spend. Naming one register out of 32 costs 5 of them, and an
+instruction like `add` names three registers, so 15 bits are gone before the operation has been
+spelled out. There are three ways the bits get divided up:
+
+| type | fields                                                       | used by                                           |
 | ---- | ------------------------------------------------------------ | ------------------------------------------------- |
 | R    | opcode 6, `rs` 5, `rt` 5, `rd` 5, shift amount 5, function 6 | three registers: `add`, `and`, `sll`              |
 | I    | opcode 6, `rs` 5, `rt` 5, immediate 16                       | two registers and a constant: `addi`, `lw`, `beq` |
 | J    | opcode 6, address 26                                         | `j` and `jal`                                     |
 
-Five bits name a register, which is why there are exactly 32 of them and no more. Sixteen bits hold a
-constant, which is why a number outside -32768 to 65535 takes two instructions. And 26 bits hold a
-jump target as a word address, which the CPU pastes under the top four bits of the program counter,
-so `j` can reach anywhere in the same 256 megabyte quarter of memory and no further. A branch is an
-I-type, so its 16 bit field is a distance in words from the instruction after it, which reaches about
-32 kilobytes either way.
+Now read the consequences back off it. An I-type has spent 6 bits on the operation and 10 on two
+registers, so the constant gets the 16 that are left, and `li $t0, 100000` cannot possibly be one
+instruction. A J-type has 26 bits for a destination, which is a word address rather than a byte
+address, and the top four bits of the address come from wherever the program already is, so `j`
+cannot leave its own 256 megabyte quarter of memory. A branch is an I-type, so it gets 16 bits, and
+it spends them on a distance from the instruction after it rather than an address, which is what
+buys it the 32 kilobytes in each direction.
 
-None of that is something you write. It decides what the assembler can and cannot do for you, which
-is the rest of this page.
+You will never type any of these fields. They are worth five minutes because every "why can I not
+just write..." question on this machine is answered by counting bits in that table.
 
 ## The families
 
@@ -90,14 +103,15 @@ main:
     andi $t7, $t2, 0xFF     # register and constant
 ```
 
-`$t2` and `$t3` both come out at `00000010`, which is 16, `$t4` at 4 and `$t5` at 1. `$t6` is 0,
-because 16 and 1 have no bit in common, and `$t7` is 16.
+`$t2` and `$t3` land on the same value from a constant shift and a register shift, which is the
+whole difference the `v` makes. `$t6` is 0, and that is the line to think about: 16 and 1 have no
+bit set in the same place, so anding them together leaves nothing.
 
-## Instructions that are not instructions
+## Pseudo-instructions
 
-Half of what you have been writing does not exist in the hardware. `li`, `la`, `move`, `blt` and a
-dozen more are **pseudo-instructions**: names the assembler accepts and turns into one or more real
-ones, sometimes using `$at` to do it.
+A good half of what you have been writing does not exist in the hardware. `li`, `la`, `move`, `blt`
+and a dozen more are pseudo-instructions: names the assembler accepts and quietly turns into one or
+more real ones, sometimes borrowing `$at` on the way.
 
 | you write             | what the assembler makes of it                                      |
 | --------------------- | ------------------------------------------------------------------- |
@@ -136,24 +150,29 @@ less:
     la $s5, main            # two, and $at
 ```
 
-`$s0` stays 0 because the branch was taken, `$s1` is 5, `$s2` is `000186A0`, `$s3` is 50, `$s4` is 0
-(10 divided by 5 leaves nothing) and `$s5` is `00400000`, the address of `main`, because a label on
-an instruction is an address like any other.
+`$s5` is the one that catches people out: it holds `00400000`, the address of `main`. A label on an
+instruction is an address in exactly the same way a label on a `.word` is, and `la` will happily
+hand you either.
 
-Why care which is which. Three reasons: a pseudo-instruction can cost you `$at`, it can cost you four
-instructions where you thought you were writing one, and it can put a `break` in the middle of your
-program, which is what the guard on `rem` and three-operand `div` is. When any of that matters, write
-the real instructions.
+The reason to know which lines are pseudo-instructions is that one line of source is not one line of
+machine. A pseudo-instruction can take `$at` off you, it can cost four instructions where you
+counted on one, and in the case of `rem` and three-operand `div` it can put a `break` in the middle
+of your program to guard against dividing by zero. When any of that matters, write the real
+instructions yourself.
 
-## The delay slot this simulator does not have
+## The delay slot
 
-A real MIPS chip starts fetching the instruction after a branch before it knows whether the branch is
-taken, and the architecture says that instruction runs either way, so the fetch is never wasted.
-That instruction is the **branch delay slot**, and it is why printed MIPS code from a compiler has a
-`nop` after so many of its jumps: there was nothing useful to put there.
+There is one piece of real MIPS behaviour this editor leaves out, and it is worth knowing about
+because you will meet it the moment you read MIPS code written anywhere else.
 
-This simulator does not do it. MARS has the behaviour as a setting, it is off by default, and that is
-what this editor runs.
+A real MIPS chip starts fetching the instruction after a branch before it has worked out whether the
+branch is taken. Rather than throw that fetch away, the architecture says the instruction runs
+either way. That instruction is called the **branch delay slot**, and it is why printed MIPS from a
+compiler has a `nop` sitting under so many of its jumps: there was nothing useful to put in the
+slot, so the compiler put nothing.
+
+This editor runs branches the way they read. The instruction under a jump does not run unless the
+jump falls through to it.
 
 ```mips|playground
 .text
@@ -169,17 +188,16 @@ done:
     li $t2, 7
 ```
 
-`$t0` comes out at 1 and `$t1` at 5, so neither line under a jump ran. On hardware with delay slots
-both of them would have, and `$t0` would be 99.
+`$t0` is 1 and `$t1` is 5, so neither line under a jump ran. On hardware with delay slots both would
+have, and `$t0` would have finished at 99.
 
-So write your branches as they read, and put nothing after them that you do not mean. If you go and
-read real MIPS assembly, from a compiler or a textbook, expect the instruction under a jump to belong
-to the jump.
+So write your branches as they read. If you go and read MIPS assembly out of a compiler or a
+textbook, expect the instruction under a jump to belong to the jump.
 
-## Your turn
+## One to try
 
-The test starts `$t0` at 5. Leave `$t0` times 8, plus 1, in `$t1`, in two instructions and without
-`mul`. It comes out at 41.
+The test starts `$t0` at 5. Leave `$t0` times 8, plus 1, in `$t1`, using two instructions and no
+`mul`.
 
 ```mips|playground|exercise
 .text
@@ -202,32 +220,6 @@ main:
 main:
     sll $t1, $t0, 3     # three places left is eight times
     addi $t1, $t1, 1
-```
-
-</details>
-
-The second one wants `0x00A50000` in `$t0` with `$at` left at 0, which rules out `li`: it would put
-the top half of that number in `$at` on the way. One real instruction does it.
-
-```mips|playground|exercise
-.text
-main:
-    # your code here
-```
-
-```testcase
-{
-    "expectedRegisters": { "$t0": "0x00A50000", "$at": 0 }
-}
-```
-
-<details>
-<summary>Show solution</summary>
-
-```mips|playground|solution
-.text
-main:
-    lui $t0, 0xA5       # the top 16 bits, and zeroes under them
 ```
 
 </details>

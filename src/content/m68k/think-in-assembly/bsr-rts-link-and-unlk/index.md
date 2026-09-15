@@ -1,7 +1,10 @@
-`bsr label` pushes the address of the next instruction onto the stack and jumps to the label. `rts`
-pops it back into the program counter. That pair is the whole of calling and returning on the M68K.
-Getting the arguments in and the answer out takes more, and so does giving a subroutine local
-variables of its own.
+A subroutine is code you can get to from more than one place, which means it has to come back to a
+different place each time. The M68K does that with the stack. `bsr label` pushes the address of the
+instruction after it and jumps to the label; `rts` pops that address back into the program counter
+and carries on from there.
+
+That pair is the whole of calling and returning. Getting the arguments in, getting the answer out,
+and giving a subroutine variables of its own is the rest of this lecture.
 
 ## The call, and arguments in registers
 
@@ -24,16 +27,18 @@ triple:
 end:
 ```
 
-`d0` and `d1` both come out at `0000001E`, which is 30. Step through it and watch `a7` drop by 4 at
-the `bsr` and climb back at the `rts`, and the program counter jump to `$1010` and back to `$1008`.
+Step through it and watch two things at once: `a7` drops by 4 at the `bsr` and climbs back at the
+`rts`, and the program counter jumps to `$1010` and then back to `$1008`. The four bytes that
+appeared on the stack are the `$1008`.
 
-The `bra end` above `triple` is there because a subroutine is code like any other and the program
-would otherwise walk straight into it after the `move.l d0, d1`. Falling into a subroutine gives you
-an `rts` with nothing of yours on the stack, which pops whatever is there and jumps to it.
+The `bra end` above `triple` is there because a subroutine is code like any other, and without it the
+program would walk straight into `triple` after the `move.l d0, d1`. Falling into a subroutine that
+way gives you an `rts` with nothing of yours on the stack, so it pops whatever happens to be there
+and jumps to it.
 
 `jsr` is the other call instruction. `bsr` takes a label; `jsr` takes an address the way `lea` does,
-so `jsr (a0)` calls whatever address `a0` holds, which is how you call through a function pointer or
-out of a jump table.
+so `jsr (a0)` calls whatever address `a0` is holding, which is how you call a subroutine you picked
+while the program was running.
 
 ```m68k|playground|no-flags
     move.l #5, d0
@@ -54,11 +59,11 @@ double:
 end:
 ```
 
-`d0` and `d1` come out at 10, and `d2` and `d3` come out at 0, the values the caller had. The
-`movem.l` pair at the two ends of `double` is what makes that true, and it is what a **calling
-convention** asks a subroutine to do: a list of registers it must leave as it found them, and a list
-it is free to destroy. The two sides here are both yours, so the convention is whatever you write in
-the comment above the label, and writing it down is the point.
+`d2` and `d3` come out holding what the caller left in them, not what `double` put there, and the
+`movem.l` pair at the two ends of `double` is the only reason. An agreement of that kind is called a
+**calling convention**: a list of registers a subroutine must leave as it found them, and a list it
+is free to destroy. Both sides here are yours, so the convention is whatever you write in the comment
+above the label, and writing it down is the point of writing it at all.
 
 ## Arguments on the stack
 
@@ -85,7 +90,7 @@ add_two:
 end:
 ```
 
-`d0` comes out at `0000002A`, which is 42. At the moment `add_two` starts, the stack holds:
+At the moment `add_two` starts, the stack holds:
 
 |   address |    value    | reached as | what it is         |
 | --------: | :---------: | ---------- | ------------------ |
@@ -93,22 +98,35 @@ end:
 | `$FFFFF8` |  00000016   | `4(sp)`    | `a`, which is 22   |
 | `$FFFFFC` |  00000014   | `8(sp)`    | `b`, which is 20   |
 
-`add.l #8, sp` after the call is the caller giving the eight bytes back, and somebody has to do it
-or the stack pointer walks downwards a little further at every call until it reaches your data. Here
-the caller does it, which is the convention C uses, and the alternative is `rtd` on the later 68000s,
-which the subroutine uses to return and drop the arguments in one instruction.
-
-The catch with `4(sp)` is that `sp` moves. Push anything inside the subroutine and every offset
-changes, which is what the next two instructions exist to avoid.
+`add.l #8, sp` after the call is the caller giving those eight bytes back. Somebody has to, or the
+stack pointer creeps downwards a little further at every call until it reaches your data.
 
 ## link and unlk
 
-`link a6, #-8` does three things: it pushes `a6`, it copies `sp` into `a6`, and it subtracts 8 from
-`sp`. `unlk a6` undoes all three: it copies `a6` back into `sp` and pops the old `a6`.
+Here is the problem with `4(sp)`.
 
-What you get is `a6` sitting still in the middle of the frame while `sp` is free to move: the
-arguments are above it at `8(a6)`, `12(a6)` and so on, and the local variables are below it at
-`-4(a6)`, `-8(a6)`, in the room the `#-8` reserved.
+Suppose `add_two` needs `d2` for something and has to save it first, so it starts with
+`move.l d2, -(sp)`. That push moved `sp` down by four, so `a` is no longer at `4(sp)`, it is at
+`8(sp)`, and `b` has moved to `12(sp)`. Every offset in the subroutine has to be rewritten. Add a
+second push later and they all move again. Push in one branch of an `if` and not the other and there
+is no number that is right in both places.
+
+What you want is one landmark that stays where it is for the whole call, and then to measure
+everything from that instead of from `sp`. That is all a frame pointer is, and `link` sets one up:
+
+`link a6, #-8` does three things in one instruction.
+
+1. It pushes `a6`, saving whatever the caller had in it.
+2. It copies `sp` into `a6`. That is the landmark, planted, and nothing after this moves it.
+3. It subtracts 8 from `sp`, which reserves eight bytes of room below the landmark for your own
+   variables.
+
+`unlk a6` undoes all three: it copies `a6` back into `sp`, which throws away the room in one go, and
+then pops the caller's `a6`.
+
+Once the landmark is planted, everything has a fixed name. The arguments are **above** it, at
+`8(a6)`, `12(a6)` and so on. Your own variables are **below** it, at `-4(a6)`, `-8(a6)`, in the room
+the `#-8` reserved. Push as much as you like in between and not one of those numbers changes.
 
 ```m68k|playground|memory|no-flags
     move.l #7, -(sp)    ; the argument
@@ -131,38 +149,67 @@ squares:
 end:
 ```
 
-`d0` and `d2` come out at `00000031`, which is 49, and `d1` at 7. While the subroutine is running,
-the stack looks like this:
+Step through it and watch the stack in three states. 🟢 marks where `sp` is pointing and 🔷 where
+`a6` is.
 
-|   address |    value    | reached as | what it is                                   |
-| --------: | :---------: | ---------- | -------------------------------------------- |
-| `$FFFFEC` | 🟢 00000031 | `-8(a6)`   | `local2`, the square                         |
-| `$FFFFF0` |  00000007   | `-4(a6)`   | `local1`, the argument copied                |
-| `$FFFFF4` |  00000000   | `(a6)`     | the caller's `a6`, and where `a6` now points |
-| `$FFFFF8` |  00001008   | `4(a6)`    | the return address                           |
-| `$FFFFFC` |  00000007   | `8(a6)`    | `n`, the argument                            |
+**At `squares:`, before the `link`.** The caller pushed the argument, then `bsr` pushed the return
+address on top of it. `a6` is still the caller's and has nothing to do with this.
 
-That block, from the arguments down to the last local, is a **stack frame**, and `a6` holding its
-middle is the **frame pointer**. It is exactly what a C compiler builds for every function that has
-local variables: `8(a6)` is the first parameter, `-4(a6)` is the first local, and the saved `a6` at
-`(a6)` chains one frame to the one that called it, which is what a debugger walks to print a call
-stack. The editor's call stack tab is reading the same chain.
+|   address |    value    | what it is         |
+| --------: | :---------: | ------------------ |
+| `$FFFFF8` | 🟢 00001008 | the return address |
+| `$FFFFFC` |  00000007   | `n`, the argument  |
 
-`unlk a6` before `rts` is not optional. It puts `sp` back to where the return address is, and
-without it the `rts` pops a local variable and jumps to it.
+**After `link a6, #-8`.** The old `a6` has been pushed, `a6` now points at where it went, and `sp` has
+dropped eight bytes below that to leave room. The two reserved longs still read `FFFFFFFF`, because
+nobody has written them yet.
+
+|   address |    value    | reached as | what it is                 |
+| --------: | :---------: | ---------- | -------------------------- |
+| `$FFFFEC` | 🟢 FFFFFFFF | `-8(a6)`   | `local2`, room only so far |
+| `$FFFFF0` |  FFFFFFFF   | `-4(a6)`   | `local1`, room only so far |
+| `$FFFFF4` | 🔷 00000000 | `(a6)`     | the caller's `a6`, saved   |
+| `$FFFFF8` |  00001008   | `4(a6)`    | the return address         |
+| `$FFFFFC` |  00000007   | `8(a6)`    | `n`, the argument          |
+
+From here to the `unlk`, `a6` does not move again. `sp` is free to.
+
+The body then runs entirely against those names. `move.l 8(a6), d0` fetches `n` and
+`move.l d0, -8(a6)` writes a local, and by that point `sp` could have been pushed anywhere further
+down without a single one of those offsets needing to change.
+
+**After `unlk a6`.** `sp` jumped back up to where `a6` was and then popped it, which puts `sp` exactly
+where it was when the subroutine started: on the return address, ready for `rts`.
+
+|   address |    value    | what it is                  |
+| --------: | :---------: | --------------------------- |
+| `$FFFFF8` | 🟢 00001008 | the return address, next up |
+| `$FFFFFC` |  00000007   | `n`, still the caller's     |
+
+That block from the arguments down to the last local is a **stack frame**, and `a6` holding the
+middle of it is the **frame pointer**. The saved `a6` at `(a6)` is the previous frame's landmark, so
+the frames are a chain, each one pointing at the one that called it. The editor's call stack tab is
+reading that chain.
+
+`unlk a6` before `rts` is not optional. Take it out and `sp` is still eight bytes below the return
+address, so the `rts` pops a local variable and jumps to it.
 
 ## Recursion needs nothing new
 
 A subroutine that calls itself gets a fresh frame at a fresh address every time, because every `link`
-subtracts from wherever `sp` happens to be. Nothing has to be reserved and nothing has to be named:
-the same `-4(a6)` in the source is a different address in every call. Locals at a fixed address would
-be shared by every call and destroyed by the second one, so the frame goes on the stack, and a
-recursive program in assembly comes out no longer than a loop.
+subtracts from wherever `sp` has got to. Nothing has to be reserved and nothing has to be named in
+advance: the same `-4(a6)` in the source is a different address on every call.
+
+That is the reason locals go on the stack rather than in a fixed place in memory. A fixed address
+would be shared by every call at once, so the second call would destroy the first call's variables
+before the first call had finished with them.
 
 ## Your turn
 
-Write a subroutine called with `bsr` that squares the number in `d0` and leaves the answer in `d0`.
-The test starts `d0` at 7, so it comes back at 49.
+Write a subroutine, called with `bsr`, that squares the number in `d0` and leaves the answer in `d0`.
+`d0` starts at 7.
+
+Remember the `bra` over the subroutine, or the program will run into it a second time.
 
 ```m68k|playground|exercise
 * your code here
@@ -193,9 +240,9 @@ end:
 
 </details>
 
-The second one hands you the caller. It pushes 20 and then 22, calls `add_two`, and takes the eight
-bytes back. Write the body of `add_two`, which must leave 42 in `d0` without touching the stack
-pointer.
+This time the caller is written for you. It pushes 20 and then 22, calls `add_two`, and takes the
+eight bytes back afterwards. Fill in the body of `add_two` so that it leaves 42 in `d0`, and leave
+the stack pointer exactly as you found it.
 
 ```m68k|playground|exercise
     move.l #20, -(sp)   ; the second argument

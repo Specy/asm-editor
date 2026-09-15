@@ -18,6 +18,8 @@
     import { ProjectStore } from '$stores/projectsStore.svelte'
     import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
     import { resolve } from '$app/paths'
+    import { courseTheme } from '$lib/languages/languageColors'
+    import { DEFAULT_THEME, ThemeStore } from '$stores/themeStore.svelte'
 
     interface Props {
         children?: import('svelte').Snippet
@@ -29,6 +31,21 @@
     let currentLectureName = $derived(`${page.params.moduleId}-${page.params.lectureId}`)
 
     let menuOpen = $state(false)
+
+    /**
+     * A Language course shows its language's colours, the way `/documentation/<language>` does. Read
+     * from storage rather than from the live theme, because selecting below does not save, so this
+     * stays the reader's own choice however many courses they walk through.
+     */
+    const chosenTheme = ThemeStore.getChosenTheme()
+
+    //an effect rather than onMount: one layout serves every course, so moving from one to the next
+    //changes the slug without remounting anything
+    $effect(() => {
+        if (chosenTheme !== DEFAULT_THEME.id) return //the reader picked a theme, so leave it alone
+        ThemeStore.select(courseTheme(data.course.slug), true)
+        return () => ThemeStore.select(chosenTheme, true)
+    })
 </script>
 
 <Navbar style="border-bottom-left-radius: 0;">

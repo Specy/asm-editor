@@ -15,7 +15,8 @@ describe('resolveProjectSettings', () => {
     it('follows the defaults where nothing was decided', () => {
         expect(resolveProjectSettings('M68K', {})).toEqual({
             maxHistorySize: 100,
-            screenHistoryBudgetMb: 64
+            screenHistoryBudgetMb: 64,
+            fileSystemHistoryBudgetMb: 64
         })
         expect(resolveProjectSettings('Z80', undefined).maxHistorySize).toBe(100)
     })
@@ -40,10 +41,14 @@ describe('resolveProjectSettings', () => {
 
 describe('projectSettingsFor', () => {
     it('lists only the Settings that apply: x86 has no Screen, so no Screen budget', () => {
-        expect(projectSettingsFor('X86').map((setting) => setting.id)).toEqual(['maxHistorySize'])
+        expect(projectSettingsFor('X86').map((setting) => setting.id)).toEqual([
+            'maxHistorySize',
+            'fileSystemHistoryBudgetMb'
+        ])
         expect(projectSettingsFor('M68K').map((setting) => setting.id)).toEqual([
             'maxHistorySize',
-            'screenHistoryBudgetMb'
+            'screenHistoryBudgetMb',
+            'fileSystemHistoryBudgetMb'
         ])
     })
 })

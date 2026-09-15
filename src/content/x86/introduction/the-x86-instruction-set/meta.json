@@ -1,0 +1,6 @@
+{
+    "name": "The x86 instruction set",
+    "description": "How many instructions there are and how few you need, the destination-first shape of a line, the rule that only one operand may be in memory, and the sixteen conditions jcc, setcc and cmovcc share.",
+    "order": 4,
+    "topic": "instruction-set"
+}

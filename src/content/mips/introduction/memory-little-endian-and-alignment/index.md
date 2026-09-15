@@ -1,11 +1,12 @@
-Thirty two registers hold thirty two words, and a program has more than that to keep. Everything else
-lives in memory, which MIPS reaches with a 32 bit address and with nothing but the load and store
-instructions.
+Thirty two registers hold thirty two words. A program that wants to keep more than that, and every
+program does, keeps it in memory, which MIPS reaches with a 32 bit address and with nothing but the
+load and store instructions.
 
 ## The address space
 
-An address is 32 bits, so it runs from `0x00000000` to `0xFFFFFFFF`: four gigabytes. Nothing in the
-hardware divides that up, and this simulator follows MARS in putting each thing at a fixed address:
+An address is 32 bits, so it runs from `0x00000000` to `0xFFFFFFFF`: four gigabytes of them. The
+hardware draws no lines in that range at all, so where things go is the editor's decision, and it
+puts each of them at a fixed address:
 
 | from         | what is there                                                 |
 | ------------ | ------------------------------------------------------------- |
@@ -19,17 +20,18 @@ hardware divides that up, and this simulator follows MARS in putting each thing 
 | `0xffff0000` | the memory-mapped devices, the screen and the keyboard        |
 
 A byte nobody has written reads **0** here. Open the memory panel of any program on this page, look
-anywhere your program did not touch, and every byte is `00`. That is this simulator's choice, and the
-M68K's is the opposite, so a program that reads uninitialised memory behaves differently on the two.
+anywhere your program did not touch, and every byte is `00`. That is the editor being kind to you;
+do not lean on it, because a program that depends on memory it never wrote is a program that depends
+on luck.
 
-The instructions are the one region you cannot read. `lw $t0, 0x00400000($zero)` ends the run with
+The text region is the one you cannot read. `lw $t0, 0x00400000($zero)` ends the run with
 
 ```
 Cannot read directly from text segment!0x00400000
 ```
 
-The assembled program is there, at four bytes per instruction, and this simulator keeps it where a
-load cannot reach it. Everything else in the table is memory like any other.
+Your assembled program is genuinely there, four bytes per instruction, and the editor keeps it
+behind glass. Everything else in the table is ordinary memory.
 
 ## Little endian
 
@@ -62,18 +64,23 @@ main:
 | `0x10010002` | `34` | `$t3` |
 | `0x10010003` | `12` | `$t4` |
 
-`$t5` comes out at `00005678` and `$t6` at `00001234`, the two halves each read back the right way
-round, and `$t7` at `12345678`, the whole word as you wrote it. A load of a word or a half puts the
-bytes back in order; only reading them one at a time shows you which way they are stored.
+Then look at `$t5`, `$t6` and `$t7`. They read `00005678`, `00001234` and `12345678`: the halves and
+the whole word all come back the right way round, even though the bytes underneath them are in the
+reverse order. That is the useful half of the rule. A load or a store of a word or a half puts the
+bytes in order for you, and the only programs that ever notice little endian are the ones that take
+a value apart one byte at a time, as the table above does.
 
-The M68K is big endian and stores the same word as `12 34 56 78`. Nothing about a program that only
-reads and writes whole words changes between the two. What changes is a program that takes a word
-apart a byte at a time, which is what the table above does.
+Storing the bytes the other way round, `12 34 56 78`, has a name too, **big endian**. It is not what
+this machine does, and it is worth knowing the word because a memory dump is unreadable until you
+know which of the two you are looking at.
 
 ## The size is in the instruction's name
 
-MIPS has no size suffix. Which instruction you use says how many bytes it touches, and the loads say
-what to do with the bits above them:
+The instruction's own name says how many bytes it moves. A load of fewer than four also has to
+decide what to put in the bits above what it read, and it has two choices: fill them with zeroes, or
+**sign extend**, which means copying the top bit of the loaded value into all of them. Sign
+extending is what keeps a negative number negative when it moves into a bigger box, since a byte
+holding -1 is `FF` and a word holding -1 is `FFFFFFFF`.
 
 | instruction | bytes | what it does                                    |
 | ----------- | ----- | ----------------------------------------------- |
@@ -86,8 +93,8 @@ what to do with the bits above them:
 | `sh`        | 2     | stores the lowest half                          |
 | `sw`        | 4     | stores the whole word                           |
 
-The stores have no signed and unsigned pair, because a store writes the bits it is given and there is
-nothing above them to fill in.
+Only the loads come in signed and unsigned pairs. A store is handed 32 bits and writes some of them,
+so there is nothing above it to fill in and no decision to make.
 
 ```mips|playground|memory
 .data
@@ -105,13 +112,12 @@ main:
     lw $t4, 4($t0)      # and read those three back as one word
 ```
 
-The eight bytes at `0x10010000` come out as `DD CC BB AA 11 00 33 22`, and `$t4` reads `22330011`.
-The `sb` wrote one byte and left the one after it alone, the `sh` wrote two, and the `lw` picked up
-all four as a little endian word, which is why the `11` your program stored first ends up at the
-bottom of it.
+The eight bytes at `0x10010000` come out as `DD CC BB AA 11 00 33 22`. Byte five is the `11`, byte
+six was never written and is still `00`, and the `33 22` at the end is the half you stored.
 
-`0($t0)`, `4($t0)` and `6($t0)` are the only addressing mode there is: a register plus a constant
-offset in bytes. "Loads, stores and immediates" is the lecture on it.
+`$t4` is the interesting one. It reads `22330011`, because the `lw` picked up those last four bytes
+as a single little endian word, and the byte you wrote first is the one at the bottom of it. Three
+stores of three different sizes, read back as one value, and the arithmetic still works out.
 
 ## Alignment
 
@@ -158,7 +164,7 @@ Two more addresses end a run. One outside everything in the table, such as `lw $
 two million instructions run out, with no message at all, which is what an accidental infinite loop
 looks like here.
 
-## Your turn
+## Try these
 
 The word at `value` is `0x12345678`. Leave its **lowest** byte in `$t0`, which is the `0x78`, and its
 **highest** byte in `$t1`, which is the `0x12`, each as a number on its own with zeroes above it.
@@ -209,7 +215,8 @@ main:
 
 ```testcase
 {
-    "expectedMemory": [{ "type": "number-chunk", "address": "0x10010008", "bytes": 4, "expected": ["0x11223344"] }]
+    "expectedMemory": [{ "type": "number-chunk", "address": "0x10010008", "bytes": 4, "expected":
+["0x11223344"] }]
 }
 ```
 

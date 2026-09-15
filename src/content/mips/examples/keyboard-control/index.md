@@ -3,14 +3,10 @@ way on its own, coming back in at the opposite edge when it leaves the grid. **C
 panel first**: the screen only gets the keyboard when it has the focus, and a ring around it says so
 while it does.
 
-A bouncing ball drew a picture that changed on its own. This one asks the keyboard, once per frame,
-whether anything has been typed, and the answer changes what every frame after it will look like.
+What is on the screen in this one depends on what you type. Once per frame the program asks the
+keyboard whether anything has arrived, and the answer decides what every frame after it looks like.
 
-**You need to know:** the "A bouncing ball" Example and the "The bitmap display and the keyboard
-registers" lecture. What is new here is the two receiver registers at `0xffff0000`, one whose bit 0
-says a character is waiting and one that hands it over.
-
-```mips|playground|screen|no-registers|allow-open
+```mips|playground|open-screen|no-registers|allow-open
 # @screen unit=8 width=256 height=256 base=display
 .eqv MMIO 0xffff0000
 .eqv SIDE 32                # words across and down
@@ -134,12 +130,15 @@ Polling once a frame is enough, because what is not read stays in the queue. Rea
 is not empty", so a key pressed between two polls is still waiting at the next one and nothing is
 lost.
 
-The M68K asks a different question. Its task 19 takes four key codes and answers with which of them
-are held **down at this instant**, so a program there can tell that a key is still being held and
-that another was let go. The receiver here has no such notion: it hands over characters that were
-typed, one at a time, with no key code, no key up and no way to ask what is down now. That is why
-this program is written around a direction that persists, and why it takes `w`, `a`, `s` and `d` and
-not the arrow keys, which send nothing a receiver can carry.
+What the receiver gives you is worth being precise about, because it shapes the whole program. It
+hands over **characters that were typed**, one at a time, in the order they arrived. That is all.
+There is no key code, no notion of a key going down or coming up, and no way to ask which keys are
+being held at this instant.
+
+Two things follow. The square has to keep moving after you let go, because nothing will ever tell
+the program that you did, so the direction has to be remembered rather than read. And the keys are
+`w`, `a`, `s` and `d` rather than the arrows, because the arrow keys are not characters and send the
+receiver nothing at all.
 
 The keys do not move the square, they write `$s4` and `$s5`, and the code under them moves it. That
 separation is what makes the square keep going after you let go of the key, and it is how anything
@@ -157,6 +156,7 @@ program with twenty keys would use instead.
 One frame is about 165 instructions, so the `runFor` of 100000 is around six hundred of them. A
 testcase cannot type into the receiver, so the keys are yours to try by hand.
 
-Try changing `li $s2, 0` under `ble $s2, LAST, x_low` to `li $s2, LAST`. The square stops against
-the right edge instead of coming back in at the left, which is the same two instructions doing
-clamping instead of wrapping.
+Change the `li $s2, 0` under `ble $s2, LAST, x_low` to `li $s2, LAST` and the square stops dead
+against the right edge instead of reappearing at the left. Wrapping and clamping are the same two
+instructions with a different number in one of them, and which one a game wants is a design decision
+rather than a technical one.

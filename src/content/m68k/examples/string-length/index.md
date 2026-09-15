@@ -1,21 +1,18 @@
 A string sits at `$2000` with a zero byte after it, and the program works out how long it is by
 walking to that zero and subtracting the address it started from. The answer, 15, ends up in `d0`.
 
-Nothing in memory records the length of a string. The largest element knew it had eight numbers
-because `count` said so; here the only thing that says where the string ends is a byte of its own,
-and finding it is the program's job.
-
-**You need to know:** the "Arrays, strings and `(a0)+`" lecture. What is new here is that the
-difference of two addresses is a number of bytes, so a length can be measured instead of counted.
+Nothing in memory records how long a string is. An array can be given a `count` next to it; a string
+carries its own end instead, as a zero byte after the last character, and finding it is the
+program's job every single time.
 
 ```m68k|playground|memory|no-flags|allow-open
-    lea text, a0        ; p = text
-    move.l a0, d1       ; keep where the string starts
+    lea text, a0        ; a0 walks the string
+    move.l a0, d1       ; keep where it started
 scan:
-    tst.b (a0)+         ; is *p++ the terminator?
+    tst.b (a0)+         ; the terminator? and step on either way
     bne scan
-    move.l a0, d0       ; p, one byte past the terminator
-    sub.l d1, d0        ; n = p - text
+    move.l a0, d0       ; a0 is one byte past the terminator
+    sub.l d1, d0        ; how far it walked
     subq.l #1, d0       ; without the terminator itself
 
     org $2000
@@ -28,12 +25,12 @@ text: dc.b 'Assembly is fun', 0
 
 When the loop falls out, `a0` is `00002010`, one byte past the terminator, and `d1` still holds the
 `00002000` it was given before the loop. Their difference is 16, the whole string including the zero,
-and the `subq.l #1` takes the zero back off. That is what C's `strlen` compiles to, and it is why
-`d0` comes out at `0000000F`, which is 15.
+and the `subq.l #1` takes the zero back off. The length was never counted, it was measured.
 
-Counting with a register works too, an `addq.l #1, d0` inside the loop and no subtraction at the end,
-and it costs one instruction per character instead of two instructions once.
+Counting with a register works too, an `addq.l #1, d0` inside the loop and no subtraction at the end.
+It costs one instruction per character instead of two instructions once.
 
-Try taking the `, 0` off the `dc.b` line and pressing Run. The loop walks past the end of your string
-into memory nobody wrote and keeps going, and after a while the run stops with "Execution limit of
-2000000 instructions reached". A string with no terminator has no length.
+Take the `, 0` off the `dc.b` line and press Run. There is now nothing at the end of the string to
+stop the loop, so it walks off into memory nobody wrote, and it keeps walking until the run stops
+with "Execution limit of 2000000 instructions reached". Nothing about the string itself changed; you
+removed the only thing that said where it ended.

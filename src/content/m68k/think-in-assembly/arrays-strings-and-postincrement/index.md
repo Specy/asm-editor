@@ -25,8 +25,9 @@ numbers: dc.l 10, 20, 30, 40, 50
 `add.l`, from `00002000` to `00002014`, twenty bytes on and one past the last element.
 
 The 4 is in the `.l`, nowhere else. Change the array to `dc.w` and the instruction to `add.w` and
-the same loop steps by 2, because the size of the read decides the step. That is the M68K's version
-of C hiding the size of `*p++`, and it is the one place assembly does the arithmetic for you.
+the same loop steps by 2 instead, because the size of the read is what decides the step. This is the
+one place on the machine where the element size is handled for you, and the reason to prefer this
+loop shape wherever it fits.
 
 `count equ 5` gives the length a name. The loop counts with `count-1` because `dbra` runs one more
 time than its counter, and the assembler does the subtraction, so adding a sixth number means
@@ -34,8 +35,8 @@ changing the `equ` and nothing else.
 
 ## Indexing with (a0, d1)
 
-The other way keeps the base address still and works out the offset every time, which is what
-`numbers[i]` compiles to.
+The other way leaves the base address where it is and works out the offset from an index on every
+pass.
 
 ```m68k|playground|memory|no-flags
 count equ 5
@@ -55,9 +56,9 @@ loop:
 numbers: dc.l 10, 20, 30, 40, 50
 ```
 
-`d0` is 150 again, out of four more instructions per pass. The scaling is the extra work: `numbers[i]`
-in C means the base plus `i` times 4, the M68K adds a register and nothing else, and `lsl.l #2` is
-how you multiply by 4 without a `mulu`.
+`d0` is 150 again, out of four more instructions per pass. The extra work is all scaling: `(a0, d2)`
+adds a register and does nothing else, so `d2` has to hold a number of bytes rather than a number of
+elements, and `lsl.l #2` is how you multiply by 4 without reaching for a `mulu`.
 
 So which one. Use `(a0)+` when you touch every element in order, which is most loops. Use `(a0, d1)`
 when you need the index itself, to report where you found something; when the loop jumps around the
@@ -72,19 +73,19 @@ Nothing in memory says how long the string is, so a loop finds out by reading un
 The instruction that does the reading also sets `Z`, so no `cmp` is needed:
 
 ```m68k|playground|memory|no-flags
-    lea message, a0     ; p = message
-    clr.l d0            ; n = 0
+    lea message, a0     ; a0 walks the string
+    clr.l d0            ; and d0 counts what it passes
 count_loop:
     tst.b (a0)+         ; is the byte the terminator?
     beq counted
-    addq.l #1, d0       ; n++
+    addq.l #1, d0       ; no, so count it
     bra count_loop
 counted:
 
-    lea message, a0     ; p = message
-    lea copy, a1        ; q = copy
+    lea message, a0     ; back to the start
+    lea copy, a1        ; and a1 on the room to copy into
 copy_loop:
-    move.b (a0)+, (a1)+ ; *q++ = *p++
+    move.b (a0)+, (a1)+ ; one byte across, both pointers step
     bne copy_loop       ; the move set Z on the terminator, which it copied
 
     org $2000
@@ -92,21 +93,24 @@ message: dc.b 'Hello', 0
 copy:    ds.b 8
 ```
 
-`d0` comes out at 5, the five characters without the terminator, and `a0` at `00002006`, one past it.
-Then the second loop copies the string to `copy` at `$2006`, and the memory panel shows the same six
-bytes twice: `48 65 6C 6C 6F 00` and then `48 65 6C 6C 6F 00`.
+`d0` comes out at 5, the five characters not counting the terminator. Look at `$2000` in the memory
+panel afterwards and the same six bytes appear twice over, `48 65 6C 6C 6F 00` and then
+`48 65 6C 6C 6F 00`, which is the string and its copy.
 
-`move.b (a0)+, (a1)+` is the whole of C's `strcpy` in one instruction plus a branch. It works because
-`move` sets `Z` from the byte it moved, so the terminator both ends the loop and gets copied, which
-is what you want: a copy without a terminator is not a string.
+That copy loop is two instructions, and the reason it works is worth spelling out. `move` sets `Z`
+from the byte it moved, so the pass that reaches the terminator copies it **and** sets `Z` in the
+same instruction, and the `bne` then falls out of the loop. Both halves matter: a copy that stops
+before the terminator has produced something that is not a string, because the next thing to read it
+will not know where to stop.
 
-Comparing two strings has an instruction of its own. `cmpm.b (a0)+, (a1)+` compares the bytes at
-`a0` and `a1` and steps both, which is `strcmp` without loading either byte into a register.
+Comparing two strings has an instruction of its own. `cmpm.b (a0)+, (a1)+` compares the bytes at `a0`
+and `a1` and steps both pointers, without either byte passing through a register.
 
 ## Two dimensions
 
-A 2D array is a 1D array read in rows. `grid[row][col]` is the base plus `(row * COLS + col)` times
-the size of an element, and the M68K makes you write both multiplications.
+A two dimensional array is a one dimensional array that you have agreed to read in rows. The element
+at row `r`, column `c` sits at `(r * COLS + c)` elements from the start, and you write out both of
+those multiplications yourself.
 
 ```m68k|playground|memory|no-flags
 COLS equ 4
@@ -127,14 +131,12 @@ grid: dc.w 0, 1, 2, 3
 ```
 
 `d3` comes out at `00000017`, which is 23, the last element of the last row. `add.l d2, d2` is the
-multiplication by 2, since adding a number to itself is cheaper than a `mulu` and every size on this
-machine is a power of two.
+multiplication by 2: adding a number to itself doubles it, and every element size on this machine is
+a power of two, so doubling and shifting cover all of them without a `mulu`.
 
-The three `dc.w` lines are one array: the rows are a convenience for whoever reads the source, and
-the twelve words sit end to end at `$2000`, which is what `COLS` in the index arithmetic assumes.
-
-Try changing `move.l #2, d0` to `move.l #0, d0` and `move.l #3, d1` to `move.l #1, d1`. `d3` comes
-out at 1, the second element of the first row.
+The three `dc.w` lines are one array. The rows exist for whoever reads the source; in memory the
+twelve words sit end to end from `$2000`, and `COLS` in the arithmetic above is the only thing that
+knows where one row stops.
 
 ## The address error, again
 
@@ -146,8 +148,8 @@ length.
 
 ## Your turn
 
-`text` at `$2000` is a string with a zero at the end. Leave its length, not counting the terminator,
-in `d0`. For `'Assembly'` that is 8.
+`text` at `$2000` is a string with a zero on the end. Leave its length in `d0`, not counting the
+terminator, which for `'Assembly'` is 8.
 
 ```m68k|playground|memory|exercise
 * your code here
@@ -166,12 +168,12 @@ text: dc.b 'Assembly', 0
 <summary>Show solution</summary>
 
 ```m68k|playground|memory|solution
-    lea text, a0        ; p = text
-    clr.l d0            ; n = 0
+    lea text, a0        ; a0 walks the string
+    clr.l d0            ; and d0 counts
 loop:
     tst.b (a0)+         ; is the byte the terminator?
     beq done
-    addq.l #1, d0       ; n++
+    addq.l #1, d0       ; no, so count it
     bra loop
 done:
 
@@ -181,8 +183,8 @@ text: dc.b 'Assembly', 0
 
 </details>
 
-The second one copies `source` to `dest`, terminator included. `source` is at `$2000` and holds nine
-bytes, so `dest` begins at `$2009`.
+Now copy `source` to `dest`, terminator included, so that what lands in `dest` is a string in its own
+right. `source` is at `$2000` and takes nine bytes, so `dest` begins at `$2009`.
 
 ```m68k|playground|memory|exercise
 * your code here
@@ -202,10 +204,10 @@ dest:   ds.b 16
 <summary>Show solution</summary>
 
 ```m68k|playground|memory|solution
-    lea source, a0      ; p = source
-    lea dest, a1        ; q = dest
+    lea source, a0      ; read from here
+    lea dest, a1        ; write to here
 copy:
-    move.b (a0)+, (a1)+ ; *q++ = *p++
+    move.b (a0)+, (a1)+ ; one byte across, both pointers step
     bne copy            ; until the byte moved was the terminator
 
     org $2000

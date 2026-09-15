@@ -1,0 +1,7 @@
+{
+    "name": "Print a string",
+    "description": "The first program that talks to anybody: a call number in rax, a descriptor, an address and a length, and the one instruction that hands the request over.",
+    "order": 17,
+    "topic": "hello-world",
+    "template": 4
+}

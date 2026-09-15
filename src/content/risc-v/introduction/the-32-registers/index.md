@@ -1,15 +1,20 @@
-Getting started said RISC-V has 32 registers, all 32 bits wide, and that each of them has two names.
-The hardware knows one thing about them, that `x0` reads 0. Everything else on this page is a
-**convention**: a set of names people agreed on, which the assembler and every compiler follow, and
-which nothing in the machine enforces.
+There are 32 registers and the hardware knows exactly one fact about them: `x0` reads 0. It has no
+opinion about any of the others. Everything else on this page is a **convention**, an agreement
+people arrived at about which register is used for what, which the assembler and every compiler
+follow and which nothing in the machine will make you keep.
+
+That matters more than it sounds. If you break the convention in a program you wrote entirely
+yourself, nothing goes wrong. If you break it where your code meets somebody else's, everything
+does, quietly.
 
 ## The numbers and the names
 
-The number, `x0` to `x31`, is what goes into the instruction. The **ABI name** is the assembler's,
-and it says what the register is for, so `t0` and `x5` are two spellings of one register and only
-the second of them is in the machine code.
+The number, `x0` to `x31`, is what actually goes into the instruction. The name next to it says what
+the register is conventionally used for, so `t0` and `x5` are two spellings of one register and only
+`x5` exists in the machine code. Those names are sometimes called the ABI names, ABI being the
+agreement about how pieces of a program call each other.
 
-| number      | ABI name    | what it is for                                     |
+| number      | name        | what it is for                                     |
 | ----------- | ----------- | -------------------------------------------------- |
 | `x0`        | `zero`      | always reads 0                                     |
 | `x1`        | `ra`        | return address, written by `jal`                   |
@@ -87,22 +92,25 @@ onwards:
     li s1, 1
 ```
 
-`t1` is 5, `t2` is `FFFFFFFA`, `t3` and `t4` are both `FFFFFFFB`, which is -5, and `t6` is 0. `s0`
-stays 0 and `s1` comes out at 1, because the `j` jumped over the line between them.
+`t3` and `t4` hold the same `FFFFFFFB`, which is -5, from two lines that are the same instruction
+under two names. `s0` stays 0 because the `j` jumped clean over it.
 
 `not` is the one in that program that is not built on `zero`: it becomes `xori t2, t0, -1`, since
 exclusive or with all ones flips every bit.
 
-`zero` is not in the registers panel: a row that always reads `00000000` says nothing.
+## Where a shorthand does its working
 
-## No scratch register, with one exception
+Some of the lines you write are not single instructions. `li t0, 100000` cannot be one instruction,
+because a whole 32 bit number will not fit inside a 32 bit instruction with room left over for the
+opcode and the register. The assembler quietly turns it into two.
 
-The MIPS assembler keeps `$at` for itself, and any pseudo-instruction that needs somewhere to put a
-half-finished value takes it. RISC-V pseudo-instructions build their value **in the register you
-named**, so `li` and `la` cost two instructions and no register but the destination.
+The question that matters is where those two instructions do their working out, because that
+register is one you cannot rely on afterwards. Here the answer is reassuring: they build the value
+**in the register you asked for**. `li` and `la` cost two instructions and disturb nothing but the
+destination.
 
-The exception is `call`, which becomes an `auipc` and a `jalr`, and the `auipc` has to put the
-address somewhere before the jump uses it. This assembler puts it in `t1`.
+The one exception is `call`, which becomes an `auipc` and a `jalr`, and the address has to be
+somewhere before the jump can use it. This assembler puts it in `t1`.
 
 ```riscv|playground
 .data
@@ -151,10 +159,11 @@ agreements about what happens across a subroutine call.
   the caller's `s3` on the stack on entry and puts it back before returning, which makes these
   callee-saved.
 
-In C those two categories are invisible: the compiler puts a variable that is only used between two
-calls in a temporary, and one that has to survive a call in a saved register, and it emits the saves
-for you. Here it is your agreement to keep, and there is nothing in the machine that will stop you
-breaking it. The "jal, ret and the calling convention" lecture writes both sides out.
+The split exists because the alternative is worse. If every register had to survive every call,
+every subroutine would spend its first instructions saving registers it might not even use; if none
+did, a caller would have to save everything it cared about before every call. Half and half means
+each side saves only what it actually needs. It is your agreement to keep, and nothing in the
+machine will stop you breaking it. "jal, ret and the calling convention" writes both sides out.
 
 The rest of the list divides the same way:
 
@@ -165,10 +174,6 @@ The rest of the list divides the same way:
   register, both for an answer that needs two.
 - **`a7`** carries the service number into an `ecall`, which the outside-world module uses on every
   line that prints. It is an argument register the rest of the time.
-
-There is no register reserved for an exception handler here, the way MIPS keeps `$k0` and `$k1`. A
-RISC-V handler saves what it uses, or uses the `uscratch` control register, which "Exceptions, CSRs
-and interrupts" comes back to.
 
 ## The four the environment set up
 
@@ -203,14 +208,7 @@ pointer is all that taking room means.
 - **`ra`** is written by `jal`, the call instruction, with the address to come back to. `ret` goes
   there, and it is `jalr zero, ra, 0` written short.
 
-## No hi and lo
-
-MIPS puts the product of a multiplication in two registers outside the 32, called `hi` and `lo`, and
-four instructions exist only to move values in and out of them. RISC-V has nothing of the kind:
-`mul`, `mulh`, `div` and `rem` each write one ordinary register you named, and the registers panel
-has nothing under `pc`. "Arithmetic, logic and bits" is where they are used.
-
-## Your turn
+## Two to write
 
 The test starts `t0` at 5. Leave a copy of it in `s0` and its negation in `s1`, which the panel
 shows as `FFFFFFFB`, using `zero` in both instructions instead of a `mv` or a `neg`.
@@ -240,9 +238,9 @@ main:
 
 </details>
 
-The second one builds `0x12345678` out of the two real instructions `li` would have used, so that
-you can see both halves. `lui` puts a 20 bit constant in the top of a register and clears the bottom
-12 bits; leave what it produces in `t1`, which is `0x12345000`, and the whole number in `t0`.
+The second one is about the two naming schemes and nothing else. Put 1 into `x18` and 2 into `s3`,
+then add the two registers together into `t3` naming them by whichever spelling you did **not** use
+to write them.
 
 ```riscv|playground|exercise
 .text
@@ -252,7 +250,7 @@ main:
 
 ```testcase
 {
-    "expectedRegisters": { "t0": "0x12345678", "t1": "0x12345000" }
+    "expectedRegisters": { "s2": 1, "s3": 2, "t3": 3 }
 }
 ```
 
@@ -262,8 +260,9 @@ main:
 ```riscv|playground|solution
 .text
 main:
-    lui t1, 0x12345     # the top 20 bits, the low 12 cleared
-    addi t0, t1, 0x678  # and the low 12 added in
+    li x18, 1           # x18 is s2
+    li s3, 2            # and s3 is x19
+    add t3, s2, x19     # the same two registers, named the other way round
 ```
 
 </details>

@@ -108,7 +108,7 @@ start:
 export const LANGUAGE_THEMES = {
     M68K: 'default',
     MIPS: 'default-mips',
-    X86: 'default',
+    X86: 'default-x86',
     'RISC-V': 'default-risc-v',
     'RISC-V-64': 'default-risc-v',
     Z80: 'default-z80'

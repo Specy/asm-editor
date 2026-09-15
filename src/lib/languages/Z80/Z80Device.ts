@@ -7,6 +7,7 @@ import {
     Z80_MOUSE_FLAGS,
     Z80_MOUSE_VIEWS,
     Z80_PORTS,
+    Z80_SCREEN_COMMAND_DOCS,
     Z80_SCREEN_COMMANDS,
     Z80_SCREEN_MAX_SIZE,
     type Z80PortGroup,
@@ -32,6 +33,19 @@ import {
 /** What the device prints. The adapter passes the Terminal peripheral's `write`. */
 export type Z80ConsoleWriter = (text: string) => void
 
+/**
+ * The TRS-80 memory-mapped display, as much of it as the port device needs to switch between the
+ * two Screen modes ([ADR 0020](../../../../docs/adr/0020-mirror-the-trs80-display-in-guest-memory.md)).
+ * Declared structurally so this module keeps its distance from the Core and from `Trs80Devices`.
+ */
+export type Z80CellDisplay = {
+    readonly isEnabled: boolean
+    enable(): void
+    disable(): void
+    /** Repaints every cell, which is what a change of ink or paper needs. */
+    resync(): void
+}
+
 /** Everything the device needs from the Emulator's peripherals. */
 export type Z80DeviceHost = {
     write: Z80ConsoleWriter
@@ -48,6 +62,11 @@ export type Z80DeviceHost = {
     keyboard: Keyboard
     mouse: Mouse
     /**
+     * The memory-mapped display, when the adapter wired one up. Without it the Screen only ever
+     * draws, which is what every Z80 environment did before ADR 0020.
+     */
+    cells?: Z80CellDisplay
+    /**
      * Called the first time the program touches a Screen, Keyboard or Mouse port, which is what
      * makes a run graphical: from there on the Terminal answers its reads from the Screen's Keyboard
      * instead of from a prompt (ADR 0009). Programs that only ever print keep the prompt they always
@@ -61,6 +80,18 @@ export const Z80_UNCONNECTED_PORT_VALUE = 0xff
 
 export const INVALID_NUMBER_ERROR = 'Invalid number'
 export const INVALID_HEX_NUMBER_ERROR = 'Invalid hex number'
+
+/** What asking for the memory-mapped display gets where no adapter wired one up. */
+export const CELL_MODE_UNAVAILABLE_ERROR = 'The TRS-80 display is not available in this environment'
+
+/**
+ * What a drawing port answers with while the memory-mapped display is on. The two Screen modes are
+ * exclusive (ADR 0020): a drawing command would be erased by the next cell repaint, so saying so is
+ * better than appearing to work, which is the rule the M68K's unsupported trap tasks already follow.
+ */
+export function cellModeError(what: string): string {
+    return `${what} is not supported while the TRS-80 display is on: the program draws by storing bytes at 0x3C00`
+}
 
 const READ_LINE_QUESTION = 'Enter a line of text'
 const READ_NUMBER_QUESTION = 'Enter a number'
@@ -187,10 +218,13 @@ export class Z80Device {
             case 'SCREEN_COMMAND':
                 return this.lastCommand
             case 'SCREEN_PIXEL':
+                if (this.inCellMode) throw new Error(cellModeError('The pixel-color port'))
                 return packColor(screen.getPixel(this.x, this.y))
             case 'SCREEN_CURSOR_COLUMN':
+                if (this.inCellMode) throw new Error(cellModeError('The text cursor'))
                 return screen.cursorColumn & 0xff
             case 'SCREEN_CURSOR_ROW':
+                if (this.inCellMode) throw new Error(cellModeError('The text cursor'))
                 return screen.cursorRow & 0xff
             case 'KEY_AVAILABLE':
                 return this.host.hasInput() ? 1 : 0
@@ -221,9 +255,12 @@ export class Z80Device {
     writePort(busAddress: number, value: number): void {
         const name = Z80Device.portNameOf(busAddress)
         if (name === undefined) return
-        this.noticeGraphicalUse(name)
         const screen = this.host.screen
         const byte = value & 0xff
+        //the two mode commands choose which interface the program is about to use, and neither
+        //draws anything, so neither is the graphical use that moves console input to the Screen
+        //(ADR 0009). Without this the command that turns the display on would move it first
+        if (!isModeCommand(name, byte)) this.noticeGraphicalUse(name)
         switch (name) {
             case 'CHAR':
                 this.print(String.fromCharCode(byte))
@@ -246,9 +283,18 @@ export class Z80Device {
                 return
             case 'SCREEN_PEN_COLOR':
                 screen.setPenColor(expandColor(byte))
+                //ink is chosen when a cell is painted, so the cells already on screen have to be
+                //repainted to take the new color
+                if (this.inCellMode) this.host.cells?.resync()
                 return
             case 'SCREEN_FILL_COLOR':
                 screen.setFillColor(expandColor(byte))
+                if (this.inCellMode) {
+                    //the fill color is the paper of a cell display, the same adoption the clear
+                    //command makes in drawing mode
+                    screen.setBackgroundColor(expandColor(byte))
+                    this.host.cells?.resync()
+                }
                 return
             case 'SCREEN_PEN_WIDTH':
                 screen.setPenWidth(Math.max(1, byte))
@@ -269,9 +315,11 @@ export class Z80Device {
                 this.runCommand(byte)
                 return
             case 'SCREEN_CURSOR_COLUMN':
+                if (this.inCellMode) throw new Error(cellModeError('The text cursor'))
                 screen.setCursor(byte, screen.cursorRow)
                 return
             case 'SCREEN_CURSOR_ROW':
+                if (this.inCellMode) throw new Error(cellModeError('The text cursor'))
                 screen.setCursor(screen.cursorColumn, byte)
                 return
             default:
@@ -335,6 +383,7 @@ export class Z80Device {
      * traps echo through the same helper, since EASy68K and the Z80 share the convention.
      */
     echo(text: string): void {
+        if (this.inCellMode) return
         echoToScreen(this.host.screen, text)
     }
 
@@ -363,12 +412,40 @@ export class Z80Device {
      */
     private print(text: string): void {
         this.host.write(text)
+        //with the memory-mapped display on there is no text cursor to draw at: printing on that
+        //machine *is* storing a byte, and a device-side store would bypass the Core's journal and
+        //leave Undo with an image its memory disagrees with (ADR 0020). The transcript keeps
+        //everything, so testcases are unaffected
+        if (this.inCellMode) return
         this.host.screen.writeText(text)
+    }
+
+    /** Whether the Screen is showing memory rather than what the drawing commands put on it. */
+    private get inCellMode(): boolean {
+        return this.host.cells?.isEnabled ?? false
     }
 
     private runCommand(command: number): void {
         const screen = this.host.screen
         this.lastCommand = command
+        //the mode commands are the two that work in either mode, because they are how a program
+        //moves between them
+        if (command === Z80_SCREEN_COMMANDS.MODE_CELLS) {
+            const cells = this.host.cells
+            if (!cells) throw new Error(CELL_MODE_UNAVAILABLE_ERROR)
+            cells.enable()
+            return
+        }
+        if (command === Z80_SCREEN_COMMANDS.MODE_DRAWING) {
+            this.host.cells?.disable()
+            return
+        }
+        if (this.inCellMode) {
+            const name = Z80_SCREEN_COMMAND_DOCS.find((row) => row.command === command)?.name
+            //an undecoded command is dropped in either mode, as a write to an undecoded port is
+            if (name === undefined) return
+            throw new Error(cellModeError(`Screen command ${command} (${name})`))
+        }
         switch (command) {
             case Z80_SCREEN_COMMANDS.PIXEL:
                 return screen.drawPixel(this.x, this.y)
@@ -432,6 +509,13 @@ export class Z80Device {
     /** The first Screen, Keyboard or Mouse access is what makes a run graphical (ADR 0009). */
     private noticeGraphicalUse(name: Z80PortName): void {
         if (this.graphical) return
+        //not with the memory-mapped display on: moving console reads to the Screen's Keyboard comes
+        //with an echo at the text cursor, and cell mode has no text cursor to echo at, so the user
+        //would type into a Screen that shows nothing back. The prompt is the only visible way to
+        //answer a console read there. A program that draws with commands first and only then asks
+        //for the display keeps the Screen input it already switched to: the source is fixed for a
+        //run, by ADR 0009, and cell mode is not a reason to move it back
+        if (this.inCellMode) return
         const group = z80PortGroupOf(name)
         if (group !== 'screen' && group !== 'keyboard' && group !== 'mouse') return
         this.graphical = true
@@ -446,6 +530,14 @@ export class Z80Device {
         for (const character of line) this.characterInput.push(byteOf(character))
         this.characterInput.push(0x0a)
     }
+}
+
+/** Whether this write is one of the two commands that pick a Screen mode rather than draw. */
+function isModeCommand(name: Z80PortName, value: number): boolean {
+    return (
+        name === 'SCREEN_COMMAND' &&
+        (value === Z80_SCREEN_COMMANDS.MODE_CELLS || value === Z80_SCREEN_COMMANDS.MODE_DRAWING)
+    )
 }
 
 /** The parameter register B, which `in r,(c)` and `out (c),r` drive onto the high address byte. */

@@ -3,6 +3,7 @@
     import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
     import RISCVDirectiveDocumentation from '$cmp/documentation/riscv/RISCVDirectiveDocumentation.svelte'
     import RISCVSyscallExplanation from '$cmp/documentation/riscv/RISCVSyscallExplanation.svelte'
+    import RISCVRegistersDocumentation from '$cmp/documentation/riscv/RISCVRegistersDocumentation.svelte'
     import MarsScreenDocumentation from '$cmp/documentation/mars/MarsScreenDocumentation.svelte'
     import {
         riscvInstructionEntries,
@@ -32,6 +33,7 @@
         <a href="#instructions">Instructions</a>
         <a href="#directives">Directives</a>
         <a href="#syscalls">Syscalls</a>
+        <a href="#registers">Registers</a>
         <a href="#screen">Screen and I/O</a>
     </nav>
 
@@ -78,6 +80,15 @@
     <section id="syscalls">
         <h2>Syscalls</h2>
         <RISCVSyscallExplanation />
+    </section>
+
+    <section id="registers">
+        <h2>Registers</h2>
+        <p class="text-muted">
+            The 32 general purpose registers, the 32 the floating point extension adds, and the
+            control and status registers the simulator implements.
+        </p>
+        <RISCVRegistersDocumentation disableLinks />
     </section>
 
     <section id="screen">

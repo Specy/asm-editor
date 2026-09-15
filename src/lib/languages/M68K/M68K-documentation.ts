@@ -10,7 +10,11 @@ export enum AddressingMode {
     Immediate = 64,
     Absolute = 128,
     IndirectIndex = 256,
-    RegisterRange = 512
+    RegisterRange = 512,
+    PcDisplacement = 1024,
+    PcIndex = 2048,
+    StatusRegister = 4096,
+    ConditionCodeRegister = 8192
 }
 
 export function addressingModeToString(addressingMode: AddressingMode): string {
@@ -23,16 +27,25 @@ export function addressingModeToString(addressingMode: AddressingMode): string {
         case AddressingMode.PostIndirect:
         case AddressingMode.PreIndirect:
         case AddressingMode.Indirect:
-        case AddressingMode.IndirectWithDisplacement:
             return '(An)'
+        case AddressingMode.IndirectWithDisplacement:
+            return 'd(An)'
         case AddressingMode.Immediate:
             return 'Im'
         case AddressingMode.Absolute:
-            return 'ea'
+            return 'Ea/<label>'
         case AddressingMode.IndirectIndex:
-            return '(An, Xn)'
+            return 'd(An,Xn)'
         case AddressingMode.RegisterRange:
-            return 'Xn-Xn'
+            return '<register list>'
+        case AddressingMode.PcDisplacement:
+            return 'd(PC)'
+        case AddressingMode.PcIndex:
+            return 'd(PC,Xn)'
+        case AddressingMode.StatusRegister:
+            return 'sr'
+        case AddressingMode.ConditionCodeRegister:
+            return 'ccr'
         default:
             return '_'
     }
@@ -41,7 +54,8 @@ export function addressingModeToString(addressingMode: AddressingMode): string {
 export enum Size {
     Byte = 1,
     Word = 2,
-    Long = 4
+    Long = 4,
+    Short = 8
 }
 
 export enum M68KFlag {
@@ -64,6 +78,9 @@ export function fromSizeToString(size: Size, extended = false): string {
         case Size.Long:
             result = 'long'
             break
+        case Size.Short:
+            result = 'short'
+            break
         default:
             break
     }
@@ -83,24 +100,40 @@ const Id = AddressingMode.IndirectWithDisplacement
 const Im = AddressingMode.Immediate
 const Ea = AddressingMode.Absolute
 const Ix = AddressingMode.IndirectIndex
+const Rl = AddressingMode.RegisterRange
+const Pd = AddressingMode.PcDisplacement
+const Pi = AddressingMode.PcIndex
+const Sr = AddressingMode.StatusRegister
+const Ccr = AddressingMode.ConditionCodeRegister
 
-const ANY = [Da, Ad, In, Ipi, Ipd, Id, Im, Ea, Ix]
-const NO_Ad = [Da, In, Ipi, Ipd, Id, Im, Ea, Ix]
-const NO_Im = [Da, In, Ad, Ipi, Ipd, Id, Ea, Ix]
+/** The same mode groups as s68k's v2 instruction table, aggregated for documentation/completion. */
+const MEMORY = [In, Ipi, Ipd, Id, Ix, Ea, Pd, Pi]
+const ANY = [Da, Ad, ...MEMORY, Im]
+const NO_Ad = [Da, ...MEMORY, Im]
+const NO_Im = [Da, Ad, In, Ipi, Ipd, Id, Ix, Ea]
 const NO_IM_OR_Ad = [Da, In, Ipi, Ipd, Id, Ea, Ix]
 const NO_Ad_AND_NO_Im = [Da, In, Ipi, Ipd, Id, Ea, Ix]
 const ONLY_REG = [Da, Ad]
 const ONLY_Ad = [Ad]
 const ONLY_Da = [Da]
-const ONLY_Da_OR_In_OR_Ea = [Da, In, Ea]
+const ONLY_Da_OR_In_OR_Ea = NO_IM_OR_Ad
 const ONLY_Ea = [Ea]
 const ONLY_Im = [Im]
-const ONLY_In_OR_Id_OR_Ea = [In, Id, Ea]
+const ONLY_In_OR_Id_OR_Ea = [In, Id, Ix, Ea, Pd, Pi]
 const ONLY_Ipi = [Ipi]
+const COUNT = [Da, Im]
+const EXTENDED_PAIR = [Da, Ipd]
+const REGISTER_LIST_OR_REGISTER = [Da, Ad, Rl]
+const STATUS_DESTINATION = [...NO_IM_OR_Ad, Sr, Ccr]
 
 const NO_SIZE: Size[] = []
 const ANY_SIZE = [Size.Byte, Size.Word, Size.Long]
 const ONLY_LONG_OR_WORD = [Size.Long, Size.Word]
+const ONLY_BYTE = [Size.Byte]
+const ONLY_WORD = [Size.Word]
+const ONLY_LONG = [Size.Long]
+const BYTE_OR_LONG = [Size.Byte, Size.Long]
+const BRANCH_SIZES = [Size.Byte, Size.Short, Size.Word, Size.Long]
 
 export enum AffectedFlagKind {
     ToZero = 'to-zero',
@@ -176,6 +209,20 @@ const FLAGS_CLR: Record<M68KFlag, AffectedFlagKind> = {
     [M68KFlag.Zero]: O,
     [M68KFlag.Overflow]: Z,
     [M68KFlag.Carry]: Z
+}
+const FLAGS_DECIMAL: Record<M68KFlag, AffectedFlagKind> = {
+    [M68KFlag.Extend]: E,
+    [M68KFlag.Negative]: U,
+    [M68KFlag.Zero]: E,
+    [M68KFlag.Overflow]: U,
+    [M68KFlag.Carry]: E
+}
+const FLAGS_CHK: Record<M68KFlag, AffectedFlagKind> = {
+    [M68KFlag.Extend]: U,
+    [M68KFlag.Negative]: E,
+    [M68KFlag.Zero]: U,
+    [M68KFlag.Overflow]: U,
+    [M68KFlag.Carry]: U
 }
 
 export type InstructionDocumentation = {
@@ -266,7 +313,7 @@ export const directionsDescriptions = new Map<string, string>([
 ])
 const desc = {
     move: 'Moves the value from the first operand to second operand. If the second operand is an address register, the [MOVEA](/documentation/m68k/instruction/movea) instruction is used instead.',
-    moveq: 'Moves the value from the first operand to second operand. The first operand is read as a byte so only values between -127 and 127.',
+    moveq: 'Moves an 8-bit encoded value from -128 through 255 into a data register and sign extends it to 32 bits. Values 128 through 255 are the unsigned spellings of -128 through -1.',
     movea: 'Moves the value from the first operand to second operand. If the size is word, it is sign extended to long. It does not change the SR. When using word size, the first operand is sign extended to long and the second is written as a long.',
     movem:
         'Move many, useful when you want to save a bunch of registers, for example to save their value when branching to a function it moves a list of registers to memory, or memory to a list of registers. The first operand is the list of registers, ' +
@@ -311,9 +358,10 @@ const desc = {
     ori: 'Performs a logical OR between the first immediate value and second operand, stores the result in the second operand',
     eor: 'Performs a logical XOR between the first and second operand, stores the result in the second operand',
     eori: 'Performs a logical XOR between the first immediate value and second operand, stores the result in the second operand',
-    lsd: 'Shifts the bits of the destination operand to the {direction}. Two forms: (1) `ls<d> Dx/Im, Dn` shifts Dn by the count in Dx or immediate (1–8), any size. New bits are filled with 0s. Defaults to word. (2) `ls<d> (An)` shifts a memory word by 1, no size suffix allowed.',
-    asd: 'Shifts the bits of the destination operand to the {direction}. Two forms: (1) `as<d> Dx/Im, Dn` shifts Dn by the count in Dx or immediate (1–8), any size. New bits are filled with the sign bit. Defaults to word. Note: ASL sets the overflow flag if the MSB changes during the shift, while ASR always clears it. (2) `as<d> (An)` shifts a memory word by 1, no size suffix allowed.',
-    rod: 'Rotates the bits of the destination operand to the {direction}. Two forms: (1) `ro<d> Dx/Im, Dn` rotates Dn by the count in Dx or immediate (1–8), any size. Defaults to word. (2) `ro<d> (An)` rotates a memory word by 1, no size suffix allowed.',
+    lsd: 'Shifts the bits of the destination operand to the {direction}. Two forms: (1) `ls<d> Dx/Im, Dn` shifts Dn by the count in Dx or immediate (1–8), any size. New bits are filled with 0s. Defaults to word. (2) `ls<d>.w (An)` shifts a memory word by 1; `.w` is the only size accepted and may be omitted.',
+    asd: 'Shifts the bits of the destination operand to the {direction}. Two forms: (1) `as<d> Dx/Im, Dn` shifts Dn by the count in Dx or immediate (1–8), any size. New bits are filled with the sign bit. Defaults to word. Note: ASL sets the overflow flag if the MSB changes during the shift, while ASR always clears it. (2) `as<d>.w (An)` shifts a memory word by 1; `.w` is the only size accepted and may be omitted.',
+    rod: 'Rotates the bits of the destination operand to the {direction}. Two forms: (1) `ro<d> Dx/Im, Dn` rotates Dn by the count in Dx or immediate (1–8), any size. Defaults to word. (2) `ro<d>.w (An)` rotates a memory word by 1; `.w` is the only size accepted and may be omitted.',
+    roxd: 'Rotates the destination to the {direction} through the extend flag. The register form takes a data-register or immediate count; the memory form rotates one word by one place.',
     btst: 'Tests the bit of the second operand at the position of the value of the first operand, it changes the Z (zero) flag, the destination operand is not modified',
     bclr: 'Clears the bit of the second operand at the position of the value of the first operand',
     bset: 'Sets to 1 the bit of the second operand at the position of the value of the first operand',
@@ -351,14 +399,41 @@ answers with, is on the [trap tasks page](/documentation/m68k/traps).
 | 61     | Read the mouse: flags in d0, y:x in d1.  |
 | 80-96  | Graphics: colors, pixels, lines, rectangles, ellipses, flood fill, drawing modes, double buffering, text and the pen position.  |
 `.trim(),
-    nop: 'This instruction is a no-operation, it does not do anything.'
+    nop: 'This instruction is a no-operation, it does not do anything.',
+    movep: 'Moves a word or long between a data register and every other byte beginning at a displacement from an address register.',
+    addx: 'Adds the source, the destination and the extend flag. Use matching data registers or matching predecrement operands for multi-precision arithmetic.',
+    subx: 'Subtracts the source and the extend flag from the destination. Use matching data registers or matching predecrement operands for multi-precision arithmetic.',
+    negx: 'Negates the destination and subtracts the extend flag as well, with the cumulative zero-flag rule used by multi-precision arithmetic.',
+    abcd: 'Adds two packed binary-coded-decimal bytes together with the extend flag.',
+    sbcd: 'Subtracts two packed binary-coded-decimal bytes together with the extend flag.',
+    nbcd: 'Takes the packed binary-coded-decimal tens complement of one byte, including the extend flag.',
+    extb: 'Sign extends the low byte of a data register directly to a long.',
+    tas: 'Tests the original byte into the condition codes, then sets its top bit.',
+    rtr: 'Returns by popping the condition-code byte and then the program counter from the stack.',
+    chk: 'Checks a signed data-register word against zero and a signed upper bound, ending the run with a CHK exception when it is outside that range.',
+    trapv: 'Ends the run with an overflow exception when V is set; otherwise it continues.',
+    illegal: 'Always ends the run with an illegal-instruction exception.'
 }
 const dirsDesc = {
     dc: 'Defines constants, following the directive there can be a list of constants separated by commas, the size of each constant depends on the selected size. If no size is selected, the size is determined by the value of the constant. If the constant is a string, it will be stored as a sequence of bytes, if it is a number, it will be stored as a sequence of words',
     ds: 'Defines a space in memory of N elements, the size of each element depends on the specified size, the content of the space is undefined',
     dcb: 'Defines a space in memory of N elements, the size of each element depends on the specified size, the content of the space is initialized to the second operand',
     org: 'Sets the current position in memory for the following instructions',
-    equ: 'Defines a constant that will be replaced by the value when the program is assembled'
+    equ: 'Defines a constant expression. The symbol cannot be redefined later.',
+    set: 'Defines an expression value that may be redefined later in the assembled order.',
+    end: 'Stops assembly and optionally selects the program entry point. Code after it is ignored.',
+    reg: 'Names a register list for use by `movem`.',
+    fail: 'Raises an assembly error with the rest of the line as its message.',
+    simhalt: 'Emits a four-byte simulator pause. Run resumes at the following instruction.',
+    section: 'Selects one of sixteen independent location counters, numbered 0 through 15.',
+    offset: 'Enters an offset-only region at the given value. Labels receive offsets and no bytes are emitted until `org`.',
+    include:
+        'Assembles another text File at this point. The path is relative to the including File, then the Project root.',
+    incbin: 'Copies the exact bytes of another File into memory at this point.',
+    opt: 'Accepts an assembler option for compatibility and ignores it.',
+    list: 'Accepted for compatibility and ignored.',
+    nolist: 'Accepted for compatibility and ignored.',
+    page: 'Accepted for compatibility and ignored.'
 }
 
 export function getAddressingModeNames(addressingModes: AddressingMode[]): string {
@@ -377,14 +452,27 @@ export const M68KDirectiveDocumentation = {
     ds: makeDirective('ds', ANY_SIZE, dirsDesc.ds, 'ds.l 100'),
     dcb: makeDirective('dcb', ANY_SIZE, dirsDesc.dcb, 'dcb.b 50, 1'),
     org: makeDirective('org', NO_SIZE, dirsDesc.org, 'org $1000'),
-    equ: makeDirective('equ', NO_SIZE, dirsDesc.equ, 'name equ 10')
+    equ: makeDirective('equ', NO_SIZE, dirsDesc.equ, 'name equ 10'),
+    set: makeDirective('set', NO_SIZE, dirsDesc.set, 'count set count+1'),
+    end: makeDirective('end', NO_SIZE, dirsDesc.end, 'end START'),
+    reg: makeDirective('reg', NO_SIZE, dirsDesc.reg, 'saved reg d0-d3/a0-a2'),
+    fail: makeDirective('fail', NO_SIZE, dirsDesc.fail, 'fail Expected an argument'),
+    simhalt: makeDirective('simhalt', NO_SIZE, dirsDesc.simhalt, 'simhalt'),
+    section: makeDirective('section', NO_SIZE, dirsDesc.section, 'section 1'),
+    offset: makeDirective('offset', NO_SIZE, dirsDesc.offset, 'offset 0'),
+    include: makeDirective('include', NO_SIZE, dirsDesc.include, "include 'lib/io.x68'"),
+    incbin: makeDirective('incbin', NO_SIZE, dirsDesc.incbin, "incbin 'images/sprite.bin'"),
+    opt: makeDirective('opt', NO_SIZE, dirsDesc.opt, 'opt xref'),
+    list: makeDirective('list', NO_SIZE, dirsDesc.list, 'list'),
+    nolist: makeDirective('nolist', NO_SIZE, dirsDesc.nolist, 'nolist'),
+    page: makeDirective('page', NO_SIZE, dirsDesc.page, 'page')
 }
 export const M68KDirectiveDocumentationList = Object.values(M68KDirectiveDocumentation)
 
 export const M68kDocumentation = {
     move: makeIns(
         'move',
-        [ANY, NO_Im],
+        [[...ANY, Sr, Ccr], STATUS_DESTINATION],
         ANY_SIZE,
         FLAGS_LOGIC,
         desc.move,
@@ -417,22 +505,25 @@ move.l #$11223344, -(a1)
     moveq: makeIns(
         'moveq',
         [ONLY_Im, ONLY_Da],
-        NO_SIZE,
+        ONLY_LONG,
         FLAGS_LOGIC,
         desc.moveq,
         'moveq #10, d0',
-        undefined,
+        Size.Long,
         `
 moveq #100, d0
 moveq #-1, d1
-moveq #127, d2
+moveq #255, d2 ; the encoded byte is $ff, so d2 becomes -1
 moveq #-128, d3
-; moveq #128, d4 ; error! 128 exceeds signed byte range (-128..127)
+; moveq #256, d4 ; error! the encoded value must be -128..255
     `
     ),
     movem: makeIns(
         'movem',
-        [NO_Im, NO_Im],
+        [
+            [...REGISTER_LIST_OR_REGISTER, In, Ipi, Id, Ix, Ea, Pd, Pi],
+            [...REGISTER_LIST_OR_REGISTER, In, Ipd, Id, Ix, Ea]
+        ],
         ONLY_LONG_OR_WORD,
         UNAFFECTED,
         desc.movem,
@@ -637,11 +728,11 @@ subq.l #1, d0
     divs: makeIns(
         'divs',
         [NO_Ad, ONLY_Da],
-        NO_SIZE,
+        ONLY_WORD,
         FLAGS_DIV,
         desc.divs,
         'divs #2, d1',
-        undefined,
+        Size.Word,
         `
 * --- Result: quotient in low word, remainder in high word ---
 move.l #21, d0
@@ -664,11 +755,11 @@ move.w d3, d5 ; d5 = remainder (-1)
     divu: makeIns(
         'divu',
         [NO_Ad, ONLY_Da],
-        NO_SIZE,
+        ONLY_WORD,
         FLAGS_DIV,
         desc.divu,
         'divu #4, d1',
-        undefined,
+        Size.Word,
         `
 * --- Result: quotient in low word, remainder in high word ---
 move.l #21, d0
@@ -688,11 +779,11 @@ move.w d3, d5 ; d5 = remainder ($FFFE)
     muls: makeIns(
         'muls',
         [NO_Ad, ONLY_Da],
-        NO_SIZE,
+        ONLY_WORD,
         FLAGS_LOGIC,
         desc.muls,
         'muls d0, d1',
-        undefined,
+        Size.Word,
         `
 move.l #2, d0
 muls #-3, d0 ; d0 = -6
@@ -708,11 +799,11 @@ muls #$100, d2 ; d2 = $10000
     mulu: makeIns(
         'mulu',
         [NO_Ad, ONLY_Da],
-        NO_SIZE,
+        ONLY_WORD,
         FLAGS_LOGIC,
         desc.mulu,
         'mulu d5, d2',
-        undefined,
+        Size.Word,
         `
 move.l #2, d0
 mulu #4, d0 ; d0 = 8
@@ -725,11 +816,11 @@ mulu #$FFFF, d1 ; d1 = $FFFE0001
     swap: makeIns(
         'swap',
         [ONLY_Da],
-        NO_SIZE,
+        ONLY_WORD,
         FLAGS_LOGIC,
         desc.swap,
         'swap d0',
-        undefined,
+        Size.Word,
         `
 move.l #$12345678, d0
 swap d0 ; d0 = $56781234
@@ -758,11 +849,11 @@ clr.l d2 ; d2 = $00000000
     exg: makeIns(
         'exg',
         [ONLY_REG, ONLY_REG],
-        NO_SIZE,
+        ONLY_LONG,
         UNAFFECTED,
         desc.exg,
         'exg d0, a1',
-        undefined,
+        Size.Long,
         `
 * --- Data registers ---
 move.l #$AAAA, d0
@@ -823,11 +914,11 @@ ext.l d2 ; d2 = $FFFF8000
     lea: makeIns(
         'lea',
         [ONLY_In_OR_Id_OR_Ea, ONLY_Ad],
-        NO_SIZE,
+        ONLY_LONG,
         UNAFFECTED,
         desc.lea,
         'lea (a0), a1',
-        undefined,
+        Size.Long,
         `
 org $2000
 someLabel: dc.l 0
@@ -841,11 +932,11 @@ lea $3000, a2
     pea: makeIns(
         'pea',
         [ONLY_In_OR_Id_OR_Ea],
-        NO_SIZE,
+        ONLY_LONG,
         UNAFFECTED,
         desc.pea,
         'pea (a0)',
-        undefined,
+        Size.Long,
         `
 * --- Pushes address onto stack, SP decremented by 4 ---
 move.l sp, d0 ; save sp before
@@ -856,7 +947,7 @@ move.l (sp), d2 ; d2 = $00002000
     ),
     tst: makeIns(
         'tst',
-        [NO_Im],
+        [NO_IM_OR_Ad],
         ANY_SIZE,
         FLAGS_LOGIC,
         desc.tst,
@@ -899,7 +990,7 @@ seq d7 ; d7 = $FF
     ),
     cmpi: makeIns(
         'cmpi',
-        [ONLY_Im, NO_Im],
+        [ONLY_Im, NO_IM_OR_Ad],
         ANY_SIZE,
         FLAGS_CMP,
         desc.cmpi,
@@ -960,7 +1051,7 @@ seq d1
         ...makeIns(
             'bcc',
             [ONLY_Ea],
-            NO_SIZE,
+            BRANCH_SIZES,
             UNAFFECTED,
             desc.bcc,
             '`b<cc> label` Where cc is one of the condition codes',
@@ -992,7 +1083,7 @@ done:
         ...makeIns(
             'scc',
             [NO_Ad_AND_NO_Im],
-            NO_SIZE,
+            ONLY_BYTE,
             UNAFFECTED,
             desc.scc,
             '`s<cc> d0` Where cc is one of the condition codes',
@@ -1019,7 +1110,7 @@ smi d7 ; d7 = $FF (negative)
         ...makeIns(
             'dbcc',
             [ONLY_Da, ONLY_Ea],
-            NO_SIZE,
+            ONLY_WORD,
             UNAFFECTED,
             desc.dbcc,
             '`db<cc> d0, label` Where cc is one of the condition codes',
@@ -1041,7 +1132,7 @@ loop2:
     dbne d2, loop2 ; stops when d3 = 0 OR d2 exhausted
     `
         ),
-        compundNames: branchConditions.map((c) => `db${c}`)
+        compundNames: setConditions.map((c) => `db${c}`)
     },
     not: makeIns(
         'not',
@@ -1084,7 +1175,7 @@ or.b #%00000101, d2 ; set bits 0 and 2
     ),
     ori: makeIns(
         'ori',
-        [ONLY_Im, NO_IM_OR_Ad],
+        [ONLY_Im, STATUS_DESTINATION],
         ANY_SIZE,
         FLAGS_LOGIC,
         desc.ori,
@@ -1115,7 +1206,7 @@ and.w #$00FF, d2 ; keep low byte only: d2 = $00CD
     ), //destination should only be register
     andi: makeIns(
         'andi',
-        [ONLY_Im, NO_IM_OR_Ad],
+        [ONLY_Im, STATUS_DESTINATION],
         ANY_SIZE,
         FLAGS_LOGIC,
         desc.andi,
@@ -1147,7 +1238,7 @@ eor.l d2, d2 ; d2 = 0
     ),
     eori: makeIns(
         'eori',
-        [ONLY_Im, NO_IM_OR_Ad],
+        [ONLY_Im, STATUS_DESTINATION],
         ANY_SIZE,
         FLAGS_LOGIC,
         desc.eori,
@@ -1210,7 +1301,7 @@ END:
     dbra: makeIns(
         'dbra',
         [ONLY_Da, ONLY_Ea],
-        NO_SIZE,
+        ONLY_WORD,
         UNAFFECTED,
         desc.dbra,
         'dbra d0, label',
@@ -1228,7 +1319,7 @@ loop:
     bra: makeIns(
         'bra',
         [ONLY_Ea],
-        NO_SIZE,
+        BRANCH_SIZES,
         UNAFFECTED,
         desc.bra,
         'bra $2000',
@@ -1301,7 +1392,7 @@ END:
     bsr: makeIns(
         'bsr',
         [ONLY_Ea],
-        NO_SIZE,
+        BRANCH_SIZES,
         UNAFFECTED,
         desc.bsr,
         'bsr label',
@@ -1343,7 +1434,7 @@ trap #15 ; print character (space)
     asd: {
         ...makeIns(
             'asd',
-            [NO_Ad, NO_Ad_AND_NO_Im],
+            [COUNT, ONLY_Da],
             ANY_SIZE,
             FLAGS_MATH,
             desc.asd,
@@ -1376,7 +1467,7 @@ asl (a0) ; (a0) = $0002
     lsd: {
         ...makeIns(
             'lsd',
-            [NO_Ad, NO_Ad_AND_NO_Im],
+            [COUNT, ONLY_Da],
             ANY_SIZE,
             FLAGS_LSd,
             desc.lsd,
@@ -1408,7 +1499,7 @@ lsr (a0) ; (a0) = $0008
     rod: {
         ...makeIns(
             'rod',
-            [NO_Ad, NO_Ad_AND_NO_Im],
+            [COUNT, ONLY_Da],
             ANY_SIZE,
             FLAGS_ROd,
             desc.rod,
@@ -1437,8 +1528,8 @@ rol (a0) ; (a0) = %00000000_00000011
     },
     btst: makeIns(
         'btst',
-        [NO_Ad, NO_Ad_AND_NO_Im],
-        NO_SIZE,
+        [COUNT, NO_Ad],
+        BYTE_OR_LONG,
         FLAGS_BIT,
         desc.btst,
         'btst #4, d0',
@@ -1457,8 +1548,8 @@ btst #31, d2 ; bit 31 = 1, Z flag clear
     ),
     bchg: makeIns(
         'bchg',
-        [NO_Ad, NO_Ad_AND_NO_Im],
-        NO_SIZE,
+        [COUNT, NO_Ad_AND_NO_Im],
+        BYTE_OR_LONG,
         FLAGS_BIT,
         desc.bchg,
         'bchg #%101, d3',
@@ -1475,8 +1566,8 @@ bchg #3, d1 ; bit 3 was 0, now 1. Z flag set
     ),
     bclr: makeIns(
         'bclr',
-        [NO_Ad, NO_Ad_AND_NO_Im],
-        NO_SIZE,
+        [COUNT, NO_Ad_AND_NO_Im],
+        BYTE_OR_LONG,
         FLAGS_BIT,
         desc.bclr,
         'bclr d2, d7',
@@ -1492,8 +1583,8 @@ bclr #1, d1 ; bit 1 was already 0 (Z set), no change
     ),
     bset: makeIns(
         'bset',
-        [NO_Ad, NO_Ad_AND_NO_Im],
-        NO_SIZE,
+        [COUNT, NO_Ad_AND_NO_Im],
+        BYTE_OR_LONG,
         FLAGS_BIT,
         desc.bset,
         'bset #1, d1',
@@ -1507,6 +1598,90 @@ move.l #%0100, d1
 bset #2, d1 ; bit 2 was already 1 (Z clear), no change
     `
     ),
+    movep: makeIns(
+        'movep',
+        [
+            [Da, Id],
+            [Da, Id]
+        ],
+        ONLY_LONG_OR_WORD,
+        UNAFFECTED,
+        desc.movep,
+        'movep.w d0,4(a0)',
+        Size.Word
+    ),
+    addx: makeIns(
+        'addx',
+        [EXTENDED_PAIR, EXTENDED_PAIR],
+        ANY_SIZE,
+        FLAGS_MATH,
+        desc.addx,
+        'addx.l d0,d1',
+        Size.Word
+    ),
+    subx: makeIns(
+        'subx',
+        [EXTENDED_PAIR, EXTENDED_PAIR],
+        ANY_SIZE,
+        FLAGS_MATH,
+        desc.subx,
+        'subx.l -(a0),-(a1)',
+        Size.Word
+    ),
+    negx: makeIns('negx', [NO_IM_OR_Ad], ANY_SIZE, FLAGS_MATH, desc.negx, 'negx.w d0', Size.Word),
+    abcd: makeIns(
+        'abcd',
+        [EXTENDED_PAIR, EXTENDED_PAIR],
+        ONLY_BYTE,
+        FLAGS_DECIMAL,
+        desc.abcd,
+        'abcd.b d0,d1',
+        Size.Byte
+    ),
+    sbcd: makeIns(
+        'sbcd',
+        [EXTENDED_PAIR, EXTENDED_PAIR],
+        ONLY_BYTE,
+        FLAGS_DECIMAL,
+        desc.sbcd,
+        'sbcd.b -(a0),-(a1)',
+        Size.Byte
+    ),
+    nbcd: makeIns(
+        'nbcd',
+        [NO_IM_OR_Ad],
+        ONLY_BYTE,
+        FLAGS_DECIMAL,
+        desc.nbcd,
+        'nbcd.b d0',
+        Size.Byte
+    ),
+    extb: makeIns('extb', [ONLY_Da], ONLY_LONG, FLAGS_LOGIC, desc.extb, 'extb.l d0', Size.Long),
+    roxd: {
+        ...makeIns(
+            'roxd',
+            [COUNT, ONLY_Da],
+            ANY_SIZE,
+            FLAGS_LSd,
+            desc.roxd,
+            '`rox<d> #1,d0` or `rox<d> (a0)` where d is (l)eft or (r)ight',
+            Size.Word
+        ),
+        compundNames: ['roxl', 'roxr']
+    },
+    tas: makeIns('tas', [NO_IM_OR_Ad], ONLY_BYTE, FLAGS_LOGIC, desc.tas, 'tas.b d0', Size.Byte),
+    rtr: makeIns('rtr', [], NO_SIZE, FLAGS_MATH, desc.rtr, 'rtr'),
+    chk: makeIns(
+        'chk',
+        [NO_Ad, ONLY_Da],
+        ONLY_WORD,
+        FLAGS_CHK,
+        desc.chk,
+        'chk.w #10,d0',
+        Size.Word
+    ),
+    trapv: makeIns('trapv', [], NO_SIZE, UNAFFECTED, desc.trapv, 'trapv'),
+    illegal: makeIns('illegal', [], NO_SIZE, UNAFFECTED, desc.illegal, 'illegal'),
     nop: makeIns(
         'nop',
         [],
@@ -1547,7 +1722,7 @@ export function uncompoundInstructions(
             i.compundNames.forEach((n) => {
                 let description = i.description
                 const name = i.name
-                if (name === 'lsd' || name === 'asd' || name === 'rod') {
+                if (name === 'lsd' || name === 'asd' || name === 'rod' || name === 'roxd') {
                     const direction = n.substring(n.length - 1)
                     description = description.replace(
                         '{direction}',
@@ -1555,10 +1730,10 @@ export function uncompoundInstructions(
                     )
                 }
                 if (name === 'bcc' || name === 'dbcc') {
-                    const code = n.substring(n.length - 2)
+                    const code = name === 'dbcc' ? n.substring(2) : n.substring(1)
                     description = description.replace(
                         '{condition code}',
-                        `"**${branchConditionsDescriptions.get(code)}**"`
+                        `"**${setConditionsDescriptions.get(code)}**"`
                     )
                 }
                 if (name === 'scc') {
@@ -1643,62 +1818,65 @@ function makeDirective(
     spl highlighted wrogn
 */
 
-const arithmetic = [
-    'add',
-    'sub',
-    'suba',
-    'adda',
-    'divs',
-    'divu',
-    'muls',
-    'mulu',
-    'addq',
-    'subq',
-    'addi',
-    'subi'
+/** Directives accepted by s68k v2, including the four compatibility no-ops. */
+export const M68KDirectives = [
+    'dc',
+    'dcb',
+    'ds',
+    'end',
+    'equ',
+    'fail',
+    'incbin',
+    'include',
+    'list',
+    'nolist',
+    'offset',
+    'opt',
+    'org',
+    'page',
+    'reg',
+    'section',
+    'set',
+    'simhalt'
+] satisfies (keyof typeof M68KDirectiveDocumentation)[]
+
+/** Directive names the parser reserves so they receive a useful not-implemented diagnostic. */
+export const M68KRefusedDirectives = [
+    'memory',
+    'macro',
+    'endm',
+    'mexit',
+    'ifeq',
+    'ifne',
+    'iflt',
+    'ifle',
+    'ifgt',
+    'ifge',
+    'ifc',
+    'ifnc',
+    'ifarg',
+    'endc',
+    'if',
+    'else',
+    'endi',
+    'while',
+    'endw',
+    'for',
+    'endf',
+    'repeat',
+    'until',
+    'dbloop',
+    'unless'
 ]
-const logic = [
-    'tst',
-    'cmp',
-    'cmpa',
-    'cmpm',
-    'cmpi',
-    'not',
-    'or',
-    'and',
-    'eor',
-    'lsl',
-    'lsr',
-    'asr',
-    'asl',
-    'rol',
-    'ror',
-    'btst',
-    'bclr',
-    'bchg',
-    'bset',
-    'andi',
-    'ori',
-    'eori',
-    'subi'
-]
-const special = ['clr', 'exg', 'neg', 'ext', 'swap', 'move', 'movea', 'trap', 'movem']
-export const M68KDirectives = ['org', 'equ', 'dcb', 'ds', 'dc']
-const others = [
-    ...setConditions.map((e) => `s${e}`),
-    ...branchConditions.map((e) => `b${e}`),
-    ...branchConditions.map((e) => `db${e}`),
-    'dbra',
-    'bsr',
-    'bra',
-    'jsr',
-    'rts',
-    'link',
-    'unlk',
-    'lea',
-    'pea',
-    'moveq',
-    'jmp',
-    'nop'
-]
-export const M68kInstructions = [...arithmetic, ...logic, ...special, ...others]
+
+/** Real 68000 mnemonics recognised by s68k but deliberately not implemented. */
+export const M68KRefusedInstructions = ['rte', 'stop', 'reset']
+
+const documentationFamilyNames = new Set(['asd', 'lsd', 'rod', 'roxd'])
+/** Every implemented mnemonic, with documentation-family placeholders removed. */
+export const M68kInstructions = Array.from(M68KUncompoundedInstructions.keys()).filter(
+    (name) => !documentationFamilyNames.has(name)
+)
+
+export const M68KRecognizedInstructions = [...M68kInstructions, ...M68KRefusedInstructions]
+export const M68KRecognizedDirectives = [...M68KDirectives, ...M68KRefusedDirectives]

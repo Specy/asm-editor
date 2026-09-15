@@ -1,0 +1,6 @@
+{
+    "name": "Getting started with x86",
+    "description": "x86-64 the way this editor runs it: the sixteen registers and the four names each of them has, NASM syntax, and why a program here is a Linux process. It ends with a first program whose answer you read in the registers panel.",
+    "order": 0,
+    "topic": "introduction"
+}

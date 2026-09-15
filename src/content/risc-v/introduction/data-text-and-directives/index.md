@@ -1,7 +1,10 @@
-A program is instructions and the data they work on, and something has to say which lines are which.
-The M68K assembler has no answer to that: it walks your source from top to bottom and puts each line
-at the next free address. RISC-V has **sections**, so the two are separated by name and land in
-different parts of memory.
+A source file has two kinds of line in it: instructions, and the data those instructions work on.
+They cannot live in the same place. Instructions are read by the processor, four bytes at a time,
+from the start of the program onwards; data is read and written by your own loads and stores, and
+would be decoded as nonsense instructions if the processor ever wandered into it.
+
+So a file is split into **sections**, and a directive tells the assembler which one the following
+lines belong to.
 
 ## .data and .text
 
@@ -35,9 +38,9 @@ main:
     ecall
 ```
 
-`t0` comes out at `10010000`, `t1` at `10010004` and `t2` at `10010014`. Open the memory panel at
-`10010000` and the first bytes are `48 69 00 00`, the two characters of `"Hi"`, its terminator and
-the byte the `.align 2` skipped over.
+The three addresses in `t0`, `t1` and `t2` are where the assembler put the three labels, in the
+order they were written. Open the memory panel at `10010000` and the first bytes are `48 69 00 00`:
+the two characters of `"Hi"`, its terminator, and the byte the `.align 2` skipped over.
 
 That is the shape of every RISC-V program in this course: constants at the top, a data section, then
 a text section with `main` in it and an `ecall` at the end.
@@ -55,10 +58,10 @@ a text section with `main` in it and an `ecall` at the end.
 | `.string "Hi"`      | another name for `.asciz`                              |
 | `.space 8`          | that many bytes, left at zero and not aligned          |
 | `.align n`          | moves the next thing up to a multiple of 2 to the `n`  |
-| `.float`, `.double` | floating point numbers, which this course does not use |
+| `.float`, `.double` | one floating point number per value, 4 or 8 bytes each |
 
-The spelling is `.asciz`, with one `i` and one `z`. MIPS writes `.asciiz`, and a program moved
-between the two assemblers trips over that line first.
+The spelling is `.asciz`, with one `i` and one `z`, and `.string` is a second name for exactly the
+same directive.
 
 ```riscv|playground|memory
 .data
@@ -131,13 +134,14 @@ main:
 `4` inside the instruction, while `values` became the address `0x10010000` and the instruction went
 to memory for what was there. `t3` is 16.
 
-The assembler does no arithmetic. `li t0, SIZE*4` is a build error, and so is `lw t2, values+4`,
-which the MIPS assembler would have taken. A name multiplied by something has to be multiplied by
-the program, as the `slli` above does, and an offset from a label has to go in the `offset(base)` of
-the load.
+The assembler does no arithmetic with these names. `li t0, SIZE*4` is a build error, and so is
+`lw t2, values+4`. A name that needs multiplying gets multiplied by the running program, as the
+`slli` above does, and an offset from a label goes in the `offset(base)` part of the load.
 
-Use `.eqv` for anything you would write as a `#define` in C: the length of an array, the size of an
-element, a service number, a screen width.
+`.eqv` is for every number in your program that means something: the length of an array, the size of
+an element, a service number, the width of the screen. Writing it once at the top and using the name
+everywhere means changing it in one place, and it costs nothing at run time because the number was
+put straight into the instruction.
 
 ## Where a program starts, and where it stops
 
@@ -208,7 +212,7 @@ main:
 subroutine is the alternative that costs one call. Build it and the two expanded lines are marked
 `<2>` in the disassembly, which is the macro expansion depth.
 
-## Your turn
+## Lay out a program
 
 Write a data section holding the three words 100, 200 and 300 at `values`, followed by eight bytes of
 room at `room`, and leave the address of `room` in `t0`. Three words take twelve bytes, so it comes

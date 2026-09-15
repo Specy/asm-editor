@@ -5,6 +5,7 @@
     import Page from '$cmp/shared/layout/Page.svelte'
     import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
     import { resolve } from '$app/paths'
+    import { courseAccent } from '$lib/languages/languageColors'
 
     interface Props {
         data: PageData
@@ -33,7 +34,13 @@
     <p></p>
     <div class="courses">
         {#each data.courses as course (course.slug)}
-            <a href={resolve('/learn/courses/[courseId]', { courseId: course.slug })}>
+            {@const accent = courseAccent(course.slug)}
+            <a
+                href={resolve('/learn/courses/[courseId]', { courseId: course.slug })}
+                class="course"
+                class:of-a-language={accent !== null}
+                style={accent ? `--course-accent: ${accent}` : ''}
+            >
                 <Card
                     background="secondary"
                     gap="1rem"
@@ -61,19 +68,18 @@
     }
     .courses a {
         display: flex;
+        border-radius: 0.5rem;
     }
-    .icon {
-        height: 2.2rem;
-        display: flex;
-        align-items: center;
-        gap: 1rem;
 
-        img {
-            height: 100%;
-        }
-
-        &:hover {
-            color: var(--accent);
-        }
+    /* A Language course wears its language's colour, the same one its pages and its documentation
+       show. The General course has no language and stays as it is, which is what tells the two
+       kinds apart at a glance. */
+    .course.of-a-language > :global(*) {
+        border-left: 0.3rem solid var(--course-accent);
+        background-color: color-mix(in srgb, var(--course-accent) 8%, var(--secondary));
+        transition: background-color 0.2s;
+    }
+    .course.of-a-language:hover > :global(*) {
+        background-color: color-mix(in srgb, var(--course-accent) 18%, var(--secondary));
     }
 </style>

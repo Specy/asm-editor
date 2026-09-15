@@ -20,14 +20,16 @@
     import { DEFAULT_THEME, ThemeStore } from '$stores/themeStore.svelte'
     import { LANGUAGE_THEMES } from '$lib/Config'
     import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
-    import { createShareLink } from '$lib/utils'
+    import { blobDownloader, createShareLink, ShareTooLargeError } from '$lib/utils'
     import { serializer } from '$lib/json'
     import { createExamSessionLink, parseLegacyProjectExamPayload } from '$lib/exam'
     import { resolveProjectSettings } from '$lib/projectSettings'
+    import { projectArchiveName, projectToArchive } from '$lib/projectArchive'
 
     let project = $state(makeProject())
     let status: 'loading' | 'loaded' | 'error' = $state('loading')
     let oldTheme = ThemeStore.getChosenTheme()
+    let linkedMigrationNoticeShown = false
 
     $effect(() => {
         const theme = LANGUAGE_THEMES[project.language]
@@ -121,14 +123,91 @@
             project.set({ id: newProject.id })
             goto(resolve('/projects/[project]', { project: project.id }))
         } else {
-            await ProjectStore.save(project)
+            const result = await ProjectStore.save(project)
+            if (result.local === 'failed') {
+                //Not silenced by autosave: nothing was stored, so the user has to know now.
+                toast.error(
+                    'Could not save this project in the browser — your changes are not stored.',
+                    10000
+                )
+            }
+            if (result.linked === 'failed') {
+                toast.error(
+                    'Project saved in the browser, but its linked disk file could not be updated.'
+                )
+            } else if (result.linked === 'needs-archive') {
+                if (silent) {
+                    if (!linkedMigrationNoticeShown) {
+                        linkedMigrationNoticeShown = true
+                        toast.warn(
+                            'Project saved in the browser. Its linked source file cannot hold multiple or binary Files; use Save to choose an .asmproj archive.',
+                            10000
+                        )
+                    }
+                } else {
+                    await offerArchiveSave(project)
+                }
+            }
         }
         return true
     }
 
+    async function offerArchiveSave(project: Project) {
+        const saveArchive = await Prompt.confirm(
+            'This Project no longer fits its linked source file. Save a complete .asmproj archive instead?'
+        )
+        if (!saveArchive) return
+        try {
+            const archive = projectToArchive(project)
+            if ('showSaveFilePicker' in window) {
+                const handle: FileSystemFileHandle = await window.showSaveFilePicker({
+                    suggestedName: projectArchiveName(project.name),
+                    types: [
+                        {
+                            description: 'ASM Editor Project',
+                            accept: { 'application/zip': ['.asmproj'] }
+                        }
+                    ]
+                })
+                const writer = await handle.createWritable()
+                await writer.write(new Uint8Array(archive).buffer)
+                await writer.close()
+                ProjectStore.setFileHandle(project.id, handle, 'archive')
+                linkedMigrationNoticeShown = false
+                toast.success('Project archive saved and linked')
+                return
+            }
+            const contents = new Uint8Array(archive).buffer
+            blobDownloader(
+                new Blob([contents], { type: 'application/zip' }),
+                projectArchiveName(project.name)
+            )
+            toast.warn(
+                'Archive downloaded. This browser cannot link it for future saves; the original source file was left unchanged.',
+                10000
+            )
+        } catch (error) {
+            if (error instanceof DOMException && error.name === 'AbortError') return
+            console.error(error)
+            toast.error('Could not save the Project archive')
+        }
+    }
+
     async function share(pr: Project) {
         if (!pr) return
-        const url = createShareLink(pr)
+        let url: string
+        try {
+            url = createShareLink(pr)
+        } catch (error) {
+            console.error(error)
+            toast.error(
+                error instanceof ShareTooLargeError
+                    ? 'This Project is too big to share as a link. Export an .asmproj archive instead.'
+                    : 'Could not create a share link for this Project',
+                10000
+            )
+            return
+        }
         await navigator.clipboard.writeText(url)
         toast.logPill('Copied to clipboard')
     }
@@ -153,7 +232,7 @@
             )
             if (wantsToSave === null) return
             if (wantsToSave) {
-                await ProjectStore.save(project)
+                await save(project, false)
                 toast.logPill('Project saved')
             }
             goto(page)
@@ -198,11 +277,18 @@
     {#key project.id}
         <EmulatorLoader
             bind:code={project.code}
+            source={{ files: project.files, entry: project.entry }}
             language={project.language}
             settings={{
+                automaticChecking: false,
                 display: project.display,
                 screenHistoryBudgetMb: resolveProjectSettings(project.language, project.settings)
-                    .screenHistoryBudgetMb
+                    .screenHistoryBudgetMb,
+                fileSystemHistoryBudgetMb: resolveProjectSettings(
+                    project.language,
+                    project.settings
+                ).fileSystemHistoryBudgetMb,
+                peripherals: { fileSystem: project.fileSystem }
             }}
         >
             {#snippet children(emulator)}
@@ -211,6 +297,9 @@
                     name={project.name}
                     language={project.language}
                     bind:code={project.code}
+                    bind:files={project.files}
+                    bind:entry={project.entry}
+                    fileSystem={project.fileSystem}
                     bind:testcases={project.testcases}
                     bind:display={project.display}
                     bind:settings={project.settings}

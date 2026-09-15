@@ -250,6 +250,61 @@ describe('Screen primitives', () => {
         expect(visibleAt(screen, 5, 5)).toBe(BLACK)
     })
 
+    it('lays a wide pen over the fill as it goes, one pixel at a time', () => {
+        //the interior of a filled ellipse is written a row at a time, but a pen wider than one
+        //pixel reaches the pixel to its right, which the fill then covers again: GDI fills and
+        //stamps each pixel before moving on, so that order is visible and the row fill is not
+        //allowed to take it away
+        const wide = new Screen({ width: 16, height: 12, penColor: RED, fillColor: GREEN })
+        wide.setPenWidth(3)
+        wide.drawEllipse(2, 1, 14, 11)
+        const narrow = new Screen({ width: 16, height: 12, penColor: RED, fillColor: GREEN })
+        narrow.setPenWidth(1)
+        narrow.drawEllipse(2, 1, 14, 11)
+        //the wide pen covers strictly more than the narrow one, and the fill is still there
+        expect(pointsOf(wide, RED).length).toBeGreaterThan(pointsOf(narrow, RED).length)
+        expect(pointsOf(wide, GREEN).length).toBeGreaterThan(0)
+        //these two are the whole difference: the stamp on the border pixel to their left reaches
+        //them, and the fill of their own pixel comes after it and takes them back. Filling the row
+        //before stamping its border would leave both of them pen
+        expect(visibleAt(wide, 5, 2)).toBe(GREEN)
+        expect(visibleAt(wide, 4, 3)).toBe(GREEN)
+        //the border itself is still pen, and the middle of the shape is still fill
+        expect(visibleAt(wide, 4, 2)).toBe(RED)
+        expect(visibleAt(wide, 8, 5)).toBe(GREEN)
+    })
+
+    it('floods a shape the fill has to come back up through', () => {
+        //a scanline fill seeds the rows above and below each run it fills; a U needs the seed
+        //above to be taken, which a fill that only ever walked downwards would miss
+        screen.setPenColor(RED)
+        screen.drawLine(4, 0, 4, 9)
+        screen.drawLine(4, 9, 9, 9)
+        screen.drawLine(9, 0, 9, 9)
+        screen.setFillColor(GREEN)
+        screen.floodFill(6, 8)
+        //both arms of the U are reached, all the way back to the top
+        expect(visibleAt(screen, 6, 8)).toBe(GREEN)
+        expect(visibleAt(screen, 5, 0)).toBe(GREEN)
+        expect(visibleAt(screen, 8, 0)).toBe(GREEN)
+        //and nothing outside it
+        expect(visibleAt(screen, 2, 5)).toBe(BLACK)
+        expect(visibleAt(screen, 12, 5)).toBe(BLACK)
+    })
+
+    it('floods through a channel one pixel wide', () => {
+        screen.setPenColor(RED)
+        screen.drawUnfilledRectangle(2, 2, 12, 10)
+        //one gap in the left wall, so the outside can only reach the inside through it
+        screen.setPenColor(BLACK)
+        screen.drawPixel(2, 6)
+        screen.setFillColor(GREEN)
+        screen.floodFill(0, 6)
+        expect(visibleAt(screen, 0, 6)).toBe(GREEN)
+        expect(visibleAt(screen, 2, 6)).toBe(GREEN)
+        expect(visibleAt(screen, 7, 6)).toBe(GREEN)
+    })
+
     it('floods the connected area of the color under the starting point', () => {
         screen.setPenColor(RED)
         screen.drawUnfilledRectangle(1, 1, 6, 6)
@@ -375,6 +430,30 @@ describe('Screen text', () => {
                 expect(visibleAt(screen, column, row)).toBe(lit ? RED : GREEN)
             }
         }
+    })
+
+    it('clips a glyph at every edge instead of wrapping it round the image', () => {
+        //the cell is clipped once and then written as words, so a glyph hanging off an edge must
+        //still stop at it rather than land on the far side of the row below
+        const column = (point: string) => Number(point.split(',')[0])
+        const line = (point: string) => Number(point.split(',')[1])
+        const left = makeScreen()
+        left.setPenColor(RED)
+        left.drawText(-3, 4, 'W')
+        expect(pointsOf(left, RED).length).toBeGreaterThan(0)
+        expect(pointsOf(left, RED).every((point) => column(point) < 5)).toBe(true)
+        const right = makeScreen()
+        right.setPenColor(RED)
+        right.drawText(12, 2, 'W')
+        expect(pointsOf(right, RED).every((point) => column(point) >= 12)).toBe(true)
+        const above = makeScreen()
+        above.setPenColor(RED)
+        above.drawText(2, -3, 'W')
+        expect(pointsOf(above, RED).every((point) => line(point) < 5)).toBe(true)
+        const below = makeScreen()
+        below.setPenColor(RED)
+        below.drawText(2, 8, 'W')
+        expect(pointsOf(below, RED).every((point) => line(point) >= 8)).toBe(true)
     })
 
     it('paints an opaque cell when writing at the text cursor', () => {

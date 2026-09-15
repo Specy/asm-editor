@@ -1,32 +1,41 @@
 [Assembly basics](/learn/courses/assembly-basics) went through registers, memory, branching and the
-stack once, using whichever language made each point clearest. From here on there is one language,
-the M68K.
+stack quickly. From here on everything happens on one machine.
 
 ## The machine
 
-**M68K** is short for the Motorola 68000, a family of CPUs. It works with:
+**M68K** is short for the Motorola 68000, a family of CPUs. What you get to work with is:
 
 - **Eight data registers**, `d0` to `d7`, 32 bits each. Numbers live here.
-- **Eight address registers**, `a0` to `a7`, also 32 bits. Addresses live here, and `a7` is the stack
-  pointer, which you can also write as `sp`.
-- **Memory**, one large array of bytes. In this editor it runs from `$000000` to `$FFFFFF`, so an
-  address is 24 bits.
+- **Eight address registers**, `a0` to `a7`, also 32 bits. Addresses live here, and `a7` is the
+  stack pointer, which you can also write as `sp`.
+- **Memory**, one long row of bytes. There are sixteen megabytes of it, far more than anything in
+  this course will use.
 - **Five flags**, `X`, `N`, `Z`, `V` and `C`, in a register of their own. Comparisons and most
   arithmetic write them, and the branch instructions read them.
 
-The registers panel next to every program on this page lists all sixteen. The two kinds are not
-interchangeable, some instructions take only one of them. For example `lea`, which loads an address,
-writes an address register and nothing else.
+The registers panel beside every program on this page lists all sixteen registers. The two kinds are
+not interchangeable: plenty of instructions accept one and refuse the other. `lea`, which loads an
+address, writes an address register and nothing else.
 
-The M68K is **big endian**: the most significant byte of a number sits at the lowest address, so a
-long you wrote as `$12345678` reads left to right in memory as `12 34 56 78`.
+## Everything is written in hex
 
-## The simulator
+A register is 32 bits and you will constantly want to know which of them are on. Decimal is no help
+with that. Nothing about 2864434397 tells you anything about its bits, and you certainly cannot see
+that it is four bytes that happen to spell `AA BB CC DD`.
 
-There is no real 68000 in your browser, there is a simulator, and this one follows **EASy68K**.
-Printing, reading input and drawing go through the instruction `trap #15`, which is taught in the
-"Talking to the outside world" module of this course. Until then, programs show what they did in the
-registers and the memory.
+So values here are written in **hexadecimal**, base 16, marked with a `$` in front. Hex counts `0`
+to `9` like decimal and then keeps going with letters: `A` is ten, `B` eleven, `C` twelve, `D`
+thirteen, `E` fourteen, `F` fifteen, and `$10` is sixteen.
+
+The point of base 16 is that sixteen is two to the fourth, so **one hex digit is exactly four bits**
+and **two hex digits are exactly one byte**. Nothing ever straddles a digit. Read `$AABBCCDD` in
+pairs and you are reading the four bytes of a long straight off the page.
+
+A 32 bit register is therefore always eight hex digits, and the registers panel shows all eight,
+padded with zeroes on the left. The number ten sits in `d0` as `0000000A`.
+
+Addresses work the same way. Memory here runs from `$000000` to `$FFFFFF`, six hex digits, which is
+24 bits and 16777216 bytes.
 
 ## How a program is written down
 
@@ -43,22 +52,13 @@ A line is a label, an instruction, a directive, a comment, or nothing.
 - **Case does not matter.** `MOVE.L D0, D1` and `move.l d0, d1` are the same instruction. We write
   lower case.
 
-Numbers can be written in four bases, and a `#` in front means the number itself:
+A `#` in front of a number means the number itself. `move.l #$2000, d0` puts the number `$2000` in
+`d0`. Drop the `#` and `move.l $2000, d0` reads the four bytes _at address_ `$2000` and puts those
+in `d0` instead.
 
-| written    | means             |
-| ---------- | ----------------- |
-| `100`      | decimal 100       |
-| `$64`      | hex, the same 100 |
-| `%1100100` | binary, still 100 |
-| `@144`     | octal, still 100  |
-
-`move.l #$2000, d0` puts the number `$2000` in `d0`. Drop the `#` and `move.l $2000, d0` reads the
-four bytes _at address_ `$2000` and puts those in `d0` instead. One character makes two completely
-different instructions.
-
-Most instructions also carry a **size**, which says how much of the register or of memory they touch.
-`.b` is one byte, `.w` is two (a word), `.l` is four (a long). Leave it off and you get a word, which
-is a good reason to always write it.
+Most instructions also carry a **size**, which says how much of the register or of memory they
+touch. `.b` is one byte, `.w` is two (a word), `.l` is four (a long). Leave it off and you get a
+word, which is a good reason to always write it.
 
 ## Your first program
 
@@ -72,22 +72,20 @@ answer in `d0` in the registers panel.
 ```
 
 `move.l #10, d0` writes the number 10 into all four bytes of `d0`, and the line under it does the
-same with 32 and `d1`. `add.l d1, d0` adds the two registers and leaves the answer in `d0`, because
-on the M68K the operand on the right is the destination, the one that gets written. So `d0` ends at
-42 and `d1` is still 32.
+same with 32 and `d1`. `add.l d1, d0` adds the two registers and leaves the answer **in `d0`**: on
+the M68K the operand on the right is the destination, the one that gets written, and the one on the
+left is left alone.
 
 **Build** assembles what you wrote and points the simulator at the first instruction, **Run** runs
 the program to the end, and **Step** runs one instruction at a time.
 
-Nothing in the program says "stop". The simulator ends a program when there is no next instruction to
-run, which here is the end of what you wrote.
-
-Try changing `add.l d1, d0` to `add.l d0, d1` and see the answer come out in `d1` instead.
+Nothing in the program says "stop". The simulator ends a program when there is no next instruction
+to run, which here is the end of what you wrote.
 
 ## Sizes in the registers panel
 
 A size touches the low end of the register and leaves the rest of it alone. Build this one and press
-**Step** four times, keeping an eye on `d0` in the registers panel.
+**Step** four times, keeping an eye on `d0`.
 
 ```m68k|playground|no-flags
     move.l #$AABBCCDD, d0   ; fill d0 so the sizes are easy to see
@@ -96,8 +94,15 @@ A size touches the low end of the register and leaves the rest of it alone. Buil
     move.l #$33333333, d0   ; and now the whole register
 ```
 
-Try putting `move.b #$11, d0` back at the end and see that `$33333333` becomes `$33333311`, not
-`$00000011`.
+| after                   |       `d0` |
+| ----------------------- | ---------: |
+| `move.l #$AABBCCDD, d0` | `AABBCCDD` |
+| `move.b #$11, d0`       | `AABBCC11` |
+| `move.w #$2222, d0`     | `AABB2222` |
+| `move.l #$33333333, d0` | `33333333` |
+
+Read the right hand column in pairs of digits and you can see how far up the register each
+instruction reached. `.b` changed two digits, `.w` changed four, `.l` changed all eight.
 
 ## The flags panel
 
@@ -112,13 +117,16 @@ equal, which is what `beq` and `bne` read.
     cmp.l #5, d1        ; compare y with 5
 ```
 
-Step through it and watch `Z`: it goes to 1 after the first `cmp` and back to 0 after the second one.
+Step through it with an eye on `Z`. The first comparison is of two equal numbers and the second one
+is not.
 
 ## Your turn
 
-Two instructions. Leave `$FF` in the lowest byte of `d0` without disturbing the three bytes above it,
-and put `100` in `d1`. The test starts `d0` at `$12345678`, so a correct answer leaves it at
-`$123456FF`. Write your two instructions and press **Test**.
+Time to write some yourself. The editor below has a **Test** button under it: write your answer,
+press Test, and it says whether the registers came out as asked.
+
+Two instructions. `d0` begins holding `$12345678`. Leave `$FF` in its lowest byte without disturbing
+the three bytes above it, so it ends at `$123456FF`, and put `100` in `d1`.
 
 ```m68k|playground|exercise
 * your code here

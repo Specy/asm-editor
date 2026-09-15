@@ -1,15 +1,30 @@
 import { browser } from '$app/environment'
 import { db } from '$lib/storage/db'
 import { requestPersistentStorage } from '$lib/storage/persist'
-import { type ExternalImport, makeProjectFromExternal, type Project } from '$lib/Project.svelte'
+import {
+    type ExternalImport,
+    makeProject,
+    makeProjectFromExternal,
+    type Project
+} from '$lib/Project.svelte'
+import { isLegacyLinkedFileCompatible, projectToArchive } from '$lib/projectArchive'
 
 export const SHARE_ID = '__share__'
 
 function createProjectStore() {
     let inited = $state(false)
     let projects = $state<Project[]>([])
+    type LinkedFile = { handle: FileSystemFileHandle; format: 'legacy' | 'archive' }
+    type SaveResult = {
+        linked: 'none' | 'saved' | 'needs-archive' | 'failed'
+        /** Whether the browser's own copy was written. A failure here is unsaved work. */
+        local: 'saved' | 'failed'
+        error?: unknown
+    }
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Imperative async/event workflows use this registry; it has no tracked consumer.
-    const writableFiles = new Map<string, FileSystemFileHandle>()
+    const writableFiles = new Map<string, LinkedFile>()
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Promise serialization is internal and has no tracked consumer.
+    const saveTails = new Map<string, Promise<void>>()
     if (browser) {
         load()
     }
@@ -30,21 +45,57 @@ function createProjectStore() {
         return result
     }
 
-    async function save(project: Project): Promise<void> {
+    async function save(project: Project): Promise<SaveResult> {
         if (project.id === SHARE_ID) throw new Error('Cannot save shared project')
         project.updatedAt = new Date().getTime()
-        const file = writableFiles.get(project.id)
+        const snapshot = project.toObject()
+        const previous = saveTails.get(project.id) ?? Promise.resolve()
+        let finish!: () => void
+        const tail = new Promise<void>((resolve) => {
+            finish = resolve
+        })
+        const queued = previous.catch(() => {}).then(() => tail)
+        saveTails.set(project.id, queued)
+        await previous.catch(() => {})
+        let result: SaveResult = { linked: 'none', local: 'saved' }
         try {
-            if (file) {
-                const writer = await file.createWritable()
-                await writer.write(project.toExternal())
-                await writer.close()
+            const linked = writableFiles.get(snapshot.id)
+            if (linked) {
+                if (linked.format === 'legacy' && !isLegacyLinkedFileCompatible(snapshot)) {
+                    result = { linked: 'needs-archive', local: 'saved' }
+                } else {
+                    const contents =
+                        linked.format === 'archive'
+                            ? projectToArchive(snapshot)
+                            : makeProject(snapshot).toExternal()
+                    const writer = await linked.handle.createWritable()
+                    await writer.write(
+                        typeof contents === 'string' ? contents : new Uint8Array(contents).buffer
+                    )
+                    await writer.close()
+                    result = { linked: 'saved', local: 'saved' }
+                }
             }
-        } catch (e) {
-            console.error(e)
+        } catch (error) {
+            console.error(error)
+            result = { linked: 'failed', local: 'saved', error }
         }
-        await db.updateProject(project)
+        try {
+            //The linked write and IndexedDB both use the same immutable save snapshot. Queuing the
+            //whole operation prevents a slow old disk write from landing after a newer one.
+            await db.updateProject(makeProject(snapshot))
+        } catch (error) {
+            //A quota or a blocked database means the work is not stored anywhere. Reported rather
+            //than rejected, so autosave's caller can tell the user instead of producing an
+            //unhandled rejection that leaves them believing the project is saved.
+            console.error(error)
+            result = { ...result, local: 'failed', error }
+        } finally {
+            finish()
+            if (saveTails.get(snapshot.id) === queued) saveTails.delete(snapshot.id)
+        }
         await load()
+        return result
     }
 
     async function deleteProject(project: Project): Promise<void> {
@@ -58,8 +109,12 @@ function createProjectStore() {
         return imported
     }
 
-    function setFileHandle(id: string, handle: FileSystemFileHandle) {
-        writableFiles.set(id, handle)
+    function setFileHandle(
+        id: string,
+        handle: FileSystemFileHandle,
+        format: 'legacy' | 'archive' = 'legacy'
+    ) {
+        writableFiles.set(id, { handle, format })
     }
 
     async function getProject(id: string) {

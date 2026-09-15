@@ -24,16 +24,27 @@
     <div class="column gap-03">
         <div class="sub-title">Indirect</div>
         <div class="sub-description">
-            Gets the value contained in memory with address being the content of the address
-            register specified. Specifiying an offset by writing a number before the (), the
-            addressing mode becomes indirect with displacement and the final address to read the
-            memory will be (address + offset).
+            Gets the value in memory at the address held by the specified address register.
         </div>
-        <div class="example">(a0), 4(sp)</div>
+        <div class="example">(a0), (sp)</div>
         <div class="row">
             <DocsOperand
                 name={addressingModeToString(AddressingMode.Indirect)}
                 content="Indirect"
+            />
+        </div>
+    </div>
+    <div class="column gap-03">
+        <div class="sub-title">Address-register displacement</div>
+        <div class="sub-description">
+            Adds an expression known at assembly time to the address register. Parentheses may also
+            surround the whole operand, as in <code>(4,a0)</code>.
+        </div>
+        <div class="example">4(a0), label-base(sp), (8,a1)</div>
+        <div class="row">
+            <DocsOperand
+                name={addressingModeToString(AddressingMode.IndirectWithDisplacement)}
+                content="Address-register displacement"
             />
         </div>
     </div>
@@ -85,10 +96,10 @@
         <div class="sub-title">Effective address</div>
         <div class="sub-description">
             Represents the address of the memory where the data is stored. It can be a label or a
-            number. When the program is assembled, the labels will be converted to the address of
-            the label.
+            number. A <code>.w</code> or <code>.l</code> suffix selects the address width; both name the
+            same address, and the word form is range checked.
         </div>
-        <div class="example">$1000, some_label, 140, %101010, @22, 'e'</div>
+        <div class="example">$1000, some_label, some_label.w, some_label.l</div>
         <div class="row gap-03 wrap">
             <DocsOperand
                 name={addressingModeToString(AddressingMode.Absolute)}
@@ -98,22 +109,48 @@
         </div>
     </div>
     <div class="column gap-03">
-        <div class="sub-title">Base displacement indirect</div>
+        <div class="sub-title">Address-register indexed</div>
         <div class="sub-description">
-            Gets the value contained in memory with address being the sum of (address + offset +
-            base), where the first register (address) will be the base address, the second register
-            (base) and offset being the number before the ().
-            <br />
-            In the documentation, wherever there is {addressingModeToString(
-                AddressingMode.Indirect
-            )}, this addressing mode is valid too
+            Adds an address register, a data or address index register, and an optional 8-bit
+            displacement. The index may carry a <code>.w</code> or <code>.l</code> size.
         </div>
-        <div class="example">4(a0, d2), (sp, a0)</div>
+        <div class="example">4(a0, d2), (sp, a0), (8,a1,d3.w)</div>
         <div class="row gap-03 wrap">
             <DocsOperand
-                name={addressingModeToString(AddressingMode.IndirectWithDisplacement)}
-                content="Base displacement indirect"
+                name={addressingModeToString(AddressingMode.IndirectIndex)}
+                content="Address-register indexed"
             />
+        </div>
+    </div>
+    <div class="column gap-03">
+        <div class="sub-title">Program-counter relative</div>
+        <div class="sub-description">
+            Adds a displacement to the address of the current instruction, optionally with a data or
+            address index register. These modes can be read but not written.
+        </div>
+        <div class="example">label(pc), 4(pc,d0.w), (label,pc,a1)</div>
+        <div class="row gap-03 wrap">
+            <DocsOperand
+                name={addressingModeToString(AddressingMode.PcDisplacement)}
+                content="PC displacement"
+            />
+            <DocsOperand
+                name={addressingModeToString(AddressingMode.PcIndex)}
+                content="PC displacement with index"
+            />
+        </div>
+    </div>
+    <div class="column gap-03">
+        <div class="sub-title">Status registers</div>
+        <div class="sub-description">
+            <code>sr</code> is the 16-bit status register and <code>ccr</code> is its low
+            condition-code byte. Only <code>move</code>, <code>andi</code>, <code>ori</code> and
+            <code>eori</code> accept these operands.
+        </div>
+        <div class="example">move.w sr,d0</div>
+        <div class="row gap-03 wrap">
+            <DocsOperand name="sr" content="Status register" />
+            <DocsOperand name="ccr" content="Condition-code register" />
         </div>
     </div>
 </div>

@@ -9,23 +9,26 @@
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
     import { scale } from 'svelte/transition'
     import FileImporter from '$cmp/shared/fileImporter/FileImporter.svelte'
-    import { createShareLink, textDownloader } from '$lib/utils'
+    import { blobDownloader, createShareLink, ShareTooLargeError } from '$lib/utils'
     import FaUpload from '~icons/fa-solid/upload'
     import { toast } from '$stores/toastStore'
-    import { makeProjectFromExternal, projectContentEquals } from '$lib/Project.svelte'
+    import {
+        makeProjectFromExternal,
+        projectContentEquals,
+        type ExternalImport
+    } from '$lib/Project.svelte'
     import { Prompt } from '$stores/promptStore.svelte'
     import { goto } from '$app/navigation'
     import Page from '$cmp/shared/layout/Page.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
-    import { LANGUAGE_EXTENSIONS } from '$lib/Config'
     import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
     import { resolve } from '$app/paths'
+    import { looksLikeZip, makeProjectFromArchive, projectDownload } from '$lib/projectArchive'
 
     let hasFileHandleSupport = false
 
-    async function importFromText(text: string) {
+    async function importProject({ project, notice }: ExternalImport) {
         try {
-            const { project, notice } = makeProjectFromExternal(text)
             if (notice) toast.warn(notice, 8000)
             const existing = await ProjectStore.getProject(project.id)
             if (existing && !projectContentEquals(existing.toObject(), project.toObject())) {
@@ -40,7 +43,7 @@
                     toast.success('Cancelled import')
                     return undefined
                 }
-                ProjectStore.save(project)
+                await ProjectStore.save(project)
                 toast.logPill('Overriden project!')
                 return project
             } else if (existing) {
@@ -59,23 +62,44 @@
         return undefined
     }
 
+    async function importFromData(data: ArrayBuffer, fileName: string) {
+        try {
+            const bytes = new Uint8Array(data)
+            const archiveName = /\.(?:asmproj|zip)$/i.test(fileName)
+            const imported =
+                looksLikeZip(bytes) || archiveName
+                    ? makeProjectFromArchive(bytes)
+                    : makeProjectFromExternal(new TextDecoder().decode(bytes))
+            return await importProject(imported)
+        } catch (e) {
+            console.error(e)
+            toast.error(e instanceof Error ? e.message : 'Failed to import project!')
+            return undefined
+        }
+    }
+
     async function importFromFileHandle(fileHandles: FileSystemFileHandle[]) {
         for (const fileHandle of fileHandles) {
             const blob = await fileHandle.getFile()
             // @ts-ignore -- File omits the nonstandard handle retained by the importer
             blob.handle = fileHandle
-            const text = await blob.text()
-            const importedProject = await importFromText(text)
+            const data = await blob.arrayBuffer()
+            const importedProject = await importFromData(data, blob.name)
             if (!importedProject) continue
             const id = importedProject.id
-            ProjectStore.setFileHandle(id, fileHandle)
-            const proj = await ProjectStore.getProject(id)
-            if (!proj) continue
-            ProjectStore.save(proj) //saves the new metadata to the file
+            ProjectStore.setFileHandle(
+                id,
+                fileHandle,
+                looksLikeZip(new Uint8Array(data)) ? 'archive' : 'legacy'
+            )
+            //The imported instance, not a re-read by id: the store's array may not have reloaded
+            //yet, and writing back a stale row reverted the import it had just applied.
+            await ProjectStore.save(importedProject) //saves the new metadata to the file
         }
     }
 
     onMount(() => {
+        hasFileHandleSupport = 'showOpenFilePicker' in window
         async function run() {
             await ProjectStore.load()
             try {
@@ -87,11 +111,15 @@
                             try {
                                 const blob = await file.getFile()
                                 blob.handle = file
-                                const text = await blob.text()
-                                const importedProject = await importFromText(text)
+                                const data = await blob.arrayBuffer()
+                                const importedProject = await importFromData(data, blob.name)
                                 if (!importedProject) continue
                                 lastId = importedProject.id
-                                ProjectStore.setFileHandle(lastId, file)
+                                ProjectStore.setFileHandle(
+                                    lastId,
+                                    file,
+                                    looksLikeZip(new Uint8Array(data)) ? 'archive' : 'legacy'
+                                )
                                 const proj = await ProjectStore.getProject(lastId)
                                 if (!proj) continue
                                 ProjectStore.save(proj) //saves the new metadata to the file
@@ -131,7 +159,7 @@
 </svelte:head>
 
 <DefaultNavbar />
-<Page hasNavbar style="padding-top: 2rem">
+<Page hasNavbar>
     <div class="project-display">
         <div class="content">
             <div class="top-row">
@@ -162,9 +190,12 @@
                     {:else}
                         <FileImporter
                             on:import={(e) => {
-                                importFromText(e.detail.data as string)
+                                if (e.detail.data instanceof ArrayBuffer) {
+                                    void importFromData(e.detail.data, e.detail.file.name)
+                                }
                             }}
-                            as="text"
+                            as="buffer"
+                            accept=".asmproj,.zip,text/*,.s68k,.asm,.x68,.mips,.riscv,.z80"
                         >
                             <Button cssVar="secondary">
                                 <Icon style="margin-right: 0.4rem" size={1}>
@@ -197,15 +228,45 @@
                         <ProjectCard
                             {project}
                             on:share={async (e) => {
-                                const link = createShareLink(e.detail)
+                                let link: string
+                                try {
+                                    link = createShareLink(e.detail)
+                                } catch (error) {
+                                    console.error(error)
+                                    toast.error(
+                                        error instanceof ShareTooLargeError
+                                            ? 'This Project is too big to share as a link. Download the .asmproj archive instead.'
+                                            : 'Could not create a share link for this Project',
+                                        10000
+                                    )
+                                    return
+                                }
                                 await navigator.clipboard.writeText(link)
                                 toast.logPill('Copied to clipboard')
                             }}
                             on:download={(e) => {
-                                textDownloader(
-                                    e.detail.toExternal(),
-                                    `${(e.detail.name || 'Untitled project').split(' ').join('_')}.${LANGUAGE_EXTENSIONS[e.detail.language]}`
-                                )
+                                //Whichever form loses nothing: a single-File Project keeps its
+                                //name, description, Testcases, Settings and display in the
+                                //commented metadata block a source file carries, and everything
+                                //else needs the archive.
+                                try {
+                                    const download = projectDownload(e.detail)
+                                    const contents =
+                                        typeof download.contents === 'string'
+                                            ? download.contents
+                                            : new Uint8Array(download.contents).buffer
+                                    blobDownloader(
+                                        new Blob([contents], { type: download.mimeType }),
+                                        download.fileName
+                                    )
+                                } catch (error) {
+                                    console.error(error)
+                                    toast.error(
+                                        error instanceof Error
+                                            ? error.message
+                                            : 'Failed to export project!'
+                                    )
+                                }
                             }}
                         />
                     </div>
@@ -224,6 +285,7 @@
 <style lang="scss">
     .top-row {
         display: flex;
+        margin-top: 2rem;
         justify-content: space-between;
         align-items: center;
         margin-bottom: 2rem;
@@ -277,7 +339,7 @@
 
     @media screen and (max-width: 650px) {
         .top-row {
-            margin-top: 1rem;
+            margin-top: 0.5rem;
             margin-bottom: 1rem;
             flex-direction: column;
             align-items: unset;

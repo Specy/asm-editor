@@ -2,12 +2,8 @@ Two numbers sit in registers, and the program leaves the larger of them in `$t2`
 between them in `$t4`. Both answers come out of the same pair of instructions, one that works a
 condition out into a register and a branch that reads it.
 
-The two programs before this one ran every instruction they had, top to bottom. This is the first
-one where some instructions are skipped, and stepping through it is how you watch which ones.
-
-**You need to know:** the "Branch on compare" lecture and the "Comparing without flags" lecture.
-What is new here is that a branch chooses between two pieces of code, so the piece that runs first
-has to jump over the one that follows it.
+This is the first program here where some instructions are skipped, which makes it the first one
+worth stepping through slowly: you get to watch which lines the `pc` jumps over.
 
 ```mips|playground|allow-open
 .text
@@ -29,20 +25,19 @@ done:
 positive:
 ```
 
-`slt $t3, $t0, $t1` writes 1 into `$t3` when `$t0` is less than `$t1` and 0 when it is not, which is
-C's `t3 = (a < b)`. There is no flags register to leave the answer in, so it goes into a register
-you named, and `beqz $t3, a_is_bigger` under it branches when that register came out 0. The M68K
-writes the same two lines as `cmp.l d1, d0` and `bge`, with the answer in the condition codes and
-nothing naming where it went.
+`slt $t3, $t0, $t1` asks whether `$t0` is less than `$t1` and writes the answer, a 1 or a 0, into
+`$t3`. It is an ordinary instruction with an ordinary destination, so you can see where the answer
+went and read it whenever you like. `beqz $t3, a_is_bigger` on the next line is what acts on it, and
+it jumps when the answer was 0.
 
-The `j done` is the whole difference between the two halves. An `if` with an `else` has two pieces
-of code and only one of them may run, so the first one ends by jumping over the second; leave the
-`j` out and the program falls through into `a_is_bigger` and overwrites the answer it just wrote. An
-`if` with no `else`, like the second `sub` below it, has nothing to jump over.
+The `j done` is what separates the two halves. Only one of them may run, so the first one has to
+jump over the second. Delete that line and run it: the program does `move $t2, $t1`, walks straight
+into `a_is_bigger`, and overwrites the answer it just worked out. An `if` with no `else`, like the
+second `sub` below it, has nothing to jump over and needs no such line.
 
-`$t2` comes out at `00000040`, which is 64, and `$t4` at `0000001B`, which is 27. `bgez` reads the
-register the `sub` above it wrote, so no second comparison is needed: the subtraction that computed
-the difference has already put it somewhere a branch can look at.
+`bgez` further down reads the register the `sub` above it wrote, which saves a comparison
+altogether: the subtraction that worked out the difference has already left its sign in a register,
+and `bgez` looks straight at it.
 
 `sub $t4, $zero, $t4` is how a sign is flipped, since 0 minus a number is its negative.
 `neg $t4, $t4` is the assembler's name for that same instruction.
@@ -51,5 +46,6 @@ the difference has already put it somewhere a branch can look at.
 below zero. Writing `sltu` there would read both registers as unsigned, and a negative `$t0` would
 then be a very large number.
 
-Try changing `li $t0, 37` to `li $t0, 99`. `$t2` comes out at 99 and `$t4` at 35, and the two
-branches that were not taken are now the ones that are.
+Change `li $t0, 37` to `li $t0, 99` and step through it again. The answers become 99 and 35, and
+the two branches that were not taken the first time are the ones that are taken now, which is easier
+to follow on the `pc` than to read off the page.

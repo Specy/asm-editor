@@ -1,18 +1,18 @@
-The M68K reaches its screen through a trap: every drawing operation is a task number and a request.
-RISC-V has no such thing. Its screen is **memory**, its keyboard is **four addresses**, and the
-instructions that reach both are `lw` and `sw`. Nothing is asked of the simulator at all.
+Printing went through `ecall`, which is a request: your program asks, and something else does the
+work. The screen and the keyboard are not like that. The screen **is memory**, the keyboard is
+**four addresses**, and the only instructions involved are `lw` and `sw`. Nothing is asked of
+anybody.
 
-Both devices are RARS's own tools, the **bitmap display** and the **keyboard and display simulator**,
-which are ports of the MARS tools the MIPS course uses, with the same parameters and the same
-register layout. So a program written for RARS runs here unchanged, and the MIPS version of this page
-describes the same two devices.
+That arrangement has a name, **memory mapped I/O**, and it is how most real hardware is reached. A
+device is wired up so that it answers to certain addresses, and from the processor's side talking to
+it is indistinguishable from reading and writing memory. The wires decide which.
 
 ## One word is one pixel
 
 The bitmap display is a grid of words somewhere in memory. The **low 24 bits** of each word are its
 colour: red in bits 23 to 16, green in 15 to 8, blue in 7 to 0, and the top byte is ignored. So
 `0x00FF0000` is red, `0x0000FF00` is green, `0x000000FF` is blue and `0x00FFFFFF` is white, which is
-the `#RRGGBB` order you write in CSS with a `0x` on the front.
+the same `#RRGGBB` order a web page is written in, with a `0x` on the front.
 
 The words run **left to right and then top to bottom**, so the pixel below a word is one row of words
 further on. Four parameters say how big the grid is and where it starts, and a fifth says how large
@@ -25,7 +25,7 @@ each word is drawn:
 
 Press Run on this one and watch the Screen panel next to it.
 
-```riscv|playground|screen|memory
+```riscv|playground|open-screen|memory
 # @screen unit=16 width=256 height=256 base=display
 .data
 display: .space 1024        # 16 * 16 words, four bytes each
@@ -51,8 +51,8 @@ covers: the screen shows whatever those words hold, so a program that writes pas
 writing over something else, and one that reserves too little shows whatever is next in the data
 section.
 
-Try changing `sw t1, 64(t0)` to `sw t1, 68(t0)` and running again: the blue pixel moves one to the
-right, because one word is one pixel and four bytes.
+Move that third store four bytes along, `68(t0)` instead of `64(t0)`, and the blue pixel moves one
+place to the right rather than down. One word is one pixel, and one pixel is four bytes.
 
 ## The @screen line
 
@@ -69,8 +69,8 @@ with a comment line naming `@screen`. Every Build reads it, before the first ins
 - **`base`** is **a label your program defines**, which is the point of it, since the program then
   never has to know the address. An address such as `0x10010000` works too.
 
-It is a comment, so the same file still assembles in RARS, where you set the five values in the
-tool's window by hand. Anything the line gets wrong is a **warning** on that line and never an error:
+It is written as a comment, so it costs nothing and any assembler will ignore it. Anything the line
+gets wrong is a **warning** on that line and never an error:
 a size that is not on the list is replaced by the nearest one that is, and a label that does not
 exist leaves the base address alone. What the directive leaves out keeps the value it had.
 
@@ -85,7 +85,7 @@ base + (y * columns + x) * 4
 which is the two dimensional array of "Arrays and strings" with an element size of 4. When the number
 of columns is a power of two, both multiplications are shifts.
 
-```riscv|playground|screen|memory
+```riscv|playground|open-screen|memory
 # @screen unit=16 width=256 height=256 base=display
 .data
 display: .space 1024
@@ -119,12 +119,10 @@ A blue and green ramp over the whole grid, 256 pixels drawn by two nested loops.
 the `y * 16`, and `slli t2, t2, 2` afterwards is the four bytes; the two could be one shift of 6, and
 they are written apart so the formula is readable.
 
-`li s3, 16` is outside both loops because every RISC-V branch compares two registers, so the bound of
-a loop lives in one of its own.
-
-`slli t0, s2, 4` puts `x`, which runs 0 to 15, into bits 4 to 7 of the colour, which is the top half
-of the blue byte. Try changing it to `slli t0, s2, 20` and running again: `x` lands in the red byte
-instead, and the ramp runs the other way across the colours.
+`slli t0, s2, 4` puts `x`, which runs from 0 to 15, into bits 4 to 7 of the colour, which is the top
+half of the blue byte. Shift it by 20 instead and the same numbers land in the red byte, and the
+ramp runs across a different pair of colours: the shift is the only thing that decides which part of
+the colour a value ends up in.
 
 ## An animation
 
@@ -134,7 +132,7 @@ Playground's budget is spent on drawing instead of on counting.
 
 This one runs until you press Stop.
 
-```riscv|playground|screen
+```riscv|playground|open-screen
 # @screen unit=16 width=256 height=256 base=display
 .eqv SIDE, 16
 .eqv CELLS, 256
@@ -185,9 +183,10 @@ flip:
 { "runFor": 200000 }
 ```
 
-Take the `ecall` out and the dot moves as fast as the instruction budget allows and then the program
-stops, which is not the same thing as fast. Try changing `li a0, 50` to `li a0, 200` and watching it
-slow down.
+Take that `ecall` out and the dot does not run faster in any useful sense: it spends the whole
+instruction budget in a couple of seconds and the program stops. The wait is what turns a budget of
+instructions into a picture that moves at a speed you chose, and raising it from 50 to 200 slows the
+dot to a quarter of the pace.
 
 The whole grid is repainted every frame, which is 256 stores, and then one more for the dot. Erasing
 only the pixel the dot was at last time would be two stores a frame, and that is what a program with
@@ -243,7 +242,7 @@ takes the character and makes room for the next one. That loop is **polling**.
 **Click the Screen panel before you type**: the screen only gets the keyboard when it has the focus,
 and a ring around it says so while it does.
 
-```riscv|playground|screen|console|no-registers
+```riscv|playground|open-screen|console|no-registers
 .eqv MMIO, 0xffff0000
 .data
 banner: .asciz "Click the screen, then type. q ends the program.\n"
@@ -304,14 +303,13 @@ receiver control register at 0xffff0000. Poll the Ready bit (bit 0) instead.
 The next lecture is about the interrupt and exception machinery that message is refusing, and about
 the part of it this editor does run.
 
-## What this editor does differently
+## What is particular to this editor
 
-- The display is always there, as a panel, instead of a tool you connect to a program before running
-  it.
+- The display is always there as a panel, rather than a tool you have to connect to the program
+  first.
 - Service 30 counts from the start of the run, and a testcase runs on a virtual clock.
-- There is no mouse. Neither RARS nor MARS has one, and the M68K course's mouse is a trap task with
-  no equivalent here.
-- A testcase cannot type: an automated run leaves the receiver empty, so the keyboard programs on
+- The only pointing device is the two devices above: there is nothing that reports the mouse.
+- A testcase cannot type, so an automated run leaves the receiver empty. The keyboard programs on
   this page are yours to try by hand and cannot be checked by a test.
 
 The five display parameters, the four registers and the `@screen` settings are all on the
@@ -323,7 +321,7 @@ The grid is 16 by 16 words at `display`. Paint the pixel at column 5, row 3 whit
 `0x00FFFFFF`, working the address out from the two coordinates instead of counting the bytes
 yourself. Row 3 column 5 is word `3 * 16 + 5`, which is 53, so the store lands at `0x10010000` plus 212.
 
-```riscv|playground|screen|memory|exercise
+```riscv|playground|open-screen|memory|exercise
 # @screen unit=16 width=256 height=256 base=display
 .eqv SIDE, 16
 .data
@@ -348,7 +346,7 @@ main:
 <details>
 <summary>Show solution</summary>
 
-```riscv|playground|screen|memory|solution
+```riscv|playground|open-screen|memory|solution
 # @screen unit=16 width=256 height=256 base=display
 .eqv SIDE, 16
 .data

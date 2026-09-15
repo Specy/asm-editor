@@ -61,8 +61,8 @@ Build this one, type `9000` into the memory panel's address box, and press Run.
 ## Little endian
 
 Look at those first two bytes again. The number was `0x1234` and memory holds `34 12`: **the low byte
-goes at the lower address**. That is little endian, the same order MIPS and RISC-V use and the
-opposite of the M68K's.
+goes at the lower address**. That order has a name, **little endian**, and it is wired into the CPU;
+every 16 bit load and store on this machine uses it.
 
 It is not a decision the program can change, and it decides what the two halves of an address mean.
 `ld a, (0x9001)` reads the byte after the `34`, which is `12`, the _high_ byte of the number stored
@@ -84,9 +84,9 @@ value:  .ds 2
 trade values.
 
 There is **no alignment rule**. A 16 bit value can start at an odd address, and `ld hl, (0x9001)`
-reads two bytes from there with no penalty and no error. The M68K stops a program that reads a word
-from an odd address, and MIPS and RISC-V do the same for a misaligned word; the Z80 was designed
-around 8 bit memory and simply reads two bytes in a row.
+reads two bytes from there with no penalty and no error. The Z80 was designed around memory that
+hands over one byte at a time, so a 16 bit load is just two of those in a row and it does not care
+where they start. You can pack 16 bit values as tightly as you like.
 
 ## Your program is in there too
 
@@ -102,8 +102,10 @@ start:
     halt
 ```
 
-The panel shows `3A 00 80 47 76`. `3A` is the opcode for `ld a, (nnnn)`, the `00 80` after it is the
-address `0x8000` written little endian, `47` is `ld b, a` and `76` is `halt`. Now press Run: `a` and
+The panel shows `3A 00 80 47 76`. The first byte of any instruction is its **opcode**, the number
+that says which instruction it is, and `3A` is the opcode for "load `a` from an address". The
+`00 80` after it is that address, `0x8000`, written little endian. `47` is the whole of `ld b, a`
+and `76` is the whole of `halt`. Now press Run: `a` and
 `b` both come out at `3A`, because the program read its own first byte and there is nothing about it
 that says "instruction" rather than "data".
 
@@ -113,17 +115,14 @@ says why a program that runs off the end of its own code keeps going: the bytes 
 This editor stops the run at the end of your code instead, which is the "running off the end"
 termination from the first lecture.
 
-Try changing `ld a, (start)` to `ld a, (start + 3)` and running again. `a` comes out at `47`, the
-`ld b, a` that follows.
-
 ## Untouched memory
 
-Every byte this editor has not written reads `00`. On the M68K untouched memory reads `FF`, so a
-program moved between the two courses sees a different blank, and neither of them is a promise: a
-real machine's RAM holds whatever the last program left there, and reading a byte you never wrote is
-a bug in either case.
+Every byte this editor has not written reads `00`. Treat that as a convenience of the editor and not
+as a fact about the machine. Real RAM comes up holding whatever pattern the electronics happened to
+settle into, and on a machine that has been running a while it holds whatever the last program left
+there. Reading a byte you never wrote is a bug; it just happens to be a quiet one here.
 
-## Your turn
+## Two reads and writes to try
 
 Write the 16 bit number `0xBEEF` to address `0x9000`, then read the byte at `0x9001` back into `a`.
 Little endian decides what that byte is.

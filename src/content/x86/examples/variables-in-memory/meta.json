@@ -1,0 +1,6 @@
+{
+    "name": "Variables in memory and constants",
+    "description": "A variable in .data, a constant made with equ and a slot in .bss, and the difference between a name the assembler replaces and eight bytes you can write to.",
+    "order": 1,
+    "topic": "variables-in-memory"
+}

@@ -2,15 +2,9 @@ Two unit conversions, one in each direction. The first turns 365 days into 8760 
 turns 1000 seconds into 16 minutes and 40 seconds, which answers both questions at once because a
 division produces the remainder on its way to the quotient.
 
-The M68K does each of these in one instruction, `mulu` and `divu`, and so do MIPS and RISC-V. **The
-Z80 has neither.** There is no multiply instruction and no divide instruction anywhere in the set,
-so both of them are loops you write, and this is the rung of the ladder where the machine costs you
-the most.
-
-**You need to know:** the "8-bit and 16-bit arithmetic, logic and bits" lecture and the "Loops and
-djnz" lecture. What is new here is that both algorithms are the long multiplication and long
-division you were taught at school, done in base 2, where a digit is either 0 or 1 and multiplying
-by the base is a shift.
+**There is no multiply instruction and no divide instruction anywhere in the Z80's set.** Both of
+these conversions are loops you write yourself, and this is the rung of the ladder where that costs
+you the most.
 
 ```z80|playground|no-flags|allow-open
     .org 0x8000
@@ -50,7 +44,7 @@ The multiplication looks at the multiplier one bit at a time from the bottom up.
 lowest bit of 24 into `C`, `jr nc` skips the addition when that bit was a 0, and `sla e` with `rl d`
 under it doubles the multiplicand so that the next bit up is worth twice as much. Eight passes,
 whatever the numbers, and the product is kept in `hl` because 365 times 24 needs a great deal more
-than the eight bits `a` has. `de` comes out at `2238`, which is 8760.
+than the eight bits `a` has.
 
 `sla e` and `rl d` are the 16 bit shift from the arithmetic lecture: `sla e` puts the top bit of `e`
 into `C` and `rl d` brings it in at the bottom of `d`, so the two of them are one shift of the pair.
@@ -66,14 +60,15 @@ dividend leaves the top of it, which is why one register does both jobs and why 
 the bit it sets was shifted in as a 0 a moment earlier.
 
 `hl` comes out at `0010`, which is 16 minutes, and `a` at `28`, which is the 40 seconds left over.
-On the M68K those two answers arrive packed into one register and are pulled apart with a `swap`;
-here they are simply in the two registers the loop used, and the remainder is free.
+Both answers are simply sitting in the two registers the loop was already using, so the remainder
+costs nothing extra.
 
-The whole program is 134 instructions for two sums the other machines do in two. A multiplication by
-a **constant** is much cheaper, because you know the bits in advance: 24 is 16 plus 8, so four
+The whole program is 134 instructions for two sums. A multiplication by a **constant** is much
+cheaper, because you know the bits in advance: 24 is 16 plus 8, so four
 `add hl, hl`, a copy kept when the number has been doubled three times, and one `add hl, de` at the
 end would do it with no loop at all.
 
-Try changing `ld b, 8` to `ld b, 4`. The loop looks at only the bottom four bits of 24, which are
-`1000`, so `de` comes out at `0B68`, which is 2920: the multiplier became 8 and the bits above the
-fourth were never looked at.
+The `ld b, 8` is not decoration. Set it to 4 and the loop looks at only the bottom four bits of 24,
+which are `1000`, so it multiplies by 8 instead and `de` comes out at `0B68`, or 2920. There is no
+error and no warning: the bits above the fourth were simply never looked at, and one byte needs
+eight passes because it has eight bits.

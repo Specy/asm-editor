@@ -79,7 +79,7 @@ export const mipsInstructionEntries = [...mipsInstructionMap.entries()].sort(([a
 
 export const mipsInstructionNames = mipsInstructionEntries.map(([name]) => name)
 
-export function formatAggregatedArgs(ins: MIPSInstruction[]): string {
+export function mipsVariantOperands(variant: MIPSInstruction): string[] {
     const isReg = (s: string) => s === '$reg' || s === '$freg' || s === 'regnum'
 
     function getLabel(type: string): string {
@@ -87,45 +87,45 @@ export function formatAggregatedArgs(ins: MIPSInstruction[]): string {
         return hasOwnKey(MIPSAddressingModes, type) ? MIPSAddressingModes[type].label : type
     }
 
-    function parseOperands(variant: MIPSInstruction): string[] {
-        const tokens = variant.args.map((a) => a[0])
-        if (tokens.length === 0) return []
+    const tokens = variant.args.map((a) => a[0])
+    if (tokens.length === 0) return []
 
-        const operands: string[] = []
-        let parts: string[] = []
+    const operands: string[] = []
+    let parts: string[] = []
 
-        for (let i = 0; i < tokens.length; i++) {
-            const t = tokens[i]
-            const label = getLabel(t.type)
+    for (let i = 0; i < tokens.length; i++) {
+        const t = tokens[i]
+        const label = getLabel(t.type)
 
-            if (t.type === 'LEFT_PAREN') {
-                const last = parts[parts.length - 1]
-                if (parts.length > 0 && !isReg(last)) {
-                    parts.push('(')
-                } else {
-                    if (parts.length > 0) operands.push(parts.join(''))
-                    parts = ['(']
-                }
-            } else if (t.type === 'RIGHT_PAREN') {
-                parts.push(')')
+        if (t.type === 'LEFT_PAREN') {
+            const last = parts[parts.length - 1]
+            if (parts.length > 0 && !isReg(last)) {
+                parts.push('(')
+            } else {
+                if (parts.length > 0) operands.push(parts.join(''))
+                parts = ['(']
+            }
+        } else if (t.type === 'RIGHT_PAREN') {
+            parts.push(')')
+            operands.push(parts.join(''))
+            parts = []
+        } else if (t.type === 'PLUS') {
+            parts.push('+')
+        } else {
+            const prevType = i > 0 ? tokens[i - 1].type : null
+            if (parts.length > 0 && prevType !== 'LEFT_PAREN' && prevType !== 'PLUS') {
                 operands.push(parts.join(''))
                 parts = []
-            } else if (t.type === 'PLUS') {
-                parts.push('+')
-            } else {
-                const prevType = i > 0 ? tokens[i - 1].type : null
-                if (parts.length > 0 && prevType !== 'LEFT_PAREN' && prevType !== 'PLUS') {
-                    operands.push(parts.join(''))
-                    parts = []
-                }
-                parts.push(label)
             }
+            parts.push(label)
         }
-        if (parts.length > 0) operands.push(parts.join(''))
-        return operands
     }
+    if (parts.length > 0) operands.push(parts.join(''))
+    return operands
+}
 
-    const allOps = ins.map(parseOperands)
+export function formatAggregatedArgs(ins: MIPSInstruction[]): string {
+    const allOps = ins.map(mipsVariantOperands)
     const maxLen = Math.max(...allOps.map((o) => o.length))
     const result: string[] = []
 
@@ -327,33 +327,87 @@ export const mipsDirectivesMap = {
         description:
             'Declares an **uninitialized data section**, typically used for reserving large blocks of memory.'
     },
-    org: {
-        name: 'org',
-        description:
-            'Sets the **location counter** to a specific address, controlling where subsequent data or code is placed.'
-    },
-    ltorg: {
-        name: 'ltorg',
-        description:
-            'Forces the assembler to place **literal pools** (constants) at the current location.'
-    },
     frame: {
-        name: '.frame',
+        //every other name here is written without the dot, which the page adds itself
+        name: 'frame',
         description:
-            "Defines a function's **stack frame structure**, including base register, stack size, and return register."
+            "Describes a function's **stack frame** for the debugger: base register, stack size and return register. MARS accepts it and does nothing with it, so that compiler output assembles unchanged."
     },
     ent: {
         name: 'ent',
-        description: 'Marks the **start of a function** for debugging or profiling purposes.'
+        description:
+            'Marks the **start of a function** for the debugger. MARS accepts it and does nothing with it, so that compiler output assembles unchanged.'
     },
     end: {
         name: 'end',
-        description: 'Marks the **end of an assembly file** or function.'
+        description:
+            'Marks the **end of a function** for the debugger. MARS accepts it and does nothing with it, so that compiler output assembles unchanged.'
     },
     local: {
         name: 'local',
         description:
-            'Declares a **symbol as local**, meaning it is only accessible within the current file.'
+            'Marks a symbol as **local to this file** for the linker. MARS accepts it and does nothing with it, so that compiler output assembles unchanged.'
+    },
+    section: {
+        name: 'section',
+        description:
+            'Switches to the named section. A read-only or zeroed section becomes part of the data segment here.\n\nExample:\n```mips\n.section .rodata\n```'
+    },
+    rdata: {
+        name: 'rdata',
+        description:
+            'Declares a section for **read-only initialized data**, such as string literals. Read-only data is not stored separately in this simulator, so it joins the data segment.'
+    },
+    sdata: {
+        name: 'sdata',
+        description: 'Alias for `.rdata`.'
+    },
+    sbss: {
+        name: 'sbss',
+        description: 'Alias for `.bss`.'
+    },
+    comm: {
+        name: 'comm',
+        description:
+            'Reserves bytes for an **uninitialized global variable**, the way a C compiler declares one. Takes a symbol, a size in bytes and an optional alignment, and leaves the current section unchanged.\n\nExample:\n```mips\n.comm total, 4, 4\n```'
+    },
+    lcomm: {
+        name: 'lcomm',
+        description:
+            'Like `.comm`, but for a symbol **local to this file**, as a C compiler declares an uninitialized `static` variable.'
+    },
+    zero: {
+        name: 'zero',
+        description: 'Reserves the given number of bytes, which read as zero. Alias for `.space`.'
+    },
+    p2align: {
+        name: 'p2align',
+        description: 'Alias for `.align`: aligns the next item on a 2^n byte boundary.'
+    },
+    balign: {
+        name: 'balign',
+        description:
+            'Aligns the next item on the given byte boundary, written **directly** rather than as a power of two.\n\nExample:\n```mips\n.balign 8\n```'
+    },
+    '2byte': {
+        name: '2byte',
+        description: 'Alias for `.half`.'
+    },
+    '4byte': {
+        name: '4byte',
+        description: 'Alias for `.word`.'
+    },
+    asciz: {
+        name: 'asciz',
+        description: 'Alias for `.asciiz`: stores a null-terminated string.'
+    },
+    string: {
+        name: 'string',
+        description: 'Alias for `.asciiz`: stores a null-terminated string.'
+    },
+    global: {
+        name: 'global',
+        description: 'Alias for `.globl`.'
     }
 } as const
 
@@ -900,3 +954,87 @@ export const mipsRegisters = {
             '**Return address**, automatically written by `jal` with the address of the instruction following the call. The subroutine returns by executing `jr $ra`. Functions that themselves call other subroutines must save `$ra` on the stack first, since `jal` would otherwise overwrite it.'
     }
 }
+
+export type MIPSRegisterDoc = {
+    name: string
+    /**
+     * What the page prints in the parenthesis after the name: the numbers behind it where the entry
+     * is one register or a run of them, and what the entry covers where it is a rule about the file
+     * rather than a register of its own. Left out where the name already carries the number, as the
+     * CP0 names do.
+     */
+    detail?: string
+    description: string
+}
+
+/**
+ * A register file beside the general purpose registers: the coprocessors the simulator shows on
+ * their own tabs. The registers are grouped by role, as the general ones above are, rather than
+ * listed one entry per number.
+ */
+export type MIPSRegisterFileDoc = {
+    /**
+     * The anchor of the section on the page, and the tab the registers panel shows the file
+     * under.
+     */
+    id: string
+    title: string
+    /** Markdown, shown once above the registers of the file. */
+    intro: string
+    registers: MIPSRegisterDoc[]
+}
+
+export const mipsRegisterFiles: MIPSRegisterFileDoc[] = [
+    {
+        id: 'fpu',
+        title: 'FPU (coprocessor 1)',
+        intro: 'Floating point numbers live in a coprocessor with registers and instructions of its own: `add.s` adds two single precision values the way `add` adds two integers, and no arithmetic instruction reads a register from each file. Crossing between them is a job of its own. `mtc1` and `mfc1` name one general register and one floating point register and move the **bits** between them without converting anything, while `cvt.s.w` and `cvt.w.s` convert between an integer and a float once the value is inside the coprocessor.\n\nThis simulator has no `li.s` or `li.d` pseudo-instruction. A constant is either written in the data section as a `.float` or a `.double` and loaded with `l.s` or `l.d`, or assembled as a bit pattern in a general register and moved across with `mtc1`.',
+        registers: [
+            {
+                name: '$f0 - $f31',
+                detail: '32 bits each',
+                description:
+                    'The floating point registers. Each one holds a single precision value, which is what the `.s` instructions read and write. By convention `$f12` and `$f14` pass the first two floating point arguments to a subroutine and `$f0` returns the result, and the syscalls that read and print floats use the same registers.'
+            },
+            {
+                name: 'Double precision pairs',
+                detail: '$f0, $f2, $f4 … $f30',
+                description:
+                    'A double precision value is 64 bits, so it occupies a **pair** of registers: the even one holds the low word and the odd one above it holds the high word. Only the even register is ever named, so `l.d $f4, value` fills both `$f4` and `$f5`, and `add.d $f0, $f2, $f4` reads and writes three pairs. Naming an odd register in a `.d` instruction is an error. This is also why the double format of the registers panel leaves the odd rows blank.'
+            },
+            {
+                name: 'Condition flags',
+                detail: '0 - 7',
+                description:
+                    'A floating point comparison writes no register. It writes one of eight condition flags, and `bc1t` and `bc1f` branch on one of them, which is how a float comparison reaches a branch. The two operand form `c.lt.s $f0, $f2` writes flag **0**, the flag that `bc1t label` reads when it is given no number; the three operand form `c.lt.s 3, $f0, $f2` writes flag 3, and `bc1t 3, label` is the branch that reads it. Eight flags mean eight comparisons can be kept apart at once. The registers panel shows them in the row above the registers of the file.'
+            }
+        ]
+    },
+    {
+        id: 'cp0',
+        title: 'CP0 (coprocessor 0)',
+        intro: 'Coprocessor 0 is the part of the processor that deals with exceptions: a bad memory address, an overflow on `add`, a `break`. The machine writes these registers itself, at the moment it stops what the program was doing and jumps to the handler, which is whatever the program assembled at the exception vector with `.ktext 0x80000180`. A program with no handler there stops instead, with the message the simulator prints. The handler reads these registers with `mfc0`, as in `mfc0 $k0, $13`, to find out what happened and where, and writes them back with `mtc0`, as in `mtc0 $k0, $14`, which is how it steps the return address past the instruction that faulted before `eret` returns to it.\n\nThis simulator implements the four registers below, and it raises exceptions only: nothing in it delivers an interrupt, so the interrupt bits are values to read and write rather than something that changes what runs.',
+        registers: [
+            {
+                name: '$8 (vaddr)',
+                description:
+                    'The address that caused the exception, when it was a memory one: the address the `lw` or `sw` failed on. It keeps whatever it held after any other kind of exception, so it is only worth reading once the cause says the exception was an address error.'
+            },
+            {
+                name: '$12 (status)',
+                description:
+                    'The interrupt mask and the enable bits. It starts at `0x0000FF11`: every one of the eight interrupt levels unmasked, user mode, and interrupts enabled. The bit this simulator writes itself is bit 1, the exception level, which taking an exception sets and `eret` clears on the way back, so the register reads `0x0000FF13` inside a handler. A handler is free to change the mask and the enable bit with `mtc0`, as it would on a real processor, but since nothing here delivers an interrupt the change is only visible in the register.'
+            },
+            {
+                name: '$13 (cause)',
+                description:
+                    'Why the exception happened. Bits 2 to 6 hold the exception code, the number behind the message the simulator prints, so an address error on a load reads as `0x10`, which is code 4 shifted up by two. The bits above them report pending interrupts on a real processor and stay zero here, because nothing in this simulator raises one. A handler that serves several causes reads this register first and branches on the code.'
+            },
+            {
+                name: '$14 (epc)',
+                description:
+                    'The address of the instruction that was interrupted. A handler that means to let the program continue returns to it, normally after adding 4 so that the instruction which trapped is not run a second time.'
+            }
+        ]
+    }
+]

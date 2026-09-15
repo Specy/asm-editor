@@ -26,6 +26,9 @@
         <NavigationLinkButton href="/documentation/risc-v/syscall">
             <div>Syscalls</div>
         </NavigationLinkButton>
+        <NavigationLinkButton href="/documentation/risc-v/registers">
+            <div>Registers</div>
+        </NavigationLinkButton>
         <NavigationLinkButton href="/documentation/risc-v/screen">
             <div>Screen and I/O</div>
         </NavigationLinkButton>

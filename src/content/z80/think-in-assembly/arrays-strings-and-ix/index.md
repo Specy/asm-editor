@@ -1,21 +1,23 @@
 Seven registers hold seven bytes, and a program has more than seven bytes to keep. Everything else
-lives in the 64 KB, and the instructions that reach it are the ones from the addressing lecture. Let's
-now use them on the three shapes that turn up in every program: an array, a string and a record.
+lives in the 64 KB, and almost all of it is arranged in one of three shapes: a run of values of the
+same size, a run of characters, or a small bundle of different things that belong together. This
+lecture is those three, and the code for each of them is shorter than you would expect.
 
 ## An array is a run of bytes
 
-In C an array is elements of the same size laid end to end, and `a[i]` is the address of `a[0]` plus
+An array is values of the same size laid end to end, and element number `i` is at the address of the
+first one plus
 `i` times the size of an element. Assembly has exactly that without the brackets: a pointer in `hl`,
 and `inc hl` to move it on.
 
 ```z80|playground|memory
     .org 0x8000
-    ld hl, numbers  ; p = numbers
+    ld hl, numbers  ; hl = the start of the array
     ld b, 6         ; six of them
     ld a, 1         ; v = 1
 loop:
-    ld (hl), a      ; *p = v
-    inc hl          ; p++
+    ld (hl), a      ; write v where hl points
+    inc hl          ; on to the next byte
     inc a           ; v++
     djnz loop
     halt
@@ -28,8 +30,10 @@ Type `9000` into the memory panel and press Run. The six bytes go from `00 00 00
 `01 02 03 04 05 06`, and `hl` ends at `9006`, one past the last one it wrote. They start at zero
 because `.ds` reserved the room and put nothing in it.
 
-`inc hl` is the `p++` of C written out. C hides the size of what a pointer points at and assembly does
-not, so a pointer into an array of bytes moves by 1 and a pointer into an array of words moves by 2.
+The `inc hl` is where the size of an element lives, and it is entirely your responsibility. Nothing
+in `(hl)` knows how wide the thing it just read was. An array of bytes steps by 1; an array of 16 bit
+words steps by 2, which is two `inc hl`. Get it wrong and the walk reads the second half of one
+element and the first half of the next, and nothing complains.
 
 ## Indexing by a register
 
@@ -66,14 +70,12 @@ numbers: .db 10, 20, 30, 40
 words:   .dw 100, 200, 300, 400
 ```
 
-`a` comes out at `1E`, which is 30, and `bc` at `012C`, which is 300. Four instructions of address
+That is four instructions of address
 arithmetic for one read, which is why a program that touches every element walks a pointer instead,
 and only computes an address when it has to jump straight to one.
 
 The two loads at the end are the little endian order from the memory lecture: the low byte is the one
 at the lower address, so it goes into `c`.
-
-Try changing the second `ld a, 2` to `ld a, 3` and `bc` comes out at `0190`, which is 400.
 
 ## Strings
 
@@ -98,19 +100,19 @@ of five characters takes six bytes.
 
 ```z80|playground|memory
     .org 0x8000
-    ld hl, text     ; p = text
+    ld hl, text     ; hl = the start of the string
 loop:
-    ld a, (hl)      ; c = *p
+    ld a, (hl)      ; the byte hl points at
     or a            ; is it the terminator?
     jr z, done
-    cp 'a'          ; if(c < 'a') leave it alone
+    cp 'a'          ; below 'a', so leave it alone
     jr c, next
-    cp 'z' + 1      ; if(c > 'z') leave it alone
+    cp 'z' + 1      ; above 'z', so leave it alone
     jr nc, next
     sub 32          ; 'a' - 'A' is 32, so this is toupper
-    ld (hl), a      ; *p = c
+    ld (hl), a      ; write it back where hl points
 next:
-    inc hl          ; p++
+    inc hl          ; on to the next byte
     jr loop
 done:
     halt
@@ -128,8 +130,10 @@ memory compares against 123, and `jr nc` is "greater or equal to 123", which is 
 
 ## Records, and ix
 
-A record is a fixed set of fields at fixed offsets, which is a `struct` in C. `ix` and the `(ix+dd)`
-mode were made for it: park `ix` at the start and reach each field by a name defined with `equ`.
+A **record** is a small bundle of values that belong together, laid out at fixed distances from a
+starting point: a player's x, then their y, then their lives, three bytes in a row. `ix` and the
+`(ix+dd)` mode were made for exactly this. Park `ix` at the start of the bundle and reach each field
+by a name defined with `equ`, and nothing in the code has to mention a raw offset.
 
 Stepping through an **array of records** means adding the record's size to `ix`, and since the
 displacement in the instruction is a constant, that addition is `add ix, de` with the size in `de`.
@@ -141,13 +145,13 @@ LIVES   equ 2
 SIZE    equ 3
 
     .org 0x8000
-    ld ix, players      ; p = &players[0]
+    ld ix, players      ; ix = the first record
     ld b, 3             ; three of them
     ld a, 0             ; total = 0
 loop:
-    add a, (ix+Y)       ; total = total + p->y
+    add a, (ix+Y)       ; add this record's y
     ld de, SIZE
-    add ix, de          ; p++, which here is three bytes
+    add ix, de          ; on to the next record, three bytes along
     djnz loop
     halt
 
@@ -197,7 +201,7 @@ when the two blocks **overlap and the destination is higher**. Copying `0x9000` 
 would read a byte the copy has already overwritten; going backwards reads each byte before anything
 lands on it.
 
-## Your turn
+## Two walks to write
 
 Find the largest of the six bytes at `numbers` and leave it in `a`. They are unsigned, the largest is
 90, and a `cp (hl)` next to a `jr` is the comparison.
@@ -222,12 +226,12 @@ numbers: .db 10, 90, 30, 40, 50, 60
 
 ```z80|playground|solution|memory
     .org 0x8000
-    ld hl, numbers  ; p = numbers
+    ld hl, numbers  ; hl = the start of the array
     ld b, 6
     ld a, 0         ; best = 0, since every byte is at least that
 loop:
-    cp (hl)         ; best - *p
-    jr nc, next     ; if(best >= *p) keep it
+    cp (hl)         ; best minus the byte hl points at
+    jr nc, next     ; not bigger, so keep the one we have
     ld a, (hl)      ; otherwise this one is the new best
 next:
     inc hl

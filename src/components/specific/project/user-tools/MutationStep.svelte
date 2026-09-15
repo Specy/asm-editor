@@ -17,11 +17,12 @@
         [RegisterSize.Byte]: 'Byte',
         [RegisterSize.Word]: 'Word',
         [RegisterSize.Long]: 'Long',
-        [RegisterSize.Double]: 'Double'
+        [RegisterSize.Double]: 'Double',
+        [RegisterSize.Quad]: 'Quad'
     } satisfies Record<RegisterSize, string>
     const dispatcher = createEventDispatcher<{
         undo: void
-        highlight: number
+        highlight: ExecutionStep
     }>()
 </script>
 
@@ -46,7 +47,7 @@
                     title="Go to line"
                     class="go-to-line"
                     onclick={() => {
-                        dispatcher('highlight', step.line)
+                        dispatcher('highlight', step)
                     }}
                 >
                     go

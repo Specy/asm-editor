@@ -2,6 +2,7 @@ import { SITE_URL } from '$lib/seo'
 import { M68KUncompoundedInstructions } from '$lib/languages/M68K/M68K-documentation'
 import { mipsInstructionMap } from '$lib/languages/MIPS/MIPS-documentation'
 import { riscvInstructionMap } from '$lib/languages/RISC-V/RISC-V-documentation'
+import { x86DocumentedNames } from '$lib/languages/X86/X86-documentation'
 import { z80InstructionMap } from '$lib/languages/Z80/Z80-documentation'
 
 export const prerender = true
@@ -37,9 +38,10 @@ function staticRoutes() {
  * themselves load, so the two cannot disagree: `$content/<course>/<module>/<lecture>`.
  */
 function courseRoutes() {
-    const courses = Object.keys(import.meta.glob('/src/content/*/meta.json')).map(
-        (path) => `/learn/courses/${path.split('/').at(-2)}`
-    )
+    const courses = Object.keys(import.meta.glob('/src/content/*/meta.json')).map((path) => {
+        const parts = path.split('/')
+        return `/learn/courses/${parts[parts.length - 2]}`
+    })
     const lectures = Object.keys(import.meta.glob('/src/content/*/*/*/meta.json')).map((path) => {
         const [, , , course, module_, lecture] = path.split('/')
         return `/learn/courses/${course}/${module_}/${lecture}`
@@ -50,7 +52,7 @@ function courseRoutes() {
 /** One entry per documented instruction, from the same maps the pages themselves load,
  *  so the sitemap cannot list a page that does not exist or miss one that does. */
 function instructionRoutes() {
-    return [
+    const instructions = [
         ['m68k', M68KUncompoundedInstructions],
         ['mips', mipsInstructionMap],
         ['risc-v', riscvInstructionMap],
@@ -60,6 +62,10 @@ function instructionRoutes() {
             (name) => `/documentation/${arch}/instruction/${name}`
         )
     )
+    // x86 has a page per documented instruction rather than per accepted mnemonic: the vector and
+    // system extensions are listed on the complete documentation page instead of getting one each.
+    const x86 = x86DocumentedNames.map((name) => `/documentation/x86/instruction/${name}`)
+    return [...instructions, ...x86]
 }
 
 function escapeXml(value: string) {

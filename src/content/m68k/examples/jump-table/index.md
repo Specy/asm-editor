@@ -2,13 +2,9 @@ A number picks which of four pieces of code runs. `d2` holds 2, the program read
 out of a table in memory and jumps to it, and the multiplication is what happens. Changing `d2`
 changes the answer without changing a comparison anywhere.
 
-The bigger of two numbers chose between two paths with a `cmp` and a branch. A chain of those works
-for three or four cases and gets slower with every one you add, since a value at the bottom of the
-chain is compared against everything above it first. A table is looked up once whatever the value is.
-
-**You need to know:** the "Compare and branch" lecture and the "Addressing modes" lecture. What is
-new here is a jump to an address the program worked out, `jmp (a1)` goes to whatever `a1` holds,
-which nothing in the source names.
+A chain of comparisons works for three or four cases and gets slower with every one you add, because
+a value that matches the last test has been compared against every test above it first. A table costs
+one lookup no matter how many cases there are.
 
 ```m68k|playground|no-flags|allow-open
     move.l #6, d0           ; a = 6
@@ -48,16 +44,15 @@ gave that label. Put the memory panel on `2000` and they read `00001020`, `00001
 `00001044`, which are the four addresses inside your own code. A label is nothing but an address, and
 this is what that sentence is for.
 
-The three instructions before the `jmp` are C's `table[op]`: multiply the index by the size of an
+The three instructions before the `jmp` are the table lookup: multiply the index by the size of an
 element with a shift, add it to the base with the indexed mode, and read the long there. What comes
-out is an address, so it goes into an address register. `jmp (a1)` then leaves without
-pushing anything, which is what makes this a `switch` and not four calls; `jsr (a1)` would make it
-four calls.
+out is an address, so it goes into an address register. `jmp (a1)` then leaves without pushing
+anything, so there is nothing to come back to; use `jsr (a1)` instead and each entry becomes a
+subroutine call that returns.
 
-`d4` comes out at `00000012`, which is 18, and `a1` at `00001038`, the address of `mul_op`. Each arm
-ends with `bra done` for the same reason the two halves of an `if` do: the arms are laid out one
-after another and nothing stops the program running into the next one.
+`a1` ends at `00001038`, which is the address of `mul_op`, a value that appears nowhere in the
+source. Each piece of code ends with `bra done` for the same reason the two halves of an `if` do:
+they are laid out one after another and nothing stops the program running into the next one.
 
-Try changing `move.l #2, d2` to `move.l #3, d2` and `d4` comes out at 2, which is 6 divided by 3.
-With `#0` it comes out at 9. Nothing else in the program moves, and there is no comparison anywhere
-in it to change.
+Change the index at the top and the answer changes with it, and there is not a single comparison
+anywhere in the program to adjust.

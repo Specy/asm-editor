@@ -1,7 +1,7 @@
-A program is instructions and the data they work on, and something has to say where each of them goes
-in memory. MIPS and RISC-V do it with sections, `.data` and `.text`. The M68K assembler here has no
-sections at all: it starts at an address, walks your source from top to bottom, and puts each
-instruction and each piece of data at the next free address. Four directives control that walk.
+A program is instructions and the data they work on, and something has to say where each of them
+goes in memory. The assembler does it in the simplest way there is: it starts at an address, walks
+your source from top to bottom, and drops each instruction and each piece of data at the next free
+address. Four directives steer that walk.
 
 ## org: where the next thing goes
 
@@ -42,8 +42,9 @@ an instruction name and fails to assemble. The one exception is `equ`, whose nam
 and takes no colon.
 
 A label is nothing but its address, so nothing distinguishes a label on an instruction from a label
-on a `dc`. `bra here` and `move.l here, d0` are both legal on the same label, and one of them makes
-sense.
+on a `dc`. Both `bra here` and `move.l here, d0` will assemble whichever kind `here` turned out to
+be, and only one of them will do anything sensible. Jump to a label on a `dc` and the machine will
+happily try to run your data.
 
 ## dc, ds and dcb: what is in memory
 
@@ -77,11 +78,11 @@ pointer:  dc.l greeting
 | `filler`   | `$200F` | `7E 7E 7E 7E` | four copies of `$7E`                  |
 | `pointer`  | `$2013` | `00 00 20 00` | the address of `greeting`, as a long  |
 
-`a0` comes out at `00002000`, the same address `pointer` holds. Two things in that table are worth
-reading twice. `counts` starts at `$2003`, an **odd** address, because `greeting` took three bytes
-and the assembler pads nothing, so `move.w counts, d0` on this layout is an address error. And
-`pointer` is a long whose value is an address, which is how you write the equivalent of `char *p =
-greeting;` in C.
+Two rows in that table are worth reading twice. `counts` starts at `$2003`, an **odd** address,
+because `greeting` took three bytes and the assembler pads nothing, so `move.w counts, d0` on this
+layout ends the run with an address error. And `pointer` holds `00002000`, which is not a value at
+all but the address of `greeting`: a long in memory whose contents are somewhere else in memory,
+which is how you store a place rather than a thing.
 
 ## equ: a name for a number
 
@@ -100,18 +101,19 @@ size    equ 4
 stored: dc.l 6
 ```
 
-`d0` and `d2` both come out at `00000006`, and they got there in completely different ways: `count`
-became a `#6` inside the instruction, while `stored` became the address `$2000` and the instruction
-went to memory. `d1` is `00000018`, which is 24, worked out by the assembler.
+`d0` and `d2` both end up at `00000006` and they got there by completely different routes. `count`
+became a literal `#6` inside the instruction, and by the time the program runs there is no `count`
+anywhere. `stored` became the address `$2000`, and the instruction went out to memory to fetch what
+was sitting there.
 
-Use `equ` for anything you would write as a `#define` in C: the length of an array, the size of an
-element, a trap task number, a screen width. Change the number in one place and every use of it
-changes with it. The one thing it will not do here is arithmetic on another `equ` with `*`, so write
-sizes as sums (`limit equ 640-40`) or repeat the number.
+Use `equ` for any number that appears in more than one place and means one thing: the length of an
+array, the size of an element, a task number, a screen width. Change it once at the top and every
+use changes with it. The one thing it will not do here is arithmetic on another `equ` with `*`, so
+write sizes as sums (`limit equ 640-40`) or repeat the number.
 
 ## The shape of a real program
 
-Put together, an M68K program in this editor looks like this: constants at the top, code from
+Put those four together and a program comes out in this shape: constants at the top, code from
 `$1000`, data under its own `org` after it.
 
 ```m68k|playground|memory|no-flags
@@ -138,9 +140,9 @@ and inconvenient every time you want to look at a fixed address in the memory pa
 
 ## Your turn
 
-Write a data block at `$3000` holding the three words 100, 200 and 300, followed by eight bytes of
-room, and leave the address of that room in `a0`. It comes out at `$3006`, since three words take
-six bytes.
+Build a data block at `$3000` holding the three words 100, 200 and 300, followed by eight bytes of
+empty room, and leave the address of that room in `a0`. Three words take six bytes, so the room
+begins at `$3006`.
 
 ```m68k|playground|memory|exercise
 * your code here
@@ -168,8 +170,9 @@ room:   ds.b 8
 
 </details>
 
-The second one wants two names, `rows` for 4 and `cols` for 5, and their product in `d0`, multiplied
-by the assembler rather than by the program.
+Now two names instead of data: `rows` for 4 and `cols` for 5, with their product in `d0`. The
+multiplication should happen while the program is being assembled, not while it runs, so there is no
+`mulu` anywhere in your answer.
 
 ```m68k|playground|exercise
 * your code here

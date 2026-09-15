@@ -13,12 +13,14 @@
     import FaPlus from '~icons/fa-solid/plus'
     import { Prompt } from '$stores/promptStore.svelte'
     import FaTrashAlt from '~icons/fa-solid/trash-alt'
+    import { resolve } from '$app/paths'
+    import type { ResolvedPathname } from '$app/types'
 
     let theme = ThemeStore.themeList
-    let previousPage: string = $state('/projects')
+    let previousPage: ResolvedPathname = $state(resolve('/projects', {}))
 
     afterNavigate(({ from }) => {
-        previousPage = from?.url.pathname ?? previousPage
+        previousPage = (from?.url.pathname as ResolvedPathname) ?? previousPage
     })
 </script>
 

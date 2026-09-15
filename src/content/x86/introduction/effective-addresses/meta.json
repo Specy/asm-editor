@@ -1,0 +1,6 @@
+{
+    "name": "Effective addresses",
+    "description": "The one addressing mode x86 has, base plus index times scale plus displacement, lea as arithmetic that leaves the flags alone, and the two reasons 64 bit code reaches its data by an offset from rip.",
+    "order": 5,
+    "topic": "addressing-modes"
+}

@@ -41,6 +41,15 @@ export function getM68kErrorMessage(error: unknown, lineNumber?: number): string
                 return `${prepend} Address error: Tried to read/write to an odd memory address "${error.value.address}" using non-byte operation with size "${error.value.size}" `
             }
             break
+        case 'ChkOutOfBounds':
+            if (isRecord(error.value)) {
+                return `${prepend} CHK exception: ${error.value.value} is outside 0..${error.value.bound}`
+            }
+            break
+        case 'OverflowException':
+            return `${prepend} Overflow exception: TRAPV ran while the overflow flag was set`
+        case 'IllegalInstruction':
+            return `${prepend} Illegal instruction exception`
     }
     if (typeof error.message === 'string') {
         if (error.message === 'unreachable') {

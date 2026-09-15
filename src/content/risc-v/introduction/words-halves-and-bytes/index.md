@@ -1,26 +1,18 @@
-Memory is bytes and a register is 32 bits, and neither of them holds a number in the sense C means
-it. What the bits mean is decided by the instruction that reads them, and on RISC-V that decision is
-made twice: once by which of a signed and unsigned pair you picked, and once by how much of the
-register the instruction touched.
+A register holds 32 bits. It does not hold a number, it holds bits, and what those bits mean is
+decided by the instruction that reads them rather than by anything stored alongside them. The same
+`FFFFFFF0` is -16 or 4294967280 depending entirely on which instruction you point at it, and both
+readings are correct. This page is about the two places you make that choice: which of a signed and
+unsigned pair of instructions you write, and how much of the register the instruction touches.
 
 ## Three ways of writing a number
 
-The assembler reads decimal, hexadecimal and a character literal. There is no `#` in front, since a
-`#` starts a comment.
+`100`, `0x64` and `'d'` are three spellings of the same number, the last one because ASCII gives the
+letter `d` the code `0x64`. There is **no binary literal**, so `0b1100100` is a build error, and
+negative numbers take a minus sign.
 
-| written | base                  |
-| ------- | --------------------- |
-| `100`   | decimal               |
-| `0x64`  | hexadecimal           |
-| `'d'`   | the ASCII code of `d` |
-
-All three of those are 100, and the last one because ASCII gives the letter `d` the code `0x64`.
-There is **no binary literal**: `0b1100100` is a build error. Negative numbers take a minus sign.
-
-The assembler also does no arithmetic. `li t0, 4*2` does not assemble, and neither does
-`lw t0, numbers+8`, which the MIPS assembler would have taken: a label in an operand is the label
-and nothing added to it, so eight bytes past `numbers` is an `la` and an offset your program works
-out.
+The assembler does no arithmetic for you. `li t0, 4*2` does not assemble, and neither does
+`lw t0, numbers+8`: a label in an operand is that label and nothing added to it. Eight bytes past
+`numbers` is an `la` and an offset that your program applies while it runs.
 
 ```riscv|playground
 .text
@@ -33,8 +25,8 @@ main:
     li t5, -2147483648  # and the smallest
 ```
 
-`t0`, `t1` and `t2` all come out at `00000064`. `t3` is `FFFFFFFF`, `t4` is `7FFFFFFF` and `t5` is
-`80000000`.
+`t0`, `t1` and `t2` all hold the same `00000064`: three ways of writing a number, one number in the
+register.
 
 ## Byte, half, word
 
@@ -44,10 +36,10 @@ The three sizes have names, and RISC-V uses them in the names of its instruction
 - a **half**, 2 bytes, 16 bits, which `lh`, `lhu` and `sh` move.
 - a **word**, 4 bytes, 32 bits, which `lw` and `sw` move, and which is the size of every register.
 
-A word here is 4 bytes. On the M68K a word is 2 and the 4 byte size is called a long, so the same
-word means two different things on the two machines, which is what to check whenever you read a
-manual for a machine you do not know. The 64 bit form of RISC-V adds a fourth size, the
-**doubleword**, and "Going 64-bit" is where it comes in.
+A word is 4 bytes here, which is worth fixing in your head now, because "word" is a word that
+different manuals use for different sizes. On this machine it is 32 bits, the same as a register.
+The 64 bit form of RISC-V adds a fourth size on top, the **doubleword**, and "Going 64-bit" is where
+that turns up.
 
 Everything else on RISC-V is 32 bits and says nothing about size, because there is no arithmetic on
 part of a register. `add`, `and`, `sll` and the rest read all 32 bits of their operands and write
@@ -60,7 +52,12 @@ above, because memory is where the smaller things live.
 register says which. The signed reading is **two's complement**: the top bit is the sign, and
 negating a number means flipping every bit and adding 1.
 
-Where the answer really is different, RISC-V gives you two instructions and you pick:
+Two of the rows below are shifts, so here is what one is: a **shift** slides every bit in a register
+a number of places left or right. Sliding right by one throws the lowest bit away and halves the
+number, and the question it raises, what comes in at the top, is exactly the signed and unsigned
+question again.
+
+Wherever the two readings would give different answers, there are two instructions and you pick:
 
 | signed | unsigned | what they differ about                     |
 | ------ | -------- | ------------------------------------------ |
@@ -86,9 +83,8 @@ main:
     srli t6, t4, 2      # the same bits, zeroes coming in
 ```
 
-`t2` comes out at 1 and `t3` at 0, from the same two registers. `t5` is `FFFFFFFB`, which is -5, and
-`t6` is `3FFFFFFB`, which is 1073741819. Two instructions, the same input bits, two right answers to
-two different questions.
+`t2` is 1 and `t3` is 0, from the same two registers. `t5` and `t6` disagree the same way. Two
+instructions, one set of input bits, two right answers to two different questions.
 
 The registers panel has the same choice. The **B**, **W** and **L** buttons in its header cut each
 register into bytes, halves or one word, and hovering a value shows its signed and unsigned readings
@@ -105,10 +101,10 @@ Three ways to ask for it. `lb` sign extends what it loads and `lbu` fills with z
 `lhu` do the same for a half, and `sext.b`, `sext.h`, `zext.b` and `zext.h` do it to a value already
 in a register.
 
-Then there is the constant inside an instruction, and this is where RISC-V and MIPS disagree
-completely. **Every immediate on RISC-V is sign extended**, including the ones of `andi`, `ori` and
-`xori`, where MIPS fills with zeroes. So `andi t1, t0, -1` keeps every bit of `t0`, and there is no
-16 bit mask you can write as a constant, because the field only holds 12 bits anyway.
+Then there is the constant written inside an instruction, and here the rule is short: **every
+immediate is sign extended**, the logical ones included. `andi`, `ori` and `xori` all spread the top
+bit of their 12 bit constant across the whole register before they do anything. So `andi t1, t0, -1`
+keeps every bit of `t0`, because the `-1` has become `FFFFFFFF` by the time the `and` happens.
 
 ```riscv|playground|memory
 .data
@@ -147,9 +143,8 @@ fails with `Unsigned value is too large to fit into a sign-extended immediate`.
 A larger number takes two instructions. `lui` (load upper immediate) puts a **20 bit** constant in
 the top of a register and clears the bottom 12, and an `addi` adds the rest.
 
-`li` hides that. Give it a small number and you get one instruction, give it a large one and you get
-two, and unlike the MIPS assembler it uses no scratch register: both instructions write the register
-you named.
+`li` hides that from you. A small number gets you one instruction and a large one gets you two, and
+either way both instructions write the register you named and nothing else.
 
 ```riscv|playground
 .text
@@ -168,9 +163,9 @@ underneath, which is 4096 minus 2048: the `addi` sign extends, so the assembler 
 
 ## Overflow
 
-Add 1 to the largest signed word and the answer wraps round to the smallest. **RISC-V says nothing
-about it.** There is no trapping add, there is no carry flag, and the base instruction set has no
-overflow exception at all, so the program carries on with the wrapped answer.
+Add 1 to the largest signed word and the answer wraps round to the most negative one. The program
+carries on with the wrapped answer and says nothing: there is one `add`, it wraps, and that is the
+end of the matter.
 
 ```riscv|playground
 .text
@@ -182,15 +177,14 @@ main:
     addi t4, t0, 1      # and the immediate form
 ```
 
-`t1` comes out at `FFFFFFFE`, `t3` at `FFFFFFFE` as well, and `t4` at `80000000`, which read as
-signed is the most negative word there is. This is where RISC-V and MIPS part company: MIPS has an
-`add` that raises an arithmetic overflow exception and an `addu` that wraps, and RISC-V has one
-`add`, which wraps.
+`t1` comes out at `FFFFFFFE`, and so does `t3` from adding -1 to itself: the same bits, arrived at
+two ways, and both answers are right for their own reading. `t4` is `80000000`, the most negative
+word there is, one past the largest positive one.
 
-So a program that needs to know whether an addition overflowed works it out from the answer, and
-"Comparing without flags" is where that is written.
+A program that needs to know whether an addition overflowed has to work it out from the answer
+itself, by comparing the result against the operands. "if, else and jump tables" shows how.
 
-## Your turn
+## Read the same bits twice
 
 The test starts `t0` at -16, which the panel shows as `FFFFFFF0`. Divide it by 16 twice with shifts:
 the signed answer in `t1`, which is -1, and the unsigned answer in `t2`, which is `0x0FFFFFFF`.

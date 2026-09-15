@@ -1,0 +1,6 @@
+{
+    "name": "if, else and jump tables",
+    "description": "There is no if in the instruction set, only a jump that happens sometimes. Laying two blocks of code out so a branch can skip one of them, chaining tests, comparing against a constant, and jumping through a table of addresses.",
+    "order": 0,
+    "topic": "branching"
+}

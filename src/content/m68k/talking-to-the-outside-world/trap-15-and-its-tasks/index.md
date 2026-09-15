@@ -5,9 +5,9 @@ typed or draw a circle, an M68K program asks the environment, and the instructio
 ## trap #15, and no other trap
 
 A real 68000 has sixteen trap vectors, `trap #0` to `trap #15`, and each one jumps somewhere the
-operating system filled in. This editor imitates **EASy68K**, whose whole input and output lives
-behind one of them, so `trap #15` is the only one it assembles. Write `trap #14` and the build fails
-with "Only implemented TRAP is 15 for IO, received 14".
+operating system filled in. Here the whole of input and output sits behind the last of them, so
+`trap #15` is the only one the assembler accepts. Write `trap #14` and the build fails with "Only
+implemented TRAP is 15 for IO, received 14".
 
 The request is always three steps:
 
@@ -83,8 +83,6 @@ an **unsigned** one and takes the base in `d2.b`, anything from 2 to 36, so `#2`
 `#16` prints hexadecimal. Task 20 is task 3 padded on the left to `d2.b` columns, which is how you
 line numbers up in a table.
 
-Try changing `move.b #2, d2` to `move.b #16, d2` and running again: the same `d1` prints as `FF`.
-
 ## Reading
 
 ```m68k|playground|console|no-flags
@@ -144,9 +142,8 @@ elapsed: dc.b 10, 'hundredths elapsed: ', 0
 ```
 
 Both answers come out at 0: nobody has typed anything, and the program is fast. Task 8 counts
-hundredths of a second **since the run started**, which is where this editor differs from EASy68K,
-where the same task counts from midnight. Programs measure how long something took by subtracting
-two reads of it, and that works the same either way.
+hundredths of a second **since the run started**, so the number on its own means nothing. You use it
+by reading it twice and subtracting, which gives you how long the part in between took.
 
 Task 23 is the clock's other operation. It lets `d1.l` hundredths of a second of program time pass
 before the next instruction runs. The editor stays responsive while it waits, so Stop still answers, and
@@ -187,35 +184,23 @@ the ones that read the keyboard and the mouse are the next lecture.
 |    61 | read the mouse                               | `d1.b` = which state           | `d0.b` = buttons, `d1.l` = position       |
 | 80-96 | drawing                                      | see the next lecture           |                                           |
 
-The same table, with a paragraph on each task, is on the
-[trap tasks documentation page](/documentation/m68k/traps).
+The [trap tasks documentation page](/documentation/m68k/traps) has a paragraph on each of them.
 
 ## The tasks that are refused
 
-EASy68K has more tasks than this, and eleven of them stop the run here with a message saying which
-one and why. Refusing them out loud is deliberate: a program that asks for one finds out, instead of
-running to the end having quietly done nothing.
+Eleven other task numbers are recognised and then turned down: the run stops with a message saying
+which one it was and why. They cover a printer, keyboard echo, display and font properties, reading
+characters back off the screen, scrolling text, cycle counting, hardware control, and turning the
+mouse or keyboard interrupt on. None of those has anything behind it here.
 
-|   task | what it was for                      | why it is refused                                        |
-| -----: | ------------------------------------ | -------------------------------------------------------- |
-|     10 | print to the printer                 | the editor has no printer                                |
-|     12 | turn keyboard echo off               | typed input is always echoed, the way a terminal does it |
-|     16 | display properties                   | the editor's input prompt is not a program setting       |
-|     21 | font properties                      | the screen draws text in one fixed cell font             |
-|     22 | read a character off the text screen | the screen holds pixels, not a grid of characters        |
-|     25 | scroll a rectangle of text           | the screen holds pixels, not a grid of characters        |
-| 30, 31 | clear and read the cycle counter     | no cycle counting is emulated                            |
-|     32 | hardware and simulator control       | there is no hardware window and no automatic IRQ         |
-|     60 | turn the mouse interrupt on          | mouse input is polled with task 61                       |
-|     62 | turn the keyboard interrupt on       | keyboard input is polled with tasks 7 and 19             |
-
-The last two come back in the interrupts lecture, which is where the reason they cannot work is
-explained.
+Refusing them out loud is deliberate. A program that asks for one finds out, rather than running to
+the end having quietly done nothing.
 
 ## Your turn
 
-Print `The answer is 42` and end the program. The string is written for you at `$2000`, and the
-number is not part of it: print the string and the number 42 with one task.
+Print `The answer is 42` and end the program. The string at `$2000` stops before the number, on
+purpose: there is a single task that prints a string and a number together, and this is what it is
+for.
 
 ```m68k|playground|console|exercise
 * your code here
@@ -247,8 +232,8 @@ message: dc.b 'The answer is ', 0
 
 </details>
 
-The second one reads a number and prints its square, with nothing else in the output. The test types
-9, so the console reads `81`.
+Now one with input in it. Read a number, print its square, and print nothing else at all. The test
+types 9, so the console should read exactly `81`.
 
 ```m68k|playground|console|exercise
 * your code here

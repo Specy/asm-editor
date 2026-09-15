@@ -85,10 +85,27 @@ export function capitalize(word: string) {
  * Split out from createShareLink so in-app navigation can put it behind a resolve()d
  * route instead of an absolute origin-prefixed URL, without duplicating the encoding.
  */
+/**
+ * What a `?project=` payload may grow to. A share link has to survive being pasted into a chat
+ * message, an email or a browser address bar, and those stop well short of what a Project's Files
+ * can reach: a single 1 MiB binary asset compresses to roughly 370,000 characters. Past this, the
+ * honest answer is an `.asmproj` archive, not a link that silently fails wherever it is pasted.
+ */
+export const SHARE_PAYLOAD_LIMIT = 32_000
+
+export class ShareTooLargeError extends Error {
+    constructor() {
+        super('This Project is too large to share as a link')
+        this.name = 'ShareTooLargeError'
+    }
+}
+
 export function createSharePayload(project: Project): string {
     const p = project.toObject()
     p.id = SHARE_ID
-    return lzstring.compressToEncodedURIComponent(serializer.stringify(p))
+    const payload = lzstring.compressToEncodedURIComponent(serializer.stringify(p))
+    if (payload.length > SHARE_PAYLOAD_LIMIT) throw new ShareTooLargeError()
+    return payload
 }
 
 export function createShareLink(project: Project, mode: 'exam' | 'project' = 'project'): string {
