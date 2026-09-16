@@ -1,6 +1,6 @@
 {
     "name": "Variables in memory and constants",
-    "description": "Two words the assembler writes into memory, a constant that never leaves the instruction, and the total written back where you can see it.",
+    "description": "Load two initialized words, add a named constant, and store the result in reserved memory while tracing addresses and little-endian bytes.",
     "order": 1,
     "topic": "variables-in-memory"
 }

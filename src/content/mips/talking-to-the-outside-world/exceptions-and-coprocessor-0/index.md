@@ -1,288 +1,157 @@
-Somewhere in this course you have run a program that stopped with `arithmetic overflow` or
-`store address not aligned on word boundary`, and that was the end of it. One bad instruction, run
-over, nothing you could do.
+This lesson describes the exception model implemented by this Playground, which follows the MARS
+behavior used by its MIPS core. It exposes four coprocessor 0 registers: `BadVAddr` (register 8),
+`Status` (12), `Cause` (13), and `EPC` (14). A handler begins at `0x80000180`. The Playground
+delivers exceptions caused by the running program; its devices do not deliver interrupts. The fixed
+addresses, reset values, data layout, and instruction budget mentioned below are Playground
+properties, not rules for every MIPS processor.
 
-It does not have to end there. When an instruction cannot be carried out, the CPU does not give up:
-it stops doing what you asked, writes down what went wrong and where, and jumps to a fixed address
-to run whatever code it finds. That code is called a **handler**, and on this machine it is code you
-write, in the same file, in the same language. A handler can count faults, print a diagnosis, patch
-up whatever went wrong and retry the instruction, or simply skip it and carry on. The program keeps
-running either way.
+## Exceptions and interrupts
 
-Three words before the machinery. An **exception** is the CPU refusing an instruction of yours. An
-**interrupt** arrives from a device between two instructions and has nothing to do with which two
-they were. A **trap** is an instruction you ran deliberately to hand control over, and on MIPS that
-is `syscall`. All three take the same route out of your program.
+A **synchronous exception** belongs to the instruction being executed. An overflowing `add` or an
+unaligned `lw` always fails at that instruction, so the CPU can record its address and cause. The
+instruction is abandoned before the handler begins: it does not partly update a register or memory.
 
-## What actually happens
+An **asynchronous interrupt** comes from outside the instruction stream, usually from a device, and
+is taken between instructions. MIPS uses related state and handler machinery for both, but the
+distinction matters: a device can interrupt a program regardless of the instruction currently
+running. This Playground does not deliver those device interrupts, so the examples on this page are
+all synchronous exceptions.
 
-Take the program further down this page: it puts the largest positive word in `$t0` and then runs
-`add $t1, $t0, $t0`, which overflows. That `add` sits at `0x00400008`. Between it and the next
-instruction, the CPU does five things, none of which your program can see happening:
+A **trap** is not another name for `syscall`. MIPS has conditional trap instructions, such as `teq`,
+that raise an exception when their condition is true. In this Playground, a valid, supported
+`syscall` service is handled directly by the environment and does not enter your `.ktext` handler.
+An invalid or unsupported service number raises a synchronous exception with code 8, which a
+handler can receive.
 
-1. **It abandons the instruction.** `$t1` is not written. Whatever was in it stays there.
-2. **It saves where you were.** `0x00400008`, the address of the faulting instruction, goes into a
-   register called `EPC`, the exception program counter.
-3. **It writes down why.** A number identifying the fault goes into a register called `Cause`.
-4. **It notes that it is inside a handler**, by setting bit 1 of a register called `Status`.
-5. **It sets `pc` to `0x80000180`** and carries on from there.
+## What happens on overflow
 
-Then your handler runs, doing whatever you wrote. One instruction at the end of it undoes steps 4
-and 5 together:
+Suppose the program reaches this instruction:
 
-- **`eret`**, return from exception, copies `EPC` into `pc` and clears that bit of `Status`.
-
-| when                       | `pc`           | `EPC`        | `$t1`       |
-| -------------------------- | -------------- | ------------ | ----------- |
-| about to run the `add`     | `0x00400008`   | anything     | whatever    |
-| first handler line         | `0x80000180`   | `0x00400008` | not written |
-| after the handler's `mtc0` | in the handler | `0x0040000C` | not written |
-| after `eret`               | `0x0040000C`   | `0x0040000C` | not written |
-
-Read the last two rows twice, because this is where handlers go wrong. `EPC` holds the address of
-the instruction that **faulted**, not the one after it. Return without changing it and the CPU runs
-the same `add` again, which overflows again, which calls the handler again, for ever.
-
-So a handler that means to give up on the instruction adds 4 to `EPC` first. A handler that has
-actually fixed the problem leaves `EPC` alone, so the instruction gets a second try.
-
-## Where the handler lives
-
-Every exception on MIPS goes to the same address, `0x80000180`. There is no table of addresses to
-fill in and no registering anything: put code at that address and it is the handler.
-
-That address is in the **kernel text** segment, which `.ktext` opens the way `.text` opens the
-ordinary one:
-
+```mips
+add $t1, $t0, $t0
 ```
+
+If `$t0` holds `0x7FFFFFFF`, the signed result does not fit in 32 bits. The Playground then:
+
+1. abandons the `add`, leaving `$t1` unchanged;
+2. writes the address of that `add` into `EPC`;
+3. records arithmetic-overflow code 12 in the exception-code field of `Cause`;
+4. sets the exception-level bit in `Status`; and
+5. continues at the handler vector, `0x80000180`.
+
+The handler eventually executes `eret`. That instruction clears the exception-level bit and loads
+the program counter from `EPC`. It does not move `EPC` for you.
+
+This leaves the handler with a deliberate choice:
+
+| policy | what the handler does with `EPC`      | what `eret` runs next      |
+| ------ | ------------------------------------- | -------------------------- |
+| retry  | leaves it at the faulting instruction | the same instruction again |
+| skip   | adds 4                                | the following instruction  |
+
+Retrying makes sense only after the handler has changed something that can make the instruction
+succeed. Otherwise it raises the same exception again. This Playground has no delay slots, and its
+MIPS instructions are four bytes, so copying `EPC` to `$k1` and running `addiu $k1, $k1, 4` skips
+exactly one instruction. A final `mtc0` writes that address back to `EPC`.
+
+## The four CP0 registers
+
+Coprocessor 0, or **CP0**, is a control-register bank separate from the 32 general-purpose
+registers. Two instructions cross between the banks:
+
+- `mfc0 $k0, $13` copies CP0 register 13 into `$k0`.
+- `mtc0 $k0, $14` copies `$k0` into CP0 register 14.
+
+The four registers this Playground exposes are:
+
+| number | name       | purpose in this Playground                      |
+| -----: | ---------- | ----------------------------------------------- |
+|      8 | `BadVAddr` | the address involved in an address exception    |
+|     12 | `Status`   | control bits, including the exception-level bit |
+|     13 | `Cause`    | fields describing why the exception occurred    |
+|     14 | `EPC`      | the address where execution should resume       |
+
+The Playground resets `Status` to `0x0000FF11`. Taking an exception sets bit 1, so an otherwise
+unchanged `Status` reads `0x0000FF13` inside the handler; `eret` clears that bit. These exact values
+describe the Playground's reset configuration.
+
+The assembler places a handler at the Playground's vector with:
+
+```mips
 .ktext 0x80000180
 ```
 
-Everything after that line is assembled there, and `.kdata` does the same for data the handler owns.
-A program with no `.ktext` section has no handler at all, and then a fault ends the run and prints a
-message under the editor, which is every program you have written so far.
+If a program-caused exception has no handler there, the run stops and the Playground reports the
+fault.
 
-## Coprocessor 0
+## Registers a handler can use
 
-`EPC`, `Cause` and `Status` are not among the 32 registers. They belong to **coprocessor 0**, a
-second register bank that holds everything about faults and memory management, and two instructions
-reach across to it:
+The handler must not silently destroy values that the interrupted program expects to keep. If it
+uses an ordinary general-purpose register, it must save that register and restore it before `eret`.
 
-- **`mfc0 $t0, $13`** copies coprocessor 0 register 13 into `$t0`.
-- **`mtc0 $t0, $14`** copies `$t0` into coprocessor 0 register 14.
+The calling convention reserves `$k0` and `$k1` for kernel and exception-handling code. Ordinary
+program code should not keep values in them, which gives a small handler two temporary registers
+without a save-and-restore step. The examples here use only `$k0` and `$k1` inside `.ktext`.
 
-The registers are named by number, and four of them matter here:
+Instructions are atomic, so an exception never catches `addiu $sp, $sp, -4` halfway through its
+update. Even so, the user program's `$sp` may contain an invalid address or point to storage that is
+inappropriate for handler state, especially when the exception itself concerns an address.
+`.kdata` opens the kernel data segment, where a larger handler can reserve fixed save slots. Simple
+fixed slots are not safe for nested or re-entrant handlers: another entry could overwrite the first
+entry's saved values.
 
-| number | name       | what it holds                                        |
-| -----: | ---------- | ---------------------------------------------------- |
-|      8 | `BadVAddr` | the address that caused an address error             |
-|     12 | `Status`   | mode bits. `0x0000FF11` before anything has happened |
-|     13 | `Cause`    | which fault this was                                 |
-|     14 | `EPC`      | the address of the instruction that caused it        |
+## Skipping the overflowing instruction
 
-### Getting the code out of Cause
+Now the whole path is visible:
 
-`Cause` does not hold the fault number on its own. It holds several things at once, and the one you
-want, the **exception code**, occupies bits 6 down to 2:
-
-```
- bit  31                        7 6 5 4 3 2 1 0
-      +-------------------------+---------+---+
-      |      other fields       | ExcCode |   |
-      +-------------------------+---------+---+
-                                  5 bits
-```
-
-Two instructions get it out, and both halves are worth understanding rather than copying:
-
-- **`srl $k0, $k0, 2`** slides everything right by two places, so the bottom of the code lands at
-  bit 0. Whatever was in bits 1 and 0 falls off the end, which is what you want.
-- **`andi $k0, $k0, 0x1F`** keeps the low five bits and clears the rest. `0x1F` is `11111` in
-  binary, five bits set, which is exactly the width of the field.
-
-Those are the same mask-and-shift moves from "Arithmetic, logic and bits", used on a register the
-hardware filled in rather than one you did. The code that comes out means:
-
-| code | what happened                                            |
-| ---: | -------------------------------------------------------- |
-|    4 | address error on a load, including an unaligned one      |
-|    5 | address error on a store                                 |
-|    8 | `syscall`, including a service number nothing answers to |
-|    9 | `break`                                                  |
-|   10 | an instruction the CPU does not know                     |
-|   12 | arithmetic overflow, from `add`, `addi` or `sub`         |
-
-## A handler that works
-
-Four steps, always in this order: find out what happened, deal with it, decide what `EPC` should be,
-and `eret`.
-
-```mips|playground
+```mips|playground|cp0|pc
 .text
 .globl main
 main:
     li $t0, 0x7FFFFFFF
-    add $t1, $t0, $t0       # overflow: nothing is written and the handler runs
-    li $t2, 5               # and the program carries on here
+    add $t1, $t0, $t0       # abandoned when it overflows
+    li $t2, 5               # the handler returns here
     li $v0, 10
-    syscall
+    syscall                  # supported service: handled directly
 
 .ktext 0x80000180
-    mfc0 $k0, $13           # Cause, so the handler knows what happened
-    mfc0 $k1, $14           # EPC, the address of the add
-    addi $k1, $k1, 4        # the instruction after it
-    mtc0 $k1, $14
-    eret                    # back to the program, at the new EPC
-```
-
-`$t2` is 5, so the program survived the overflow and reached its `syscall`. `$t1` is 0, because an
-`add` that overflows writes nothing at all.
-
-Step through it with `pc` in view. You will watch it leave the `add`, appear at `80000180`, run four
-lines that are nowhere near your program, and come back to the `li $t2, 5`. Nothing in `main` knows
-any of that happened.
-
-Now delete the `addi $k1, $k1, 4` and the `mtc0` under it and press Run. The program stops when the
-Playground's two million instructions run out, with `pc` parked on the `add`: the handler kept
-returning to the instruction that called it. That is the loop the table above was warning about, and
-it is worth seeing once.
-
-## Reading Cause
-
-```mips|playground|memory
-.data
-code:   .word 0
-status: .word 0
-bad:    .word 0
-
-.text
-.globl main
-main:
-    li $t0, 0x7FFFFFFF
-    add $t1, $t0, $t0       # code 12
-    li $t2, 5
-    li $v0, 10
-    syscall
-
-.ktext 0x80000180
-    mfc0 $k0, $13           # Cause
-    srl $k0, $k0, 2
-    andi $k0, $k0, 0x1F     # the exception code out of bits 6 to 2
-    la $k1, code
-    sw $k0, 0($k1)
-    mfc0 $k0, $12           # Status
-    sw $k0, 4($k1)
-    mfc0 $k0, $8            # BadVAddr
-    sw $k0, 8($k1)
-    mfc0 $k1, $14
-    addi $k1, $k1, 4
-    mtc0 $k1, $14
+    mfc0 $k1, $14           # copy EPC into a handler temporary
+    addiu $k1, $k1, 4       # choose to skip one instruction
+    mtc0 $k1, $14           # write the new return address
     eret
 ```
 
-`code` is 12, arithmetic overflow, dug out of `Cause` by the shift and the mask. `status` is
-`0000FF13`, which is the `0000FF11` a program starts with, plus bit 1: that is the CPU's note to
-itself that a handler is running, and `eret` is what clears it again.
+The `add` never writes `$t1`. The handler advances `EPC`, so `eret` resumes at `li $t2, 5`, and
+`$t2` becomes 5. The final, supported exit service does not call the handler.
 
-`bad` is 0, because an overflow happens to a pair of registers and has no address to report. Change
-the `add` to a `lw` at an odd address and both change: `code` becomes 4 and `bad` holds the address
-that was not a multiple of four, which is the one piece of information that makes an address error
-fixable.
+If the handler leaves `EPC` unchanged, `eret` retries the same `add`, which overflows again. The
+cycle continues until the Playground's own instruction budget ends the run.
 
-## $k0 and $k1
+## Reading Cause and BadVAddr
 
-A handler starts running between two instructions of a program that has no idea it exists, and it
-has to hand every register back exactly as it found it. That is a hard promise to keep when you need
-somewhere to put a value, so the convention sets two registers aside, `$k0` and `$k1`, and says no
-ordinary program may keep anything in them. Now the handler has two registers it can scribble on for
-free. This is why "The 32 registers" told you to leave those two alone.
+`Cause` contains several fields. The five-bit exception code occupies bits 6 through 2. A shift and
+a mask extract it:
 
-Two is not many. A handler that needs more room saves registers into a `.kdata` block of its own
-rather than pushing them on the stack, and the reason is worth a second: the interrupted program may
-have been part way through moving `$sp` when the fault hit, so `$sp` cannot be trusted to point
-anywhere sensible.
-
-`.kdata` is the kernel form of `.data`, and this handler keeps a count of the faults it has caught in
-one word of it. The program below causes three, two overflows and an unaligned load, and reads the
-count back afterwards.
-
-```mips|playground|memory
-.data
-odd:    .byte 1
-        .align 0            # so the word below lands on an odd address
-w:      .word 0x12345678
-
-.text
-.globl main
-main:
-    li $t0, 0x7FFFFFFF
-    add $t1, $t0, $t0       # one: arithmetic overflow
-    add $t1, $t0, $t0       # two: the same again
-    la $t2, w
-    lw $t3, 0($t2)          # three: an address error on a load
-    lw $s0, faults          # what the handler counted
-    li $v0, 10
-    syscall
-
-.kdata
-faults: .word 0
-
-.ktext 0x80000180
-    la $k0, faults
-    lw $k1, 0($k0)
-    addi $k1, $k1, 1        # one more fault
-    sw $k1, 0($k0)
-    mfc0 $k1, $14
-    addi $k1, $k1, 4
-    mtc0 $k1, $14
-    eret
+```mips
+mfc0 $k0, $13
+srl $k0, $k0, 2
+andi $k0, $k0, 0x1F
 ```
 
-`$s0` is 3: three faults, counted by a handler in a word the program itself never wrote. And none of
-the three stopped the run.
+The shift moves bit 2 down to bit 0. The mask `0x1F`, five binary ones, clears every bit outside the
+five-bit code. The codes used in this lesson are 12 for arithmetic overflow and 4 for an address
+error on a load. Code 8 identifies an unsupported `syscall` service in this Playground.
 
-`$t1` and `$t3` are both 0, which is the cost of this handler's policy. It steps past every fault
-without fixing anything, so all three instructions were skipped and none of them wrote a result. A
-handler that counts is useful; a handler that also leaves the program's arithmetic half done is
-something to be deliberate about.
-
-## Handlers here run for your own faults
-
-Exceptions and interrupts share this machinery on real hardware, but no device here raises
-an interrupt: the display never does, and setting the keyboard's interrupt enable bit ends the run
-with a message telling you to poll instead. So the handler you write runs for faults your own
-program caused, and nothing else.
-
-Polling is what takes the place of an interrupt, and the previous lecture's keyboard loop is what it
-looks like: read a status register, and when nothing is ready, let some program time pass with
-`syscall` service 32 and go round again.
-
-## The messages you get without a handler
-
-Each of these ends the run and names the line it happened on:
-
-| what you did                       | the message                                        |
-| ---------------------------------- | -------------------------------------------------- |
-| `add`, `addi` or `sub` overflowed  | `arithmetic overflow`                              |
-| `lw` at an odd address             | `fetch address not aligned on word boundary 0x...` |
-| `sw` at an odd address             | `store address not aligned on word boundary 0x...` |
-| read outside every segment         | `address out of range 0x...`                       |
-| read the instructions as data      | `Cannot read directly from text segment!0x...`     |
-| a `syscall` number nothing answers | `invalid or unimplemented syscall service: 99`     |
-| `break`, or a `rem` by zero        | `break instruction executed; no code given.`       |
-| `jr` to an address with no code    | `invalid program counter value: 0x00000000`        |
-
-Every one of those is an exception with a code from the table above, so a `.ktext` handler catches
-any of them. Most of the time you do not want to: a program that stops on the line that broke is
-easier to debug than one that quietly carries on. Write a handler when carrying on is genuinely the
-right answer.
+`BadVAddr` needs one extra rule: the Playground updates it when an address exception occurs. For
+other exceptions it may retain an older value, so zero after reset does not make it meaningful for
+an overflow. Read `BadVAddr` only after `Cause` says the current exception is an address error.
 
 ## Write two handlers
 
-The program below overflows on purpose and its handler section is empty, so the run stops on the
-`add`. Fill the handler in so the program survives and reaches the `li $t2, 5`.
+The program below overflows on purpose. Fill in the handler so it skips the abandoned `add` and the
+program reaches `li $t2, 5`.
 
-```mips|playground|exercise
+```mips|playground|cp0|exercise
 .text
 .globl main
 main:
@@ -305,7 +174,7 @@ main:
 <details>
 <summary>Show solution</summary>
 
-```mips|playground|solution
+```mips|playground|cp0|solution
 .text
 .globl main
 main:
@@ -316,17 +185,17 @@ main:
     syscall
 
 .ktext 0x80000180
-    mfc0 $k1, $14           # EPC, the instruction that faulted
-    addi $k1, $k1, 4        # the one after it
+    mfc0 $k1, $14
+    addiu $k1, $k1, 4
     mtc0 $k1, $14
     eret
 ```
 
 </details>
 
-The second one faults on an unaligned `lw`. Write a handler that stores the exception code from
-`Cause` into `code` and the faulting address from `BadVAddr` into `bad`, then steps past the
-instruction. The code for an address error on a load is 4, and `w` lands at `0x10010009`.
+The second program performs an unaligned `lw`. Write a handler that extracts the exception code
+from `Cause` into `code`, stores `BadVAddr` in `bad`, skips the failed load, and lets `$t2` become 5.
+With the Playground's current data layout, `w` is at `0x10010009`, which is not divisible by four.
 
 ```mips|playground|memory|exercise
 .data
@@ -339,7 +208,7 @@ w:      .word 0x12345678
 .text
 .globl main
 main:
-    la $t0, w               # an odd address, since .align 0 turned padding off
+    la $t0, w
     lw $t1, 0($t0)
     li $t2, 5
     li $v0, 10
@@ -351,6 +220,7 @@ main:
 
 ```testcase
 {
+    "expectedRegisters": { "$t2": 5 },
     "expectedMemory": [
         { "type": "number-chunk", "address": "0x10010000", "bytes": 4, "expected": [4, "0x10010009"] }
     ]
@@ -378,15 +248,15 @@ main:
     syscall
 
 .ktext 0x80000180
-    mfc0 $k0, $13           # Cause
+    mfc0 $k0, $13
     srl $k0, $k0, 2
     andi $k0, $k0, 0x1F
     la $k1, code
     sw $k0, 0($k1)
-    mfc0 $k0, $8            # BadVAddr
+    mfc0 $k0, $8
     sw $k0, 4($k1)
     mfc0 $k1, $14
-    addi $k1, $k1, 4
+    addiu $k1, $k1, 4
     mtc0 $k1, $14
     eret
 ```

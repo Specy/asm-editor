@@ -1,6 +1,6 @@
 {
     "name": "Loops",
-    "description": "MIPS has no counted loop instruction, so a loop is a branch backwards and a counter you keep yourself. Why counting down to zero is half the instructions, nested loops, and walking an array against an end pointer.",
+    "description": "Build MIPS loops from initialization, a test, a body, an update, and a backward jump. Practice top-tested, guarded bottom-tested, and nested loops.",
     "order": 1,
     "topic": "loops"
 }

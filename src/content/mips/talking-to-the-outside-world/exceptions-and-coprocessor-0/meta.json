@@ -1,6 +1,6 @@
 {
     "name": "Exceptions and coprocessor 0",
-    "description": "What the CPU does between the instruction that failed and the next one it runs, and how a handler of your own picks the program back up. Coprocessor 0, reading the code out of Cause, eret, and why EPC has to be moved on.",
+    "description": "How this Playground records synchronous exceptions in coprocessor 0, enters a handler, and returns with eret. EPC may be advanced when the handler chooses to skip the faulting instruction.",
     "order": 2,
     "topic": "interrupts"
 }

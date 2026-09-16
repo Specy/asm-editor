@@ -1,6 +1,6 @@
 {
     "name": "The largest element",
-    "description": "One walk through eight words, keeping the best one seen so far and where it was, with a negative number in there to make the signed comparison matter.",
+    "description": "A boundary-safe indexed walk that keeps the first signed maximum and its position, including an explicit result for an empty array.",
     "order": 5,
     "topic": "max-of-an-array"
 }

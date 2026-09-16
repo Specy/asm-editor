@@ -1,6 +1,6 @@
 {
     "name": "Arrays and strings",
-    "description": "An array is a first address and a size per element, and every loop over one is built out of those two numbers. Scaling an index by hand, walking bytes to a terminator, and the row times columns of a grid.",
+    "description": "Calculate array addresses from a base, index, and element size; walk and copy zero-terminated strings; and flatten row-major grids into linear memory.",
     "order": 3,
     "topic": "data-in-memory"
 }
