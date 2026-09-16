@@ -2,6 +2,7 @@ import {
     defaultRegisterKind,
     type RegisterFileRegister,
     type RegisterFormat,
+    type RegisterPoke,
     RegisterSize,
     toHexString
 } from '$lib/languages/commonLanguageFeatures.svelte'
@@ -134,6 +135,20 @@ function sizeOf(file: RegisterFileRendering, register: RenderableRegister, index
     return Number(file.layout[index]?.size ?? file.size)
 }
 
+/**
+ * How wide that row's register is, in bits, which is the width its value is read and written at.
+ * The panels compare a value the Core gave them with a value that was typed at this width: MIPS and
+ * RISC-V report their CPU registers signed while a poked value is unsigned by contract, so the two
+ * readings of the same bits differ in sign unless both are masked to it.
+ */
+export function registerWidthBits(
+    file: RegisterFileRendering,
+    register: RenderableRegister,
+    index: number
+): number {
+    return 8 * sizeOf(file, register, index)
+}
+
 function kindOf(file: RegisterFileRendering, index: number): 'integer' | 'float' {
     return file.layout[index]?.kind ?? defaultRegisterKind(file.formats)
 }
@@ -226,7 +241,7 @@ function doubleText(
  * One row of a Register file panel: the chunks to draw, each with the text the previous value drew
  * so the renderer can highlight what changed, and the hover lines.
  *
- * `format` is the Format the file's tab is showing and `groupSize` the B/W/L/D/Q grouping of the
+ * `format` is the Format the file's tab is showing and `groupSize` the width grouping of the
  * hex one, never wider than the register itself. A register of integer kind ignores the Format and
  * stays hexadecimal, which is how a control register inside a floating-point file (`mxcsr`,
  * `fctrl`) has always been read.
@@ -302,6 +317,185 @@ export function renderRegister(
         chunks: current.map((text, lane) => ({ text, prevText: previous[lane] ?? text })),
         hover,
         blank: false
+    }
+}
+
+/**
+ * Encoding is the other half of `decodeSingle`/`decodeDouble`: what a decimal typed into a float
+ * lane becomes, at the lane's own precision, so that a Poke of `0.1` into a single lands as the
+ * single the panel then reads back as `0.1`.
+ */
+export function encodeSingle(value: number): bigint {
+    scratch.setFloat32(0, value)
+    return BigInt(scratch.getUint32(0))
+}
+
+/** The same for a double. */
+export function encodeDouble(value: number): bigint {
+    scratch.setFloat64(0, value)
+    return scratch.getBigUint64(0)
+}
+
+/** What one chunk of a register row was asked to become ([the design record](../../../docs/design/pokes.md)). */
+export type RegisterPokeRequest = {
+    /** The file the row belongs to, as `renderRegister` reads it. */
+    file: RegisterFileRendering
+    /** The file's whole register array in the descriptor's order, for the same reason. */
+    registers: readonly RenderableRegister[]
+    /** The row: an index into `registers`. */
+    index: number
+    /** The Format the file's tab is showing, which an integer register ignores. */
+    format: RegisterFormat
+    /** The width grouping of the hexadecimal Format. */
+    groupSize: RegisterSize
+    /** Which chunk of the row was typed into: a hex group, or a float lane, low lane first. */
+    chunkIndex: number
+    /** What was typed, trimmed here rather than by the caller. */
+    text: string
+    /**
+     * `preferencesStore.values.useDecimalAsDefault`, passed in rather than read, so that this stays
+     * a pure function: it decides how a bare integer group is read, exactly as it decides how the
+     * row draws one.
+     */
+    decimals: boolean
+}
+
+/** Either the Poke to make, which is usually one register, or why the commit is refused. */
+export type RegisterPokeParse = { ok: true; writes: RegisterPoke[] } | { ok: false; reason: string }
+
+const HEX_TEXT = /^(0x)?[0-9a-f]+$/i
+const DECIMAL_TEXT = /^[+-]?\d+$/
+const FLOAT_TEXT = /^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i
+const INFINITY_TEXT = /^([+-]?)inf(inity)?$/i
+
+function refuse(reason: string): RegisterPokeParse {
+    return { ok: false, reason }
+}
+
+/**
+ * One hex group's new bits. An explicit `0x` is always read as hex, and a bare number is read in
+ * the base the row is drawing it in, so that what the input opens holding reads back as itself:
+ * under the decimal Preference bare hex digits are refused rather than guessed at, since `10` is a
+ * number in both bases. A decimal may be signed, as the hover beside the group is; nothing is
+ * truncated, a value too wide for the group is refused instead.
+ */
+function parseGroupValue(text: string, bits: bigint, decimals: boolean): bigint | string {
+    const explicitHex = /^0x/i.test(text)
+    if (explicitHex || (!decimals && HEX_TEXT.test(text))) {
+        if (!HEX_TEXT.test(text)) return `${text} is not a hexadecimal number`
+        const value = BigInt(explicitHex ? text : `0x${text}`)
+        if (value >> bits !== 0n) return `0x${value.toString(16)} does not fit ${bits} bits`
+        return value
+    }
+    if (decimals && DECIMAL_TEXT.test(text)) {
+        const value = BigInt(text)
+        const span = 1n << bits
+        if (value < 0n) {
+            if (-value > span / 2n) return `${value} does not fit ${bits} bits`
+            return span + value
+        }
+        if (value >= span) return `${value} does not fit ${bits} bits`
+        return value
+    }
+    return decimals ? `${text} is not a decimal number` : `${text} is not a hexadecimal number`
+}
+
+/** A float lane's number: a decimal, `NaN` or an infinity, in any case the panel prints them in. */
+function parseLaneValue(text: string): number | null {
+    if (/^nan$/i.test(text)) return NaN
+    const infinity = INFINITY_TEXT.exec(text)
+    if (infinity) return infinity[1] === '-' ? -Infinity : Infinity
+    //`Number` reads far more than a decimal ('0x10', '1_0', ''), so the shape is checked first
+    if (!FLOAT_TEXT.test(text)) return null
+    return Number(text)
+}
+
+/**
+ * What a chunk of a register row commits to: the writes one Poke makes, or the reason the input
+ * keeps the text it was given ([the design record](../../../docs/design/pokes.md)). Pure, and the
+ * counterpart of `renderRegister`: it reads the same chunks back, so the chunk at `chunkIndex` is
+ * the one that row drew at that position.
+ *
+ * A hex group replaces its own bits inside the register and leaves the rest as they are; a float
+ * lane replaces its lane. The two file rules `renderRegister` follows are followed here too: a
+ * MIPS double under the double Format is written to its even/odd pair as two writes of one Poke,
+ * low word in the even register, and a RISC-V single is NaN-boxed, which is what the Core reads
+ * back as a single.
+ */
+export function parseRegisterPoke(request: RegisterPokeRequest): RegisterPokeParse {
+    const { file, registers, index, format, groupSize, chunkIndex, decimals } = request
+    const register = registers[index]
+    if (!register) return refuse('that row holds no register')
+    const size = sizeOf(file, register, index)
+    const kind = kindOf(file, index)
+    const effective: RegisterFormat = kind === 'integer' ? 'hex' : format
+    //a blanked row draws a dash and the bits under it are stale, so there is nothing to change
+    if (file.blanks?.[index]) return refuse(`${register.name} holds no value`)
+    const text = request.text.trim()
+    if (text === '') return refuse('a value is needed')
+    const width = BigInt(size * 8)
+    const whole = (1n << width) - 1n
+    const current = register.value & whole
+
+    if (effective === 'hex') {
+        const groupBytes = Math.max(1, Math.min(Number(groupSize), size))
+        const digits = size * 2
+        const offset = chunkIndex * groupBytes * 2
+        if (offset >= digits) return refuse('that group is not part of the register')
+        //the last group of a register the grouping does not divide is the short one, as the row
+        //draws it, so the digits it takes are counted rather than assumed
+        const groupDigits = Math.min(groupBytes * 2, digits - offset)
+        const bits = BigInt(groupDigits * 4)
+        const value = parseGroupValue(text, bits, decimals)
+        if (typeof value === 'string') return refuse(value)
+        const shift = BigInt((digits - offset - groupDigits) * 4)
+        const mask = ((1n << bits) - 1n) << shift
+        return {
+            ok: true,
+            writes: [{ register: register.name, value: (current & ~mask) | (value << shift) }]
+        }
+    }
+
+    const number = parseLaneValue(text)
+    if (number === null) return refuse(`${text} is not a number`)
+
+    if (file.pairedDoubles && effective === 'double' && size === RegisterSize.Long) {
+        //MARS's Double column is read on the even register and written back the same way: the pair
+        //is one value, so both halves are one Poke
+        if (index % 2 === 1) return refuse('a double belongs to the even register of its pair')
+        const high = registers[index + 1]
+        if (!high) return refuse(`${register.name} has no pair to hold the high word`)
+        const bits = encodeDouble(number)
+        return {
+            ok: true,
+            writes: [
+                { register: register.name, value: bits & WORD_MASK },
+                { register: high.name, value: (bits >> 32n) & WORD_MASK }
+            ]
+        }
+    }
+
+    if (file.nanBoxedSingles && effective === 'single' && size === RegisterSize.Double) {
+        //the boxing is the value: a RISC-V register holding anything else is not a single at all
+        return {
+            ok: true,
+            writes: [{ register: register.name, value: (WORD_MASK << 32n) | encodeSingle(number) }]
+        }
+    }
+
+    const laneBytes = effective === 'single' ? 4 : 8
+    if (laneBytes > size) return refuse(`${register.name} is narrower than a ${effective}`)
+    const count = size > RegisterSize.Double ? Math.floor(size / laneBytes) : 1
+    if (chunkIndex >= count) return refuse('that lane is not part of the register')
+    const laneBits = BigInt(laneBytes * 8)
+    const shift = laneBits * BigInt(chunkIndex)
+    const mask = ((1n << laneBits) - 1n) << shift
+    const encoded = effective === 'single' ? encodeSingle(number) : encodeDouble(number)
+    return {
+        ok: true,
+        writes: [
+            { register: register.name, value: ((current & ~mask) | (encoded << shift)) & whole }
+        ]
     }
 }
 

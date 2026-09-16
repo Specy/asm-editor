@@ -1,6 +1,6 @@
 {
     "name": "The stack, push and pop",
-    "description": "push and pop as a subtraction and a store, the stack drawn address by address as it grows downwards, making room with one sub rsp, and the other things that move rsp behind your back.",
+    "description": "Use rsp, push and pop on a downward-growing stack, then reserve and release temporary slots with matching sub and add instructions.",
     "order": 4,
     "topic": "the-stack"
 }

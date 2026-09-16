@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
     ANIMATING_PANEL_REFRESH_MS,
+    CPU_REGISTER_FILE_ID,
     GenericEmulator,
     RUNNING_PANEL_REFRESH_MS
 } from '$lib/languages/GenericEmulator.svelte'
@@ -12,6 +13,7 @@ import {
 import {
     InterpreterStatus,
     RegisterSize,
+    type BaseEmulatorState,
     type Diagnostic,
     type EmulatorDecoration,
     type EmulatorSettings,
@@ -97,6 +99,7 @@ class FakeEmulator extends GenericEmulator<object, FakeRegister> {
 
     _undo(): void {
         this.coreSteps -= 1
+        this.history = this.history.slice(1)
     }
 
     _checkCode(): Diagnostic[] {
@@ -134,14 +137,24 @@ class FakeEmulator extends GenericEmulator<object, FakeRegister> {
         return this.hasEnded
     }
 
-    _writeMemoryBytes(): void {}
+    /** A byte of fake memory per address, so what a Poke wrote can be read back. */
+    readonly memoryBytes = new Map<bigint, number>()
+
+    _writeMemoryBytes(address: bigint, data: Uint8Array): void {
+        this.pokeLog.push(`memory $${address.toString(16)}=${[...data].join(',')}`)
+        data.forEach((byte, offset) => this.memoryBytes.set(address + BigInt(offset), byte))
+    }
 
     /** How many times the panels have read the Core, so a test can count refreshes. */
     memoryReads = 0
 
-    _readMemoryBytes(_address: bigint, length: bigint): Uint8Array {
+    _readMemoryBytes(address: bigint, length: bigint): Uint8Array {
         this.memoryReads += 1
-        return new Uint8Array(Number(length))
+        const bytes = new Uint8Array(Number(length))
+        for (let i = 0; i < bytes.length; i++) {
+            bytes[i] = this.memoryBytes.get(address + BigInt(i)) ?? 0
+        }
+        return bytes
     }
 
     /** `refreshRunningPanels` is what an adapter calls from inside a slice; it is protected. */
@@ -157,8 +170,11 @@ class FakeEmulator extends GenericEmulator<object, FakeRegister> {
         return null
     }
 
-    _getUndoHistory(): ExecutionStep[] {
-        return []
+    /** What the fake Core's Undo history holds, newest first, as an adapter reports it. */
+    history: ExecutionStep[] = []
+
+    _getUndoHistory(max: number): ExecutionStep[] {
+        return this.history.slice(0, max)
     }
 
     _getPc(): bigint {
@@ -224,7 +240,74 @@ class FakeEmulator extends GenericEmulator<object, FakeRegister> {
         return 0n
     }
 
-    _setRegisterValue(): void {}
+    _setRegisterValue(register: FakeRegister, value: bigint, size?: RegisterSize): void {
+        this.pokeLog.push(`register ${register}=${value} at ${size ?? 'default'} bytes`)
+        this.registerValue = value
+    }
+
+    _setRegisterFileValue(id: string, register: string, value: bigint): void {
+        this.pokeLog.push(`file ${id}.${register}=${value}`)
+        const index = FAKE_FPU.registers.findIndex((candidate) => candidate.name === register)
+        if (index >= 0) this.fileValues[index] = value
+    }
+
+    /** Everything the Core was told to do, in order, so a test can see what a Poke bracketed. */
+    pokeLog: string[] = []
+    pokeOpen = false
+    /** Whether the fake Core records an entry; a history of 0 would not, as for an instruction. */
+    pokeRecords = true
+
+    _beginPoke(): void {
+        if (this.pokeOpen) throw new Error('a Poke transaction is already open')
+        this.pokeOpen = true
+        this.pokeLog.push('begin')
+    }
+
+    _endPoke(): boolean {
+        this.pokeOpen = false
+        this.pokeLog.push('end')
+        if (!this.pokeRecords) return false
+        //a recorded Poke is one entry of the same history as the instructions, undoable like one
+        this.coreSteps += 1
+        this.history = [makePokeStep(), ...this.history]
+        return true
+    }
+
+    /** How often the Screen re-read the memory it is mapped over, which a Poke into it triggers. */
+    screenResyncs = 0
+
+    _resyncScreenFromMemory(): void {
+        this.screenResyncs += 1
+    }
+
+    /** Reaches into the state as a Build, an input request or a termination would. */
+    setSessionState(
+        state: Partial<
+            Pick<
+                BaseEmulatorState,
+                | 'canExecute'
+                | 'terminated'
+                | 'interrupt'
+                | 'startingRegisterNames'
+                | 'hiddenRegisters'
+            >
+        >
+    ): void {
+        Object.assign(this.state, state)
+    }
+}
+
+/** A poke entry of the fake Core's history, shaped as the adapters map one. */
+function makePokeStep(): ExecutionStep {
+    return {
+        kind: 'poke',
+        mutations: [],
+        writes: [],
+        pc: -1,
+        line: -1,
+        old_ccr: { bits: 0 },
+        new_ccr: { bits: 0 }
+    }
 }
 
 const emptyTestcase: Testcase = {
@@ -1053,6 +1136,272 @@ describe('testcase run configuration', () => {
         await emulator.runTestcase(emptyTestcase, 100)
         expect(emulator.peripherals.terminal.inputSource).toBe('interactive')
         expect(emulator.peripherals.clock.isVirtual).toBe(false)
+    })
+})
+
+describe('pokes', () => {
+    /** A built fake Core with nothing logged yet, which is where every Poke below starts. */
+    async function pokeableEmulator(): Promise<FakeEmulator> {
+        const emulator = new FakeEmulator({ automaticChecking: false })
+        await emulator.compile(0, undefined)
+        emulator.pokeLog = []
+        return emulator
+    }
+
+    it('is possible exactly when a Step is', async () => {
+        const emulator = new FakeEmulator({ automaticChecking: false })
+        //before a Build there is no session to poke
+        emulator.setSessionState({ canExecute: false })
+        expect(emulator.canPoke).toBe(false)
+        expect(emulator.canPokeRegister(CPU_REGISTER_FILE_ID, 'R0')).toBe(false)
+        expect(emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'R0', value: 1n }])).toBe(
+            false
+        )
+        expect(emulator.pokeMemory(0x1000n, new Uint8Array([1]))).toBe(false)
+
+        await emulator.compile(0, undefined)
+        expect(emulator.canPoke).toBe(true)
+
+        //a terminated program is not poked: undoing the Poke would resume the machine
+        emulator.setSessionState({ terminated: true })
+        expect(emulator.canPoke).toBe(false)
+        //nor is one suspended on an Interrupt, which owns the Core until it is answered
+        emulator.setSessionState({ terminated: false, interrupt: { type: 'ReadInput' } })
+        expect(emulator.canPoke).toBe(false)
+        emulator.setSessionState({ interrupt: undefined })
+        expect(emulator.canPoke).toBe(true)
+        //nothing above opened a transaction
+        expect(emulator.pokeLog).toEqual([])
+    })
+
+    it('is refused while a Core operation is in flight, and possible again after it', async () => {
+        const emulator = await pokeableEmulator()
+        let release!: () => void
+        const gate = new Promise<void>((resolve) => {
+            release = resolve
+        })
+        emulator._step = async () => {
+            await gate
+            return { terminated: false }
+        }
+        const stepping = emulator.step()
+        await settle()
+        expect(emulator.canPoke).toBe(false)
+        expect(emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'R0', value: 1n }])).toBe(
+            false
+        )
+        expect(emulator.pokeMemory(0x1000n, new Uint8Array([1]))).toBe(false)
+        expect(emulator.pokeLog).toEqual([])
+        release()
+        await stepping
+        expect(emulator.canPoke).toBe(true)
+    })
+
+    it('refuses the program counter and the registers the Core hides', async () => {
+        const emulator = await pokeableEmulator()
+        emulator.setSessionState({
+            //the CPU registers a Testcase may seed, as MIPS and x86 report them
+            startingRegisterNames: ['R0', 'zero', 'pc', 'rip'],
+            hiddenRegisters: ['zero']
+        })
+        expect(emulator.canPokeRegister(CPU_REGISTER_FILE_ID, 'R0')).toBe(true)
+        expect(emulator.canPokeRegister(CPU_REGISTER_FILE_ID, 'zero')).toBe(false)
+        expect(emulator.canPokeRegister(CPU_REGISTER_FILE_ID, 'pc')).toBe(false)
+        expect(emulator.canPokeRegister(CPU_REGISTER_FILE_ID, 'rip')).toBe(false)
+        //`hi` and `lo` are read but never set, so the Core does not offer them at all
+        expect(emulator.canPokeRegister(CPU_REGISTER_FILE_ID, 'hi')).toBe(false)
+        expect(emulator.canPokeRegister('nosuchfile', 'f0')).toBe(false)
+        expect(emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'pc', value: 1n }])).toBe(
+            false
+        )
+        //one refused register refuses the whole Poke, which is one step or none
+        expect(
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [
+                { register: 'R0', value: 1n },
+                { register: 'pc', value: 1n }
+            ])
+        ).toBe(false)
+        expect(emulator.pokeLog).toEqual([])
+    })
+
+    it('refuses a row the Core blanked, which holds no value to change', async () => {
+        const emulator = await pokeableEmulator()
+        expect(emulator.canPokeRegister('fpu', 'f1')).toBe(true)
+        emulator.fileBlanks = [false, true]
+        emulator.refreshPanels(true)
+        expect(emulator.canPokeRegister('fpu', 'f0')).toBe(true)
+        expect(emulator.canPokeRegister('fpu', 'f1')).toBe(false)
+        expect(emulator.canPokeRegister('fpu', 'f2')).toBe(false)
+    })
+
+    it('brackets exactly the writes of one Poke in one transaction', async () => {
+        const emulator = await pokeableEmulator()
+        expect(
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'R0', value: 0x2an }])
+        ).toBe(true)
+        expect(emulator.pokeLog).toEqual(['begin', 'register R0=42 at 4 bytes', 'end'])
+        expect(emulator.pokeOpen).toBe(false)
+    })
+
+    it('writes a Register file register through its own setter, several in one step', async () => {
+        const emulator = await pokeableEmulator()
+        expect(
+            emulator.pokeRegisters('fpu', [
+                { register: 'f0', value: 0x3ff8000000000000n },
+                { register: 'f1', value: 2n }
+            ])
+        ).toBe(true)
+        //one transaction for both writes, which is how a MIPS double reaches its register pair
+        expect(emulator.pokeLog).toEqual([
+            'begin',
+            `file fpu.f0=${0x3ff8000000000000n}`,
+            'file fpu.f1=2',
+            'end'
+        ])
+        const [, fpu] = emulator.registerFiles
+        expect(fpu.registers.map((register) => register.value)).toEqual([0x3ff8000000000000n, 2n])
+    })
+
+    it('records nothing when the value is the one the register already holds', async () => {
+        const emulator = await pokeableEmulator()
+        expect(emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'R0', value: 0n }])).toBe(
+            false
+        )
+        expect(emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [])).toBe(false)
+        expect(emulator.pokeLog).toEqual([])
+        //the writes that do change something are still made, without the ones that do not
+        expect(
+            emulator.pokeRegisters('fpu', [
+                { register: 'f0', value: 0n },
+                { register: 'f1', value: 5n }
+            ])
+        ).toBe(true)
+        expect(emulator.pokeLog).toEqual(['begin', 'file fpu.f1=5', 'end'])
+    })
+
+    it('drops a write the register already holds under another sign', async () => {
+        const emulator = await pokeableEmulator()
+        //MIPS and RISC-V report their CPU registers signed, so a register of all ones reads `-1n`
+        //here while a poked value is unsigned by contract: the two are the same bits, and a Poke
+        //of the digits the panel is showing has nothing to record
+        emulator.registerValue = -1n
+        emulator.rebuildRegistersFromCore()
+        expect(emulator.registers[0].value).toBe(-1n)
+        expect(
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'R0', value: 0xffffffffn }])
+        ).toBe(false)
+        expect(emulator.pokeLog).toEqual([])
+        //a value that is not those bits is still poked
+        expect(
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'R0', value: 0xfffffffen }])
+        ).toBe(true)
+        expect(emulator.pokeLog).toEqual(['begin', `register R0=${0xfffffffen} at 4 bytes`, 'end'])
+    })
+
+    it('refuses a value that does not fit the register, rather than truncating it', async () => {
+        const emulator = await pokeableEmulator()
+        expect(() =>
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [
+                { register: 'R0', value: 0x1_0000_0000n }
+            ])
+        ).toThrow(/does not fit R0, which is 32 bits wide/)
+        expect(() =>
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'R0', value: -1n }])
+        ).toThrow(/does not fit R0/)
+        //the wide value of a wider file is fine there
+        expect(
+            emulator.pokeRegisters('fpu', [{ register: 'f0', value: 0xffffffffffffffffn }])
+        ).toBe(true)
+        expect(() => emulator.pokeRegisters('fpu', [{ register: 'f1', value: 1n << 64n }])).toThrow(
+            /does not fit f1, which is 64 bits wide/
+        )
+        //a refused value opened no transaction and left nothing for the panels to report
+        expect(emulator.pokeOpen).toBe(false)
+        expect(emulator.errors).toEqual([])
+    })
+
+    it('pokes a run of memory bytes as one step, and re-syncs a memory backed Screen', async () => {
+        const emulator = await pokeableEmulator()
+        expect(emulator.pokeMemory(0x2000n, new Uint8Array([1, 2, 3, 4]))).toBe(true)
+        expect(emulator.pokeLog).toEqual(['begin', 'memory $2000=1,2,3,4', 'end'])
+        expect(emulator.screenResyncs).toBe(1)
+        expect([...emulator.readMemoryBytes(0x2000n, 4)]).toEqual([1, 2, 3, 4])
+
+        emulator.pokeLog = []
+        //the same bytes again change nothing, so no transaction and no re-paint
+        expect(emulator.pokeMemory(0x2000n, new Uint8Array([1, 2, 3, 4]))).toBe(false)
+        expect(emulator.pokeMemory(0x2000n, new Uint8Array())).toBe(false)
+        expect(emulator.pokeLog).toEqual([])
+        expect(emulator.screenResyncs).toBe(1)
+    })
+
+    it('refreshes the panels and the Undo state the way an Undo does', async () => {
+        const emulator = await pokeableEmulator()
+        expect(emulator.canUndo).toBe(false)
+        const memoryReads = emulator.memoryReads
+        expect(emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'R0', value: 7n }])).toBe(
+            true
+        )
+        //the registers are read back out of the Core, with the previous value left to highlight
+        expect(emulator.registers[0].value).toBe(7n)
+        expect(emulator.registers[0].prev).toBe(0n)
+        expect(emulator.memoryReads).toBeGreaterThan(memoryReads)
+        //a recorded Poke is undoable like an instruction and is a History row of its own
+        expect(emulator.canUndo).toBe(true)
+        expect(emulator.latestSteps.map((step) => step.kind)).toEqual(['poke'])
+        expect(emulator.undo(1)).toBe(1)
+        expect(emulator.canUndo).toBe(false)
+        expect(emulator.latestSteps).toEqual([])
+    })
+
+    it('applies a Poke the Core kept no history for, and says it recorded nothing', async () => {
+        const emulator = await pokeableEmulator()
+        //a history Setting of 0 records nothing, for a Poke as for an instruction
+        emulator.pokeRecords = false
+        expect(emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'R0', value: 9n }])).toBe(
+            false
+        )
+        expect(emulator.pokeLog).toEqual(['begin', 'register R0=9 at 4 bytes', 'end'])
+        expect(emulator.registers[0].value).toBe(9n)
+        expect(emulator.canUndo).toBe(false)
+    })
+
+    it('closes the transaction when a setter throws, and reports the failure', async () => {
+        const emulator = await pokeableEmulator()
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+        emulator._setRegisterValue = () => {
+            throw new Error('the Core refused')
+        }
+        expect(() =>
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'R0', value: 1n }])
+        ).toThrow('the Core refused')
+        //a Core left journaling into an entry nothing ends would swallow the next instruction
+        expect(emulator.pokeOpen).toBe(false)
+        expect(emulator.pokeLog).toEqual(['begin', 'end'])
+        expect(emulator.errors).toEqual(['Error: the Core refused'])
+    })
+
+    it('shows what a Poke wrote before a setter threw, rather than hiding it', async () => {
+        const emulator = await pokeableEmulator()
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+        const write = emulator._setRegisterFileValue.bind(emulator)
+        emulator._setRegisterFileValue = (id: string, register: string, value: bigint) => {
+            if (register === 'f1') throw new Error('the Core refused')
+            write(id, register, value)
+        }
+        expect(() =>
+            emulator.pokeRegisters('fpu', [
+                { register: 'f0', value: 1n },
+                { register: 'f1', value: 2n }
+            ])
+        ).toThrow('the Core refused')
+        expect(emulator.pokeLog).toEqual(['begin', 'file fpu.f0=1', 'end'])
+        //the Core kept the write that landed, so the panels and the Undo state say so: a refresh
+        //skipped here leaves the user with no sign of a change the next Undo would revert
+        const [, fpu] = emulator.registerFiles
+        expect(fpu.registers[0].value).toBe(1n)
+        expect(emulator.canUndo).toBe(true)
+        expect(emulator.latestSteps.map((step) => step.kind)).toEqual(['poke'])
     })
 })
 

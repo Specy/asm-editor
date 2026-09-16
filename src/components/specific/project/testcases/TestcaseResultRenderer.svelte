@@ -1,5 +1,5 @@
 <script lang="ts">
-    import type { TestcaseResult } from '$lib/Project.svelte'
+    import type { AvailableLanguages, TestcaseResult } from '$lib/Project.svelte'
     import Card from '$cmp/shared/layout/Card.svelte'
     import { RegisterSize, toHexString } from '$lib/languages/commonLanguageFeatures.svelte'
     import ExpandableContainer from '$cmp/shared/layout/ExpandableContainer.svelte'
@@ -12,13 +12,16 @@
         registerNames: string[]
         hiddenRegistersNames?: string[]
         systemSize: RegisterSize
+        /** The Target, which names the widths the register panels below group by. */
+        language: AvailableLanguages
     }
 
     let {
         testcaseResult = $bindable(),
         registerNames,
         hiddenRegistersNames,
-        systemSize
+        systemSize,
+        language
     }: Props = $props()
 
     function formatNumber(value: bigint | number, size: bigint | number) {
@@ -77,6 +80,7 @@
         {/snippet}
         <Testcase
             {systemSize}
+            {language}
             bind:testcase={testcaseResult.testcase}
             {registerNames}
             {hiddenRegistersNames}

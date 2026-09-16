@@ -7,7 +7,7 @@
     import PromptProvider from '$cmp/shared/providers/PromptProvider.svelte'
     import Footer from '$cmp/shared/layout/Footer.svelte'
     import { onMount } from 'svelte'
-    import { ThemeStore } from '$stores/themeStore.svelte'
+    import { ScopedTheme, ThemeStore } from '$stores/themeStore.svelte'
     import { beforeNavigate } from '$app/navigation'
     import { navigationStore } from '$stores/navigationStore'
     import { toAbsoluteUrl } from '$lib/seo'
@@ -36,7 +36,9 @@
     const color = ThemeStore.theme.secondary
     $effect(() => {
         if (metaTheme) {
-            metaTheme.content = color.color
+            //a subtree showing a language's colours dresses the browser chrome too: the tag lives
+            //in this head, so it is the one part of that theme the subtree cannot write itself
+            metaTheme.content = ScopedTheme.theme?.theme.secondary.color ?? color.color
         }
     })
 </script>

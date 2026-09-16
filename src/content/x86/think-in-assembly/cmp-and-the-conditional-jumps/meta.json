@@ -1,6 +1,6 @@
 {
     "name": "cmp and the conditional jumps",
-    "description": "Building an if out of a compare and a jump, why the condition comes out inverted, the sixteen conditions and which four words separate the signed ones from the unsigned, and the branch a cmov can replace.",
+    "description": "Use cmp, conditional jumps, fall-through and labels to build signed and unsigned decisions, short-circuit conditions and three-way comparisons.",
     "order": 0,
     "topic": "branching"
 }

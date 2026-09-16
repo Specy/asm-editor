@@ -1,14 +1,18 @@
-An array in memory has no length, no bounds and no element names. What it has is a first address and
-a size per element, and every loop over it is built out of those two numbers. On RISC-V the size is
-also what you multiply the index by, because `offset(base)` adds a register to nothing and scales
-nothing.
+An array occupies one contiguous run of memory, with equal-sized elements placed one after another.
+Its memory representation carries no automatic length or bounds. A program can keep the length in a
+register or memory, define it as a constant, or mark the address just after the final element.
 
-## The size decides the shift
+To reach element `i`, start with the array's base address and add `i * element_size`. RISC-V addresses
+memory in bytes, so the element size turns an index into a byte offset.
 
-Asking for element number `i` means going to the first address and moving `i` elements along, and
-moving along by an element means multiplying by its size. That multiplication is a shift you write
-out: two places for a word, one for a half, and none at all for a byte, which is already the unit an
-address counts in.
+## Scale a register index
+
+The address inside a load or store has the form `constant(base_register)`. For example,
+`lw t3, 8(t1)` reads four bytes at address `t1 + 8`. The `8` is a constant byte offset encoded in the
+instruction. When an index is held in a register, calculate its byte offset, add that to the base,
+and then load or store through the resulting address.
+
+Here the same index selects the third element from arrays whose elements have three different sizes:
 
 ```riscv|playground|memory
 .data
@@ -18,65 +22,65 @@ bytes:  .byte 5, 6, 7, 8
 
 .text
 main:
-    li t0, 2            # i = 2
-    la t1, words
-    slli t2, t0, 2      # i * 4
-    add t2, t1, t2
-    lw t3, 0(t2)        # words[i]
-    la t4, halves
-    slli t5, t0, 1      # i * 2
-    add t5, t4, t5
-    lh t6, 0(t5)        # halves[i]
-    la s0, bytes
-    add s1, s0, t0      # i, with nothing to scale
-    lb s2, 0(s1)        # bytes[i]
+    li   t0, 2           # i = 2
+
+    la   t1, words
+    slli t2, t0, 2       # byte offset = i * 4
+    add  t2, t1, t2
+    lw   t3, 0(t2)       # words[i]
+
+    la   t1, halves
+    slli t2, t0, 1       # byte offset = i * 2
+    add  t2, t1, t2
+    lh   t4, 0(t2)       # halves[i]
+
+    la   t1, bytes
+    add  t2, t1, t0      # byte offset = i
+    lb   t5, 0(t2)       # bytes[i]
 ```
 
-`t3` comes out at 30, `t6` at 3 and `s2` at 7, the third element of each of the three arrays. The
-three `la` results say where the assembler put them: `10010000` for the words, `10010010` for the
-halves, since four words take sixteen bytes, and `10010018` for the bytes.
+After the run, `t3` is 30, `t4` is 3 and `t5` is 7. Shifting left by two multiplies by four, and
+shifting left by one multiplies by two. A byte index is already a byte offset, so it needs no shift.
 
-An array of bytes needs no shift, which is why a string is walked with `addi t0, t0, 1` and nothing
-else.
+In this simulator, `words`, `halves` and `bytes` begin at `0x10010000`, `0x10010010` and
+`0x10010018`. Those addresses follow from this particular data layout; the labels let the program
+work without embedding them as constants.
 
-## Strings are bytes with a zero at the end
+A moving pointer is the other common way to walk an array. Add 4 after visiting a word, 2 after a
+halfword, or 1 after a byte. An index loop and a pointer loop perform the same address arithmetic in
+different places.
 
-`.asciz "Assembly"` writes nine bytes: the eight character codes and the terminator the directive
-adds. To the CPU `'A'` is the number 65, or `0x41`, which is what ASCII assigns to that letter, and
-nothing anywhere marks that byte as a letter instead of a number.
+## Zero-terminated strings
 
-Nothing records how long a string is either, so a loop finds out by reading until it reads a zero.
+A string is an array of character-code bytes with a convention for finding its end. The `.asciz`
+directive appends a zero byte after the characters:
 
-```riscv|playground|memory
-.data
+```riscv
 text: .asciz "Assembly"
-
-.text
-main:
-    la t0, text         # where we are looking
-    li t1, 0            # how many characters so far
-loop:
-    lb t2, 0(t0)        # the character there
-    beqz t2, done       # a zero byte ends the string
-    addi t0, t0, 1      # on to the next byte
-    addi t1, t1, 1      # and count it
-    j loop
-done:
 ```
 
-`t1` comes out at 8, the eight characters without the terminator, and `t0` at `10010008`, the address
-of the zero byte. The memory panel at `10010000` reads `41 73 73 65 6D 62 6C 79 00`, and its text
-button draws those same bytes as `Assembly`.
+This writes nine bytes: eight ASCII character codes followed by zero. `'A'` has ASCII code 65, or
+`0x41`, so the bytes begin `41 73 73 65 6D 62 6C 79 00`. In this simulator, if `text` is the first
+item in `.data`, those bytes begin at `0x10010000`.
 
-`lb` sign extends, so a byte above 127 comes back negative. Every ASCII character is 127 or under, so
-`lb` is safe for text. Bytes that hold numbers instead of letters want `lbu`, which keeps them in 0
-to 255.
+The zero is called the **terminator**. A program finds the string's end by checking one byte at a
+time, and its character count excludes that terminator. The string itself still occupies one extra
+byte to hold it.
 
-## Copying one
+Choose `lb` or `lbu` according to how the loaded byte will be interpreted:
 
-Copying a string means copying characters until you have copied the terminator, and copying the
-terminator is the point rather than an afterthought: without it the copy is not a string, it is just
-some bytes that happen to look like one.
+- `lb` sign-extends bit 7 and gives a signed value from -128 through 127.
+- `lbu` zero-extends and gives an unsigned value from 0 through 255.
+
+ASCII codes use only 0 through 127, so both instructions produce the same register value for ASCII.
+Either also works when a byte is only tested for zero or copied with `sb`: zero remains zero, and
+`sb` writes the low eight bits. Use `lbu` when later arithmetic or comparison should treat every
+possible byte as an unsigned number, and `lb` when the byte represents a signed 8-bit value.
+
+## Copy a string
+
+A complete string copy includes the terminating zero. This loop stores each byte before deciding
+whether another pass is needed:
 
 ```riscv|playground|memory
 .data
@@ -85,30 +89,66 @@ dest:   .space 16
 
 .text
 main:
-    la t0, source       # where we are reading
-    la t1, dest         # where we are writing
+    la   t0, source      # source pointer
+    la   t1, dest        # destination pointer
 loop:
-    lb t2, 0(t0)        # the character there
-    sb t2, 0(t1)        # write it to the other string
-    addi t0, t0, 1      # step both pointers on
-    addi t1, t1, 1      # and the second one
-    bnez t2, loop       # until the byte copied was the terminator
+    lbu  t2, 0(t0)       # read one byte
+    sb   t2, 0(t1)       # copy that byte, including a possible zero
+    addi t0, t0, 1
+    addi t1, t1, 1
+    bnez t2, loop        # continue if the copied byte was not zero
+done:
 ```
 
-`source` is nine bytes at `0x10010000`, so `dest` begins at `0x10010009`, and after the run the
-memory panel shows the same nine bytes twice: `48 69 20 74 68 65 72 65 00` and then the same again.
+In this simulator, `source` begins at `0x10010000` and occupies nine bytes, so `dest` begins at
+`0x10010009`. After the run, both locations contain `48 69 20 74 68 65 72 65 00`. The branch tests
+the byte that was just stored; when it is zero, the destination already has its terminator.
 
-The `bnez t2, loop` at the bottom is the test on the byte that was **just copied**, which is why the
-terminator gets written before the loop ends. Comparing two strings is the same loop with a `bne`
-between the two bytes in it, and the `sb` swapped for a second `lb`.
+## Compare two strings
 
-`dest` is a `.space`, so it is not word aligned and a `sw` into it would end the run. Bytes are fine
-anywhere, which is why this loop does not care.
+Two zero-terminated strings are equal when every corresponding character matches and both reach
+their terminators together. A mismatch produces 0 here, while matching strings produce 1:
+
+```riscv|playground|memory
+.data
+left:  .asciz "same"
+right: .asciz "sand"
+
+.text
+main:
+    la   t0, left
+    la   t1, right
+compare:
+    lbu  t2, 0(t0)
+    lbu  t3, 0(t1)
+    bne  t2, t3, different
+    beqz t2, equal       # equal bytes that are zero end both strings
+    addi t0, t0, 1
+    addi t1, t1, 1
+    j    compare
+different:
+    li   t4, 0
+    j    done
+equal:
+    li   t4, 1
+done:
+```
+
+With the data shown, the third characters differ, so `t4` becomes 0. Change `right` to `"same"`
+and `t4` becomes 1. The `beqz` is reached only after the two loaded bytes have compared equal. If
+that equal byte is zero, both strings ended at the same position and every earlier pair matched.
 
 ## Two dimensions
 
-A 2D array is a 1D array read in rows. `grid[row][col]` is the base plus `(row * COLS + col)` times
-the size of an element, and RISC-V makes you write both multiplications.
+A 2D array is stored as one contiguous array, one row after another. If every row has `COLS`
+elements, the element number for `grid[row][col]` is:
+
+```text
+row * COLS + col
+```
+
+Multiply that element number by the element size to obtain the byte offset. This example uses four
+halfwords per row:
 
 ```riscv|playground|memory
 .eqv COLS, 4
@@ -120,30 +160,79 @@ grid:   .half 0, 1, 2, 3
 
 .text
 main:
-    li t0, 2            # row
-    li t1, 3            # column
-    li t2, COLS
-    mul t3, t0, t2      # row * COLS
-    add t3, t3, t1      # + column
-    slli t3, t3, 1      # times 2, the size of a half
-    la t4, grid
-    add t4, t4, t3
-    lh t5, 0(t4)        # the element itself
+    li   t0, 2           # row
+    li   t1, 3           # column
+    li   t2, COLS
+    mul  t3, t0, t2      # row * COLS
+    add  t3, t3, t1      # row * COLS + column
+    slli t3, t3, 1       # byte offset: halfwords take two bytes
+    la   t4, grid
+    add  t4, t4, t3
+    lh   t5, 0(t4)       # grid[row][column]
 ```
 
-`t5` comes out at 23, the last element of the last row, and `t3` at 22, which is the byte offset into
-the block. The three `.half` lines are one array: the rows are a convenience for whoever reads the
-source, and the twelve halves sit end to end from `0x10010000`, which is what `COLS` in the index
-arithmetic assumes.
+`t3` becomes 22, the byte offset of element 11, and `t5` becomes 23. The line breaks in the data
+declaration make the rows visible to a reader; memory contains twelve consecutive halfwords. The
+value of `COLS` is what gives those bytes their row shape during the calculation.
 
-`mul t3, t0, t2` is a real instruction of the M extension and it is what a row of any width needs.
-When the width is a power of two, `slli` does it in one cheaper instruction, and the two shifts can
-be added together: a grid of 4 halves is `slli t3, t0, 3` for the row and then the column shifted by 1.
+When the row width and element size are powers of two, shifts can express both multiplications
+directly. A row above occupies `4 * 2 = 8` bytes, and a column step occupies 2 bytes. This complete
+sequence computes the same address:
 
-## Two strings to walk
+```riscv
+    # t0 = row, t1 = column
+    slli t2, t0, 3       # row byte offset = row * 8
+    slli t3, t1, 1       # column byte offset = column * 2
+    add  t2, t2, t3      # total byte offset
+    la   t4, grid
+    add  t4, t4, t2
+    lh   t5, 0(t4)
+```
 
-`text` at `0x10010000` is a string with a zero at the end. Leave its length, not counting the
-terminator, in `t0`. For `"Assembly"` that is 8.
+The shift form makes the power-of-two layout explicit. The multiplication form follows the general
+formula and also works when the row width is not a power of two.
+
+## Four memory exercises
+
+First, load element 4 of the halfword array into `t1`. The supplied index in `t0` is zero-based, so
+element 4 holds 23.
+
+```riscv|playground|memory|exercise
+.data
+values: .half 4, 8, 15, 16, 23, 42
+
+.text
+main:
+    li t0, 4             # index
+    # your code here
+```
+
+```testcase
+{
+    "expectedRegisters": { "t1": 23 }
+}
+```
+
+<details>
+<summary>Show solution</summary>
+
+```riscv|playground|memory|solution
+.data
+values: .half 4, 8, 15, 16, 23, 42
+
+.text
+main:
+    li   t0, 4
+    slli t2, t0, 1       # halfword index to byte offset
+    la   t3, values
+    add  t3, t3, t2
+    lh   t1, 0(t3)
+```
+
+</details>
+
+Next, leave the length of `text`, excluding its terminator, in `t0`. For `"Assembly"` the answer is
+8.
 
 ```riscv|playground|memory|exercise
 .data
@@ -169,26 +258,78 @@ text: .asciz "Assembly"
 
 .text
 main:
-    la t1, text         # where we are looking
-    li t0, 0            # how many characters so far
+    la   t1, text
+    li   t0, 0
 loop:
-    lb t2, 0(t1)        # the character there
+    lbu  t2, 0(t1)
     beqz t2, done
     addi t1, t1, 1
     addi t0, t0, 1
-    j loop
+    j    loop
 done:
 ```
 
 </details>
 
-The second one turns `text` into upper case **in place**, so the memory at `0x10010000` ends up
-holding `HELLO` and its terminator. A lower case letter is `'a'` to `'z'` and subtracting 32 from its
-code gives the capital. The two bounds you compare against will each need a register of their own.
+For the third exercise, load `grid[1][2]` into `t2`. The grid has four halfwords per row.
+
+```riscv|playground|memory|exercise
+.eqv COLS, 4
+
+.data
+grid:   .half 0, 1, 2, 3
+        .half 10, 11, 12, 13
+        .half 20, 21, 22, 23
+
+.text
+main:
+    li t0, 1             # row
+    li t1, 2             # column
+    # your code here
+```
+
+```testcase
+{
+    "expectedRegisters": { "t2": 12 }
+}
+```
+
+<details>
+<summary>Show solution</summary>
+
+```riscv|playground|memory|solution
+.eqv COLS, 4
+
+.data
+grid:   .half 0, 1, 2, 3
+        .half 10, 11, 12, 13
+        .half 20, 21, 22, 23
+
+.text
+main:
+    li   t0, 1
+    li   t1, 2
+    li   t3, COLS
+    mul  t3, t0, t3      # row * COLS
+    add  t3, t3, t1      # add the column
+    slli t3, t3, 1       # halfword index to byte offset
+    la   t4, grid
+    add  t4, t4, t3
+    lh   t2, 0(t4)
+```
+
+</details>
+
+Finally, turn `text` into upper case in place. A character literal is its numeric character code:
+`'a'` assembles as ASCII 97 and `'z'` as ASCII 122. Subtracting 32 from a lowercase ASCII code
+produces the corresponding uppercase code. Leave other characters unchanged and preserve the
+terminator. In this simulator, this first `.data` item begins at `0x10010000`, which is the memory
+address checked below. The result should read `HELLO, ASM!`: the existing uppercase letter, comma,
+space and exclamation mark stay as they are.
 
 ```riscv|playground|memory|exercise
 .data
-text: .asciz "hello"
+text: .asciz "Hello, asm!"
 
 .text
 main:
@@ -197,7 +338,7 @@ main:
 
 ```testcase
 {
-    "expectedMemory": [{ "type": "string-chunk", "address": "0x10010000", "expected": "HELLO" }]
+    "expectedMemory": [{ "type": "string-chunk", "address": "0x10010000", "expected": "HELLO, ASM!" }]
 }
 ```
 
@@ -206,23 +347,23 @@ main:
 
 ```riscv|playground|memory|solution
 .data
-text: .asciz "hello"
+text: .asciz "Hello, asm!"
 
 .text
 main:
-    la t0, text
-    li t3, 'a'
-    li t4, 'z'
+    la   t0, text
+    li   t3, 'a'         # ASCII 97
+    li   t4, 'z'         # ASCII 122
 loop:
-    lb t1, 0(t0)        # the character there
+    lbu  t1, 0(t0)
     beqz t1, done
-    blt t1, t3, skip    # leave anything that is not a lower case letter
-    bgt t1, t4, skip
-    addi t1, t1, -32    # 'a' - 'A' is 32
-    sb t1, 0(t0)        # put it back
+    blt  t1, t3, skip
+    bgt  t1, t4, skip
+    addi t1, t1, -32
+    sb   t1, 0(t0)
 skip:
     addi t0, t0, 1
-    j loop
+    j    loop
 done:
 ```
 

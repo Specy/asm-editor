@@ -1,8 +1,18 @@
-There are two ways to get from one element of an array to the next. You can count, and work out an
-address from the count every time. Or you can keep the address itself and move it along. Both are
-written here, because x86 has a family of instructions that only works with the second.
+# Arrays, strings and the string instructions
 
-## An array is a label and a size
+An **array** is a consecutive run of equal-size elements. If a qword array begins at `numbers`,
+then its elements begin at `numbers + 0`, `numbers + 8`, `numbers + 16`, and so on. There are two
+common ways to walk it:
+
+- keep an index and calculate `base + index * element_size`;
+- keep a pointer to the current element and advance it by `element_size`.
+
+Both forms need a boundary so that they never read beyond the array.
+
+## Walking an array by index
+
+This loop sums six qwords. The index starts at zero, so `[rbx + rcx*8]` implements
+`base + index * size`.
 
 ```x86|playground|memory|no-flags
 default rel
@@ -14,13 +24,18 @@ COUNT       equ ($ - numbers) / 8
 
 section .text
 _start:
-    xor rax, rax                ; the total
-    xor rcx, rcx                ; the index
-.add:
-    add rax, [numbers + rcx*8]  ; add element number rcx
-    inc rcx
+    lea rbx, [rel numbers]      ; base address
+    xor rcx, rcx                ; index = 0
+    xor rax, rax                ; total = 0
+
+sum_test:
     cmp rcx, COUNT
-    jb .add
+    jae sum_done                ; unsigned index >= count
+    add rax, [rbx + rcx*8]
+    inc rcx
+    jmp sum_test
+
+sum_done:
     mov r8, rax
 
     mov rax, 60
@@ -28,13 +43,17 @@ _start:
     syscall
 ```
 
-The loop never mentions the number six. `COUNT` is worked out by the assembler from the bytes the
-`dq` line actually produced, so adding a seventh number to the list changes the answer and nothing
-else.
+The `dq` directive emits 48 bytes. Dividing that byte count by the eight-byte element size makes
+`COUNT` equal to 6. `COUNT equ ...` is an assembly-time calculation: it allocates no memory and
+there is no stored variable named `COUNT` at run time.
 
-## The same loop with a pointer
+The condition is tested before the load. If `COUNT` were zero, the first `jae` would skip the body,
+so the program would not try to read an element that does not exist.
 
-Instead of an index and a scale, keep the address of the next element and an address to stop at.
+## Walking the same array with a pointer
+
+A label immediately after the array gives its **one-past-end address**. That address is a boundary;
+the program compares against it but never dereferences it.
 
 ```x86|playground|no-flags
 default rel
@@ -46,14 +65,18 @@ numbers_end:
 
 section .text
 _start:
-    lea rsi, [numbers]          ; the address of the first element
-    lea rdi, [numbers_end]      ; and of one past the last
-    xor rax, rax
-.add:
-    add rax, [rsi]              ; add whatever rsi is pointing at
-    add rsi, 8                  ; and step it on by one element
+    lea rsi, [rel numbers]      ; current element
+    lea rdi, [rel numbers_end]  ; one past the final element
+    xor rax, rax                ; total = 0
+
+pointer_test:
     cmp rsi, rdi
-    jb .add                     ; until it reaches the end
+    jae pointer_done            ; at or beyond the boundary
+    add rax, [rsi]
+    add rsi, 8                  ; advance by one qword
+    jmp pointer_test
+
+pointer_done:
     mov r8, rax
 
     mov rax, 60
@@ -61,79 +84,82 @@ _start:
     syscall
 ```
 
-`numbers_end:` is a label with nothing under it, so it holds the address the next item would have gone
-at, which is one byte past the end of the array. It is an address you compare against and never read
-from, and having the assembler work it out means the loop stays right when the array changes size.
+The pointer takes the values `numbers`, `numbers + 8`, through `numbers + 40`. After the final
+element it becomes `numbers_end`. The pre-test happens before every load, including the first one,
+so this shape is safe for an empty array whose start and end labels have the same address.
 
-Both loops do the same work. The index form is easier to read and lets you look back at the previous
-element on the way past. The pointer form is what the string instructions below need, because they
-have no notion of an index at all.
+The index form keeps the element number available. The pointer form already holds the next address
+to use. x86 string instructions use the pointer form through implicit registers.
 
-## A string is bytes and a rule for where it ends
+## Fixed-length bytes and zero-terminated strings
 
-There is no string type. There are bytes, and a convention about which byte stops the reading.
+A string is byte data plus a rule that says where the data ends. Two common rules are an explicit
+length and a terminating zero byte:
 
-```
-text:   db "hello", 0           ; six bytes, C style, ending at the zero
-fixed:  db "hello"              ; five bytes, and the length has to be kept elsewhere
-LEN     equ $ - fixed
-```
+```x86
+fixed:      db "hello"
+FIXED_LEN   equ $ - fixed       ; five bytes
 
-A quoted string in a `db` line is one byte per character and nothing else. NASM will not add a
-terminator for you, so if the code that reads the string is going to stop at a zero, the zero has to
-be in the `db` line where you can see it.
-
-Walking one is a loop that stops on the zero:
-
-```x86|playground|no-flags
-default rel
-global _start
-
-section .data
-text:   db "hello", 0
-
-section .text
-_start:
-    lea rsi, [text]
-    xor rcx, rcx                ; the length
-.next:
-    mov al, [rsi + rcx]         ; the byte at index rcx
-    test al, al                 ; is it the terminator?
-    jz .done
-    inc rcx
-    jmp .next
-.done:
-    mov r8, rcx
-
-    mov rax, 60
-    xor rdi, rdi
-    syscall
+c_text:     db "hello", 0      ; six bytes including the terminator
 ```
 
-The stopping condition is one instruction. `test al, al` sets `ZF` when `al` is zero and writes no
-register, so the byte just loaded is examined and left exactly as it was.
+`fixed` contains exactly five bytes, so code must receive or calculate its length. Those five bytes
+may include zero; the length, rather than a byte value, determines the end.
 
-## The string instructions
+`c_text` uses the C-style convention: the first zero byte ends the string. NASM does not append
+that byte to a quoted `db` value. The explicit `, 0` creates it.
 
-x86 has instructions that move one element from `[rsi]` to `[rdi]` and step both pointers as part of
-doing it. They come in the four sizes, `b`, `w`, `d` and `q`, and the direction they step is `DF`:
-`cld` clears it and they count upwards, `std` sets it and they count down.
+For the smaller declaration `message: db "Hi!", 0`, memory contains:
 
-| instruction | does                                                   |
-| ----------- | ------------------------------------------------------ |
-| `movsb`     | copy `[rsi]` to `[rdi]`, then step both                |
-| `stosb`     | store `al` at `[rdi]`, then step `rdi`                 |
-| `lodsb`     | load `[rsi]` into `al`, then step `rsi`                |
-| `scasb`     | compare `al` with `[rdi]`, set the flags, step `rdi`   |
-| `cmpsb`     | compare `[rsi]` with `[rdi]`, set the flags, step both |
+| address       | byte | meaning |
+| ------------- | ---- | ------- |
+| `message + 0` | `48` | `H` |
+| `message + 1` | `69` | `i` |
+| `message + 2` | `21` | `!` |
+| `message + 3` | `00` | terminator |
 
-None of them takes an operand: the registers are part of the instruction. What makes them worth
-having is the **repeat prefixes**, which run the instruction `rcx` times without fetching it again:
+A byte-at-a-time walk examines offsets 0, 1, 2, and 3. The load at offset 3 reads the terminator;
+`test al, al` then sets `ZF`, and the loop stops without treating that byte as a character. A valid
+zero-terminated string therefore needs accessible storage for the terminator as well as the visible
+characters.
 
-- **`rep`** repeats `rcx` times. Used with `movs` and `stos`.
-- **`repe`** repeats while the comparison says equal and `rcx` is not zero. Used with `cmps` and
-  `scas`.
-- **`repne`** repeats while it says not equal.
+## Implicit registers and the direction flag
+
+This lesson uses four byte-form string instructions. They use fixed registers rather than written
+operands:
+
+| instruction | operation | pointer change when `DF=0` | pointer change when `DF=1` |
+| ----------- | --------- | -------------------------- | -------------------------- |
+| `movsb` | copy byte `[rsi]` to `[rdi]` | `rsi += 1`, `rdi += 1` | `rsi -= 1`, `rdi -= 1` |
+| `stosb` | store `al` at `[rdi]` | `rdi += 1` | `rdi -= 1` |
+| `scasb` | set flags for `al - [rdi]` | `rdi += 1` | `rdi -= 1` |
+| `cmpsb` | set flags for `[rsi] - [rdi]` | `rsi += 1`, `rdi += 1` | `rsi -= 1`, `rdi -= 1` |
+
+The **direction flag**, `DF`, is persistent processor state. `cld` clears it for forward movement;
+`std` sets it for backward movement. A string instruction does not restore the old direction when
+it finishes. Execute `cld` whenever code requires forward movement instead of relying on whatever
+some earlier code left in `DF`.
+
+The suffix selects the element width. The `w`, `d`, and `q` forms move each affected pointer by 2,
+4, or 8 bytes respectively; the byte forms above move by 1. For example, `movsq` copies a qword and
+then adds or subtracts 8 from both pointers.
+
+`movsb` is also a useful exception to the ordinary operand rule. An explicit
+`mov [destination], [source]` is invalid because ordinary `mov` cannot have two memory operands.
+`movsb` performs a memory-to-memory copy through its implicit `[rsi]` source and `[rdi]`
+destination.
+
+## Repeating a string instruction
+
+A repeat prefix uses `rcx` as a count. Before each possible iteration, a zero `rcx` stops the
+instruction. Each completed iteration decrements `rcx`.
+
+- As used here, `rep` repeats `movs` or `stos` while `rcx` is nonzero.
+- `repe` repeats a comparison while `rcx` is nonzero and, after each comparison, `ZF=1`.
+- `repne` repeats a comparison while `rcx` is nonzero and, after each comparison, `ZF=0`.
+
+Here a bounded `rep movsb` copies six bytes, including the terminator. A bounded `rep stosb` then
+fills four other bytes.
 
 ```x86|playground|memory|no-flags
 default rel
@@ -141,19 +167,18 @@ global _start
 
 section .data
 source: db "hello", 0
-        db "xxxxxxxxxx"
 dest:   times 16 db 0
 
 section .text
 _start:
-    cld                         ; count upwards
+    cld                         ; both operations move forward
 
-    lea rsi, [source]           ; copy six bytes from source
-    lea rdi, [dest]             ; to dest
+    lea rsi, [rel source]
+    lea rdi, [rel dest]
     mov rcx, 6
     rep movsb
 
-    lea rdi, [dest + 8]         ; and fill four bytes with 'A'
+    lea rdi, [rel dest + 8]
     mov al, 'A'
     mov rcx, 4
     rep stosb
@@ -163,80 +188,115 @@ _start:
     syscall
 ```
 
-Type `402010` into the memory panel, which is where `dest` starts. The sixteen bytes read
+The resulting destination bytes are:
 
 ```
 68 65 6C 6C 6F 00 00 00   41 41 41 41 00 00 00 00
 ```
 
-`rep movsb` copies a block of memory in two bytes of code, and on a current processor it is the
-fastest way to do it. The hardware recognises the pattern and moves whole cache lines at a time
-rather than genuinely repeating a one byte copy `rcx` times.
+After the copy, `rsi` is `source + 6`, `rdi` is `dest + 6`, and `rcx` is zero. The following setup
+changes `rdi`; after the fill, it is `dest + 12` and `rcx` is zero again.
 
-## Finding the end of a string in four instructions
+## Scanning within a capacity
 
-`repne scasb` scans forward until the byte at `[rdi]` equals `al`, or until `rcx` runs out. Set `al`
-to zero and `rcx` to something huge and it stops on the terminator.
+`repne scasb` can look for a byte, but it must have a real bound. This example searches an
+eight-byte accessible range for a zero terminator:
 
 ```x86|playground|no-flags
 default rel
 global _start
 
 section .data
-text:   db "hello", 0
+text:           db "hello", 0, 'X', 'Y'
+text_end:
+TEXT_CAPACITY   equ text_end - text
 
 section .text
 _start:
-    lea rdi, [text]
-    xor al, al                  ; the byte being looked for
-    mov rcx, -1                 ; the largest count there is
-    cld
-    repne scasb                 ; stop at the first zero
+    lea rbx, [rel text]         ; remember the start
+    lea rdi, [rel text]
+    mov rcx, TEXT_CAPACITY      ; maximum accessible bytes
+    test rcx, rcx
+    jz terminator_missing
 
-    not rcx                     ; how many it got through
-    dec rcx                     ; minus the terminator itself
-    mov r8, rcx
+    xor eax, eax                ; al = byte to find: zero
+    cld                         ; scan toward increasing addresses
+    repne scasb
+    jnz terminator_missing      ; ZF=0: capacity exhausted without a match
+
+    ; ZF=1: rdi is one byte past the matching zero
+    mov r8, rdi
+    sub r8, rbx
+    dec r8                      ; character count excludes the terminator
+    jmp scan_done
+
+terminator_missing:
+    mov r8, -1                  ; no terminator within the capacity
+
+scan_done:
+    mov rax, 60
+    xor rdi, rdi
+    syscall
+```
+
+`scasb` sets flags for `al - [rdi]`, then advances `rdi`. The scan examines `h`, `e`, `l`, `l`,
+`o`, and zero. On the match, `ZF=1`, `rcx=2`, and `rdi=text+6`, one byte past the terminator.
+Subtracting the start gives six examined bytes; subtracting one more gives the five-character
+length.
+
+If all eight bytes were nonzero, the scan would finish with `rcx=0` and `ZF=0`. The immediate
+`jnz` distinguishes that exhausted-input case from a match. A zero capacity is handled before the
+scan because no comparison would run and there would be no new `ZF` result from `scasb`.
+
+## Comparing two bounded byte sequences
+
+`repe cmpsb` compares corresponding bytes while they are equal and a count remains. This example
+has an explicit five-byte bound:
+
+```x86|playground|no-flags
+default rel
+global _start
+
+section .data
+left:       db "stone"
+right:      db "stove"
+BYTE_COUNT  equ $ - right
+
+section .text
+_start:
+    xor r8, r8                  ; result will be 0 or 1
+    lea rsi, [rel left]
+    lea rdi, [rel right]
+    mov rcx, BYTE_COUNT
+    cld
+    repe cmpsb
+    sete r8b                    ; 1 only if all five bytes matched
 
     mov rax, 60
     xor rdi, rdi
     syscall
 ```
 
-`r8` is 5, and the two lines that got it there deserve taking apart, because `not` followed by `dec`
-looks like nothing at all to do with counting.
-
-`rcx` started at -1, which is `FFFFFFFFFFFFFFFF`, every bit set. The repeat prefix takes one off it
-per byte examined. So after the scan has looked at `k` bytes, `rcx` holds `-1 - k`:
-
-| bytes examined | the byte | `rcx` afterwards   | as a number |
-| -------------- | -------- | ------------------ | ----------- |
-| 0              |          | `FFFFFFFFFFFFFFFF` | -1          |
-| 1              | `h`      | `FFFFFFFFFFFFFFFE` | -2          |
-| 2              | `e`      | `FFFFFFFFFFFFFFFD` | -3          |
-| 3              | `l`      | `FFFFFFFFFFFFFFFC` | -4          |
-| 4              | `l`      | `FFFFFFFFFFFFFFFB` | -5          |
-| 5              | `o`      | `FFFFFFFFFFFFFFFA` | -6          |
-| 6              | the zero | `FFFFFFFFFFFFFFF9` | -7          |
-
-The count you want is in there, upside down. Getting it out is where `not` comes in, and the reason it
-works is two's complement: flipping every bit of a number `n` gives you `-n - 1`. Flipping `-1 - k`
-therefore gives `-(-1 - k) - 1`, which is just `k`. The scan looked at six bytes, so `not rcx` leaves 6.
-
-Six is one too many, because the last of those six was the terminator and the terminator is not part
-of the string. That is the `dec`. Five characters, which is what `r8` shows.
+`cmpsb` sets flags for `[rsi] - [rdi]`, then advances both pointers. The first three pairs match.
+The fourth comparison is `n - v`, so `ZF=0`; repetition stops with `rcx=1` and both pointers one
+byte past the differing pair. `r8` becomes zero. Two zero-length sequences count as equal, so that
+path should set the result to 1 without executing `cmpsb`.
 
 ## Your turn
 
-`values` holds five qwords. Walk them with a **pointer**, not an index, and leave the largest of them
-in `r8`. The answer is 42.
+Each array below is nonempty and contains **unsigned qwords**. Walk each array with a pointer and
+find its unsigned maximum. Leave the maxima in `r12` and `r13`. Preserve the final one-past-end
+pointers in `r14` and `r15` before the exit setup.
 
 ```x86|playground|memory|exercise
 default rel
 global _start
 
 section .data
-values:     dq 4, 42, 15, 16, 23
-values_end:
+values_a:       dq 4, 42, 15, 16, 23
+values_a_end:
+values_b:       dq 7, 0x8000000000000000, 12, 0xFFFFFFFFFFFFFFFE, 200, 5
+values_b_end:
 
 section .text
 _start:
@@ -249,7 +309,12 @@ _start:
 
 ```testcase
 {
-    "expectedRegisters": { "r8": 42 }
+    "expectedRegisters": {
+        "r12": 42,
+        "r13": "0xFFFFFFFFFFFFFFFE",
+        "r14": "0x402028",
+        "r15": "0x402058"
+    }
 }
 ```
 
@@ -261,24 +326,50 @@ default rel
 global _start
 
 section .data
-values:     dq 4, 42, 15, 16, 23
-values_end:
+values_a:       dq 4, 42, 15, 16, 23
+values_a_end:
+values_b:       dq 7, 0x8000000000000000, 12, 0xFFFFFFFFFFFFFFFE, 200, 5
+values_b_end:
 
 section .text
 _start:
-    lea rsi, [values]
-    lea rdi, [values_end]
-    mov r8, [rsi]               ; the first one is the best so far
+    lea rsi, [rel values_a]
+    lea rdx, [rel values_a_end]
+    mov r12, [rsi]
     add rsi, 8
-.next:
+
+first_test:
+    cmp rsi, rdx
+    jae first_done
     mov rax, [rsi]
-    cmp rax, r8
-    jbe .skip                   ; not bigger, so leave the best alone
-    mov r8, rax
-.skip:
+    cmp rax, r12
+    jbe first_next            ; unsigned candidate <= current maximum
+    mov r12, rax
+first_next:
     add rsi, 8
-    cmp rsi, rdi
-    jb .next
+    jmp first_test
+
+first_done:
+    mov r14, rsi
+
+    lea rsi, [rel values_b]
+    lea rdx, [rel values_b_end]
+    mov r13, [rsi]
+    add rsi, 8
+
+second_test:
+    cmp rsi, rdx
+    jae second_done
+    mov rax, [rsi]
+    cmp rax, r13
+    jbe second_next           ; unsigned candidate <= current maximum
+    mov r13, rax
+second_next:
+    add rsi, 8
+    jmp second_test
+
+second_done:
+    mov r15, rsi
 
     mov rax, 60
     xor rdi, rdi
@@ -287,8 +378,9 @@ _start:
 
 </details>
 
-The second one copies. `source` holds eight bytes and `dest` is eight zeroes. Copy the eight across
-with one `rep movsb`, so that `dest` reads `01 02 03 04 05 06 07 08`.
+Now copy the eight source bytes to `dest` with one `rep movsb`. The skeleton executes `std`
+immediately before your code, so execute `cld` before the forward copy. Preserve the final `rsi`,
+`rdi`, and `rcx` values in `r12`, `r13`, and `r14`.
 
 ```x86|playground|memory|exercise
 default rel
@@ -300,8 +392,12 @@ dest:   times 8 db 0
 
 section .text
 _start:
+    std
     ; your code here
 
+    mov r12, rsi
+    mov r13, rdi
+    mov r14, rcx
     mov rax, 60
     xor rdi, rdi
     syscall
@@ -309,8 +405,18 @@ _start:
 
 ```testcase
 {
+    "expectedRegisters": {
+        "r12": "0x402008",
+        "r13": "0x402010",
+        "r14": 0
+    },
     "expectedMemory": [
-        { "type": "number-chunk", "address": "0x402008", "bytes": 8, "expected": ["0x0807060504030201"] }
+        {
+            "type": "number-chunk",
+            "address": "0x402008",
+            "bytes": 1,
+            "expected": ["0x01", "0x02", "0x03", "0x04", "0x05", "0x06", "0x07", "0x08"]
+        }
     ]
 }
 ```
@@ -328,12 +434,16 @@ dest:   times 8 db 0
 
 section .text
 _start:
-    cld                     ; upwards
-    lea rsi, [source]
-    lea rdi, [dest]
+    std
+    cld                         ; this copy must move forward
+    lea rsi, [rel source]
+    lea rdi, [rel dest]
     mov rcx, 8
     rep movsb
 
+    mov r12, rsi
+    mov r13, rdi
+    mov r14, rcx
     mov rax, 60
     xor rdi, rdi
     syscall

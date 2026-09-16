@@ -1,29 +1,29 @@
-Printing went through `ecall`, which is a request: your program asks, and something else does the
-work. The screen and the keyboard are not like that. The screen **is memory**, the keyboard is
-**four addresses**, and the only instructions involved are `lw` and `sw`. Nothing is asked of
-anybody.
+`ecall` asks the Playground to do work. A screen and a console device can also be reached through
+addresses. RISC-V still uses the load and store instructions you already know: `lw` reads a word
+from an address and `sw` writes one.
 
-That arrangement has a name, **memory mapped I/O**, and it is how most real hardware is reached. A
-device is wired up so that it answers to certain addresses, and from the processor's side talking to
-it is indistinguishable from reading and writing memory. The wires decide which.
+This is **memory-mapped I/O**. The important distinction is what sits behind the address. The
+bitmap display uses an ordinary region of memory as its backing store. The console addresses below
+belong to device registers, so reading or writing them can have an effect outside the program.
 
 ## One word is one pixel
 
-The bitmap display is a grid of words somewhere in memory. The **low 24 bits** of each word are its
-colour: red in bits 23 to 16, green in 15 to 8, blue in 7 to 0, and the top byte is ignored. So
-`0x00FF0000` is red, `0x0000FF00` is green, `0x000000FF` is blue and `0x00FFFFFF` is white, which is
-the same `#RRGGBB` order a web page is written in, with a `0x` on the front.
+The Screen panel can display a region of memory as a grid of pixels. Each pixel is one four-byte
+word. Its low 24 bits are colour bytes:
 
-The words run **left to right and then top to bottom**, so the pixel below a word is one row of words
-further on. Four parameters say how big the grid is and where it starts, and a fifth says how large
-each word is drawn:
+| bits | colour byte |
+| ---- | ----------- |
+| 23 through 16 | red |
+| 15 through 8 | green |
+| 7 through 0 | blue |
 
-- **unit width** and **unit height**, 1 to 32, how many screen pixels one word covers.
-- **display width** and **height**, 64 to 1024. Divided by the unit size, they give the grid: 256 by
-  256 at a unit of 16 is a 16 by 16 grid of words.
-- **base address**, where the grid starts in memory.
+The high byte is ignored. Thus `0x00FF0000` is red, `0x0000FF00` is green,
+`0x000000FF` is blue, and `0x00FFFFFF` is white. This is the familiar `#RRGGBB` order written as
+a hexadecimal word.
 
-Press Run on this one and watch the Screen panel next to it.
+Pixels occupy consecutive words: left to right across a row, then the next row. Here the grid has
+16 words in each row, so `.space 1024` reserves its 256 words. Run the program and inspect the
+Screen panel.
 
 ```riscv|playground|open-screen|memory
 # @screen unit=16 width=256 height=256 base=display
@@ -34,56 +34,56 @@ display: .space 1024        # 16 * 16 words, four bytes each
 .globl main
 main:
     la t0, display
-    li t1, 0x00FF0000       # red
-    sw t1, 0(t0)            # the pixel at the top left
-    li t1, 0x0000FF00       # green
-    sw t1, 4(t0)            # the one to the right of it
-    li t1, 0x000000FF       # blue
-    sw t1, 64(t0)           # 16 words on, so the one below the first
-    li t1, 0x00FFFFFF       # white
-    sw t1, 1020(t0)         # the last word of the grid
+    li t1, 0x00FF0000       # red: column 0, row 0
+    sw t1, 0(t0)
+    li t1, 0x0000FF00       # green: one word to the right
+    sw t1, 4(t0)
+    li t1, 0x000000FF       # blue: one row below the first pixel
+    sw t1, 64(t0)
+    li t1, 0x00FFFFFF       # white: the final word in the grid
+    sw t1, 1020(t0)
     li a7, 10
     ecall
 ```
 
-Four `sw` instructions and four pixels change. `.space 1024` is what reserves the memory the grid
-covers: the screen shows whatever those words hold, so a program that writes past what it reserved is
-writing over something else, and one that reserves too little shows whatever is next in the data
-section.
+The offsets are bytes. `4(t0)` moves by one word and `64(t0)` moves by 16 words, one full row.
+The display reads these reserved words; loading or storing them otherwise behaves like loading or
+storing any data memory.
 
-Move that third store four bytes along, `68(t0)` instead of `64(t0)`, and the blue pixel moves one
-place to the right rather than down. One word is one pixel, and one pixel is four bytes.
+## Configuring the Screen panel
 
-## The @screen line
-
-The five parameters are the Screen panel's **Display** button, and a program can ask for them itself
-with a comment line naming `@screen`. Every Build reads it, before the first instruction runs.
+The Screen panel's **Display** button lets you choose a display size, pixel-unit size, and backing
+address. A complete `@screen` directive gives the same settings in the program. Each Build applies
+them before the program begins, which makes the display setup repeatable:
 
 ```
 # @screen unit=16 width=256 height=256 base=display
 ```
 
-- **`width`** and **`height`** are the display area in pixels, one of 64, 128, 256, 512 or 1024.
-- **`unit`** is how large one word is drawn, one of 1, 2, 4, 8, 16 or 32. `unitWidth` and
-  `unitHeight` set the two separately.
-- **`base`** is **a label your program defines**, which is the point of it, since the program then
-  never has to know the address. An address such as `0x10010000` works too.
+Here `width=256` and `height=256` make a 256-by-256-pixel display. `unit=16` draws every backing
+word as a 16-by-16 screen-pixel square, leaving a 16-by-16 grid of words. The allowed display
+widths and heights are 64, 128, 256, 512, and 1024. The allowed unit dimensions are 1, 2, 4, 8,
+16, and 32; `unit` sets both dimensions, while `unitWidth` and `unitHeight` can set them separately.
+Finally, `base=display` tells the panel that the word at the label `display` is the first pixel.
+An address may be used for `base` too, but a label keeps the program independent of the data
+section's numeric address.
 
-It is written as a comment, so it costs nothing and any assembler will ignore it. Anything the line
-gets wrong is a **warning** on that line and never an error:
-a size that is not on the list is replaced by the nearest one that is, and a label that does not
-exist leaves the base address alone. What the directive leaves out keeps the value it had.
+## Finding a pixel
 
-## Working out which word
-
-A pixel at column `x` and row `y` is at
+For a 16-column display, begin at the base, skip `y` whole rows of 16 words, then skip `x` more
+words within that row. Since each word has four bytes, the address is:
 
 ```
-base + (y * columns + x) * 4
+base + (y * 16 + x) * 4
 ```
 
-which is the two dimensional array of "Arrays and strings" with an element size of 4. When the number
-of columns is a power of two, both multiplications are shifts.
+For example, column 15 in row 15 is the final word: skip 15 rows, then 15 words. A simple
+blue-and-green ramp can use `x << 4` for the blue byte and `y << 12` for the green byte. At
+`x = 15`, `y = 15`, those pieces are `0x000000F0` and `0x0000F000`, giving the colour
+`0x0000F0F0`.
+
+This program calculates the address for one chosen pixel. Change `x`, `y`, or `colour`, build, and
+run it to place a different pixel.
 
 ```riscv|playground|open-screen|memory
 # @screen unit=16 width=256 height=256 base=display
@@ -93,119 +93,40 @@ display: .space 1024
 .text
 .globl main
 main:
-    la s0, display
-    li s3, 16                   # the side of the grid, since a branch needs a register
-    li s1, 0                    # y
-row:
-    li s2, 0                    # x
-pixel:
-    slli t0, s2, 4              # blue from x
-    slli t1, s1, 12             # green from y
-    or t0, t0, t1               # the colour of this pixel
-    slli t2, s1, 4              # y * 16, the number of columns
-    add t2, t2, s2              # + x
-    slli t2, t2, 2              # times four bytes per word
-    add t2, t2, s0
-    sw t0, 0(t2)
-    addi s2, s2, 1
-    blt s2, s3, pixel
-    addi s1, s1, 1
-    blt s1, s3, row
+    li t0, 15                   # x: column
+    li t1, 15                   # y: row
+    li t2, 0x0000F0F0           # green and blue
+    la t3, display              # base address
+
+    slli t4, t1, 4              # y * 16 words
+    add  t4, t4, t0             # word number: rows, then x words
+    slli t4, t4, 2              # byte offset: four bytes per word
+    add  t4, t4, t3             # address of this pixel
+    sw   t2, 0(t4)
+
     li a7, 10
     ecall
 ```
 
-A blue and green ramp over the whole grid, 256 pixels drawn by two nested loops. `slli t2, s1, 4` is
-the `y * 16`, and `slli t2, t2, 2` afterwards is the four bytes; the two could be one shift of 6, and
-they are written apart so the formula is readable.
+## The console registers at `0xffff0000`
 
-`slli t0, s2, 4` puts `x`, which runs from 0 to 15, into bits 4 to 7 of the colour, which is the top
-half of the blue byte. Shift it by 20 instead and the same numbers land in the red byte, and the
-ramp runs across a different pair of colours: the shift is the only thing that decides which part of
-the colour a value ends up in.
+The console appears as four **device registers**. The two control registers carry status and
+control bits; the two data registers carry characters. They are accessed with ordinary `lw` and
+`sw` spelling, but they are not a buffer in your data section. In particular, reading receiver data
+takes a character from the input queue, and storing transmitter data sends a character to the
+console.
 
-## An animation
+| address | register | use |
+| ------: | -------- | --- |
+| `0xffff0000` | receiver control | bit 0 is **Ready** when a typed character is waiting |
+| `0xffff0004` | receiver data | low byte is the next character; reading it takes that character |
+| `0xffff0008` | transmitter control | bit 0 is Ready; it is always 1 here |
+| `0xffff000c` | transmitter data | storing a low-byte character prints it on the console |
 
-A moving picture is a loop that erases, moves, draws and then **waits**. Service 32 is what makes it
-move at the same speed whatever your machine is doing, and it costs no instructions, so the
-Playground's budget is spent on drawing instead of on counting.
+For the programs on this page, inspect bit 0 of either control register.
 
-This one runs until you press Stop.
-
-```riscv|playground|open-screen
-# @screen unit=16 width=256 height=256 base=display
-.eqv SIDE, 16
-.eqv CELLS, 256
-.eqv BACKGROUND, 0x00101820
-.eqv DOT, 0x00FFCC33
-.data
-display: .space 1024
-
-.text
-.globl main
-main:
-    la s0, display
-    li s1, 0                    # x
-    li s2, 1                    # the step, which flips at the edges
-    li s3, SIDE
-    li s4, CELLS
-frame:
-    li t0, BACKGROUND           # paint the whole grid over
-    li t1, 0
-fill:
-    slli t2, t1, 2
-    add t2, t2, s0
-    sw t0, 0(t2)
-    addi t1, t1, 1
-    blt t1, s4, fill
-
-    slli t3, s1, 2              # the dot, on row 8
-    addi t3, t3, 512            # 8 rows of 16 words, four bytes each
-    add t3, t3, s0
-    li t4, DOT
-    sw t4, 0(t3)
-
-    li a7, 32                   # let 50 milliseconds of program time pass
-    li a0, 50
-    ecall
-
-    add s1, s1, s2              # move it
-    bltz s1, flip
-    blt s1, s3, frame
-flip:
-    sub s2, zero, s2            # turn it round at the edge
-    add s1, s1, s2
-    add s1, s1, s2
-    j frame
-```
-
-```testcase
-{ "runFor": 200000 }
-```
-
-Take that `ecall` out and the dot does not run faster in any useful sense: it spends the whole
-instruction budget in a couple of seconds and the program stops. The wait is what turns a budget of
-instructions into a picture that moves at a speed you chose, and raising it from 50 to 200 slows the
-dot to a quarter of the pace.
-
-The whole grid is repainted every frame, which is 256 stores, and then one more for the dot. Erasing
-only the pixel the dot was at last time would be two stores a frame, and that is what a program with
-a bigger grid does.
-
-## The keyboard and the console at 0xffff0000
-
-Four words carry one character each way. They are not memory: reading one asks the device something
-and writing one tells it to do something.
-
-|      address | name                | what it does                                                    |
-| -----------: | ------------------- | --------------------------------------------------------------- |
-| `0xffff0000` | receiver control    | bit 0 is **Ready**: a typed character is waiting                |
-| `0xffff0004` | receiver data       | the character, in the low byte. Reading it takes that character |
-| `0xffff0008` | transmitter control | bit 0 is Ready, and here it is always 1                         |
-| `0xffff000c` | transmitter data    | storing a character in the low byte prints it on the console    |
-
-The transmitter is the simpler of the two: a `sw` of a character code appends it to the console, the
-same console `ecall` service 4 writes to. ASCII 12, a form feed, clears the console instead.
+The transmitter is ready to accept a character, so this prints without using an `ecall` printing
+service:
 
 ```riscv|playground|console
 .eqv MMIO, 0xffff0000
@@ -214,33 +135,28 @@ same console `ecall` service 4 writes to. ASCII 12, a form feed, clears the cons
 .globl main
 main:
     li s0, MMIO
-    lw t0, 8(s0)            # the transmitter control register, always Ready
-    li t1, 'H'
-    sw t1, 12(s0)           # printed, with no ecall anywhere
-    li t1, 'i'
-    sw t1, 12(s0)
-    li t1, '\n'
-    sw t1, 12(s0)
-    lw t2, 0(s0)            # the receiver control, with nobody typing
+    li t0, 'H'
+    sw t0, 12(s0)           # transmitter data register
+    li t0, 'i'
+    sw t0, 12(s0)
+    li t0, '\n'
+    sw t0, 12(s0)
     li a7, 10
     ecall
 ```
 
-The console shows `Hi`. `t0` comes out at 1, the Ready bit of a device that is always willing to take
-a character, and `t2` at 0, because nothing was typed.
+The base in `s0` is `0xffff0000`, so the four word registers are at byte offsets 0, 4, 8, and 12.
+When the registers panel shows that base as a signed number, it may display a negative value; the
+same 32 address bits still select these registers.
 
-`li s0, MMIO` puts `0xFFFF0000` in a register, and the registers panel shows it as `FFFF0000` while
-hovering it says -65536: an address with its top bit set is a negative number read as signed, which
-changes nothing about the `lw` and is what to expect when you look at the row.
+## Polling and echoing keys
 
-## Polling the keyboard
+No instruction announces that a key was pressed. Instead, a program can repeatedly load receiver
+control, keep bit 0, and branch back while that bit is zero. This is **polling**. Once Ready is one,
+loading receiver data obtains one queued character. The following program sends that character back
+through transmitter data and ends when it receives `q`.
 
-A program cannot know when somebody will press a key. What it can do is read the receiver control
-register over and over until the Ready bit turns on, and then read the receiver data register, which
-takes the character and makes room for the next one. That loop is **polling**.
-
-**Click the Screen panel before you type**: the screen only gets the keyboard when it has the focus,
-and a ring around it says so while it does.
+Click the Screen panel before typing so that it has keyboard focus.
 
 ```riscv|playground|open-screen|console|no-registers
 .eqv MMIO, 0xffff0000
@@ -258,16 +174,17 @@ main:
     li s1, 'q'
 poll:
     lw t0, 0(s0)            # receiver control
-    andi t0, t0, 1          # the Ready bit
+    andi t0, t0, 1          # retain Ready, bit 0
     bnez t0, take
-    li a7, 32               # nothing typed yet, so wait instead of spinning
+
+    li a7, 32               # wait briefly before checking again
     li a0, 10
     ecall
     j poll
 take:
-    lw t1, 4(s0)            # receiver data, which dequeues one character
+    lw t1, 4(s0)            # receiver data: take one queued character
     andi t1, t1, 0xFF
-    sw t1, 12(s0)           # echo it through the transmitter
+    sw t1, 12(s0)           # transmitter data: echo it
     beq t1, s1, quit
     j poll
 quit:
@@ -275,51 +192,15 @@ quit:
     ecall
 ```
 
-```testcase
-{ "runFor": 40000 }
-```
-
-Type into the screen panel and every character comes back in the console; type `q` and the program
-ends. The `ecall` service 32 in the middle is what stops the poll from burning the instruction
-budget while nothing is happening: a wait costs no instructions, so a program idling on the keyboard
-can idle for as long as you like.
-
-Ready means "the queue is not empty" instead of "exactly one character is here". What does not fit in
-the data register waits behind it, so a program that polls slowly still gets every keystroke in
-order.
-
-## Interrupts, and why the program stops
-
-Bit 1 of either control register is the device's **interrupt enable** bit: setting it asks the device
-to interrupt the program when it has something, instead of being polled. This editor does not deliver
-device interrupts. A program that set the bit would wait for one forever, so a `sw` that sets it ends
-the run instead, with
-
-```
-Interrupt-driven I/O is not supported: the program set the interrupt-enable bit (bit 1) of the
-receiver control register at 0xffff0000. Poll the Ready bit (bit 0) instead.
-```
-
-The next lecture is about the interrupt and exception machinery that message is refusing, and about
-the part of it this editor does run.
-
-## What is particular to this editor
-
-- The display is always there as a panel, rather than a tool you have to connect to the program
-  first.
-- Service 30 counts from the start of the run, and a testcase runs on a virtual clock.
-- The only pointing device is the two devices above: there is nothing that reports the mouse.
-- A testcase cannot type, so an automated run leaves the receiver empty. The keyboard programs on
-  this page are yours to try by hand and cannot be checked by a test.
-
-The five display parameters, the four registers and the `@screen` settings are all on the
-[RISC-V screen documentation page](/documentation/risc-v/screen).
+In this Playground, service 32 lets an empty polling loop wait without spending its instruction
+budget. During an interactive run it waits for the requested time; a testcase advances its virtual
+clock immediately. The wait makes the program pleasant to leave idle while it is waiting for a key.
 
 ## Your turn
 
-The grid is 16 by 16 words at `display`. Paint the pixel at column 5, row 3 white, which is
-`0x00FFFFFF`, working the address out from the two coordinates instead of counting the bytes
-yourself. Row 3 column 5 is word `3 * 16 + 5`, which is 53, so the store lands at `0x10010000` plus 212.
+The Screen panel is a 16-by-16 word grid whose base label is `display`. Put white at the pixel with
+the supplied `x` and `y` values. Derive the row-and-column offset, convert it to bytes, and store
+`0x00FFFFFF` at the resulting address.
 
 ```riscv|playground|open-screen|memory|exercise
 # @screen unit=16 width=256 height=256 base=display
@@ -359,8 +240,8 @@ main:
     li t1, 3                # y
     la t2, display
     li t3, SIDE
-    mul t4, t1, t3          # y * SIDE
-    add t4, t4, t0          # + x
+    mul t4, t1, t3          # y * SIDE rows of words
+    add t4, t4, t0          # then x words
     slli t4, t4, 2          # four bytes per word
     add t4, t4, t2
     li t5, 0x00FFFFFF
@@ -371,8 +252,8 @@ main:
 
 </details>
 
-The second one prints `Hi` on the console through the **transmitter data register**, with no `ecall`
-service 4 and no `ecall` service 11.
+Print `Hi` by storing its character codes in the transmitter data register, without printing
+services 4 or 11. You may still use service 10 to end the run.
 
 ```riscv|playground|console|exercise
 .text

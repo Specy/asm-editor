@@ -1,104 +1,121 @@
-You can write real x86 programs with about sixty instructions. The full set is far larger than that,
-and the gap between the two numbers is worth understanding before it frightens you off.
+# The x86 instruction set
 
-## How many there are
+x86 has a large instruction set, but useful programs begin with a small core. The instructions in
+that core move values, calculate, compare, and choose which instruction runs next. Each instruction
+has a short name called a **mnemonic**, followed by the operands it uses.
 
-Most of what a complete x86 reference lists is the vector extensions, SSE and AVX and AVX-512, where
-a single idea appears once per width and once per data type. "Add two numbers" turns into dozens of
-separate names that way, and none of them is a new idea to learn.
+The assembler turns that source into machine-code bytes. Its
+[instruction reference](/documentation/x86/instruction) lists the operand forms that NASM accepts
+for each mnemonic.
 
-The integer instructions a program like the ones in this course uses are around sixty, and the
-[instruction reference](/documentation/x86/instruction) lists them with the operand forms this
-assembler really accepts. The rest is reachable from the
-[complete documentation](/documentation/x86/all) on the day you need it.
+## Mnemonics and operands
 
-x86 is a **CISC** design, complex instruction set, and that means two concrete things here.
-Instructions are not all the same length: they run from one byte to fifteen, so you cannot tell where
-the next one starts without decoding this one first. And a single instruction may do a great deal.
-`movsb` copies a byte, steps two pointers and, with a prefix in front of it, repeats itself a million
-times, all from two bytes of code.
+An instruction can have zero, one, two, or occasionally more explicit operands:
 
-## The shape of a line
-
-```
-mnemonic destination, source
+```x86
+    ret                         ; zero explicit operands
+    inc rax                     ; one
+    add rax, rbx                ; two
+    imul rax, rbx, 10           ; three
 ```
 
-The destination is on the left and it is the operand that gets written. An operand is one of three
-things:
+For common two-operand data instructions in NASM syntax, the destination comes first:
 
-- A **register**: `rax`, `bl`, `r9d`.
-- An **immediate**, a number written into the instruction itself rather than fetched from anywhere:
-  `5`, `0x40`, `'A'`.
-- A **memory reference** in square brackets: `[total]`, `[rbx]`, `[rbx + rcx*8 + 4]`. What may go
-  inside the brackets is the "Effective addresses" lecture.
-
-The rule that shapes everything is that **at most one operand can be in memory**. So
-
-```
-    mov rax, [total]        ; register and memory: fine
-    mov [total], rax        ; memory and register: fine
-    mov [total], 5          ; memory and immediate: fine
-    mov [a], [b]            ; two memory operands: not an instruction
+```x86
+    mov rax, 5                  ; rax receives 5
+    add rax, rbx                ; rax receives rax + rbx
 ```
 
-Copying one variable to another therefore takes two instructions and a register to pass through. That
-is the only real restriction on which operands go where, and everything else about memory operands is
-allowed: `add rax, [total]`, `cmp rax, [limit]` and `imul rcx, [scale]` are all single instructions.
+This common shape has exceptions. For example, `cmp rax, rbx` reads both registers and records their
+relationship in the flags; it leaves both registers unchanged. The mnemonic's documented forms
+tell you how many operands it takes, where each kind of operand may appear, and what the instruction
+writes.
 
-## The size is in the operands
+## Three common kinds of operand
 
-There is no `.b` or `.l` on an x86 mnemonic. `mov` moves one byte or eight depending on what you
-name:
+The instructions in this course often use:
 
+- A **register**, such as `rax`, `bl`, or `r9d`.
+- An **immediate**, a value written directly in the instruction, such as `5`, `0x40`, or `'A'`.
+- A **memory reference** in square brackets, such as `[total]` or `[rbx]`.
+
+In the ordinary explicit two-operand forms shown here, at most one operand can be a memory
+reference:
+
+```x86
+    mov rax, [source]           ; memory to register
+    mov [destination], rax      ; register to memory
+    mov qword [destination], 5  ; immediate to memory
 ```
-    mov al, 1               ; one byte
-    mov ax, 1               ; two
-    mov eax, 1              ; four
-    mov rax, 1              ; eight
-    mov qword [total], 1    ; eight, said by the keyword because nothing else could
+
+NASM has no ordinary `mov` form from one memory location directly to another:
+
+```x86
+    mov [destination], [source] ; assembly error
 ```
 
-Five instructions, one mnemonic. The assembler picks the encoding, and the
-[hover in the editor](/documentation/x86/instruction) lists the forms each mnemonic has.
+Use a register as a temporary:
 
-## The families
+```x86
+    mov rax, [source]
+    mov [destination], rax
+```
 
-| family            | examples                                                            | what they do                         |
-| ----------------- | ------------------------------------------------------------------- | ------------------------------------ |
-| moving data       | `mov`, `movzx`, `movsx`, `lea`, `xchg`, `push`, `pop`               | copy bits from one place to another  |
-| arithmetic        | `add`, `sub`, `inc`, `dec`, `neg`, `mul`, `imul`, `div`, `idiv`     | numbers                              |
-| logic and bits    | `and`, `or`, `xor`, `not`, `test`, `shl`, `shr`, `sar`, `rol`, `bt` | bit patterns                         |
-| comparing         | `cmp`, `test`                                                       | set the flags and write nothing else |
-| control flow      | `jmp`, `jcc`, `call`, `ret`, `loop`                                 | change `rip`                         |
-| conditional moves | `cmovcc`, `setcc`                                                   | act on the flags without branching   |
-| strings           | `movsb`, `stosb`, `lodsb`, `scasb`, `cmpsb`, with `rep`             | work through memory a byte at a time |
-| floating point    | `addsd`, `mulss`, `cvtsi2sd`, `fld`, `faddp`                        | the SSE and x87 units                |
-| system            | `syscall`, `int`, `hlt`, `in`, `out`                                | leave the program                    |
+The one-memory-operand guideline covers many familiar two-operand instructions, including these
+forms of `mov`, `add`, and `cmp`. Each mnemonic still has its own permitted forms. A form shown in
+the instruction reference is the authority when the general pattern is not enough.
 
-## cc, the family that is one instruction sixteen times
+## Operand width selects the operation width
 
-`jcc`, `setcc` and `cmovcc` are not three instructions. They are three instructions crossed with
-sixteen conditions, and the `cc` in the name is where the condition goes.
+The operands usually tell NASM whether an instruction works on a byte, word, dword, or qword. A
+register name supplies that width:
 
-| suffix     | means                         |
-| ---------- | ----------------------------- |
-| `e`, `z`   | equal, or the result was zero |
-| `ne`, `nz` | not equal                     |
-| `l`        | less, signed                  |
-| `g`        | greater, signed               |
-| `b`        | below, unsigned               |
-| `a`        | above, unsigned               |
-| `s`        | negative                      |
-| `o`        | overflowed                    |
+```x86
+    mov al, 1                   ; one byte
+    mov ax, 1                   ; two bytes
+    mov eax, 1                  ; four bytes
+    mov rax, 1                  ; eight bytes
 
-So `jne` is jump if not equal, `setl` writes 1 or 0 into a byte if less, and `cmovg` copies a
-register only if greater. Adding `e` to `l`, `g`, `b` or `a` gives you the "or equal" version, `jle`
-through `jae`. All sixteen are on the
-[registers and flags page](/documentation/x86/registers).
+    mov bl, [value]             ; read one byte
+    mov rbx, [value]            ; read eight bytes
+```
 
-Where does the condition come from? From an earlier instruction, through the flags. "The flags
-register", two lectures from here, is what each of those words actually means in bits.
+When a memory operand is paired with a register, the register usually provides the memory width.
+In `mov [total], rax`, NASM therefore knows to store eight bytes.
+
+An immediate has no register name from which to infer a width. An immediate-to-memory store needs
+an explicit size:
+
+```x86
+    mov byte [total], 5         ; store one byte
+    mov word [total], 5         ; store two bytes
+    mov qword [total], 5        ; store eight bytes
+```
+
+Writing `mov [total], 5` leaves the size ambiguous, so NASM rejects it. Widths are also part of an
+instruction's supported forms: two operands that make sense separately may still be an invalid
+pair if their widths or positions do not match a documented form.
+
+## A map of the main families
+
+Instruction mnemonics are easier to learn in small families:
+
+| family         | examples                                         | purpose                                  |
+| -------------- | ------------------------------------------------ | ---------------------------------------- |
+| moving values  | `mov`, `movzx`, `movsx`, `lea`, `xchg`           | transfer values or produce addresses     |
+| arithmetic     | `add`, `sub`, `inc`, `dec`, `neg`, `imul`, `div` | calculate with integers                  |
+| logic and bits | `and`, `or`, `xor`, `not`, `test`, `shl`, `shr`  | work with bit patterns                   |
+| comparison     | `cmp`, `test`                                    | record information for a later decision |
+| control flow   | `jmp`, conditional jumps, `call`, `ret`          | choose which instruction runs next      |
+
+The table gives the broad purpose of each family. Individual instructions can have additional
+behavior. For instance, `lea` calculates an address expression without reading memory, while `mov`
+transfers a value. The instruction reference gives the precise behavior of each mnemonic.
+
+## One bit pattern, two comparisons
+
+A comparison can treat the same bits as signed or unsigned. `cmp left, right` records the relation
+between its operands. A following condition instruction chooses which interpretation to use.
 
 ```x86|playground
 default rel
@@ -106,39 +123,41 @@ global _start
 
 section .text
 _start:
-    mov rax, 10
-    mov rbx, 20
-    cmp rax, rbx            ; 10 against 20
+    mov r8,  0xAAAAAAAAAAAAAAAA
+    mov r9,  0xBBBBBBBBBBBBBBBB
 
-    setl r8b                ; signed less: 1
-    seta r9b                ; unsigned above: 0
+    mov rax, -1
+    mov rbx, 1
+    cmp rax, rbx
 
-    mov rcx, 111
-    mov rdx, 222
-    cmovl rcx, rdx          ; less, so rcx takes 222
+    setg r8b                    ; signed: -1 > 1 is false, so write 0
+    seta r9b                    ; unsigned: 0xFFFF... > 1 is true, so write 1
 
     mov rax, 60
     mov rdi, 0
     syscall
 ```
 
-One `cmp` and two different answers out of it, because `setl` asked a signed question and `seta` an
-unsigned one about the same two numbers.
-
-`setcc` writes **one byte**, so `setl rax` is not a form. `setl al` followed by `movzx rax, al` is how
-you get a full register out of it. `cmovcc` is a move that happens or does not happen, with no jump
-anywhere in the program, and the branching lecture is where that turns out to matter.
+`setg` and `seta` each write a one-byte answer: 1 when the requested relation is true and 0 when it
+is false. The full results are `r8 = 0xAAAAAAAAAAAAAA00` and
+`r9 = 0xBBBBBBBBBBBBBB01`. Both answers came from the same `cmp`; the condition selected the signed
+or unsigned reading.
 
 ## Your turn
 
-Compare `rax` and `rbx`, and leave 1 in `cl` if `rax` is greater than `rbx` read as signed numbers,
-0 if it is not. The test starts them at -1 and 1, and starts `cl` at `0xFF` so that leaving it alone
-is not an answer. As signed numbers -1 is the smaller, so `cl` should end at 0, and reading the same
-bits as unsigned would give the other answer.
+`source` holds a qword. Load it into `r10`, then copy it into `copy`. Use the register as the
+temporary because an ordinary two-operand `mov` cannot have two memory operands. Finally, store the
+word `0x1234` at `marker`. That last store must change only the first two bytes, leaving its other
+six bytes as `0xFF`.
 
-```x86|playground|exercise
+```x86|playground|memory|exercise
 default rel
 global _start
+
+section .data
+source: dq 0x1122334455667788
+copy:   dq 0
+marker: dq 0xFFFFFFFFFFFFFFFF
 
 section .text
 _start:
@@ -151,22 +170,43 @@ _start:
 
 ```testcase
 {
-    "startingRegisters": { "rax": "0xFFFFFFFFFFFFFFFF", "rbx": 1, "rcx": "0xFF" },
-    "expectedRegisters": { "rcx": 0 }
+    "expectedRegisters": {
+        "r10": "0x1122334455667788"
+    },
+    "expectedMemory": [
+        {
+            "type": "number-chunk",
+            "address": "0x402008",
+            "bytes": 8,
+            "expected": ["0x1122334455667788"]
+        },
+        {
+            "type": "number-chunk",
+            "address": "0x402010",
+            "bytes": 8,
+            "expected": ["0xFFFFFFFFFFFF1234"]
+        }
+    ]
 }
 ```
 
 <details>
 <summary>Show solution</summary>
 
-```x86|playground|solution
+```x86|playground|memory|solution
 default rel
 global _start
 
+section .data
+source: dq 0x1122334455667788
+copy:   dq 0
+marker: dq 0xFFFFFFFFFFFFFFFF
+
 section .text
 _start:
-    cmp rax, rbx        ; sets the flags and writes nothing else
-    setg cl             ; signed greater, one byte of answer
+    mov r10, [source]
+    mov [copy], r10
+    mov word [marker], 0x1234
 
     mov rax, 60
     mov rdi, 0

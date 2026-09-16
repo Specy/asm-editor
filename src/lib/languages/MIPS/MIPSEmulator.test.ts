@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import type { JsMips, JsUndoGroup } from '@specy/mips'
 import { MIPSEmulator } from '$lib/languages/MIPS/MIPSEmulator.svelte'
 import {
     MARS_INTERRUPT_ENABLE_BIT,
@@ -13,7 +14,8 @@ import type { ProjectDisplay } from '$lib/languages/mars/marsDisplay'
 import type { Testcase } from '$lib/Project.svelte'
 import { Keyboard } from '$lib/languages/peripherals/Keyboard'
 import { ProgramClock } from '$lib/languages/peripherals/ProgramClock'
-import { InterpreterStatus } from '$lib/languages/commonLanguageFeatures.svelte'
+import { InterpreterStatus, RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
+import { CPU_REGISTER_FILE_ID } from '$lib/languages/GenericEmulator.svelte'
 import { FileSystem } from '$lib/languages/peripherals/FileSystem'
 
 /**
@@ -1478,5 +1480,302 @@ describe('MIPS diagnostic spans', () => {
         const operator = diagnostics.find((d) => d.message.includes('bogusinstr'))
         expect(operator?.column).toBe(9)
         expect(operator?.endColumn).toBe(19)
+    })
+})
+
+/**
+ * Pokes against the real Core ([the design record](../../../../docs/design/pokes.md)): a register or
+ * memory value changed between two instructions is one entry of MARS's own undo history, listed as
+ * a row of its own and undone like an instruction
+ * ([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md)).
+ */
+describe('MIPS Pokes', () => {
+    const POKEABLE =
+        `        .data
+buffer: .space  2048
+        .text
+main:
+        li      $t0, 5
+        li      $t1, 6
+        addu    $t2, $t0, $t1
+` + EXIT
+
+    /** Past the 64 words the 64 by 64 display mirrors, so a memory Poke there draws nothing. */
+    const BUFFER = 0x10010400n
+
+    /** Opens a File, writes to it and closes it, one syscall each, without ending the program. */
+    const WRITE_FILE =
+        `        .data
+path:   .asciiz "output.txt"
+payload:.asciiz "hello"
+        .text
+main:
+        li      $v0, 13
+        la      $a0, path
+        li      $a1, 1
+        li      $a2, 0
+        syscall
+        move    $s0, $v0
+        li      $v0, 15
+        move    $a0, $s0
+        la      $a1, payload
+        li      $a2, 5
+        syscall
+        move    $a0, $s0
+        li      $v0, 16
+        syscall
+` + EXIT
+
+    function registerOf(emulator: Emulator, name: string) {
+        const register = emulator.registers.find((candidate) => candidate.name === name)
+        if (!register) throw new Error(`No register named ${name}`)
+        return register
+    }
+
+    function fileValue(emulator: Emulator, id: string, name: string): bigint {
+        const file = emulator.registerFiles.find((candidate) => candidate.id === id)
+        const register = file?.registers.find((candidate) => candidate.name === name)
+        if (!register) throw new Error(`No register named ${name} in ${id}`)
+        return register.value
+    }
+
+    it('records a poked CPU register as a step of its own and undoes it', async () => {
+        const emulator = await build(POKEABLE)
+        await emulator.step()
+        expect(registerOf(emulator, '$t0').value).toBe(5n)
+        expect(emulator.canPoke).toBe(true)
+        expect(
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: '$t0', value: 0x2an }])
+        ).toBe(true)
+        expect(registerOf(emulator, '$t0').value).toBe(0x2an)
+
+        const [poke] = emulator.latestSteps
+        expect(poke.kind).toBe('poke')
+        //no instruction ran, so the row has neither a PC nor a line to jump to
+        expect(poke.pc).toBe(-1)
+        expect(poke.line).toBe(-1)
+        expect(poke.writes).toEqual([{ type: 'register', name: '$t0', old: 5n, new: 0x2an }])
+        expect(poke.mutations).toEqual([
+            {
+                type: 'WriteRegister',
+                value: { register: '$t0', old: 5n, new: 0x2an, size: RegisterSize.Long }
+            }
+        ])
+
+        expect(emulator.canUndo).toBe(true)
+        expect(emulator.undo(1)).toBe(1)
+        expect(registerOf(emulator, '$t0').value).toBe(5n)
+        //the Poke is gone from the history and the instruction under it is back on top
+        expect(emulator.latestSteps[0].kind).toBe('instruction')
+    })
+
+    it('never offers the program counter, hi or lo, which MARS has no setter for', async () => {
+        const emulator = await build(POKEABLE)
+        await emulator.step()
+        expect(emulator.canPokeRegister(CPU_REGISTER_FILE_ID, '$t0')).toBe(true)
+        for (const register of ['pc', 'hi', 'lo', '$zero']) {
+            expect(emulator.canPokeRegister(CPU_REGISTER_FILE_ID, register)).toBe(false)
+        }
+        expect(emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'pc', value: 0n }])).toBe(
+            false
+        )
+        //a value that leaves the register as it is changes nothing and records nothing
+        expect(emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: '$t0', value: 5n }])).toBe(
+            false
+        )
+        expect(emulator.latestSteps[0].kind).toBe('instruction')
+    })
+
+    it('records nothing when the panel pokes back the hex a negative register shows', async () => {
+        const emulator = await build(POKEABLE)
+        await emulator.step()
+        //MARS keeps its registers in an `Int32Array`, so a register of all ones reads `-1n` here
+        //while the row draws `ffffffff` and sends that back unsigned: the two are the same bits
+        expect(
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: '$t0', value: 0xffffffffn }])
+        ).toBe(true)
+        expect(registerOf(emulator, '$t0').value).toBe(-1n)
+        expect(
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: '$t0', value: 0xffffffffn }])
+        ).toBe(false)
+        //one Poke, one row: the second commit left the history where the first put it
+        expect(emulator.latestSteps.filter((step) => step.kind === 'poke')).toHaveLength(1)
+    })
+
+    it('pokes a register of the FPU and of the CP0 file, each as one step', async () => {
+        const emulator = await build(POKEABLE)
+        await emulator.step()
+        expect(emulator.pokeRegisters('fpu', [{ register: '$f2', value: 0x40400000n }])).toBe(true)
+        expect(fileValue(emulator, 'fpu', '$f2')).toBe(0x40400000n)
+        expect(emulator.latestSteps[0].writes).toEqual([
+            { type: 'register', name: '$f2', old: 0n, new: 0x40400000n }
+        ])
+
+        expect(
+            emulator.pokeRegisters('cp0', [{ register: '$13 (cause)', value: 0x8000000fn }])
+        ).toBe(true)
+        expect(fileValue(emulator, 'cp0', '$13 (cause)')).toBe(0x8000000fn)
+        //the Core spells a coprocessor 0 register with its MIPS number, which is how the file
+        //spells it too
+        expect(emulator.latestSteps[0].writes).toEqual([
+            { type: 'register', name: '$13 (cause)', old: 0n, new: 0x8000000fn }
+        ])
+
+        //two Pokes, two entries: each Undo takes one of them back
+        emulator.undo(1)
+        expect(fileValue(emulator, 'cp0', '$13 (cause)')).toBe(0n)
+        expect(fileValue(emulator, 'fpu', '$f2')).toBe(0x40400000n)
+        emulator.undo(1)
+        expect(fileValue(emulator, 'fpu', '$f2')).toBe(0n)
+    })
+
+    it('pokes a run of memory bytes as one step, whatever its length', async () => {
+        const emulator = await build(POKEABLE)
+        await emulator.step()
+        expect(emulator.pokeMemory(BUFFER, new Uint8Array([1, 2, 3, 4]))).toBe(true)
+        expect([...emulator.readMemoryBytes(BUFFER, 4)]).toEqual([1, 2, 3, 4])
+
+        const [poke] = emulator.latestSteps
+        expect(poke.kind).toBe('poke')
+        expect(poke.writes).toEqual([
+            { type: 'memory', address: BUFFER, old: [0, 0, 0, 0], new: [1, 2, 3, 4] }
+        ])
+        expect(poke.mutations).toEqual([
+            {
+                type: 'WriteMemoryBytes',
+                value: { address: BUFFER, old: [0, 0, 0, 0], new: [1, 2, 3, 4] }
+            }
+        ])
+
+        //four bytes are one entry, so one Undo takes all four back
+        expect(emulator.undo(1)).toBe(1)
+        expect([...emulator.readMemoryBytes(BUFFER, 4)]).toEqual([0, 0, 0, 0])
+    })
+
+    it('restores the poked value when the step made after the Poke is undone too', async () => {
+        const emulator = await build(POKEABLE)
+        await emulator.step()
+        emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: '$t0', value: 0x2an }])
+        //`addu $t2, $t0, $t1` runs on the poked value, which is what a Poke is for
+        await emulator.step()
+        await emulator.step()
+        expect(registerOf(emulator, '$t2').value).toBe(0x30n)
+        expect(emulator.latestSteps.map((step) => step.kind)).toEqual([
+            'instruction',
+            'instruction',
+            'poke',
+            'instruction'
+        ])
+
+        //the two instructions and then the Poke, each one step
+        expect(emulator.undo(3)).toBe(3)
+        expect(registerOf(emulator, '$t0').value).toBe(5n)
+        expect(registerOf(emulator, '$t2').value).toBe(0n)
+    })
+
+    it('groups one instruction into one row, as `undo` pops it', async () => {
+        const emulator = await build(
+            `        .text
+main:
+        jal     target
+target:
+` + EXIT
+        )
+        await emulator.step()
+        //`jal` restores both `$ra` and the program counter, which used to be two History rows and
+        //made "Undo to here" on row N undo N instructions rather than N rows
+        expect(emulator.latestSteps).toHaveLength(1)
+        const [step] = emulator.latestSteps
+        expect(step.kind).toBe('instruction')
+        expect(step.mutations.map((mutation) => mutation.type)).toEqual([
+            'WriteRegister',
+            'WriteRegister'
+        ])
+    })
+
+    //Kept as a reproducer for a dev server whose optimized dependency cache still holds the 3.5
+    //Core after the editor has moved to 3.6. The supported 3.6 contract requires `newValue`, so
+    //this must not become compatibility behaviour in the adapter.
+    it.skip('keeps older grouped history readable when it has no written values', async () => {
+        const emulator = await build(
+            `        .data
+word:   .word   0
+        .text
+main:
+        li      $t0, 0x1234
+        la      $t1, word
+        sw      $t0, 0($t1)
+` + EXIT
+        )
+
+        //First let the current Core produce a real memory back step, then remove only the additive
+        //field to model @specy/mips 3.5 or a Vite dependency cached before a local Core relink.
+        for (
+            let count = 0;
+            count < 8 &&
+            !emulator.latestSteps[0]?.mutations.some((mutation) => mutation.type === 'WriteMemory');
+            count++
+        ) {
+            await emulator.step()
+        }
+        const core = (emulator as unknown as { mips: JsMips }).mips
+        const withoutWrittenValues = core.getUndoGroups().map((group) => ({
+            ...group,
+            steps: group.steps.map((step) => {
+                const legacy: Partial<typeof step> = { ...step }
+                Reflect.deleteProperty(legacy, 'newValue')
+                return legacy
+            })
+        })) as unknown as JsUndoGroup[]
+        core.getUndoGroups = () => withoutWrittenValues
+
+        expect(() => emulator._getUndoHistory(8)).not.toThrow()
+        const memory = emulator
+            ._getUndoHistory(8)
+            .flatMap((step) => step.mutations)
+            .find((mutation) => mutation.type === 'WriteMemory')
+        expect(memory?.value).toMatchObject({ old: 0n, size: RegisterSize.Long })
+        expect(memory?.value).not.toHaveProperty('new')
+
+        //A register row must not turn the missing value into zero either.
+        const register = emulator
+            ._getUndoHistory(8)
+            .flatMap((step) => step.mutations)
+            .find((mutation) => mutation.type === 'WriteRegister')
+        expect(register?.value).not.toHaveProperty('new')
+    })
+
+    it('repaints the bitmap display on a Poke into it and on its Undo', async () => {
+        const emulator = await build(DATA + EXIT)
+        expect(pixelAt(emulator, 0, 0)).toBe(0x000000)
+        //the framebuffer is little endian, so the low byte of the word comes first
+        expect(emulator.pokeMemory(0x10010000n, new Uint8Array([0x44, 0x33, 0x22, 0x11]))).toBe(
+            true
+        )
+        expect(pixelAt(emulator, 0, 0)).toBe(0x223344)
+        emulator.undo(1)
+        expect(pixelAt(emulator, 0, 0)).toBe(0x000000)
+    })
+
+    it('leaves the FileSystem journal alone when a Poke is undone', async () => {
+        const fileSystem = new FileSystem()
+        //the File does not exist until the open syscall runs, and it is gone again once that
+        //syscall is rolled back
+        const written = () =>
+            fileSystem.files['output.txt'] ? fileSystem.readText('output.txt') : ''
+        const emulator = await build(WRITE_FILE, { fileSystem })
+        for (let step = 0; step < 16 && written() !== 'hello'; step++) {
+            await emulator.step()
+        }
+        expect(written()).toBe('hello')
+
+        emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: '$t0', value: 0x2an }])
+        //a Poke has no instruction identity, so undoing it rolls back nothing of the session whose
+        //frames are keyed by the syscall's address
+        expect(emulator.undo(1)).toBe(1)
+        expect(written()).toBe('hello')
+        //the write syscall is still the entry under it, and undoing far enough still takes it back
+        for (let step = 0; step < 16 && written() === 'hello'; step++) emulator.undo(1)
+        expect(written()).toBe('')
     })
 })

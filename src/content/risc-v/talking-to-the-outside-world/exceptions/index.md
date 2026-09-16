@@ -1,98 +1,128 @@
-Every program in this course so far has stopped dead when it did something impossible. Load a word
-from an odd address and the run ends with a message under the editor. That message is not the
-machine's only option: the processor's actual response to an impossible instruction is to stop what
-it is doing and jump somewhere else, and you get to say where.
+`ecall` is a deliberate trap: your program runs it to ask the Playground to do something. This
+lesson handles a different kind of event, a **synchronous fault**: an instruction cannot be carried
+out, so the processor transfers control to a handler.
 
-That jump is an **exception**: the processor refusing to carry out the instruction it is on, and
-handing control to a piece of code called a **handler**.
+For example, `lw` needs a word-aligned address. An address ending in binary `...01` is not a
+multiple of four, so a word load from it faults.
+
+## What happens on a fault
+
+Before the handler's first instruction, the hardware does these things in order:
+
+1. It abandons the instruction that cannot run.
+2. It writes that instruction's address to **`uepc`**.
+3. It writes a cause code to **`ucause`**, and the related address or value to **`utval`**.
+4. It jumps to the address in **`utvec`**, if user exceptions are enabled in **`ustatus`**.
+
+The handler finishes with **`uret`**. `uret` resumes execution at the address currently in `uepc`.
+That is why a handler can either retry a faulting instruction or arrange to skip it.
+
+`utvec`, `ustatus`, `uepc`, `ucause`, and `utval` are control and status registers (CSRs), separate
+from the 32 general-purpose registers. These are the CSR instruction forms used here:
+
+| instruction       | meaning                                        |
+| ----------------- | ---------------------------------------------- |
+| `csrr rd, csr`    | read a CSR into general-purpose register `rd`  |
+| `csrw csr, rs`    | write general-purpose register `rs` into a CSR |
+| `csrsi csr, mask` | OR the immediate mask into a CSR               |
+
+So `csrsi ustatus, 1` ORs in the mask `1` (`...0001` in binary), setting bit 0. Without enabling
+bit 0, writing a handler address to `utvec` alone has no effect. When user exceptions are disabled,
+this Playground reports the fault and ends the run.
 
 ## Installing a handler
 
-A handler is ordinary code in `.text`. Nothing is reserved for it and there is no table anywhere.
-Two things have to happen before a fault will reach it:
+This program deliberately places `w` at a misaligned address. The byte `odd` occupies one byte;
+`.align 0` prevents the usual padding before the word, so `w`'s address ends in `...01`. A normal
+word alignment directive would insert padding before `w`.
 
-- the address of your handler goes into **`utvec`**,
-- and **bit 0 of `ustatus`** gets set, which is what switches the whole mechanism on.
-
-Those two are **control registers**, which are a separate set from the 32 you have been using. They
-have names rather than numbers and their own instructions to reach them: `csrw` writes one, `csrr`
-reads one, and `csrsi` sets individual bits in one.
+The handler uses `t0` and `t1`, so it saves and restores both. It makes two word-sized stack slots,
+saves those registers, does its work, restores them, then restores `sp`. The Playground provides a
+valid stack for this program, and every stack access below is word-aligned.
 
 ```riscv|playground|memory
 .data
-odd: .byte 1
-     .align 0
-w:   .word 0x12345678
+odd:        .byte 1
+            .align 0
+w:          .word 0x12345678
+            .align 2
+last_cause: .word 0
+last_value: .word 0
 
 .text
 .globl main
 main:
     la t0, handler
-    csrw t0, utvec              # where to go when something faults
-    csrsi ustatus, 1            # and switch it on
-    la t1, w                    # an odd address: .align 0 turned the padding off
-    lw t2, 0(t1)                # so this load cannot work
-    li s0, 5                    # and yet the program gets here
-    li a7, 10
-    ecall
+    csrw utvec, t0              # CSR first, source register second
+    csrsi ustatus, 1            # OR in mask 1: enable bit 0
+
+    la t1, w                    # w ends in ...01 because padding was disabled
+    lw t2, 0(t1)                # misaligned load: enter handler
+    li s0, 5                    # runs after the handler returns
+    j end                       # do not fall through into handler
 
 handler:
-    csrr s1, ucause             # why we are here
-    csrr s2, uepc               # the address of the load that failed
-    addi s2, s2, 4              # move past it
-    csrw s2, uepc
-    uret                        # and back to the program
+    addi sp, sp, -8             # make two aligned words on the stack
+    sw t0, 0(sp)
+    sw t1, 4(sp)                # preserve both registers this handler will use
+
+    csrr t0, ucause
+    la t1, last_cause
+    sw t0, 0(t1)                # record why the fault happened
+    csrr t0, utval
+    la t1, last_value
+    sw t0, 0(t1)                # record the address involved
+
+    csrr t0, uepc               # address of the faulting lw
+    addi t0, t0, 4              # all instructions assembled here are 32-bit (4 bytes)
+    csrw uepc, t0               # resume at the following instruction
+
+    lw t1, 4(sp)
+    lw t0, 0(sp)
+    addi sp, sp, 8              # restore both registers and the original stack pointer
+    uret
+
+end:
 ```
 
-`s0` comes out at 5, so the program survived. `t2` is 0: a load that faults writes nothing. `s1` is
-4, which is the cause code for a misaligned load.
+Here `j end` is ordinary control flow. `end` names the address after the last assembled instruction,
+so reaching it completes this Playground run.
 
-Delete the `csrsi ustatus, 1` line and run it again. The handler is still installed, and it is never
-entered: the run stops with `Load address not aligned to word boundary`. That one line is what
-people leave out.
+After the run, `s0` is 5. `last_cause` holds 4, the code for a misaligned load, and `last_value`
+holds the misaligned address of `w`.
 
-## uepc, and the loop you will write by accident
+## Choosing where to return
 
-`uepc` holds the address of the instruction that **faulted**, not the one after it. `uret` returns
-to whatever `uepc` holds.
+`uepc` contains the address of the `lw` that faulted, not the address after it. If the handler
+executes `uret` without changing `uepc`, the processor retries that same `lw`; it faults again and
+the program repeats the handler forever.
 
-So a handler that returns without touching `uepc` sends the program straight back to the instruction
-that failed, which fails again, which enters the handler again, for ever. Delete the `addi` and the
-`csrw` under it and watch: the program runs until the Playground's two million instructions are gone,
-with `pc` parked on that `lw`.
+This handler chooses not to perform the load, so it adds 4 to `uepc`. Four is correct for the
+32-bit, four-byte instructions this Playground assembles. A handler that repaired the problem
+instead would leave `uepc` unchanged and let the instruction run again.
 
-Adding 4 is right here because this handler decided to give up on the instruction and skip it. A
-handler that had actually fixed the problem would leave `uepc` alone, so the instruction gets another
-go.
+For these memory faults, `ucause` and `utval` help identify the problem:
 
-## What went wrong
+| code | what happened            | `utval`                  |
+| ---: | ------------------------ | ------------------------ |
+|    4 | load address misaligned  | the load address         |
+|    5 | load access fault        | the inaccessible address |
+|    6 | store address misaligned | the store address        |
+|    7 | store access fault       | the inaccessible address |
 
-`ucause` holds a number, and `utval` holds the address the fault was about.
+Arithmetic instructions do not raise these faults. That includes `div`: as in the earlier arithmetic
+work, this Playground produces `-1` for division by zero.
 
-| code | what happened                               |
-| ---: | ------------------------------------------- |
-|    4 | load address misaligned                     |
-|    5 | load access fault, an address in no segment |
-|    6 | store address misaligned                    |
-|    7 | store access fault                          |
+## Polling still handles input
 
-Those four are what a program you write here can raise. Arithmetic never faults at all: nothing
-overflows into an exception, and a division by zero answers -1.
-
-## Nothing here interrupts you
-
-An **interrupt** is the other way a handler gets entered: a device asking for attention between two
-instructions, with no connection to what the program was doing. No device in this editor does that.
-The display never interrupts, and setting the keyboard's interrupt enable bit stops the run with a
-message telling you to poll instead.
-
-So everything above is about exceptions your own program caused, and polling, from the previous
-lecture, is what stands in for an interrupt here.
+An interrupt is a device asking for attention between instructions; it is different from the
+instruction-caused faults above. This Playground does not deliver device interrupts. Its keyboard
+model remains polling: read the ready status, then read a character when it is ready.
 
 ## Your turn
 
-The program below faults on an unaligned load and its handler is empty, so the run stops. Fill the
-handler in so the program carries on and `s0` comes out at 5.
+The `lw` below faults. Fill the handler so it advances `uepc` past that `lw` and returns with
+`uret`. Preserve `t0` and restore `sp` before returning.
 
 ```riscv|playground|memory|exercise
 .data
@@ -103,24 +133,37 @@ w:   .word 0x12345678
 .text
 .globl main
 main:
+    li sp, 0x7FFFEFFC
     la t0, handler
-    csrw t0, utvec
+    csrw utvec, t0
+    li t0, 0x13579BDF
     csrsi ustatus, 1
     la t1, w
+    li t2, 0x2468ACE0
     lw t2, 0(t1)
     li s0, 5
-    li a7, 10
-    ecall
+    j end
 
 handler:
     # your handler here
+
+end:
 ```
 
 ```testcase
 {
-    "expectedRegisters": { "s0": 5 }
+    "startingRegisters": { "sp": "0x7FFFEFFC" },
+    "expectedRegisters": {
+        "s0": 5,
+        "t0": "0x13579BDF",
+        "t2": "0x2468ACE0",
+        "sp": "0x7FFFEFFC"
+    }
 }
 ```
+
+Automated state checks cover reaching post-fault main, preserved `t0`, unchanged `t2`, and restored
+`sp`; stepping verifies the `uepc` update and `uret` control path.
 
 <details>
 <summary>Show solution</summary>
@@ -134,20 +177,28 @@ w:   .word 0x12345678
 .text
 .globl main
 main:
+    li sp, 0x7FFFEFFC
     la t0, handler
-    csrw t0, utvec
+    csrw utvec, t0
+    li t0, 0x13579BDF
     csrsi ustatus, 1
     la t1, w
+    li t2, 0x2468ACE0
     lw t2, 0(t1)
     li s0, 5
-    li a7, 10
-    ecall
+    j end
 
 handler:
-    csrr t3, uepc               # the instruction that faulted
-    addi t3, t3, 4              # the one after it
-    csrw t3, uepc
+    addi sp, sp, -4
+    sw t0, 0(sp)
+    csrr t0, uepc
+    addi t0, t0, 4              # skip this four-byte lw
+    csrw uepc, t0
+    lw t0, 0(sp)
+    addi sp, sp, 4
     uret
+
+end:
 ```
 
 </details>

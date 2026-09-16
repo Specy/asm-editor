@@ -1,6 +1,6 @@
 {
     "name": "The flags register",
-    "description": "The bits arithmetic leaves behind, which instructions write them and which leave them alone, why the signed less-than condition is SF against OF worked out on paper, and why one cmp answers both the signed and the unsigned question.",
+    "description": "How x86 records zero, sign, unsigned carry or borrow, and signed overflow at an operation's chosen width.",
     "order": 6,
     "topic": "flags"
 }

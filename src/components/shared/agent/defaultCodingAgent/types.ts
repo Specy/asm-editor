@@ -22,7 +22,9 @@ export const DEFAULT_CODING_AGENT_TOOL_NAMES = [
     'undo',
     'get_line_from_address',
     'compile',
-    'read_memory'
+    'read_memory',
+    'poke_register',
+    'poke_memory'
 ] as const
 
 export type DefaultCodingAgentToolName = (typeof DEFAULT_CODING_AGENT_TOOL_NAMES)[number]

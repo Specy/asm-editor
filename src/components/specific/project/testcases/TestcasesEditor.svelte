@@ -13,6 +13,7 @@
     import TestcaseResultRenderer from '$cmp/specific/project/testcases/TestcaseResultRenderer.svelte'
     import ExpandableContainer from '$cmp/shared/layout/ExpandableContainer.svelte'
     import type { RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
+    import type { AvailableLanguages } from '$lib/Project.svelte'
 
     interface Props {
         visible: boolean
@@ -23,6 +24,8 @@
         hiddenRegistersNames?: string[]
         editable?: boolean
         systemSize: RegisterSize
+        /** The Target, which names the widths the register panels below group by. */
+        language: AvailableLanguages
     }
 
     let {
@@ -33,7 +36,8 @@
         startingRegisterNames,
         hiddenRegistersNames,
         editable = true,
-        systemSize
+        systemSize,
+        language
     }: Props = $props()
 
     function makeNewTestcase() {
@@ -76,6 +80,7 @@
                 {#each failedTestcases.keys() as i (i)}
                     <TestcaseResultRenderer
                         {systemSize}
+                        {language}
                         bind:testcaseResult={failedTestcases[i]}
                         {registerNames}
                         {hiddenRegistersNames}
@@ -98,6 +103,7 @@
                             <div class="testcase-wrapper">
                                 <TestcaseRenderer
                                     {systemSize}
+                                    {language}
                                     style="padding-top: 0.3rem"
                                     bind:testcase={testcases[i]}
                                     editable={false}
@@ -134,6 +140,7 @@
                 {#key testcaseKey}
                     <TestcaseRenderer
                         {systemSize}
+                        {language}
                         {registerNames}
                         {startingRegisterNames}
                         {hiddenRegistersNames}

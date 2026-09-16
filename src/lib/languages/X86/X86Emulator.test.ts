@@ -171,7 +171,12 @@ describe('x86 register files', () => {
             )
             expect(writes).toContainEqual({
                 type: 'WriteRegister',
-                value: { register: 'xmm0', old: 0x3ff8000000000000n, size: RegisterSize.Quad }
+                value: {
+                    register: 'xmm0',
+                    old: 0x3ff8000000000000n,
+                    new: 0x4008000000000000n,
+                    size: RegisterSize.Quad
+                }
             })
             expect(emulator.undo()).toBe(1)
             expect(xmm0.value).toBe(0x3ff8000000000000n)
@@ -334,6 +339,253 @@ describe('x86 diagnostic spans', () => {
             expect(symbol?.lineIndex).toBe(4)
             expect(symbol?.column).toBe(12)
             expect(symbol?.endColumn).toBe(25)
+        } finally {
+            emulator.dispose()
+        }
+    })
+})
+
+const STORE_PROGRAM = [
+    'bits 64',
+    'global _start',
+    'section .data',
+    'buffer: dq 0x1122334455667788',
+    'section .text',
+    '_start:',
+    '    lea rbx, [rel buffer]',
+    '    mov rax, 0x99AABBCCDDEEFF00',
+    '    mov [rbx], rax',
+    '    mov rax, 60',
+    '    xor rdi, rdi',
+    '    syscall'
+].join('\n')
+
+describe('x86 history rows', () => {
+    //the Core reports both sides of a write; the crossing has to carry the memory half over too,
+    //or a History row could only ever say what a store found
+    it('carries the bytes a store left, beside the ones it replaced', async () => {
+        const sources = programSources(STORE_PROGRAM)
+        const emulator = await X86Emulator(sources, { automaticChecking: false })
+        try {
+            await emulator.compile(20, sources)
+            expect(emulator.errors).toEqual([])
+            for (let i = 0; i < 3; i++) await emulator.step()
+
+            const write = emulator.latestSteps
+                .flatMap((step) => step.mutations)
+                .find((mutation) => mutation.type === 'WriteMemoryBytes')
+            expect(write).toBeDefined()
+            if (write?.type !== 'WriteMemoryBytes') throw new Error('not a memory write')
+            expect(write.value.old).toEqual([0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11])
+            expect(write.value.new).toEqual([0x00, 0xff, 0xee, 0xdd, 0xcc, 0xbb, 0xaa, 0x99])
+        } finally {
+            emulator.dispose()
+        }
+    })
+})
+
+describe('x86 pokes', () => {
+    //a preset made before the first step does not survive it: the machine is built when the program
+    //starts, so every Poke here is made on a machine that has already run an instruction
+    async function steppedEmulator(code: string, steps: number) {
+        const sources = programSources(code)
+        const emulator = await X86Emulator(sources, { automaticChecking: false })
+        await emulator.compile(20, sources)
+        expect(emulator.errors).toEqual([])
+        for (let i = 0; i < steps; i++) await emulator.step()
+        return emulator
+    }
+
+    it('pokes a CPU register as one step with no line of its own', async () => {
+        const emulator = await steppedEmulator(SSE_PROGRAM, 1)
+        try {
+            const rax = registerOf(fileOf(emulator, 'cpu'), 'rax')
+            expect(rax.value).toBe(0x3ff8000000000000n)
+            expect(emulator.canPoke).toBe(true)
+            expect(emulator.pokeRegisters('cpu', [{ register: 'rax', value: 0x1234n }])).toBe(true)
+            expect(rax.value).toBe(0x1234n)
+            const [poke] = emulator.latestSteps
+            expect(poke.kind).toBe('poke')
+            //no instruction ran, so the History row has no line and no file to jump to, while the
+            //pc the entry carries is still the instruction the machine is parked on
+            expect(poke.line).toBe(-1)
+            expect(poke.file).toBe(undefined)
+            expect(poke.pc).toBe(Number(emulator.pc))
+            expect(poke.writes).toEqual([
+                { type: 'register', name: 'rax', old: 0x3ff8000000000000n, new: 0x1234n }
+            ])
+            expect(poke.mutations).toContainEqual({
+                type: 'WriteRegister',
+                value: {
+                    register: 'rax',
+                    old: 0x3ff8000000000000n,
+                    new: 0x1234n,
+                    size: RegisterSize.Double
+                }
+            })
+            //a Poke calls nothing and returns from nothing, so the frames stay as the program left
+            //them, both while it stands and once it is undone
+            const callStack = emulator.callStack.map((frame) => frame.address)
+            expect(emulator.canUndo).toBe(true)
+            expect(emulator.undo()).toBe(1)
+            expect(rax.value).toBe(0x3ff8000000000000n)
+            expect(emulator.callStack.map((frame) => frame.address)).toEqual(callStack)
+            expect(emulator.latestSteps[0]?.kind).toBe('instruction')
+        } finally {
+            emulator.dispose()
+        }
+    })
+
+    it('keeps the program counter and a terminated program out of reach', async () => {
+        const emulator = await steppedEmulator(SSE_PROGRAM, 1)
+        try {
+            expect(emulator.canPokeRegister('cpu', 'rip')).toBe(false)
+            expect(emulator.pokeRegisters('cpu', [{ register: 'rip', value: 0n }])).toBe(false)
+            //a value wider than the register is refused rather than truncated
+            expect(() =>
+                emulator.pokeRegisters('cpu', [{ register: 'rax', value: 1n << 64n }])
+            ).toThrow(/does not fit rax/)
+            //undoing a poke made on a terminated program would resume the machine, so the
+            //availability rule keeps Pokes off one
+            while (!emulator.terminated) await emulator.step()
+            expect(emulator.canPoke).toBe(false)
+            expect(emulator.pokeRegisters('cpu', [{ register: 'rax', value: 7n }])).toBe(false)
+        } finally {
+            emulator.dispose()
+        }
+    })
+
+    it('says nothing was recorded when the history Setting keeps no steps', async () => {
+        const sources = programSources(SSE_PROGRAM)
+        const emulator = await X86Emulator(sources, { automaticChecking: false })
+        try {
+            await emulator.compile(0, sources)
+            expect(emulator.errors).toEqual([])
+            await emulator.step()
+            const rax = registerOf(fileOf(emulator, 'cpu'), 'rax')
+            //blink applies the Poke and answers that it changed a value, but a history of zero
+            //keeps no more of it than of an instruction: what the caller is told is whether there
+            //is a step to undo, which is what the agent's "cannot be undone" note is built on
+            expect(emulator.pokeRegisters('cpu', [{ register: 'rax', value: 0x1234n }])).toBe(false)
+            expect(rax.value).toBe(0x1234n)
+            expect(emulator.canUndo).toBe(false)
+            expect(emulator.latestSteps).toEqual([])
+        } finally {
+            emulator.dispose()
+        }
+    })
+
+    it('names only the register a float file Poke changed', async () => {
+        const emulator = await steppedEmulator(X87_PROGRAM, 2)
+        try {
+            const sse = fileOf(emulator, 'sse')
+            const x87 = fileOf(emulator, 'x87')
+            //the whole block goes back through `setFpuState`, so only the Core's own diff can tell
+            //the panel which row the Poke changed
+            expect(emulator.pokeRegisters('sse', [{ register: 'xmm1', value: 0x4008n }])).toBe(true)
+            expect(registerOf(sse, 'xmm1').value).toBe(0x4008n)
+            expect(emulator.latestSteps[0].writes).toEqual([
+                { type: 'register', name: 'xmm1', old: 0n, new: 0x4008n }
+            ])
+            const st0 = registerOf(x87, 'st0')
+            expect(st0.value).toBe(0x3ff0000000000000n)
+            expect(
+                emulator.pokeRegisters('x87', [{ register: 'st0', value: 0x4000000000000000n }])
+            ).toBe(true)
+            expect(emulator.latestSteps[0].writes).toEqual([
+                {
+                    type: 'register',
+                    name: 'st0',
+                    old: 0x3ff0000000000000n,
+                    new: 0x4000000000000000n
+                }
+            ])
+            expect(st0.value).toBe(0x4000000000000000n)
+            //each file's Poke is a step of its own, so two Undos put both back
+            expect(emulator.undo()).toBe(1)
+            expect(st0.value).toBe(0x3ff0000000000000n)
+            expect(emulator.undo()).toBe(1)
+            expect(registerOf(sse, 'xmm1').value).toBe(0n)
+        } finally {
+            emulator.dispose()
+        }
+    })
+
+    it('leaves the current line on the instruction a Poke did not run', async () => {
+        const emulator = await steppedEmulator(SSE_PROGRAM, 2)
+        try {
+            const line = emulator.line
+            const flags = emulator.statusRegisters.map((flag) => ({ ...flag }))
+            expect(emulator.pokeRegisters('cpu', [{ register: 'rbx', value: 0x20n }])).toBe(true)
+            //nothing ran, so the editor stays parked where the last step left it
+            expect(emulator.line).toBe(line)
+            //and the flags a Poke did not touch show no change against the step before it
+            expect(emulator.statusRegisters).toEqual(
+                flags.map((flag) => ({ ...flag, prev: flag.value }))
+            )
+            //the last executed instruction is the newest instruction entry, not the Poke on top
+            const last = emulator._getLastInstruction?.()
+            expect(SSE_PROGRAM.split('\n')[last?.lineNumber ?? -1]).toContain('movq')
+            //with an instruction on top there is nothing to skip and the caller's fallback stands
+            expect(emulator.undo()).toBe(1)
+            expect(emulator._getLastInstruction?.()).toBe(null)
+        } finally {
+            emulator.dispose()
+        }
+    })
+
+    it('refuses a Poke into an empty x87 stack slot', async () => {
+        const emulator = await steppedEmulator(X87_PROGRAM, 2)
+        try {
+            //two pushes, so the slots under them hold nothing to change
+            expect(emulator.canPokeRegister('x87', 'st0')).toBe(true)
+            expect(emulator.canPokeRegister('x87', 'st3')).toBe(false)
+            expect(emulator.pokeRegisters('x87', [{ register: 'st3', value: 1n }])).toBe(false)
+        } finally {
+            emulator.dispose()
+        }
+    })
+
+    it('pokes a run of memory bytes as one step and gives them back on undo', async () => {
+        const emulator = await steppedEmulator(SSE_PROGRAM, 1)
+        try {
+            const address = emulator.sp - 64n
+            const before = [...emulator.readMemoryBytes(address, 4)]
+            const bytes = new Uint8Array([1, 2, 3, 4])
+            expect(emulator.pokeMemory(address, bytes)).toBe(true)
+            expect([...emulator.readMemoryBytes(address, 4)]).toEqual([1, 2, 3, 4])
+            const [poke] = emulator.latestSteps
+            expect(poke.kind).toBe('poke')
+            expect(poke.writes).toEqual([
+                { type: 'memory', address, old: before, new: [1, 2, 3, 4] }
+            ])
+            //writing back what is already there changes nothing and records nothing
+            expect(emulator.pokeMemory(address, bytes)).toBe(false)
+            expect(emulator.latestSteps.filter((step) => step.kind === 'poke')).toHaveLength(1)
+            expect(emulator.undo()).toBe(1)
+            expect([...emulator.readMemoryBytes(address, 4)]).toEqual(before)
+        } finally {
+            emulator.dispose()
+        }
+    })
+
+    it('undoes a Poke and the instruction that followed it back to the pre-poke state', async () => {
+        const emulator = await steppedEmulator(SSE_PROGRAM, 1)
+        try {
+            const rax = registerOf(fileOf(emulator, 'cpu'), 'rax')
+            const address = emulator.sp - 64n
+            const memoryBefore = [...emulator.readMemoryBytes(address, 2)]
+            expect(emulator.pokeRegisters('cpu', [{ register: 'rax', value: 0x1234n }])).toBe(true)
+            expect(emulator.pokeMemory(address, new Uint8Array([9, 9]))).toBe(true)
+            //movq xmm0, rax reads the poked register, so the step after a Poke sees the new value
+            await emulator.step()
+            expect(registerOf(fileOf(emulator, 'sse'), 'xmm0').value).toBe(0x1234n)
+            //the instruction, then the memory Poke, then the register Poke: three steps, and a Poke
+            //counts as one of them
+            expect(emulator.undo(3)).toBe(3)
+            expect(rax.value).toBe(0x3ff8000000000000n)
+            expect([...emulator.readMemoryBytes(address, 2)]).toEqual(memoryBefore)
+            expect(emulator.latestSteps.every((step) => step.kind === 'instruction')).toBe(true)
         } finally {
             emulator.dispose()
         }

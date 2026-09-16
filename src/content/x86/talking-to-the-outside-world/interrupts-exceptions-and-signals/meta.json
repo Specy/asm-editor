@@ -1,6 +1,6 @@
 {
     "name": "Interrupts, exceptions and signals",
-    "description": "The 256 vectors and the five a program meets, how the kernel turns one into a signal, why syscall skips the table, and what a fault looks like in an emulator that delivers no signals at all.",
+    "description": "How x86 exceptions, hardware interrupts, software int instructions, syscall entry, kernel handlers, and Linux signals fit into one layered model.",
     "order": 2,
     "topic": "interrupts"
 }

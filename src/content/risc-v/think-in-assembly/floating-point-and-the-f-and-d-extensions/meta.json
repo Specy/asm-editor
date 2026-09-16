@@ -1,6 +1,6 @@
 {
     "name": "Floating point and the F and D extensions",
-    "description": "What a coprocessor is and why RISC-V made its floating point an extension instead, the 32 f registers, NaN boxing, the comparisons that write an integer register, and the fcsr that holds the rounding mode.",
+    "description": "Single and double precision, floating-point registers, NaN boxing, conversions, comparisons, status flags, and the calling convention.",
     "order": 6,
     "topic": "floating-point"
 }

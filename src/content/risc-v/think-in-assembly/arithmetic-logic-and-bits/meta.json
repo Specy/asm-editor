@@ -1,6 +1,6 @@
 {
     "name": "Arithmetic, logic and bits",
-    "description": "Multiplication and division each write one ordinary register, so the top half of a product takes a second instruction, and dividing by zero returns an answer rather than stopping. Then the masks, the shifts and the fields you pull out of a word with them.",
+    "description": "Build complete signed and unsigned products, handle defined division edge cases, and use masks, shifts and logical operations to extract, pack, count and select bits.",
     "order": 2,
     "topic": "arithmetic"
 }

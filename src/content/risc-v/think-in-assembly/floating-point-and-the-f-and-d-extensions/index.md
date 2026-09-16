@@ -1,80 +1,84 @@
-Every number in this course so far has been an integer. This lecture is the other kind, and the 32
-registers and the set of instructions that work on it, which RISC-V keeps separate from the integer
-side on purpose.
+Integer registers are a good fit for counts, addresses and whole-number arithmetic. Many programs
+also need approximations of real values: measurements such as 1.5 metres, coordinates or the result
+of a square root. **Floating point** uses a finite set of bit patterns to represent those values. A
+calculation is rounded when its exact result has no matching pattern.
 
-## Two extensions, and why they are optional
+RISC-V gives floating-point values their own registers and instructions. The `riscv` playgrounds on
+this page use RV32 integer registers and provide both floating-point extensions described below.
 
-Arithmetic on fractions costs a great deal more hardware than arithmetic on whole numbers, and
-plenty of processors are built into things that never need it: a washing machine controller, a
-sensor, a keyboard. So RISC-V leaves it out of the base and offers it as two named extensions. **F**
-adds 32 floating point registers and single precision arithmetic. **D** widens those registers to 64
-bits and adds double precision. A chip with neither is still a RISC-V chip, and the assembler here
-has both.
+## F, D and the two precisions
 
-Being a separate extension has a visible consequence: floating point gets a **second set of
-registers** of its own, with its own instructions, and two instructions whose only job is to carry
-raw bits between the two sets.
+Floating-point hardware is optional in RISC-V. A processor can omit it when its programs have no
+need for it, include F for singles, or include F and D together for singles and doubles:
 
-## How a number is stored
+- **F** adds 32 floating-point registers and **single-precision** operations. A single occupies 32
+  bits, or 4 bytes.
+- **D** builds on F, adds **double-precision** operations and makes each floating-point register wide
+  enough for a 64-bit double. A double occupies 8 bytes.
 
-A floating point number is three fields: a **sign** bit, an **exponent** and a **mantissa**, the
-digits. The value is the mantissa times two to the power of the exponent, with the sign applied,
-which is scientific notation written in binary.
+Operations that must select a floating-point precision use `.s` for single or `.d` for double:
+`fadd.s` adds singles, while `fadd.d` adds doubles. Loads, stores, raw moves and control-register
+instructions use other naming patterns, which we will meet as they arise.
 
-| type   | bytes | directive | sign | exponent | mantissa | about             |
-| ------ | ----- | --------- | ---- | -------- | -------- | ----------------- |
-| float  | 4     | `.float`  | 1    | 8        | 23       | 7 decimal digits  |
-| double | 8     | `.double` | 1    | 11       | 52       | 16 decimal digits |
+## A useful model of the bits
 
-Two consequences follow from the mantissa being binary.
+For an ordinary nonzero finite value, IEEE 754 divides the encoding into a **sign**, an **exponent**
+and a **fraction**. The fraction contributes to the number's **significand**, the binary digits that
+carry its precision. This resembles scientific notation with a power of two in place of a power of
+ten.
 
-**Most decimal fractions cannot be stored exactly.** 0.1 in binary repeats for ever, the way 1/3 does
-in decimal, so what a float holds is the nearest representable number to 0.1, and 0.1 + 0.2 is not
-0.3. That is not a fault in the hardware, it is what happens when a base 10 fraction is written in
-base 2.
+| type   | bytes | data directive | sign bits | exponent bits | stored fraction bits | approximate decimal precision |
+| ------ | ----: | -------------- | --------: | ------------: | -------------------: | ----------------------------: |
+| single |     4 | `.float`       |         1 |             8 |                   23 |                      7 digits |
+| double |     8 | `.double`      |         1 |            11 |                   52 |                     16 digits |
 
-**Some values are not numbers.** An exponent of all ones means an **infinity** when the mantissa is
-zero and a **NaN**, not a number, when it is not. One divided by zero is an infinity, zero divided by
-zero is a NaN, and a NaN compared with anything, itself included, answers false.
+For most finite values, an additional leading significand bit is implied instead of stored. Zero
+and very small **subnormal** values use the fields differently, as do the special values infinity
+and **NaN** (not a number). The three-field description is therefore a useful first model, not a
+complete account of every encoding.
 
-## The 32 f registers
+Many decimal fractions have no finite binary representation. For example, the binary expansion of
+0.1 repeats, so a single or double stores a nearby representable value. This is why a sequence of
+floating-point operations can accumulate small rounding differences.
 
-`f0` to `f31`, named the way the integer registers are and with a convention of the same shape:
+An exponent field of all ones represents an infinity when the fraction field is zero and a NaN when
+the fraction field is nonzero. Operations such as zero divided by zero produce a NaN. `feq`, `flt`
+and `fle` write 0 when either input is a NaN.
 
-| registers       | name      | used for                                                             |
-| --------------- | --------- | -------------------------------------------------------------------- |
-| `ft0` to `ft11` | temporary | destroyed by a call                                                  |
-| `fs0` to `fs11` | saved     | a subroutine must put them back                                      |
-| `fa0` to `fa7`  | argument  | the first eight floating point arguments, and `fa0` the return value |
+## The 32 floating-point registers
 
-They are not the integer registers. `ft0` and `t0` are two different registers, and an instruction
-names one file or the other, never both, apart from the four that exist to cross between them.
+The registers are `f0` through `f31`. Their ABI names follow the caller-saved and callee-saved idea
+from the integer calling convention:
 
-The registers panel shows them on its own **FPU** tab, in register number order, so `ft0` to `ft7`
-come first, then `fs0` and `fs1`, then `fa0` to `fa7`, then the rest. Its Format selector reads each
-one as a double, as a single or as raw hex, because nothing in a register records which of the three
-the program meant.
+| registers       | role      | calling-convention use                                |
+| --------------- | --------- | ----------------------------------------------------- |
+| `ft0` to `ft11` | temporary | a call may replace them                               |
+| `fs0` to `fs11` | saved     | a subroutine restores any of them that it changes     |
+| `fa0` to `fa7`  | argument  | floating-point arguments; `fa0` also carries a result |
 
-With the D extension every one of those registers is **64 bits** wide, because that is what a double
-needs. Which raises a question: a single is only 32 bits, so what goes in the other half?
+An integer register and a floating-point register with similar names are still separate. For
+example, `t0` can hold an address while `ft0` holds the single loaded from that address.
 
-Zeroes would be the obvious answer and they are the wrong one. Nothing in a register records whether
-the program meant a single or a double, so if the top half were zeroes, an instruction that read the
-register as a double would find a perfectly plausible number there and carry on with it. You would
-get a wrong answer and no hint that anything had happened.
+The editor shows the floating-point registers on the **FPU** tab. Its Format selector can interpret
+the bits as Double, Single or Hex. A register does not remember which interpretation the program
+intended, so choose the view that matches the instructions that wrote it.
 
-So a single is stored with the top 32 bits **all ones**, and those bits read as a double are a NaN,
-a value that is not a number. Anything that then treats it as a double produces a NaN, which spreads
-through every calculation it touches and is impossible to mistake for an answer. The technique has a
-name, **NaN boxing**: a value wrapped in a box that is obviously rubbish if you open it the wrong
-way.
+### Singles in a D-capable register
 
-It is also why the registers panel opens on the Double format. Read a register holding a double in
-Single and you get a NaN, for exactly the same reason in reverse.
+An F-only processor has 32-bit floating-point registers. When D is present, as it is in these
+playgrounds, those registers are 64 bits wide. A single uses the low 32 bits, and a floating-point
+instruction fills the upper 32 bits with ones. This is **NaN boxing**.
 
-## Loading, storing and arithmetic
+The box makes an accidental `.d` use easy to detect: interpreting the complete boxed pattern as a
+double produces a NaN. It does not make the reverse interpretation safe. If a register contains a
+double, the Single view simply interprets its low 32 bits as a single. Those bits could represent
+many values. For example, double-precision 3.75 is `400E000000000000`, whose low word is zero, so
+the Single view displays 0.0.
 
-Every instruction carries a suffix: `.s` for a single and `.d` for a double.
+## Load, calculate and store
+
+`flw` and `fsw` transfer a 32-bit single. `fld` and `fsd` transfer a 64-bit double. Their addresses
+use the familiar `offset(base)` form, and the base is an integer register.
 
 ```riscv|playground|fpu
 .data
@@ -86,36 +90,29 @@ result: .float 0.0
 .globl main
 main:
     la t0, a
-    flw ft0, 0(t0)          # load a single
-    flw ft1, 4(t0)
+    flw ft0, 0(t0)          # single 1.5
+    flw ft1, 4(t0)          # single 2.25
     fadd.s ft2, ft0, ft1    # 3.75
-    fsw ft2, 8(t0)          # and store it back
+    fsw ft2, 8(t0)          # store result
 
     fsub.s ft3, ft1, ft0    # 0.75
     fmul.s ft4, ft0, ft1    # 3.375
     fdiv.s ft5, ft1, ft0    # 1.5
-    fsqrt.s ft6, ft1        # 1.5, since 1.5 squared is 2.25
+    fsqrt.s ft6, ft1        # 1.5
     fneg.s ft7, ft0         # -1.5
-    fabs.s fs0, ft7         # 1.5 again
-
-    li a7, 10
-    ecall
+    fabs.s fs0, ft7         # 1.5
+end:
 ```
 
-Switch the FPU tab's Format to **Single** and `ft2` reads `3.75`, `ft3` reads `0.75` and the rest
-follow. On Hex it is `FFFFFFFF40700000`: the `40700000` is 3.75 and the ones above it are the NaN box.
-On Double every one of them reads NaN, which is the box doing its job.
+Select Single on the FPU tab. `ft2` reads 3.75, `ft3` reads 0.75 and the other results follow. In
+Hex, `ft2` is `FFFFFFFF40700000`: `40700000` encodes the single 3.75 and the upper ones are its NaN
+box. Select Double and that complete boxed pattern appears as NaN.
 
-`flw` and `fsw` load and store a single, `fld` and `fsd` a double, and their addressing mode is
-`offset(base)` like `lw` and `sw`. There is no `la`-style pseudo-instruction that loads a float from
-a label in one line, so the address goes into an integer register first.
+`fneg.s` and `fabs.s` are convenient pseudo-instructions based on **sign injection**. For example,
+`fneg.s ft7, ft0` expands to `fsgnjn.s ft7, ft0, ft0`, which copies the value while reversing its
+sign bit.
 
-`fneg.s` and `fabs.s` are pseudo-instructions. Both are really `fsgnj`, sign injection, which builds a
-result from the bits of one register and the sign of another: `fneg.s ft7, ft0` is
-`fsgnjn.s ft7, ft0, ft0`, the value of `ft0` with its own sign flipped. There is no negate
-instruction because there does not need to be one.
-
-Doubles are the same instructions with `.d`.
+The double-precision forms use `.d` and double-sized memory transfers:
 
 ```riscv|playground|fpu
 .data
@@ -131,69 +128,75 @@ main:
     fld fa1, 8(t0)
     fadd.d fa2, fa0, fa1    # 3.75
     fsd fa2, 16(t0)
-
-    li a7, 10
-    ecall
+end:
 ```
 
-On the Double format `fa2` reads `3.75`, and on Hex it is `400E000000000000`, the whole 64 bits in
-use with no box.
+In Double format, `fa2` reads 3.75. Its Hex value is `400E000000000000`, with all 64 bits belonging
+to the double.
 
-## Crossing between the files
+## Conversions and raw moves
 
-Four instructions move between the two register files, and they divide into moves and conversions.
+A **conversion** preserves the numeric value as closely as the destination format allows. A **raw
+move** preserves the payload bits within the width it transfers. For `fmv.w.x`, those are the low 32
+bits; on a D-capable register, the instruction also fills the upper 32 bits with ones to create a
+NaN-boxed single. These are different operations even when they cross the same two register files.
 
-- **`fmv.x.w t0, ft0`** copies 32 bits out of a floating point register, unchanged.
-- **`fmv.w.x ft0, t0`** copies them back, unchanged.
-- **`fcvt.s.w ft0, t0`** reads `t0` as an integer and writes the float with that value.
-- **`fcvt.w.s t0, ft0`** goes the other way, rounding.
+| instruction        | action in this RV32 playground                                      |
+| ------------------ | ------------------------------------------------------------------- |
+| `fcvt.s.w ft0, t0` | convert a signed integer word to a single                           |
+| `fcvt.w.s t0, ft0` | convert a single to a signed integer word, with rounding            |
+| `fmv.x.w t0, ft0`  | move the single's 32 raw bits into an integer register              |
+| `fmv.w.x ft0, t0`  | move 32 raw bits into a single; the D-capable register NaN-boxes it |
 
-Read the names backwards: `fcvt.s.w` converts **to** single **from** word, and `fmv.x.w` moves **to**
-an integer register **from** a word sized float. `fcvt.d.w`, `fcvt.s.d` and `fcvt.d.s` are the rest of
-the family.
+Read a conversion name from destination to source: `fcvt.s.w` converts **to single from word**.
+Other members include `fcvt.d.w`, `fcvt.s.d` and `fcvt.d.s`.
 
-Which way a conversion rounds is written on the instruction. Leave it off and it follows the rounding
-mode in `frm`, which starts as round to nearest, so `fcvt.w.s` turns 2.6 into 3. Write `rtz`, round
-towards zero, and it truncates instead, throwing the fraction away and keeping the whole part.
+An integer conversion can name a rounding mode. With no mode written, it uses the current mode,
+which initially is round to nearest, ties to even. The `rtz` mode rounds toward zero.
 
 ```riscv|playground|fpu
 .data
-n:      .word 7
+n: .word 7
 
 .text
 .globl main
 main:
     la t0, n
     lw t1, 0(t0)
-    fcvt.s.w ft0, t1        # 7.0, which is 40E00000
-    fsqrt.s ft1, ft0        # 2.6457...
-    fcvt.w.s t2, ft1        # back to an integer: 3, rounded to nearest
-    fcvt.w.s t3, ft1, rtz   # or 2, truncated
-    fmv.x.w t4, ft1         # or the raw bits, unconverted
-
-    li a7, 10
-    ecall
+    fcvt.s.w ft0, t1        # numeric conversion: 7 -> 7.0
+    fsqrt.s ft1, ft0        # about 2.64575
+    fcvt.w.s t2, ft1        # 3, using round to nearest
+    fcvt.w.s t3, ft1, rtz   # 2, rounding toward zero
+    fmv.x.w t4, ft1         # raw single bits: 0x402953FD
+end:
 ```
 
-`t2` comes out at 3 and `t3` at 2 from the same register, because the first one rounded and the
-second was told not to. `t4` holds `402953FD`, the bits of 2.6457 rather than its value.
+The same value in `ft1` produces integer 3, integer 2 or the raw pattern `402953FD`, depending on the
+instruction.
 
-## Comparing writes an integer register
+RV64 changes two raw-move details. `fmv.x.w` still reads 32 bits, then sign-extends bit 31 through
+the 64-bit integer destination. `fmv.w.x` uses the low 32 integer bits and, on a D-capable processor,
+writes a NaN-boxed single. RV64D also has `fmv.x.d` and `fmv.d.x` for moving a complete 64-bit double
+between one floating-point register and one 64-bit integer register. In RV32, one integer register is
+not wide enough for those whole-double moves.
 
-A floating point comparison writes **1 or 0 into an integer register**, exactly the way `slt` does
-for whole numbers, and the branch after it is the ordinary `bnez` you already know. The two sets of
-registers meet here: the question is about floating point values, the answer is an integer, and no
-new branch instruction is needed.
+## Comparisons produce an integer answer
 
-- **`flt.s t0, ft0, ft1`** sets `t0` to 1 when `ft0 < ft1`.
-- **`fle.s`** and **`feq.s`** are the other two.
+Floating-point comparisons write 1 or 0 into an integer register. An ordinary integer branch can
+then act on that result.
 
-There is no `fgt`: swap the operands. There is no `fne` either: use `feq` and branch on zero.
+- `flt.s t0, ft0, ft1` writes 1 when `ft0 < ft1`.
+- `fle.s t0, ft0, ft1` writes 1 when `ft0 <= ft1`.
+- `feq.s t0, ft0, ft1` writes 1 when the two values are equal.
+
+The destination comes first and must be an integer register. The two sources are floating-point
+registers. To ask whether one value is greater, swap the sources of `flt.s`. To branch when two
+values differ, use `feq.s` and branch when its integer result is zero.
 
 ```riscv|playground|fpu
 .data
-a:      .float 1.5
-b:      .float 2.25
+a: .float 1.5
+b: .float 2.25
 
 .text
 .globl main
@@ -202,116 +205,102 @@ main:
     flw ft0, 0(t0)
     flw ft1, 4(t0)
 
-    flt.s t1, ft0, ft1      # is 1.5 < 2.25? 1
-    fle.s t2, ft1, ft0      # is 2.25 <= 1.5? 0
-    feq.s t3, ft0, ft0      # is a equal to itself? 1
+    flt.s t1, ft0, ft1      # 1: 1.5 < 2.25
+    fle.s t2, ft1, ft0      # 0: 2.25 <= 1.5
+    feq.s t3, ft0, ft0      # 1 for this ordinary value
 
     bnez t1, less
     li t4, 200
-    j done
+    j end
 less:
     li t4, 100
-done:
-
-    li a7, 10
-    ecall
+end:
 ```
 
-`feq.s ft0, ft0`, asking whether a number is equal to itself, is not the silly question it looks
-like. It comes out false for a NaN and true for everything else, which makes it the way you test for
-one.
+`t4` finishes at 100. If either comparison source is a NaN, `feq.s`, `flt.s` and `fle.s` write 0.
+Therefore `feq.s t3, ft0, ft0` followed by `xori t3, t3, 1` gives the simple NaN test used in the
+second exercise.
 
-## The fcsr
+## Sticky status flags
 
-Floating point arithmetic has state that a register cannot hold: which way to round, and what has
-gone wrong since anybody last looked. RISC-V puts both in a **control and status register**, `fcsr`,
-which the registers panel shows on its **CSR** tab.
+Floating-point operations record exceptional conditions in the five `fflags` bits of the `fcsr`
+control and status register:
 
-`fcsr` is two fields. Bits 7 to 5 are `frm`, the rounding mode, and bits 4 to 0 are `fflags`, the
-five accrued exception flags:
+| flag | meaning                                                   |
+| ---- | --------------------------------------------------------- |
+| NV   | invalid operation                                         |
+| DZ   | division by zero                                          |
+| OF   | overflow: the magnitude was too large for the destination |
+| UF   | underflow: a tiny result lost accuracy                    |
+| NX   | inexact: the exact result had to be rounded               |
 
-| bit | flag | set when                                       |
-| --: | ---- | ---------------------------------------------- |
-|   4 | NV   | invalid, such as the square root of a negative |
-|   3 | DZ   | divided by zero                                |
-|   2 | OF   | the result was too large for the type          |
-|   1 | UF   | too small                                      |
-|   0 | NX   | inexact: the true answer needed more mantissa  |
+These are sticky status flags, not traps. Once an operation sets a bit, it remains set until the
+program explicitly clears or replaces the flags. Clear them before observing one calculation:
 
-They **accrue**: nothing clears them, so a flag says that something happened at some point, not that
-it happened in the last instruction.
-
-```riscv|playground|csr
+```riscv|playground|fpu|csr
 .data
-n:      .word 7
+n: .word 7
 
 .text
 .globl main
 main:
+    fsflags zero            # begin with all five flags clear
     la t0, n
     lw t1, 0(t0)
-    fcvt.s.w ft0, t1        # 7.0, exact
-    frflags t2              # nothing has gone wrong yet: 0
+    fcvt.s.w ft0, t1        # exactly 7.0
+    frflags t2              # 0
 
-    fsqrt.s ft1, ft0        # 2.6457..., which no float holds exactly
-    frflags t3              # NX: 1
-    frcsr t4                # the whole register
-
-    li a7, 10
-    ecall
+    fsqrt.s ft1, ft0        # rounded approximation of sqrt(7)
+    frflags t3              # NX is bit 0, so t3 is 1
+end:
 ```
 
-`t2` is 0 and `t3` is 1, the inexact flag, set because the square root of 7 is irrational and what
-`ft1` holds is the nearest float to it. Almost every real floating point program has NX set within a
-few instructions, which is why it is the one flag nobody checks.
+The CSR tab shows the flags. `t2` is zero after the exact conversion. The square root of 7 cannot be
+represented exactly as a single, so it sets NX and `t3` becomes 1.
 
-The CSR tab shows `fflags` and `fcsr` moving together. `frflags`, `frrm` and `frcsr` read the three
-views, `fsflags`, `fsrm` and `fscsr` write them, and they are all pseudo-instructions for `csrrs` and
-`csrrw` on CSR numbers 1, 2 and 3.
+## Floating-point arguments and results
 
-## Passing a float to a subroutine
+Under the floating-point calling convention, floating-point arguments use `fa0` through `fa7`, and
+a floating-point result returns in `fa0`. They are counted separately from integer arguments in
+`a0` through `a7`. A subroutine receiving one integer and two floats would therefore find them in
+`a0`, `fa0` and `fa1`.
 
-Floating point arguments go in `fa0` to `fa7` and the result comes back in `fa0`, counted separately
-from the integer arguments in `a0` to `a7`. So a subroutine taking an integer and two doubles finds
-the integer in `a0` and the doubles in `fa0` and `fa1`.
+This playground needs the same 12-byte startup adjustment as the previous calling-convention
+examples so that `sp` is 16-byte aligned when the subroutine begins:
 
 ```riscv|playground|fpu
 .data
-x:      .float 3.0
-y:      .float 4.0
+x: .float 3.0
+y: .float 4.0
 
 .text
 .globl main
 main:
+    addi sp, sp, -12       # align the playground stack
     la t0, x
-    flw fa0, 0(t0)          # the first argument
-    flw fa1, 4(t0)          # the second
-    jal hypot_squared       # fa0 = x*x + y*y
-    fsqrt.s fs0, fa0        # 5.0
+    flw fa0, 0(t0)         # first floating-point argument
+    flw fa1, 4(t0)         # second floating-point argument
+    jal hypot_squared      # fa0 = x*x + y*y
+    fsqrt.s fs0, fa0       # 5.0, kept where it is easy to inspect
+    addi sp, sp, 12        # restore the playground's initial sp
+    j end
 
-    li a7, 10
-    ecall
-
-# hypot_squared(fa0, fa1) -> fa0 * fa0 + fa1 * fa1 in fa0
+# hypot_squared(fa0, fa1) -> fa0
 hypot_squared:
     fmul.s fa0, fa0, fa0
     fmul.s ft0, fa1, fa1
     fadd.s fa0, fa0, ft0
     ret
+end:
 ```
 
-Switch the FPU tab to Single and `fs0` reads `5`. `ft0` is a temporary the subroutine used and did not
-restore, which is what the convention allows; a subroutine that wanted `fs0` upwards would have to
-save it on the stack.
-
-Printing a float is `ecall` service 2 with the value in `f12`, and a double is service 3. Both are in
-the "ecall" lecture with the rest.
+Select Single and `fs0` reads 5.0. `hypot_squared` freely replaces the caller-saved `fa0` and `ft0`
+registers. It changes no saved register and makes no further call, so it needs no stack frame.
 
 ## Your turn
 
-`values` holds three floats. Add them up, divide by three, and leave the **bits** of the answer in
-`t3` with `fmv.x.w`, since a testcase reads the integer registers. The three add up to 9.0, so the
-answer is 3.0, whose bits are `0x40400000`.
+`values` holds three singles. Add them, divide the sum by three, and leave the raw bits of the answer
+in `t3` with `fmv.x.w`. The exact answer for this data is 3.0, encoded as `0x40400000`.
 
 ```riscv|playground|fpu|exercise
 .data
@@ -322,9 +311,7 @@ three:  .float 3.0
 .globl main
 main:
     # your code here
-
-    li a7, 10
-    ecall
+end:
 ```
 
 ```testcase
@@ -347,36 +334,32 @@ main:
     la t0, values
     flw ft0, 0(t0)          # 1.5
     flw ft1, 4(t0)
-    fadd.s ft0, ft0, ft1    # + 3.25
+    fadd.s ft0, ft0, ft1    # 4.75
     flw ft1, 8(t0)
-    fadd.s ft0, ft0, ft1    # + 4.25, so 9.0
+    fadd.s ft0, ft0, ft1    # 9.0
     la t1, three
     flw ft2, 0(t1)
     fdiv.s ft0, ft0, ft2    # 3.0
     fmv.x.w t3, ft0
-
-    li a7, 10
-    ecall
+end:
 ```
 
 </details>
 
-The second one compares. Leave 1 in `t1` when the float at `a` is less than the one at `b` and 0 when
-it is not, and leave 1 in `t2` when `a` is a NaN and 0 when it is not. The data holds 1.5 and 2.5, so
-the answers are 1 and 0.
+For the second exercise, leave 1 in `t1` when the single at `a` is less than the one at `b`, and 0
+otherwise. Leave 1 in `t2` when `a` is a NaN, and 0 otherwise. With the supplied data, the answers
+are 1 and 0.
 
 ```riscv|playground|fpu|exercise
 .data
-a:      .float 1.5
-b:      .float 2.5
+a: .float 1.5
+b: .float 2.5
 
 .text
 .globl main
 main:
     # your code here
-
-    li a7, 10
-    ecall
+end:
 ```
 
 ```testcase
@@ -390,8 +373,8 @@ main:
 
 ```riscv|playground|fpu|solution
 .data
-a:      .float 1.5
-b:      .float 2.5
+a: .float 1.5
+b: .float 2.5
 
 .text
 .globl main
@@ -401,12 +384,9 @@ main:
     flw ft1, 4(t0)
 
     flt.s t1, ft0, ft1      # a < b
-
-    feq.s t2, ft0, ft0      # a equal to itself? only a NaN is not
-    xori t2, t2, 1          # so flip the answer
-
-    li a7, 10
-    ecall
+    feq.s t2, ft0, ft0      # 1 for an ordinary value, 0 for NaN
+    xori t2, t2, 1          # invert it to make 1 mean NaN
+end:
 ```
 
 </details>

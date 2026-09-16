@@ -274,6 +274,27 @@ function renderRegisterFileInformation(enabledToolNames: DefaultCodingAgentToolN
         .join(' ')
 }
 
+/**
+ * Pokes ([the design record](../../../../../docs/design/pokes.md)), as one paragraph beside the
+ * other execution guidance: a Poke is the debugger changing a value the program is about to read,
+ * it is a step of the same history the instructions are in, and it has two things it never writes.
+ * Written from the allow list like the neighbouring tips, so it names only the tools the agent has.
+ */
+function renderPokeInformation(enabledToolNames: DefaultCodingAgentToolName[]) {
+    const poking = (['poke_register', 'poke_memory'] as const).filter((name) =>
+        hasTool(enabledToolNames, name)
+    )
+    const listed = poking.length > 1 ? poking.join(' and ') : poking[0]
+    const verb = poking.length > 1 ? 'change' : 'changes'
+
+    return [
+        `- Pokes: ${listed} ${verb} a value of the paused program between two instructions, which is what a debugger does when it tries a fix without editing the code, reaches a branch the program never takes, or sets up a state that would take many instructions to arrive at.`,
+        'A Poke is one step of the same history the instructions are in: undo reverts it like an instruction, and latestSteps lists it with kind poke and the old and new value of everything it wrote.',
+        'The program counter and the status flags are never pokeable, nor is a register the emulator cannot set such as $zero; poke the values an instruction reads and step to see what it does with them.',
+        'Poke only what you are testing, and say what you poked when you report results: those values are yours, not the program’s.'
+    ].join(' ')
+}
+
 function renderToolSelectionTips(enabledToolNames: DefaultCodingAgentToolName[]) {
     const tips = [
         hasTool(enabledToolNames, 'list_files')
@@ -308,6 +329,9 @@ function renderToolSelectionTips(enabledToolNames: DefaultCodingAgentToolName[])
             : '',
         hasTool(enabledToolNames, 'read_memory')
             ? '- Use read_memory only when register/stdout state is insufficient, such as inspecting arrays, strings, the stack, or data sections.'
+            : '',
+        hasTool(enabledToolNames, 'poke_register') || hasTool(enabledToolNames, 'poke_memory')
+            ? renderPokeInformation(enabledToolNames)
             : '',
         hasTool(enabledToolNames, 'run_to_completion') &&
         (hasTool(enabledToolNames, 'set_breakpoint') ||

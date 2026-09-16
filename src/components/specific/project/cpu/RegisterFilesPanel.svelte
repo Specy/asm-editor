@@ -7,9 +7,11 @@
         type Register,
         type RegisterFile,
         type RegisterFormat,
+        type RegisterPoke,
         RegisterSize
     } from '$lib/languages/commonLanguageFeatures.svelte'
     import { registerFileWidth } from '$lib/languages/registerFormats'
+    import type { AvailableLanguages } from '$lib/Project.svelte'
 
     /**
      * The Register file panel ([the design record](../../../../../docs/design/register-files.md)):
@@ -21,27 +23,41 @@
         /** Every file of the emulator, the CPU one first; `RegistersRenderer` passes a single made-up one. */
         files: RegisterFile[]
         systemSize: RegisterSize
+        /** The Target, which is what names the widths of the grouping strip (`sizeNames.ts`). */
+        language: AvailableLanguages
         /** The file the panel opens on, which is a Playground's `fpu`/`cp0`/`csr`/`sse`/`x87` flag. */
         initialFileId?: string
         position?: 'top' | 'bottom'
         withoutHeader?: boolean
         style?: string
         gridStyle?: string
-        /** The B/W/L/D/Q grouping of the hexadecimal Formats, shared by the files that use it. */
+        /** The width grouping of the hexadecimal Formats, shared by the files that use it. */
         size?: RegisterSize
         onRegisterClick?: (register: Register) => void
+        /**
+         * Whether the rows take Pokes ([the design record](../../../../../docs/design/pokes.md)):
+         * the page's half of the availability rule. The file's own id goes back out with every
+         * question and every commit, because a Poke is made on one Register file.
+         */
+        pokeable?: boolean
+        canPokeRegister?: (fileId: string, register: string) => boolean
+        onPoke?: (fileId: string, writes: RegisterPoke[]) => void
     }
 
     let {
         files,
         systemSize,
+        language,
         initialFileId = undefined,
         position = 'top',
         withoutHeader = false,
         style = '',
         gridStyle = '',
         size = $bindable(RegisterSize.Word),
-        onRegisterClick
+        onRegisterClick,
+        pokeable = false,
+        canPokeRegister,
+        onPoke
     }: Props = $props()
 
     const FORMAT_LABELS: Record<RegisterFormat, string> = {
@@ -149,6 +165,7 @@
                             {/if}
                             {#if format === 'hex'}
                                 <SizeSelector
+                                    {language}
                                     maxSize={maxGroupSize}
                                     style="flex: 1;"
                                     selected={groupSize}
@@ -178,6 +195,11 @@
                 gridStyle={gridStyleOf(file)}
                 compact={isCompact(file)}
                 {onRegisterClick}
+                {pokeable}
+                canPokeRegister={canPokeRegister
+                    ? (register) => canPokeRegister(file.id, register)
+                    : undefined}
+                onPoke={onPoke ? (writes) => onPoke(file.id, writes) : undefined}
             />
         </div>
     {/if}

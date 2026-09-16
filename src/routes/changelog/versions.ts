@@ -7,6 +7,19 @@ type Version = {
 }
 export const versions: Version[] = [
     {
+        version: '10.1.0',
+        title: 'Poke registers and memory while debugging',
+        date: new Date('2026-09-15'),
+        changes: [
+            'While a program is paused you can now poke any register of any register file, and any memory byte or selected range, and watch the next instructions run with the new value',
+            'Every poke is a step of the undo history with a row of its own, showing what it changed, so it can be undone like an instruction',
+            'Pokes work in the lecture playgrounds too',
+            'The AI assistant gained two tools to poke registers and memory',
+            'A write in the History panel can be clicked open to show the value it wrote and the value it replaced'
+        ],
+        notes: []
+    },
+    {
         version: '10.0.0',
         title: 'Graphics and simulators overhaul',
         date: new Date('2026-09-15'),

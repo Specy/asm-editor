@@ -1,11 +1,44 @@
-A loop is a conditional jump that goes backwards. Everything the last lecture said about `cmp` and
-`jcc` still holds; the only new thing is that the label is above the jump instead of below it.
+# Loops
 
-## Testing at the top
+A loop repeats a body while a condition allows another pass. In assembly, the parts that a
+high-level language writes as `while` or `for` are separate instructions and labels.
 
-The most familiar shape tests before it does anything, so a loop whose condition is false at the
-start runs its body zero times. That needs two jumps: one at the top that leaves when the test fails,
-and one at the bottom that goes back to the top unconditionally.
+Consider this loop:
+
+```c
+while (index < limit) {
+    do_something();
+    index++;
+}
+```
+
+Its control flow can be written with labels and jumps:
+
+```text
+loop_test:
+    if index >= limit, go to loop_done
+    do_something
+    increase index
+    go back to loop_test
+loop_done:
+```
+
+This shape has five parts:
+
+- the **condition** is tested before each pass;
+- the **body** does the repeated work;
+- the **state update** changes a value used by the condition;
+- the **backward edge** jumps to an earlier label;
+- the **exit** is where execution continues when the condition is false.
+
+The update is essential. Every path through the body that returns to the test must change the
+controlling state so that the condition can eventually become false. If one path jumps back without
+doing that, the loop can repeat forever.
+
+## Testing before the body
+
+Here is the same pre-tested shape with an unsigned qword counter. The body sees the values 0 through
+9:
 
 ```x86|playground|no-flags
 default rel
@@ -13,35 +46,36 @@ global _start
 
 section .text
 _start:
-    xor rcx, rcx                ; the counter, starting at 0
-.while:
+    xor rcx, rcx                ; index = 0
+
+loop_test:
     cmp rcx, 10
-    jae .done                   ; leave once it reaches 10
-    inc rcx                     ; the body
-    jmp .while
-.done:
+    jae loop_done               ; unsigned index >= 10: leave the loop
 
+    ; body: rcx is an index from 0 through 9
+    inc rcx                     ; state update
+    jmp loop_test               ; backward edge
+
+loop_done:
+    ; Immediately before exit setup, rcx is 10.
     mov rax, 60
     xor rdi, rdi
     syscall
 ```
 
-`rcx` comes out at 10, one past the last value the body saw, which is where a counting loop always
-leaves its counter.
+Keep `cmp` beside the conditional jump that reads its flags. Starting from 0, the first comparison
+allows entry. The body sees 0, updates `rcx` to 1, and jumps back. After the body sees 9, the update
+makes `rcx` equal to 10. The next `cmp` makes `jae` take the exit. For this upward loop, the counter
+is one past the final body value immediately before the exit setup.
 
-Two small choices in there are worth copying. `jae` rather than `jge`, because a counter is never
-negative and the unsigned question is the right one to ask about it. And `inc rcx` rather than
-`add rcx, 1`, because `inc` is a byte shorter and leaves `CF` alone, which matters when the loop body
-is adding numbers up with a carry running between passes.
+A pre-tested loop can also run zero times. If `rcx` starts at 10, the first `cmp rcx, 10` makes
+`jae loop_done` jump immediately. The body and its `inc` do not run, so `rcx` is still 10 at
+`loop_done`.
 
-`xor rcx, rcx` is the usual way of writing `mov rcx, 0`. It is shorter, and it is also one of the
-patterns the processor recognises as producing a value that depends on nothing that came before, for
-the reason "The 16 registers and their halves" went through.
+## Counting down at the bottom
 
-## Testing at the bottom
-
-Move the test to the bottom and the body always runs at least once, which is fine when you already
-know there is at least one pass to do. That shape needs only one jump.
+When a count is known to be positive, the body can run before the test. This example adds
+`5 + 4 + 3 + 2 + 1`:
 
 ```x86|playground|no-flags
 default rel
@@ -49,27 +83,50 @@ global _start
 
 section .text
 _start:
-    mov rcx, 5                  ; the count
-    xor rax, rax                ; the total
-.body:
-    add rax, rcx                ; total += count
-    dec rcx                     ; count--
-    jnz .body                   ; go again unless the count hit zero
+    mov rcx, 5                  ; a known positive count
+    xor rax, rax                ; total = 0
 
+countdown_body:
+    add rax, rcx
+    dec rcx                     ; state update; also sets ZF
+    jnz countdown_body          ; repeat while rcx is not zero
+
+countdown_done:
+    ; Immediately before exit setup, rax is 15 and rcx is 0.
     mov rax, 60
     xor rdi, rdi
     syscall
 ```
 
-There is no `cmp` anywhere in that loop, and the absence is the point. `dec rcx` sets `ZF` itself when
-its answer is zero, so the decrement has already asked the question the jump wants answered. A loop
-that counts **down to zero** gets its test for free; a loop that counts up to a limit has to compare
-against the limit every pass. That is why so much hand written assembly runs its passes backwards even
-when the order does not matter.
+The body runs with `rcx` equal to 5, 4, 3, 2, and 1. Each `dec` supplies the `ZF` value consumed by
+the adjacent `jnz`. After processing 1, `dec` changes `rcx` to 0, sets `ZF`, and `jnz` falls through.
+Unlike the upward example, this countdown finishes with its counter at zero.
+
+This bottom-tested `dec`/`jnz` form requires a nonzero initial count. If `rcx` starts at zero, the
+body still runs once. The `dec` then wraps the qword to all ones:
+`0xFFFFFFFFFFFFFFFF`, which is unsigned `2^64 - 1` and signed `-1`. `jnz` jumps back, and the loop
+continues through the enormous wrapped count.
+
+When zero is a valid input, guard the body with a test at the top:
+
+```x86
+    test rcx, rcx
+    jz countdown_done
+
+countdown_body:
+    ; body
+    dec rcx
+    jnz countdown_body
+
+countdown_done:
+```
+
+The first pair handles zero before the body. For a positive count, the bottom pair performs the
+remaining tests. Both flag-producing instructions stay next to the jumps that use their flags.
 
 ## Walking an array
 
-Counting from 0 to 9 is more useful when the counter doubles as an index.
+A loop counter can also be an array index. This loop fills ten qwords with the values 1 through 10:
 
 ```x86|playground|memory|no-flags
 default rel
@@ -80,59 +137,37 @@ numbers:    resq 10
 
 section .text
 _start:
-    xor rcx, rcx                ; the index
-.fill:
-    mov rax, rcx
-    inc rax                     ; the value to store, one more than the index
-    mov [numbers + rcx*8], rax
-    inc rcx                     ; on to the next
+    lea rbx, [rel numbers]      ; base address of the array
+    xor rcx, rcx                ; zero-based index
+
+fill_test:
     cmp rcx, 10
-    jb .fill
+    jae fill_done
 
+    mov rax, rcx
+    inc rax                     ; value = index + 1
+    mov [rbx + rcx*8], rax      ; store one qword
+    inc rcx                     ; advance to the next element
+    jmp fill_test
+
+fill_done:
+    ; Immediately before exit setup, rcx is 10 and the array holds 1 through 10.
     mov rax, 60
     xor rdi, rdi
     syscall
 ```
 
-Type `402000` into the memory panel and the ten qwords read 1 to 10, each one as eight little endian
-bytes.
+`lea rbx, [rel numbers]` first calculates the position-independent address of the array. The memory
+operand `[rbx + rcx*8]` then combines that base address with the index. Its scale is 8 because each
+qword occupies eight bytes. A dword array would use a scale of 4 and a dword-sized store.
 
-`[numbers + rcx*8]` is the whole of the indexing. The scale of 8 is the size of one element, and the
-processor multiplies it out as part of working out the address, so there is no separate line turning
-an index into an offset. Change the array to `resd 10`, the store to `mov [numbers + rcx*4], eax` and
-the scale to 4, and the same loop fills dwords instead.
-
-## The loop instruction
-
-x86 has an instruction that is a countdown loop on its own. `loop label` decrements `rcx` and jumps to
-`label` if the answer is not zero.
-
-```x86|playground|no-flags
-default rel
-global _start
-
-section .text
-_start:
-    mov rcx, 5                  ; loop reads this and nothing else
-    xor rax, rax
-.sum:
-    add rax, rcx
-    loop .sum                   ; rcx--, and go again while rcx != 0
-
-    mov rax, 60
-    xor rdi, rdi
-    syscall
-```
-
-Three things constrain it. The counter is always `rcx`, so a body that needs `rcx` for anything else
-has to save it first. The jump it takes is a short one, reaching at most 127 bytes, so a long body
-turns into a build error. And on current processors it is **slower** than the `dec` and `jnz` pair it
-replaces, which is why compilers stopped emitting it decades ago. It is two bytes and it reads
-clearly, but the loop in the section above is what production code looks like.
+The pre-test also defines the empty case. If the length were zero, the first comparison would jump
+to `fill_done` before any memory access.
 
 ## Nested loops
 
-An inner loop needs its own counter, since the outer one is still counting.
+A nested loop has two pieces of controlling state. The inner counter must be initialized once for
+every outer pass:
 
 ```x86|playground|no-flags
 default rel
@@ -140,33 +175,44 @@ global _start
 
 section .text
 _start:
-    xor rax, rax                ; the total
-    xor rcx, rcx                ; the outer counter
-.outer:
-    xor rdx, rdx                ; the inner counter, reset every time round
-.inner:
+    xor rax, rax                ; number of inner-body executions
+    xor rcx, rcx                ; outer counter
+
+outer_body:
+    xor rdx, rdx                ; reset the inner counter for this outer pass
+
+inner_body:
     inc rax
     inc rdx
     cmp rdx, 4
-    jb .inner
+    jb inner_body
+
     inc rcx
     cmp rcx, 3
-    jb .outer
+    jb outer_body
 
+    mov r12, rax                ; keep the result across the exit setup
     mov rax, 60
     xor rdi, rdi
     syscall
 ```
 
-`rax` comes out at 12, three times four. The `xor rdx, rdx` is inside the outer loop and outside the
-inner one, and moving it up two lines is all it takes to turn this into one flat loop that counts to
-four and stops.
+On each outer pass, `rdx` starts at 0 and the inner body advances it through 1, 2, 3, and 4. The
+inner body therefore runs four times. `rcx` advances once after each completed inner loop, so three
+outer passes produce 12 inner-body executions and leave 12 in `r12`.
+
+Reset placement determines which loop owns the initialization. If `xor rdx, rdx` were moved above
+`outer_body`, it would run only once. The first inner loop would take `rdx` from 0 to 4. Because this
+inner loop tests at the bottom, the second outer pass would still enter the inner body once, taking
+`rdx` from 4 to 5, and the third would take it from 5 to 6. That changed program would leave 6 in
+`r12`, not 12.
 
 ## Your turn
 
-Add up the numbers from 1 to `rcx` and leave the total in `rax`. The test sets `rcx` to 10, so the
-answer is 55. Guard the loop so that a count of zero leaves the total at zero instead of counting down
-past it. The exit in this one carries the answer out in `rdi`, which is what the test reads.
+Add the integers from 1 through each supplied unsigned count. The three inputs are in `r8`, `r9`,
+and `r10`; put their corresponding totals in `r12`, `r13`, and `r14`. Use a guarded countdown loop
+for each input so a zero count skips the body. The tested pairs are `0 → 0`, `4 → 10`, and
+`10 → 55`.
 
 ```x86|playground|exercise
 default rel
@@ -176,15 +222,23 @@ section .text
 _start:
     ; your code here
 
-    mov rdi, rax
     mov rax, 60
+    xor rdi, rdi
     syscall
 ```
 
 ```testcase
 {
-    "startingRegisters": { "rcx": 10 },
-    "expectedRegisters": { "rdi": 55 }
+    "startingRegisters": {
+        "r8": 0,
+        "r9": 4,
+        "r10": 10
+    },
+    "expectedRegisters": {
+        "r12": 0,
+        "r13": 10,
+        "r14": 55
+    }
 }
 ```
 
@@ -197,30 +251,52 @@ global _start
 
 section .text
 _start:
-    xor rax, rax
+    xor r12, r12
+    mov rcx, r8
     test rcx, rcx
-    jz .done            ; a count of zero adds nothing, and skipping the test
-.sum:                   ; here is what stops dec from wrapping round to -1
-    add rax, rcx        ; total += count
+    jz first_sum_done
+first_sum_body:
+    add r12, rcx
     dec rcx
-    jnz .sum            ; while the count has not reached zero
-.done:
+    jnz first_sum_body
+first_sum_done:
 
-    mov rdi, rax
+    xor r13, r13
+    mov rcx, r9
+    test rcx, rcx
+    jz second_sum_done
+second_sum_body:
+    add r13, rcx
+    dec rcx
+    jnz second_sum_body
+second_sum_done:
+
+    xor r14, r14
+    mov rcx, r10
+    test rcx, rcx
+    jz third_sum_done
+third_sum_body:
+    add r14, rcx
+    dec rcx
+    jnz third_sum_body
+third_sum_done:
+
     mov rax, 60
+    xor rdi, rdi
     syscall
 ```
 
 </details>
 
-The second one walks memory. `values` holds six qwords; leave their total in `r8`, which is 120.
+Now walk the six-qword array in order. Leave the total in `r8` and the final index in `r9`. The
+final index should equal the number of elements processed.
 
 ```x86|playground|memory|exercise
 default rel
 global _start
 
 section .data
-values: dq 4, 8, 15, 16, 23, 54
+values: dq 13, 7, 29, 4, 18, 11
 
 section .text
 _start:
@@ -233,7 +309,10 @@ _start:
 
 ```testcase
 {
-    "expectedRegisters": { "r8": 120 }
+    "expectedRegisters": {
+        "r8": 82,
+        "r9": 6
+    }
 }
 ```
 
@@ -245,18 +324,22 @@ default rel
 global _start
 
 section .data
-values: dq 4, 8, 15, 16, 23, 54
+values: dq 13, 7, 29, 4, 18, 11
 
 section .text
 _start:
-    xor r8, r8              ; the total
-    xor rcx, rcx            ; the index
-.add:
-    add r8, [values + rcx*8]
-    inc rcx
-    cmp rcx, 6
-    jb .add
+    lea rbx, [rel values]
+    xor r8, r8                  ; total
+    xor r9, r9                  ; index
 
+array_test:
+    cmp r9, 6
+    jae array_done
+    add r8, [rbx + r9*8]
+    inc r9
+    jmp array_test
+
+array_done:
     mov rax, 60
     xor rdi, rdi
     syscall

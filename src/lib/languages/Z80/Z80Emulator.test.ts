@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Z80Emulator } from '$lib/languages/Z80/Z80Emulator.svelte'
+import { CPU_REGISTER_FILE_ID } from '$lib/languages/GenericEmulator.svelte'
 
 /**
  * The slice contract against a real Core. `@specy/z80` is plain TypeScript, so it is the one adapter
@@ -199,6 +200,143 @@ describe('Z80 reset and testcases', () => {
         expect(Date.now() - started).toBeLessThan(1_000)
         //the drawing happened too, on a Screen the testcase reset before it started
         expect(colorAt(emulator.peripherals.screen, 100, 100)).toBe(0xffffff)
+    })
+})
+
+/**
+ * Pokes against the real Core ([the design record](../../../../docs/design/pokes.md),
+ * [ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md)): a poked value is one step of
+ * the same history the instructions use, named as the panel names it (`af'`, not the machine's
+ * `afPrime`), and undone like any other.
+ */
+describe('Z80 Pokes', () => {
+    const LOADS = [
+        '        org $8000',
+        '        ld a, 1',
+        '        ld hl, 0x1234',
+        '        ld a, 2',
+        '        halt'
+    ].join('\n')
+
+    /** Built with a history and stopped between two instructions, which is when a Poke is possible. */
+    async function stepped(code: string, steps: number) {
+        const emulator = Z80Emulator(code)
+        await emulator.compile(100, code)
+        for (let i = 0; i < steps; i++) await emulator.step()
+        return emulator
+    }
+
+    function registerOf(emulator: ReturnType<typeof Z80Emulator>, name: string): bigint {
+        const register = emulator.registers.find((candidate) => candidate.name === name)
+        if (!register) throw new Error(`No register ${name}`)
+        return register.value
+    }
+
+    it('records a poked register as a step of its own, and undoes it', async () => {
+        const emulator = await stepped(LOADS, 2)
+        expect(registerOf(emulator, 'hl')).toBe(0x1234n)
+        expect(emulator.canPoke).toBe(true)
+
+        expect(
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'hl', value: 0xbeefn }])
+        ).toBe(true)
+        expect(registerOf(emulator, 'hl')).toBe(0xbeefn)
+
+        const [step] = emulator.latestSteps
+        expect(step.kind).toBe('poke')
+        //no instruction ran, so the row has no line to go to
+        expect(step.line).toBe(-1)
+        expect(step.writes).toEqual([{ type: 'register', name: 'hl', old: 0x1234n, new: 0xbeefn }])
+        expect(emulator.canUndo).toBe(true)
+
+        emulator.undo(1)
+        expect(registerOf(emulator, 'hl')).toBe(0x1234n)
+        expect(emulator.latestSteps[0].kind).toBe('instruction')
+    })
+
+    it('names a shadow register the way the panel does', async () => {
+        const emulator = await stepped(LOADS, 2)
+        expect(
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: "af'", value: 0x7fffn }])
+        ).toBe(true)
+        expect(registerOf(emulator, "af'")).toBe(0x7fffn)
+        expect(emulator.latestSteps[0].writes).toEqual([
+            { type: 'register', name: "af'", old: 0n, new: 0x7fffn }
+        ])
+    })
+
+    it("keeps the last executed instruction and the flags out of a Poke's way", async () => {
+        const emulator = await stepped(LOADS, 2)
+        const line = emulator.line
+        const flags = emulator.statusRegisters.map((flag) => ({ ...flag }))
+
+        emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'hl', value: 0x1n }])
+        //a Poke moves neither the current line nor the flags: the instruction that ran last is
+        //still the one before it, and a poked value highlights nothing in the Status flags
+        expect(emulator.line).toBe(line)
+        expect(emulator.statusRegisters).toEqual(flags)
+
+        //and the next instruction is still the one the PC is on
+        await emulator.step()
+        expect(registerOf(emulator, 'a')).toBe(2n)
+    })
+
+    it('records poked memory as one step, however many bytes it spans', async () => {
+        const emulator = await stepped(LOADS, 2)
+        const bytes = new Uint8Array([0xde, 0xad, 0xbe, 0xef])
+
+        expect(emulator.pokeMemory(0x9000n, bytes)).toBe(true)
+        expect([...emulator.readMemoryBytes(0x9000n, 4)]).toEqual([...bytes])
+
+        const [step] = emulator.latestSteps
+        expect(step.kind).toBe('poke')
+        expect(step.writes).toEqual([
+            { type: 'memory', address: 0x9000n, old: [0, 0, 0, 0], new: [...bytes] }
+        ])
+
+        emulator.undo(1)
+        expect([...emulator.readMemoryBytes(0x9000n, 4)]).toEqual([0, 0, 0, 0])
+    })
+
+    it('puts back the value the program found when the instruction after a Poke is undone too', async () => {
+        const emulator = await stepped(LOADS, 2)
+        emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'a', value: 0x55n }])
+        //the third load overwrites the poked value, so undoing both has to walk back through it
+        await emulator.step()
+        expect(registerOf(emulator, 'a')).toBe(2n)
+
+        emulator.undo(1)
+        expect(registerOf(emulator, 'a')).toBe(0x55n)
+        emulator.undo(1)
+        expect(registerOf(emulator, 'a')).toBe(1n)
+    })
+
+    it('leaves the Screen journal where it is when a Poke is undone', async () => {
+        const code = [
+            '        org $8000',
+            '        ld a, 0xFF',
+            '        out (0x20), a       ; white pen',
+            '        ld a, 50',
+            '        out (0x23), a',
+            '        out (0x24), a',
+            '        ld a, 0',
+            '        out (0x27), a       ; the pixel at (50, 50)',
+            '        halt'
+        ].join('\n')
+        const emulator = await stepped(code, 7)
+        const screen = emulator.peripherals.screen
+        expect(colorAt(screen, 50, 50)).toBe(0xffffff)
+        const journaled = screen.history.sequence
+
+        expect(
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'hl', value: 0x99n }])
+        ).toBe(true)
+        expect(screen.history.sequence).toBe(journaled)
+
+        //a Poke drew nothing, so undoing it must not pop the record of the `out` that did
+        emulator.undo(1)
+        expect(screen.history.sequence).toBe(journaled)
+        expect(colorAt(screen, 50, 50)).toBe(0xffffff)
     })
 })
 

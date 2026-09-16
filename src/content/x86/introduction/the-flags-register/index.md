@@ -1,43 +1,48 @@
-An instruction that adds two numbers produces more than a sum. It also knows whether the answer was
-zero, whether it was negative, and whether it was too big to fit in the register it went into. All of
-that would be thrown away if there were nowhere to put it, so there is somewhere: a register of
-single bits called `rflags`, which the panel shows as its own row above the registers.
+# The flags register
 
-## The row
+Integer instructions can produce information besides the value written to their destination. x86
+stores that information as individual bits in a register named `rflags`. The editor shows those
+bits together in the flags row.
 
-Five of those bits do nearly all the work.
+This lesson uses four arithmetic status flags:
 
-| flag | set when                                                                             |
-| ---- | ------------------------------------------------------------------------------------ |
-| `CF` | the **unsigned** answer did not fit: an addition carried out, a subtraction borrowed |
-| `ZF` | the answer was zero                                                                  |
-| `SF` | the top bit of the answer is set, so read as signed it is negative                   |
-| `OF` | the **signed** answer did not fit                                                    |
-| `DF` | the string instructions should count downwards instead of up                         |
+| flag | meaning after an operation |
+| ---- | -------------------------- |
+| `ZF` | The result used to compute the flags is zero. |
+| `SF` | The top bit of the result used to compute the flags is 1. |
+| `CF` | An unsigned addition carried out of the chosen width, or an unsigned subtraction borrowed. |
+| `OF` | The mathematical signed result is outside the signed range for the chosen width. |
 
-`DF` is the odd one in that list: no arithmetic touches it, `cld` clears it, `std` sets it, and only
-the string instructions ever read it. The other four are written by nearly everything and read by the
-conditional jumps.
+`ZF` is the **zero flag**, `SF` the **sign flag**, `CF` the **carry flag**, and `OF` the
+**overflow flag**. The panel also displays other flags, including `PF` and `AF`. They may change
+too, but the tables, comments, and explanations here report only the four flags above.
 
-The panel shows three more bits. `PF` is set when the low byte of the answer has an even number of
-set bits, a parity check left over from serial communication, and it comes back once in this course
-when floating point numbers are compared. `AF` records a carry out of bit 3 and is read only by the
-decimal arithmetic instructions, which nothing here uses. `TF` is the trap flag, which a debugger
-sets to make the processor stop after every instruction; the Step button here is the emulator
-stopping, not that.
+## Flags use the operation's width
 
-## Who writes them
+The operand names select the width of an operation. `add al, 1` is an 8-bit addition, while
+`add rax, 1` is a 64-bit addition. The flags describe the result at that selected width.
 
-- **`add`, `sub`, `neg`, `and`, `or`, `xor`, the shifts** write the flags as a side effect of doing
-  their real work.
-- **`cmp` and `test`** exist only to write them. `cmp a, b` subtracts and throws the answer away;
-  `test a, b` ands and throws the answer away.
-- **`inc` and `dec`** write every flag except `CF`, which they deliberately leave alone so that a
-  loop can count without disturbing a carry the loop body is keeping.
-- **`mov`, `lea`, `push`, `pop` and the jumps** write no flags at all.
+For a byte operation, only eight result bits are retained. Its top bit is bit 7, its unsigned range
+is 0 to 255, and its signed range is -128 to 127. These two byte additions therefore set different
+flags:
 
-That last line is what makes the whole arrangement usable. A flag survives until something writes it,
-so you can `cmp`, do a `mov` or two, and still read the answer to the comparison afterwards.
+| operation | byte result | `ZF` | `SF` | `CF` | `OF` |
+| --------- | ----------- | ---: | ---: | ---: | ---: |
+| `0x7F + 1` | `0x80` | 0 | 1 | 0 | 1 |
+| `0xFF + 1` | `0x00` | 1 | 0 | 1 | 0 |
+
+In the first row, signed 127 plus 1 is outside the signed byte range, so `OF` is 1. The unsigned
+answer 128 fits, so `CF` is 0. In the second row, unsigned 255 plus 1 needs a ninth bit, so `CF` is
+1. Read as signed, `0xFF` is -1, and -1 plus 1 is 0, so `OF` is 0.
+
+Subtraction gives `CF` the related unsigned meaning of a borrow. A qword calculation of `3 - 5`
+cannot be represented as an unsigned qword without wrapping, so it sets `CF`. Its retained result
+is `0xFFFFFFFFFFFFFFFE`: it is not zero, and its top bit is 1, so `ZF` is 0 and `SF` is 1. The signed
+result -2 fits in a qword, so `OF` is 0.
+
+## Watch four results
+
+Build this program and keep the flags row visible while stepping through it:
 
 ```x86|playground
 default rel
@@ -46,46 +51,52 @@ global _start
 section .text
 _start:
     mov rax, 5
-    sub rax, 5              ; zero: ZF goes to 1
-    mov rbx, 3
-    sub rbx, 5              ; -2: SF and CF go to 1, ZF back to 0
-    mov rcx, 1
-    mov rdx, 2              ; mov writes no flags, so the row does not move
-    add rcx, rdx            ; 3: everything back to 0
+    sub rax, 5              ; qword 0: ZF=1, SF=0, CF=0, OF=0
+
+    mov rbx, 3              ; mov preserves those flags
+    sub rbx, 5              ; qword -2: ZF=0, SF=1, CF=1, OF=0
+
+    mov rcx, 0x7F           ; mov preserves the flags again
+    add cl, 1               ; byte 0x80: ZF=0, SF=1, CF=0, OF=1
+
+    mov rdx, 0xFF
+    add dl, 1               ; byte 0: ZF=1, SF=0, CF=1, OF=0
 
     mov rax, 60
     mov rdi, 0
     syscall
 ```
 
-Press **Step** through it with the flags row in view. `ZF` lights after the first `sub` and goes out
-after the second, where `SF` and `CF` light instead: `CF` because 3 minus 5 borrowed, `SF` because the
-answer `FFFFFFFFFFFFFFFE` has its top bit set. The two `mov` lines change nothing in the row at all.
+Inspect the four focus flags immediately after each `sub` or `add`, before stepping over the next
+arithmetic instruction. After the final `add`, the two exit-setup `mov` instructions still preserve
+the flags; inspect them before stepping over `syscall`. The `mov` instructions between arithmetic
+operations also preserve the existing flags. For example, after `sub rbx, 5`, the following
+`mov rcx, 0x7F` does not erase the subtraction's `SF` and `CF` values.
 
-## cmp and test
+## Flags keep their values
 
-`cmp rax, rbx` computes `rax - rbx`, sets the flags from the answer, and writes no register anywhere.
-The comparison you wanted is then read out of the flags:
+A status flag keeps its current value until a later instruction changes that flag. This is why an
+instruction can produce flags and a later instruction can use them.
 
-| written              | true when                |
-| -------------------- | ------------------------ |
-| `cmp a, b` then `je` | a equals b               |
-| `cmp a, b` then `jb` | a is below b, unsigned   |
-| `cmp a, b` then `jl` | a is less than b, signed |
+Many integer arithmetic and bitwise instructions update status flags. The exact set depends on the
+instruction: for example, `add` and `sub` update all four flags discussed here, while `inc` and
+`dec` leave `CF` unchanged. The `mov` and `lea` forms used in this course do not change these four
+flags, and an ordinary unconditional `jmp` does not change them either. When preservation matters,
+check the particular instruction rather than assuming that every calculation has the same effect.
 
-Read it left to right. `cmp rax, rbx` followed by `jl` jumps when `rax < rbx`, with the operands in
-the order the question is asked in.
+## `cmp` and `test` produce flags
 
-`test rax, rbx` does the same with an AND instead of a subtraction. Its two usual forms are
+Two common instructions update flags without writing an arithmetic result to a general-purpose
+register:
 
-```
-    test rax, rax           ; is rax zero? ZF says so
-    test rcx, 1             ; is the lowest bit set? ZF is 0 if it is
-```
+- `cmp left, right` updates flags as if it had calculated `left - right` at the operands' width. It
+  discards that arithmetic result and leaves both operands unchanged.
+- `test left, right` updates flags from `left AND right` at the operands' width. It discards the AND
+  result and leaves both operands unchanged. For `test`, `CF` and `OF` are cleared, while `ZF` and
+  `SF` describe the AND result.
 
-`test rax, rax` looks strange the first time. A number ANDed with itself is itself, so the instruction
-computes nothing new; all it does is set the flags from the value already in `rax`, and `ZF` then
-answers "is this zero". It is a byte shorter than `cmp rax, 0` and it is what x86 code writes.
+The width rule still applies even when the result is discarded. This example uses the same bits in
+a qword `test` and a byte `test`:
 
 ```x86|playground
 default rel
@@ -93,202 +104,21 @@ global _start
 
 section .text
 _start:
-    mov rcx, 0x80
-    test rcx, 0x80          ; bit 7 is set, so the and is not zero: ZF = 0
-    test rcx, 0x01          ; bit 0 is clear, so the and is zero: ZF = 1
-    xor rax, rax            ; a register exclusive-ored with itself is zero
-    test rax, rax           ; zero: ZF = 1 and nothing was written
+    mov rax, 0x80
+    test rax, rax           ; qword result 0x80: ZF=0, SF=0
+    test al, al             ; byte result 0x80: ZF=0, SF=1
+
+    mov rbx, 9
+    cmp rbx, 9              ; hypothetical qword subtraction is 0: ZF=1
+    mov rcx, rbx            ; rbx and the flags are unchanged
 
     mov rax, 60
     mov rdi, 0
     syscall
 ```
 
-Step through and watch `ZF` alone. `rcx` never changes, because `test` writes no register.
-
-## Why "less than" is SF against OF
-
-Here is the piece that every table states and nobody explains. The condition `jl` uses is not "`SF` is
-set". It is "**`SF` is not `OF`**", and it is worth seeing why, because the reason is the same reason
-signed and unsigned comparisons have to be different instructions.
-
-Work it on bytes, where the numbers are small enough to hold in your head. A signed byte runs from
--128 to 127. `cmp al, bl` subtracts `bl` from `al` and keeps the flags.
-
-Start with the easy pair.
-
-| `al`   | `bl`   | subtraction | true answer | byte kept | `SF` | `OF` |
-| ------ | ------ | ----------- | ----------- | --------- | ---- | ---- |
-| `0x05` | `0x03` | 5 - 3       | 2           | `0x02`    | 0    | 0    |
-| `0x03` | `0x05` | 3 - 5       | -2          | `0xFE`    | 1    | 0    |
-
-Nothing overflowed in either row, so the answer came out with its real sign, and `SF` alone tells you
-which number was bigger. If every subtraction behaved like this, `jl` could just read `SF`.
-
-Now the pair that breaks it.
-
-| `al`   | `bl`   | subtraction  | true answer | byte kept | `SF` | `OF` |
-| ------ | ------ | ------------ | ----------- | --------- | ---- | ---- |
-| `0x9C` | `0x64` | -100 - 100   | -200        | `0x38`    | 0    | 1    |
-| `0x64` | `0x9C` | 100 - (-100) | 200         | `0xC8`    | 1    | 1    |
-
-Follow the first of those two. -100 really is less than 100, and the true answer, -200, really is
-negative. But -200 does not fit in a signed byte, so what the processor keeps is `0x38`, which is 56,
-and its top bit is **clear**. `SF` came out 0 for a subtraction whose real answer was negative. `SF`
-is lying, and `OF` is set precisely to say so.
-
-The row under it is the same accident pointing the other way: 200 does not fit either, the byte kept
-is `0xC8` with its top bit set, and `SF` says negative about an answer that was positive.
-
-So the rule writes itself. `SF` tells you the sign of the answer that survived. `OF` tells you whether
-that sign is trustworthy. When `OF` is 0, believe `SF`. When `OF` is 1, believe the opposite of `SF`.
-Both cases together are exactly "`SF` is different from `OF`", and that is `jl`.
-
-```x86|playground
-default rel
-global _start
-
-section .text
-_start:
-    mov al, -100
-    mov bl, 100
-    cmp al, bl              ; -100 is less than 100: SF 0, OF 1
-
-    mov al, 100
-    mov bl, -100
-    cmp al, bl              ; and this way round: SF 1, OF 1
-
-    mov rax, 60
-    mov rdi, 0
-    syscall
-```
-
-Step through it and read `SF` and `OF` off the panel after each `cmp`. They differ after the first one
-and match after the second, and in both cases the answer sitting in `al` has the wrong sign on it.
-
-Every other signed condition is built out of those two flags and `ZF` in the same way, and you never
-have to work any of them out again: `jl` and `jg` and the rest already contain the reasoning above.
-
-## Signed and unsigned ask different questions
-
-The same `cmp` sets `CF` for the unsigned reading and `SF` with `OF` for the signed one. You choose
-which pair the processor looks at by choosing the jump.
-
-| unsigned | signed | means                                        |
-| -------- | ------ | -------------------------------------------- |
-| `jb`     | `jl`   | below, less                                  |
-| `jbe`    | `jle`  | below or equal, less or equal                |
-| `ja`     | `jg`   | above, greater                               |
-| `jae`    | `jge`  | above or equal, greater or equal             |
-| `je`     | `je`   | equal, which is the same question either way |
-
-`0xFFFFFFFFFFFFFFFF` is -1 read as signed and the largest number there is read as unsigned. So "is it
-bigger than 1" has two correct answers, and the instruction you write picks which one you get.
-
-```x86|playground
-default rel
-global _start
-
-section .text
-_start:
-    mov rax, -1             ; FFFFFFFFFFFFFFFF
-    mov rbx, 1
-    cmp rax, rbx            ; one comparison
-
-    setg r8b                ; signed: -1 > 1 is false, so 0
-    seta r9b                ; unsigned: a huge number > 1 is true, so 1
-
-    mov rax, 60
-    mov rdi, 0
-    syscall
-```
-
-One `cmp`, two answers, and neither instruction had to be told what kind of number was in `rax`.
-
-## Your turn
-
-`rax` holds a number. Leave 1 in `bl` if it is zero and 0 if it is not, using `test` and a `setcc`.
-The test starts `rax` at 0 and `rbx` at `0xFF`, so a correct answer leaves `rbx` at 1.
-
-```x86|playground|exercise
-default rel
-global _start
-
-section .text
-_start:
-    ; your code here
-
-    mov rax, 60
-    mov rdi, 0
-    syscall
-```
-
-```testcase
-{
-    "startingRegisters": { "rax": 0, "rbx": "0xFF" },
-    "expectedRegisters": { "rbx": 1 }
-}
-```
-
-<details>
-<summary>Show solution</summary>
-
-```x86|playground|solution
-default rel
-global _start
-
-section .text
-_start:
-    test rax, rax       ; ZF = 1 when rax is zero
-    sete bl             ; and sete reads exactly that
-
-    mov rax, 60
-    mov rdi, 0
-    syscall
-```
-
-</details>
-
-The second one is the signed and unsigned trap. `rax` and `rbx` hold `0xFFFFFFFFFFFFFFFF` and `1`.
-Leave the **unsigned** answer to "is `rax` below `rbx`" in `cl` and the **signed** answer to "is `rax`
-less than `rbx`" in `dl`. The unsigned answer is 0 and the signed answer is 1.
-
-```x86|playground|exercise
-default rel
-global _start
-
-section .text
-_start:
-    ; your code here
-
-    mov rax, 60
-    mov rdi, 0
-    syscall
-```
-
-```testcase
-{
-    "startingRegisters": { "rax": "0xFFFFFFFFFFFFFFFF", "rbx": 1, "rcx": "0xFF", "rdx": "0xFF" },
-    "expectedRegisters": { "rcx": 0, "rdx": 1 }
-}
-```
-
-<details>
-<summary>Show solution</summary>
-
-```x86|playground|solution
-default rel
-global _start
-
-section .text
-_start:
-    cmp rax, rbx        ; one comparison answers both
-    setb cl             ; unsigned below: 0
-    setl dl             ; signed less: 1
-
-    mov rax, 60
-    mov rdi, 0
-    syscall
-```
-
-</details>
+After `test rax, rax`, bit 63 of the qword result is clear, so `SF` is 0. After `test al, al`, bit 7
+of the byte result is set, so `SF` is 1. Then `cmp rbx, 9` sets `ZF` because the subtraction used to
+compute its flags would produce zero; `rbx` remains 9 because `cmp` discards that result. Inspect
+after the first `test` before stepping over the second, after the second `test` before stepping over
+`cmp`, and after `cmp` before stepping over `syscall`.

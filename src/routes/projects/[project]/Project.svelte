@@ -49,6 +49,7 @@
     import {
         makeColorizedLabels,
         makeRegister,
+        type RegisterPoke,
         RegisterSize,
         type Diagnostic
     } from '$lib/languages/commonLanguageFeatures.svelte'
@@ -369,6 +370,37 @@
     //the register column is as wide as the CPU file asks and no wider, whichever tab of the panel is
     //open: the memory panel sits beside it in a `min-content` row, so a column that followed the
     //visible file would slide the memory panel sideways every time a tab was picked
+    //the page's half of the Poke availability rule
+    //([the design record](../../../../docs/design/pokes.md)): a read-only Project takes no Pokes,
+    //and neither does one whose Core is building or running. The Emulator owns the other half
+    let pokeable = $derived(!readonly && !running && !building && emulator.canPoke)
+
+    /**
+     * One commit of a register chunk, which is one Poke. A value too wide for the register it was
+     * typed into throws rather than being truncated, and this is the only place that says so: the
+     * Emulator does not put it among its errors.
+     */
+    function pokeRegisters(fileId: string, writes: RegisterPoke[]) {
+        try {
+            emulator.pokeRegisters(fileId, writes)
+        } catch (e) {
+            toast.error(getM68kErrorMessage(e))
+        }
+    }
+
+    /**
+     * One commit of a memory selection, which is one Poke however many bytes it covers. A value
+     * that does not fit the selection never reaches here, the panel refuses it; what throws here is
+     * the Emulator refusing the write itself.
+     */
+    function pokeMemory(address: bigint, bytes: Uint8Array) {
+        try {
+            emulator.pokeMemory(address, bytes)
+        } catch (e) {
+            toast.error(getM68kErrorMessage(e))
+        }
+    }
+
     let registersColumnWidth = $derived(registerColumnWidth(emulator.registerFiles, groupSize))
     //empty for a language with a single file, which has no tab to pick and goes on sizing its column
     //by what the column holds, exactly as it always did. `min-width` is set with the width because a
@@ -887,6 +919,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
 <TestcasesEditor
     editable={testcasesEditable}
     systemSize={emulator.systemSize}
+    {language}
     registerNames={emulator.registers.map((r) => r.name)}
     startingRegisterNames={emulator.startingRegisterNames}
     hiddenRegistersNames={emulator.hiddenRegisters}
@@ -911,6 +944,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
 
 <ToggleableDraggable title="History" left={500}>
     <MutationsViewer
+        {language}
         statusRegisterNames={emulator.statusRegisters.map((r) => r.name)}
         on:undo={(e) => {
             const amount = e.detail
@@ -946,6 +980,8 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
             emulator.setTabMemoryAddress(address, tab.id)
         }}
         callStackAddresses={makeColorizedLabels(emulator.callStack)}
+        {pokeable}
+        onPoke={pokeMemory}
     />
 {/each}
 <div class="editor-memory-wrapper">
@@ -1200,6 +1236,7 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                 {/if}
                 <RegistersRenderer
                     systemSize={emulator.systemSize}
+                    {language}
                     style="flex: unset; overflow: unset; padding: 0;"
                     gridStyle="padding: 0.2rem 0.7rem"
                     size={emulator.systemSize}
@@ -1209,9 +1246,13 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                 />
                 <RegisterFilesPanel
                     systemSize={emulator.systemSize}
+                    {language}
                     size={groupSize}
                     style="flex: 1; min-height: 0;"
                     files={emulator.registerFiles}
+                    {pokeable}
+                    canPokeRegister={(fileId, name) => emulator.canPokeRegister(fileId, name)}
+                    onPoke={pokeRegisters}
                     onRegisterClick={(register) => {
                         const value = register.value
                         const clampedSize =
@@ -1247,6 +1288,8 @@ When the user asks a conceptual question ("how does X work", "show me Y") while 
                         currentAddress={emulator.memory.global.address}
                         sp={emulator.sp}
                         callStackAddresses={makeColorizedLabels(emulator.callStack)}
+                        {pokeable}
+                        onPoke={pokeMemory}
                     />
                 {:else if !running && children}
                     <Card

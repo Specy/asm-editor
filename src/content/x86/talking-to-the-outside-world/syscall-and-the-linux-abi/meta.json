@@ -1,6 +1,6 @@
 {
-    "name": "syscall and the Linux ABI",
-    "description": "The one instruction that leaves your program, which register carries which argument and which two the instruction destroys, printing with write, exiting with 60, and a program reading its own ELF header.",
+    "name": "syscall and the Linux x86-64 ABI",
+    "description": "The Linux x86-64 binary agreement for system-call numbers, argument and result registers, errors, partial writes, file descriptors, and exit.",
     "order": 0,
     "topic": "syscalls"
 }

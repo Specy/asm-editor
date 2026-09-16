@@ -1,235 +1,148 @@
-Thirty two registers hold thirty two words, and a program has more than that to keep. Everything else
-lives in memory, which RISC-V reaches with a 32 bit address and with nothing but the load and store
-instructions.
+## From registers to memory
 
-## The address space
+RISC-V has 32 integer registers. Registers are useful working storage, but a program keeps the
+rest of its information in **memory**.
 
-An address is 32 bits, so it runs from `0x00000000` to `0xFFFFFFFF`: four gigabytes. Nothing in the
-hardware divides that up into regions. The division below is a decision somebody made about where to
-put things, and this simulator's choices are the usual ones:
+Recall the basic picture: memory is a long sequence of **bytes**, and every byte has a numbered
+**address**. An address tells us which byte we mean. The editor usually writes addresses in
+**hexadecimal**, a base-16 notation marked by the prefix `0x`. Hexadecimal uses the digits `0`
+through `9` and the letters `A` through `F`.
 
-| from         | what is there                                                |
-| ------------ | ------------------------------------------------------------ |
-| `0x00400000` | **text**, the instructions you wrote                         |
-| `0x10000000` | global data                                                  |
-| `0x10008000` | where `gp` starts                                            |
-| `0x10010000` | **static data**, where `.data` puts your first label         |
-| `0x10040000` | the **heap**, which `ecall` service 9 hands out              |
-| `0x7FFFEFFC` | where `sp` starts, and the **stack** grows downwards from it |
-| `0xFFFF0000` | the memory-mapped devices, the screen and the keyboard       |
+Consecutive addresses name consecutive bytes:
 
-A byte nobody has written reads **0** here. Open the memory panel of any program on this page, look
-somewhere your program never touched, and every byte is `00`. Do not build anything on that. It is
-this simulator being tidy, not a rule of the machine, and a program that reads memory it never wrote
-is relying on luck.
+| address  | byte stored there |
+| -------- | ----------------- |
+| `0x1000` | first byte        |
+| `0x1001` | next byte         |
+| `0x1002` | next byte         |
+| `0x1003` | next byte         |
 
-The instructions are the one region you cannot read. `li t0, 0x00400000` and then `lw t1, 0(t0)`
-ends the run with
+One byte contains eight bits. A multi-byte value therefore occupies several adjacent
+addresses. Reading or writing bytes in memory is called a **memory access**. Two questions then
+matter:
 
-```
-Cannot read directly from text segment!0x00400000
-```
+1. In what order are the bytes placed at those addresses?
+2. Which starting addresses support an access of several bytes?
 
-The assembled program is there, at four bytes per instruction, and this simulator keeps it where a
-load cannot reach it. Everything else in the table is memory like any other.
+These questions describe **byte order** and **alignment**.
 
-## Little endian
+## Little-endian byte order
 
-RISC-V is **little endian**: the **least** significant byte of a word goes at the **lowest**
-address. The word `0x12345678` written at `0x10010000` is `78` at `0x10010000`, `56` at
-`0x10010001`, `34` at `0x10010002` and `12` at `0x10010003`, which is backwards from the way you
-wrote the number down.
+Consider the four-byte value `0x12345678`. A byte has 256 possible bit patterns, and two
+hexadecimal digits can name those 256 patterns, from `00` through `FF`. We can therefore separate
+the value into bytes like this:
 
-Build this one with the memory panel open, type `10010000` in its address box, then Run.
-
-```riscv|playground|memory
-.data
-value: .word 0x12345678
-
-.text
-main:
-    la t0, value
-    lbu t1, 0(t0)       # the byte at value
-    lbu t2, 1(t0)       # the one after it
-    lbu t3, 2(t0)
-    lbu t4, 3(t0)
-    lhu t5, 0(t0)       # the low half
-    lhu t6, 2(t0)       # and the high half
-    lw s0, 0(t0)        # the whole word
+```text
+value as written:  12 | 34 | 56 | 78
+                   ^              ^
+             highest part     lowest part
 ```
 
-| address      | byte | in   |
-| ------------ | ---- | ---- |
-| `0x10010000` | `78` | `t1` |
-| `0x10010001` | `56` | `t2` |
-| `0x10010002` | `34` | `t3` |
-| `0x10010003` | `12` | `t4` |
+The byte `0x78` is the **least significant byte**: it contains the lowest place values in the
+number. The byte `0x12` is the **most significant byte**: it contains the highest place values.
+“Significant” is about place value here, not importance.
 
-`t5` comes out at `00005678` and `t6` at `00001234`, the two halves each read back the right way
-round, and `s0` at `12345678`, the whole word as you wrote it. A load of a word or a half puts the
-bytes back in order; only reading them one at a time shows you which way they are stored.
+The 32-bit RISC-V environment used in this course is **little endian**. That means the least
+significant byte goes at the lowest address. If our value begins at address `0x1000`, memory contains:
 
-Which way round the bytes go only ever matters to a program that takes a word apart a byte at a
-time, the way the table above does. Read and write whole words and you will never notice, because
-whatever `sw` put down `lw` picks back up in the same order.
+| address  | byte |
+| -------- | ---- |
+| `0x1000` | `78` |
+| `0x1001` | `56` |
+| `0x1002` | `34` |
+| `0x1003` | `12` |
 
-## The size is in the instruction's name
+The addresses rise from `0x1000` to `0x1003`, while the byte pairs appear in the reverse order from
+the written number:
 
-RISC-V has no size suffix. Which instruction you use says how many bytes it touches, and the loads
-say what to do with the bits above them:
-
-| instruction | bytes | what it does                                    |
-| ----------- | ----- | ----------------------------------------------- |
-| `lb`        | 1     | loads a byte and **sign extends** it to 32 bits |
-| `lbu`       | 1     | loads a byte and fills the rest with zeroes     |
-| `lh`        | 2     | loads a half and sign extends it                |
-| `lhu`       | 2     | loads a half and fills the rest with zeroes     |
-| `lw`        | 4     | loads a whole word                              |
-| `sb`        | 1     | stores the **lowest byte** of the register      |
-| `sh`        | 2     | stores the lowest half                          |
-| `sw`        | 4     | stores the whole word                           |
-
-The stores have no signed and unsigned pair, because a store writes the bits it is given and there
-is nothing above them to fill in.
-
-```riscv|playground|memory
-.data
-room: .space 8
-
-.text
-main:
-    la t0, room
-    li t1, 0xAABBCCDD
-    sw t1, 0(t0)        # four bytes at room
-    li t2, 0x11
-    sb t2, 4(t0)        # one byte, four along
-    li t3, 0x2233
-    sh t3, 6(t0)        # two bytes, six along
-    lw t4, 4(t0)        # and read those three back as one word
+```text
+written number:        12 34 56 78
+in increasing address: 78 56 34 12
 ```
 
-The eight bytes at `0x10010000` come out as `DD CC BB AA 11 00 33 22`, and `t4` reads `22330011`.
-The `sb` wrote one byte and left the one after it alone, the `sh` wrote two, and the `lw` picked up
-all four as a little endian word, which is why the `11` your program stored first ends up at the
-bottom of it.
+When RISC-V reads those four bytes as one value, it uses the same little-endian rule and
+reconstructs `0x12345678`. The order is visible when inspecting the individual bytes in the memory
+panel.
 
-`0(t0)`, `4(t0)` and `6(t0)` are the only addressing mode there is: a register plus a constant
-offset in bytes. "Loads, stores and immediates" is the lecture on it.
+Byte order arranges the bytes of a multi-byte value. A single byte stays unchanged, and its bits stay
+in the same order: the byte `0x78` remains `0x78`.
+
+### Check the byte order
+
+Suppose the four-byte value `0xA1B2C3D4` begins at address `0x2000`.
+
+1. Which byte is stored at `0x2000`?
+2. Which byte is stored at `0x2003`?
+3. Four consecutive addresses contain `EF BE AD DE`, listed from lowest to highest address. What
+   four-byte value do they represent?
+
+<details>
+<summary>Show answers</summary>
+
+1. `0xD4`. It is the least significant byte, so it goes at the lowest address.
+2. `0xA1`. It is the most significant byte, so it goes at the highest of the four addresses.
+3. `0xDEADBEEF`. Reverse the address order when writing the complete value in the usual notation.
+
+</details>
 
 ## Alignment
 
-A word has to start at an address that is a **multiple of 4**, and a half at a multiple of 2. A byte
-can go anywhere. Break the rule and the run ends with a message naming the address:
+A multi-byte value needs several adjacent addresses. A memory access is **naturally aligned** when
+its starting address is divisible by the number of bytes in the access. This course's simulator
+requires that alignment for accesses of several bytes at once.
 
-```
-Store address not aligned to word boundary 0x10010005
-```
+For a four-byte access, the starting address must therefore be a multiple of four. These are aligned
+starts:
 
-A load says `Load address` instead of `Store address`, and a half says `halfword boundary`.
-
-The assembler keeps `.word` and `.half` aligned for you: put a `.byte` in front of a `.word` and it
-leaves the gap, so `.word` data is always safe. What it does **not** align is `.space` and the
-strings, because those are byte data and a byte needs no alignment. So a buffer you reserve after an
-odd length string starts at an odd address, and the first `sw` into it ends the run.
-
-`.align n` is the fix: it moves the next thing up to a multiple of 2 to the `n`, so `.align 2` gives
-you a multiple of 4.
-
-```riscv|playground|memory
-.data
-label:  .asciz "Hi"     # three bytes, so what follows would start at 0x10010003
-        .align 2        # push it up to the next multiple of four
-counts: .space 8
-
-.text
-main:
-    la t0, label
-    la t1, counts
-    li t2, 42
-    sw t2, 0(t1)
-    lw t3, 0(t1)
+```text
+0x1000   0x1004   0x1008   0x100C
 ```
 
-`t0` is `10010000` and `t1` is `10010004`, the three bytes of `"Hi"` rounded up to four, and `t3`
-comes back at 42.
+Each address is four bytes after the previous one. Addresses such as `0x1001`, `0x1002` and `0x1003`
+are not four-byte aligned. In hexadecimal, a four-byte-aligned address ends in `0`, `4`, `8` or `C`.
+That ending is a quick way to recognize the rule; the rule itself is still “a multiple of four.”
 
-Delete the `.align 2` line and press Build and Run. `counts` moves to `0x10010003`, the `sw` stops
-the program, and the message under the editor gives you that address. Then put it back.
+The same idea follows the access size:
 
-Two more addresses end a run. One outside everything in the table, such as `li t0, 4` and
-`lw t1, 0(t0)`, says `address out of range 0x00000004`. And a loop that never stops is simply cut
-off when the Playground's two million instructions run out, with no message at all, which is what an
-accidental infinite loop looks like here.
+| bytes accessed | aligned starting address |
+| -------------- | ------------------------ |
+| 1              | any address              |
+| 2              | a multiple of 2          |
+| 4              | a multiple of 4          |
 
-## Your turn
+The starting address must be divisible by the number of bytes in the access.
 
-The word at `value` is `0x12345678`. Leave its **lowest** byte in `t0`, which is the `0x78`, and its
-**highest** byte in `t1`, which is the `0x12`, each as a number on its own with zeroes above it.
+Sometimes arranging the next value for an aligned access leaves a gap. Suppose three bytes already
+occupy addresses `0x1000` through `0x1002`. The next free address is `0x1003`, but that is not a
+multiple of four. We can instead place a four-byte value beginning at `0x1004`:
 
-```riscv|playground|memory|exercise
-.data
-value: .word 0x12345678
-
-.text
-main:
-    # your code here
+```text
+address:  0x1000  0x1001  0x1002  0x1003  0x1004  0x1005  0x1006  0x1007
+use:      existing existing existing  gap   |------ four-byte value ------|
 ```
 
-```testcase
-{
-    "expectedRegisters": { "t0": "0x78", "t1": "0x12" }
-}
-```
+The unused byte at `0x1003` is called **padding**. It moves the next starting point forward to the
+required boundary.
+
+In this course's simulator, a multi-byte access from an incorrectly aligned address stops the
+program with an alignment error.
+
+### Check the alignment
+
+1. Is address `0x3006` aligned for a two-byte access?
+2. Is address `0x3006` aligned for a four-byte access?
+3. Three bytes occupy addresses `0x4000`, `0x4001` and `0x4002`. What is the first later address at
+   which a four-byte value can begin while remaining aligned? How many padding bytes are needed?
 
 <details>
-<summary>Show solution</summary>
+<summary>Show answers</summary>
 
-```riscv|playground|memory|solution
-.data
-value: .word 0x12345678
-
-.text
-main:
-    la t2, value
-    lbu t0, 0(t2)       # the lowest byte is at the lowest address
-    lbu t1, 3(t2)       # and the highest is three bytes on
-```
+1. Yes. Its last hexadecimal digit, `6`, is even, so `0x3006` is a multiple of two.
+2. No. The nearby four-byte boundaries are `0x3004` and `0x3008`.
+3. The value begins at `0x4004`. Address `0x4003` is one padding byte.
 
 </details>
 
-The second one has a string of five bytes and a buffer after it, so the buffer starts at an odd
-address. Make it word aligned and store `0x11223344` in its first word.
-
-```riscv|playground|memory|exercise
-.data
-name:   .asciz "RISC"
-buffer: .space 8
-
-.text
-main:
-    # your code here
-```
-
-```testcase
-{
-    "expectedMemory": [{ "type": "number-chunk", "address": "0x10010008", "bytes": 4, "expected": ["0x11223344"] }]
-}
-```
-
-<details>
-<summary>Show solution</summary>
-
-```riscv|playground|memory|solution
-.data
-name:   .asciz "RISC"
-        .align 2
-buffer: .space 8
-
-.text
-main:
-    la t0, buffer       # now at 0x10010008
-    li t1, 0x11223344
-    sw t1, 0(t0)
-```
-
-</details>
+The two rules answer different questions. **Little endian** determines the order of the bytes after
+a starting address has been chosen. **Alignment** determines whether that starting address is valid
+for an access of a particular size.

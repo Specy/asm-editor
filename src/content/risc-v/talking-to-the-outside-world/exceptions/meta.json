@@ -1,6 +1,6 @@
 {
     "name": "When an instruction cannot be carried out",
-    "description": "A load at an address that cannot work does not have to end the run. Pointing utvec at a handler of your own, the one bit in ustatus that switches it on, stepping past the instruction that faulted, and what ucause tells you afterwards.",
+    "description": "Set up utvec and ustatus, then handle a misaligned load by reading its fault details, moving uepc past the instruction, and returning safely with uret.",
     "order": 2,
     "topic": "interrupts"
 }

@@ -376,6 +376,49 @@ export const BUILTIN_THEMES: StoredTheme<ThemeKeys>[] = [
     DEFAULT_X86_THEME
 ]
 
+/** The text colours a theme dresses its colours with, which no theme chooses for itself. */
+type ThemeTextColors = {
+    textForDark: string
+    textForLight: string
+    textMutedForDark: string
+    textMutedForLight: string
+}
+
+function toRgbChannels(color: string) {
+    const { r, g, b } = new TinyColor(color).toRgb()
+    return `${r}, ${g}, ${b}`
+}
+
+/**
+ * The custom properties a theme stands for, as the body of a `style` attribute.
+ *
+ * Written once and read both by the provider that dresses the whole app and by the scope that
+ * dresses a single subtree, so that a language's pages and the rest of the app cannot end up
+ * defining different sets of variables.
+ */
+export function themeCssVariables(
+    theme: Record<ThemeKeys, ThemeProp<ThemeKeys>>,
+    text: ThemeTextColors
+) {
+    const declarations = Object.values(theme).map(({ name, color }) => {
+        const isDark = new TinyColor(color).isDark()
+        const foreground = isDark ? text.textForDark : text.textForLight
+        //the dimmed variant of the same text, for prose sitting on this color
+        const muted = isDark ? text.textMutedForDark : text.textMutedForLight
+        return `
+    --${name}: ${color};
+    --${name}-text: ${foreground};
+    --${name}-text-muted: ${muted};
+    --RGB-${name}: ${toRgbChannels(color)};
+    --RGB-${name}-text: ${toRgbChannels(foreground)};
+    --RGB-${name}-text-muted: ${toRgbChannels(muted)};
+`
+    })
+    return `${declarations.join('\n')}
+    --scroll-accent: ${theme.scrollbar.color};
+`
+}
+
 function makeThemeStore(_theme: StoredTheme<ThemeKeys>) {
     const [debouncer] = createDebouncer(100)
     let themes: StoredTheme<ThemeKeys>[] = $state(structuredClone(BUILTIN_THEMES))
@@ -580,3 +623,25 @@ function makeThemeStore(_theme: StoredTheme<ThemeKeys>) {
 }
 
 export const ThemeStore = makeThemeStore(BUILTIN_THEMES[0])
+
+/**
+ * The built-in theme one subtree of the app is dressed in, when a layout asks for one.
+ *
+ * The colours themselves are custom properties that layout writes into its own markup — that is
+ * what keeps them from flashing — so this exists only for the one thing markup cannot reach: the
+ * `theme-color` meta tag, which colours the browser's own chrome on mobile and lives in a head
+ * the root layout owns.
+ */
+let scopedThemeId: string | null = $state(null)
+
+export const ScopedTheme = {
+    get id() {
+        return scopedThemeId
+    },
+    get theme() {
+        return BUILTIN_THEMES.find((t) => t.id === scopedThemeId) ?? null
+    },
+    set(id: string | null) {
+        scopedThemeId = id
+    }
+}

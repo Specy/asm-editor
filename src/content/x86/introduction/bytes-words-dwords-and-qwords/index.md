@@ -1,8 +1,10 @@
-A register holds 64 bits. What those bits mean is not written anywhere: the same eight bytes are a
-positive number, a negative number, four characters or an address depending only on which instruction
-reads them.
+# Bytes, words, dwords and qwords
 
-## The four sizes
+A general-purpose register family is 64 bits wide, but x86 instructions can work on its low 8, 16,
+32, or all 64 bits. The width of an operation decides how many bits take part. Those bits can then
+be interpreted as an unsigned number, a signed number, an address, or simply a bit pattern.
+
+## The four widths
 
 | name  | bytes | bits | unsigned range            | signed range                                |
 | ----- | ----- | ---- | ------------------------- | ------------------------------------------- |
@@ -11,32 +13,50 @@ reads them.
 | dword | 4     | 32   | 0 to 4294967295           | -2147483648 to 2147483647                   |
 | qword | 8     | 64   | 0 to 18446744073709551615 | -9223372036854775808 to 9223372036854775807 |
 
-The register you name picks the size, `al` for a byte up to `rax` for a qword, and the `byte`, `word`,
-`dword` and `qword` keywords pick it when no register does.
+The register names from the previous lesson select these widths: `al` is a byte, `ax` is a word,
+`eax` is a dword, and `rax` is a qword. Numbered register families follow the same pattern with names
+such as `r8b`, `r8w`, `r8d`, and `r8`.
 
-## Signed and unsigned are the same bits
+Memory references need a width too, but the way it is written depends on the instruction:
 
-There is no signed register and no unsigned one. `0xFF` in `al` is 255 if you read it as unsigned and
--1 if you read it as signed, and the register holds the same eight bits either way.
+- In an ordinary move between a register and memory, the register selects the memory width.
+  `mov eax, [value]` loads a dword, while `mov [value], ax` stores a word.
+- An extension instruction has two different widths. Its destination register supplies the wider
+  destination, and a memory source needs `byte`, `word`, or `dword` to state the narrower source:
+  `movsx rbx, byte [value]`.
+- A numeric immediate has no register width. An immediate-to-memory store therefore needs an
+  explicit memory size, as in `mov word [value], 5`.
 
-Negative numbers are stored in **two's complement**: to negate a number, flip every bit and add one.
-`1` is `00000001`, so `-1` is `11111110 + 1`, which is `11111111`. The top bit ends up set for every
-negative number and clear for every positive one, which is why it is called the sign bit.
+A data directive such as `db` or `dq` lays out a certain number of bytes, but its label remains an
+address. It does not make later memory accesses remember the declaration's size.
 
-The point of doing it that way is that **addition does not need to know**. `0xFF + 0x01` is `0x00`
-with a carry out, and that is the right answer read as -1 + 1 = 0 and the right answer read as
-255 + 1 = 256 with the 256 dropped off the top. So `add`, `sub` and `mov` have one version each and
-it serves both readings. Three things do differ:
+## One pattern, two readings
 
-- **The flags they set.** `CF` says the unsigned answer did not fit, `OF` says the signed one did not.
-- **The conditional jumps.** `jb` and `ja` compare unsigned, `jl` and `jg` compare signed.
-- **Multiplication and division.** `mul` and `div` are unsigned, `imul` and `idiv` are signed, and
-  they really are different instructions.
+There are no signed and unsigned versions of a general-purpose register. The byte pattern `0xFF`
+can be read as unsigned 255 or signed -1. A `mov` copies the pattern without choosing between those
+meanings.
 
-The registers panel shows a value in hex; hovering it shows what those bits read as signed and as
-unsigned.
+Signed integers use **two's complement**. To form the negative of a bit pattern, flip every bit and
+add 1. In one byte, positive 1 is `00000001`; flipping it gives `11111110`, and adding 1 gives
+`11111111`. That final pattern is signed -1 and unsigned 255.
 
-## When the answer does not fit
+For a signed value, the highest bit is the **sign bit**. It is 1 for a negative value and 0 for a
+non-negative value. The same all-ones pattern represents -1 at every width:
+
+| width | pattern for signed -1 |
+| ----- | --------------------- |
+| byte  | `FF`                  |
+| word  | `FFFF`                |
+| dword | `FFFFFFFF`            |
+| qword | `FFFFFFFFFFFFFFFF`    |
+
+Two's complement lets the processor use the same fixed-width addition for both readings. The
+meaning of the result depends on how the program interprets it.
+
+## Fixed-width arithmetic wraps
+
+An 8-bit operation can keep only eight result bits. If a mathematical answer needs more, the bits
+above bit 7 are discarded. This is arithmetic modulo 256: after 255 comes 0.
 
 ```x86|playground
 default rel
@@ -44,39 +64,46 @@ global _start
 
 section .text
 _start:
-    mov al, 200
-    add al, 100             ; 300, which does not fit in a byte
+    mov r8, 0x1122334455667700
+    mov r8b, 200
+    add r8b, 100             ; 300 becomes 44 in eight bits
 
-    mov rbx, 0x7FFFFFFFFFFFFFFF     ; the largest signed qword
-    add rbx, 1                      ; one more than that
+    mov ebx, 0x7FFFFFFF
+    add ebx, 1               ; one past the largest signed dword
 
     mov rax, 60
     mov rdi, 0
     syscall
 ```
 
-`al` comes out at `2C`, which is 44. The answer 300 is `1_0010_1100` in binary and a byte kept the
-low eight bits of it. `CF` is set, because the unsigned answer did not fit. `OF` is clear, and this is
-the part worth pausing on: read as signed, `200` in a byte is already -56, and -56 + 100 = 44, which
-fits perfectly well. One addition, two readings, and only one of them overflowed.
+The mathematical sum `200 + 100` is 300, whose binary form is `1_0010_1100`. The byte addition
+keeps `0010_1100`, so `r8b` becomes `0x2C`, or 44. Because only the low byte participated, the full
+`r8` becomes `0x112233445566772C`.
 
-`rbx` comes out at `8000000000000000`. Unsigned that is the right answer. Signed it is the most
-negative number there is, and `OF` is set to say the answer went off the top of the signed range and
-came back round the bottom.
+The unsigned reading crossed its boundary: 255 is the largest unsigned byte, and 300 is 44 after
+one wrap. The signed reading is different. In a byte, the starting pattern for 200 is signed -56,
+so that same addition is -56 + 100 = 44, which fits the signed byte range.
 
-Nothing stopped the program either time. **x86 has no trap on integer overflow.** The flags record
-what happened and it is the program's job to look, which is what `jo` and `jc` are for.
+The processor records those two views separately immediately after arithmetic. `CF` reports that an
+unsigned result did not fit, while `OF` reports that a signed result did not fit. After the byte
+addition above, `CF` is 1 and `OF` is 0. Step over that `add` to see them before later instructions
+replace the flags.
 
-## Widening a small number
+The dword addition produces the pattern `0x80000000`. Unsigned, that is 2147483648 and it fits.
+Signed, adding 1 to 2147483647 has crossed the signed maximum and wrapped to -2147483648, so this
+addition sets `OF` and clears `CF`. Integer addition continues with the wrapped bits; it does not
+stop the program.
 
-Loading a byte into `al` leaves the seven bytes above it holding whatever they held, so a byte read
-out of memory is not yet a number you can do 64 bit arithmetic on. Turning it into one means filling
-those seven bytes, and how to fill them depends on whether the byte was signed.
+## Widening a small value
 
-- **`movzx`** zero extends: the new bits are all 0.
-- **`movsx`** sign extends: the new bits are all copies of the old top bit, so a negative byte stays
-  negative.
-- **`movsxd`** is `movsx` for the 32 to 64 case, which needed a name of its own.
+Loading a byte with `mov bl, [value]` makes that byte available for 8-bit work, but it replaces only
+the low byte of `rbx`. The other 56 bits keep their previous contents. To use the byte as a clean
+wider value, choose how its meaning should be preserved:
+
+- **`movzx`** zero-extends. It fills the new high bits with zero, preserving the unsigned reading.
+- **`movsx`** sign-extends. It copies the old sign bit into the new high bits, preserving the signed
+  reading.
+- **`movsxd`** sign-extends a dword to a qword.
 
 ```x86|playground|no-flags
 default rel
@@ -89,82 +116,31 @@ sd: dd -3           ; FD FF FF FF
 
 section .text
 _start:
-    movzx rbx, byte [sb]        ; 0x00000000000000FD, which is 253
-    movsx rcx, byte [sb]        ; 0xFFFFFFFFFFFFFFFD, which is -3
-    movsx r10, word [sw]        ; -3 again, from two bytes
-    movsxd r11, dword [sd]      ; and from four
+    movzx r12, byte [sb]        ; 0x00000000000000FD, unsigned 253
+    movsx r13, byte [sb]        ; 0xFFFFFFFFFFFFFFFD, signed -3
+    movsx r14, word [sw]        ; signed -3 from a word
+    movsxd r15, dword [sd]      ; signed -3 from a dword
 
     mov rax, 60
     mov rdi, 0
     syscall
 ```
 
-The one byte `FD` became 253 in one register and -3 in another, and nothing in memory said which one
-was meant. The instruction you chose is the only thing that decided.
+The destination names select 64-bit results. The keywords before the brackets select how many bytes
+to read before extending them. In the first two lines, the same memory byte `FD` becomes 253 after
+zero extension and -3 after sign extension.
 
-The `byte` keyword in `movzx rbx, byte [sb]` is doing real work. Change it to
-`movzx rbx, word [sb]` and the instruction reads `FDFD`: the byte at `sb` and the byte that happens
-to follow it, which is the first byte of `sw`. The size comes from the word you wrote, not from how
-big the thing at the label was declared to be.
-
-## Widening rax in place
-
-Six instructions widen `rax` without taking any operands at all. They exist for division. `div` and
-`idiv` read a dividend twice as wide as the number you divide by, spread across `rdx` and `rax`, so
-before dividing `rax` by something you have to fill `rdx` with the right thing, and "the right thing"
-for a signed number means copies of its sign bit.
-
-The names look like line noise until you know the key. The `c` is convert; the letters after it are
-the size it starts from and the size it ends at, `b` for byte, `w` for word, `d` for dword, `q` for
-quadword and `o` for a sixteen byte octword. A final **`e`** means extended, which is this family's
-way of saying "keep the answer inside one register".
-
-| instruction | widens         | into      | reads as                    |
-| ----------- | -------------- | --------- | --------------------------- |
-| `cbw`       | `al`, 8 bits   | `ax`      | convert byte to word        |
-| `cwde`      | `ax`, 16 bits  | `eax`     | word to dword, extended     |
-| `cdqe`      | `eax`, 32 bits | `rax`     | dword to quadword, extended |
-| `cwd`       | `ax`, 16 bits  | `dx:ax`   | word to dword               |
-| `cdq`       | `eax`, 32 bits | `edx:eax` | dword to quadword           |
-| `cqo`       | `rax`, 64 bits | `rdx:rax` | quadword to octword         |
-
-So the three with an `e` grow a value inside the register it is already in. The three without spill
-into a **second** register, and those are the ones a division needs. `cwd` and `cwde` start from the
-same `ax` and differ only in where they put the answer, which is exactly what the `e` is there to
-tell you.
-
-```x86|playground|no-flags
-default rel
-global _start
-
-section .text
-_start:
-    mov eax, -3
-    cdqe                    ; eax into rax: FFFFFFFD becomes FFFFFFFFFFFFFFFD
-    mov r8, rax
-
-    mov rax, -3
-    cqo                     ; rax into rdx:rax: rdx becomes all ones
-    mov r9, rdx
-
-    mov rax, 60
-    mov rdi, 0
-    syscall
-```
-
-Both lines did the same thing to the same value and put the result in different places. `cdqe` left
-one register holding -3 in 64 bits. `cqo` left two registers holding -3 in 128 bits, which is
-`FFFFFFFFFFFFFFFF` in `rdx` and `FFFFFFFFFFFFFFFD` in `rax`: all ones above, and the number itself
-below.
-
-Before an **unsigned** division you write `xor rdx, rdx` instead, because an unsigned number is
-widened with zeroes and not with its top bit. Forgetting either line is how a division goes wrong,
-and "Arithmetic, logic and bits" comes back to it with the fault it causes.
+Changing `byte [sb]` to `word [sb]` would deliberately read two adjacent bytes starting at `sb`.
+Here that word would be `FDFD`: the `FD` at `sb`, followed by the first `FD` byte of `sw`. This
+crosses from one declaration into the next. It is useful for seeing that a label carries no size,
+but real code should depend on neighboring layout only when it intentionally defines the bytes as
+one larger object.
 
 ## Your turn
 
-`amount` is a signed byte holding -5. Leave it in `rbx` as a full 64 bit -5, and leave the same byte
-read as an unsigned number in `rcx`, which is 251.
+`amount` is a byte intended to be read as signed -5. Read exactly that one byte: sign-extend it into
+`r12`, leaving the 64-bit pattern for -5 there, and zero-extend it into `r13`, leaving unsigned 251
+there. The nonzero `guard` byte makes an accidental word load produce a different result.
 
 ```x86|playground|exercise
 default rel
@@ -172,6 +148,7 @@ global _start
 
 section .data
 amount: db -5
+guard:  db 0x7A
 
 section .text
 _start:
@@ -184,7 +161,14 @@ _start:
 
 ```testcase
 {
-    "expectedRegisters": { "rbx": "0xFFFFFFFFFFFFFFFB", "rcx": 251 }
+    "startingRegisters": {
+        "r12": "0x1122334455667788",
+        "r13": "0x8877665544332211"
+    },
+    "expectedRegisters": {
+        "r12": "0xFFFFFFFFFFFFFFFB",
+        "r13": "0x00000000000000FB"
+    }
 }
 ```
 
@@ -197,11 +181,12 @@ global _start
 
 section .data
 amount: db -5
+guard:  db 0x7A
 
 section .text
 _start:
-    movsx rbx, byte [amount]    ; the sign bit copied upwards
-    movzx rcx, byte [amount]    ; zeroes instead
+    movsx r12, byte [amount]
+    movzx r13, byte [amount]
 
     mov rax, 60
     mov rdi, 0
@@ -210,8 +195,10 @@ _start:
 
 </details>
 
-The second one overflows on purpose. Add 1 to the largest signed dword there is, `0x7FFFFFFF`, in
-`ebx`, so that `rbx` ends at `0x80000000` and `OF` is set.
+Now perform two operations at their requested widths. Put 200 in `r8b` and add 100 to it, so the
+byte wraps to 44 without changing the upper bytes of `r8`. The low dword of the supplied `rbx` is
+already `0x7FFFFFFF`. Add 1 to it using `ebx`, leaving the wrapped dword result in `rbx`. Remember
+that writing a 32-bit general-purpose register clears the upper 32 bits of its register family.
 
 ```x86|playground|exercise
 default rel
@@ -228,7 +215,14 @@ _start:
 
 ```testcase
 {
-    "expectedRegisters": { "rbx": "0x80000000" }
+    "startingRegisters": {
+        "r8": "0x1122334455667788",
+        "rbx": "0xFFEEDDCC7FFFFFFF"
+    },
+    "expectedRegisters": {
+        "r8": "0x112233445566772C",
+        "rbx": "0x0000000080000000"
+    }
 }
 ```
 
@@ -241,8 +235,10 @@ global _start
 
 section .text
 _start:
-    mov ebx, 0x7FFFFFFF     ; the largest signed 32 bit number
-    add ebx, 1              ; one more, which OF reports and nothing stops
+    mov r8b, 200
+    add r8b, 100
+
+    add ebx, 1
 
     mov rax, 60
     mov rdi, 0

@@ -1,6 +1,6 @@
 {
     "name": "Going 64-bit",
-    "description": "RV64 is the same instruction set with 64 bit registers, a doubleword size, and a set of w instructions that work on the low 32 bits and sign extend the answer into the top half.",
+    "description": "Choose RV64 mode, work with 64-bit registers and doublewords, and select the right extension or arithmetic width for 32-bit values.",
     "order": 8,
     "topic": "rv64"
 }

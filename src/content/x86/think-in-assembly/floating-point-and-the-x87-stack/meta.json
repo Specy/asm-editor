@@ -1,6 +1,6 @@
 {
     "name": "Floating point and the x87 stack",
-    "description": "Why x86 ended up with two floating point units, a double taken apart bit by bit and put back together, why 0.1 cannot be stored at all, and the eight register stack the older unit still works on.",
+    "description": "Decode binary32 and binary64, follow x87's rotating eight-register stack, calculate with ordered popping operations, and branch correctly after floating-point comparisons.",
     "order": 6,
     "topic": "floating-point"
 }

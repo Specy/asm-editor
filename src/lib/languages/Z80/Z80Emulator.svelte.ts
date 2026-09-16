@@ -3,6 +3,8 @@ import {
     assemble,
     type AssemblyResult,
     type ExecutionRecord,
+    isPokeRecord,
+    type PokeWrite as CorePokeWrite,
     type RegisterSet,
     SourceMap,
     StopReason,
@@ -21,6 +23,7 @@ import {
     type ExecutionStep,
     makeLabelColor,
     type MutationOperation,
+    type PokeWrite,
     RegisterSize,
     type StackFrame
 } from '$lib/languages/commonLanguageFeatures.svelte'
@@ -340,20 +343,35 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         this.lastInstructionAddress = null
     }
 
+    _beginPoke(): void {
+        this.requireMachine().beginPoke()
+    }
+
+    _endPoke(): boolean {
+        return this.requireMachine().endPoke()
+    }
+
     _canUndo(): boolean {
         const record = this.machine?.getHistory(1)[0]
-        return !!record && (this.screenInstructions?.canUndoAfter(record.tStateCountBefore) ?? true)
+        if (!record) return false
+        //a Poke on top is the Core's alone to roll back: it drew nothing, and the Screen journal
+        //keys its records by the t-states of an instruction, which a Poke never spent
+        //([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md))
+        if (isPokeRecord(record)) return true
+        return this.screenInstructions?.canUndoAfter(record.tStateCountBefore) ?? true
     }
 
     _undo(): void {
         const machine = this.requireMachine()
         const record = machine.getHistory(1)[0]
         machine.undo()
-        if (record) this.screenInstructions?.undoAfter(record.tStateCountBefore)
+        if (record && !isPokeRecord(record)) {
+            this.screenInstructions?.undoAfter(record.tStateCountBefore)
+        }
         //the core restores the registers but not `instructionAddress`, so without this the panel
-        //would keep naming the instruction that was just undone. The newest surviving record is
-        //the one that ran last, and there always is one while the machine could undo at all.
-        this.lastInstructionAddress = machine.getHistory(1)[0]?.address ?? null
+        //would keep naming the instruction that was just undone. The newest surviving instruction
+        //is the one that ran last, and there always is one while the machine could undo at all.
+        this.lastInstructionAddress = this.newestInstructionAddress()
     }
 
     /**
@@ -511,12 +529,13 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
     }
 
     _setRegisterValue(register: Z80RegisterName, value: bigint, _size?: RegisterSize): void {
-        const regs = this.requireMachine().z80.regs
-        //the core clamps `a` itself but stores the 16 bit pairs verbatim, so writing 0x12345 to HL
-        //would leave a value no Z80 instruction could have produced. Masking both also keeps the
-        //conversion below inside the range `Number` can represent exactly.
-        const mask = register === 'a' ? 0xffn : 0xffffn
-        regs[coreRegisterKey(register)] = Number(value & mask)
+        //the machine clamps the value to what the register can hold and journals the write when a
+        //Poke is open ([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md)); the
+        //truncation here is only so the conversion stays inside the range `Number` is exact in
+        this.requireMachine().setRegisterValue(
+            coreRegisterKey(register),
+            Number(BigInt.asUintN(16, value))
+        )
     }
 
     _readMemoryBytes(address: bigint, length: bigint): Uint8Array {
@@ -532,12 +551,14 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
     }
 
     _writeMemoryBytes(address: bigint, data: Uint8Array): void {
-        const memory = this.requireMachine().memory
+        const machine = this.requireMachine()
         const start = Number(address)
+        //the Z80 does not wrap around and the machine's host write does, so the bytes past the top
+        //of RAM are dropped here rather than landing back at address 0
         const writable = Math.max(0, Math.min(data.length, Z80_MEMORY_SIZE - start))
-        //direct RAM access, like the other adapters' testcase setup: it bypasses the memory hooks
-        //and the history journal, which is what setting up a program's initial state should do
-        if (writable > 0) memory.set(data.subarray(0, writable), start)
+        //outside a Poke this is the direct write a testcase's preset memory wants, bypassing the
+        //memory hooks and the history; inside one the machine journals the bytes it overwrites
+        if (writable > 0) machine.writeMemoryBytes(start, data.subarray(0, writable))
     }
 
     _getNextInstruction(): Instruction | null {
@@ -595,7 +616,23 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
             //the state the instruction produced is the state the next one found, and for the newest
             //record it is the machine as it stands now
             const after = records[i + 1]?.stateBefore.regs ?? machine.z80.regs
+            if (isPokeRecord(record)) {
+                //a Poke ran no instruction, so its row has no PC and no line to go to; what it
+                //changed is in its writes, and `f` is not among them, so the flags do not move
+                const writes = record.writes.map(convertPokeWrite)
+                steps.push({
+                    kind: 'poke',
+                    pc: record.address,
+                    line: -1,
+                    old_ccr: { bits: record.stateBefore.regs.f },
+                    new_ccr: { bits: after.f },
+                    writes,
+                    mutations: writes.map(pokeWriteToMutation)
+                })
+                continue
+            }
             steps.push({
+                kind: 'instruction',
                 pc: record.address,
                 line: this.sourceMap?.addressToLocation(record.address)?.lineNumber ?? -1,
                 file: this.sourceMap?.addressToLocation(record.address)?.pathname,
@@ -755,6 +792,24 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         this.lastInstructionAddress = this.requireMachine().z80.instructionAddress
     }
 
+    /**
+     * Where the machine last executed: the newest record that is an instruction. A Poke ran none and
+     * carries no instruction address, so it is looked past
+     * ([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md)). The window grows because
+     * a run of Pokes can be any length; the usual one Poke costs a window of two.
+     */
+    private newestInstructionAddress(): number | null {
+        const machine = this.machine
+        if (!machine) return null
+        for (let window = 2; ; window *= 2) {
+            const records = machine.getHistory(window)
+            for (let i = records.length - 1; i >= 0; i--) {
+                if (!isPokeRecord(records[i])) return records[i].address
+            }
+            if (records.length < window) return null
+        }
+    }
+
     private recordToMutations(record: ExecutionRecord, after: RegisterSet): MutationOperation[] {
         const mutations: MutationOperation[] = []
         const before = record.stateBefore.regs
@@ -763,11 +818,14 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
             if (name === 'pc') continue
             const key = CORE_REGISTER_BY_NAME[name]
             if (before[key] === after[key]) continue
+            //the record holds the state the instruction found and the next one the state it left,
+            //so both sides of the write are the Core's own to report
             mutations.push({
                 type: 'WriteRegister',
                 value: {
                     register: name,
                     old: BigInt(before[key]),
+                    new: BigInt(after[key]),
                     size: name === 'a' ? RegisterSize.Byte : RegisterSize.Word
                 }
             })
@@ -778,6 +836,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
                 value: {
                     address: BigInt(write.address),
                     old: BigInt(write.before),
+                    new: BigInt(write.value),
                     size: RegisterSize.Byte
                 }
             })
@@ -814,6 +873,52 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         if (!this.device) throw new Error(NOT_INITIALIZED_ERROR)
         return this.device
     }
+}
+
+/**
+ * One value a Poke wrote, as the panels show it: the machine spells the shadow registers `afPrime`,
+ * the panel and the History row spell them `af'`.
+ */
+function convertPokeWrite(write: CorePokeWrite): PokeWrite {
+    if (write.type === 'register') {
+        return {
+            type: 'register',
+            name: editorRegisterName(write.name),
+            old: BigInt(write.old),
+            new: BigInt(write.new)
+        }
+    }
+    return {
+        type: 'memory',
+        address: BigInt(write.address),
+        old: [...write.old],
+        new: [...write.new]
+    }
+}
+
+/** The mutation list a poked value reads as, so the coding agent sees a Poke as it sees a write. */
+function pokeWriteToMutation(write: PokeWrite): MutationOperation {
+    if (write.type === 'register') {
+        return {
+            type: 'WriteRegister',
+            value: {
+                register: write.name,
+                old: write.old,
+                new: write.new,
+                size: write.name === 'a' ? RegisterSize.Byte : RegisterSize.Word
+            }
+        }
+    }
+    return {
+        type: 'WriteMemoryBytes',
+        value: { address: write.address, old: write.old, new: write.new }
+    }
+}
+
+/** The inverse of `CORE_REGISTER_BY_NAME`: a machine key back to the name the panel draws. */
+function editorRegisterName(key: string): string {
+    const name = Z80_REGISTER_NAMES.find((candidate) => CORE_REGISTER_BY_NAME[candidate] === key)
+    return name ?? key
 }
 
 function coreRegisterKey(register: Z80RegisterName): CoreRegisterKey {

@@ -18,6 +18,11 @@ _Avoid_: coprocessor registers, register group, register set, extra registers
 The way a **Register file**'s bit patterns are read for display: hex, single precision or double precision. A file offers the Formats that make sense for its registers and the person picks one; a Format changes what is shown, never the value.
 _Avoid_: view, representation, interpretation, display mode
 
+## Size name
+
+What a **Target** calls one of the widths the editor reads values at: the same four bytes are a `Long` to the 68000, a `Word` to MIPS and RISC-V and a `Dword` to x86, and the same two are a `Word` to the 68000 and a `Halfword` to MIPS. The width itself is the same everywhere — `RegisterSize` is a count of bytes, spelled the way the 68000 spells it because M68K was the first language here — and only the name shown changes, in `src/lib/languages/sizeNames.ts`. Used by the width grouping strip of the **Register file** panel and by anything that writes a width out.
+_Avoid_: size alias, operand size, B/W/L
+
 ## Status flag
 
 A named one-bit condition of an **Emulator**, shown as 0 or 1 with its change highlighted. The CPU has a row of them (the M68K CCR bits, the x86 EFLAGS bits, the Z80 F bits; MIPS and RISC-V have none), and a **Register file** may carry a row of its own, such as the MIPS FPU condition flags.
@@ -38,6 +43,11 @@ The generic state "the Emulator is paused mid-execution waiting on the user" (e.
 ## Pause
 
 A user-requested suspension of forward execution within a **Debug session**, retaining the program for inspection, Step, instruction Undo, and Resume. Distinct from an **Interrupt**, which the program causes by requesting input, and from Stop, which ends the Debug session.
+
+## Poke
+
+A change a person or the coding agent makes to one register or memory value of a **Debug session** between two instructions, kept in the same Undo history as the instructions as a step of its own. Distinct from a mutation, which is a write the program made, and from a **Testcase**'s starting values, which are preset before the run and never undone.
+_Avoid_: edit, value edit, override, patch, set value, host write, manual write
 
 ## Peripheral
 

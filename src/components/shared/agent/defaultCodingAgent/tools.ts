@@ -1,7 +1,12 @@
 import { tool, type RegisteredTool } from '@discerns/sdk'
 import { z } from 'zod'
 import type { Emulator } from '$lib/languages/Emulator'
-import { InterpreterStatus } from '$lib/languages/commonLanguageFeatures.svelte'
+import {
+    InterpreterStatus,
+    type RegisterFile,
+    type RegisterSize
+} from '$lib/languages/commonLanguageFeatures.svelte'
+import { CPU_REGISTER_FILE_ID } from '$lib/languages/GenericEmulator.svelte'
 import { delay } from '$lib/utils'
 import { defaultEntryPath } from '$lib/Project.svelte'
 import { fileText, type ProjectFile } from '$lib/projectFiles'
@@ -16,6 +21,8 @@ import {
     collectEmulatorDiagnostics,
     collectEmulatorErrors,
     formatEmulatorState,
+    type FormatEmulatorStateOptions,
+    formatHexBytes,
     formatSourceLine,
     formatNumber
 } from './formatting'
@@ -35,6 +42,145 @@ function parseHexAddress(address: string) {
     const trimmedAddress = address.trim()
     if (!/^(0x)?[0-9a-f]+$/i.test(trimmedAddress)) return null
     return BigInt(trimmedAddress.startsWith('0x') ? trimmedAddress : `0x${trimmedAddress}`)
+}
+
+/**
+ * The program counter as the languages spell it, for the refusal message only: the Emulator owns
+ * the rule that a Poke never writes it ([the design record](../../../../../docs/design/pokes.md)),
+ * this list is what lets the tool say which register the model reached for.
+ */
+const PROGRAM_COUNTER_NAMES = ['pc', 'rip']
+
+function findRegisterFile(emulator: Emulator, fileId: string): RegisterFile | undefined {
+    return (emulator.registerFiles ?? []).find((file) => file.id === fileId)
+}
+
+function registerRowIndex(file: RegisterFile, register: string): number {
+    return file.layout.findIndex((row) => row.name === register)
+}
+
+/**
+ * The register as the Register file spells it, so a model that writes `d0` where the 68000 panel
+ * says `D0` still reaches the row it meant. Null when the file draws no such register.
+ */
+function resolveRegisterName(file: RegisterFile, register: string): string | null {
+    const wanted = register.trim()
+    if (registerRowIndex(file, wanted) !== -1) return wanted
+    const lowered = wanted.toLowerCase()
+    return file.layout.find((row) => row.name.toLowerCase() === lowered)?.name ?? null
+}
+
+/**
+ * How wide that row is, in bits, which is the width a poked value has to fit. The CPU file is asked
+ * for the width the register ended up with rather than the one the file declares, because an
+ * adapter may narrow a register after the file is built (the Z80's byte wide `a`); this is the same
+ * width `GenericEmulator.pokeRegisters` checks against.
+ */
+function registerBits(file: RegisterFile, index: number): bigint {
+    const narrowed = file.id === CPU_REGISTER_FILE_ID ? file.registers[index]?.size : undefined
+    return 8n * BigInt(narrowed ?? file.layout[index].size)
+}
+
+function registerSizeOf(file: RegisterFile, index: number): RegisterSize {
+    return Number(file.registers[index]?.size ?? file.layout[index].size) as RegisterSize
+}
+
+/**
+ * Why the Emulator will not take this register, in words the model can act on: the program counter
+ * is not a value to change, a hidden register is one the Core cannot set, and an empty x87 stack
+ * slot holds nothing to poke.
+ */
+function registerPokeRefusal(
+    emulator: Emulator,
+    file: RegisterFile,
+    register: string
+): string | null {
+    if (emulator.canPokeRegister(file.id, register)) return null
+    if (file.id === CPU_REGISTER_FILE_ID) {
+        if (PROGRAM_COUNTER_NAMES.includes(register.toLowerCase())) {
+            return `${register} is the program counter, which is never poked: moving it is a jump, not a value change.`
+        }
+        if ((emulator.hiddenRegisters ?? []).includes(register)) {
+            return `${register} is hidden and cannot be poked; the emulator has no setter for it.`
+        }
+        if (!(emulator.startingRegisterNames ?? []).includes(register)) {
+            return `${register} is read only: the emulator cannot set it.`
+        }
+    }
+    const index = registerRowIndex(file, register)
+    if (index !== -1 && file.blanks?.[index]) {
+        return `${register} is an empty stack slot right now and holds no value to poke.`
+    }
+    return `${register} cannot be poked.`
+}
+
+/**
+ * A poked value as the model writes it: hex with `0x`, or decimal, either one signed. A negative
+ * number lands as the two's complement pattern of that register's width, which is the unsigned bit
+ * pattern the panels and the Emulator work in.
+ */
+function parsePokeValue(
+    raw: string,
+    register: string,
+    bits: bigint
+): { value: bigint } | { error: string } {
+    const trimmed = raw.trim()
+    const negative = trimmed.startsWith('-')
+    const magnitudeText = negative || trimmed.startsWith('+') ? trimmed.slice(1) : trimmed
+    const isHex = /^0x[0-9a-f]+$/i.test(magnitudeText)
+    const isDecimal = /^[0-9]+$/.test(magnitudeText)
+    if (!isHex && !isDecimal) {
+        return {
+            error: `Invalid value "${raw}". Write hex as 0x1f or decimal as 31, either one negative.`
+        }
+    }
+    const magnitude = BigInt(magnitudeText)
+    const limit = 1n << bits
+    const tooWide = {
+        error:
+            `${trimmed} does not fit ${register}, which is ${bits} bits wide: ` +
+            `it holds 0 to 0x${(limit - 1n).toString(16)} unsigned, ` +
+            `${-(limit >> 1n)} to ${(limit >> 1n) - 1n} signed.`
+    }
+    if (!negative) return magnitude < limit ? { value: magnitude } : tooWide
+    if (magnitude > limit >> 1n) return tooWide
+    return { value: (limit - magnitude) & (limit - 1n) }
+}
+
+/** The bytes of a memory Poke: two hex digits a byte, spaces wherever the model likes them. */
+function parsePokeBytes(raw: string): { bytes: Uint8Array } | { error: string } {
+    const digits = raw.replace(/\s+/g, '')
+    if (digits.length === 0) {
+        return { error: 'No bytes to poke. Write them as hex digits, two per byte, like "de ad".' }
+    }
+    if (!/^[0-9a-f]+$/i.test(digits)) {
+        return {
+            error: `Invalid bytes "${raw}". Write hex digits only, two per byte, like "de ad".`
+        }
+    }
+    if (digits.length % 2 !== 0) {
+        return {
+            error: `"${raw}" has ${digits.length} hex digits, an odd count: a byte is two digits.`
+        }
+    }
+    const bytes = new Uint8Array(digits.length / 2)
+    for (let index = 0; index < bytes.length; index++) {
+        bytes[index] = Number.parseInt(digits.slice(index * 2, index * 2 + 2), 16)
+    }
+    return { bytes }
+}
+
+/**
+ * What a Poke result has to say beyond its numbers: a value that was already there is no change, so
+ * nothing is recorded, and a Poke made with the history Setting at 0 applies but cannot be undone,
+ * exactly as an instruction cannot ([ADR 0022](../../../../../docs/adr/0022-core-native-poke-records.md)).
+ */
+function pokeNote(changed: boolean, recorded: boolean): string | undefined {
+    if (!changed) return 'That value was already there, so nothing was poked and nothing recorded.'
+    if (!recorded) {
+        return 'The Poke was applied, but this emulator keeps no history, so it cannot be undone.'
+    }
+    return undefined
 }
 
 export function getEffectiveEntry(context: DefaultCodingAgentToolContext): string {
@@ -297,11 +443,46 @@ function executionBlocker(emulator: Emulator, action: 'execute' | 'undo'): Execu
     return null
 }
 
+/**
+ * What stops a Poke: everything that stops a Step, plus the Core being busy. A Poke is a
+ * synchronous Core operation like Undo, so a Run, Step or input handler that still owns the Core
+ * refuses it ([the design record](../../../../../docs/design/pokes.md)).
+ */
+function pokeBlocker(emulator: Emulator): ExecutionBlocker | null {
+    const blocker = executionBlocker(emulator, 'execute')
+    if (blocker) return blocker
+    if (!emulator.canPoke) {
+        return {
+            error: 'Cannot poke. The emulator is busy running, stepping, or waiting on the core.',
+            retryable: true,
+            nextAction:
+                'Let the current run or step finish, or pause it, then poke and step from there.'
+        }
+    }
+    return null
+}
+
+/**
+ * The Emulator's state as the tools report it: the project's files resolve through the context, and
+ * the editor's Target comes along so that a reported width is named the way that architecture names
+ * it rather than the way the 68000 does.
+ */
+function emulatorState(
+    context: DefaultCodingAgentToolContext,
+    emulator: Emulator,
+    options: FormatEmulatorStateOptions = {}
+) {
+    return formatEmulatorState((file) => getFile(context, file)?.content ?? '', emulator, {
+        language: context.getEditorLanguage(),
+        ...options
+    })
+}
+
 function executionDetails(context: DefaultCodingAgentToolContext, emulator: Emulator) {
     return {
         errors: collectEmulatorErrors(emulator),
         diagnostics: collectEmulatorDiagnostics(emulator),
-        state: formatEmulatorState((file) => getFile(context, file)?.content ?? '', emulator)
+        state: emulatorState(context, emulator)
     }
 }
 
@@ -1178,11 +1359,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                         diagnostics: collectEmulatorDiagnostics(emulator, checkDiagnostics),
                         //the full refresh is where every Register file is reported whole; the
                         //execution tools report only what is not zero in them
-                        ...formatEmulatorState(
-                            (file) => getFile(context, file)?.content ?? '',
-                            emulator,
-                            { registerFiles: 'full' }
-                        )
+                        ...emulatorState(context, emulator, { registerFiles: 'full' })
                     })
                 })
         }),
@@ -1227,10 +1404,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                         return toolRun.success({
                             stepsRequested: steps,
                             stepsExecuted,
-                            ...formatEmulatorState(
-                                (file) => getFile(context, file)?.content ?? '',
-                                emulator
-                            )
+                            ...emulatorState(context, emulator)
                         })
                     } catch (error) {
                         return toolRun.failure('runtime_error', error, {
@@ -1281,10 +1455,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                                     status: statusName(status),
                                     errors,
                                     diagnostics,
-                                    ...formatEmulatorState(
-                                        (file) => getFile(context, file)?.content ?? '',
-                                        emulator
-                                    )
+                                    ...emulatorState(context, emulator)
                                 }
                             }
                         )
@@ -1293,10 +1464,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                     return toolRun.success({
                         status: statusName(status),
                         diagnostics,
-                        ...formatEmulatorState(
-                            (file) => getFile(context, file)?.content ?? '',
-                            emulator
-                        )
+                        ...emulatorState(context, emulator)
                     })
                 })
         }),
@@ -1336,10 +1504,7 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                         emulator.undo(steps)
                         return toolRun.success({
                             stepsRequested: steps,
-                            ...formatEmulatorState(
-                                (file) => getFile(context, file)?.content ?? '',
-                                emulator
-                            )
+                            ...emulatorState(context, emulator)
                         })
                     } catch (error) {
                         return toolRun.failure('runtime_error', error, {
@@ -1535,6 +1700,215 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                             details: {
                                 address,
                                 length,
+                                errors: collectEmulatorErrors(emulator)
+                            }
+                        })
+                    }
+                })
+        }),
+        poke_register: tool({
+            name: 'poke_register',
+            description: `Pokes a register of the paused program: it writes the value between two instructions and records it as one step of the execution history, which undo reverts like an instruction. You MUST compile first, and the program must not be terminated or waiting on an interrupt.
+- Use it to try a fix without editing the code, to reach a branch the program never takes, or to set up a state that takes many instructions to reach.
+- The program counter, the status flags, and registers the emulator cannot set (such as $zero) are never pokeable.
+- Returns what step returns, plus recorded (whether the history kept an undoable entry) and, when the register already held the value, a note that nothing was poked.`,
+            schema: z.object({
+                file: z
+                    .string()
+                    .optional()
+                    .describe(
+                        `Register file id, as registerFiles reports it (fpu, cp0, csr, sse, x87). Defaults to "${CPU_REGISTER_FILE_ID}", the general registers.`
+                    ),
+                register: z
+                    .string()
+                    .describe(
+                        'Register name as its Register file spells it, for example "D0", "$t0", "t0", "rax", "xmm3".'
+                    ),
+                value: z
+                    .string()
+                    .describe(
+                        'The new value: hex such as "0x1f" or decimal such as "31", negative allowed within the width of the register.'
+                    )
+            }),
+            execute: async ({ file, register, value }) =>
+                runAgentTool(async (toolRun) => {
+                    const emulator = context.getEmulator()
+                    if (!emulator) {
+                        return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
+                            retryable: true,
+                            nextAction:
+                                'Wait for the editor language to load, then compile and poke again.'
+                        })
+                    }
+                    const blocker = pokeBlocker(emulator)
+                    if (blocker) {
+                        return toolRun.failure('execution_state', blocker.error, {
+                            retryable: blocker.retryable,
+                            nextAction: blocker.nextAction,
+                            details: executionDetails(context, emulator)
+                        })
+                    }
+
+                    const fileId = file ?? CPU_REGISTER_FILE_ID
+                    const registerFile = findRegisterFile(emulator, fileId)
+                    if (!registerFile) {
+                        const available = (emulator.registerFiles ?? [])
+                            .map((candidate) => candidate.id)
+                            .join(', ')
+                        return toolRun.failure(
+                            'invalid_input',
+                            `No register file "${fileId}" in this language. Available files: ${available || 'none'}`,
+                            {
+                                retryable: true,
+                                nextAction:
+                                    'Call get_emulator_state to see the register files this language has.'
+                            }
+                        )
+                    }
+
+                    const name = resolveRegisterName(registerFile, register)
+                    if (name === null) {
+                        return toolRun.failure(
+                            'invalid_input',
+                            `No register "${register}" in the ${registerFile.label} file. Its registers are: ${registerFile.layout
+                                .map((row) => row.name)
+                                .join(', ')}`,
+                            {
+                                retryable: true,
+                                nextAction:
+                                    'Call poke_register again with a register name the file lists.'
+                            }
+                        )
+                    }
+
+                    const refusal = registerPokeRefusal(emulator, registerFile, name)
+                    if (refusal) {
+                        return toolRun.failure('invalid_input', refusal, {
+                            retryable: false,
+                            nextAction:
+                                'Poke a register the program reads instead, or change the code that computes this value.'
+                        })
+                    }
+
+                    const index = registerRowIndex(registerFile, name)
+                    const bits = registerBits(registerFile, index)
+                    const parsed = parsePokeValue(value, name, bits)
+                    if ('error' in parsed) {
+                        return toolRun.failure('invalid_input', parsed.error, {
+                            retryable: true,
+                            nextAction:
+                                'Call poke_register again with a value that fits the register.'
+                        })
+                    }
+
+                    const size = registerSizeOf(registerFile, index)
+                    const previous = registerFile.registers[index]?.value ?? 0n
+                    //the same masking `GenericEmulator.pokeRegisters` drops a no-op write by: MIPS
+                    //and RISC-V report their CPU registers signed while a poked value is unsigned,
+                    //so an unmasked comparison would report poking `0xffffffff` over `-1n` as a
+                    //change the Emulator then refuses to record
+                    const width = Number(bits)
+                    const changed =
+                        BigInt.asUintN(width, previous) !== BigInt.asUintN(width, parsed.value)
+                    try {
+                        const recorded = emulator.pokeRegisters(fileId, [
+                            { register: name, value: parsed.value }
+                        ])
+                        return toolRun.success({
+                            file: fileId,
+                            register: name,
+                            value: formatNumber(parsed.value, size),
+                            previous: formatNumber(previous, size),
+                            changed,
+                            recorded,
+                            note: pokeNote(changed, recorded),
+                            ...emulatorState(context, emulator)
+                        })
+                    } catch (error) {
+                        return toolRun.failure('invalid_input', error, {
+                            retryable: true,
+                            nextAction:
+                                'Call poke_register again with a value the register can hold.',
+                            details: executionDetails(context, emulator)
+                        })
+                    }
+                })
+        }),
+        poke_memory: tool({
+            name: 'poke_memory',
+            description: `Pokes a run of memory of the paused program: it writes the bytes between two instructions and records them as one step of the execution history, however many bytes they are, which undo reverts like an instruction. You MUST compile first, and the program must not be terminated or waiting on an interrupt.
+- Use it to seed a buffer, to correct a data value without editing the code, or to drive a memory-mapped display.
+- Bytes are written in the order given, at ascending addresses; read them back with read_memory.
+- Returns what step returns, plus recorded (whether the history kept an undoable entry) and, when memory already held those bytes, a note that nothing was poked.`,
+            schema: z.object({
+                address: z
+                    .string()
+                    .describe('Hex string of the start address, for example "0x1000" or "1000"'),
+                bytes: z
+                    .string()
+                    .describe(
+                        'The bytes as hex digits, two per byte, spaces allowed, for example "de ad be ef" or "deadbeef".'
+                    )
+            }),
+            execute: async ({ address, bytes }) =>
+                runAgentTool(async (toolRun) => {
+                    const emulator = context.getEmulator()
+                    if (!emulator) {
+                        return toolRun.failure('emulator_unavailable', 'Emulator not loaded yet.', {
+                            retryable: true,
+                            nextAction:
+                                'Wait for the editor language to load, then compile and poke again.'
+                        })
+                    }
+                    const blocker = pokeBlocker(emulator)
+                    if (blocker) {
+                        return toolRun.failure('execution_state', blocker.error, {
+                            retryable: blocker.retryable,
+                            nextAction: blocker.nextAction,
+                            details: executionDetails(context, emulator)
+                        })
+                    }
+
+                    const parsedAddress = parseHexAddress(address)
+                    if (parsedAddress === null) {
+                        return toolRun.failure('invalid_input', `Invalid hex address: ${address}`, {
+                            retryable: true,
+                            nextAction: 'Call poke_memory again with a hex address such as 0x1000.'
+                        })
+                    }
+                    const parsed = parsePokeBytes(bytes)
+                    if ('error' in parsed) {
+                        return toolRun.failure('invalid_input', parsed.error, {
+                            retryable: true,
+                            nextAction: 'Call poke_memory again with an even count of hex digits.'
+                        })
+                    }
+
+                    try {
+                        const previous = Array.from(
+                            emulator.readMemoryBytes(parsedAddress, parsed.bytes.length)
+                        )
+                        const poked = Array.from(parsed.bytes)
+                        const changed = poked.some((byte, index) => byte !== previous[index])
+                        const recorded = emulator.pokeMemory(parsedAddress, parsed.bytes)
+                        return toolRun.success({
+                            address: formatNumber(parsedAddress),
+                            length: poked.length,
+                            hex: formatHexBytes(poked),
+                            previousHex: formatHexBytes(previous),
+                            changed,
+                            recorded,
+                            note: pokeNote(changed, recorded),
+                            ...emulatorState(context, emulator)
+                        })
+                    } catch (error) {
+                        return toolRun.failure('runtime_error', error, {
+                            retryable: false,
+                            nextAction:
+                                'Check that the address belongs to a valid memory region for the active emulator.',
+                            details: {
+                                address,
+                                length: parsed.bytes.length,
                                 errors: collectEmulatorErrors(emulator)
                             }
                         })

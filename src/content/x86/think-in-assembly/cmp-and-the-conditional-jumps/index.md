@@ -1,36 +1,26 @@
-A program that always runs its instructions in order can compute one thing. To compute anything that
-depends on its input, it has to be able to skip some instructions and run others, and on x86 that
-means one idea: an instruction that changes `rip` only when the flags say so.
+# cmp and the conditional jumps
 
-## A jump writes rip
+A conditional jump lets a program choose which instructions run. The dependable pattern is:
 
-`jmp label` sets `rip` to the address of `label`, so the next instruction to run is the one there.
-
-A **conditional** jump does the same thing, but only when the flags are in a particular state. There
-are sixteen of them, one per condition, and they read flags that some earlier instruction left
-behind. Nothing links the two instructions except order:
-
-```
-    cmp rax, rbx        ; sets the flags from rax - rbx
-    jl smaller          ; goes to smaller when rax < rbx, signed
+```x86
+    cmp left, right       ; record flags for left - right
+    jcc somewhere         ; jump when one condition is true
 ```
 
-That looseness is worth being careful about. Any instruction between the `cmp` and the `jl` that
-writes flags breaks the pair, and the program will still assemble and still run. It will just jump on
-the wrong question.
+`jcc` is a placeholder for a real condition mnemonic such as `je` or `jl`, not an instruction
+spelled literally. `cmp` subtracts only to set flags. It does not store the subtraction result, and
+it does not change either operand. The following **conditional jump** reads those flags. If its
+condition is true, it puts the target label's address in `rip`. Otherwise execution **falls
+through** to the next instruction.
 
-## An if in three pieces
+Keep the `cmp` immediately before its conditional jump. An intervening instruction may change one
+of the flags that the jump needs. A gap is safe only when you know that every needed flag is
+preserved.
 
-Say you want one of two values in `rax`: 100 when `x` is greater than `y`, and 200 otherwise.
+## Building an if
 
-Assembly has no `if`, so you build one out of a comparison, a jump and two labels. The shape is
-always the same three pieces: jump away when the test **fails**, do the "it passed" work, jump over
-the alternative, and put the alternative under a label.
-
-The inversion in that first piece is the part that catches people. You want to do something when
-`x > y`, and the instruction you write is `jle`, less or equal, the opposite. The reason is that the
-"it passed" work is going to sit directly after the jump, where it runs when the jump is not taken.
-So the jump has to be the one that leaves.
+Suppose `result` should become 100 when signed `x > y`, and 200 otherwise. Put the true path after
+the conditional jump, then jump to the false path when the condition is not true:
 
 ```x86|playground|memory
 default rel
@@ -44,60 +34,99 @@ result: dq 0
 section .text
 _start:
     mov rax, [x]
-    cmp rax, [y]            ; x - y, and only the flags are kept
-    jle .else               ; x is not greater, so go to the other branch
+    cmp rax, [y]            ; flags for x - y
+    jle false_path          ; signed x <= y: skip the true path
 
     mov qword [result], 100
-    jmp .done
-.else:
-    mov qword [result], 200
-.done:
+    jmp if_done
 
+false_path:
+    mov qword [result], 200
+
+if_done:
     mov rax, 60
     xor rdi, rdi
     syscall
 ```
 
-Type `402010` into the memory panel to see `result`, or set `x` to 20 and watch which branch runs.
+With `x = 7` and `y = 12`, `jle` is taken and the false path stores 200. If you change `x` to 20,
+`jle` is not taken. Execution falls through to the true path and stores 100.
 
-The `jmp .done` is easy to forget and the program that forgets it falls straight from the end of one
-branch into the beginning of the other, running both. There is no `}` to stop it; the label `.else:`
-is a name for an address and nothing more.
+The unconditional `jmp if_done` prevents the true path from continuing into the false path. There
+is no `}` to stop it. A label only names the address of the instruction that follows it.
 
-`cmp rax, [y]` takes its second operand straight out of memory, which saves a line. The other operand
-still has to be a register, which is why `mov rax, [x]` on the line before is not avoidable.
+The comparison uses `jle` even though the source condition is `x > y`. This inverted jump works
+because the true path occupies the fall-through position: jump away when signed `x <= y`, then let
+signed `x > y` fall through.
 
-## Which jump to write
+## Choosing the condition
 
-| jump          | jumps when                    |
-| ------------- | ----------------------------- |
-| `je` / `jz`   | equal, or the result was zero |
-| `jne` / `jnz` | not equal                     |
-| `jl` / `jnge` | less, **signed**              |
-| `jle`         | less or equal, signed         |
-| `jg` / `jnle` | greater, signed               |
-| `jge`         | greater or equal, signed      |
-| `jb` / `jc`   | below, **unsigned**           |
-| `jbe`         | below or equal, unsigned      |
-| `ja`          | above, unsigned               |
-| `jae` / `jnc` | above or equal, unsigned      |
-| `js` / `jns`  | negative, not negative        |
-| `jo` / `jno`  | overflowed, did not           |
+The same fixed-width bit pattern can represent a signed or unsigned integer. `cmp` records enough
+flags for either reading; the conditional jump chooses the reading.
 
-Which flags each of those reads, and why the signed ones read two flags instead of one, is worked out
-in "The flags register".
+These are the comparison conditions used in this lesson:
 
-The four words are what to remember: **less** and **greater** are the signed pair, **below** and
-**above** the unsigned one. A length, an index and an address are unsigned, so a loop over an array
-wants `jb`. A temperature or a difference between two measurements is signed and wants `jl`.
+| relation | jump | flag condition |
+| -------- | ---- | -------------- |
+| equal | `je` / `jz` | `ZF = 1` |
+| not equal | `jne` / `jnz` | `ZF = 0` |
+| less, signed | `jl` | `SF != OF` |
+| less or equal, signed | `jle` | `ZF = 1` or `SF != OF` |
+| greater, signed | `jg` | `ZF = 0` and `SF = OF` |
+| greater or equal, signed | `jge` | `SF = OF` |
+| below, unsigned | `jb` / `jc` | `CF = 1` |
+| below or equal, unsigned | `jbe` | `CF = 1` or `ZF = 1` |
+| above, unsigned | `ja` | `CF = 0` and `ZF = 0` |
+| above or equal, unsigned | `jae` / `jnc` | `CF = 0` |
 
-`jrcxz` is the odd one out, reading a register rather than the flags and jumping when `rcx` is zero.
-Its 16 and 32 bit spellings, `jcxz` and `jecxz`, are build errors in 64 bit mode.
+Equality has no signed or unsigned version. Equal bit patterns make the hypothetical subtraction
+zero, so `cmp` sets `ZF`.
 
-## Two conditions at once
+For unsigned order, `CF` records whether `left - right` needed a borrow. A borrow means `left` is
+below `right`. `ZF` distinguishes equality for the conditions that include it.
 
-"Is `x` above 0 and below 100" is two comparisons, and the way to write it is to jump away as soon as
-either one fails.
+For signed order, the top bit of the subtraction result is not enough by itself because signed
+overflow can make that bit misleading. The signed conditions therefore compare `SF` with `OF`.
+`left` is less than `right` when those flags differ; `ZF` again adds or excludes equality.
+
+Use **less** and **greater** for signed comparisons, and **below** and **above** for unsigned
+comparisons. Temperatures and signed differences use conditions such as `jl` and `jg`. Lengths,
+indices, and addresses are normally unsigned, so they use conditions such as `jb` and `ja`.
+
+This difference is visible with `-1` and `1`. As signed qwords, -1 is less than 1, so `jl` would be
+taken. As unsigned qwords, the all-ones bit pattern is above 1, so `ja` would be taken after the
+same `cmp`.
+
+## Valid `cmp` operands
+
+The operands must have the same width, and the forms used here permit at most one memory operand.
+A register makes the width clear:
+
+```x86
+    cmp rax, rbx            ; register with register
+    cmp rax, [y]            ; register with qword memory
+    cmp rax, 0              ; register with an immediate
+```
+
+Memory can also be compared directly with an immediate when its width is explicit or otherwise
+inferable:
+
+```x86
+    cmp qword [x], 0        ; legal: explicit qword width
+```
+
+Two memory variables cannot be the two operands of one `cmp`. Load either value into a register
+first:
+
+```x86
+    mov rax, [x]
+    cmp rax, [y]            ; compare x with y
+```
+
+## Short-circuiting two conditions
+
+For a logical AND, jump to the false result as soon as either condition is false. This example asks
+whether `rax` is strictly between 0 and 100, signed:
 
 ```x86|playground
 default rel
@@ -105,77 +134,79 @@ global _start
 
 section .text
 _start:
-    mov rax, 42             ; the value being tested
-    xor rbx, rbx            ; the answer, 0 until proved otherwise
+    mov rax, 42
+    xor rbx, rbx            ; answer starts as false
 
     cmp rax, 0
-    jle .no                 ; fails the first test
+    jle and_done            ; signed rax <= 0
     cmp rax, 100
-    jge .no                 ; fails the second
-    mov rbx, 1              ; both passed
-.no:
+    jge and_done            ; signed rax >= 100
+    mov rbx, 1              ; both conditions were true
 
+and_done:
     mov rax, 60
     xor rdi, rdi
     syscall
 ```
 
-Set `rax` to 500 and `rbx` stays 0, having failed the second test. Set it to -3 and `rbx` stays 0
-again, but this time the second `cmp` never ran at all: the first jump had already decided the
-answer. That is **short circuit** evaluation, and in assembly you do not have to ask for it. It falls
-out of the fact that a jump means the following instructions do not happen.
+If `rax` is -3, the first jump reaches `and_done`, so the second comparison does not run. If it is
+500, the first condition passes and the second jump reaches `and_done`. Only values 1 through 99
+set `rbx` to 1.
 
-"Or" is the same shape with the jumps going the other way, to a label that sets the answer to 1.
+For a logical OR, jump to the true result as soon as either condition is true. This example asks
+whether signed `rax < 0` or signed `rax > 100`:
 
-## A branch you can avoid
+```x86
+    xor rbx, rbx            ; answer starts as false
 
-A modern processor does not wait to find out where a conditional jump is going. It guesses, starts
-running the instructions down the path it guessed, and keeps the work if the guess was right. That is
-**branch prediction**, and it is why branches are nearly free most of the time. When the guess is
-wrong the processor has to throw away everything it started and begin again at the right address,
-which costs it the equivalent of a dozen or more instructions.
+    cmp rax, 0
+    jl or_true
+    cmp rax, 100
+    jg or_true
+    jmp or_done
 
-Guesses are right when a branch is predictable, a loop that runs a thousand times and exits once. They
-are wrong about half the time when a branch depends on unpredictable data. So for a branch that just
-picks one of two values there is a way to write the same thing with no branch at all:
+or_true:
+    mov rbx, 1
 
-```x86|playground|no-flags
-default rel
-global _start
-
-section .text
-_start:
-    mov rax, 7
-    mov rbx, 12
-
-    ; the branching way: rcx = the larger of rax and rbx
-    mov rcx, rax
-    cmp rbx, rcx
-    jle .keep
-    mov rcx, rbx
-.keep:
-
-    ; the branchless way, same answer
-    mov rdx, rax
-    cmp rbx, rdx
-    cmovg rdx, rbx          ; move only if rbx was greater
-
-    mov rax, 60
-    xor rdi, rdi
-    syscall
+or_done:
 ```
 
-`cmovg` always runs and only sometimes writes, so there is no path for the processor to guess about.
+When the first condition is true, the jump skips the second comparison. That is short-circuit
+evaluation expressed directly with control flow.
 
-It cannot replace every branch. `cmov` reads both of its operands whatever the condition turns out to
-be, so it cannot guard anything: a `cmov` that loads through a pointer loads through that pointer even
-when the condition says the pointer is not valid. A conditional jump protects the instructions after
-it, and a `cmov` protects nothing.
+## A three-way decision
+
+A comparison can also select less, equal, or greater. Test less and greater; if neither jump is
+taken, the operands must be equal:
+
+```x86
+    cmp rax, rbx
+    jl less_path            ; signed rax < rbx
+    jg greater_path         ; signed rax > rbx
+
+    mov rdx, 0              ; equal path
+    jmp compare_done
+
+less_path:
+    mov rdx, -1
+    jmp compare_done
+
+greater_path:
+    mov rdx, 1
+
+compare_done:
+```
+
+Both jumps read the flags from the same `cmp`; `jl` itself does not change them. Keeping each jump
+next to the comparison makes the dependency easy to see.
 
 ## Your turn
 
-`rax` and `rbx` hold two numbers. Leave the larger of the two, read as **signed**, in `rcx`. The test
-gives -5 and 3, so the answer is 3.
+Each pair below contains signed qwords. Leave the larger value from `r8` and `r9` in `rbx`, the
+larger from `r10` and `r12` in `rbp`, and the larger from `r13` and `r14` in `r15`.
+
+The three pairs cover left-less, left-greater, and equal inputs. The first pair is also a reminder
+that signed -5 is less than 3 even though its qword bit pattern is above 3 when read as unsigned.
 
 ```x86|playground|exercise
 default rel
@@ -192,8 +223,19 @@ _start:
 
 ```testcase
 {
-    "startingRegisters": { "rax": "-5", "rbx": 3 },
-    "expectedRegisters": { "rcx": 3 }
+    "startingRegisters": {
+        "r8": "-5",
+        "r9": 3,
+        "r10": 12,
+        "r12": "-4",
+        "r13": 9,
+        "r14": 9
+    },
+    "expectedRegisters": {
+        "rbx": 3,
+        "rbp": 12,
+        "r15": 9
+    }
 }
 ```
 
@@ -206,11 +248,23 @@ global _start
 
 section .text
 _start:
-    mov rcx, rax        ; assume rax is the larger
-    cmp rbx, rcx
-    jle .done           ; and it is, unless rbx is bigger
-    mov rcx, rbx
-.done:
+    mov rbx, r8
+    cmp r9, rbx
+    jle first_max_done
+    mov rbx, r9
+first_max_done:
+
+    mov rbp, r10
+    cmp r12, rbp
+    jle second_max_done
+    mov rbp, r12
+second_max_done:
+
+    mov r15, r13
+    cmp r14, r15
+    jle third_max_done
+    mov r15, r14
+third_max_done:
 
     mov rax, 60
     xor rdi, rdi
@@ -219,9 +273,12 @@ _start:
 
 </details>
 
-The second one is a three way comparison. Leave -1 in `rdx` if `rax` is less than `rbx`, 0 if they
-are equal and 1 if `rax` is greater, all signed. The test gives 9 and 9, so the answer is 0, and
-`rdx` starts at `0xFF` so that leaving it alone is not an answer.
+Now perform three signed three-way comparisons. For each pair, produce -1 when the left value is
+less, 0 when the values are equal, and 1 when the left value is greater:
+
+- compare `r8` with `r9` and put the result in `rbx`;
+- compare `r10` with `r12` and put the result in `rbp`;
+- compare `r13` with `r14` and put the result in `r15`.
 
 ```x86|playground|exercise
 default rel
@@ -238,8 +295,19 @@ _start:
 
 ```testcase
 {
-    "startingRegisters": { "rax": 9, "rbx": 9, "rdx": "0xFF" },
-    "expectedRegisters": { "rdx": 0 }
+    "startingRegisters": {
+        "r8": 4,
+        "r9": 9,
+        "r10": 14,
+        "r12": "-2",
+        "r13": 7,
+        "r14": 7
+    },
+    "expectedRegisters": {
+        "rbx": "0xFFFFFFFFFFFFFFFF",
+        "rbp": 1,
+        "r15": 0
+    }
 }
 ```
 
@@ -252,17 +320,41 @@ global _start
 
 section .text
 _start:
-    cmp rax, rbx
-    jl .less
-    jg .greater
-    xor rdx, rdx            ; equal
-    jmp .done
-.less:
-    mov rdx, -1
-    jmp .done
-.greater:
-    mov rdx, 1
-.done:
+    cmp r8, r9
+    jl first_less
+    jg first_greater
+    mov rbx, 0
+    jmp first_compare_done
+first_less:
+    mov rbx, -1
+    jmp first_compare_done
+first_greater:
+    mov rbx, 1
+first_compare_done:
+
+    cmp r10, r12
+    jl second_less
+    jg second_greater
+    mov rbp, 0
+    jmp second_compare_done
+second_less:
+    mov rbp, -1
+    jmp second_compare_done
+second_greater:
+    mov rbp, 1
+second_compare_done:
+
+    cmp r13, r14
+    jl third_less
+    jg third_greater
+    mov r15, 0
+    jmp third_compare_done
+third_less:
+    mov r15, -1
+    jmp third_compare_done
+third_greater:
+    mov r15, 1
+third_compare_done:
 
     mov rax, 60
     xor rdi, rdi

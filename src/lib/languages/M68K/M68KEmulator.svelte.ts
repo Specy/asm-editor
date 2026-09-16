@@ -5,6 +5,7 @@ import {
     Interpreter,
     InterpreterStatus as CoreInterpreterStatus,
     type Interrupt,
+    type PokeWrite as CorePokeWrite,
     type RegisterOperand,
     type Program,
     S68k,
@@ -29,6 +30,7 @@ import {
     type ExecutionStep,
     makeLabelColor,
     type MutationOperation,
+    type PokeWrite,
     RegisterSize,
     type StackFrame
 } from '$lib/languages/commonLanguageFeatures.svelte'
@@ -102,6 +104,16 @@ const sizeMap = {
     [Size.Long]: RegisterSize.Long
 } satisfies Record<Size, RegisterSize>
 
+/**
+ * The width a mutation names, as the panels count it. The Core's types declare the numeric `Size`
+ * enum, but a step crosses the wasm boundary through serde, which spells the variant by name
+ * (`"Long"`), so the name is looked up through the enum's reverse mapping before the table; a
+ * history row would otherwise carry no width at all and read as "undefined bytes".
+ */
+function mutationSize(size: Size | keyof typeof Size): RegisterSize {
+    return sizeMap[typeof size === 'string' ? Size[size] : size]
+}
+
 export function M68KEmulator(source: BuildInput, options: EmulatorSettings = {}) {
     return new AsmEditorM68KEmulator(source, options)
 }
@@ -172,12 +184,22 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         }
     }
 
+    _beginPoke(): void {
+        this.requireInterpreter().beginPoke()
+    }
+
+    _endPoke(): boolean {
+        return this.requireInterpreter().endPoke()
+    }
+
     _canUndo(): boolean {
         const interpreter = this.interpreter
-        return (
-            !!interpreter?.canUndo() &&
-            (this.screenInstructions?.canUndoAfter(interpreter.getLastStepId() - 1) ?? true)
-        )
+        if (!interpreter?.canUndo()) return false
+        //a Poke on top is the Core's alone to roll back: it drew nothing, and it holds a step id of
+        //its own that the Screen journal never hung an effect on
+        //([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md))
+        if (interpreter.getUndoHistory(1)[0]?.kind === 'poke') return true
+        return this.screenInstructions?.canUndoAfter(interpreter.getLastStepId() - 1) ?? true
     }
 
     _checkCode(sources: BuildSources): Diagnostic[] {
@@ -345,12 +367,31 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
 
     _getUndoHistory(max: number): ExecutionStep[] {
         return (
-            this.interpreter?.getUndoHistory(max).map((step) => ({
-                ...step,
-                line: step.location?.line ?? -1,
-                file: step.location?.file,
-                mutations: step.mutations.map(convertMutation)
-            })) ?? []
+            this.interpreter?.getUndoHistory(max).map((step): ExecutionStep => {
+                if (step.kind === 'poke') {
+                    //a Poke ran no instruction, so it has no line to go to and no mutations of its
+                    //own: its row is what it wrote
+                    const writes = step.writes.map(convertPokeWrite)
+                    return {
+                        kind: 'poke',
+                        pc: step.pc,
+                        old_ccr: step.old_ccr,
+                        new_ccr: step.new_ccr,
+                        line: -1,
+                        writes,
+                        mutations: writes.map(pokeWriteToMutation)
+                    }
+                }
+                return {
+                    kind: 'instruction',
+                    pc: step.pc,
+                    old_ccr: step.old_ccr,
+                    new_ccr: step.new_ccr,
+                    line: step.location?.line ?? -1,
+                    file: step.location?.file,
+                    mutations: step.mutations.map(convertMutation)
+                }
+            }) ?? []
         )
     }
 
@@ -402,6 +443,9 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
 
     _undo(): void {
         const step = this.requireInterpreter().undo()
+        //a Poke has no instruction identity, so the Screen journal hung nothing on it and must be
+        //left where it is ([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md))
+        if (step.kind === 'poke') return
         this.screenInstructions?.undoAfter(step.id - 1)
     }
 
@@ -1022,7 +1066,8 @@ function convertMutation(mutation: CoreExecutionStep['mutations'][number]): Muta
                 type: 'WriteRegister',
                 value: {
                     old: BigInt(mutation.value.old),
-                    size: sizeMap[mutation.value.size],
+                    new: BigInt(mutation.value.new),
+                    size: mutationSize(mutation.value.size),
                     register: registerOperandToString(mutation.value.register)
                 }
             }
@@ -1031,7 +1076,8 @@ function convertMutation(mutation: CoreExecutionStep['mutations'][number]): Muta
                 type: 'WriteMemoryBytes',
                 value: {
                     address: BigInt(mutation.value.address),
-                    old: mutation.value.old
+                    old: mutation.value.old,
+                    new: mutation.value.new
                 }
             }
         case 'WriteMemory':
@@ -1040,7 +1086,8 @@ function convertMutation(mutation: CoreExecutionStep['mutations'][number]): Muta
                 value: {
                     address: BigInt(mutation.value.address),
                     old: BigInt(mutation.value.old),
-                    size: sizeMap[mutation.value.size]
+                    new: BigInt(mutation.value.new),
+                    size: mutationSize(mutation.value.size)
                 }
             }
         case 'PushCall':
@@ -1062,6 +1109,48 @@ function convertMutation(mutation: CoreExecutionStep['mutations'][number]): Muta
         default:
             return unsupportedMutation(mutation)
     }
+}
+
+/**
+ * One value a Poke wrote, as the panels show it: unsigned bit patterns, and the register named the
+ * way the Register file draws it (`D0`) rather than the way the Core spells it (`d0`).
+ */
+function convertPokeWrite(write: CorePokeWrite): PokeWrite {
+    if (write.type === 'register') {
+        return {
+            type: 'register',
+            name: pokeRegisterName(write.name),
+            old: BigInt(write.old >>> 0),
+            new: BigInt(write.new >>> 0)
+        }
+    }
+    return {
+        type: 'memory',
+        address: BigInt(write.address),
+        old: [...write.old],
+        new: [...write.new]
+    }
+}
+
+/** The mutation list a poked value reads as, so the coding agent sees a Poke as it sees a write. */
+function pokeWriteToMutation(write: PokeWrite): MutationOperation {
+    if (write.type === 'register') {
+        return {
+            type: 'WriteRegister',
+            //a Poke writes the whole register, which is what `pokeRegisters` hands the Core
+            value: { register: write.name, old: write.old, new: write.new, size: RegisterSize.Long }
+        }
+    }
+    return {
+        type: 'WriteMemoryBytes',
+        value: { address: write.address, old: write.old, new: write.new }
+    }
+}
+
+/** The Core names a register the way the assembler does; the Register file draws it `D0`, `A7`. */
+function pokeRegisterName(name: string): string {
+    const upper = name.toUpperCase()
+    return (registerName as readonly string[]).includes(upper) ? upper : name
 }
 
 function unsupportedMutation(mutation: never): never {

@@ -107,3 +107,75 @@ export function goesNextLineBy(index: number, length: number, rowLength: number)
         by: ((index + length) % rowLength) + 1
     }
 }
+
+/** How the memory panel is reading the selected bytes, which is how a Poke typed into it is read back. */
+export type MemoryReading = 'hex' | 'char' | 'decimal'
+
+export type ParsedMemoryPoke = { ok: true; bytes: Uint8Array } | { ok: false; reason: string }
+
+/**
+ * One commit of the selection popup, turned into the bytes of a Poke
+ * ([the design record](../../../../../docs/design/pokes.md)): whatever the popup opened holding
+ * reads back as itself, so a single byte is read in the reading its cell shows and a longer
+ * selection as the number the popup shows for the run. `0x` is always hexadecimal, a leading `-`
+ * is a two's complement value of the selected width, and a value wider than the selection is
+ * refused rather than truncated.
+ */
+export function parseMemoryPoke(
+    text: string,
+    length: number,
+    endianess: 'big' | 'little',
+    reading: MemoryReading
+): ParsedMemoryPoke {
+    if (length <= 0) return { ok: false, reason: 'Nothing is selected' }
+    //one character is one byte, and the raw text is read: a space is a character to poke, not
+    //padding around a number
+    if (reading === 'char' && length === 1) {
+        const chars = [...text]
+        if (chars.length !== 1) {
+            return { ok: false, reason: 'A character Poke takes exactly one character' }
+        }
+        const code = chars[0].codePointAt(0) ?? 0
+        if (code > 0xff) {
+            return { ok: false, reason: `${chars[0]} is ${code}, which does not fit a byte` }
+        }
+        return { ok: true, bytes: Uint8Array.from([code]) }
+    }
+    const trimmed = text.trim()
+    if (trimmed === '') return { ok: false, reason: 'A Poke needs a value' }
+    let body = trimmed
+    let negative = false
+    if (body.startsWith('-')) {
+        negative = true
+        body = body.slice(1)
+    } else if (body.startsWith('+')) {
+        body = body.slice(1)
+    }
+    //a single byte drawn in hex is typed in hex, as it is shown; the number of a longer selection
+    //is the decimal the popup shows, unless the value says otherwise with a `0x`
+    let hexadecimal = reading === 'hex' && length === 1
+    if (/^0x/i.test(body)) {
+        hexadecimal = true
+        body = body.slice(2)
+    }
+    const digits = hexadecimal ? /^[0-9a-f]+$/i : /^[0-9]+$/
+    if (!digits.test(body)) {
+        return {
+            ok: false,
+            reason: `${trimmed} is not a ${hexadecimal ? 'hexadecimal' : 'decimal'} number`
+        }
+    }
+    let value = BigInt(hexadecimal ? `0x${body}` : body)
+    if (negative) value = -value
+    const bits = length * 8
+    if (value > (1n << BigInt(bits)) - 1n || value < -(1n << BigInt(bits - 1))) {
+        return {
+            ok: false,
+            reason: `${trimmed} does not fit ${length} byte${length === 1 ? '' : 's'}, which is ${bits} bits wide`
+        }
+    }
+    return {
+        ok: true,
+        bytes: Uint8Array.from(numberToByteSlice(BigInt.asUintN(bits, value), length, endianess))
+    }
+}

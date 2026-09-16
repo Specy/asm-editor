@@ -18,6 +18,10 @@
         callStackAddresses: ColorizedLabel[]
         onAddressChange?: (address: bigint, tab: MemoryTab) => void
         systemSize: RegisterSize
+        /** Whether the bytes take Pokes ([the design record](../../../../../docs/design/pokes.md)). */
+        pokeable?: boolean
+        /** One commit of the selection, which is one Poke however many bytes it holds. */
+        onPoke?: (address: bigint, bytes: Uint8Array) => void
     }
 
     let {
@@ -29,7 +33,9 @@
         defaultMemoryValue,
         endianess,
         callStackAddresses,
-        onAddressChange
+        onAddressChange,
+        pokeable = false,
+        onPoke
     }: Props = $props()
 </script>
 
@@ -56,6 +62,8 @@
             currentAddress={tab.address}
             {sp}
             {callStackAddresses}
+            {pokeable}
+            {onPoke}
         />
     </div>
 </ToggleableDraggable>

@@ -6,6 +6,7 @@
         RegisterSize
     } from '$lib/languages/commonLanguageFeatures.svelte'
     import { createEventDispatcher } from 'svelte'
+    import type { AvailableLanguages } from '$lib/Project.svelte'
 
     const dispatcher = createEventDispatcher<{
         registerClick: Register
@@ -26,6 +27,8 @@
         style?: string
         gridStyle?: string
         systemSize: RegisterSize
+        /** The Target, passed straight through: it names the widths of the grouping strip. */
+        language: AvailableLanguages
     }
 
     let {
@@ -36,7 +39,8 @@
         gridStyle = '',
         hiddenRegistersNames = [],
         position = 'top',
-        systemSize
+        systemSize,
+        language
     }: Props = $props()
 
     //no layout: every register here is an integer of the width it was built with, which is what the
@@ -57,6 +61,7 @@
 <RegisterFilesPanel
     files={[file]}
     {systemSize}
+    {language}
     {position}
     {withoutHeader}
     {style}

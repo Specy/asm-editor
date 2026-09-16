@@ -9,6 +9,8 @@ import {
     toHexString
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import { renderRegister } from '$lib/languages/registerFormats'
+import { sizeName } from '$lib/languages/sizeNames'
+import type { AvailableLanguages } from '$lib/Project.svelte'
 import { unsignedBigIntToSigned } from '$lib/utils'
 
 export type FormattedNumber = {
@@ -18,14 +20,6 @@ export type FormattedNumber = {
     signedDecimal?: string
     unsignedDecimal?: string
 }
-
-const SIZE_NAMES = {
-    [RegisterSize.Byte]: 'Byte',
-    [RegisterSize.Word]: 'Word',
-    [RegisterSize.Long]: 'Long',
-    [RegisterSize.Double]: 'Double',
-    [RegisterSize.Quad]: 'Quad'
-} satisfies Record<RegisterSize, string>
 
 function normalizeNumber(value: bigint | number) {
     return typeof value === 'bigint' ? value : BigInt(value)
@@ -71,8 +65,14 @@ export function formatNumber(value: bigint | number, size?: RegisterSize): Forma
     }
 }
 
-export function formatSize(size: RegisterSize) {
-    return SIZE_NAMES[size] ?? String(size)
+/**
+ * A width written out as the Target names it (`sizeNames.ts`), so a report of what an instruction
+ * wrote uses the same word the architecture's own manual does: four bytes are a `Long` to the
+ * 68000, a `Word` to MIPS and a `Dword` to x86. Without a Target it stays the 68000's naming, which
+ * is what this reported before the names were per-language.
+ */
+export function formatSize(size: RegisterSize, language?: AvailableLanguages | null) {
+    return sizeName(size, language).long
 }
 
 export function formatSourceLine(editorCode: string, lineIndex: number, file?: string) {
@@ -136,39 +136,83 @@ export function collectEmulatorErrors(
     )
 }
 
+/** A run of memory bytes the way `read_memory` writes one: two hex digits a byte, space separated. */
+export function formatHexBytes(bytes: number[]) {
+    return bytes.map((byte) => byte.toString(16).padStart(2, '0')).join(' ')
+}
+
+/**
+ * A Poke as its own row ([the design record](../../../../../docs/design/pokes.md)): no instruction
+ * ran, so there is no source line and no pc to report, only which register or memory run was poked
+ * and what it held before and after.
+ */
+function formatPokeStep(step: ExecutionStep) {
+    return {
+        kind: 'poke' as const,
+        writes: (step.writes ?? []).map((write) =>
+            write.type === 'register'
+                ? {
+                      type: write.type,
+                      register: write.name,
+                      old: formatNumber(write.old),
+                      new: formatNumber(write.new)
+                  }
+                : {
+                      type: write.type,
+                      address: formatNumber(write.address),
+                      old: formatHexBytes(write.old),
+                      new: formatHexBytes(write.new)
+                  }
+        )
+    }
+}
+
 export function formatLatestSteps(
     codeOrResolver: string | ((file?: string) => string),
     steps: ExecutionStep[],
+    language?: AvailableLanguages | null,
     max = 10
 ) {
     const resolve = typeof codeOrResolver === 'function' ? codeOrResolver : () => codeOrResolver
-    return steps.slice(-max).map((step) => {
+    //`latestSteps` is newest first, so the newest `max` of them are its head: taking its tail would
+    //hand the model the oldest steps whenever the history preference is set above `max`, and the
+    //Poke or instruction it just made would not be in the list at all
+    return steps.slice(0, max).map((step) => {
+        //a Poke is a step of the same history as the instructions, so it is listed here too, and it
+        //is told apart by its kind rather than by a missing line
+        if (step.kind === 'poke') return formatPokeStep(step)
         const code = resolve(step.file)
         return {
+            kind: step.kind,
             file: step.file ?? null,
             line: formatSourceLine(code, step.line, step.file).line,
             pc: formatNumber(step.pc),
             mutations: step.mutations.map((mutation) => {
                 switch (mutation.type) {
+                    //`old` and `new` are what the Core reports of a write and nothing is
+                    //reconstructed: a side it does not hand over is null
                     case 'WriteRegister':
                         return {
                             type: mutation.type,
                             register: mutation.value.register,
-                            old: formatNumber(mutation.value.old, mutation.value.size),
-                            size: formatSize(mutation.value.size)
+                            old: formatOptionalNumber(mutation.value.old, mutation.value.size),
+                            new: formatOptionalNumber(mutation.value.new, mutation.value.size),
+                            size: formatSize(mutation.value.size, language)
                         }
                     case 'WriteMemory':
                         return {
                             type: mutation.type,
                             address: formatNumber(mutation.value.address),
-                            old: formatNumber(mutation.value.old, mutation.value.size),
-                            size: formatSize(mutation.value.size)
+                            old: formatOptionalNumber(mutation.value.old, mutation.value.size),
+                            new: formatOptionalNumber(mutation.value.new, mutation.value.size),
+                            size: formatSize(mutation.value.size, language)
                         }
                     case 'WriteMemoryBytes':
                         return {
                             type: mutation.type,
                             address: formatNumber(mutation.value.address),
-                            old: mutation.value.old
+                            old: mutation.value.old,
+                            new: mutation.value.new ?? null
                         }
                     case 'PushCallStack':
                     case 'PopCallStack':
@@ -183,6 +227,10 @@ export function formatLatestSteps(
             })
         }
     })
+}
+
+function formatOptionalNumber(value: bigint | undefined, size: RegisterSize) {
+    return value === undefined ? null : formatNumber(value, size)
 }
 
 export function formatRegisters(emulator: Emulator) {
@@ -325,6 +373,8 @@ export function formatRegisterFiles(
 export type FormatEmulatorStateOptions = {
     /** How much of every Register file beyond the CPU one to report. Defaults to `non-zero`. */
     registerFiles?: RegisterFileDetail
+    /** The Target, which names the widths a reported mutation was written at. */
+    language?: AvailableLanguages | null
 }
 
 export function formatEmulatorState(
@@ -370,6 +420,6 @@ export function formatEmulatorState(
         statusRegisters: emulator.statusRegisters,
         registers: formatRegisters(emulator),
         registerFiles: formatRegisterFiles(emulator, options.registerFiles ?? 'non-zero'),
-        latestSteps: formatLatestSteps(codeOrResolver, emulator.latestSteps)
+        latestSteps: formatLatestSteps(codeOrResolver, emulator.latestSteps, options.language)
     }
 }

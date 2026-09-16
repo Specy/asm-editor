@@ -9,6 +9,7 @@
     import MemoryTestcaseEditor from '$cmp/specific/project/testcases/MemoryTestcaseEditor.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
     import type { RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
+    import type { AvailableLanguages } from '$lib/Project.svelte'
 
     let newInput = $state('')
 
@@ -21,6 +22,8 @@
         startingRegisterNames?: string[]
         hiddenRegistersNames?: string[]
         systemSize: RegisterSize
+        /** The Target, which names the widths the register panels below group by. */
+        language: AvailableLanguages
     }
 
     let {
@@ -31,7 +34,8 @@
         registerNames,
         startingRegisterNames,
         hiddenRegistersNames,
-        systemSize
+        systemSize,
+        language
     }: Props = $props()
 
     let allowedStartingRegisterNames = $derived(startingRegisterNames ?? registerNames)
@@ -47,6 +51,7 @@
                 <Header type="h3">Starting registers values</Header>
                 <RegistersTestcaseEditor
                     {systemSize}
+                    {language}
                     bind:registers={testcase.startingRegisters}
                     {hiddenRegistersNames}
                     registerNames={allowedStartingRegisterNames}
@@ -57,6 +62,7 @@
                 <Header type="h3">Expected registers values</Header>
                 <RegistersTestcaseEditor
                     {systemSize}
+                    {language}
                     bind:registers={testcase.expectedRegisters}
                     {hiddenRegistersNames}
                     {registerNames}
@@ -119,6 +125,7 @@
                         <Header type="h3">Starting registers</Header>
                         <RegistersTestcaseEditor
                             {systemSize}
+                            {language}
                             {registerNames}
                             bind:registers={testcase.startingRegisters}
                             {hiddenRegistersNames}
@@ -132,6 +139,7 @@
                         <Header type="h3">Expected registers</Header>
                         <RegistersTestcaseEditor
                             {systemSize}
+                            {language}
                             {registerNames}
                             bind:registers={testcase.expectedRegisters}
                             {hiddenRegistersNames}

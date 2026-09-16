@@ -5,6 +5,7 @@
     import RegistersRenderer from '$cmp/specific/project/cpu/RegistersRenderer.svelte'
     import { makeRegister, RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
+    import type { AvailableLanguages } from '$lib/Project.svelte'
 
     interface Props {
         registers: Record<string, bigint>
@@ -12,6 +13,8 @@
         registerNames: string[]
         hiddenRegistersNames?: string[]
         systemSize: RegisterSize
+        /** The Target, which names the widths the register panel groups by. */
+        language: AvailableLanguages
     }
 
     let {
@@ -19,7 +22,8 @@
         registers = $bindable(),
         editable,
         registerNames,
-        hiddenRegistersNames = []
+        hiddenRegistersNames = [],
+        language
     }: Props = $props()
 
     function makeNewRegister(defaultName?: string) {
@@ -89,6 +93,7 @@
     {:else}
         <RegistersRenderer
             {systemSize}
+            {language}
             {hiddenRegistersNames}
             registers={Object.entries(registers).map(([name, value]) =>
                 makeRegister(name, value, systemSize)

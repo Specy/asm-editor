@@ -10,6 +10,7 @@ import {
     type EmulatorSettings,
     type ExecutionStep,
     type MutationOperation,
+    type PokeWrite,
     type RegisterFileDescriptor,
     RegisterSize,
     type StackFrame
@@ -36,6 +37,7 @@ import {
     type ExecutionStep as CoreExecutionStep,
     type MonacoError as CoreMonacoError,
     type MutationOperation as CoreMutationOperation,
+    type PokeWrite as CorePokeWrite,
     type X86CompileResult,
     type X86CompilationDiagnostic,
     type X86Emulator as CoreX86Emulator,
@@ -182,6 +184,25 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return this.core?.canUndo() ?? false
     }
 
+    /**
+     * The Core's own Poke transaction
+     * ([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md)): every register, register
+     * file and memory value written between the two calls becomes one entry of the same history the
+     * instructions live in, and `endPoke` answers whether there was a change worth recording.
+     */
+    _beginPoke(): void {
+        this.requireCore().beginPoke()
+    }
+
+    _endPoke(): boolean {
+        const core = this.requireCore()
+        //blink answers whether the Poke changed anything, and answers it with a history of zero
+        //too, where the entry it pushed is dropped as an instruction's is. The editor's contract is
+        //whether an entry was kept, which is what the Undo the caller offers reverts, so the Core's
+        //own history is asked as well
+        return core.endPoke() && core.canUndo()
+    }
+
     async _checkCode(sources: BuildSources): Promise<Diagnostic[]> {
         if (!this.core && !this.diagnosticCore) return []
         const currentCheck = this.checkCodeQueue.then(async () => {
@@ -320,6 +341,21 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         }
     }
 
+    /**
+     * Which instruction the current line follows when the newest history entry is a Poke, which has
+     * no line of its own: the last executed instruction is the newest `instruction` entry, not the
+     * newest entry ([the design record](../../../../docs/design/pokes.md)). Blink reports no last
+     * instruction of its own, and with an instruction on top there is nothing to skip, so the answer
+     * is left to the caller's own fallback — the instruction about to run — as it was before Pokes.
+     */
+    _getLastInstruction(): Instruction | null {
+        const history = this.core?.getUndoHistory(LAST_INSTRUCTION_LOOKBACK) ?? []
+        if (history[0]?.kind !== 'poke') return null
+        const executed = history.find((step) => step.kind === 'instruction')
+        if (!executed) return null
+        return this._getInstructionAt(BigInt(executed.pc))
+    }
+
     _getPc(): bigint {
         return this.core?.getPc() ?? 0n
     }
@@ -388,6 +424,10 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return (
             this.core?.getUndoHistory(max).map((step) => {
                 const mapped = mapExecutionStep(step)
+                //a Poke ran no instruction, so it has no line of its own even though the Core reads
+                //one off the pc the machine is parked on, and the History row draws no PC line for
+                //it ([the design record](../../../../docs/design/pokes.md))
+                if (mapped.kind === 'poke') return { ...mapped, line: -1, file: undefined }
                 const file = coreSourceFile(step)
                 if (file) return { ...mapped, file }
                 const source = x86SourceLineAt(this.buildLineMap, mapped.line, entry)
@@ -630,6 +670,13 @@ function toLocalRegisterSize(size: CoreRegisterSize): RegisterSize {
     }
 }
 
+/**
+ * How far back `_getLastInstruction` looks for the instruction under a run of Pokes. Deep enough for
+ * any hand-made run of them, and it is read only when the program stopped with a Poke on top, which
+ * costs nothing on the stepping path.
+ */
+const LAST_INSTRUCTION_LOOKBACK = 32
+
 /** The x87 stack holds eight slots, whatever the tag word says about them. */
 const X87_STACK_DEPTH = 8
 
@@ -850,12 +897,31 @@ function projectDiagnosticToDiagnostic(
 
 function mapExecutionStep(step: CoreExecutionStep): ExecutionStep {
     return {
+        kind: step.kind,
         mutations: step.mutations.map(mapMutationOperation),
         pc: step.pc,
         old_ccr: { ...step.old_ccr },
         new_ccr: { ...step.new_ccr },
         line: step.line,
-        file: coreSourceFile(step)
+        file: coreSourceFile(step),
+        ...(step.writes ? { writes: step.writes.map(mapPokeWrite) } : {})
+    }
+}
+
+/**
+ * What a Poke changed, as the History panel reads it. The Core already spells the values the way
+ * the panels do — unsigned bit patterns and its own register names, `rax`, `xmm3`, `st0` — so the
+ * crossing only copies the byte runs out of the Core's arrays.
+ */
+function mapPokeWrite(write: CorePokeWrite): PokeWrite {
+    if (write.type === 'register') {
+        return { type: 'register', name: write.name, old: write.old, new: write.new }
+    }
+    return {
+        type: 'memory',
+        address: write.address,
+        old: [...write.old],
+        new: [...write.new]
     }
 }
 
@@ -883,7 +949,11 @@ function mapMutationOperation(operation: CoreMutationOperation): MutationOperati
             type: operation.type,
             value: {
                 address: operation.value.address,
-                old: [...operation.value.old]
+                old: [...operation.value.old],
+                //the bytes the write left, which the Core reports beside the ones it replaced; a
+                //write the machine could not account for carries none, and the row shows only the
+                //old side, as it did before the Core had a new one to give
+                ...(operation.value.new.length > 0 ? { new: [...operation.value.new] } : {})
             }
         }
     }

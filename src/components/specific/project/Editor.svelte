@@ -154,8 +154,10 @@
         overflowWidgets = document.createElement('div')
         //Keep Monaco's widget styles/theme while escaping the editor's local stacking context.
         overflowWidgets.className = 'monaco-overflow-widgets monaco-editor'
+        //the nearest theme, not the app's: an editor embedded in a lecture or a language's docs
+        //sits in a subtree with its own colours, and the widgets have to agree with it
         const overflowWidgetsHost =
-            editorElement.closest<HTMLElement>('.theme-root') ?? document.body
+            editorElement.closest<HTMLElement>('.theme-scope, .theme-root') ?? document.body
         overflowWidgetsHost.appendChild(overflowWidgets)
         const mountedEditor = loadedMonaco.editor.create(editorElement, {
             model: initialModel,

@@ -1,6 +1,6 @@
 {
     "name": "Arrays, strings and the string instructions",
-    "description": "Walking an array by index and by pointer, a string as bytes with a terminator you write yourself, and the movs, stos, lods and scas family with the rep prefixes that copy a block of memory in two bytes of code.",
+    "description": "Walk equal-size arrays by index or pointer, distinguish fixed-length data from zero-terminated strings, and use bounded movs, stos, scas and cmps operations with repeat prefixes.",
     "order": 3,
     "topic": "data-in-memory"
 }

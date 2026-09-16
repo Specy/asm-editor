@@ -1,6 +1,6 @@
 {
     "name": "Arithmetic, logic and bits",
-    "description": "The two multiplications and the division that reads rdx:rax, why the line before a div is never optional, masks with and, or and xor, and the difference between shr and sar.",
+    "description": "Fixed-width arithmetic, full and truncated products, prepared dividends, bit masks, tests, shifts and rotates in x86-64.",
     "order": 2,
     "topic": "arithmetic"
 }

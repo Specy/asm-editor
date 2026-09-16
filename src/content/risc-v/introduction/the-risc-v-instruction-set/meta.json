@@ -1,6 +1,6 @@
 {
     "name": "The RISC-V instruction set",
-    "description": "Three operands with the destination first, six encodings that are all four bytes long, and a base of about forty instructions with everything else in an optional extension. It ends on the shorthands the assembler expands for you.",
+    "description": "Read the mnemonic and operands of a simple RISC-V instruction, distinguish destinations from sources, and see how assembler pseudo-instructions fit into the base instruction set and its extensions.",
     "order": 4,
     "topic": "instruction-set"
 }

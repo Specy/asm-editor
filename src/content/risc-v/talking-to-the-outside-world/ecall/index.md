@@ -1,25 +1,33 @@
-Every program so far has left its answer in a register or in memory. To print a line, read what you
-typed or ask what the time is, a RISC-V program asks the environment, and the instruction it asks
-with is `ecall`.
+So far, a program's answer has stayed in a register or memory. To print, read input, wait, or finish
+the run, it asks the environment through `ecall`.
 
-## The three steps
+## One instruction, a Playground convention
 
-`ecall` takes no operands at all. Everything about the request is in the registers:
+The RISC-V ISA defines `ecall` as an **environment call**: it raises a trap so that the environment
+running the program can handle a request. The ISA does not define a print service, a service number,
+or which registers carry a request. This Playground defines that small conversation:
 
-1. put the **service number** in `a7`, which says what you want,
-2. put the **arguments** in `a0`, and in `a1` and `a2` for the services that take more,
+1. put the service number in `a7`,
+2. put that service's inputs in its documented registers,
 3. run `ecall`.
 
-Anything the service answers with comes back in `a0`. There is one `ecall` instruction and about
-thirty services behind it, and here is the part worth understanding: **which number means what is
-not part of RISC-V**. The processor's only job is to stop what it was doing and hand over to
-whatever is running the program. What that is, and what it makes of the number in `a7`, depends
-entirely on where your program is running. A RISC-V chip inside a router would make nothing of a 4.
-A RISC-V program under Linux asks in exactly the same way, with Linux's own numbers, and a few of
-them match the ones here: 64 writes and 93 exits in both.
+Integer results usually arrive in `a0`. Check the service's entry, though: the clock also uses `a1`
+and floating-point reading services use `f0`. A service that writes into memory, such as reading a
+line, leaves its answer in that memory instead of returning a new register value.
 
-`a7` is the eighth argument register the rest of the time, and `a0` is both the first argument and
-the first return value, which is the same double duty a subroutine call gives them.
+This is a **service ABI**, an agreement between your program and the Playground. It is separate from
+the ordinary RISC-V function-call ABI. In a function call, floating arguments and results use `fa0`
+through `fa7`, with a result in `fa0`. The Playground's floating services instead take a value to
+print in `f12` and put a value read from input in `f0`. Use the service table for `ecall`; use the
+function calling convention for `jal` and `ret`.
+
+`a7` is also an argument register in an ordinary function call, and `a0` is both the first argument
+and usual one-word result there. That familiar overlap is why a value in `a0` needs saving before a
+later request uses `a0` for something else.
+
+Linux programs also use the `ecall` instruction, with Linux's own service ABI. A number that happens
+to match, such as 93 for exit, does not make a Playground program portable to Linux. The numbers on
+this page are Playground conventions.
 
 ## Printing
 
@@ -30,7 +38,7 @@ message: .asciz "Hello, world!\n"
 .text
 .globl main
 main:
-    li a7, 4                # service 4: print a null terminated string
+    li a7, 4                # service 4: print a zero-terminated string
     la a0, message
     ecall
 
@@ -42,19 +50,44 @@ main:
     li a0, '\n'
     ecall
 
-    li a7, 10               # service 10: end the program
+    li a7, 10               # service 10: end this Playground run
     ecall
 ```
 
-The console panel below the editor shows `Hello, world!` and then `42`. Service 4 walks the string
-from `a0` until it reads a zero byte, which is why `.asciz` and not `.ascii`. Service 1 reads `a0` as
-a **signed** 32 bit number, so `li a0, -1` prints `-1`.
+The console shows `Hello, world!` and then `42`. Service 4 starts at the address in `a0` and prints
+bytes through the first zero byte, which is why the declaration uses `.asciz` rather than `.ascii`.
+Service 1 reads `a0` as a signed 32-bit number, so `li a0, -1` prints `-1`.
 
-`\n` inside a string is a newline, and `'\n'` as a character literal is the same byte, which is 10.
-Nothing prints a newline for you: service 4 prints exactly the bytes you gave it.
+`\n` in a string is a newline. `'\n'` is one character literal with the same byte value, 10. Each
+printing service writes exactly what its input describes; a newline only appears when the program
+prints one.
 
-`li a7, 10` and `ecall` is service 10, **exit**. Without it the program carries on into whatever
-follows, which is why every program on this page ends with those two lines.
+### A floating-point service
+
+The floating register names in this example are deliberate. `flw` puts the single in `f12` because
+service 2 reads `f12`; a function call would normally pass the same kind of value in `fa0`.
+
+```riscv|playground|console|fpu|no-registers
+.data
+value: .float 3.5
+
+.text
+.globl main
+main:
+    la t0, value
+    flw f12, 0(t0)
+    li a7, 2                # service 2: print the float in f12
+    ecall
+
+    li a7, 11
+    li a0, '\n'
+    ecall
+    li a7, 10
+    ecall
+```
+
+It prints `3.5`. Service 3 prints a double from `f12`; services 6 and 7 read a float or double and
+return it in `f0`.
 
 ## Printing a number in another base
 
@@ -62,7 +95,7 @@ follows, which is why every program on this page ends with those two lines.
 .text
 .globl main
 main:
-    li a7, 34               # service 34: hexadecimal, eight digits
+    li a7, 34               # hexadecimal, padded to eight digits
     li a0, 255
     ecall
 
@@ -70,7 +103,7 @@ main:
     li a0, ' '
     ecall
 
-    li a7, 35               # service 35: binary, 32 digits
+    li a7, 35               # binary, padded to 32 digits
     li a0, 5
     ecall
 
@@ -78,7 +111,7 @@ main:
     li a0, ' '
     ecall
 
-    li a7, 36               # service 36: the same bits, unsigned decimal
+    li a7, 36               # the bits interpreted as unsigned decimal
     li a0, -1
     ecall
 
@@ -86,13 +119,9 @@ main:
     ecall
 ```
 
-The console reads `0x000000ff 00000000000000000000000000000101 4294967295`. All three of those pad to
-the full width of a word, so 255 comes out as eight hex digits and 5 as thirty two binary ones, and
-service 36 prints the same bits service 1 would have printed as `-1`.
-
-Print -1 with service 34 and it comes out as `0xffffffff`, which is exactly what the registers panel
-shows for that register: these three services show you the bits, and only service 1 puts a minus
-sign on anything.
+The console reads `0x000000ff 00000000000000000000000000000101 4294967295`. Services 34 and 35 pad
+their output to a word's hexadecimal or binary width. Service 36 prints ordinary unsigned decimal,
+so it has no fixed width. It interprets the bits of `-1` as the unsigned value 4294967295.
 
 ## Reading
 
@@ -110,7 +139,7 @@ main:
 
     li a7, 5                # service 5: read an integer into a0
     ecall
-    add t0, a0, a0          # double what was typed
+    add t0, a0, a0          # save the calculation before reusing a0
 
     li a7, 4
     la a0, answer
@@ -127,41 +156,50 @@ main:
 { "input": ["21"] }
 ```
 
-Press Run and the program stops at the `ecall` with the prompt in the console and waits: type a
-number in the box under it and press Enter, and the run carries on inside that one instruction.
+When the run reaches service 5, type a decimal number in the console input box and press Enter. The
+service parses that line and places the integer in `a0`. The `add` doubles it into `t0`, keeping the
+calculated value there before the following print request replaces `a0` with an address.
 
-The reading services are:
+Service 12 reads one character into `a0`. Service 8 reads a line into a buffer in memory:
 
-- **5** reads a line and parses it as a decimal number into `a0`. A line that is not a number ends
-  the run.
-- **12** reads one character into `a0`.
-- **8** reads a whole line into the buffer at `a0`, up to `a1` characters, and keeps the newline. The
-  buffer is yours, and `.space` is how you reserve it.
+```riscv
+.data
+line: .space 16
 
-The answer lands in `a0`, and the `add t0, a0, a0` takes it out of there before the next `li a0` of
-a printing service lands on top of it. Getting the answer out of `a0` before doing anything else is
-the habit to form.
+.text
+main:
+    la a0, line            # destination buffer
+    li a1, 16              # its total capacity, including the final zero
+    li a7, 8
+    ecall
+```
 
-## The clock
+For service 8, `a1` is the buffer's total capacity, including room for the zero terminator. With a
+capacity of `n`, it stores at most `n - 1` input characters, then writes a zero when `n` is 1 or
+greater. A short line includes its newline when there is room; a longer line is truncated after `n - 1`
+characters. Capacity 1 writes only the zero, and a capacity below 1 writes nothing. The completed
+string is in `line`, ready for service 4 to print.
+
+## The clock and waiting
 
 ```riscv|playground|console|no-registers
 .data
-label: .asciz " ms of program time\n"
+label: .asciz " ms elapsed\n"
 
 .text
 .globl main
 main:
-    li a7, 30               # service 30: milliseconds since the run started
+    li a7, 30               # milliseconds since this interactive run began
     ecall
-    mv s0, a0               # the low word of the answer
+    mv s0, a0               # keep the low word of the first reading
 
-    li a7, 32               # service 32: wait
+    li a7, 32               # wait for the count in a0
     li a0, 500
     ecall
 
     li a7, 30
     ecall
-    sub t0, a0, s0          # how much time passed
+    sub t0, a0, s0          # low-word difference; 500 cannot wrap it
 
     li a7, 1
     mv a0, t0
@@ -174,62 +212,45 @@ main:
     ecall
 ```
 
-The console shows `500 ms of program time`. Service 30 counts from the **start of the run**, and it
-answers in two registers, the low word in `a0` and the high word in `a1`. Whatever a clock counts
-from, a program that wants to know how long something took subtracts two readings of it, which is
-what the `sub` above does.
+Service 30 returns elapsed milliseconds as one 64-bit reading split across two 32-bit registers:
+the low word is `a0` and the high word is `a1`. The short wait above is safely measured by subtracting
+only the low words: 500 cannot wrap a 32-bit count. An interactive run requests a 500-millisecond
+wait, then prints 500 milliseconds or a little more as real time continues to pass.
 
-Service 32 waits for `a0` milliseconds of program time. The wait costs no instructions, so a program
-that idles on the keyboard never reaches the Playground's two million, and the editor stays
-responsive so Stop still answers. In a testcase both of them run on a virtual clock that starts at
-zero and only moves through the program's own waits, which is why the number above is exactly 500 and
-not 503.
+In an interactive run, service 30 measures time from the start of that run and service 32 waits for
+the requested duration. In a testcase, the Playground uses a virtual clock: it starts at zero and
+service 32 advances it immediately. A testcase that waits for 500 milliseconds therefore observes
+exactly 500 without depending on the speed of the computer running it.
 
-## The whole table
+## Common Playground services
 
-| service | what it does                       | reads                                     | answers            |
-| ------: | ---------------------------------- | ----------------------------------------- | ------------------ |
-|       1 | print a signed integer             | `a0`                                      |                    |
-|       2 | print a float                      | `f12`                                     |                    |
-|       3 | print a double                     | `f12`                                     |                    |
-|       4 | print a null terminated string     | `a0` = its address                        |                    |
-|       5 | read an integer                    |                                           | `a0`               |
-|       6 | read a float                       |                                           | `f0`               |
-|       7 | read a double                      |                                           | `f0`               |
-|       8 | read a line into a buffer          | `a0` = buffer, `a1` = how many characters | the string         |
-|       9 | ask for heap memory                | `a0` = how many bytes                     | `a0` = the address |
-|      10 | end the program                    |                                           |                    |
-|      11 | print one character                | `a0`                                      |                    |
-|      12 | read one character                 |                                           | `a0`               |
-|      30 | milliseconds since the run started |                                           | `a0`, `a1`         |
-|      32 | wait that many milliseconds        | `a0`                                      |                    |
-|      34 | print an integer in hexadecimal    | `a0`                                      |                    |
-|      35 | print an integer in binary         | `a0`                                      |                    |
-|      36 | print an integer as unsigned       | `a0`                                      |                    |
-|      41 | a random integer                   | `a0` = which generator                    | `a0`               |
-|      42 | a random integer under a limit     | `a0` = which generator, `a1` = the limit  | `a0`               |
-|      43 | a random float                     | `a0`                                      | `f0`               |
-|      44 | a random double                    | `a0`                                      | `f0`               |
-|      93 | end the program with a code        | `a0`                                      |                    |
-|   50-60 | pop up dialog boxes                | see the documentation page                |                    |
+This is a curated reference for the services used most often on this page. The
+[RISC-V ecall documentation page](/documentation/risc-v/syscall) has the full service reference.
 
-The same table with a paragraph on each service is on the
-[RISC-V ecall documentation page](/documentation/risc-v/syscall).
-
-Service 9 hands out memory from the heap, which starts at `0x10040000`. There is no service that
-gives it back, so a program that asks in a loop will eventually run out. Services 50 to 60 are the
-dialog box services, and here they read from and write to the console like everything else, because
-this editor has one place for input and one for output.
-
-`ecall` with a number nothing answers to ends the run with
-`invalid or unimplemented syscall service: 99`, naming the number. The four file services are the
-ones this editor does not have: it has no file system, so `open`, `read`, `write` and `close` stop
-the program with `Handler openFile is not implemented`.
+| service | what it does                   | reads                                | result or effect                          |
+| ------: | ------------------------------ | ------------------------------------ | ----------------------------------------- |
+|       1 | print a signed integer         | `a0`                                 |                                           |
+|       2 | print a float                  | `f12`                                |                                           |
+|       3 | print a double                 | `f12`                                |                                           |
+|       4 | print a zero-terminated string | `a0` = address                       |                                           |
+|       5 | read an integer                |                                      | `a0`                                      |
+|       6 | read a float                   |                                      | `f0`                                      |
+|       7 | read a double                  |                                      | `f0`                                      |
+|       8 | read a line into a buffer      | `a0` = buffer, `a1` = total capacity | writes a zero-terminated string to buffer |
+|      10 | end the run                    |                                      |                                           |
+|      11 | print one character            | `a0`                                 |                                           |
+|      12 | read one character             |                                      | `a0`                                      |
+|      30 | milliseconds since run start   |                                      | low word `a0`, high word `a1`             |
+|      32 | wait for milliseconds          | `a0`                                 |                                           |
+|      34 | print hexadecimal              | `a0`                                 | eight hexadecimal digits                  |
+|      35 | print binary                   | `a0`                                 | 32 binary digits                          |
+|      36 | print unsigned decimal         | `a0`                                 |                                           |
+|      93 | end the run with a code        | `a0`                                 |                                           |
 
 ## Ask for something yourself
 
-Print `The answer is 42` and end the program, with nothing else in the output. The string is written
-for you and the number is not part of it, so it takes two services.
+Print `The answer is 42` and end the program, with nothing else in the output. The string is
+written for you and the number is separate, so this takes two print requests.
 
 ```riscv|playground|console|exercise
 .data
@@ -257,10 +278,10 @@ message: .asciz "The answer is "
 .text
 .globl main
 main:
-    li a7, 4                # the string
+    li a7, 4
     la a0, message
     ecall
-    li a7, 1                # then the number
+    li a7, 1
     li a0, 42
     ecall
     li a7, 10
@@ -269,8 +290,8 @@ main:
 
 </details>
 
-The second one reads a number and prints its square, with nothing else in the output. The test types
-9, so the console reads `81`.
+The next program reads a number and prints its square, with nothing else in the output. Its input
+and output trace is simply `9` in, then `81` out.
 
 ```riscv|playground|console|exercise
 .text
@@ -295,15 +316,55 @@ main:
 main:
     li a7, 5                # read a number into a0
     ecall
-    mul a0, a0, a0          # the answer is already where service 1 wants it
+    mul a0, a0, a0          # its result is where service 1 reads it
     li a7, 1
     ecall
     li a7, 10
     ecall
 ```
 
+</details>
+
+Finally, read one short line into the supplied buffer and print it unchanged. With input `cat`, the
+output is `cat` followed by its newline.
+
+```riscv|playground|console|exercise
+.data
+line: .space 8
+
+.text
+.globl main
+main:
+    # your code here
+```
+
 ```testcase
-{ "input": ["9"] }
+{
+    "input": ["cat"],
+    "expectedOutput": "cat\n"
+}
+```
+
+<details>
+<summary>Show solution</summary>
+
+```riscv|playground|console|solution
+.data
+line: .space 8
+
+.text
+.globl main
+main:
+    la a0, line
+    li a1, 8
+    li a7, 8
+    ecall
+
+    la a0, line             # name the completed buffer for service 4
+    li a7, 4
+    ecall
+    li a7, 10
+    ecall
 ```
 
 </details>

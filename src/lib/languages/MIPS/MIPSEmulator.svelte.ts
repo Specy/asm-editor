@@ -4,7 +4,10 @@ import {
     ConfirmResult,
     type HandlerMapFns,
     type JsBackStep,
+    type JsInstructionUndoGroup,
     type JsMips,
+    type JsPokeUndoGroup,
+    type JsPokeWrite,
     type JsProgramStatement,
     MIPS,
     type MIPSAssembleError,
@@ -27,6 +30,7 @@ import {
     type ExecutionStep,
     makeLabelColor,
     type MutationOperation,
+    type PokeWrite,
     type RegisterFileDescriptor,
     type SourceBreakpoint,
     RegisterSize,
@@ -233,8 +237,26 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
     _canUndo(): boolean {
         const mips = this.mips
         if (!mips?.canUndo) return false
-        const step = mips.getUndoStack()[0]
-        return !step || (this.fileSystemSession?.canUndoAfter(step.pc) ?? true)
+        const group = mips.getUndoGroups()[0]
+        //a Poke belongs to no instruction, so the FileSystem session, whose frames are keyed by a
+        //syscall's address, has nothing to say about undoing one
+        //([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md))
+        if (!group || group.kind === 'poke') return true
+        return this.fileSystemSession?.canUndoAfter(group.pc) ?? true
+    }
+
+    /**
+     * Opens the Core's Poke transaction: `setRegisterValue`, `setCoprocessor1Value`,
+     * `setCoprocessor0Value` and `setMemoryBytes` journal into it instead of writing straight
+     * through, and `endPoke` records the lot as one entry of the undo history
+     * ([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md)).
+     */
+    _beginPoke(): void {
+        this.requireMips().beginPoke()
+    }
+
+    _endPoke(): boolean {
+        return this.requireMips().endPoke()
     }
 
     _checkCode(sources: BuildSources): Diagnostic[] {
@@ -553,21 +575,37 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         return this._hasTerminated() ? EmulatorStatus.Terminated : EmulatorStatus.Running
     }
 
+    /**
+     * The history as `undo()` pops it: one entry per executed instruction or Poke, rather than the
+     * one row per back step the panel used to show, where a `jal` was two rows and "Undo to here"
+     * on row N undid N instructions ([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md)).
+     */
     _getUndoHistory(max: number): ExecutionStep[] {
         const mips = this.mips
         if (!mips) return []
         return mips
-            .getUndoStack()
+            .getUndoGroups()
             .slice(0, max)
-            .map((step) => ({
-                pc: step.pc,
-                //MIPS has no condition code register, the UI reads these only for M68K
-                old_ccr: { bits: 0 },
-                new_ccr: { bits: 0 },
-                line: (this.statementAtAddress(step.pc)?.sourceLine ?? 0) - 1,
-                file: this.statementAtAddress(step.pc)?.sourcePath,
-                mutations: [backstepToMutation(step)]
-            }))
+            .map((group) =>
+                group.kind === 'poke' ? pokeGroupToStep(group) : this.instructionGroupToStep(group)
+            )
+    }
+
+    /** One executed instruction, with every value it overwrote as a mutation of the same row. */
+    private instructionGroupToStep(group: JsInstructionUndoGroup): ExecutionStep {
+        const statement = this.statementAtAddress(group.pc)
+        return {
+            kind: 'instruction',
+            pc: group.pc,
+            //MIPS has no condition code register, the UI reads these only for M68K
+            old_ccr: { bits: 0 },
+            new_ccr: { bits: 0 },
+            line: (statement?.sourceLine ?? 0) - 1,
+            file: statement?.sourcePath,
+            //the Core reports the back steps newest first, which is the order they are undone in;
+            //a row reads as what the instruction did, so it lists them in the order they happened
+            mutations: [...group.steps].reverse().map(backstepToMutation)
+        }
     }
 
     _hasTerminated(): boolean {
@@ -619,12 +657,16 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
 
     _undo(): void {
         const mips = this.requireMips()
-        const step = mips.getUndoStack()[0]
-        if (step && !(this.fileSystemSession?.canUndoAfter(step.pc) ?? true)) {
+        const group = mips.getUndoGroups()[0]
+        //the FileSystem session keys its frames by the syscall's address, and a Poke has no
+        //instruction identity to undo file operations by, so it is rolled back by the Core alone
+        //([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md))
+        const pc = group?.kind === 'instruction' ? group.pc : undefined
+        if (pc !== undefined && !(this.fileSystemSession?.canUndoAfter(pc) ?? true)) {
             throw new Error('FileSystem Undo history exhausted')
         }
         mips.undo()
-        if (step) this.fileSystemSession?.undoAfter(step.pc)
+        if (pc !== undefined) this.fileSystemSession?.undoAfter(pc)
     }
 
     /**
@@ -981,15 +1023,71 @@ function formatStatement(statement: string) {
     return statement
 }
 
+/**
+ * One Poke: everything a single `beginPoke`/`endPoke` transaction wrote, as one row of the History
+ * panel ([the design record](../../../../docs/design/pokes.md)). No instruction ran, so it carries
+ * no PC and no source line, and its mutations are the values it overwrote, which is what the panel
+ * diffs a poked cell against.
+ */
+function pokeGroupToStep(group: JsPokeUndoGroup): ExecutionStep {
+    const writes = group.writes.map(pokeWrite)
+    return {
+        kind: 'poke',
+        pc: -1,
+        old_ccr: { bits: 0 },
+        new_ccr: { bits: 0 },
+        line: -1,
+        file: undefined,
+        writes,
+        mutations: writes.map(pokeWriteToMutation)
+    }
+}
+
+/**
+ * One value a Poke wrote, in the panels' reading: unsigned bit patterns, and the Core's own
+ * register spellings, which are the ones the Register files list (`$t0`, `$f2`, `$13 (cause)`).
+ */
+function pokeWrite(write: JsPokeWrite): PokeWrite {
+    if (write.type === 'memory') {
+        return {
+            type: 'memory',
+            address: BigInt(write.address >>> 0),
+            old: [...write.old],
+            new: [...write.new]
+        }
+    }
+    //every register the Core reports is a signed 32 bit int, the FPU and CP0 ones included
+    return {
+        type: 'register',
+        name: write.name,
+        old: BigInt(write.old >>> 0),
+        new: BigInt(write.new >>> 0)
+    }
+}
+
+function pokeWriteToMutation(write: PokeWrite): MutationOperation {
+    if (write.type === 'memory') {
+        return {
+            type: 'WriteMemoryBytes',
+            value: { address: write.address, old: write.old, new: write.new }
+        }
+    }
+    return {
+        type: 'WriteRegister',
+        //every MIPS register is a word wide, in all three files
+        value: { register: write.name, old: write.old, new: write.new, size: RegisterSize.Long }
+    }
+}
+
 function backstepToMutation(step: JsBackStep): MutationOperation {
     if (step.action === BackStepAction.REGISTER_RESTORE) {
-        return makeRegisterBackstepMutation(getRegisterFileName(step.param1))
+        return makeRegisterBackstepMutation(getRegisterFileName(step.param1), step)
     }
     if (step.action === BackStepAction.COPROC0_REGISTER_RESTORE) {
-        return makeRegisterBackstepMutation(getCP0RegisterName(step.param1))
+        return makeRegisterBackstepMutation(getCP0RegisterName(step.param1), step)
     }
     if (step.action === BackStepAction.COPROC1_REGISTER_RESTORE) {
-        return makeRegisterBackstepMutation(getCP1RegisterName(step.param1))
+        return makeRegisterBackstepMutation(getCP1RegisterName(step.param1), step)
     }
     const memorySize = getMemoryBackstepSize(step.action)
     if (memorySize !== undefined) {
@@ -998,12 +1096,17 @@ function backstepToMutation(step: JsBackStep): MutationOperation {
             value: {
                 address: BigInt(step.param1),
                 size: memorySize,
-                old: 0n
+                //the word, half or byte the store replaced and the one it left, each in the low
+                //bits of the signed int the facade hands over
+                old: BigInt.asUintN(8 * memorySize, BigInt(step.param2)),
+                new: BigInt.asUintN(8 * memorySize, BigInt(step.newValue))
             }
         }
     }
     if (step.action === BackStepAction.PC_RESTORE) {
-        return makeRegisterBackstepMutation('$pc')
+        //`addPCRestore` puts the old program counter in `param1`, and the address the
+        //instruction set in `newValue`
+        return makeRegisterBackstepMutation('$pc', step, step.param1)
     }
     if (step.action === BackStepAction.COPROC1_CONDITION_CLEAR) {
         return {
@@ -1034,15 +1137,29 @@ const backStepActionMap = {
     [BackStepAction.COPROC1_CONDITION_SET]: 'Coproc1 condition set',
     [BackStepAction.DO_NOTHING]: 'Do nothing',
     [BackStepAction.REGISTER_RESTORE]: 'Register restore',
-    [BackStepAction.PC_RESTORE]: 'PC restore'
+    [BackStepAction.PC_RESTORE]: 'PC restore',
+    //a Poke is read out of its group's `writes` and never through a back step, but the map has to
+    //stay exhaustive over the Core's actions
+    [BackStepAction.POKE]: 'Poke'
 } satisfies Record<BackStepAction, string>
 
-function makeRegisterBackstepMutation(register: string): MutationOperation {
+/**
+ * A register restore as a write: `old` is the value the back step puts back and `new` the value
+ * the write left, both reported by the facade as signed 32 bit ints, the way every register
+ * getter does. The old value is `param2` unless the caller says otherwise (the PC keeps its in
+ * `param1`).
+ */
+function makeRegisterBackstepMutation(
+    register: string,
+    step: JsBackStep,
+    old: number = step.param2
+): MutationOperation {
     return {
         type: 'WriteRegister',
         value: {
             register,
-            old: 0n,
+            old: BigInt(old >>> 0),
+            new: BigInt(step.newValue >>> 0),
             size: RegisterSize.Long
         }
     }
@@ -1084,6 +1201,7 @@ function getMemoryBackstepSize(action: BackStepAction): RegisterSize | undefined
         case BackStepAction.COPROC1_CONDITION_CLEAR:
         case BackStepAction.COPROC1_CONDITION_SET:
         case BackStepAction.DO_NOTHING:
+        case BackStepAction.POKE:
             return undefined
     }
     const exhaustiveAction: never = action

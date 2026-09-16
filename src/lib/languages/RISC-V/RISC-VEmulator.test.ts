@@ -19,6 +19,7 @@ import {
     RegisterSize
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import { FileSystem } from '$lib/languages/peripherals/FileSystem'
+import { CPU_REGISTER_FILE_ID } from '$lib/languages/GenericEmulator.svelte'
 import { RISCVCsrRegisterNames } from '$lib/languages/RISC-V/RISC-V-registers'
 
 /**
@@ -1382,9 +1383,11 @@ main:
             .find(
                 (mutation) => mutation.type === 'WriteRegister' && mutation.value.register === 'ft0'
             )
+        //both sides cross whole, as signed decimal strings of the 64 bit value: the single 3.0 the
+        //program loaded is NaN-boxed into the register it left
         expect(written).toEqual({
             type: 'WriteRegister',
-            value: { register: 'ft0', old: 0n, size: RegisterSize.Double }
+            value: { register: 'ft0', old: 0n, new: 0xffffffff40400000n, size: RegisterSize.Double }
         })
         emulator.undo(1)
         expect(fileOf(emulator, 'fpu').registers[0].value).toBe(0n)
@@ -1413,13 +1416,13 @@ main:
         //indexed the file by the number would name it wrong or not at all
         expect(written).toContainEqual({
             type: 'WriteRegister',
-            value: { register: 'uscratch', old: 0n, size: RegisterSize.Long }
+            value: { register: 'uscratch', old: 0n, new: 0x55n, size: RegisterSize.Long }
         })
         //`fcsr` passes either mapping, its number 0x003 being its position as well, and is kept
         //because it is the CSR a floating point program actually writes
         expect(written).toContainEqual({
             type: 'WriteRegister',
-            value: { register: 'fcsr', old: 0n, size: RegisterSize.Long }
+            value: { register: 'fcsr', old: 0n, new: 0x18n, size: RegisterSize.Long }
         })
     })
 
@@ -1494,5 +1497,277 @@ describe('RISC-V diagnostic spans', () => {
         const operator = diagnostics.find((d) => d.message.includes('bogusinstr'))
         expect(operator?.column).toBe(9)
         expect(operator?.endColumn).toBe(19)
+    })
+})
+
+/**
+ * Pokes against the real Core ([the design record](../../../../docs/design/pokes.md)): a register or
+ * memory value changed between two instructions is one entry of RARS's own undo history, listed as
+ * a row of its own and undone like an instruction
+ * ([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md)).
+ */
+describe('RISC-V Pokes', () => {
+    const POKEABLE =
+        `        .data
+buffer: .space  2048
+        .text
+main:
+        li      t0, 5
+        li      t1, 6
+        add     t2, t0, t1
+` + EXIT
+
+    /** Past the 64 words the 64 by 64 display mirrors, so a memory Poke there draws nothing. */
+    const BUFFER = 0x10010400n
+
+    /** Opens a File, writes to it and closes it, one syscall each, without ending the program. */
+    const WRITE_FILE =
+        `        .data
+path:   .asciz "output.txt"
+payload:.asciz "hello"
+        .text
+main:
+        li      a7, 1024
+        la      a0, path
+        li      a1, 1
+        ecall
+        mv      s0, a0
+        li      a7, 64
+        mv      a0, s0
+        la      a1, payload
+        li      a2, 5
+        ecall
+        mv      a0, s0
+        li      a7, 57
+        ecall
+` + EXIT
+
+    function registerOf(emulator: Emulator, name: string) {
+        const register = emulator.registers.find((candidate) => candidate.name === name)
+        if (!register) throw new Error(`No register named ${name}`)
+        return register
+    }
+
+    function fileValue(emulator: Emulator, id: string, name: string): bigint {
+        const file = emulator.registerFiles.find((candidate) => candidate.id === id)
+        const register = file?.registers.find((candidate) => candidate.name === name)
+        if (!register) throw new Error(`No register named ${name} in ${id}`)
+        return register.value
+    }
+
+    it('records a poked CPU register as a step of its own and undoes it', async () => {
+        const emulator = await build(POKEABLE)
+        await emulator.step()
+        expect(registerOf(emulator, 't0').value).toBe(5n)
+        expect(emulator.canPoke).toBe(true)
+        expect(
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 't0', value: 0x2an }])
+        ).toBe(true)
+        expect(registerOf(emulator, 't0').value).toBe(0x2an)
+
+        const [poke] = emulator.latestSteps
+        expect(poke.kind).toBe('poke')
+        //no instruction ran, so the row has neither a PC nor a line to jump to
+        expect(poke.pc).toBe(-1)
+        expect(poke.line).toBe(-1)
+        //the Core reports a register as a signed decimal string of the whole 64 bit value, which
+        //the panels read as the target's word
+        expect(poke.writes).toEqual([{ type: 'register', name: 't0', old: 5n, new: 0x2an }])
+        expect(poke.mutations).toEqual([
+            {
+                type: 'WriteRegister',
+                value: { register: 't0', old: 5n, new: 0x2an, size: RegisterSize.Long }
+            }
+        ])
+
+        expect(emulator.canUndo).toBe(true)
+        expect(emulator.undo(1)).toBe(1)
+        expect(registerOf(emulator, 't0').value).toBe(5n)
+        expect(emulator.latestSteps[0].kind).toBe('instruction')
+    })
+
+    it('reads a poked negative value as the unsigned word the panels show', async () => {
+        const emulator = await build(POKEABLE)
+        await emulator.step()
+        expect(
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 't0', value: 0xffffffffn }])
+        ).toBe(true)
+        expect(emulator.latestSteps[0].writes).toEqual([
+            { type: 'register', name: 't0', old: 5n, new: 0xffffffffn }
+        ])
+    })
+
+    it('never offers the program counter, which RARS has no setter for', async () => {
+        const emulator = await build(POKEABLE)
+        await emulator.step()
+        expect(emulator.canPokeRegister(CPU_REGISTER_FILE_ID, 't0')).toBe(true)
+        for (const register of ['pc', 'zero']) {
+            expect(emulator.canPokeRegister(CPU_REGISTER_FILE_ID, register)).toBe(false)
+        }
+        expect(emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'pc', value: 0n }])).toBe(
+            false
+        )
+        //a value that leaves the register as it is changes nothing and records nothing
+        expect(emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 't0', value: 5n }])).toBe(
+            false
+        )
+        expect(emulator.latestSteps[0].kind).toBe('instruction')
+    })
+
+    it('pokes a register of the FPU and of the CSR file, each as one step', async () => {
+        const emulator = await build(POKEABLE)
+        await emulator.step()
+        //the FPU file is 64 bits wide on both targets, so a double goes in whole
+        expect(
+            emulator.pokeRegisters('fpu', [{ register: 'ft0', value: 0x4008000000000000n }])
+        ).toBe(true)
+        expect(fileValue(emulator, 'fpu', 'ft0')).toBe(0x4008000000000000n)
+        expect(emulator.latestSteps[0].writes).toEqual([
+            { type: 'register', name: 'ft0', old: 0n, new: 0x4008000000000000n }
+        ])
+
+        expect(emulator.pokeRegisters('csr', [{ register: 'fcsr', value: 0x1fn }])).toBe(true)
+        expect(fileValue(emulator, 'csr', 'fcsr')).toBe(0x1fn)
+        const written = emulator.latestSteps[0].writes ?? []
+        expect(written.find((write) => write.type === 'register' && write.name === 'fcsr')).toEqual(
+            {
+                type: 'register',
+                name: 'fcsr',
+                old: 0n,
+                new: 0x1fn
+            }
+        )
+
+        //two Pokes, two entries: each Undo takes one of them back
+        emulator.undo(1)
+        expect(fileValue(emulator, 'csr', 'fcsr')).toBe(0n)
+        expect(fileValue(emulator, 'fpu', 'ft0')).toBe(0x4008000000000000n)
+        emulator.undo(1)
+        expect(fileValue(emulator, 'fpu', 'ft0')).toBe(0n)
+    })
+
+    it('pokes a run of memory bytes as one step, whatever its length', async () => {
+        const emulator = await build(POKEABLE)
+        await emulator.step()
+        expect(emulator.pokeMemory(BUFFER, new Uint8Array([1, 2, 3, 4]))).toBe(true)
+        expect([...emulator.readMemoryBytes(BUFFER, 4)]).toEqual([1, 2, 3, 4])
+
+        const [poke] = emulator.latestSteps
+        expect(poke.kind).toBe('poke')
+        expect(poke.writes).toEqual([
+            { type: 'memory', address: BUFFER, old: [0, 0, 0, 0], new: [1, 2, 3, 4] }
+        ])
+        expect(poke.mutations).toEqual([
+            {
+                type: 'WriteMemoryBytes',
+                value: { address: BUFFER, old: [0, 0, 0, 0], new: [1, 2, 3, 4] }
+            }
+        ])
+
+        //four bytes are one entry, so one Undo takes all four back
+        expect(emulator.undo(1)).toBe(1)
+        expect([...emulator.readMemoryBytes(BUFFER, 4)]).toEqual([0, 0, 0, 0])
+    })
+
+    it('restores the poked value when the step made after the Poke is undone too', async () => {
+        const emulator = await build(POKEABLE)
+        await emulator.step()
+        emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 't0', value: 0x2an }])
+        //`add t2, t0, t1` runs on the poked value, which is what a Poke is for
+        await emulator.step()
+        await emulator.step()
+        expect(registerOf(emulator, 't2').value).toBe(0x30n)
+        expect(emulator.latestSteps.map((step) => step.kind)).toEqual([
+            'instruction',
+            'instruction',
+            'poke',
+            'instruction'
+        ])
+
+        //the two instructions and then the Poke, each one step
+        expect(emulator.undo(3)).toBe(3)
+        expect(registerOf(emulator, 't0').value).toBe(5n)
+        expect(registerOf(emulator, 't2').value).toBe(0n)
+    })
+
+    it('groups one instruction into one row, counters and clock samples included', async () => {
+        const emulator = await build(
+            `        .text
+main:
+        jal     target
+target:
+` + EXIT
+        )
+        await emulator.step()
+        //an instruction pushes the values it overwrote, the cycle and instret decrement and, on a
+        //step, a clock sample; all of them are one entry of the history and so one row
+        expect(emulator.latestSteps).toHaveLength(1)
+        const [step] = emulator.latestSteps
+        expect(step.kind).toBe('instruction')
+        //`jal` writes its link register and the program counter; the counters and the clock sample
+        //are bookkeeping the program did not ask for and stay out of the row. Each write carries both
+        //sides: `ra` was clear and now holds the return address, and the PC went from the address of
+        //the `jal` itself to its target
+        expect(step.mutations).toEqual([
+            {
+                type: 'WriteRegister',
+                value: { register: 'ra', old: 0n, new: 0x400004n, size: RegisterSize.Long }
+            },
+            {
+                type: 'WriteRegister',
+                value: { register: 'pc', old: 0x400000n, new: 0x400004n, size: RegisterSize.Long }
+            }
+        ])
+    })
+
+    it('reads a poked value whole on the 64 bit target', async () => {
+        const code = `        .text\nmain:\n        li      t0, 3\n` + EXIT
+        const emulator = RISCVEmulator(code, { language: 'RISC-V-64' })
+        await emulator.check()
+        await emulator.compile(200, code)
+        await emulator.step()
+        expect(
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [
+                { register: 't0', value: 0x1122334455667788n }
+            ])
+        ).toBe(true)
+        //a register is 64 bits wide here, so the whole value is the panels' reading of it
+        expect(emulator.latestSteps[0].writes).toEqual([
+            { type: 'register', name: 't0', old: 3n, new: 0x1122334455667788n }
+        ])
+        emulator.undo(1)
+        expect(emulator.registers.find((register) => register.name === 't0')?.value).toBe(3n)
+    })
+
+    it('repaints the bitmap display on a Poke into it and on its Undo', async () => {
+        const emulator = await build(DATA + EXIT)
+        expect(pixelAt(emulator, 0, 0)).toBe(0x000000)
+        //the framebuffer is little endian, so the low byte of the word comes first
+        expect(emulator.pokeMemory(0x10010000n, new Uint8Array([0x44, 0x33, 0x22, 0x11]))).toBe(
+            true
+        )
+        expect(pixelAt(emulator, 0, 0)).toBe(0x223344)
+        emulator.undo(1)
+        expect(pixelAt(emulator, 0, 0)).toBe(0x000000)
+    })
+
+    it('leaves the FileSystem journal alone when a Poke is undone', async () => {
+        const fileSystem = new FileSystem()
+        //the File does not exist until the open syscall runs, and it is gone again once that
+        //syscall is rolled back
+        const written = () =>
+            fileSystem.files['output.txt'] ? fileSystem.readText('output.txt') : ''
+        const emulator = await build(WRITE_FILE, { fileSystem })
+        for (let step = 0; step < 16 && written() !== 'hello'; step++) await emulator.step()
+        expect(written()).toBe('hello')
+
+        emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 't0', value: 0x2an }])
+        //a Poke has no instruction identity, so undoing it rolls back nothing of the session whose
+        //frames are keyed by the syscall's address
+        expect(emulator.undo(1)).toBe(1)
+        expect(written()).toBe('hello')
+        //the write syscall is still the entry under it, and undoing far enough still takes it back
+        for (let step = 0; step < 16 && written() === 'hello'; step++) emulator.undo(1)
+        expect(written()).toBe('')
     })
 })

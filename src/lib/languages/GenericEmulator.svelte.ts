@@ -14,6 +14,8 @@ import {
     makeRegister,
     numbersOfSizeToSlice,
     type RegisterFile,
+    type RegisterPoke,
+    type RegisterSize,
     resolveRegisterFileLayout
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import { Terminal } from '$lib/languages/peripherals/Terminal.svelte'
@@ -76,6 +78,20 @@ export const RUNNING_PANEL_REFRESH_MS = 16
  */
 export const ANIMATING_PANEL_REFRESH_MS = 250
 
+/** The CPU Register file's id, which is always the first file `createRegisterFiles` builds. */
+export const CPU_REGISTER_FILE_ID = 'cpu'
+
+/**
+ * The program counter as the languages spell it. It is the one register a Poke never writes
+ * ([the design record](../../../docs/design/pokes.md)): moving it is a jump and not a value change,
+ * and it is drawn as a row of the CPU file like any other, so it has to be named to be kept out.
+ */
+const PROGRAM_COUNTER_NAMES = ['pc', 'rip']
+
+function isProgramCounterName(register: string): boolean {
+    return PROGRAM_COUNTER_NAMES.includes(register.toLowerCase())
+}
+
 function buildSourcesEqual(left: BuildSources, right: BuildSources): boolean {
     if (left.entry !== right.entry) return false
     const leftPaths = Object.keys(left.files)
@@ -134,6 +150,12 @@ export abstract class GenericEmulator<T, R extends string>
     private _buildSources: BuildSources | undefined = $state()
     /** Number of core operations currently in flight, see `duringCoreOperation`. */
     private coreOperations = 0
+    /**
+     * The reactive twin of `coreOperations`, kept in step with it: the panels bind to `canPoke`,
+     * which has to re-evaluate when a Run, Step or input handler takes the Core and again when it
+     * gives it back, and a plain field would never tell them.
+     */
+    private coreBusy = $state(false)
     private coreOperationTail: Promise<void> = Promise.resolve()
     private coreIdleWaiters: (() => void)[] = []
     protected readonly executionController = new ExecutionController(() => Prompt.cancel())
@@ -289,6 +311,7 @@ export abstract class GenericEmulator<T, R extends string>
      */
     private async duringCoreOperation<T>(operation: () => Promise<T>): Promise<T> {
         this.coreOperations += 1
+        this.coreBusy = true
         const previous = this.coreOperationTail
         let release!: () => void
         this.coreOperationTail = new Promise<void>((resolve) => {
@@ -300,6 +323,7 @@ export abstract class GenericEmulator<T, R extends string>
         } finally {
             release()
             this.coreOperations -= 1
+            this.coreBusy = this.coreOperations > 0
             if (this.coreOperations === 0) {
                 const waiters = this.coreIdleWaiters
                 this.coreIdleWaiters = []
@@ -377,7 +401,7 @@ export abstract class GenericEmulator<T, R extends string>
             )
         }
         const cpu: RegisterFile = {
-            id: 'cpu',
+            id: CPU_REGISTER_FILE_ID,
             label: 'CPU',
             size: this._systemSize,
             formats: ['hex'],
@@ -1445,6 +1469,174 @@ export abstract class GenericEmulator<T, R extends string>
             console.error(e)
             throw e
         }
+    }
+
+    /**
+     * Whether a Poke is possible right now, which is exactly when a Step is
+     * ([the design record](../../../docs/design/pokes.md)): after a Build, after a Step, at a
+     * breakpoint or after a Pause, with no Interrupt pending and the program not terminated. A Poke
+     * is a synchronous Core operation like Undo, so it is refused too while a Run, Step or input
+     * handler owns the Core. The Project's read-only flag is the caller's half of the rule; the
+     * Emulator knows nothing about Projects.
+     */
+    get canPoke(): boolean {
+        return (
+            this.state.canExecute &&
+            !this.state.terminated &&
+            this.state.interrupt === undefined &&
+            !this.coreBusy
+        )
+    }
+
+    /**
+     * Whether that register of that Register file may be poked. The CPU file offers the registers a
+     * Testcase may seed, which is the set its Core has a setter for, minus the hidden ones (MIPS's
+     * `$zero`, RISC-V's `zero`) and minus the program counter under any spelling. Another file
+     * offers the rows its layout names, except one the last refresh blanked: an empty x87 stack slot
+     * holds no value to change.
+     */
+    canPokeRegister(fileId: string, register: string): boolean {
+        if (!this.canPoke) return false
+        if (fileId === CPU_REGISTER_FILE_ID) {
+            if (isProgramCounterName(register)) return false
+            if (!this.state.startingRegisterNames.includes(register)) return false
+            return !this.state.hiddenRegisters.includes(register)
+        }
+        const file = this.state.registerFiles.find((candidate) => candidate.id === fileId)
+        if (!file) return false
+        const index = file.layout.findIndex((candidate) => candidate.name === register)
+        if (index === -1) return false
+        return file.blanks[index] !== true
+    }
+
+    /**
+     * How wide the register at that row is, in bits. The CPU file is asked for the width the
+     * register ended up with rather than the one the file declares, because an adapter may narrow a
+     * register after the file is built (the Z80's byte wide `a`); every other file has its widths in
+     * its layout.
+     */
+    private pokeRegisterBits(file: RegisterFile, index: number): bigint {
+        const narrowed = file.id === CPU_REGISTER_FILE_ID ? file.registers[index]?.size : undefined
+        return 8n * BigInt(narrowed ?? file.layout[index].size)
+    }
+
+    /**
+     * Pokes one or more registers of one Register file as a single step of the Core's Undo history
+     * ([ADR 0022](../../../docs/adr/0022-core-native-poke-records.md)), and answers whether the Core
+     * recorded one: a history of zero applies the Poke but keeps nothing to undo, as it does for an
+     * instruction. Several writes belong in one call when they are one change the user made, which
+     * is how a MIPS double reaches its even/odd register pair.
+     *
+     * Refused, with no transaction opened, when the availability rule does not hold, when there is
+     * nothing to write, or when any of the registers may not be poked. A value too wide for its
+     * register throws instead of being truncated silently, the way the panels refuse such a commit,
+     * and a write that leaves the value as it is drops out, so a Poke that changes nothing records
+     * nothing.
+     */
+    pokeRegisters(fileId: string, writes: RegisterPoke[]): boolean {
+        if (!this.canPoke || writes.length === 0 || !this.getInstance()) return false
+        const file = this.state.registerFiles.find((candidate) => candidate.id === fileId)
+        if (!file) return false
+        if (!writes.every((write) => this.canPokeRegister(fileId, write.register))) return false
+        if (fileId !== CPU_REGISTER_FILE_ID && !this._setRegisterFileValue) return false
+        const pending: { register: string; value: bigint; size: RegisterSize }[] = []
+        for (const write of writes) {
+            const index = file.layout.findIndex((candidate) => candidate.name === write.register)
+            //a register the Core offers as a starting value but the CPU file does not draw has no
+            //row to take a width from, so there is nothing to check the value against
+            if (index === -1) return false
+            const bits = this.pokeRegisterBits(file, index)
+            if (write.value < 0n || write.value >> bits !== 0n) {
+                throw new Error(
+                    `0x${write.value.toString(16)} does not fit ${write.register}, ` +
+                        `which is ${bits} bits wide`
+                )
+            }
+            //a write that changes nothing is dropped, with both sides masked to the register's
+            //width: MIPS and RISC-V hand their CPU registers back signed, so a register of all
+            //ones reads `-1n` in the panel while a poked value is unsigned by contract, and an
+            //unmasked comparison would record a `Wrote 0xFFFFFFFF to $t0 (was 0xFFFFFFFF)` step of its own
+            const stored = file.registers[index]?.value
+            const width = Number(bits)
+            if (
+                stored !== undefined &&
+                BigInt.asUintN(width, stored) === BigInt.asUintN(width, write.value)
+            ) {
+                continue
+            }
+            pending.push({
+                register: write.register,
+                value: write.value,
+                size: Number(file.registers[index]?.size ?? file.layout[index].size) as RegisterSize
+            })
+        }
+        if (pending.length === 0) return false
+        try {
+            let recorded = false
+            this._beginPoke()
+            try {
+                for (const write of pending) {
+                    if (fileId === CPU_REGISTER_FILE_ID) {
+                        this._setRegisterValue(write.register as R, write.value, write.size)
+                    } else {
+                        this._setRegisterFileValue!(fileId, write.register, write.value)
+                    }
+                }
+            } finally {
+                //the transaction is closed even when a setter threw, or the Core goes on journaling
+                //into an entry nothing will ever end, and the panels are refreshed either way: a
+                //setter that threw leaves whatever the writes before it changed, which the Core
+                //recorded and the next Undo would revert
+                recorded = this._endPoke()
+                this.refreshAfterPoke()
+            }
+            return recorded
+        } catch (e) {
+            this.addError(this._stringifyError(e))
+            console.error(e)
+            throw e
+        }
+    }
+
+    /**
+     * Pokes a run of memory bytes, which is one step of the history however many bytes it holds.
+     * Refused by the same availability rule as `pokeRegisters`, and dropped when the bytes are
+     * already what memory holds.
+     */
+    pokeMemory(address: bigint, bytes: Uint8Array): boolean {
+        if (!this.canPoke || bytes.length === 0 || !this.getInstance()) return false
+        try {
+            if (isMemoryChunkEqual(this._readMemoryBytes(address, BigInt(bytes.length)), bytes)) {
+                return false
+            }
+            let recorded = false
+            this._beginPoke()
+            try {
+                this._writeMemoryBytes(address, bytes)
+            } finally {
+                recorded = this._endPoke()
+                //an image that lives in Core memory is re-read rather than journaled, exactly as
+                //after an Undo ([ADR 0005](../../../docs/adr/0005-restore-screen-state-on-undo.md),
+                //[ADR 0020](../../../docs/adr/0020-mirror-the-trs80-display-in-guest-memory.md)),
+                //and a write that threw part way through is shown rather than left hidden
+                this._resyncScreenFromMemory?.()
+                this.refreshAfterPoke()
+            }
+            return recorded
+        } catch (e) {
+            this.addError(this._stringifyError(e))
+            console.error(e)
+            throw e
+        }
+    }
+
+    /**
+     * What a Poke leaves the panels showing: the refresh an Undo ends with, without the current
+     * line, which a Poke never moves because no instruction ran.
+     */
+    private refreshAfterPoke(): void {
+        this.state.canUndo = this.canUndoStep()
+        this.refreshCoreViews()
     }
 
     readMemoryBytes(address: bigint, length: number): Uint8Array {

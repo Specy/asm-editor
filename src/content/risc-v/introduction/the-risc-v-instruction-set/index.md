@@ -1,244 +1,138 @@
-Every program so far has been written in the same shape, and this is it: a RISC-V instruction is a
-mnemonic and up to three operands, and the first of them is the one that gets written.
+This lecture introduces RISC-V instruction notation. Its two goals are to:
 
-```
-    mnemonic destination, source, source
-```
+- understand the parts of one simple instruction; and
+- recognize that some convenient names are rewritten before the processor sees them.
 
-`add t2, t0, t1` reads `t0` and `t1`, adds them and writes `t2`, leaving both sources exactly as
-they were. Naming the destination separately is what lets you keep a value and use it at the same
-time.
+## The parts of an instruction
 
-```riscv|playground
-.text
-main:
-    li t0, 7
-    li t1, 3
-    add t2, t0, t1      # a register on the right
-    addi t3, t0, 3      # a constant on the right
-    sub t4, t0, t1      # source minus source, in that order
-    sub t5, t1, t0      # and the other way round
+An **instruction** is one basic command that a processor can carry out. In assembly language, we
+write an instruction as a name followed by the values or locations it works with:
+
+```text
+mnemonic operand, operand, operand
 ```
 
-`t5` comes out at `FFFFFFFC`, which is -4: the order of the two sources matters for everything that
-is not addition, and the first one is the one being subtracted from.
+The instruction's name is called its **mnemonic**. A mnemonic is a short, readable name that hints
+at the operation: `add` means add, and `sub` means subtract.
 
-## A base and its extensions
+Each item after the mnemonic is an **operand**. An operand tells the instruction where to get a
+value or where to put a result. Here, every operand is a register.
 
-RISC-V is not one instruction set, it is a small one with optional pieces bolted on, and each piece
-has a letter. The base is **`I`**, the integer instructions, and RV32I is the whole of it: about
-forty instructions, with no multiplication, no division and no floating point.
+Consider this instruction:
 
-| letter  | what it adds                                                            | here |
-| ------- | ----------------------------------------------------------------------- | ---- |
-| `I`     | the base: arithmetic, logic, shifts, loads, stores, branches            | yes  |
-| `M`     | `mul`, `mulh`, `div`, `rem` and their unsigned forms                    | yes  |
-| `F`     | 32 bit floating point, the `f0` to `f31` registers                      | yes  |
-| `D`     | 64 bit floating point                                                   | yes  |
-| `Zicsr` | the instructions that reach the control registers                       | yes  |
-| `A`     | read and write in one uninterruptible step, for more than one processor | no   |
-| `C`     | 16 bit compressed forms of common instructions                          | no   |
-
-So the machine this editor runs is **RV32IMFD** with the control registers, and a chip that only
-implements RV32I would refuse the `mul` in your program. That is what the letters after the name of
-a real RISC-V chip are telling you. Most of this course stays inside `I` and `M`; `F` and `D` get a lecture of their own later on.
-
-The names of the two 64 bit variants work the same way, so RV64I is the base with 64 bit registers
-and RV64IM adds multiplication to it. "Going 64-bit" is the lecture.
-
-## Six encodings, all four bytes
-
-Every RISC-V instruction is exactly **32 bits**, which is the point of the design: the CPU knows
-where the next instruction begins before it has finished decoding this one. Those 32 bits are laid
-out in one of six ways, and which one an instruction uses is decided by how many registers it names
-and how big a constant it carries.
-
-| type | what it holds                              | examples             |
-| ---- | ------------------------------------------ | -------------------- |
-| R    | three registers                            | `add`, `sll`, `mul`  |
-| I    | two registers and a 12 bit signed constant | `addi`, `lw`, `jalr` |
-| S    | two registers and a 12 bit constant        | `sw`, `sb`           |
-| B    | two registers and a 13 bit branch distance | `beq`, `blt`         |
-| U    | one register and a 20 bit constant         | `lui`, `auipc`       |
-| J    | one register and a 21 bit jump distance    | `jal`                |
-
-Five bits name a register, which is why there are exactly 32 of them and no more. Twelve bits hold
-the constant of an `addi` or the offset of a `lw`, which is why those run from -2048 to 2047.
-
-The two odd ones are S and B, which are I and R with the constant chopped up and put in different
-places. That looks arbitrary until you notice what it buys: the register fields sit at the same bit
-positions in **every** format, so the CPU can start reading the two registers before it knows what
-kind of instruction it is holding.
-
-The distances are what limit where you can jump. A branch carries 13 bits, so it reaches about 4
-kilobytes either way, and past that the build fails with
-`Branch target word address beyond 12-bit range`. A `jal` carries 21 bits and reaches about a
-megabyte, which in a program you write here is everywhere.
-
-## The families
-
-About fifty instructions in the base and the M extension, in six groups.
-
-| what it does      | the instructions                                                          |
-| ----------------- | ------------------------------------------------------------------------- |
-| arithmetic        | `add`, `addi`, `sub`, `lui`, `auipc`, `mul`, `mulh`, `div`, `divu`, `rem` |
-| logic             | `and`, `or`, `xor`, `andi`, `ori`, `xori`                                 |
-| shifts            | `sll`, `srl`, `sra`, `slli`, `srli`, `srai`                               |
-| compare           | `slt`, `sltu`, `slti`, `sltiu`                                            |
-| memory            | `lw`, `lh`, `lhu`, `lb`, `lbu`, `sw`, `sh`, `sb`                          |
-| go somewhere else | `beq`, `bne`, `blt`, `bge`, `bltu`, `bgeu`, `jal`, `jalr`                 |
-
-`ecall`, `ebreak`, `csrrw` and its family, `uret` and `fence` are the ones left over, and they all
-belong to the outside-world module. The whole list, with what each instruction reads and writes, is
-on the [RISC-V documentation pages](/documentation/risc-v).
-
-There are six branches in the hardware and the assembler makes the rest out of them, since `a > b`
-is `b < a` with the operands swapped. "Asking a question with a branch" is where they are taken
-apart.
-
-```riscv|playground
-.text
-main:
-    li t0, 1
-    li t1, 4
-    slli t2, t0, 4      # a constant shift amount
-    sll t3, t0, t1      # the same shift, from a register
-    srli t4, t2, 2
-    srl t5, t2, t1
-    and t6, t2, t0      # register and register
-    andi s0, t2, 0xFF   # register and constant
+```riscv
+add t2, t0, t1
 ```
 
-The two shifts of `t0` land on the same answer whether the amount was written into the instruction
-or read out of a register. `t6` is 0, because 16 and 1 have no bit in common for the `and` to
-keep.
+For this kind of RISC-V arithmetic instruction, the first operand is the **destination**: the place
+where the result is written. The other two operands are the **sources**: the places whose values
+are read. We can therefore read the line as:
 
-There are only two letters ever glued onto an instruction name. An `i` on the end means
-**immediate**, a constant written into the instruction where the plain form would read a second
-register. A `u` means the operands are read as unsigned numbers. That is the whole naming scheme:
-`sltiu` is "set less than, immediate, unsigned" and there is nothing else to decode.
-
-## Shorthands the assembler expands
-
-`li`, `la`, `mv`, `ret`, `call`, `j` and `bgt` are not instructions the processor has. They are
-**pseudo-instructions**: names the assembler accepts and quietly replaces with one or more real
-ones. Most of them turn out to be an ordinary instruction with `zero` in one operand.
-
-The registers lecture listed the ones built on `zero`, `mv` and `neg` and `j` and `ret` among them.
-These are the rest, the ones that either cost more than one instruction or swap their operands
-round:
-
-| you write           | what the assembler makes of it         |
-| ------------------- | -------------------------------------- |
-| `not t1, t0`        | `xori t1, t0, -1`                      |
-| `li t0, 100000`     | `lui t0, 24` and `addi t0, t0, 0x6a0`  |
-| `la t0, label`      | `auipc t0, ...` and `addi t0, t0, ...` |
-| `call label`        | `auipc t1, ...` and `jalr ra, t1, ...` |
-| `bgt t0, t1, label` | `blt t1, t0, label`                    |
-| `ble t0, t1, label` | `bge t1, t0, label`                    |
-
-The one to remember is **`ret`, which is `jalr zero, ra, 0`**: jump to the address held in `ra`, and
-write the new return address into `zero`, which is to say throw it away, because a return has
-nowhere to come back from.
-
-```riscv|playground
-.text
-.globl main
-main:
-    li t0, 5
-    li t1, 10
-    blt t0, t1, less    # one instruction, and no register borrowed
-    li s0, 99           # jumped over
-less:
-    mv s1, t0           # one instruction
-    li s2, 100000       # two, and both write s2
-    mul s3, t0, t1      # one, and this one is real
-    rem s4, t1, t0      # also real, from the M extension
-    la s5, main         # two
-    li a7, 10
-    ecall
+```text
+t2 = t0 + t1
 ```
 
-`s0` stays 0 because the branch was taken, `s1` is 5, `s2` is `000186A0`, `s3` is 50, `s4` is 0 (10
-divided by 5 leaves nothing) and `s5` is `00400000`, the address of `main`, because a label on an
-instruction is an address like any other.
+If `t0` holds 7 and `t1` holds 3, the instruction writes 10 to `t2`. It does not change `t0` or
+`t1`.
 
-Build it and click on a line: the editor prints the instructions it was assembled into underneath,
-and only lines that became more than one get a note. The reason to know which is which is that a
-pseudo-instruction can cost you two instructions where you thought you were writing one, and `call`
-can cost you `t1`.
+This destination-first pattern is common in RISC-V arithmetic instructions.
 
-## Your turn
+The order of the sources matters when the operation is not interchangeable. For subtraction,
 
-The test starts `t0` at 5. Leave `t0` times 8, plus 1, in `t1`, in two instructions and without
-`mul`. It comes out at 41.
-
-```riscv|playground|exercise
-.text
-main:
-    # your code here
+```riscv
+sub t2, t0, t1
 ```
 
-```testcase
-{
-    "startingRegisters": { "t0": 5 },
-    "expectedRegisters": { "t1": 41 }
-}
+means:
+
+```text
+t2 = t0 - t1
 ```
+
+With `t0` equal to 7 and `t1` equal to 3, the result is 4. Swapping the sources gives a different
+answer:
+
+```riscv
+sub t2, t1, t0
+```
+
+This time the result is `3 - 7`, or -4. The register holds the corresponding 32-bit pattern;
+whether we describe such a pattern as signed or unsigned depends on how we interpret it.
+
+## The assembler and pseudo-instructions
+
+The processor does not read names such as `add` directly. It reads **machine code**, where each
+real instruction is represented by bits. An **assembler** is the tool that translates assembly
+language into that machine code.
+
+The assembler also accepts some convenient names that do not represent separate processor
+instructions. These are called **pseudo-instructions**. When the assembler sees one, it rewrites
+it as one or more real instructions that have the requested effect.
+
+Here is one complete example:
+
+```riscv
+neg t1, t0
+```
+
+`neg` means “negate”: produce the number with the opposite sign. It is a pseudo-instruction. The
+assembler can rewrite it using the real `sub` instruction and the `zero` register:
+
+```riscv
+sub t1, zero, t0
+```
+
+Recall that reading `zero` always gives 0. Both lines therefore mean:
+
+```text
+t1 = 0 - t0
+```
+
+If `t0` holds 5, `t1` receives -5. The convenient spelling and the real instruction have the same
+effect here; the difference is which one the processor actually has in its machine code.
+
+A line accepted by the assembler is not always a distinct instruction implemented by the
+processor.
+
+## The base instruction set and extensions
+
+An **instruction set** is the complete agreed vocabulary of real instructions and the rules for
+using them. RISC-V organizes that vocabulary as a small base plus optional **extensions**. An
+extension is an additional group of instructions that a processor may support.
+
+You can see this organization in names such as `RV32I` and `RV32IM`:
+
+| part | meaning |
+| ---- | ------- |
+| `RV` | RISC-V |
+| `32` | the integer registers are 32 bits wide |
+| `I` | the base integer instruction set |
+| `M` | an added extension for integer multiplication and division |
+
+Thus, `RV32I` names the 32-bit base. `RV32IM` names that same base with the `M` extension added. A
+processor that implements an extension understands its real instructions; a processor that does
+not implement it cannot execute them.
+
+## Check your understanding
+
+1. In `add t4, t1, t3`, identify the mnemonic, the destination and the two sources.
+2. Suppose `t1` holds 9 and `t3` holds 2. What does `sub t4, t1, t3` write to `t4`? What does
+   `sub t4, t3, t1` write instead?
+3. Rewrite the pseudo-instruction `neg t3, t2` using `sub` and `zero`.
+4. In the name `RV32IM`, what do `32`, `I` and `M` tell you?
 
 <details>
-<summary>Show solution</summary>
+<summary>Show answers</summary>
 
-```riscv|playground|solution
-.text
-main:
-    slli t1, t0, 3      # three places left is eight times
-    addi t1, t1, 1
-```
+1. The mnemonic is `add`. The destination is `t4`, and the sources are `t1` and `t3`.
+2. The first instruction writes 7 because it calculates `9 - 2`. The second writes -7 because it
+   calculates `2 - 9`.
+3. `sub t3, zero, t2`. It subtracts the value in `t2` from zero and writes the result to `t3`.
+4. `32` says that the integer registers are 32 bits wide. `I` names the base integer instruction
+   set. `M` says that the multiplication-and-division extension is also present.
 
 </details>
 
-The second one has a subroutine that doubles `a0` and then falls off the end of the program instead
-of returning. Give it its return, written as the **real instruction** `ret` stands for, so that
-`s0` comes out at 14.
-
-```riscv|playground|exercise
-.text
-.globl main
-main:
-    li a0, 7
-    jal doubled
-    mv s0, a0
-    li a7, 10
-    ecall
-
-doubled:
-    add a0, a0, a0
-    # your code here
-```
-
-```testcase
-{
-    "expectedRegisters": { "s0": 14 }
-}
-```
-
-<details>
-<summary>Show solution</summary>
-
-```riscv|playground|solution
-.text
-.globl main
-main:
-    li a0, 7
-    jal doubled
-    mv s0, a0
-    li a7, 10
-    ecall
-
-doubled:
-    add a0, a0, a0
-    jalr zero, ra, 0    # jump to ra and keep no return address
-```
-
-</details>
+A mnemonic names an operation, operands name what it works with, and common register arithmetic
+writes its first operand from the source operands that follow. The assembler translates real
+instructions and can also expand convenient pseudo-instructions.

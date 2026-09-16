@@ -1,13 +1,18 @@
-A subroutine is a piece of code you can run from several places and come back from. The coming back
-is the hard half: the code has to end up at whichever of those places called it this time, and it
-cannot know which one that is when it is written.
+# call, ret and the System V convention
 
-## call and ret
+A **subroutine** is a piece of code that can be called from several places and then return to the
+place that called it. It is also called a function, procedure, or routine.
 
-The answer is to leave a note on the stack.
+Returning is the interesting part. The same subroutine may have many callers, so it needs the
+return address for this particular call. x86 keeps that address on the stack.
 
-- **`call label`** pushes the address of the instruction after it, then jumps to `label`.
-- **`ret`** pops an address off the stack and puts it in `rip`.
+## What `call` and `ret` do
+
+- **`call label`** pushes the address of the instruction immediately after the `call`, then puts
+  the address named by `label` in `rip`.
+- **`ret`** pops a qword into `rip`, so execution resumes at that address.
+
+This program calls `sum` and continues at `mov r12, rax` when `sum` returns:
 
 ```x86|playground|no-flags
 default rel
@@ -16,85 +21,91 @@ global _start
 section .text
 ; sum(a, b) -> a + b
 sum:
-    mov rax, rdi            ; the first argument
-    add rax, rsi            ; plus the second
-    ret                     ; back to the line after the call
+    mov rax, rdi
+    add rax, rsi
+    ret
 
 _start:
-    mov rdi, 20             ; a
-    mov rsi, 22             ; b
-    call sum                ; rax comes back as 42
-    mov r12, rax
+    mov rdi, 20
+    mov rsi, 22
+    call sum
+    mov r12, rax            ; execution resumes here; r12 = 42
 
     mov rax, 60
     xor rdi, rdi
     syscall
 ```
 
-Step through it with `rsp` and `rip` both in view. The `call` drops `rsp` by 8 and writes `0x401010`
-or thereabouts into the slot it just made; `ret` reads that address back out, puts it in `rip`, and
-`rsp` climbs back to where it was.
+Trace the stack with a symbolic starting value. Immediately before `call sum`, let `rsp = S`.
 
-Notice what is not happening. Nothing marks that slot as a return address, and `ret` does not check
-anything: it takes whatever eight bytes `rsp` points at and jumps there. A subroutine that pushes
-something and forgets to pop it will `ret` to the value it pushed, and the program will run off into
-memory that was never code. That is worth knowing early, because the symptom looks nothing like the
-cause.
+| moment | `rsp` | stack and `rip` effect |
+| ------ | ----- | ---------------------- |
+| before `call` | `S` | the next instruction is `mov r12, rax` |
+| on entry to `sum` | `S - 8` | `[S - 8]` holds the address of `mov r12, rax`; `rip` points at `sum` |
+| after `ret` | `S` | `rip` holds the address loaded from `[S - 8]` |
 
-The subroutine is written **above** `_start` here. Order in the file does not matter to the assembler,
-and it matters to the program only in that a subroutine written below `_start` would be run into by
-anything that reached the end of `_start` without exiting.
+There is no tag saying that the qword at `[S - 8]` is a return address. `ret` simply loads the
+qword at `[rsp]` into `rip` and adds 8 to `rsp`. If `sum` pushed a value and failed to pop it, its
+`ret` would read that value instead of the return address and try to execute code at the wrong
+address. A function must undo its stack allocations and pushes in the right order so that `rsp`
+points at its return address when it executes `ret`.
 
-## The System V convention
+## Integer and pointer values in System V
 
-`rdi` and `rsi` in that program are not the hardware's choice. They come from the **System V AMD64
-ABI**, an **application binary interface**: a written agreement about the things two pieces of
-machine code have to settle between them before they can call each other, such as which register
-carries the first argument and who is allowed to destroy what. Every Linux compiler, library and
-program follows the same one, which is why code from different sources fits together at all.
+The hardware defines `call` and `ret`, but it does not assign registers to parameters or return
+values. Linux x86-64 code uses the **System V AMD64 ABI**, an application binary interface that
+lets separately written functions agree on those details.
 
-| what                     | where                                  |
-| ------------------------ | -------------------------------------- |
-| integer arguments 1 to 6 | `rdi`, `rsi`, `rdx`, `rcx`, `r8`, `r9` |
-| further arguments        | on the stack, pushed in reverse order  |
-| the return value         | `rax`, or `rdx:rax` for 128 bits       |
+This table covers the integer and pointer subset used in this lesson:
 
-And the registers split in two, by who is responsible for a value surviving a call:
+| value | location |
+| ----- | -------- |
+| integer/pointer argument 1 | `rdi` |
+| integer/pointer argument 2 | `rsi` |
+| integer/pointer argument 3 | `rdx` |
+| integer/pointer argument 4 | `rcx` |
+| integer/pointer argument 5 | `r8` |
+| integer/pointer argument 6 | `r9` |
+| further integer/pointer arguments | the stack |
+| one integer/pointer return value | `rax` |
 
-| kind         | registers                                        | means                                                              |
-| ------------ | ------------------------------------------------ | ------------------------------------------------------------------ |
-| callee saved | `rbx`, `rbp`, `r12`, `r13`, `r14`, `r15`, `rsp`  | a subroutine that writes one must put it back                      |
-| caller saved | `rax`, `rcx`, `rdx`, `rsi`, `rdi`, `r8` to `r11` | a subroutine may destroy them, so save them first if you need them |
+The convention also assigns responsibility for preserving general-purpose registers:
 
-Read the second table as advice about your own code. If a value has to survive a `call`, keep it in
-`rbx` or `r12` to `r15` and let the subroutine worry about it. If it is scratch, use `rax` or `rcx`
-and expect it to be gone afterwards.
+| kind | registers | responsibility |
+| ---- | --------- | -------------- |
+| caller-saved | `rax`, `rcx`, `rdx`, `rsi`, `rdi`, `r8`–`r11` | the caller saves any value it needs after a call |
+| callee-saved | `rbx`, `rbp`, `r12`–`r15` | a function that changes one restores the value it inherited |
 
-There is nothing inevitable about any of it. Windows settled on a different set of registers for the
-same processor, which is why an object file built for one system will not link against the other even
-though the instructions inside it are identical.
+`rsp` is special stack state. At the point just before `ret`, a function must have restored `rsp`
+to its entry value, where the return address is waiting. The `ret` then removes that address and
+restores the caller's pre-call `rsp`. Do not use `rsp` as an ordinary register for a long-lived
+value.
 
-## A subroutine that saves what it uses
+The save rules apply at every call boundary. If a caller needs its current `rdi` or `rcx` after a
+call, the caller must save that value before the call and restore it afterward. If a function uses
+`rbx`, `rbp`, or `r12`–`r15`, that function must preserve the value supplied by its own caller.
+
+Here `scale` uses `rbx` as scratch storage, so it saves and restores `rbx` itself:
 
 ```x86|playground|no-flags
 default rel
 global _start
 
 section .text
-; scale(x) -> x * 3, using rbx as scratch
+; scale(x) -> x * 3
 scale:
-    push rbx                ; rbx is callee saved, so it is borrowed, not taken
+    push rbx                ; save the inherited value
     mov rbx, 3
     mov rax, rdi
     imul rax, rbx
-    pop rbx                 ; and given back
+    pop rbx                 ; restore it before ret
     ret
 
 _start:
-    mov rbx, 999            ; something the caller cares about
+    mov rbx, 999
     mov rdi, 14
-    call scale              ; rax = 42
-    mov r12, rax
+    call scale
+    mov r12, rax            ; 42
     mov r13, rbx            ; still 999
 
     mov rax, 60
@@ -102,41 +113,82 @@ _start:
     syscall
 ```
 
-Delete the `push rbx` and the `pop rbx` and `r13` comes back as 3. The subroutine still returns the
-right answer, and it has quietly destroyed something that was not its to destroy, in a way that will
-surface somewhere else entirely.
+Removing the `push rbx` and `pop rbx` would make `scale` return the right result while breaking its
+register-preservation promise: the caller would find 3 in `rbx` instead of 999.
 
-## The stack frame
+## Stack alignment at a call
 
-A subroutine with local variables has a problem: it keeps them on the stack, and the stack pointer
-moves. Every push, every call, and `[rsp + 8]` means something different from what it meant two lines
-ago.
+System V adds one more rule: **immediately before a normal `call`, `rsp` must be divisible by 16**.
+The `call` then pushes an eight-byte return address, so on function entry `rsp` is 8 modulo 16.
 
-The usual fix is to take a copy of `rsp` at the start and never move the copy. That copy is the
-**frame pointer**, and by convention it lives in `rbp`:
+For example, if the caller has aligned `rsp = S`, the boundary looks like this:
 
-```
-    push rbp                ; save the caller's frame pointer
-    mov rbp, rsp            ; this frame starts here
-    sub rsp, 32             ; room for local variables
-    ...
-    mov rsp, rbp            ; throw the locals away
-    pop rbp                 ; and give the caller's frame pointer back
+| moment | stack pointer modulo 16 |
+| ------ | ----------------------- |
+| immediately before `call` | 0 |
+| on entry to the callee | 8 |
+| after the callee's `ret` | 0 |
+
+The playground starts `_start` with a 16-byte-aligned `rsp`. A direct call from `_start` therefore
+meets the rule as long as earlier instructions have not changed `rsp`. Inside a function, pushes
+and local allocations must be counted before every nested call. Code that ignores this rule may
+seem to work until a called function uses an instruction or stack object that requires alignment.
+
+## A stack frame with a local variable
+
+When a function moves `rsp`, a fixed **frame pointer** makes its stack slots easier to name. By
+convention that pointer is `rbp`. This function keeps its argument in a local qword while it calls
+another function:
+
+```x86|playground|no-flags
+default rel
+global _start
+
+section .text
+; twice(x) -> 2 * x
+twice:
+    lea rax, [rdi + rdi]
     ret
+
+; three_times(x) -> 3 * x
+three_times:
+    push rbp                ; entry was 8 mod 16; rsp is now aligned
+    mov rbp, rsp
+    sub rsp, 16             ; one local qword plus padding; keep rsp aligned
+
+    mov [rbp - 8], rdi      ; store x in the local qword
+    call twice              ; rsp is divisible by 16 here
+    mov rdx, [rbp - 8]      ; load x from the same local qword
+    add rax, rdx
+
+    leave                   ; mov rsp, rbp; pop rbp
+    ret
+
+_start:
+    mov rdi, 14
+    call three_times
+    mov r12, rax            ; 42
+
+    mov rax, 60
+    xor rdi, rdi
+    syscall
 ```
 
-`rbp` now stays still for the whole subroutine, so everything the subroutine owns has a fixed name:
-`[rbp - 8]` is the first local variable and stays the first local variable however much `rsp` moves
-underneath it.
+On entry to `three_times`, `rsp` is 8 modulo 16. `push rbp` both preserves the caller's frame
+pointer and makes `rsp` divisible by 16. Reserving 16 more bytes keeps it divisible by 16 for the
+nested `call twice`. Only `[rbp - 8]` is used here; the other eight reserved bytes provide the
+space needed to keep the total allocation aligned.
 
-The two lines that take the frame down are so common they have an instruction of their own.
-**`leave`** is exactly `mov rsp, rbp` followed by `pop rbp`, in one byte. (`enter` exists for the two
-lines at the top, and nobody uses it, because writing them out is faster.)
+`rbp` stays fixed while `rsp` moves, so `[rbp - 8]` keeps naming the same local qword. At the end,
+`leave` is exactly `mov rsp, rbp` followed by `pop rbp`: it discards the local area, restores the
+caller's `rbp`, and leaves `rsp` pointing at the return address. Then `ret` removes that address.
 
-## Arguments that do not fit in registers
+## A seventh integer argument
 
-Six registers carry six arguments. The seventh goes on the stack, pushed by the caller before the
-`call` and taken off again by the caller afterwards.
+The first six integer or pointer arguments use registers. A seventh one is passed on the stack.
+The caller must place it there while still satisfying the alignment rule.
+
+Starting with aligned `rsp` in `_start`, padding comes before the argument:
 
 ```x86|playground|no-flags
 default rel
@@ -146,9 +198,9 @@ section .text
 ; seventh(a, b, c, d, e, f, g) -> a + g
 seventh:
     push rbp
-    mov rbp, rsp            ; rbp now points at the saved rbp
-    mov rax, [rbp + 16]     ; the seventh argument
-    add rax, rdi            ; plus the first
+    mov rbp, rsp
+    mov rax, [rbp + 16]     ; g, the seventh argument
+    add rax, rdi            ; a + g
     leave
     ret
 
@@ -159,84 +211,88 @@ _start:
     mov rcx, 4
     mov r8, 5
     mov r9, 6
-    push 7                  ; the seventh argument
+
+    sub rsp, 8              ; alignment padding
+    push 7                  ; seventh argument; rsp is aligned again
     call seventh
-    add rsp, 8              ; the caller takes it off again
-    mov r12, rax
+    add rsp, 16             ; remove the argument and padding
+    mov r12, rax            ; 8
 
     mov rax, 60
     xor rdi, rdi
     syscall
 ```
 
-Why `[rbp + 16]`? Count upwards from `rbp` and everything is where the two instructions before it put
-it.
+Why does `[rbp + 16]` hold `g`? The caller places `g` on the stack, `call` places the return
+address below it, and `push rbp` places the saved frame pointer below that. After `mov rbp, rsp`,
+the layout is:
 
-| where        | holds                                       | put there by  |
-| ------------ | ------------------------------------------- | ------------- |
-| `[rbp + 16]` | the seventh argument                        | `push 7`      |
-| `[rbp + 8]`  | the return address                          | `call`        |
-| `[rbp]`      | the caller's `rbp`                          | `push rbp`    |
-| `[rbp - 8]`  | the first local variable, if there were one | `sub rsp, 32` |
+| location | contents | placed there by |
+| -------- | -------- | --------------- |
+| `[rbp + 24]` | alignment padding | `sub rsp, 8` |
+| `[rbp + 16]` | seventh argument `g` | `push 7` |
+| `[rbp + 8]` | return address | `call seventh` |
+| `[rbp]` | caller's `rbp` | `push rbp` |
+| below `rbp` | local storage, if reserved | the callee |
 
-Arguments are above `rbp` because they were pushed before the frame existed, and locals are below it
-because they were made after. Eight bytes for the saved `rbp`, eight for the return address, and the
-argument is the next thing up.
+Arguments already on the stack have positive offsets from `rbp`; locals reserved after the frame
+is established have negative offsets. The caller removes its stack argument and padding after the
+call, restoring its original `rsp`.
 
-None of this is required by the hardware. A subroutine that never moves `rsp` after it starts can
-reach its locals from `rsp` directly and keep `rbp` as one more general register, which is what a
-compiler does with optimisation turned on. The frame pointer earns its place when something has to
-walk back through the calls: each saved `rbp` points at the one below it, so the chain of them is the
-list of who called whom, which is where a debugger's backtrace comes from.
+## Recursion and caller-saved arguments
 
-## Recursion
-
-A subroutine that calls itself needs nothing new. Every call pushes its own return address, so the
-addresses stack up naturally, and anything else a level wants to survive its own call goes on the
-stack beside them.
+A recursive function follows the same rules as any other caller and callee. Every `call` adds its
+own return address, and each active invocation has its own saved values.
 
 ```x86|playground|no-flags
 default rel
 global _start
 
 section .text
-; fact(n) -> n!
+; fact(n) -> n!, for n >= 0
 fact:
     cmp rdi, 1
-    jg .recurse
-    mov rax, 1              ; fact(1) is 1, and the recursion stops here
+    jg fact_recurse
+    mov rax, 1              ; 0! and 1! are 1
     ret
-.recurse:
-    push rdi                ; n has to survive the call, and rdi is caller saved
+
+fact_recurse:
+    push rdi                ; save n; this also aligns rsp for the call
     dec rdi
-    call fact               ; rax = fact(n - 1)
-    pop rdi                 ; n again
-    imul rax, rdi           ; n * fact(n - 1)
+    call fact
+    pop rdi                 ; restore this invocation's n
+    imul rax, rdi
     ret
 
 _start:
     mov rdi, 5
-    call fact               ; 120
-    mov r12, rax
+    call fact
+    mov r12, rax            ; 120
 
     mov rax, 60
     xor rdi, rdi
     syscall
 ```
 
-`push rdi` is there because `rdi` is caller saved, and the thing being called is `fact` itself, which
-is therefore free to destroy it. Delete the push and the pop and the answer becomes 1: `rdi` comes
-back as 0 from the bottom of the recursion, and every multiplication on the way out is by zero except
-the last.
+`rdi` is caller-saved. Each non-base invocation needs its own `n` after the recursive call, so it
+pushes `rdi`. Function entry has `rsp` at 8 modulo 16; the push makes it divisible by 16 for
+`call fact`. The matching pop restores both `n` and the entry value of `rsp` before `ret`.
 
-Each level uses 16 bytes of stack, 8 for the return address and 8 for the saved `rdi`. Call it with
-`rdi` at a million and the stack grows down into memory that has nothing mapped in it, the program
-stops on the store, and that is what a stack overflow is.
+If the push and pop were removed, `fact(5)` would return 1. The recursion reaches the base case
+with `rdi = 1`, and that invocation leaves `rdi` equal to 1. Every invocation unwinding from it
+would therefore multiply by 1 instead of by its own saved value.
+
+Each non-base recursive step adds 16 bytes while the next invocation is active: eight for the
+saved `rdi` and eight for the next return address. Enough recursive levels exhaust the available
+stack and fault.
 
 ## Your turn
 
-Write `maximum(a, b)` in the System V convention: the two arguments arrive in `rdi` and `rsi`, and
-the larger of the two, read as signed, comes back in `rax`. The test calls it with -5 and 3.
+Write `maximum(a, b)` using the System V convention. Treat both arguments as signed qwords and
+return the larger one in `rax`. The three calls cover left-less, left-greater, and equal inputs.
+The first pair, -5 and 3, also distinguishes signed comparison from unsigned comparison because
+the qword bit pattern for -5 is above 3 when read as unsigned. Keep the three results in
+`r12`–`r14`.
 
 ```x86|playground|exercise
 default rel
@@ -253,6 +309,16 @@ _start:
     call maximum
     mov r12, rax
 
+    mov rdi, 12
+    mov rsi, -4
+    call maximum
+    mov r13, rax
+
+    mov rdi, 9
+    mov rsi, 9
+    call maximum
+    mov r14, rax
+
     mov rax, 60
     xor rdi, rdi
     syscall
@@ -260,7 +326,7 @@ _start:
 
 ```testcase
 {
-    "expectedRegisters": { "r12": 3 }
+    "expectedRegisters": { "r12": 3, "r13": 12, "r14": 9 }
 }
 ```
 
@@ -273,11 +339,11 @@ global _start
 
 section .text
 maximum:
-    mov rax, rdi            ; assume the first
+    mov rax, rdi
     cmp rsi, rax
-    jle .done               ; and it is, unless the second is bigger
+    jle maximum_done        ; signed b <= a
     mov rax, rsi
-.done:
+maximum_done:
     ret
 
 _start:
@@ -286,6 +352,16 @@ _start:
     call maximum
     mov r12, rax
 
+    mov rdi, 12
+    mov rsi, -4
+    call maximum
+    mov r13, rax
+
+    mov rdi, 9
+    mov rsi, 9
+    call maximum
+    mov r14, rax
+
     mov rax, 60
     xor rdi, rdi
     syscall
@@ -293,9 +369,14 @@ _start:
 
 </details>
 
-The second one is recursive. Write `fib(n)` returning the nth Fibonacci number, with `fib(0) = 0` and
-`fib(1) = 1`. The test calls it with 10, so the answer is 55. `rbx` is callee saved, which makes it
-the right place to keep the first half of the answer across the second call.
+Now write recursive `fib(n)` for `n >= 0`, with `fib(0) = 0` and `fib(1) = 1`. Return the result in
+`rax` and use `rbx` to keep `fib(n - 1)` across the second recursive call. Because `rbx` is
+callee-saved, `fib` must restore the value it inherited before every return.
+
+The test calls the base cases and a recursive case. A **sentinel** is a recognizable check value.
+Before `fib(10)`, the test puts one in `rbx`; afterward it copies the preserved value to `r15`.
+Keep the three Fibonacci results in `r12`–`r14` and the copied sentinel in `r15`. Every `call` must
+be made with aligned `rsp`.
 
 ```x86|playground|exercise
 default rel
@@ -307,9 +388,19 @@ fib:
     ret
 
 _start:
-    mov rdi, 10
+    mov rdi, 0
     call fib
     mov r12, rax
+
+    mov rdi, 1
+    call fib
+    mov r13, rax
+
+    mov rbx, 0x123456789ABCDEF0
+    mov rdi, 10
+    call fib
+    mov r14, rax
+    mov r15, rbx
 
     mov rax, 60
     xor rdi, rdi
@@ -318,7 +409,12 @@ _start:
 
 ```testcase
 {
-    "expectedRegisters": { "r12": 55 }
+    "expectedRegisters": {
+        "r12": 0,
+        "r13": 1,
+        "r14": 55,
+        "r15": "0x123456789ABCDEF0"
+    }
 }
 ```
 
@@ -332,26 +428,42 @@ global _start
 section .text
 fib:
     cmp rdi, 2
-    jge .recurse
-    mov rax, rdi            ; fib(0) is 0 and fib(1) is 1
+    jge fib_recurse
+    mov rax, rdi            ; fib(0) = 0; fib(1) = 1
     ret
-.recurse:
-    push rbx                ; borrowed, so it is saved
-    push rdi
+
+fib_recurse:
+    push rbx                ; preserve the inherited callee-saved value
+    push rdi                ; save this invocation's n
+    sub rsp, 8              ; align rsp for the first call
+
     dec rdi
     call fib                ; fib(n - 1)
-    mov rbx, rax            ; kept across the next call
-    pop rdi
+    mov rbx, rax
+
+    add rsp, 8              ; remove alignment padding
+    pop rdi                 ; recover this invocation's n; rsp is aligned
     sub rdi, 2
     call fib                ; fib(n - 2)
+
     add rax, rbx
-    pop rbx
+    pop rbx                 ; restore the inherited rbx and entry rsp
     ret
 
 _start:
-    mov rdi, 10
+    mov rdi, 0
     call fib
     mov r12, rax
+
+    mov rdi, 1
+    call fib
+    mov r13, rax
+
+    mov rbx, 0x123456789ABCDEF0
+    mov rdi, 10
+    call fib
+    mov r14, rax
+    mov r15, rbx
 
     mov rax, 60
     xor rdi, rdi

@@ -6,6 +6,9 @@ import {
     type HandlerMapFns,
     highLowToBigint,
     type JsBackStep,
+    type JsInstructionUndoGroup,
+    type JsPokeUndoGroup,
+    type JsPokeWrite,
     type JsProgramStatement,
     type JsRiscV,
     registerHandlers,
@@ -30,6 +33,7 @@ import {
     type ExecutionStep,
     makeLabelColor,
     type MutationOperation,
+    type PokeWrite,
     type RegisterFileDescriptor,
     type SourceBreakpoint,
     RegisterSize,
@@ -225,8 +229,26 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
     _canUndo(): boolean {
         const riscv = this.riscv
         if (!riscv?.canUndo) return false
-        const step = riscv.getUndoStack()[0]
-        return !step || (this.fileSystemSession?.canUndoAfter(step.pc) ?? true)
+        const group = riscv.getUndoGroups()[0]
+        //a Poke belongs to no instruction, so the FileSystem session, whose frames are keyed by a
+        //syscall's address, has nothing to say about undoing one
+        //([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md))
+        if (!group || group.kind === 'poke') return true
+        return this.fileSystemSession?.canUndoAfter(group.pc) ?? true
+    }
+
+    /**
+     * Opens the Core's Poke transaction: `setRegisterValue`, `setFloatingPointRegisterValue`,
+     * `setControlAndStatusRegisterValue` and `setMemoryBytes` journal into it instead of writing
+     * straight through, and `endPoke` records the lot as one entry of the undo history
+     * ([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md)).
+     */
+    _beginPoke(): void {
+        this.requireRiscV().beginPoke()
+    }
+
+    _endPoke(): boolean {
+        return this.requireRiscV().endPoke()
     }
 
     _checkCode(sources: BuildSources): Diagnostic[] {
@@ -513,33 +535,119 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         return this._hasTerminated() ? EmulatorStatus.Terminated : EmulatorStatus.Running
     }
 
+    /**
+     * The history as `undo()` pops it: one entry per executed instruction or Poke, rather than the
+     * one row per back step the panel used to show, where an instruction that wrote two values was
+     * two rows and "Undo to here" on row N undid N instructions
+     * ([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md)). The Core folds the
+     * counter and clock entries every instruction pushes into the instruction's own group, so
+     * nothing has to be skipped before the `max` cut any more.
+     */
     _getUndoHistory(max: number): ExecutionStep[] {
         const riscv = this.riscv
         if (!riscv) return []
-        //the dropped entries have to be skipped *before* the `max` cut, not after: the core pushes
-        //the entry that rewinds the cycle and instret counters on top of every executed
-        //instruction, so slicing first hands back a window made almost entirely of entries that are
-        //then filtered away, and `_getUndoHistory(1)`, which `getLastExecutedLine()` uses to find
-        //the instruction that just ran, would always come back empty.
-        const steps: ExecutionStep[] = []
-        for (const step of riscv.getUndoStack()) {
-            if (steps.length >= max) break
-            const mutation = this.backstepToMutation(step)
-            //the counter entry has no meaningful representation, so it is dropped from the list
-            //instead of rendering an empty row for every instruction
-            if (!mutation) continue
-            const statement = this.statementAtAddress(step.pc)
-            steps.push({
-                pc: step.pc,
-                //RISC-V has no condition code register, the UI reads these only for M68K
-                old_ccr: { bits: 0 },
-                new_ccr: { bits: 0 },
-                line: statement ? sourceLineToIndex(statement.sourceLine) : -1,
-                file: statement?.sourcePath,
-                mutations: [mutation]
-            })
+        return riscv
+            .getUndoGroups()
+            .slice(0, max)
+            .map((group) =>
+                group.kind === 'poke'
+                    ? this.pokeGroupToStep(group)
+                    : this.instructionGroupToStep(group)
+            )
+    }
+
+    /**
+     * One executed instruction, with every value it overwrote as a mutation of the same row. The
+     * counter decrement and the clock sample are bookkeeping the program did not ask for, so they
+     * drop out here and an instruction that wrote nothing else is a row with no mutations, which is
+     * still the row "Undo to here" has to count.
+     */
+    private instructionGroupToStep(group: JsInstructionUndoGroup): ExecutionStep {
+        const statement = this.statementAtAddress(group.pc)
+        return {
+            kind: 'instruction',
+            pc: group.pc,
+            //RISC-V has no condition code register, the UI reads these only for M68K
+            old_ccr: { bits: 0 },
+            new_ccr: { bits: 0 },
+            line: statement ? sourceLineToIndex(statement.sourceLine) : -1,
+            file: statement?.sourcePath,
+            //the Core reports the back steps newest first, which is the order they are undone in;
+            //a row reads as what the instruction did, so it lists them in the order they happened
+            mutations: [...group.steps]
+                .reverse()
+                .map((step) => this.backstepToMutation(step))
+                .filter((mutation) => mutation !== null)
         }
-        return steps
+    }
+
+    /**
+     * One Poke: everything a single `beginPoke`/`endPoke` transaction wrote, as one row of the
+     * History panel ([the design record](../../../../docs/design/pokes.md)). No instruction ran, so
+     * it carries no PC and no source line, and its mutations are the values it overwrote, which is
+     * what the panel diffs a poked cell against.
+     */
+    private pokeGroupToStep(group: JsPokeUndoGroup): ExecutionStep {
+        const writes = group.writes.map((write) => this.pokeWrite(write))
+        return {
+            kind: 'poke',
+            pc: -1,
+            old_ccr: { bits: 0 },
+            new_ccr: { bits: 0 },
+            line: -1,
+            file: undefined,
+            writes,
+            mutations: writes.map((write) => this.pokeWriteToMutation(write))
+        }
+    }
+
+    /**
+     * One value a Poke wrote, in the panels' reading. A register arrives as a signed decimal string
+     * of the whole 64 bit value, whatever the target: the FPU is 64 bits wide on both, while a
+     * general register and a CSR are read as the target's word, exactly as `_getRegisterValues` and
+     * `_getRegisterFileValues` narrow them.
+     */
+    private pokeWrite(write: JsPokeWrite): PokeWrite {
+        if (write.type === 'memory') {
+            return {
+                type: 'memory',
+                address: BigInt(write.address >>> 0),
+                old: [...write.old],
+                new: [...write.new]
+            }
+        }
+        const bits = this.pokeWriteBits(write.name)
+        return {
+            type: 'register',
+            name: write.name,
+            old: BigInt.asUintN(bits, BigInt(write.old)),
+            new: BigInt.asUintN(bits, BigInt(write.new))
+        }
+    }
+
+    /** How wide that register is read, by the file its name belongs to. */
+    private pokeWriteBits(register: string): number {
+        //a single lives NaN-boxed in the high word, so the FPU file is 64 bits wide on both targets
+        const floating = (RISCVFloatingPointRegisterNames as readonly string[]).includes(register)
+        return floating ? 64 : 8 * Number(this._systemSize)
+    }
+
+    private pokeWriteToMutation(write: PokeWrite): MutationOperation {
+        if (write.type === 'memory') {
+            return {
+                type: 'WriteMemoryBytes',
+                value: { address: write.address, old: write.old, new: write.new }
+            }
+        }
+        return {
+            type: 'WriteRegister',
+            value: {
+                register: write.name,
+                old: write.old,
+                new: write.new,
+                size: (this.pokeWriteBits(write.name) / 8) as RegisterSize
+            }
+        }
     }
 
     _hasTerminated(): boolean {
@@ -639,12 +747,16 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
 
     _undo(): void {
         const riscv = this.requireRiscV()
-        const step = riscv.getUndoStack()[0]
-        if (step && !(this.fileSystemSession?.canUndoAfter(step.pc) ?? true)) {
+        const group = riscv.getUndoGroups()[0]
+        //the FileSystem session keys its frames by the syscall's address, and a Poke has no
+        //instruction identity to undo file operations by, so it is rolled back by the Core alone
+        //([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md))
+        const pc = group?.kind === 'instruction' ? group.pc : undefined
+        if (pc !== undefined && !(this.fileSystemSession?.canUndoAfter(pc) ?? true)) {
             throw new Error('FileSystem Undo history exhausted')
         }
         riscv.undo()
-        if (step) this.fileSystemSession?.undoAfter(step.pc)
+        if (pc !== undefined) this.fileSystemSession?.undoAfter(pc)
     }
 
     /**
@@ -857,7 +969,8 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
                         //`registers[i].name` is `_registerNames[i]` by construction, reading the
                         //names directly avoids depending on the register list being built already
                         register: this._registerNames[step.param1] ?? `x${step.param1}`,
-                        old: 0n,
+                        old: this.backstepValue(step.oldValue, this._systemSize),
+                        new: this.backstepValue(step.newValue, this._systemSize),
                         size: this._systemSize
                     }
                 }
@@ -867,26 +980,28 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
                     value: {
                         //`param1` is the register number, which is this file's own order
                         register: RISCVFloatingPointRegisterNames[step.param1] ?? `f${step.param1}`,
-                        old: 0n,
                         //the file is 64 bit wide on both targets, a single being NaN-boxed into it
+                        old: this.backstepValue(step.oldValue, RegisterSize.Double),
+                        new: this.backstepValue(step.newValue, RegisterSize.Double),
                         size: RegisterSize.Double
                     }
                 }
             case BackStepAction.MEMORY_RESTORE_BYTE:
-                return makeMemoryBackstepMutation(step.param1, RegisterSize.Byte)
+                return makeMemoryBackstepMutation(step, RegisterSize.Byte)
             case BackStepAction.MEMORY_RESTORE_HALF:
-                return makeMemoryBackstepMutation(step.param1, RegisterSize.Word)
+                return makeMemoryBackstepMutation(step, RegisterSize.Word)
             case BackStepAction.MEMORY_RESTORE_WORD:
             case BackStepAction.MEMORY_RESTORE_RAW_WORD:
-                return makeMemoryBackstepMutation(step.param1, RegisterSize.Long)
+                return makeMemoryBackstepMutation(step, RegisterSize.Long)
             case BackStepAction.MEMORY_RESTORE_DOUBLE_WORD:
-                return makeMemoryBackstepMutation(step.param1, RegisterSize.Double)
+                return makeMemoryBackstepMutation(step, RegisterSize.Double)
             case BackStepAction.PC_RESTORE:
                 return {
                     type: 'WriteRegister',
                     value: {
                         register: 'pc',
-                        old: 0n,
+                        old: this.backstepValue(step.oldValue, this._systemSize),
+                        new: this.backstepValue(step.newValue, this._systemSize),
                         size: this._systemSize
                     }
                 }
@@ -916,7 +1031,8 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
                     type: 'WriteRegister',
                     value: {
                         register: name,
-                        old: 0n,
+                        old: this.backstepValue(step.oldValue, this._systemSize),
+                        new: this.backstepValue(step.newValue, this._systemSize),
                         size: this._systemSize
                     }
                 }
@@ -926,6 +1042,13 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
             //mutation the diff should show
             case BackStepAction.CONTROL_AND_STATUS_COUNTERS_DECREMENT:
                 return null
+            //the two a Poke records: the whole Poke, and the restore of a CSR written through its
+            //own value. A poke group is rendered from its `writes` instead
+            //([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md)), so neither
+            //reaches this list
+            case BackStepAction.POKE:
+            case BackStepAction.CONTROL_AND_STATUS_REGISTER_POKE_RESTORE:
+                return null
             case BackStepAction.DO_NOTHING:
                 return {
                     type: 'Other',
@@ -934,6 +1057,15 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         }
         // The runtime uses -1 for a backstep without an action, although its type omits it.
         return null
+    }
+
+    /**
+     * One side of a write as a back step reports it: a signed decimal string of the whole 64 bit
+     * value, the shape the Poke writes use, read at the width of what was written so that a 32
+     * bit target's registers and CSRs show their word and not a sign-extended long.
+     */
+    private backstepValue(value: string, size: RegisterSize): bigint {
+        return BigInt.asUintN(8 * size, BigInt(value))
     }
 
     private statementAtAddress(address: number): JsProgramStatement | null {
@@ -1144,13 +1276,18 @@ function formatStatement(statement: string) {
     return statement
 }
 
-function makeMemoryBackstepMutation(address: number, size: RegisterSize): MutationOperation {
+/**
+ * A memory restore as a write: what the store replaced and what it left, each a signed decimal
+ * string of the whole value, read at the width of the store.
+ */
+function makeMemoryBackstepMutation(step: JsBackStep, size: RegisterSize): MutationOperation {
     return {
         type: 'WriteMemory',
         value: {
-            address: BigInt(address),
+            address: BigInt(step.param1),
             size,
-            old: 0n
+            old: BigInt.asUintN(8 * size, BigInt(step.oldValue)),
+            new: BigInt.asUintN(8 * size, BigInt(step.newValue))
         }
     }
 }
@@ -1167,5 +1304,10 @@ const backStepActionMap = {
     [BackStepAction.CONTROL_AND_STATUS_REGISTER_BACKDOOR]: 'Control and status register backdoor',
     [BackStepAction.FLOATING_POINT_REGISTER_RESTORE]: 'Floating point register restore',
     [BackStepAction.DO_NOTHING]: 'Do nothing',
-    [BackStepAction.CONTROL_AND_STATUS_COUNTERS_DECREMENT]: 'Cycle and instret counters decrement'
+    [BackStepAction.CONTROL_AND_STATUS_COUNTERS_DECREMENT]: 'Cycle and instret counters decrement',
+    //both belong to a Poke, which is read out of its group's `writes` and never through a back
+    //step, but the map has to stay exhaustive over the Core's actions
+    [BackStepAction.CONTROL_AND_STATUS_REGISTER_POKE_RESTORE]:
+        'Control and status register poke restore',
+    [BackStepAction.POKE]: 'Poke'
 } satisfies Record<BackStepAction, string>

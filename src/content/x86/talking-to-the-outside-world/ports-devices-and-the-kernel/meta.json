@@ -1,6 +1,6 @@
 {
-    "name": "Ports, devices and the kernel in between",
-    "description": "The two ways x86 reaches a device, in and out and memory mapped registers, why a program in ring 3 may use neither, what a file descriptor gives you instead, and mmap asking for memory that did not exist.",
+    "name": "Ports, memory-mapped devices, and kernel access",
+    "description": "How x86 port I/O and memory-mapped devices work, how Linux controls a process's access, and how to map and release anonymous pages safely with mmap.",
     "order": 1,
     "topic": "mmio"
 }

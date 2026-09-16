@@ -1,216 +1,204 @@
-A program cannot print. Printing means writing to a terminal, and a terminal belongs to the operating
-system, in memory your program is not allowed to touch. The same goes for reading a file, asking for
-more memory, and stopping. What a program can do is **ask**, and `syscall` is the instruction that
-asks.
+# `syscall` and the Linux x86-64 ABI
 
-## One instruction, one agreement
+This lesson is specifically about the **Linux x86-64 system-call ABI**, also called the Linux AMD64
+system-call ABI. Its call numbers and register assignments belong to this operating system and this
+64-bit ABI. Old 32-bit x86 examples use a different ABI; do not combine their call numbers or
+register rules with the table below.
 
-`syscall` takes no operands. Everything about the request is in the registers when it runs, and which
-register means what is settled by the **ABI**, the application binary interface: the written
-agreement between programs and the kernel about where things go.
+An **application binary interface**, or **ABI**, is the binary-level agreement about details such as
+call numbers, argument registers, and results.
 
-| register | holds                       |
-| -------- | --------------------------- |
-| `rax`    | which call, by number       |
-| `rdi`    | the first argument          |
-| `rsi`    | the second                  |
-| `rdx`    | the third                   |
-| `r10`    | the fourth                  |
-| `r8`     | the fifth                   |
-| `r9`     | the sixth                   |
-| `rax`    | the result, on the way back |
+A user program does not have permission to perform every operation that the kernel can perform. To
+send bytes to an open file, request memory, or ask the kernel for another service, the program puts a
+request in registers and executes `syscall`. The kernel validates the request, performs it when
+allowed, and returns a result.
 
-That is the System V convention from the calling lecture with one change: the fourth argument is in
-`r10` and not `rcx`. The reason is that **`syscall` destroys `rcx` and `r11`**. The processor puts the
-address to come back to in `rcx` and the flags in `r11` as part of carrying the instruction out, so
-whatever you were keeping in either is gone, and `rcx` could not have carried an argument in.
+## Registers for a system call
 
-The result comes back in `rax`. A small negative number means failure and the number says which
-failure: `-2` is "no such file", `-9` is "bad file descriptor", `-38` is "this kernel does not
-implement that call". There is no flag to check afterwards. The returned value is the whole answer.
+`syscall` has no written operands. Linux reads the system-call number and as many as six arguments
+from these registers:
 
-## Printing
+| value | register |
+| ----- | -------- |
+| system-call number | `rax` |
+| argument 1 | `rdi` |
+| argument 2 | `rsi` |
+| argument 3 | `rdx` |
+| argument 4 | `r10` |
+| argument 5 | `r8` |
+| argument 6 | `r9` |
+| result or error | `rax` |
 
-Call 1 is `write`, and it takes a file descriptor, an address and a count.
+After `syscall`, treat **`rax`, `rcx`, and `r11` as changed**. Linux places the result in `rax`.
+The processor uses `rcx` and `r11` while entering and returning from the kernel, so their previous
+values are lost. Keep every value needed after a system call in memory or in another register.
 
-```x86|playground|console|no-registers
+The register order resembles the System V function-call convention, but it is a separate
+convention. In particular, a System V function receives its fourth integer argument in `rcx`, while
+a Linux system call receives its fourth argument in `r10`. `rcx` cannot carry that argument because
+the `syscall` instruction overwrites it.
+
+## Results and errors
+
+A successful call returns a call-specific result in `rax`. Linux reports errors as negative values
+from `-1` through `-4095`. There is no separate error flag to read after `syscall`; test the value in
+`rax`.
+
+This unsigned comparison recognizes the complete reserved error range:
+
+```x86
+    syscall
+    cmp rax, -4095
+    jae syscall_error       ; syscall_error is your error-handling label
+```
+
+In two's-complement form, those negative values occupy the top 4095 unsigned 64-bit values. That is
+why the unsigned `jae` condition catches them. The useful general pattern is
+`cmp rax, -4095` followed by `jae` to the error path.
+
+Some calls, including `write`, can only have nonnegative successful results. For such a call, a
+signed-negative test is a simpler local check:
+
+```x86
+    syscall
+    test rax, rax
+    js syscall_error        ; syscall_error is your error-handling label
+```
+
+The error path handles the failure and finishes with a nonzero status in this lesson's `write`
+examples.
+
+## `write`: descriptor, address, requested count
+
+Linux system-call number 1 is `write`. Its three arguments are:
+
+| register | `write` value |
+| -------- | ------------- |
+| `rdi` | file descriptor |
+| `rsi` | address of the first byte |
+| `rdx` | number of bytes requested |
+
+`write` sends bytes to the object named by the descriptor. With descriptor 1 connected to a
+terminal, sending text bytes there makes text appear on that terminal.
+
+The call requests **up to** `rdx` bytes. A nonnegative result in `rax` is the number actually
+written, which may be smaller than the requested count. `write` does not search for a zero
+terminator and does not add a newline. The program supplies both the address and the exact byte
+count it wants to send.
+
+This program keeps writing until the complete greeting has been sent. `rsi` advances past bytes
+already written, `rdx` decreases by the same amount, and `r12` accumulates the total. These
+registers survive each system call, so they hold the loop state across every request.
+
+```x86|playground|console
 default rel
 global _start
 
 section .rodata
-greeting:   db "Hello, world!", 10      ; 10 is the newline
+greeting:   db "Hello, world!", 10
 GLEN        equ $ - greeting
 
 section .text
 _start:
-    mov rax, 1              ; call 1: write
-    mov rdi, 1              ; to descriptor 1, standard output
-    lea rsi, [greeting]     ; the bytes
-    mov rdx, GLEN           ; how many of them
+    lea rsi, [rel greeting] ; next byte to write
+    mov rdx, GLEN           ; bytes still requested
+    xor r12, r12            ; total bytes written
+
+write_more:
+    test rdx, rdx
+    jz write_done
+
+    mov eax, 1              ; Linux x86-64 write
+    mov edi, 1              ; standard output
     syscall
 
-    mov rax, 60             ; call 60: exit
-    xor rdi, rdi            ; with status 0
-    syscall
-```
+    test rax, rax
+    js write_failed         ; negative result
+    jz write_stalled        ; nonempty request made no progress
 
-`write` prints **exactly** the bytes you point it at and no more. It does not look for a terminator
-and it does not add anything, so the line break is a byte you put in the string yourself, and the
-length is counted by the assembler with `$ - greeting`. Take the `, 10` out and the console loses the
-line break. Take one off the length and the `!` disappears.
+    add rsi, rax            ; advance by the bytes actually written
+    sub rdx, rax            ; that many fewer remain
+    add r12, rax            ; preserve the running total
+    jmp write_more
 
-A **file descriptor** is a small number naming something the kernel has open on your behalf. Every
-program starts with three: **0** is standard input, **1** is standard output, **2** is standard
-error. Writing to 2 instead of 1 still reaches the console here, and it is where a program puts a
-message that is not part of its answer, so that somebody redirecting the output to a file still sees
-the complaint.
-
-## Stopping
-
-Call 60 is `exit`, and its one argument is the status the program finishes with, which is the number
-a shell reports afterwards. Zero means success by convention and anything else means something went
-wrong.
-
-Nothing else stops a program, and `exit` never returns. Code that runs off the end of `_start` carries
-on into whatever bytes happen to come next in memory and executes them as instructions. Here that ends
-the run quietly a moment later, which is not an ending to rely on.
-
-```x86|playground|console|no-registers
-default rel
-global _start
-
-section .rodata
-msg:    db "leaving with status 3", 10
-MLEN    equ $ - msg
-
-section .text
-_start:
-    mov rax, 1
-    mov rdi, 1
-    lea rsi, [msg]
-    mov rdx, MLEN
+write_done:
+    mov eax, 60             ; Linux x86-64 exit
+    xor edi, edi            ; status 0: success
     syscall
 
-    mov rax, 60
-    mov rdi, 3              ; the status this time
+write_failed:
+    mov eax, 60
+    mov edi, 1              ; nonzero status: failure
+    syscall
+
+write_stalled:
+    mov eax, 60
+    mov edi, 2              ; avoid repeating forever without progress
     syscall
 ```
 
-## Opening a file
+On the normal path, the console shows the greeting and `r12` remains `14`, the number of bytes
+written in total. The loop also handles a short successful write: it requests only the remaining
+suffix on the next pass. A zero result for a nonempty request would leave both the pointer and
+remaining count unchanged, so the separate zero branch prevents an endless retry.
 
-Three calls work together on a file: `open` takes a path and returns a descriptor, `read` fills a
-buffer through it, and `close` hands the descriptor back. The program the editor runs is itself a
-file, called `/program`, so a program here can open and read its own bytes.
+## File descriptors in this playground
 
-```x86|playground|no-flags
-default rel
-global _start
+A **file descriptor** is a small integer that names an open I/O object in one process. Linux
+programs normally inherit these three descriptors from the process that starts them:
 
-section .rodata
-path:   db "/program", 0    ; the kernel reads a path up to a zero byte
+| descriptor | conventional name | usual connection |
+| ---------: | ----------------- | ---------------- |
+| 0 | standard input | input source |
+| 1 | standard output | ordinary output destination |
+| 2 | standard error | diagnostic output destination |
 
-section .bss
-buf:    resb 16
+Each descriptor names its current connection and may be redirected. Descriptor 1 can name a file,
+and descriptor 2 reaches a console only when standard error is connected there.
 
-section .text
-_start:
-    mov rax, 2              ; call 2: open
-    lea rdi, [path]
-    xor rsi, rsi            ; flags: read only is 0
-    xor rdx, rdx            ; mode, unused when not creating
-    syscall
-    mov r12, rax            ; the descriptor
+In this playground, standard output is connected to the console panel. Interactive input is not
+connected to the x86 program's descriptor 0, so examples here should not wait for a line from it.
+The precise system calls implemented by the playground, with their numbers and arguments, are on
+the [x86 syscall reference](/documentation/x86/syscall).
 
-    mov rdi, rax            ; call 0: read
-    lea rsi, [buf]
-    mov rdx, 4              ; four bytes
-    xor rax, rax
-    syscall
-    mov r13, rax            ; how many it actually read
+## Ending the program with `exit`
 
-    mov r14d, [buf]         ; the four bytes themselves
+Linux system-call number 60 is `exit`. Put the status in `rdi`:
 
-    mov rdi, r12            ; call 3: close
-    mov rax, 3
-    syscall
-
-    mov rax, 60
-    xor rdi, rdi
-    syscall
+```x86
+    mov eax, 60
+    xor edi, edi            ; zero conventionally means success
+    syscall                 ; does not return when successful
 ```
 
-`r12` comes out at 3, the first descriptor free after the three every program starts with. `r13` is 4,
-which is the number of bytes `read` actually delivered and not the number you asked for. Those two are
-allowed to differ, and a program that assumes they do not is a program that loses data on a slow file.
-
-`r14` is `464C457F`. Read it as bytes, little endian, and it is `7F 45 4C 46`: a `7F` followed by the
-letters `ELF`, which is the mark at the start of every Linux executable. The program has just read its
-own header.
-
-## The calls this emulator has
-
-blink implements around 180 of the Linux calls, and the
-[syscall page](/documentation/x86/syscall) lists every one with its number and arguments. These are
-the ones this course uses:
-
-| number | name            | arguments                                              |
-| -----: | --------------- | ------------------------------------------------------ |
-|      0 | `read`          | descriptor, buffer, count                              |
-|      1 | `write`         | descriptor, buffer, count                              |
-|      2 | `open`          | path, flags, mode                                      |
-|      3 | `close`         | descriptor                                             |
-|      9 | `mmap`          | address, length, protection, flags, descriptor, offset |
-|     11 | `munmap`        | address, length                                        |
-|     60 | `exit`          | status                                                 |
-|    228 | `clock_gettime` | which clock, where to put the answer                   |
-
-A number nothing implements returns `-38` and does not stop the program, so a call that appears to do
-nothing at all is usually one this emulator does not have.
-
-**Reading the console does not work here yet.** `read` from descriptor 0 is how a Linux program takes
-a line you type, and the editor cannot yet hand a typed line to an x86 program: the program sits
-waiting on the `read` while the line goes to the shell that blink runs around it. So every program in
-this course prints and none of them reads.
-
-## What a request costs
-
-Despite the name, this is not a call to a subroutine. `syscall` changes the processor's **privilege
-level**, from ring 3, where your program runs and the operating system's memory is unreachable, to
-ring 0, where the kernel's code runs and everything is reachable. The kernel reads your register values, checks that you
-are allowed to ask for what you asked for, does the work, and puts you back in ring 3 with the answer
-in `rax`.
-
-All of that checking and switching is why a `write` of one byte costs hundreds of times what a `mov`
-costs. It is also why nearly every language's print function collects characters in a buffer of its
-own and calls `write` once per line, or once per screenful, rather than once per character.
-
-`int 0x80` is the older way of making the same transition, from before `syscall` existed. It still
-works for 32 bit programs and it uses a different table of numbers, so a call number you find in an
-old book may not be the one to use here.
+A nonzero status conventionally reports failure. An `_start` program should explicitly request an
+exit when its work is complete. A successful `exit` has no return value for the program to use
+because execution does not resume after its `syscall`.
 
 ## Your turn
 
-Print `assembly` followed by a newline, then exit with status 0. The string is nine bytes.
+Make one `write` request for all nine bytes of `assembly` followed by a newline. Immediately after
+the system call, preserve its result in `r12`, before using `rax` for another call. For this output
+in the playground, the successful result is 9. Check for a negative result and exit with a nonzero
+status on that path; otherwise exit with status 0.
 
 ```x86|playground|console|exercise
 default rel
 global _start
 
 section .rodata
-; your data here
+phrase: db "assembly", 10
+PLEN    equ $ - phrase
 
 section .text
 _start:
     ; your code here
-
-    mov rax, 60
-    xor rdi, rdi
-    syscall
 ```
 
 ```testcase
 {
-    "expectedOutput": "assembly\n"
+    "expectedOutput": "assembly\n",
+    "expectedRegisters": { "r12": 9 }
 }
 ```
 
@@ -227,74 +215,116 @@ PLEN    equ $ - phrase
 
 section .text
 _start:
-    mov rax, 1              ; write
-    mov rdi, 1              ; to standard output
-    lea rsi, [phrase]
-    mov rdx, PLEN           ; nine bytes, counted by the assembler
+    mov eax, 1
+    mov edi, 1
+    lea rsi, [rel phrase]
+    mov edx, PLEN
     syscall
 
-    mov rax, 60
-    xor rdi, rdi
+    mov r12, rax            ; preserve the returned byte count or error
+    test rax, rax
+    js phrase_error
+
+phrase_done:
+    mov eax, 60
+    xor edi, edi
+    syscall
+
+phrase_error:
+    mov eax, 60
+    mov edi, 1
     syscall
 ```
 
 </details>
 
-The second one prints the same string one character at a time, with a `write` of one byte per pass
-through a loop. The console should read `assembly` with no newline. Eight requests to the kernel where
-one would have done, which is exactly what a buffered print function exists to avoid.
+The next exercise receives a descriptor in `r14`. Make a one-byte `write` request to that
+descriptor and preserve its result in `r12`. Use the general `-4095` comparison and leave `r13`
+equal to 1 when the result is in Linux's error range, or 0 otherwise.
 
-```x86|playground|console|exercise
+Use the classification to select a visible one-byte report: write `E` to standard output for an
+error and `S` for a success. Preserve `r12` and `r13` while making this second system call. Finish
+with a nonzero status after reporting an error and status 0 after reporting a success. The supplied
+descriptor is `-1`, so the expected path reports `E` and preserves the bad-file-descriptor result
+`-9`.
+
+```x86|playground|exercise
 default rel
 global _start
 
 section .rodata
-phrase: db "assembly"
-PLEN    equ $ - phrase
+one_byte:       db "X"
+error_mark:     db "E"
+success_mark:   db "S"
 
 section .text
 _start:
     ; your code here
-
-    mov rax, 60
-    xor rdi, rdi
-    syscall
 ```
 
 ```testcase
 {
-    "expectedOutput": "assembly"
+    "startingRegisters": { "r14": "0xFFFFFFFFFFFFFFFF" },
+    "expectedOutput": "E",
+    "expectedRegisters": {
+        "r12": "0xFFFFFFFFFFFFFFF7",
+        "r13": 1
+    }
 }
 ```
 
 <details>
 <summary>Show solution</summary>
 
-```x86|playground|console|solution
+```x86|playground|solution
 default rel
 global _start
 
 section .rodata
-phrase: db "assembly"
-PLEN    equ $ - phrase
+one_byte:       db "X"
+error_mark:     db "E"
+success_mark:   db "S"
 
 section .text
 _start:
-    xor r12, r12            ; the index, kept in a callee saved register
-.next:
-    mov rax, 1              ; write
-    mov rdi, 1
-    lea rsi, [phrase]
-    add rsi, r12            ; the address of one character
-    mov rdx, 1              ; one byte
+    mov eax, 1
+    mov rdi, r14            ; descriptor supplied at run time
+    lea rsi, [rel one_byte]
+    mov edx, 1
     syscall
 
-    inc r12
-    cmp r12, PLEN
-    jb .next
+    mov r12, rax            ; -9: bad file descriptor
+    xor r13d, r13d
+    cmp rax, -4095
+    jae error_result
 
-    mov rax, 60
-    xor rdi, rdi
+success_result:
+    lea rsi, [rel success_mark]
+    xor r15d, r15d          ; final status 0
+    jmp report_result
+
+error_result:
+    mov r13, 1
+    lea rsi, [rel error_mark]
+    mov r15d, 1             ; final status 1
+
+report_result:
+    mov eax, 1
+    mov edi, 1
+    mov edx, 1
+    syscall
+
+    test rax, rax
+    js report_failed
+    jz report_failed
+
+    mov eax, 60
+    mov edi, r15d
+    syscall
+
+report_failed:
+    mov eax, 60
+    mov edi, 2
     syscall
 ```
 

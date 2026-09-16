@@ -23,6 +23,7 @@
     import {
         makeColorizedLabels,
         makeRegister,
+        type RegisterPoke,
         RegisterSize
     } from '$lib/languages/commonLanguageFeatures.svelte'
     import ScreenRenderer from '$cmp/specific/project/screen/ScreenRenderer.svelte'
@@ -120,6 +121,29 @@
     //unless the caller asked for it open: a lecture whose program draws wants the drawing visible
     let screenOpen = $state(openScreen)
     let groupSize = $state(RegisterSize.Word)
+
+    //the Playground's half of the Poke availability rule
+    //([the design record](../../../../docs/design/pokes.md)): a Playground has no read-only flag,
+    //so it is the Core being busy that closes the rows. The Emulator owns the other half
+    const pokeable = $derived(!running && !building && emulator.canPoke)
+
+    /** One commit of a register chunk, which is one Poke; a value too wide for it throws. */
+    function pokeRegisters(fileId: string, writes: RegisterPoke[]) {
+        try {
+            emulator.pokeRegisters(fileId, writes)
+        } catch (e) {
+            toast.error(getM68kErrorMessage(e))
+        }
+    }
+
+    /** One commit of a memory selection, which is one Poke however many bytes it covers. */
+    function pokeMemory(address: bigint, bytes: Uint8Array) {
+        try {
+            emulator.pokeMemory(address, bytes)
+        } catch (e) {
+            toast.error(getM68kErrorMessage(e))
+        }
+    }
     //the fullscreen register column is pinned to the width of the CPU file, as the project page's is:
     //it sits in the same `min-content` row as the memory panel, so a column that followed the visible
     //tab would slide that panel sideways every time a tab was picked. The inline column beside the
@@ -169,6 +193,18 @@
             showPc ? '2.25rem' : '0px',
             '1rem'
         ].join(' + ')})`
+    )
+
+    //the small layout splits the CPU file into two name/value pairs per line, which is what fits
+    //beside a 32 bit value in an 18rem column. A 64 bit language (x86, RISC-V-64) draws twice the
+    //digits, so a second pair on the line would only squeeze both until their groups wrapped: those
+    //languages get one pair per line and scroll instead
+    let smallRegistersGridStyle = $derived(
+        `grid-template-columns: ${
+            Number(emulator.systemSize) > RegisterSize.Long
+                ? 'min-content 1fr'
+                : 'min-content 1fr min-content 1fr'
+        }; gap: 0.1rem; height: 100%; justify-content: space-evenly;`
     )
 
     let showRegsColumn = $derived(
@@ -335,6 +371,7 @@
         {#if showPc}
             <RegistersVisualiser
                 systemSize={emulator.systemSize}
+                {language}
                 size={emulator.systemSize}
                 style="flex: unset; overflow: unset; padding: 0;"
                 gridStyle="padding: 0.2rem 0.7rem"
@@ -351,16 +388,15 @@
         {#if showRegisters}
             <RegisterFilesPanel
                 systemSize={emulator.systemSize}
+                {language}
                 size={groupSize}
                 initialFileId={initialRegisterFile}
-                gridStyle="
-                    grid-template-columns: min-content 1fr min-content 1fr;
-                    gap: 0.1rem;
-                    height: 100%;
-                    justify-content: space-evenly;
-                "
+                gridStyle={smallRegistersGridStyle}
                 style={`flex: unset; max-height: ${embedded ? `calc(var(--screen-height) - ${sizes})` : '15.85rem'}; min-height: 15.85rem;`}
                 files={emulator.registerFiles}
+                {pokeable}
+                canPokeRegister={(fileId, name) => emulator.canPokeRegister(fileId, name)}
+                onPoke={pokeRegisters}
                 onRegisterClick={(register) => {
                     handleRegisterClick(register.value)
                 }}
@@ -393,6 +429,8 @@
             currentAddress={emulator.memory.global.address}
             sp={emulator.sp}
             callStackAddresses={makeColorizedLabels(emulator.callStack)}
+            {pokeable}
+            onPoke={pokeMemory}
         />
     </div>
 {/snippet}
@@ -405,6 +443,7 @@
         {#if showPc}
             <RegistersVisualiser
                 systemSize={emulator.systemSize}
+                {language}
                 style="flex: unset; overflow: unset; padding: 0;"
                 gridStyle="padding: 0.2rem 0.7rem"
                 size={emulator.systemSize}
@@ -416,10 +455,14 @@
         {#if showRegisters}
             <RegisterFilesPanel
                 systemSize={emulator.systemSize}
+                {language}
                 size={groupSize}
                 initialFileId={initialRegisterFile}
                 style="flex: 1; min-height: 0;"
                 files={emulator.registerFiles}
+                {pokeable}
+                canPokeRegister={(fileId, name) => emulator.canPokeRegister(fileId, name)}
+                onPoke={pokeRegisters}
                 onRegisterClick={(register) => {
                     handleRegisterClick(register.value)
                 }}
@@ -452,6 +495,8 @@
             currentAddress={emulator.memory.global.address}
             sp={emulator.sp}
             callStackAddresses={makeColorizedLabels(emulator.callStack)}
+            {pokeable}
+            onPoke={pokeMemory}
         />
     </div>
 {/snippet}
@@ -501,6 +546,7 @@
     {#if showTestcases}
         <TestcasesEditor
             systemSize={emulator.systemSize}
+            {language}
             editable={!embedded}
             registerNames={emulator.registers.map((r) => r.name)}
             startingRegisterNames={emulator.startingRegisterNames}

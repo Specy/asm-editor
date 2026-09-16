@@ -1,6 +1,6 @@
 {
     "name": "Loops",
-    "description": "A loop as a backwards jump, why testing at the bottom costs one jump instead of two, why counting down to zero needs no cmp at all, indexing an array with a scale, and the loop instruction nobody uses any more.",
+    "description": "Build pre-tested and countdown loops, handle zero counts safely, traverse arrays, and reset state correctly in nested loops.",
     "order": 1,
     "topic": "loops"
 }

@@ -1,6 +1,6 @@
 {
     "name": "Effective addresses",
-    "description": "The one addressing mode x86 has, base plus index times scale plus displacement, lea as arithmetic that leaves the flags alone, and the two reasons 64 bit code reaches its data by an offset from rip.",
+    "description": "Calculate x86-64 addresses with a base, scaled index and displacement; index arrays; and distinguish memory access with mov from address calculation with lea.",
     "order": 5,
     "topic": "addressing-modes"
 }

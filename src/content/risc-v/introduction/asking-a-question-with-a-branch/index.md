@@ -1,210 +1,207 @@
-Every program so far has run straight through, doing the same thing every time. The moment a program
-becomes interesting is the moment it looks at a value and decides what to do next, and here that is
-one instruction:
+A program normally runs one instruction after another. A **branch** lets it ask a question and
+choose which instruction comes next.
+
+A **label** is a name for a particular place in the instructions. It is written on a line ending
+in a colon:
+
+```riscv
+same:
+    li t2, 1
+```
+
+Here, `same` names the place where `li t2, 1` begins. The label is not an instruction of its own.
+Another instruction can use the name `same` as a destination.
+
+## Taken or fall-through
+
+This branch compares two registers:
 
 ```riscv
 beq t0, t1, same
 ```
 
-Read it as: **if `t0` equals `t1`, carry on from the label `same`; otherwise carry on with the next
-line**. The comparing and the jumping are the same instruction. Nothing is set up beforehand and
-nothing is left behind afterwards.
+Read it as: **if `t0` equals `t1`, continue at `same`**.
 
-## The six branches
+There are two possible paths:
 
-There are six of them, and every one compares **two registers**.
-
-| written          | jumps when                  |
-| ---------------- | --------------------------- |
-| `beq t0, t1, l`  | the two registers are equal |
-| `bne t0, t1, l`  | they are not equal          |
-| `blt t0, t1, l`  | `t0` < `t1`, signed         |
-| `bge t0, t1, l`  | `t0` >= `t1`, signed        |
-| `bltu t0, t1, l` | `t0` < `t1`, unsigned       |
-| `bgeu t0, t1, l` | `t0` >= `t1`, unsigned      |
-
-`beq` and `bne` only ask whether the bits are the same, a question that needs no notion of positive
-or negative. The other four come as pairs, one signed and one unsigned, and choosing the wrong half
-of a pair is the most common bug on this page.
-
-```riscv|playground
-.text
-main:
-    li t0, -5
-    li t1, 0
-    beq t0, t1, e1      # not taken
-    li s0, 1
-e1:
-    bne t0, t1, e2      # taken
-    li s1, 1
-e2:
-    blt t0, t1, e3      # taken: -5 is less than 0
-    li s2, 1
-e3:
-    bge t0, t1, e4      # not taken
-    li s3, 1
-e4:
-    bltu t0, t1, e5     # not taken
-    li s4, 1
-e5:
-    li s5, 9
+```text
+compare t0 with t1
+       |
+       +-- equal --------> branch taken ------> continue at same
+       |
+       +-- not equal ----> fall through ------> execute the next instruction
 ```
 
-Step through it with the registers panel open and watch `pc` jump over the lines that a taken branch
-skipped. A register that stays at 0 is one whose `li` got skipped.
+When the condition is true, the branch is **taken**. Execution continues at the instruction named
+by the label. When the condition is false, the branch is **not taken**, and execution **falls
+through** to the next line.
 
-The `bltu` at the bottom is the one to stop at. It compares the same two registers the `blt` above
-it compared, and it answers the other way round. `t0` holds `FFFFFFFB`. Read as a signed number
-those bits are -5, which is below zero; read as an unsigned number they are 4294967291, and nothing
-is below zero. Both instructions are right about their own question.
+Here is a small example. Assume all four registers start at 0:
 
-The rule of thumb: **addresses, sizes and counts of bytes are unsigned**, so compare them with
-`bltu` and `bgeu`. Differences, coordinates and anything that can go below zero are signed. Nothing
-warns you if you pick wrong. The program simply runs and the branch goes the other way, and a loop
-that walks an array with `blt` will work perfectly until the day the array sits above `0x80000000`.
-
-## The other four, and the ones against zero
-
-`a > b` is the same question as `b < a`, so the missing comparisons are the six above with their
-operands written the other way round. The assembler will do the swapping for you if you write the
-name you meant:
-
-| you write        | what it becomes   |
-| ---------------- | ----------------- |
-| `bgt t0, t1, l`  | `blt t1, t0, l`   |
-| `ble t0, t1, l`  | `bge t1, t0, l`   |
-| `bgtu t0, t1, l` | `bltu t1, t0, l`  |
-| `bleu t0, t1, l` | `bgeu t1, t0, l`  |
-| `beqz t0, l`     | `beq t0, zero, l` |
-| `bnez t0, l`     | `bne t0, zero, l` |
-| `bltz t0, l`     | `blt t0, zero, l` |
-| `bgez t0, l`     | `bge t0, zero, l` |
-| `bgtz t0, l`     | `blt zero, t0, l` |
-| `blez t0, l`     | `bge zero, t0, l` |
-
-Every row is **one** real instruction. None of them costs an extra instruction or borrows a register
-behind your back, so there is no reason not to write the one that says what you mean.
-
-The bottom six are worth a second look, because they are what makes `zero` earn its place. A
-comparison against nothing at all is just a comparison against a register that always reads 0, so
-"is this register empty" needs no special instruction.
-
-```riscv|playground
-.text
-main:
-    li t0, 3
-    li t1, 7
-    bgt t1, t0, taken   # 7 > 3, so taken
-    li s0, 99
-taken:
-    blt t0, t1, again   # the same comparison, written the other way round
-    li s1, 99
-again:
-    li s2, 1
-```
-
-Click on the `bgt` line after building. The editor prints the instruction it actually assembled to
-underneath, and it is `blt t0, t1, taken`, character for character the line below it.
-
-## When you want the answer, not a jump
-
-Sometimes the comparison is the thing you want, not the jump. `slt t2, t0, t1` is **set less than**:
-it writes 1 into `t2` when `t0` is less than `t1`, and 0 when it is not. The answer is then an
-ordinary number in an ordinary register, which you can add up, store, or leave for later.
-
-- **`slt`** and **`sltu`**, two registers, signed and unsigned.
-- **`slti`** and **`sltiu`**, with a constant on the right instead of a second register.
-- **`seqz`**, **`snez`**, **`sltz`**, **`sgtz`**, for "is it zero", "is it not zero", "is it
-  negative" and "is it positive".
-
-```riscv|playground
-.text
-main:
-    li t0, -1           # FFFFFFFF
-    li t1, 1
-    slt t2, t0, t1      # is -1 less than 1?
-    sltu t3, t0, t1     # is 4294967295 less than 1?
-    slti t4, t0, 0      # is -1 less than 0?
-    sltiu t5, t0, 0     # is 4294967295 less than 0?
-    slt t6, t1, t0      # and the operands the other way round
-    seqz s0, t1         # is t1 zero?
-    snez s1, t1         # is it not zero?
-    sltz s2, t0         # is t0 negative?
-    sgtz s3, t0         # is it positive?
-```
-
-The same pair of registers goes into `slt` and `sltu`, and they disagree, for the same reason the
-two branches did.
-
-`slt` writes a whole word holding 0 or 1. That is worth knowing because it makes the answer usable
-as a number: an `add t4, t4, t2` after an `slt` counts the times a condition held, with no branch in
-sight.
-
-Equality as a value takes two instructions rather than one, and they are worth seeing because the
-reasoning turns up everywhere: `sub t2, t0, t1` followed by `seqz t2, t2`. Two numbers are equal
-exactly when their difference is zero.
-
-## Your turn
-
-The test starts `t0` at -5 and `t1` at 3, and wants the larger of the two, read as **signed**
-numbers, in `t2`. Use `slt` and one of the six real branches, without `blt` or `bgt`.
-
-```riscv|playground|exercise
-.text
-main:
-    # your code here
-```
-
-```testcase
-{
-    "startingRegisters": { "t0": -5, "t1": 3 },
-    "expectedRegisters": { "t2": 3 }
-}
-```
-
-<details>
-<summary>Show solution</summary>
-
-```riscv|playground|solution
-.text
-main:
-    mv t2, t0           # assume t0 is the larger
-    slt t3, t0, t1      # is it smaller than t1?
-    beq t3, zero, done  # no, so keep it
-    mv t2, t1           # yes, so take t1
+```riscv
+    li t0, 4
+    li t1, 9
+    bge t0, t1, done
+    li t2, 1
 done:
+    li t3, 1
 ```
 
-</details>
+`bge` asks whether `t0` is greater than or equal to `t1`. Here it asks whether 4 is at least 9, so
+the answer is no. The branch falls through and both `li` instructions run. At the end, `t2` and
+`t3` both hold 1.
 
-The second one starts `t0` at -1 and `t1` at 1 and asks three questions about them without a single
-branch. Leave 1 in `t2` when `t0` is the higher of the two read as **unsigned** numbers, 1 in `t3`
-when it is the greater read as **signed**, and 1 in `t4` when the two are equal. Since `t0` is
-`FFFFFFFF`, `t2` comes out at 1 and the other two at 0.
+If `t0` held 12 instead, the branch would be taken. Execution would continue at `done`, skipping
+`li t2, 1`. Then `t2` would remain 0 and `t3` would become 1.
 
-```riscv|playground|exercise
-.text
-main:
-    # your code here
+A branch does not write an answer into a destination register. Its effect is only the choice of
+which instruction comes next.
+
+## The six register comparisons
+
+RISC-V has six real branch instructions for comparing two registers.
+
+| instruction form       | branch is taken when                                       |
+| ---------------------- | ---------------------------------------------------------- |
+| `beq t0, t1, label`    | `t0` and `t1` are equal                                    |
+| `bne t0, t1, label`    | `t0` and `t1` are not equal                                |
+| `blt t0, t1, label`    | `t0` is less than `t1`, using signed values                |
+| `bge t0, t1, label`    | `t0` is greater than or equal to `t1`, using signed values |
+| `bltu t0, t1, label`   | `t0` is less than `t1`, using unsigned values              |
+| `bgeu t0, t1, label`   | `t0` is greater than or equal to `t1`, using unsigned values |
+
+The names are easier to read when split into parts:
+
+- `b` means **branch**;
+- `eq` and `ne` mean **equal** and **not equal**;
+- `lt` and `ge` mean **less than** and **greater than or equal**; and
+- a final `u` means that the ordering is **unsigned**.
+
+The first register is on the left of the comparison. For example,
+`blt t0, t1, smaller` asks whether `t0 < t1`. Operand order matters for the ordering branches.
+
+There is no separate real instruction for “greater than.” Reverse the registers instead:
+`blt t1, t0, label` asks whether `t0` is greater than `t1`.
+
+## Comparing with zero
+
+Every branch above compares registers, not a register and an immediate number. When the number you
+want is zero, use the `zero` register. Recall that reading `zero` always produces 0.
+
+```riscv
+beq t0, zero, is_zero       # taken when t0 holds 0
+bne t0, zero, not_zero      # taken when t0 does not hold 0
+blt t0, zero, negative      # taken when signed t0 is below 0
+bge t0, zero, nonnegative   # taken when signed t0 is at least 0
 ```
 
-```testcase
-{
-    "startingRegisters": { "t0": -1, "t1": 1 },
-    "expectedRegisters": { "t2": 1, "t3": 0, "t4": 0 }
-}
+These are ordinary uses of the real branch instructions.
+
+## Choosing signed or unsigned ordering
+
+`beq` and `bne` only ask whether two bit patterns match. Equality therefore needs no signed or
+unsigned choice.
+
+Ordering is different. The same 32 bits can describe different signed and unsigned numbers, so
+RISC-V provides both `blt`/`bge` and `bltu`/`bgeu`.
+
+Suppose `t0` contains the bit pattern `0xFFFFFFFB` and `t1` contains 0. Those bits in `t0` can be
+read in two ways:
+
+| interpretation | value of `t0` |
+| -------------- | ------------: |
+| signed         |            -5 |
+| unsigned       | 4,294,967,291 |
+
+The register contents have not changed. Only the meaning used by the comparison changes.
+
+```riscv
+blt  t0, t1, lower     # taken: signed -5 is less than 0
+bltu t0, t1, lower     # not taken: unsigned 4,294,967,291 is not less than 0
 ```
+
+The register panel displays the pattern as `FFFFFFFB` by default, without a prefix. In prose and code
+explanations, the `0x` in `0xFFFFFFFB` makes it explicit that the value is written in hexadecimal.
+
+Choose the interpretation that matches what the value means:
+
+- Use signed comparisons when negative values are meaningful, such as for a temperature or a
+  difference.
+- Use unsigned comparisons for quantities that cannot be negative, such as a size or a count of
+  bytes.
+
+RISC-V does not remember which interpretation you intended. Choosing the signed or unsigned branch
+is part of expressing that intent.
+
+## Check the path
+
+Assume `t0` and `t1` have the values shown. For each branch, decide whether it is taken or falls
+through.
+
+1. `t0` is 7 and `t1` is 7: `beq t0, t1, equal`
+2. `t0` is 7 and `t1` is 7: `bne t0, t1, different`
+3. `t0` is -3 and `t1` is 2: `bge t0, t1, at_least`
+4. `t0` is 0 and `t1` is 0: `bgeu t0, t1, at_least`
 
 <details>
-<summary>Show solution</summary>
+<summary>Show answers</summary>
 
-```riscv|playground|solution
-.text
-main:
-    sltu t2, t1, t0     # a > b is b < a
-    slt t3, t1, t0      # the same swap, read as signed
-    sub t4, t0, t1
-    seqz t4, t4         # equal when the difference is zero
+1. Taken. The two registers contain equal values.
+2. Falls through. The two registers are not different.
+3. Falls through. As signed values, -3 is not greater than or equal to 2.
+4. Taken. As unsigned values, 0 is greater than or equal to 0.
+
+</details>
+
+## Choose a branch
+
+Write the instruction that asks each question. Use `answer` as the label.
+
+1. Are `t0` and `t1` equal?
+2. Are `t0` and `t1` different?
+3. Is signed `t0` less than signed `t1`?
+4. Is unsigned `t0` greater than or equal to unsigned `t1`?
+5. Does `t0` hold zero?
+
+<details>
+<summary>Show answers</summary>
+
+```riscv
+beq  t0, t1, answer
+bne  t0, t1, answer
+blt  t0, t1, answer
+bgeu t0, t1, answer
+beq  t0, zero, answer
 ```
 
 </details>
+
+## Read one pattern two ways
+
+Suppose `t0` contains `0xFFFFFFFB` and `t1` contains 0. Decide whether each branch is taken.
+
+| branch                    | taken or not? |
+| ------------------------- | ------------- |
+| `beq t0, t1, answer`      | ?             |
+| `bne t0, t1, answer`      | ?             |
+| `blt t0, t1, answer`      | ?             |
+| `bge t0, t1, answer`      | ?             |
+| `bltu t0, t1, answer`     | ?             |
+| `bgeu t0, t1, answer`     | ?             |
+
+<details>
+<summary>Show answers</summary>
+
+| branch | result | reason |
+| ------ | ------ | ------ |
+| `beq`  | not taken | `0xFFFFFFFB` and 0 are different bit patterns |
+| `bne`  | taken | the bit patterns are different |
+| `blt`  | taken | signed -5 is less than 0 |
+| `bge`  | not taken | signed -5 is not greater than or equal to 0 |
+| `bltu` | not taken | unsigned 4,294,967,291 is not less than 0 |
+| `bgeu` | taken | unsigned 4,294,967,291 is greater than or equal to 0 |
+
+</details>
+
+The central idea is one choice with two outcomes: compare two registers, then either continue at
+the label when the condition is true or fall through to the next instruction when it is false.

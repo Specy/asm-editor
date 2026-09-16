@@ -1,6 +1,6 @@
 {
     "name": "Bytes, words, dwords and qwords",
-    "description": "The four sizes and their ranges, two's complement and why one add serves signed and unsigned alike, the movzx and movsx pair, and the six no-operand instructions that widen rax for a division.",
+    "description": "The four x86 integer widths, signed and unsigned readings, fixed-width wrapping, and deliberate widening with movzx and movsx.",
     "order": 3,
     "topic": "numbers"
 }

@@ -1,6 +1,6 @@
 {
     "name": "Sections, directives and labels",
-    "description": "The four sections, the directives that put data in memory or reserve it, equ and the $ that counts a string for you, local labels, and what global _start is for.",
+    "description": "Lay out code, initialized data, and zero-filled storage; name addresses; and calculate sizes with equ, $, and $$.",
     "order": 7,
     "topic": "program-structure"
 }

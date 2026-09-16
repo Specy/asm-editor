@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { M68KEmulator } from '$lib/languages/M68K/M68KEmulator.svelte'
+import { CPU_REGISTER_FILE_ID } from '$lib/languages/GenericEmulator.svelte'
+import { RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
 import type { Testcase } from '$lib/Project.svelte'
 import { M68K_TRAP_DOCS, screenColorOf } from '$lib/languages/M68K/M68K-traps'
 import { Keyboard } from '$lib/languages/peripherals/Keyboard'
@@ -529,6 +531,142 @@ describe('M68K unsupported tasks', () => {
     it('lets the Core name the drawing mode it refused', async () => {
         const emulator = await run(trap(92, ['    move.b #14,d1']) + trap(9))
         expect(emulator.errors.join('\n')).toContain('Unsupported drawing mode: 14')
+    })
+})
+
+/**
+ * Pokes against the real Core ([the design record](../../../../docs/design/pokes.md),
+ * [ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md)): a poked value is one step of
+ * the same history the instructions use, told apart by its kind, and undone like any other.
+ */
+describe('M68K Pokes', () => {
+    const TWO_MOVES = ['    move.l #1,d0', '    move.l #2,d1'].join('\n') + '\n'
+
+    /** Built with a history, and stopped between two instructions, which is when a Poke is possible. */
+    async function stepped(body: string, steps = 1) {
+        const code = ORG + body
+        const emulator = M68KEmulator(code)
+        await emulator.compile(200, code)
+        for (let i = 0; i < steps; i++) await emulator.step()
+        return emulator
+    }
+
+    it('records a poked register as a step of its own, and undoes it', async () => {
+        const emulator = await stepped(TWO_MOVES + trap(9))
+        expect(registerOf(emulator, 'D0')).toBe(1n)
+        expect(emulator.canPoke).toBe(true)
+        const line = emulator.line
+
+        expect(
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'D0', value: 0xcafen }])
+        ).toBe(true)
+        expect(registerOf(emulator, 'D0')).toBe(0xcafen)
+
+        const [step] = emulator.latestSteps
+        expect(step.kind).toBe('poke')
+        //no instruction ran, so the row has no line to go to
+        expect(step.line).toBe(-1)
+        expect(step.writes).toEqual([{ type: 'register', name: 'D0', old: 1n, new: 0xcafen }])
+        expect(emulator.canUndo).toBe(true)
+
+        //a Poke changed no flag, so the Status flags highlight nothing: the CCR the row reports as
+        //the one before it is the CCR the machine is on
+        for (const flag of emulator.statusRegisters) expect(flag.prev).toBe(flag.value)
+        //and the line the panel is on is still the instruction the program is about to run
+        expect(emulator.line).toBe(line)
+
+        emulator.undo(1)
+        expect(registerOf(emulator, 'D0')).toBe(1n)
+        expect(emulator.latestSteps[0].kind).toBe('instruction')
+    })
+
+    it('names the width an instruction wrote, which the Core spells by name', async () => {
+        //serde crosses the `Size` enum as its variant name, not the number the types declare, and a
+        //row that lost the width read "undefined bytes"
+        const emulator = await stepped('    move.w #2,d1\n' + trap(9))
+        const [step] = emulator.latestSteps
+        expect(step.kind).toBe('instruction')
+        expect(step.mutations).toContainEqual({
+            type: 'WriteRegister',
+            value: { register: 'd1', old: 0n, new: 2n, size: RegisterSize.Word }
+        })
+    })
+
+    it('refuses a value the register cannot hold, and records nothing for a value it already has', async () => {
+        const emulator = await stepped(TWO_MOVES + trap(9))
+        expect(() =>
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [
+                { register: 'D0', value: 0x1_0000_0000n }
+            ])
+        ).toThrow('does not fit D0')
+        //poking what is already there is not a change, so there is nothing to undo
+        expect(emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'D0', value: 1n }])).toBe(
+            false
+        )
+        expect(emulator.latestSteps[0].kind).toBe('instruction')
+
+        //the widest value the register can hold is not the same thing as one too wide for it
+        expect(
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'D0', value: 0xffffffffn }])
+        ).toBe(true)
+        expect(registerOf(emulator, 'D0')).toBe(0xffffffffn)
+        expect(emulator.latestSteps[0].writes).toEqual([
+            { type: 'register', name: 'D0', old: 1n, new: 0xffffffffn }
+        ])
+    })
+
+    it('records poked memory as one step, however many bytes it spans', async () => {
+        const emulator = await stepped(TWO_MOVES + trap(9))
+        const bytes = new Uint8Array([0xde, 0xad, 0xbe, 0xef])
+
+        expect(emulator.pokeMemory(0x3000n, bytes)).toBe(true)
+        expect([...emulator.readMemoryBytes(0x3000n, 4)]).toEqual([...bytes])
+
+        const [step] = emulator.latestSteps
+        expect(step.kind).toBe('poke')
+        //memory this program never wrote starts at 0xFF on this Core
+        expect(step.writes).toEqual([
+            { type: 'memory', address: 0x3000n, old: [255, 255, 255, 255], new: [...bytes] }
+        ])
+
+        emulator.undo(1)
+        expect([...emulator.readMemoryBytes(0x3000n, 4)]).toEqual([255, 255, 255, 255])
+    })
+
+    it('puts back the value the program found when the instruction after a Poke is undone too', async () => {
+        const emulator = await stepped(TWO_MOVES + trap(9))
+        emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'D1', value: 0x55n }])
+        //the second move overwrites the poked value, so undoing both has to walk back through it
+        await emulator.step()
+        expect(registerOf(emulator, 'D1')).toBe(2n)
+
+        emulator.undo(1)
+        expect(registerOf(emulator, 'D1')).toBe(0x55n)
+        emulator.undo(1)
+        expect(registerOf(emulator, 'D1')).toBe(0n)
+    })
+
+    it('leaves the Screen journal where it is when a Poke is undone', async () => {
+        const body =
+            trap(80, ['    move.l #$00FFFFFF,d1']) +
+            trap(82, ['    move.l #10,d1', '    move.l #10,d2']) +
+            trap(9)
+        //the two moves and the trap of each task: seven instructions, and the pixel is drawn
+        const emulator = await stepped(body, 7)
+        const screen = emulator.peripherals.screen
+        expect(inkCount(emulator)).toBe(1)
+        const journaled = screen.history.sequence
+
+        expect(
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'D2', value: 0x99n }])
+        ).toBe(true)
+        expect(screen.history.sequence).toBe(journaled)
+
+        //a Poke drew nothing, so undoing it must not pop the record of the instruction that did
+        emulator.undo(1)
+        expect(screen.history.sequence).toBe(journaled)
+        expect(inkCount(emulator)).toBe(1)
+        expect(registerOf(emulator, 'D2')).toBe(10n)
     })
 })
 

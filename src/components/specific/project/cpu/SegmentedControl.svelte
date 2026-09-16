@@ -2,11 +2,12 @@
     /**
      * The strip of buttons the Register file panel puts where the "Registers" title used to be, and
      * again on the right for the Format of the visible file. `SizeSelector` is this control with
-     * the B/W/L/D/Q sizes baked in, so every strip in the panel header is drawn from here and they
+     * the Target's widths baked in, so every strip in the panel header is drawn from here and they
      * all share one size and one style.
      */
     interface Props {
-        options: { id: string; label: string }[]
+        /** `title` is the button's tooltip, for a label too short to read on its own. */
+        options: { id: string; label: string; title?: string }[]
         selected: string
         onSelect: (id: string) => void
         style?: string
@@ -26,6 +27,7 @@
             onclick={() => onSelect(option.id)}
             class="segmented-control-button"
             class:segmented-control-button-selected={selected === option.id}
+            title={option.title ?? ''}
         >
             {option.label}
         </button>
@@ -91,6 +93,7 @@
     .tabs {
         background-color: color-mix(in srgb, var(--background) 85%, var(--secondary));
         border: 0.1rem solid var(--tertiary);
+        border-bottom: 0;
         //the bar is the top of the panel, so its own corners follow the panel's rather than being
         //squared off and left to poke through the curve the panel clips them with
         border-radius: 0.5rem 0.5rem 0 0;

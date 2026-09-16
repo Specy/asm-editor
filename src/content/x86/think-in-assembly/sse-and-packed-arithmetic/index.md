@@ -1,26 +1,41 @@
-The x87 stack works, and it is awkward. There is no way to name a register directly, every operation
-shuffles what is underneath it, and eight slots go quickly. SSE is the answer to all three: sixteen
-ordinary registers, called `xmm0` to `xmm15`, and instructions that take a destination and a source
-like every other instruction you have written.
+# SSE2 scalar and packed arithmetic
 
-They are also 128 bits wide, which is twice as much as any number needs, and that turns out to be the
-interesting part.
+x86-64 guarantees the **SSE2** instruction set. In 64-bit mode it provides sixteen registers named
+`xmm0` through `xmm15`, each 128 bits wide. These registers hold bits; an instruction decides
+whether those bits represent one floating-point value or several values side by side.
 
-## Scalar first
+This lesson draws every XMM register from its **low bits to its high bits**, left to right:
 
-An `xmm` register is wide enough to hold two doubles or four singles side by side. So an instruction
-has to say not only what operation to do but how much of the register it means, and it says it in the
-last two letters of its name.
+```
+             low bits                                      high bits
+xmm0  [ lane 0: bits 0..63       | lane 1: bits 64..127        ]
+```
 
-| ending | means                                          |
-| ------ | ---------------------------------------------- |
-| `sd`   | **scalar double**: one double, the low 64 bits |
-| `ss`   | **scalar single**: one single, the low 32 bits |
-| `pd`   | **packed double**: two doubles at once         |
-| `ps`   | **packed single**: four singles at once        |
+Each 64-bit region above is a **lane** when an instruction treats the register as two binary64
+values. Lane 0 is the low lane and lane 1 is the high lane.
 
-`addsd` adds one pair of doubles and ignores the rest of the register. `addpd` adds two pairs. Start
-with the scalar ones, which are ordinary arithmetic on ordinary numbers.
+## Reading the instruction suffixes
+
+In the instruction families used here, the final letters say how many values the instruction uses
+and which format it gives those bits:
+
+| suffix | meaning | lanes used in one XMM register |
+| ------ | ------- | ------------------------------ |
+| `ss` | scalar binary32 | one 32-bit value in the low bits |
+| `sd` | scalar binary64 | one 64-bit value in the low lane |
+| `ps` | packed binary32 | four 32-bit lanes |
+| `pd` | packed binary64 | two 64-bit lanes |
+
+**Scalar** means one value. **Packed** means several independent lanes. For example, `addsd` adds
+the low binary64 values, while `addpd` adds both pairs of binary64 lanes.
+
+The examples begin with binary64, so their arithmetic mnemonics end in `sd` or `pd`.
+
+## Scalar arithmetic and the high half
+
+The two-operand scalar SSE2 instructions used here read the low lane of each operand, write their
+answer to the destination's low lane, and preserve the destination's high 64 bits. This first
+calculation starts with memory loads whose high halves become zero:
 
 ```x86|playground|sse|no-flags
 default rel
@@ -29,245 +44,341 @@ global _start
 section .data
 a:      dq 1.5
 b:      dq 2.25
-half:   dq 0.5
+two:    dq 2.0
 
 section .text
 _start:
-    movsd xmm0, [a]         ; load one double
-    movsd xmm1, [b]
-    addsd xmm0, xmm1        ; 1.5 + 2.25 = 3.75
-
-    movsd xmm2, [a]
-    mulsd xmm2, [b]         ; 3.375, reading the second operand from memory
-    subsd xmm2, [half]      ; 2.875
-
-    movsd xmm3, [b]
-    sqrtsd xmm3, xmm3       ; 1.5, since 1.5 squared is 2.25
+    movsd xmm0, [a]         ; [low 1.5  | high 0]
+    movsd xmm1, [b]         ; [low 2.25 | high 0]
+    addsd xmm0, xmm1        ; [low 3.75 | high 0]
+    mulsd xmm0, [two]       ; [low 7.5  | high 0]
 
     mov rax, 60
     xor rdi, rdi
     syscall
 ```
 
-The panel is on its **SSE** tab, which reads each register as the doubles it holds. Hover one and you
-also get the raw bits and the single precision reading of the same sixteen bytes, which is the right
-moment to notice that nothing in the register records which of the readings the program meant. The
-same 128 bits are two doubles or four singles depending entirely on which instruction touches them
-next.
+Here is the complete `addsd` change:
 
-`divsd`, `minsd`, `maxsd` and `sqrtsd` finish the arithmetic. There is no `modsd` and no `sinsd`: SSE
-does the four operations and a square root, and anything beyond that is a library function or a trip
-back to x87.
+```
+before: xmm0 = [ low 1.5  | high 0 ]
+        xmm1 = [ low 2.25 | high 0 ]
+after:  xmm0 = [ low 3.75 | high 0 ]
+```
 
-## Moving between integers and floats
+Only the low lanes take part in the addition. The high lane shown in the result is the old high lane
+of `xmm0`.
 
-An integer register and an `xmm` register hold completely different encodings, so a value crossing
-between them has to be converted rather than copied.
+The source form of `movsd` determines what happens to that high half:
 
-| instruction            | does                                           |
-| ---------------------- | ---------------------------------------------- |
-| `cvtsi2sd xmm0, rax`   | integer to double                              |
-| `cvttsd2si rax, xmm0`  | double to integer, **truncating** towards zero |
-| `cvtsd2si rax, xmm0`   | double to integer, rounding to nearest         |
-| `cvtss2sd`, `cvtsd2ss` | single to double and back                      |
-| `movq rax, xmm0`       | the raw bits, with no conversion at all        |
+- `movsd xmm0, [value]` loads eight bytes into the low lane and clears the high 64 bits.
+- `movsd xmm0, xmm1` copies the low lane and preserves the high 64 bits already in `xmm0`.
 
-The extra `t` in `cvttsd2si` is for truncate, and the difference between the two conversions is a
-whole bug waiting to happen: one of them turns 2.7 into 2 and the other turns it into 3.
+This example gives the preserved half a visible value:
 
 ```x86|playground|sse|no-flags
 default rel
 global _start
 
 section .data
-value:  dq 2.7
+destination:    dq 1.0, 99.0
+source:         dq 4.0
 
 section .text
 _start:
-    mov rcx, 7
-    cvtsi2sd xmm0, rcx      ; 7.0 as a double
-
-    movsd xmm1, [value]     ; 2.7
-    cvttsd2si r8, xmm1      ; 2, truncated
-    cvtsd2si r9, xmm1       ; 3, rounded
-
-    movq r10, xmm1          ; the bits themselves, 0x400599999999999A
+    movupd xmm0, [destination]  ; [low 1.0 | high 99.0]
+    movsd xmm1, [source]        ; [low 4.0 | high 0]
+    movsd xmm0, xmm1            ; [low 4.0 | high 99.0]
 
     mov rax, 60
     xor rdi, rdi
     syscall
 ```
 
-`movq` is the one that converts nothing, and `r10` is where the last lecture's arithmetic pays off.
-`400599999999999A`: the exponent field is `0x400`, which is 1024, so the real exponent is 1, and the
-mantissa begins `0101 1001 1001 1001 ...`. Those repeating `1001` groups are the binary expansion of
-0.7 running out of room, and the final `A` is the last group rounded up rather than cut off. The
-register does not hold 2.7. It holds the closest double there is to 2.7, and this is what that looks
-like written down.
+The register-to-register move changes `xmm0` like this:
 
-## Comparing floats
+```
+before: xmm0 = [ low 1.0 | high 99.0 ]
+        xmm1 = [ low 4.0 | high 0    ]
+after:  xmm0 = [ low 4.0 | high 99.0 ]
+```
 
-`ucomisd` compares two doubles and writes `ZF`, `CF` and `PF`. It does **not** write `SF` or `OF`, so
-the conditions that read it are the **unsigned** ones, `jb`, `ja` and `je`, and never `jl` or `jg`.
+`subsd`, `mulsd`, `divsd`, and `sqrtsd` follow the same destination rule: they replace the low
+binary64 lane and preserve the destination's high 64 bits.
 
-| after `ucomisd xmm0, xmm1` | true when            |
-| -------------------------- | -------------------- |
-| `jb`                       | `xmm0 < xmm1`        |
-| `je`                       | they are equal       |
-| `ja`                       | `xmm0 > xmm1`        |
-| `jp`                       | one of them is a NaN |
+## Packed loads and arithmetic
 
-That last row has no equivalent anywhere in integer arithmetic. Two integers are always in some
-order. Two floats are not, because a NaN is in no order with anything, and `ucomisd` reports that
-case by setting `ZF`, `CF` **and** `PF` together. To code that only looks at `ZF`, a NaN therefore
-reads as "equal", which it is not, to anything, including itself. Code that has to be right about
-NaN tests `PF` first, and `PF` is the flag that seemed useless back in the flags lecture.
+Packed binary64 instructions use both 64-bit lanes. With `dq 1.0, 2.0`, the first qword is at the
+lower address and becomes low lane 0. The next qword becomes high lane 1:
+
+```
+increasing address  ---->
+memory left:  [ qword 1.0 | qword 2.0 ]
+xmm0:         [ low 1.0   | high 2.0  ]
+```
+
+`movupd` loads or stores all 128 bits and has no alignment requirement. `addpd` then adds
+corresponding lanes independently:
+
+```x86|playground|sse|no-flags
+default rel
+global _start
+
+section .data
+left:   dq 1.0, 2.0
+right:  dq 10.0, 20.0
+out:    dq 0.0, 0.0
+
+section .text
+_start:
+    movupd xmm0, [left]     ; [low 1.0  | high 2.0]
+    movupd xmm1, [right]    ; [low 10.0 | high 20.0]
+    addpd xmm0, xmm1        ; [low 11.0 | high 22.0]
+    movupd [out], xmm0
+
+    mov rax, 60
+    xor rdi, rdi
+    syscall
+```
+
+| lane | `xmm0` before | `xmm1` | `xmm0` after |
+| ---: | -------------: | -----: | ------------: |
+| low lane 0 | 1.0 | 10.0 | 11.0 |
+| high lane 1 | 2.0 | 20.0 | 22.0 |
+
+`mulpd` has the same lane-by-lane shape, with multiplication in place of addition. Neither packed
+operation carries a value from one lane into the other.
+
+## Converting signed integers and binary64 values
+
+Conversion instructions change the representation of a value:
+
+| instruction | operation |
+| ----------- | --------- |
+| `cvtsi2sd xmm0, rax` | convert the signed qword in `rax` to binary64 in the low lane |
+| `cvttsd2si rax, xmm0` | convert the low binary64 value to a signed qword, truncating toward zero |
+| `cvtsd2si rax, xmm0` | convert the low binary64 value to a signed qword using MXCSR rounding control |
+| `movq rax, xmm0` | copy only the low 64 raw bits, with no numerical conversion |
+
+The usual MXCSR rounding mode is nearest, with halfway cases going to the result whose low bit is
+even. In that mode, `cvtsd2si` rounds 2.7 to 3. `cvttsd2si` always truncates toward zero, so it
+converts 2.7 to 2 regardless of that rounding setting.
+
+Like scalar arithmetic, `cvtsi2sd xmm, r64` replaces the low lane and preserves the destination's
+high 64 bits:
+
+```x86|playground|sse|no-flags
+default rel
+global _start
+
+section .data
+seed:   dq 1.0, 99.0
+value:  dq 2.7
+
+section .text
+_start:
+    movupd xmm0, [seed]     ; [low 1.0 | high 99.0]
+    mov rcx, 7
+    cvtsi2sd xmm0, rcx      ; [low 7.0 | high 99.0]
+
+    movsd xmm1, [value]     ; [low nearest binary64 to 2.7 | high 0]
+    cvttsd2si r8, xmm1      ; 2: always truncate toward zero
+    cvtsd2si r9, xmm1       ; 3 in the usual nearest-even mode
+    movq r10, xmm1          ; low 64 raw bits: 0x400599999999999A
+
+    mov rax, 60
+    xor rdi, rdi
+    syscall
+```
+
+The conversion of 7 changes `xmm0` as follows:
+
+```
+before: xmm0 = [ low 1.0 | high 99.0 ]
+after:  xmm0 = [ low 7.0 | high 99.0 ]
+```
+
+Decimal 2.7 has an infinite repeating expansion in base two. The assembler stores the nearest
+binary64 encoding, `0x400599999999999A`, under its normal rounding rule. Its exponent makes the
+normalized value approximately `1.35 x 2^1`; the stored fraction bits describe the digits after the
+leading 1 in that significand. `movq` lets `r10` expose those low-lane bits without treating them as
+an integer value to convert.
+
+### MXCSR in brief
+
+`mxcsr` holds control and status for SSE floating-point work, including its rounding-control field,
+exception masks, and recorded exception conditions. The playground begins in the usual default
+state: nearest-even rounding with the floating-point exceptions masked.
+
+A masked exception records its condition and lets the instruction produce its defined
+floating-point result. For example, a nonzero finite value divided by zero produces a signed
+infinity when divide-by-zero is masked. `0.0 / 0.0` is an invalid operation and produces a NaN when
+invalid operation is masked. The result for a masked exceptional operation depends on the operation
+and condition; masking does not turn every invalid calculation into the same result.
+
+## Comparing low lanes
+
+`ucomisd xmm0, xmm1` compares only the low binary64 lanes. It ignores both high lanes and records
+one of four outcomes in `ZF`, `PF`, and `CF`:
+
+| relation of low `xmm0` to low `xmm1` | `ZF` | `PF` | `CF` |
+| ------------------------------------- | ---: | ---: | ---: |
+| greater | 0 | 0 | 0 |
+| less | 0 | 0 | 1 |
+| equal | 1 | 0 | 0 |
+| unordered | 1 | 1 | 1 |
+
+Unordered means at least one operand is a NaN. Test it first with `jp`. Its row also satisfies the
+flag conditions used by `jb` and `je`, so either of those jumps would misclassify a NaN if it ran
+first.
 
 ```x86|playground|sse
 default rel
 global _start
 
 section .data
-a:      dq 1.5
-b:      dq 2.25
+left:   dq 0x7FF8000000000000    ; a quiet NaN
+right:  dq 2.0
 
 section .text
 _start:
-    movsd xmm0, [a]
-    movsd xmm1, [b]
-    ucomisd xmm0, xmm1      ; 1.5 against 2.25
+    movsd xmm0, [left]       ; [low NaN | high 0]
+    movsd xmm1, [right]      ; [low 2.0 | high 0]
+    ucomisd xmm0, xmm1       ; reads the low lanes only
 
-    setb r8b                ; below: 1
-    seta r9b                ; above: 0
-    setp r10b               ; unordered: 0, neither is a NaN
+    jp unordered_path        ; PF first
+    jb less_path
+    je equal_path
+    mov r12, 1               ; greater
+    jmp compare_done
 
-    jb .less
-    mov r11, 100
-    jmp .done
-.less:
-    mov r11, 200
-.done:
+less_path:
+    mov r12, -1
+    jmp compare_done
 
+equal_path:
+    mov r12, 0
+    jmp compare_done
+
+unordered_path:
+    mov r12, 2
+
+compare_done:
     mov rax, 60
     xor rdi, rdi
     syscall
 ```
 
-## Packed: several numbers, one instruction
+This input leaves 2 in `r12`.
 
-Here is what the other half of the register is for. A packed instruction applies its operation to
-every **lane** of the register at once, where a lane is one of the numbers sitting side by side
-inside it.
+## Packed comparisons produce masks
 
-```
- xmm0  [      1.0      ][      2.0      ]     two doubles, 64 bits each
- xmm1  [     10.0      ][     20.0      ]
-       ----------------------------------  addpd
- xmm0  [     11.0      ][     22.0      ]     both sums, one instruction
-```
+A packed comparison writes a result into every lane. `cmppd` takes an immediate predicate; the
+value 1 selects ordered signaling less-than: “left lane is less than right lane.” If that relation
+is true, the result lane is all one bits. If it is false, the result lane is all zero bits. A quiet
+NaN makes the lane false and all-zero, and it raises the invalid-operation condition. With the
+masked default taught above, MXCSR records that condition and execution continues.
 
 ```x86|playground|sse|no-flags
 default rel
 global _start
 
 section .data
-left:   dq 1.0, 2.0         ; two doubles, so one whole xmm register
-right:  dq 10.0, 20.0
+left:   dq 1.0, 5.0
+right:  dq 2.0, 4.0
+mask:   dq 0, 0
 
 section .text
 _start:
-    movupd xmm0, [left]     ; both lanes
-    movupd xmm1, [right]
-    addpd xmm0, xmm1        ; 11.0 in the low lane, 22.0 in the high one
+    movupd xmm0, [left]      ; [low 1.0 | high 5.0]
+    movupd xmm1, [right]     ; [low 2.0 | high 4.0]
+    cmppd xmm0, xmm1, 1      ; each lane asks: left < right?
+    movupd [mask], xmm0
 
     mov rax, 60
     xor rdi, rdi
     syscall
 ```
 
-The SSE tab shows `xmm0` as two values rather than one. This is **SIMD**, single instruction multiple
-data, and it is where the speed of modern numerical code comes from: a loop that adds two arrays of
-doubles does two elements per pass with `addpd` and four singles per pass with `addps`, for the same
-one instruction it would have spent on a single element. The later AVX extensions widened the same
-registers to 256 and then 512 bits, for four and then eight doubles per instruction, and the
-arithmetic inside is unchanged. Only the number of lanes moves.
+| lane | comparison | result bits |
+| ---: | ---------- | ----------- |
+| low lane 0 | `1.0 < 2.0`, true | `0xFFFFFFFFFFFFFFFF` |
+| high lane 1 | `5.0 < 4.0`, false | `0x0000000000000000` |
 
-`movupd` is the unaligned load and `movapd` is the aligned one. `movapd` is faster on older
-processors and faults outright on an address that is not a multiple of 16, which is the reason the
-calling convention cares about keeping `rsp` aligned.
+Those all-one and all-zero lanes form a **mask**. They are bit patterns for selecting later data,
+so the floating-point display of the result is not useful here.
 
-## Floats and the calling convention
+## Floating-point arguments and results
 
-The System V agreement has a second set of rules for floating point, alongside the integer ones from
-the calling lecture.
+For ordinary non-variadic System V x86-64 calls with simple scalar floating-point arguments, the
+first floating arguments use `xmm0` through `xmm7`; integer arguments are counted separately in the
+general-purpose argument registers. A floating-point result is returned in `xmm0`.
 
-- Floating point arguments go in `xmm0` to `xmm7`, counted separately from the integer arguments. A
-  subroutine taking a whole number, then a double, then another whole number gets the first integer
-  in `rdi`, the second integer in `rsi`, and the double in `xmm0`.
-- A floating point result comes back in `xmm0`.
-- **Every `xmm` register is caller saved.** Not one of them survives a call, so a value that has to
-  outlive one goes on the stack.
+Every XMM register is caller-saved. A called function may change any of them. A caller that needs
+an XMM value afterward must preserve it in memory, copy its bits elsewhere, or recompute it.
 
 ```x86|playground|sse|no-flags
 default rel
 global _start
 
+section .data
+x:      dq 3.0
+y:      dq 4.0
+out:    dq 0.0
+
 section .text
-; hypot_squared(x in xmm0, y in xmm1) -> x*x + y*y in xmm0
-hypot_squared:
-    mulsd xmm0, xmm0
-    mulsd xmm1, xmm1
+; sum_of_squares(x in xmm0, y in xmm1) -> x*x + y*y in xmm0
+sum_of_squares:
+    mulsd xmm0, xmm0        ; changes low lane; preserves xmm0 high half
+    mulsd xmm1, xmm1        ; changes low lane; preserves xmm1 high half
     addsd xmm0, xmm1
+    xorpd xmm1, xmm1        ; deliberately zero both lanes, all 128 bits
     ret
 
 _start:
-    mov rax, 3
-    cvtsi2sd xmm0, rax      ; x = 3.0
-    mov rax, 4
-    cvtsi2sd xmm1, rax      ; y = 4.0
-    call hypot_squared      ; xmm0 = 25.0
-    sqrtsd xmm0, xmm0       ; 5.0
+    movsd xmm0, [x]         ; [low 3.0 | high 0]
+    movsd xmm1, [y]         ; [low 4.0 | high 0]
+    call sum_of_squares     ; rsp is 16-byte aligned immediately before call
+    movsd [out], xmm0       ; low result is 25.0
+    mov r12, [out]          ; raw result bits: 0x4039000000000000
 
     mov rax, 60
     xor rdi, rdi
     syscall
 ```
 
-## mxcsr
+The playground gives `_start` a 16-byte-aligned `rsp`, and this code does not move `rsp` before the
+call. `call` pushes the return address, so `rsp` is eight bytes away from a 16-byte boundary on
+entry to `sum_of_squares`, as required by the convention. The function makes no nested calls.
+`xorpd xmm1, xmm1` clears every bit in `xmm1`, so both of its 64-bit lanes become zero.
 
-`mxcsr` is SSE's control and status register, shown at the bottom of the SSE tab. It holds the
-rounding mode, the masks that decide whether an invalid operation stops the program or quietly
-produces a NaN, and the flags recording which of those conditions has happened since you last looked.
-`ldmxcsr` and `stmxcsr` move it to and from memory.
+## Your turn: scalar sum and average
 
-It starts at `1F80`: round to nearest, every exception masked. Masked is why dividing by zero here
-gives you an infinity and carries on rather than ending the run, and it is what almost every program
-wants, because a NaN travelling through a calculation is easier to find at the end than a program
-that stopped in the middle.
+Use all four binary64 values at `values`. Calculate their sum in `xmm1` and their average in
+`xmm0`. The exact sum is 18.0 and the exact average is 4.5; the stored divisor is 4.0, so loading the
+divisor alone cannot produce either requested answer.
 
-## Your turn
+The fixed code stores both results and copies the low 64 raw bits into `r12` and `r13`. The checks
+assert both memory values and both safe register copies.
 
-Compute the average of the three doubles at `values` using SSE and leave it in `xmm0`. Their total is
-9.0, so the answer is 3.0. The test checks the bits through `r8`, so store the answer and load it
-back.
-
-```x86|playground|sse|exercise
+```x86|playground|sse|memory|exercise
 default rel
 global _start
 
 section .data
-values: dq 1.5, 3.25, 4.25
-three:  dq 3.0
-
-section .bss
-out:    resq 1
+values:       dq 1.5, 2.25, 4.0, 10.25
+count:        dq 4.0
+sum_out:      dq 0.0
+average_out:  dq 0.0
 
 section .text
 _start:
     ; your code here
 
-    movsd [out], xmm0
-    mov r8, [out]
+    movsd [sum_out], xmm1
+    movsd [average_out], xmm0
+    movq r12, xmm1            ; copy only the low 64 raw bits
+    movq r13, xmm0
 
     mov rax, 60
     xor rdi, rdi
@@ -276,33 +387,136 @@ _start:
 
 ```testcase
 {
-    "expectedRegisters": { "r8": "0x4008000000000000" }
+    "expectedRegisters": {
+        "r12": "0x4032000000000000",
+        "r13": "0x4012000000000000"
+    },
+    "expectedMemory": [
+        {
+            "type": "number-chunk",
+            "address": "0x402028",
+            "bytes": 8,
+            "expected": ["0x4032000000000000", "0x4012000000000000"]
+        }
+    ]
 }
 ```
 
 <details>
 <summary>Show solution</summary>
 
-```x86|playground|sse|solution
+```x86|playground|sse|memory|solution
 default rel
 global _start
 
 section .data
-values: dq 1.5, 3.25, 4.25
-three:  dq 3.0
-
-section .bss
-out:    resq 1
+values:       dq 1.5, 2.25, 4.0, 10.25
+count:        dq 4.0
+sum_out:      dq 0.0
+average_out:  dq 0.0
 
 section .text
 _start:
-    movsd xmm0, [values]        ; 1.5
-    addsd xmm0, [values + 8]    ; + 3.25
-    addsd xmm0, [values + 16]   ; + 4.25, so 9.0
-    divsd xmm0, [three]         ; 3.0
+    movsd xmm0, [values]
+    addsd xmm0, [values + 8]
+    addsd xmm0, [values + 16]
+    addsd xmm0, [values + 24]   ; xmm0 low lane = 18.0
+    movsd xmm1, xmm0            ; copy the low sum
+    divsd xmm0, [count]         ; xmm0 low lane = 4.5
 
-    movsd [out], xmm0
-    mov r8, [out]
+    movsd [sum_out], xmm1
+    movsd [average_out], xmm0
+    movq r12, xmm1
+    movq r13, xmm0
+
+    mov rax, 60
+    xor rdi, rdi
+    syscall
+```
+
+</details>
+
+Now perform packed addition and multiplication. Load the two lanes at `left` and `right`, put their
+lane-wise sums in `xmm0`, and put their lane-wise products in `xmm2`. The fixed code stores all four
+answers and copies each low/high qword to a safe general-purpose register.
+
+```x86|playground|sse|memory|exercise
+default rel
+global _start
+
+section .data
+left:         dq 1.5, 2.0
+right:        dq 2.5, 4.0
+sum_out:      dq 0.0, 0.0
+product_out:  dq 0.0, 0.0
+
+section .text
+_start:
+    ; your code here
+
+    movupd [sum_out], xmm0
+    movupd [product_out], xmm2
+    mov r12, [sum_out]
+    mov r13, [sum_out + 8]
+    mov r14, [product_out]
+    mov r15, [product_out + 8]
+
+    mov rax, 60
+    xor rdi, rdi
+    syscall
+```
+
+```testcase
+{
+    "expectedRegisters": {
+        "r12": "0x4010000000000000",
+        "r13": "0x4018000000000000",
+        "r14": "0x400E000000000000",
+        "r15": "0x4020000000000000"
+    },
+    "expectedMemory": [
+        {
+            "type": "number-chunk",
+            "address": "0x402020",
+            "bytes": 8,
+            "expected": [
+                "0x4010000000000000",
+                "0x4018000000000000",
+                "0x400E000000000000",
+                "0x4020000000000000"
+            ]
+        }
+    ]
+}
+```
+
+<details>
+<summary>Show solution</summary>
+
+```x86|playground|sse|memory|solution
+default rel
+global _start
+
+section .data
+left:         dq 1.5, 2.0
+right:        dq 2.5, 4.0
+sum_out:      dq 0.0, 0.0
+product_out:  dq 0.0, 0.0
+
+section .text
+_start:
+    movupd xmm0, [left]
+    movupd xmm1, [right]
+    movupd xmm2, xmm0
+    addpd xmm0, xmm1            ; [low 4.0 | high 6.0]
+    mulpd xmm2, xmm1            ; [low 3.75 | high 8.0]
+
+    movupd [sum_out], xmm0
+    movupd [product_out], xmm2
+    mov r12, [sum_out]
+    mov r13, [sum_out + 8]
+    mov r14, [product_out]
+    mov r15, [product_out + 8]
 
     mov rax, 60
     xor rdi, rdi

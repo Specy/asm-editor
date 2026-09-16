@@ -299,7 +299,9 @@ export class AssemblyCodingHarness {
         return {
             success: true,
             stepsExecuted: executed,
-            state: formatEmulatorState((file) => this.getFile(file) ?? '', this.emulator)
+            state: formatEmulatorState((file) => this.getFile(file) ?? '', this.emulator, {
+                language: this.language
+            })
         }
     }
 
@@ -311,7 +313,9 @@ export class AssemblyCodingHarness {
         return {
             success: this.emulator.errors.length === 0,
             status,
-            state: formatEmulatorState((file) => this.getFile(file) ?? '', this.emulator)
+            state: formatEmulatorState((file) => this.getFile(file) ?? '', this.emulator, {
+                language: this.language
+            })
         }
     }
 

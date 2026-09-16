@@ -1,131 +1,155 @@
-Every number so far has been a whole one. A register holding `0x05` is five, and there is no way at
-all to write two and a half into it. Fractions need a different arrangement of the same sixty four
-bits, and a different set of instructions to work on that arrangement, and x86 has two entirely
-separate units that do it. Here is how the bits are arranged, and the older of the two units.
+# Floating point and the x87 stack
 
-## Why there are two
+The bits in a register or memory have meaning only because an instruction or a program gives them
+one. The bit pattern `0x05` can be the integer 5, for example, while another program could use an
+integer as a fixed-point value with an implied fractional position. This lesson covers the IEEE 754
+**binary floating-point** formats built into x86 and the x87 instructions that operate on them.
 
-When the 8086 shipped in 1978 it could add integers and nothing else. Fractional arithmetic was done
-in software, a few hundred instructions per multiplication, which for the people who needed it, mostly
-engineering and graphics, was hopelessly slow.
+## Binary32 and binary64 in memory
 
-Intel's answer was a second chip, the **8087**, sitting beside the processor on the same board and
-watching the same stream of instructions go past. The ones beginning with `f` it recognised and
-carried out itself while the main chip waited; everything else it ignored. It had eight registers of
-its own that the 8086 could not see, and it worked to a precision the main chip had no way to
-represent. That arrangement, a second unit with its own registers reached through instructions the
-main processor hands over, is what the word **coprocessor** means.
+The names **binary32** and **binary64** describe 32-bit and 64-bit IEEE 754 memory formats. They are
+also commonly called single precision and double precision. NASM can emit them with a decimal point
+in a `dd` or `dq` declaration:
 
-The 80486 of 1989 put it on the same piece of silicon and it stopped being a separate chip. The name
-stuck. The `f` instructions and their stack of eight registers are still there, still called **x87**,
-and still behave exactly as they did.
-
-Then in 1999 the Pentium III added a **second** floating point unit with a completely different
-design, called SSE, and did not remove the first. Both are still in every 64 bit processor. SSE is
-what compilers emit and what the next lecture is about; x87 is what you reach for when SSE has no
-instruction for what you want, which turns out to be more often than you would expect.
-
-## How a number is stored
-
-A floating point number is scientific notation done in binary. Instead of writing 3.75, you write
-`1.111` times two to the power of one, and store three things: a **sign**, an **exponent** saying
-how far the point moved, and a **mantissa**, the digits themselves.
-
-| type   | bytes | written | sign | exponent | mantissa | good for          |
-| ------ | ----- | ------- | ---- | -------- | -------- | ----------------- |
-| single | 4     | `dd`    | 1    | 8        | 23       | 7 decimal digits  |
-| double | 8     | `dq`    | 1    | 11       | 52       | 16 decimal digits |
-
-NASM writes either from a literal with a dot in it, so `dq 1.5` is eight bytes and `dd 1.5` is four.
-The layout is the one defined by the IEEE 754 standard, which is why a file of numbers written by one
-machine can be read by another.
-
-Take 3.75 and do it by hand, because the constants later in this lecture make no sense until you have
-done it once.
-
-**Write it in binary.** 3 is `11`. The fraction 0.75 is one half plus one quarter, so `.11`. Put them
-together: `11.11`.
-
-**Normalise it.** Move the point left until exactly one digit is in front of it, counting the moves:
-`11.11` becomes `1.111` with one move, so the exponent is 1.
-
-```
-   11.11  =  1.111 x 2^1
+```x86
+single_value:   dd 1.5      ; four-byte binary32
+double_value:   dq 1.5      ; eight-byte binary64
 ```
 
-**Drop the leading 1.** A normalised binary number always starts with a 1, because that is what
-normalising means. Storing a bit that is always the same would be a waste, so it is not stored. The
-mantissa field holds only what comes after the point, `111`, padded with zeroes to fill 52 bits.
+Each format divides its bits into three fields:
 
-**Bias the exponent.** The exponent needs to be able to go negative, for numbers smaller than one.
-Rather than give it a sign bit of its own, the standard adds a fixed **bias** of 1023 to it first, so
-every stored exponent is a plain positive number. 1 + 1023 = 1024, which is `100 0000 0000` in
-eleven bits.
+| format | total bits | sign | exponent | stored fraction |
+| ------ | ---------: | ---: | -------: | --------------: |
+| binary32 | 32 | 1 bit | 8 bits | 23 bits |
+| binary64 | 64 | 1 bit | 11 bits | 52 bits |
 
-**Lay the three fields out**, sign first, then exponent, then mantissa:
+For binary64, the sign bit selects positive or negative. The 11-bit exponent records a power of
+two, using a bias of 1023 for normal values. The 52 stored fraction bits describe the significant
+binary digits after the point. A normal, nonzero value has an implicit leading `1`, so that leading
+bit does not need a place in the encoding.
+
+The exponent field also identifies special cases:
+
+| exponent field | fraction field | meaning |
+| -------------- | -------------- | ------- |
+| neither all zeroes nor all ones | any | normal finite value; implicit leading `1` |
+| all zeroes | all zeroes | positive or negative zero |
+| all zeroes | nonzero | subnormal value; no implicit leading `1` |
+| all ones | all zeroes | positive or negative infinity |
+| all ones | nonzero | NaN, “not a number” |
+
+Subnormal values let the format represent very small magnitudes close to zero. Infinities and NaNs
+are results that floating-point instructions can carry through later calculations. Operations that
+produce them can also raise x87 exception conditions; when an exception is masked, the condition is
+recorded and execution continues with the corresponding floating-point result.
+
+## Encoding 3.75 as binary64
+
+Take 3.75 apart one step at a time.
+
+**Write it in binary.** The integer 3 is `11`. The fraction 0.75 is one half plus one quarter, so it
+is `.11`. Together they are `11.11`.
+
+**Normalize it.** Move the point until one digit remains before it. One move changes `11.11` to
+`1.111`, so the exponent is 1:
 
 ```
- 0   100 0000 0000   1110000000000000000000000000000000000000000000000000
+11.11 = 1.111 x 2^1
+```
+
+**Form the fraction field.** This is a normal nonzero number, so the leading `1` is implicit. Store
+the digits after the point, `111`, then pad the 52-bit fraction field with zeroes.
+
+**Bias the exponent.** Add the binary64 bias of 1023. The stored exponent is
+`1 + 1023 = 1024`, or `10000000000` in 11 bits.
+
+**Lay out the fields.** The number is positive, so its sign bit is zero:
+
+```
+ 0   10000000000   1110000000000000000000000000000000000000000000000000
  ^        ^                                  ^
- sign   exponent                          mantissa
+ sign   exponent                      stored fraction
  1 bit   11 bits                           52 bits
 ```
 
-Now cut that same run of 64 bits into groups of four and read each group as a hex digit:
+Grouping the same 64 bits into fours gives hexadecimal:
 
 ```
- 0100 0000 0000 1110 0000 0000 ... 0000
-   4    0    0    E    0    0       0
+0100 0000 0000 1110 0000 0000 ... 0000
+  4    0    0    E    0    0       0
 ```
 
-`400E000000000000`. That number appears in the panel further down this page, and it is not magic: it
-is 3.75 written the only way a double can be written.
+The binary64 encoding of exactly 3.75 is therefore `0x400E000000000000`.
 
-Going the other way is the same steps backwards. Given `3FF0000000000000`, the exponent field is
-`0x3FF`, which is 1023, so the real exponent is 1023 - 1023 = 0. The mantissa field is all zeroes, so
-with the leading 1 put back the number is `1.0`, times two to the power of zero. It is 1.0.
+The reverse process decodes `0x3FF0000000000000`. Its exponent field is `0x3FF`, or 1023, so the
+unbiased exponent is zero. Its fraction field is zero. Restoring the implicit leading bit gives
+`1.0 x 2^0`, which is exactly 1.0.
 
-### Two things follow from this
-
-**Most decimal fractions cannot be stored at all.** Try 0.1 the way you did 3.75. Doubling a fraction
-repeatedly and writing down whether it passed 1 gives you its binary digits:
+Values such as decimal 0.1 behave differently. Its binary fraction repeats:
 
 ```
- 0.1 x 2 = 0.2   ->  0
- 0.2 x 2 = 0.4   ->  0
- 0.4 x 2 = 0.8   ->  0
- 0.8 x 2 = 1.6   ->  1     (keep 0.6)
- 0.6 x 2 = 1.2   ->  1     (keep 0.2)
- 0.2 x 2 = 0.4   ->  0     and we have been here before
+0.00011001100110011...
 ```
 
-`0.0001100110011...`, repeating for ever, exactly the way 1/3 repeats in decimal. Fifty two bits is
-where the processor has to stop, so what a double actually holds is the nearest number it can write to
-0.1, and that is why 0.1 + 0.2 does not come to 0.3. Nothing is broken. You asked for a base ten
-fraction in a base two format.
+A binary64 value has only 52 stored fraction bits, so it cannot hold that infinite expansion. It
+holds the nearest representable value under the current rounding rule. This is why calculations
+with decimal fractions can differ slightly from their exact decimal answers. Values such as 3.75,
+0.5, and 0.25 end after a finite number of binary places and can be represented exactly.
 
-**Some bit patterns are not numbers.** An exponent field of all ones is reserved. With a zero mantissa
-it means **infinity**, which is what one divided by zero produces here instead of a fault. With a
-non-zero mantissa it is a **NaN**, not a number, which is what zero divided by zero produces. A NaN
-compared with anything answers false, including when it is compared with itself.
+## Eight physical registers, one logical stack
 
-## x87: a stack instead of a register file
+x87 has eight physical floating-point registers. A rotating top pointer exposes them as a logical
+stack. This lesson writes the logical names as `st(0)` through `st(7)`:
 
-The x87 registers are not numbered. They are a **stack of eight**, and every instruction works
-relative to the top of it. `st0` is whatever is on top right now, `st1` is the one underneath, and
-pushing a value renames all of them: what was `st0` becomes `st1`.
+- `st(0)` is the current top;
+- `st(1)` is the value immediately below it;
+- `st(7)` is the last available logical entry.
 
-| instruction                                | does                                                |
-| ------------------------------------------ | --------------------------------------------------- |
-| `fld qword [x]`                            | push the double at `x`                              |
-| `fild dword [n]`                           | push an integer, converted                          |
-| `fld1`, `fldz`, `fldpi`                    | push 1.0, 0.0 or pi                                 |
-| `faddp`                                    | add the top two, pop one, leaving the answer on top |
-| `fmulp`, `fsubp`, `fdivp`                  | the same for the other three operations             |
-| `fsqrt`, `fsin`, `fcos`, `fpatan`, `f2xm1` | replace `st0` with a function of it                 |
-| `fstp qword [x]`                           | store `st0` and pop                                 |
-| `fistp dword [n]`                          | store as an integer, **rounded**, and pop           |
-| `fxch`                                     | swap `st0` and `st1`                                |
+A push moves the logical top, so every live value receives a new logical name. If `st(0)` held 1.5,
+then pushing 2.25 makes 2.25 the new `st(0)` and renames 1.5 as `st(1)`. A pop removes the top and
+renames the old `st(1)` as the new `st(0)`.
+
+NASM spells these register names `st0`, `st1`, and so on in instruction operands. Thus the prose
+name `st(1)` appears as `st1` in `faddp st1, st0`.
+
+Each physical register has a tag that says whether its logical entry is empty. Popping marks an
+entry empty; it need not erase the old bits. A ninth live value, or an instruction that reads an
+empty entry, raises the x87 invalid-operation condition for a stack fault. This condition is
+normally masked and recorded in x87 status, but unmasking it can make it trap. The practical rule is
+simple: every load pushes, and a popping arithmetic or store instruction must eventually remove
+that value.
+
+## A small x87 instruction set
+
+These forms are enough for the examples on this page:
+
+| instruction | value and stack effect |
+| ----------- | ---------------------- |
+| `fld dword [x]` | push the binary32 value stored in four bytes at `x` |
+| `fld qword [x]` | push the binary64 value stored in eight bytes at `x` |
+| `fld1` | push the exactly representable value 1.0 |
+| `fild word [n]` | read a signed 16-bit integer, convert it, and push it |
+| `fild dword [n]` | read a signed 32-bit integer, convert it, and push it |
+| `fild qword [n]` | read a signed 64-bit integer, convert it, and push it |
+| `faddp st1, st0` | put old `st(1) + st(0)` in old `st(1)`, then pop |
+| `fsubp st1, st0` | put old `st(1) - st(0)` in old `st(1)`, then pop |
+| `fmulp st1, st0` | put old `st(1) * st(0)` in old `st(1)`, then pop |
+| `fdivp st1, st0` | put old `st(1) / st(0)` in old `st(1)`, then pop |
+| `fstp dword [x]` | round `st(0)` to binary32, store four bytes, then pop |
+| `fstp qword [x]` | round `st(0)` to binary64, store eight bytes, then pop |
+| `fistp word [n]` | round to a signed 16-bit integer, store two bytes, then pop |
+| `fistp dword [n]` | round to a signed 32-bit integer, store four bytes, then pop |
+| `fistp qword [n]` | round to a signed 64-bit integer, store eight bytes, then pop |
+
+The default x87 rounding mode is nearest, with a value exactly halfway between two candidates going
+to the candidate whose low bit is even. Other modes exist in the x87 control word. An integer result
+must also fit the signed destination width; an out-of-range conversion raises the invalid-operation
+condition.
+
+### Load, add, and store
+
+This program adds 1.5 and 2.25. The comment after every x87 instruction shows the complete live
+logical stack, from the top downward:
 
 ```x86|playground|x87|no-flags
 default rel
@@ -134,74 +158,123 @@ global _start
 section .data
 a:      dq 1.5
 b:      dq 2.25
-n:      dd 7
-
-section .bss
-out:    resq 1
-iout:   resd 1
+out:    dq 0.0
 
 section .text
 _start:
-    fld qword [a]           ; st0 = 1.5
-    fld qword [b]           ; st0 = 2.25, st1 = 1.5
-    faddp                   ; st0 = 3.75, and the stack is one deep again
-    fstp qword [out]        ; store it and empty the stack
-    mov r8, [out]
+    fld qword [a]           ; stack: [1.5]
+    fld qword [b]           ; stack: [2.25, 1.5]
+    faddp st1, st0          ; stack: [3.75]
+    fstp qword [out]        ; stack: []
 
-    fldpi                   ; pi
-    fsqrt                   ; the square root of pi
-    fstp qword [out]
-    mov r9, [out]
-
-    fild dword [n]          ; 7 as a float
-    fsqrt                   ; 2.6457...
-    fistp dword [iout]      ; and back to an integer
-    mov r10d, [iout]
+    mov r8, [out]           ; r8 = 0x400E000000000000
 
     mov rax, 60
     xor rdi, rdi
     syscall
 ```
 
-Step through it with the panel on its **x87** tab and watch the stack work. `fld qword [a]` puts 1.5
-in `st0`. The second `fld` puts 2.25 in `st0` and 1.5 slides down to `st1`, without either instruction
-naming a register. `faddp` adds the two and pops one, so where there were two values there is now one.
-A slot that has been popped shows blank: the bits are still sitting there, and a separate tag word
-says the slot is empty, which is what the panel reads.
+The second `fld` changes the logical names without moving 1.5 between physical registers. Before
+the addition, `st(0)` is 2.25 and `st(1)` is 1.5. `faddp st1, st0` writes 3.75 into the old
+`st(1)`, pops the old top, and exposes the result as the new `st(0)`. The store writes the binary64
+bits to memory and empties the stack.
 
-`r8` holds `400E000000000000`, which is the number you took apart at the top of this page.
+### Subtraction and division have an order
 
-`r10` is **3**, not 2, and that is worth a moment. The square root of 7 is 2.6457, and `fistp` rounds
-to the nearest whole number rather than throwing the fraction away. If you wanted 2 you wanted
-truncation, and x87 will only truncate if you change the rounding mode first, which is what `fctrl`
-is for.
+For subtraction and division, the old `st(1)` is the left operand and the old `st(0)` is the right
+operand. This sequence calculates `(10.0 - 4.0) / 2.0`:
 
-`fsin`, `fcos`, `fpatan` and `f2xm1` are why x87 is still worth knowing. SSE has no instruction for
-any of them, so a program that wants a sine either calls a library function or comes back here.
+```x86
+    fld qword [ten]         ; stack: [10.0]
+    fld qword [four]        ; stack: [4.0, 10.0]
+    fsubp st1, st0          ; old st(1) - old st(0): stack [6.0]
+    fld qword [two]         ; stack: [2.0, 6.0]
+    fdivp st1, st0          ; old st(1) / old st(0): stack [3.0]
+    fstp qword [answer]     ; stack: []
+```
 
-This emulator keeps the x87 stack as ordinary 64 bit doubles. Real hardware works at **80 bit**
-extended precision inside the unit and only rounds when a value is stored, so a long chain of x87
-arithmetic here can differ from a physical processor in the last few bits.
+After `fsubp`, the result first occupies the old `st(1)` physical register. The pop then makes it
+the new `st(0)`. `fdivp` follows the same rule: it computes old `st(1) / st(0)`, places the result
+in old `st(1)`, and pops.
 
-`fctrl`, `fstat` and `ftag` are the unit's three control and status registers, holding the rounding
-mode, the exception flags, and the record of which of the eight slots are in use. All three are on the
-x87 tab.
+Integer loads and stores use the same push/pop discipline. If `n` is a signed dword containing 7,
+this balanced sequence stores the signed dword 4:
+
+```x86
+    fild dword [n]          ; stack: [7.0]
+    fld1                    ; stack: [1.0, 7.0]
+    faddp st1, st0          ; stack: [8.0]
+    fld qword [half]        ; stack: [0.5, 8.0]
+    fmulp st1, st0          ; stack: [4.0]
+    fistp dword [iout]      ; stack: []; signed 32-bit result is 4
+```
+
+## Comparing and using integer flags
+
+An ordinary integer conditional jump needs flags in `rflags`. The x87 instruction
+`fucomip st0, st1` compares `st(0)` with `st(1)`, writes `ZF`, `PF`, and `CF`, and pops `st(0)`.
+Its four possible results are:
+
+| relation of old `st(0)` to old `st(1)` | `ZF` | `PF` | `CF` |
+| --------------------------------------- | ---: | ---: | ---: |
+| greater | 0 | 0 | 0 |
+| less | 0 | 0 | 1 |
+| equal | 1 | 0 | 0 |
+| unordered | 1 | 1 | 1 |
+
+**Unordered** means that at least one operand is a NaN. A quiet NaN is a NaN encoding intended to
+flow through ordinary calculations without signaling the invalid-operation exception in this
+comparison. `fucomip` reports a quiet NaN as unordered. Check `PF` first with `jp`; the unordered
+row also has `CF=1` and `ZF=1`, so checking `jb` or `je` first would misclassify it.
+
+Here `left` is 1.0 and `right` is 2.0. The remaining `fstp st0` discards the other operand. It does
+not change the integer flags, so the jumps still read the result from `fucomip`:
+
+```x86
+    fld qword [right]       ; stack: [2.0]
+    fld qword [left]        ; stack: [1.0, 2.0]
+    fucomip st0, st1        ; compare 1.0 with 2.0; stack: [2.0]
+    fstp st0                ; discard remaining value; stack: []; flags unchanged
+
+    jp unordered_path       ; PF=1 must be tested first
+    jb less_path            ; CF=1
+    je equal_path           ; ZF=1
+    jmp greater_path        ; ZF=PF=CF=0
+```
+
+A NaN comparison is therefore not simply “false.” It produces the distinct unordered flag pattern,
+which the program must handle if NaNs are possible.
+
+## Precision and exceptions
+
+On hardware, each physical x87 register uses the 80-bit extended floating-point format. Arithmetic
+still rounds according to the x87 control word, which selects a rounding direction and an arithmetic
+precision. Storing to binary32 or binary64 memory rounds the value to that target format as well.
+
+The playground represents x87 stack values as binary64 rather than as hardware's 80-bit register
+format. Intermediate results can therefore differ from physical x87 execution. This matters most
+when a calculation depends on its final few bits; the examples and exercises here use values whose
+expected answers are exactly representable.
+
+The control word also masks or unmasks exception classes. Masked conditions such as invalid
+operations, division by zero, overflow, underflow, and inexact results are recorded in x87 status
+while execution continues with a defined floating-point response. Unmasking an exception permits a
+trap. Control-word programming is outside this first x87 lesson.
 
 ## Your turn
 
-Leave the sine of the double at `angle` in the qword at `out` and read it back into `r8`. `angle`
-holds the number of radians in a right angle, so the sine of it is 1.0. That is the number you decoded
-above, `3FF0000000000000`, which is what `r8` should read.
+Calculate `(10.0 - 4.0) / 2.0` with the explicitly ordered popping forms. Store the binary64 result
+at `out`, then copy its eight bits to `r8`. Every input and the result is exactly representable.
 
-```x86|playground|x87|exercise
+```x86|playground|x87|memory|exercise
 default rel
 global _start
 
 section .data
-angle:  dq 1.5707963267948966     ; pi / 2
-
-section .bss
-out:    resq 1
+left:       dq 10.0
+subtract:   dq 4.0
+divisor:    dq 2.0
+out:        dq 0.0
 
 section .text
 _start:
@@ -216,30 +289,142 @@ _start:
 
 ```testcase
 {
-    "expectedRegisters": { "r8": "0x3FF0000000000000" }
+    "expectedRegisters": { "r8": "0x4008000000000000" },
+    "expectedMemory": [
+        {
+            "type": "number-chunk",
+            "address": "0x402018",
+            "bytes": 8,
+            "expected": ["0x4008000000000000"]
+        }
+    ]
 }
 ```
 
 <details>
 <summary>Show solution</summary>
 
-```x86|playground|x87|solution
+```x86|playground|x87|memory|solution
 default rel
 global _start
 
 section .data
-angle:  dq 1.5707963267948966     ; pi / 2
-
-section .bss
-out:    resq 1
+left:       dq 10.0
+subtract:   dq 4.0
+divisor:    dq 2.0
+out:        dq 0.0
 
 section .text
 _start:
-    fld qword [angle]       ; push the angle
-    fsin                    ; replace it with its sine
-    fstp qword [out]        ; store and pop
+    fld qword [left]        ; stack: [10.0]
+    fld qword [subtract]    ; stack: [4.0, 10.0]
+    fsubp st1, st0          ; stack: [6.0]
+    fld qword [divisor]     ; stack: [2.0, 6.0]
+    fdivp st1, st0          ; stack: [3.0]
+    fstp qword [out]        ; stack: []
 
     mov r8, [out]
+
+    mov rax, 60
+    xor rdi, rdi
+    syscall
+```
+
+</details>
+
+Now compare four pairs: less, equal, greater, and unordered. Write byte `-1`, `0`, `1`, or `2` to
+the corresponding position in `results`. Load the final four bytes into `r8d`. For every pair,
+load the right operand first and the left operand second, use `fucomip st0, st1`, discard the one
+remaining x87 value, and test `jp` before the ordered branches.
+
+```x86|playground|x87|memory|exercise
+default rel
+global _start
+
+section .data
+lefts:      dq 1.0, 2.0, 4.0, 0x7FF8000000000000
+rights:     dq 2.0, 2.0, 3.0, 0.0
+results:    dd 0
+
+section .text
+_start:
+    lea rdi, [rel lefts]
+    lea rsi, [rel rights]
+    lea rdx, [rel results]
+    xor ebx, ebx
+
+    ; your loop here
+
+    mov r8d, [results]
+
+    mov rax, 60
+    xor rdi, rdi
+    syscall
+```
+
+```testcase
+{
+    "expectedRegisters": { "r8": "0x00000000020100FF" },
+    "expectedMemory": [
+        {
+            "type": "number-chunk",
+            "address": "0x402040",
+            "bytes": 1,
+            "expected": ["0xFF", "0x00", "0x01", "0x02"]
+        }
+    ]
+}
+```
+
+<details>
+<summary>Show solution</summary>
+
+```x86|playground|x87|memory|solution
+default rel
+global _start
+
+section .data
+lefts:      dq 1.0, 2.0, 4.0, 0x7FF8000000000000
+rights:     dq 2.0, 2.0, 3.0, 0.0
+results:    dd 0
+
+section .text
+_start:
+    lea rdi, [rel lefts]
+    lea rsi, [rel rights]
+    lea rdx, [rel results]
+    xor ebx, ebx
+
+compare_next:
+    fld qword [rsi + rbx*8]     ; stack: [right]
+    fld qword [rdi + rbx*8]     ; stack: [left, right]
+    fucomip st0, st1            ; compare left with right; stack: [right]
+    fstp st0                    ; stack: []; integer flags unchanged
+
+    jp compare_unordered        ; PF first: NaN was present
+    jb compare_less
+    ja compare_greater
+
+    mov byte [rdx + rbx], 0     ; equal
+    jmp compare_continue
+
+compare_less:
+    mov byte [rdx + rbx], -1
+    jmp compare_continue
+
+compare_greater:
+    mov byte [rdx + rbx], 1
+    jmp compare_continue
+
+compare_unordered:
+    mov byte [rdx + rbx], 2
+
+compare_continue:
+    inc rbx
+    cmp rbx, 4
+    jb compare_next
+
+    mov r8d, [results]
 
     mov rax, 60
     xor rdi, rdi

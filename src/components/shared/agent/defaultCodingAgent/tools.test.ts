@@ -14,10 +14,13 @@ import {
     makeRegister,
     RegisterSize,
     resolveRegisterFileLayout,
+    type ExecutionStep,
     type RegisterFile,
     type RegisterFileDescriptor
 } from '$lib/languages/commonLanguageFeatures.svelte'
-import type { FormattedRegisterFile } from './formatting'
+import { M68KEmulator } from '$lib/languages/M68K/M68KEmulator.svelte'
+import { CPU_REGISTER_FILE_ID } from '$lib/languages/GenericEmulator.svelte'
+import { formatLatestSteps, type FormattedRegisterFile } from './formatting'
 
 interface ToolExecutionResult {
     success?: boolean
@@ -237,6 +240,68 @@ function createCpuOnlyEmulator(): Emulator {
         ...emulator,
         registers: cpu.registers,
         registerFiles: [cpu]
+    } as unknown as Emulator
+}
+
+/** A row of `latestSteps` as the tools report it, instruction or Poke. */
+type FormattedStep = {
+    kind: string
+    line?: string
+    pc?: { hex: string }
+    writes?: unknown[]
+}
+
+/**
+ * The real 68000 Core one instruction in, which is where a Poke belongs: between two instructions,
+ * with `D0` written and `D1` not yet. A Poke goes through the Core's own transaction
+ * ([ADR 0022](../../../../../docs/adr/0022-core-native-poke-records.md)), so the tools are checked
+ * against a Core that records and undoes one rather than against a stand-in.
+ */
+const POKE_PROGRAM = '    ORG $1000\n    move.l #1,d0\n    move.l #2,d1\n'
+
+async function pokeableM68K() {
+    const emulator = M68KEmulator(POKE_PROGRAM)
+    await emulator.compile(200, POKE_PROGRAM)
+    await emulator.step()
+    const { context } = createTestContext({ 'main.s': POKE_PROGRAM }, emulator)
+    return { emulator, tools: createDefaultCodingAgentTools(context) }
+}
+
+function registerValue(emulator: Emulator, name: string): bigint | undefined {
+    return emulator.registers.find((register) => register.name === name)?.value
+}
+
+/**
+ * An emulator answering the availability rule the way `GenericEmulator` does, for the states a real
+ * Core cannot be put in from a test: a Core busy with a Run, and the registers the rule keeps out.
+ */
+function createPokeMockEmulator(overrides: Record<string, unknown> = {}): Emulator {
+    const emulator = createMockEmulator()
+    const cpu = makeFakeRegisterFile(
+        {
+            id: CPU_REGISTER_FILE_ID,
+            label: 'CPU',
+            size: RegisterSize.Long,
+            formats: ['hex'],
+            registers: [{ name: '$zero' }, { name: '$t0' }, { name: 'pc' }]
+        },
+        [0n, 7n, 0x400000n]
+    )
+    const hiddenRegisters = ['$zero']
+    return {
+        ...emulator,
+        registers: cpu.registers,
+        registerFiles: [cpu],
+        startingRegisterNames: ['$zero', '$t0', 'pc'],
+        hiddenRegisters,
+        canPoke: true,
+        canPokeRegister: (fileId: string, register: string) =>
+            fileId === CPU_REGISTER_FILE_ID &&
+            register !== 'pc' &&
+            !hiddenRegisters.includes(register),
+        pokeRegisters: vi.fn(() => true),
+        pokeMemory: vi.fn(() => true),
+        ...overrides
     } as unknown as Emulator
 }
 
@@ -1021,6 +1086,420 @@ describe('DefaultCodingAgent Tools (Standard Agent Model)', () => {
                 {}
             )) as unknown as ToolExecutionResult
             expect(result.registerFiles).toEqual([])
+        })
+    })
+
+    describe('poke_register', () => {
+        it('pokes a register of the real Core and lists the Poke as a step of its own', async () => {
+            const { emulator, tools } = await pokeableM68K()
+
+            //the file spells it `D0`, and the model may write it as it likes
+            const result = (await tools.poke_register.execute({
+                register: 'd0',
+                value: '0xcafe'
+            })) as unknown as ToolExecutionResult
+
+            expect(result.success).toBe(true)
+            expect(result.register).toBe('D0')
+            expect(result.file).toBe(CPU_REGISTER_FILE_ID)
+            expect(result.changed).toBe(true)
+            expect(result.recorded).toBe(true)
+            expect(result.note).toBeUndefined()
+            expect((result.value as { hex: string }).hex).toBe('0x0000cafe')
+            expect((result.previous as { hex: string }).hex).toBe('0x00000001')
+            expect(registerValue(emulator, 'D0')).toBe(0xcafen)
+
+            //a Poke is a step of the same history, told apart by its kind and carrying no line
+            const [poke] = result.latestSteps as FormattedStep[]
+            expect(poke.kind).toBe('poke')
+            expect(poke.line).toBeUndefined()
+            expect(poke.writes).toEqual([
+                {
+                    type: 'register',
+                    register: 'D0',
+                    old: { decimal: '1', hex: '0x1', display: 'decimal: 1 hex: 0x1' },
+                    new: {
+                        decimal: '51966',
+                        hex: '0xcafe',
+                        display: 'decimal: 51966 hex: 0xcafe'
+                    }
+                }
+            ])
+            expect(result.canUndo).toBe(true)
+        })
+
+        it('records nothing when the register already holds that value', async () => {
+            const { tools } = await pokeableM68K()
+
+            const result = (await tools.poke_register.execute({
+                register: 'D0',
+                value: '1'
+            })) as unknown as ToolExecutionResult
+
+            expect(result.success).toBe(true)
+            expect(result.changed).toBe(false)
+            expect(result.recorded).toBe(false)
+            expect(result.note).toContain('nothing was poked')
+            //the instruction that ran is still what the history has on top
+            expect((result.latestSteps as FormattedStep[])[0].kind).toBe('instruction')
+        })
+
+        it('reports no change for the bits the register already holds under another sign', async () => {
+            //MIPS and RISC-V report their CPU registers signed, so a register of all ones reads
+            //`-1n` while the model writes the unsigned `0xffffffff`: the same bits, which the
+            //Emulator drops, so the tool must not tell the model it poked something
+            const cpu = makeFakeRegisterFile(
+                {
+                    id: CPU_REGISTER_FILE_ID,
+                    label: 'CPU',
+                    size: RegisterSize.Long,
+                    formats: ['hex'],
+                    registers: [{ name: '$t0' }]
+                },
+                [-1n]
+            )
+            const emulator = createPokeMockEmulator({
+                registers: cpu.registers,
+                registerFiles: [cpu],
+                startingRegisterNames: ['$t0'],
+                //the Emulator drops a write that changes nothing, so it records nothing either
+                pokeRegisters: vi.fn(() => false)
+            })
+            const { context } = createTestContext({ 'main.s': 'nop' }, emulator)
+            const tools = createDefaultCodingAgentTools(context)
+
+            const result = (await tools.poke_register.execute({
+                register: '$t0',
+                value: '0xffffffff'
+            })) as unknown as ToolExecutionResult
+
+            expect(result.success).toBe(true)
+            expect(result.changed).toBe(false)
+            expect(result.note).toContain('nothing was poked')
+        })
+
+        it('writes a negative decimal as the bit pattern of that register', async () => {
+            const { emulator, tools } = await pokeableM68K()
+
+            const result = (await tools.poke_register.execute({
+                register: 'D1',
+                value: '-1'
+            })) as unknown as ToolExecutionResult
+
+            expect(result.success).toBe(true)
+            expect((result.value as { hex: string }).hex).toBe('0xffffffff')
+            expect(registerValue(emulator, 'D1')).toBe(0xffffffffn)
+        })
+
+        it('refuses a value the register cannot hold and pokes nothing', async () => {
+            const { emulator, tools } = await pokeableM68K()
+
+            const tooWide = (await tools.poke_register.execute({
+                register: 'D0',
+                value: '0x100000000'
+            })) as unknown as ToolExecutionResult
+            expect(tooWide.success).toBe(false)
+            expect(tooWide.errorKind).toBe('invalid_input')
+            expect(tooWide.error).toContain('does not fit D0')
+            expect(tooWide.error).toContain('32 bits wide')
+
+            const tooNegative = (await tools.poke_register.execute({
+                register: 'D0',
+                value: '-2147483649'
+            })) as unknown as ToolExecutionResult
+            expect(tooNegative.success).toBe(false)
+            expect(tooNegative.error).toContain('does not fit D0')
+
+            const notANumber = (await tools.poke_register.execute({
+                register: 'D0',
+                value: 'cafe'
+            })) as unknown as ToolExecutionResult
+            expect(notANumber.success).toBe(false)
+            expect(notANumber.error).toContain('Write hex as 0x1f')
+
+            expect(registerValue(emulator, 'D0')).toBe(1n)
+        })
+
+        it('names the registers of the file when the register is not one of them', async () => {
+            const { tools } = await pokeableM68K()
+
+            const result = (await tools.poke_register.execute({
+                register: 'pc',
+                value: '0x1000'
+            })) as unknown as ToolExecutionResult
+
+            expect(result.success).toBe(false)
+            expect(result.errorKind).toBe('invalid_input')
+            expect(result.error).toContain('No register "pc"')
+            expect(result.error).toContain('D0')
+        })
+
+        it('names the register files when the file is not one of them', async () => {
+            const { tools } = await pokeableM68K()
+
+            const result = (await tools.poke_register.execute({
+                file: 'fpu',
+                register: '$f0',
+                value: '1'
+            })) as unknown as ToolExecutionResult
+
+            expect(result.success).toBe(false)
+            expect(result.error).toContain('No register file "fpu"')
+            expect(result.error).toContain(CPU_REGISTER_FILE_ID)
+        })
+
+        it('says why the program counter and a hidden register are not pokeable', async () => {
+            const { context } = createTestContext({ 'main.s': 'nop' }, createPokeMockEmulator())
+            const tools = createDefaultCodingAgentTools(context)
+
+            const programCounter = (await tools.poke_register.execute({
+                register: 'pc',
+                value: '0x400000'
+            })) as unknown as ToolExecutionResult
+            expect(programCounter.success).toBe(false)
+            expect(programCounter.error).toContain('program counter')
+
+            const hidden = (await tools.poke_register.execute({
+                register: '$zero',
+                value: '1'
+            })) as unknown as ToolExecutionResult
+            expect(hidden.success).toBe(false)
+            expect(hidden.error).toContain('hidden')
+        })
+
+        it('passes one write of the named file through to the emulator', async () => {
+            const emulator = createPokeMockEmulator()
+            const { context } = createTestContext({ 'main.s': 'nop' }, emulator)
+            const tools = createDefaultCodingAgentTools(context)
+
+            const result = (await tools.poke_register.execute({
+                register: '$t0',
+                value: '9'
+            })) as unknown as ToolExecutionResult
+
+            expect(result.success).toBe(true)
+            expect(emulator.pokeRegisters).toHaveBeenCalledWith(CPU_REGISTER_FILE_ID, [
+                { register: '$t0', value: 9n }
+            ])
+        })
+
+        it('is blocked by everything that blocks a step, and by a busy core', async () => {
+            const blocked = [
+                { emulator: createPokeMockEmulator({ canExecute: false }), error: 'not compiled' },
+                { emulator: createPokeMockEmulator({ terminated: true }), error: 'terminated' },
+                {
+                    emulator: createPokeMockEmulator({ interrupt: { type: 'input' } }),
+                    error: 'interrupt'
+                },
+                { emulator: createPokeMockEmulator({ canPoke: false }), error: 'Cannot poke' }
+            ]
+
+            for (const { emulator, error } of blocked) {
+                const { context } = createTestContext({ 'main.s': 'nop' }, emulator)
+                const tools = createDefaultCodingAgentTools(context)
+                const result = (await tools.poke_register.execute({
+                    register: '$t0',
+                    value: '9'
+                })) as unknown as ToolExecutionResult
+
+                expect(result.success).toBe(false)
+                expect(result.errorKind).toBe('execution_state')
+                expect(result.error).toContain(error)
+                expect(emulator.pokeRegisters).not.toHaveBeenCalled()
+            }
+        })
+    })
+
+    describe('poke_memory', () => {
+        it('pokes a run of bytes of the real Core as one step', async () => {
+            const { emulator, tools } = await pokeableM68K()
+
+            const result = (await tools.poke_memory.execute({
+                address: '0x3000',
+                bytes: 'de ad be ef'
+            })) as unknown as ToolExecutionResult
+
+            expect(result.success).toBe(true)
+            expect(result.changed).toBe(true)
+            expect(result.recorded).toBe(true)
+            expect(result.length).toBe(4)
+            expect(result.hex).toBe('de ad be ef')
+            //memory this program never wrote starts at 0xFF on this Core
+            expect(result.previousHex).toBe('ff ff ff ff')
+            expect([...emulator.readMemoryBytes(0x3000n, 4)]).toEqual([0xde, 0xad, 0xbe, 0xef])
+
+            const [poke] = result.latestSteps as FormattedStep[]
+            expect(poke.kind).toBe('poke')
+            expect(poke.writes).toEqual([
+                {
+                    type: 'memory',
+                    address: {
+                        decimal: '12288',
+                        hex: '0x3000',
+                        display: 'decimal: 12288 hex: 0x3000'
+                    },
+                    old: 'ff ff ff ff',
+                    new: 'de ad be ef'
+                }
+            ])
+        })
+
+        it('records nothing when memory already holds those bytes', async () => {
+            const { tools } = await pokeableM68K()
+            await tools.poke_memory.execute({ address: '0x3000', bytes: 'deadbeef' })
+
+            const again = (await tools.poke_memory.execute({
+                address: '0x3000',
+                bytes: 'de ad be ef'
+            })) as unknown as ToolExecutionResult
+
+            expect(again.success).toBe(true)
+            expect(again.changed).toBe(false)
+            expect(again.recorded).toBe(false)
+            expect(again.note).toContain('nothing was poked')
+        })
+
+        it('refuses an empty byte string, an odd digit count and a bad address', async () => {
+            const { emulator, tools } = await pokeableM68K()
+
+            const empty = (await tools.poke_memory.execute({
+                address: '0x3000',
+                bytes: '  '
+            })) as unknown as ToolExecutionResult
+            expect(empty.success).toBe(false)
+            expect(empty.errorKind).toBe('invalid_input')
+            expect(empty.error).toContain('No bytes to poke')
+
+            const odd = (await tools.poke_memory.execute({
+                address: '0x3000',
+                bytes: 'dea'
+            })) as unknown as ToolExecutionResult
+            expect(odd.success).toBe(false)
+            expect(odd.error).toContain('odd count')
+
+            const notHex = (await tools.poke_memory.execute({
+                address: '0x3000',
+                bytes: 'zz'
+            })) as unknown as ToolExecutionResult
+            expect(notHex.success).toBe(false)
+            expect(notHex.error).toContain('hex digits only')
+
+            const badAddress = (await tools.poke_memory.execute({
+                address: 'the stack',
+                bytes: 'de'
+            })) as unknown as ToolExecutionResult
+            expect(badAddress.success).toBe(false)
+            expect(badAddress.error).toContain('Invalid hex address')
+
+            expect([...emulator.readMemoryBytes(0x3000n, 4)]).toEqual([255, 255, 255, 255])
+        })
+
+        it('is blocked by everything that blocks a step, and by a busy core', async () => {
+            const emulator = createPokeMockEmulator({ terminated: true })
+            const { context } = createTestContext({ 'main.s': 'nop' }, emulator)
+            const tools = createDefaultCodingAgentTools(context)
+
+            const result = (await tools.poke_memory.execute({
+                address: '0x3000',
+                bytes: 'de'
+            })) as unknown as ToolExecutionResult
+
+            expect(result.success).toBe(false)
+            expect(result.errorKind).toBe('execution_state')
+            expect(result.error).toContain('terminated')
+            expect(emulator.pokeMemory).not.toHaveBeenCalled()
+        })
+    })
+
+    describe('latest steps', () => {
+        it('renders a Poke with its writes in hex and no source line', () => {
+            const poke: ExecutionStep = {
+                kind: 'poke',
+                mutations: [],
+                pc: -1,
+                line: -1,
+                old_ccr: { bits: 0 },
+                new_ccr: { bits: 0 },
+                writes: [
+                    { type: 'register', name: 'D0', old: 1n, new: 0xcafen },
+                    { type: 'memory', address: 0x2000n, old: [255, 255], new: [0xde, 0xad] }
+                ]
+            }
+
+            expect(formatLatestSteps('', [poke])).toEqual([
+                {
+                    kind: 'poke',
+                    writes: [
+                        {
+                            type: 'register',
+                            register: 'D0',
+                            old: { decimal: '1', hex: '0x1', display: 'decimal: 1 hex: 0x1' },
+                            new: {
+                                decimal: '51966',
+                                hex: '0xcafe',
+                                display: 'decimal: 51966 hex: 0xcafe'
+                            }
+                        },
+                        {
+                            type: 'memory',
+                            address: {
+                                decimal: '8192',
+                                hex: '0x2000',
+                                display: 'decimal: 8192 hex: 0x2000'
+                            },
+                            old: 'ff ff',
+                            new: 'de ad'
+                        }
+                    ]
+                }
+            ])
+        })
+
+        it('reports the newest steps when the history holds more than it lists', () => {
+            //`latestSteps` is newest first and the history preference can be set well above the ten
+            //steps this lists, so a Poke the model has just made has to be the first one it reads
+            const steps: ExecutionStep[] = Array.from({ length: 12 }, (_, index) => ({
+                kind: 'instruction' as const,
+                mutations: [],
+                pc: 0x1000 + (11 - index) * 4,
+                line: 11 - index,
+                old_ccr: { bits: 0 },
+                new_ccr: { bits: 0 }
+            }))
+
+            const formatted = formatLatestSteps('', steps) as FormattedStep[]
+            expect(formatted).toHaveLength(10)
+            expect(formatted[0].pc?.hex).toBe(`0x${(0x1000 + 11 * 4).toString(16)}`)
+            expect(formatted[9].pc?.hex).toBe(`0x${(0x1000 + 2 * 4).toString(16)}`)
+        })
+
+        it('keeps an instruction step reading as one', () => {
+            const instruction: ExecutionStep = {
+                kind: 'instruction',
+                mutations: [],
+                pc: 0x1000,
+                line: 0,
+                old_ccr: { bits: 0 },
+                new_ccr: { bits: 0 }
+            }
+
+            const [formatted] = formatLatestSteps('move.l #1,d0', [instruction]) as FormattedStep[]
+            expect(formatted.kind).toBe('instruction')
+            expect(formatted.line).toBe('1 | move.l #1,d0')
+            expect(formatted.writes).toBeUndefined()
+        })
+
+        //a Poke made through the tool reaches the prompt as well, so the model knows what it is for
+        it('tells the prompt what a Poke is and what is never pokeable', () => {
+            const prompt = buildDefaultCodingAgentPrompt({
+                enabledToolNames: ['poke_register', 'poke_memory', 'undo'],
+                enabledWorkflows: []
+            })
+            expect(prompt).toContain(
+                'poke_register and poke_memory change a value of the paused program'
+            )
+            expect(prompt).toContain('one step of the same history the instructions are in')
+            expect(prompt).toContain('The program counter and the status flags are never pokeable')
         })
     })
 })

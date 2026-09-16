@@ -185,6 +185,18 @@ export abstract class BaseEmulator<R extends string> {
     /** Writes one register of a declared Register file, named as the descriptor names it. */
     _setRegisterFileValue?(id: string, register: string, value: bigint): void
 
+    /**
+     * Opens the Core's Poke transaction ([ADR 0022](../../../docs/adr/0022-core-native-poke-records.md)):
+     * everything written through `_setRegisterValue`, `_setRegisterFileValue` and
+     * `_writeMemoryBytes` until `_endPoke` is journaled as one entry of the Core's own Undo
+     * history, instead of being the direct write those setters are outside a transaction, which is
+     * what a Testcase's starting values rely on.
+     */
+    abstract _beginPoke(): void
+
+    /** Closes it, answering whether the Core recorded an entry (a history of 0 records nothing). */
+    abstract _endPoke(): boolean
+
     abstract _hasTerminated(): boolean
 
     /**

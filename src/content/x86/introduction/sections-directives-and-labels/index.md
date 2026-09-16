@@ -1,171 +1,217 @@
-Every program so far has opened with `default rel`, `global _start` and a `section` line, and put its
-numbers in memory with `dq`. None of those are instructions. They are **directives**: lines addressed
-to NASM rather than to the processor, telling it how to lay the program out before the processor ever
-sees it.
+# Sections, directives and labels
 
-## The sections
+The programs in this course already use lines such as `section .text`, `dq`, `default rel`, and
+`global _start`. These lines are **directives**: they tell NASM how to assemble the source. They are
+not instructions that the processor executes.
 
-A program is divided into sections, and `section` opens one. Everything after the line belongs to it
-until the next `section` line.
+This lesson brings those pieces together and adds three useful parts of the standard source layout:
+read-only data in `.rodata`, zero-initialized reserved storage in `.bss`, and assembly-time
+calculations with `equ`, `$`, and `$$`.
 
-| section           | holds                                | in the file | writable |
-| ----------------- | ------------------------------------ | ----------- | -------- |
-| `section .text`   | the instructions                     | yes         | no       |
-| `section .data`   | data with a starting value           | yes         | yes      |
-| `section .rodata` | constants that must never be written | yes         | no       |
-| `section .bss`    | space that starts as zeroes          | no          | yes      |
+## The four sections used in this course
 
-The last row is the interesting one, because of what it costs. Asking for a megabyte of zeroes in
-`.data` puts a megabyte of zeroes in the program file, on disk, every one of which has to be read
-before the program starts. Asking for the same megabyte in `.bss` puts a single number in a header
-saying how much is wanted, and the operating system supplies the zeroes when it loads the program.
-For anything you were going to fill in anyway, `.bss` is free.
+In the NASM/Linux ELF setup used here, `section` selects an object-file section. Everything that
+follows belongs to that section until another `section` directive selects a different one.
 
-The two read only sections mean it. A store into `.text` or `.rodata` ends the program rather than
-changing anything, which "Interrupts, exceptions and signals" comes back to. `segment` is the same
-directive spelled the other way, and NASM accepts both.
+| source section    | what it contains                         | initialized payload in the executable | usual memory access |
+| ----------------- | ---------------------------------------- | -------------------------------------- | ------------------- |
+| `section .text`   | machine instructions                     | yes                                    | read and execute    |
+| `section .rodata` | initialized data that code should not change | yes                                | read only           |
+| `section .data`   | initialized data that code may change    | yes                                    | read and write      |
+| `section .bss`    | reserved storage that starts filled with zero bytes | no                           | read and write      |
 
-## Putting data in
+These names and protections are conventions implemented by the ELF object metadata and this
+course's linker setup; they are not properties that NASM imposes on every possible program format.
+Here, `.text` and `.rodata` are normally mapped without write permission. Trying to store into such
+a mapping normally causes a protection fault, so the operating system stops the program.
 
-Four directives write bytes straight into the program, 1, 2, 4 and 8 at a time, and each of them takes
-a list.
+The `.bss` row separates file size from memory use. For example, reserving one megabyte in `.bss`
+does not put one megabyte of zero bytes into the executable file. The executable records how much
+zero-filled storage is required. That range still reserves virtual address space, and it consumes
+memory pages when the program uses it. `.bss` saves initialized payload in the program file; the
+storage is not free while the program runs.
 
+The layout can be summarized as:
+
+| part of the program | source of its initial contents |
+| ------------------- | ------------------------------ |
+| `.text`             | instruction bytes in the file  |
+| `.rodata`           | initialized bytes in the file  |
+| `.data`             | initialized bytes in the file  |
+| `.bss`              | a reserved range supplied as zero-filled memory |
+
+## Emitting initialized data
+
+The directives `db`, `dw`, `dd`, and `dq` emit initialized values. Their names mean **define byte**,
+**define word**, **define doubleword**, and **define quadword**.
+
+| directive | unit emitted for each numeric value |
+| --------- | -----------------------------------: |
+| `db`      | 1 byte                              |
+| `dw`      | 2 bytes                             |
+| `dd`      | 4 bytes                             |
+| `dq`      | 8 bytes                             |
+
+Place them in `.rodata` when the program should only read the values, or in `.data` when it should
+also modify them:
+
+```x86
+section .rodata
+letters: db "hello", 10, 0       ; bytes for hello, newline, and a zero
+sizes:   dw 10, 20                ; two words: 4 bytes in total
+
+section .data
+counts:  dd 3, 4, 5               ; three dwords: 12 bytes in total
+values:  dq 100, 200              ; two qwords: 16 bytes in total
 ```
-values: dq 10, 20, 30, 40           ; four qwords
-text:   db "hello", 10, 0           ; five characters, a newline and a terminator
-zeroes: times 8 db 0                ; the same line eight times
-```
 
-A string in quotes is just a list of bytes, so `db "hi", 0` and `db 'h', 'i', 0` assemble to the same
-three bytes. Nothing adds a terminating zero for you: if the code that reads the string expects one,
-the `0` at the end is yours to write.
+A quoted string given to `db` emits one byte per character. NASM does not append a zero terminator:
+the final `0` in `letters` is present only because the declaration explicitly includes it.
 
-`times n` repeats whatever follows it `n` times, so `times 8 db 0` is eight zero bytes written into
-the program file one after another.
+## Reserving zero-initialized storage
 
-## Reserving space
+The `.bss` directives `resb`, `resw`, `resd`, and `resq` reserve a count of units. Their names mean
+**reserve byte**, **reserve word**, **reserve doubleword**, and **reserve quadword**.
 
-The other four directives reserve room without putting anything in it, and belong in `.bss`. Their
-count is in **units** rather than bytes, which is the trap: `resq 4` is four qwords, so 32 bytes, and
-somebody who read it as four bytes has an array a quarter the size they think.
+| directive | size of each reserved unit |
+| --------- | -------------------------: |
+| `resb`    | 1 byte                     |
+| `resw`    | 2 bytes                    |
+| `resd`    | 4 bytes                    |
+| `resq`    | 8 bytes                    |
 
-```
+The operand is a unit count, not a byte count:
+
+```x86
 section .bss
-buffer: resb 64                     ; 64 bytes
-slots:  resq 4                      ; 4 qwords, so 32 bytes
+buffer: resb 64                    ; 64 bytes
+words:  resw 8                     ; 8 words, so 16 bytes
+items:  resd 6                     ; 6 dwords, so 24 bytes
+slots:  resq 4                     ; 4 qwords, so 32 bytes
 ```
 
-## Naming numbers
+All four ranges begin filled with zero bytes in this course's Linux environment.
 
-A name for a number is not a variable. `equ` makes one, and what it makes exists only while the
-program is being assembled: every appearance of the name is replaced by the number, and nothing about
-it survives into the running program.
+## Labels name addresses
 
+A label names the address of the next byte placed at that point. This is the same idea used in the
+earlier memory examples. A **data label** names the address of emitted or reserved bytes:
+
+```x86
+section .rodata
+message: db "OK", 10
+
+section .bss
+result:  resq 1
 ```
+
+`message` is the address of the `O` byte, and `result` is the address of the first reserved byte. A
+label is still only an address: it does not force later memory accesses to use the declaration's
+size.
+
+A **code label** names the address of an instruction:
+
+```x86
+section .text
+_start:
+    lea r8, [rel message]
+```
+
+Here `_start` names the address of the `lea` instruction, while `message` names the address that
+`lea` calculates. This course writes the optional colon after labels so their role is clear.
+
+In the runnable template, this course's linker setup uses `_start` as the program's entry symbol.
+`global _start` makes the `_start` definition visible to that linker.
+
+## Assembly-time constants with `equ`
+
+`equ` gives a name to a number that NASM calculates while assembling the program:
+
+```x86
 MAX     equ 10
-STEP    equ MAX * 2                 ; 20; the assembler does arithmetic
+STEP    equ MAX * 2               ; 20
 ```
 
-Two more names the assembler keeps for itself make this useful. `$` is the address of the line it
-appears on, and `$$` the address the current section started at, so subtracting one from the other
-counts bytes:
+An `equ` name is an assembly-time constant. It allocates no bytes and has no addressable storage at
+run time. `mov r8, MAX` puts the number 10 in `r8`; `[MAX]` would instead mean a memory access at
+numeric address 10, not a variable named `MAX`.
 
+NASM provides two special position values for calculations:
+
+- `$` is the current assembly position, after any bytes already emitted at that point.
+- `$$` is the start position of the current section.
+
+Subtracting an earlier label from `$` gives the number of bytes emitted since that label:
+
+```x86
+section .rodata
+name:       db "asm-editor", 0
+NAME_BYTES  equ $ - name          ; 11 bytes, including the terminating zero
+USED_BYTES  equ $ - $$            ; bytes used from the start of this section
 ```
-name:   db "asm-editor", 0
-NLEN    equ $ - name                ; 11, because $ is the address after the 0
+
+`NAME_BYTES` is 11 because the ten characters and the terminating zero all come before the current
+position. If the terminator were omitted, the value would be 10.
+
+The difference `$ - label` is always a byte count. Divide by the element size to count fixed-size
+elements:
+
+```x86
+section .data
+QWORD_SIZE equ 8
+nums:      dq 1, 2, 3
+COUNT      equ ($ - nums) / QWORD_SIZE
 ```
 
-Counting it that way stays right when you edit the string. Counting it by hand and forgetting to
-update the number afterwards is how a print ends up cut off halfway or trailing a few bytes of
-whatever came next.
+The `dq` declaration emits 24 bytes, and each element is 8 bytes, so `COUNT` is 3.
 
-```x86|playground|no-flags
+## Putting the layout together
+
+This program uses all four sections. Build it and inspect the registers and memory:
+
+```x86|playground|memory|no-flags
 default rel
 global _start
 
-MAX     equ 10
-STEP    equ MAX * 2
+MAX         equ 10
+STEP        equ MAX * 2
+QWORD_SIZE  equ 8
 
 section .rodata
-name:   db "asm-editor", 0
-NLEN    equ $ - name
+name:       db "asm-editor", 0
+NAME_BYTES  equ $ - name
 
 section .data
-nums:   dq 1, 2, 3
-COUNT   equ ($ - nums) / 8
+nums:       dq 1, 2, 3
+COUNT       equ ($ - nums) / QWORD_SIZE
 
 section .bss
-buffer: resb 16
+buffer:     resb 16
 
 section .text
 _start:
-    mov rax, MAX                ; 10
-    mov rbx, STEP               ; 20
-    mov rcx, NLEN               ; 11
-    mov rdx, COUNT              ; 3
-    lea rsi, [buffer]           ; an address in .bss
+    mov rax, MAX
+    mov rbx, STEP
+    mov rcx, NAME_BYTES
+    mov rdx, COUNT
+    lea rsi, [rel buffer]
 
     mov rax, 60
     mov rdi, 0
     syscall
 ```
 
-`COUNT` is `($ - nums) / 8`, the number of bytes the `dq` line produced divided by the size of one of
-them. Add a fourth number to the `dq` line and `rdx` comes out at 4 with nothing else in the program
-touched.
-
-## Labels
-
-A label names the address of whatever comes next. The colon is optional in NASM and this course
-always writes it, because a line that is nothing but a mistyped instruction becomes a label without
-one.
-
-A label that begins with a **dot** is local to the label above it:
-
-```
-compare:
-    cmp rax, rbx
-    jl .smaller
-    mov rcx, 1
-    ret
-.smaller:                       ; really compare.smaller
-    mov rcx, 0
-    ret
-```
-
-Local labels can repeat: another subroutine can have its own `.smaller` with no clash. That is what
-saves you inventing `loop1`, `loop2` and `loop_end_2` names across a long file.
-
-## global and extern
-
-Labels are private to the file they are written in unless you say otherwise, which is why every
-program here carries a `global _start`. The linker has to be able to find `_start`, because that is
-where a Linux program begins, and a program without the line does not link at all.
-
-`extern` is the other direction, naming a label that a different file defines. Neither matters until a
-program is more than one file, which the editor supports through its file list.
-
-## The preprocessor
-
-There is a second layer above all of this. NASM has a preprocessor of its own, which runs over the
-text of your file before the assembler proper sees any of it, and every one of its lines starts with
-a `%`.
-
-```
-%define BUFSIZE 64              ; like equ, but expanded as text and reusable
-%include "other.asm"            ; paste another file in here
-```
-
-`%define` differs from `equ` in when it is expanded, and for a plain number either works. The
-[directive page](/documentation/x86/directive) lists the rest, macros included.
+Before the exit template, `rax` is 10, `rbx` is 20, `rcx` is 11, and `rdx` is 3. `rsi` holds the
+address of the 16 zero-filled bytes reserved at `buffer`.
 
 ## Your turn
 
-Write a string and let the assembler count it. Put `Hello` followed by a newline in `.rodata` at
-`greeting`, and an `equ` called `GLEN` holding its length. Leave the address of the string in `r8`
-and the length in `r9`. The string is six bytes, five letters and the newline, with no terminator.
+Practice declaring read-only bytes and deriving their length. In `.rodata`, declare `greeting` as
+the six bytes for `Hello` followed by a newline, with no zero terminator. Define `GLEN` as
+`$ - greeting`. Leave the address of `greeting` in `r8` and `GLEN` in `r9`. The final six bytes must
+be `48 65 6C 6C 6F 0A` in hexadecimal.
 
-```x86|playground|exercise
+```x86|playground|memory|exercise
 default rel
 global _start
 
@@ -183,14 +229,22 @@ _start:
 
 ```testcase
 {
-    "expectedRegisters": { "r8": "0x402000", "r9": 6 }
+    "expectedRegisters": { "r8": "0x402000", "r9": 6 },
+    "expectedMemory": [
+        {
+            "type": "number-chunk",
+            "address": "0x402000",
+            "bytes": 1,
+            "expected": ["0x48", "0x65", "0x6C", "0x6C", "0x6F", "0x0A"]
+        }
+    ]
 }
 ```
 
 <details>
 <summary>Show solution</summary>
 
-```x86|playground|solution
+```x86|playground|memory|solution
 default rel
 global _start
 
@@ -200,7 +254,7 @@ GLEN        equ $ - greeting
 
 section .text
 _start:
-    lea r8, [greeting]
+    lea r8, [rel greeting]
     mov r9, GLEN
 
     mov rax, 60
@@ -210,8 +264,9 @@ _start:
 
 </details>
 
-The second one reserves and fills. Reserve four qwords at `slots` in `.bss`, write 7 into the third
-of them, and leave the other three as the zeroes `.bss` starts with.
+Practice reserving and addressing qwords. Reserve four qwords at `slots` in `.bss`, place 7 in the
+third qword, and leave the other three at their initial zero values. Leave the address of `slots` in
+`r8`. The four final qwords must be `0, 0, 7, 0`.
 
 ```x86|playground|memory|exercise
 default rel
@@ -231,8 +286,14 @@ _start:
 
 ```testcase
 {
+    "expectedRegisters": { "r8": "0x402000" },
     "expectedMemory": [
-        { "type": "number-chunk", "address": "0x402000", "bytes": 8, "expected": [0, 0, 7, 0] }
+        {
+            "type": "number-chunk",
+            "address": "0x402000",
+            "bytes": 8,
+            "expected": [0, 0, 7, 0]
+        }
     ]
 }
 ```
@@ -249,7 +310,8 @@ slots:  resq 4
 
 section .text
 _start:
-    mov qword [slots + 16], 7   ; the third qword, sixteen bytes in
+    lea r8, [rel slots]
+    mov qword [r8 + 16], 7       ; third qword: two 8-byte elements from slots
 
     mov rax, 60
     mov rdi, 0

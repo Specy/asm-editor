@@ -1,264 +1,264 @@
-There are exactly three ways to write an operand, and the way an operand is written is called its
-**addressing mode**.
+RISC-V keeps arithmetic and memory access separate. To change a value in memory, you first load it
+into a register, work on it there, and then store it back. This lecture develops that pattern and
+the operand notation it uses.
 
-| mode             | written | what it means                            |
-| ---------------- | ------- | ---------------------------------------- |
-| register         | `t0`    | the value in that register               |
-| immediate        | `7`     | a number written into the instruction    |
-| base plus offset | `4(t0)` | the memory at the address `t0` plus four |
+## Real operands and assembler conveniences
 
-The first two name something the processor already has in hand. The third names an address, and only
-a load or a store is allowed to use it.
+The real RISC-V instructions in this lecture use three important operand forms:
 
-## Everything happens in registers
+| form | example | meaning |
+| ---- | ------- | ------- |
+| register | `t0` | the 32-bit value currently in that register |
+| immediate | `7` or `-4` | a constant written as part of the instruction |
+| base plus offset | `8(t0)` | memory at the address obtained from `t0 + 8` |
 
-Eight instructions touch memory: `lw`, `lh`, `lb`, `lbu`, `lhu`, `sw`, `sh` and `sb`. Every other
-instruction on the machine works on registers and nothing else, which is what the phrase **load/store
-architecture** means.
+These forms are often called **addressing modes**. The form an instruction accepts depends on the
+instruction. For example, `addi` accepts registers and an immediate, while a load or store accepts
+the `offset(base)` memory form.
 
-So a program that works on data in memory always has the same shape. Load it into a register, do the
-work there, store it back. Three steps where you might have expected one, and the reason is
-underneath: reaching memory can take many times longer than an addition, so the design keeps the
-slow thing in instructions of its own where you can see it happening.
+The assembler also accepts convenient **pseudo-instructions** and rewrites them into real
+instructions. Three common ones are:
 
-## offset(base)
+- `li t0, 7`, which puts the immediate value 7 in `t0`;
+- `mv t1, t0`, which copies the value in `t0` to `t1`; and
+- `la t2, numbers`, which puts the address named `numbers` in `t2` without reading memory there.
 
-`lw t3, 4(t2)` reads the word at the address `t2 + 4`. The register is the **base**, the number is
-the **offset** in bytes, and the offset is the same signed 12 bit constant every I-type instruction
-carries, so it runs from -2048 to 2047. That is the whole mode: one register, one constant, added
-while the instruction runs.
+`li` means **load immediate**. It places a constant in a register without reading memory. For a
+small value, the assembler can rewrite it using the real instruction `addi` and the `zero`
+register:
 
-```riscv|playground|memory
-.data
-numbers: .word 10, 20, 30, 40
-
-.text
-main:
-    li t0, 7            # immediate
-    mv t1, t0           # register
-    la t2, numbers      # the address of the label, nothing read
-    lw t3, 0(t2)        # numbers[0]
-    lw t4, 4(t2)        # numbers[1]
-    addi t5, t2, 12     # a pointer at numbers[3]
-    lw t6, -4(t5)       # and one word back from it
+```riscv
+li t0, 7               # convenient spelling
+addi t0, zero, 7       # same result for this value
 ```
 
-The four words sit at `0x10010000`, where `.data` puts the first label:
+Similarly, `mv t1, t0` can become `addi t1, t0, 0`. A large value or an address may take more than
+one real instruction to construct. Use `li` for a number, `mv` to copy a register, and `la` for
+the address represented by a label.
 
-| address      | value      | which element |
-| ------------ | ---------- | ------------- |
-| `0x10010000` | `0000000A` | `numbers[0]`  |
-| `0x10010004` | `00000014` | `numbers[1]`  |
-| `0x10010008` | `0000001E` | `numbers[2]`  |
-| `0x1001000C` | `00000028` | `numbers[3]`  |
+Assemblers can also accept some label-based shortcuts for loads and stores. Those shortcuts are
+not another hardware addressing mode. In this course, the clear general pattern is to use `la`
+once to place a label's address in a register, then access memory with `offset(base)`.
 
-`t3` comes out at 10 and `t4` at 20. `t5` is `1001000C`, and `t6` is 30, because the offset may be
-negative and `-4(t5)` is one word back.
+## Working with an immediate
 
-Two things the mode will not do for you. It will not add two registers together, so there is no
-`lw t0, (t1 + t2)`. And it will not scale anything, so turning an element number into a byte offset
-is your own code's job. That is the next section.
+An **immediate** is a constant included in an instruction. The real `addi` instruction adds such a
+constant to a register:
 
-## Indexing an array
-
-Asking for element number `i` of an array means going to the start of the array and moving `i`
-elements along, and the machine has no idea how big an element is. Both halves are yours to
-write.
-
-```riscv|playground|memory
-.data
-numbers: .word 10, 20, 30, 40
-
-.text
-main:
-    la t0, numbers
-    li t1, 2            # i = 2
-    slli t2, t1, 2      # i * 4, the size of a word
-    add t3, t0, t2      # &numbers[i]
-    lw t4, 0(t3)        # numbers[i]
-    lw t5, 4(t3)        # numbers[i + 1]
-    li t6, 99
-    sw t6, 0(t3)        # numbers[i] = 99
+```riscv
+addi t1, t0, 5         # t1 = t0 + 5
+addi t2, t1, -1        # t2 = t1 - 1
 ```
 
-`slli t2, t1, 2` is the multiplication by four: shifting left by two places multiplies by four, and
-since every useful element size is a power of two, a shift is always the right instruction for this.
+The first operand is the destination, the second is the register source, and the third is the
+immediate. The source register keeps its value unless it is also the destination:
 
-Once the address is in a register, the constant offset does the rest of the work for free. `0(t3)`
-and `4(t3)` are two neighbouring elements from one piece of arithmetic, which is why a loop that
-handles elements in pairs is cheaper than two separate loops.
-
-## Where la gets its address from
-
-You have been writing `la t0, numbers` since the first lecture, and it is worth knowing what the
-assembler does with it, because the answer is not what you would guess.
-
-A 32 bit address will not fit inside a 32 bit instruction, so `la` is always two instructions. The
-surprise is that neither of them contains the address. The pair assembles into **`auipc`**, add
-upper immediate to `pc`, and an `addi`:
-
-```
-auipc t0, 0xfc10        # t0 = pc + 0xfc10000
-addi t0, t0, 0          # and the low 12 bits of the difference
+```riscv
+addi t0, t0, 4         # replace t0 with t0 + 4
 ```
 
-`auipc` takes a 20 bit constant, shifts it up 12 places, and adds it to the address of the `auipc`
-instruction itself. So what those two lines actually work out is **the distance from here to the
-label**, added to wherever the program happens to be right now.
+The immediate in a real `addi` instruction is a signed 12-bit value, so it can be from -2048 to
+2047. `li` is easier when your aim is simply to put a constant in a register, and the assembler can
+also expand `li` when the requested constant is too large for one `addi`.
 
-The `0xfc10` in the expansion is the top 20 bits of `0x10010000` minus `0x00400000`, the gap between
-the instruction and the data section.
+## Loading and storing
 
-Working in distances rather than in fixed addresses means the same code still finds its data if the
-whole program is loaded somewhere else in memory, which is a thing that really happens once a
-program is more than one file. You get that for free here and never have to think about it.
+A register can be used directly by arithmetic instructions. A value in memory cannot. RISC-V uses
+**load** instructions to copy data from memory into a register and **store** instructions to copy
+data from a register into memory.
 
-## Reaching a label directly
+The instructions choose how many bytes are copied. Loads of a byte or halfword also choose how the
+smaller value fills the rest of the 32-bit destination register:
 
-`lw t1, numbers` is not one of the three modes, but the assembler accepts it and builds it out of an
-`auipc` that works the address out into the destination register and a real `lw` through that.
+| instruction | bytes read | result in the register |
+| ----------- | ---------: | ---------------------- |
+| `lb`  | 1 | sign-extend the byte to 32 bits |
+| `lbu` | 1 | zero-extend the byte to 32 bits |
+| `lh`  | 2 | sign-extend the halfword to 32 bits |
+| `lhu` | 2 | zero-extend the halfword to 32 bits |
+| `lw`  | 4 | copy the complete 32-bit word |
 
-```riscv|playground|memory
-.data
-numbers: .word 10, 20, 30, 40
+Sign extension copies the smaller value's top bit into the new high bits; zero extension fills the
+new high bits with zero. If memory contains the byte `0xF0`, `lb` produces
+`0xFFFFFFF0`, which represents -16 as a signed value. `lbu` produces `0x000000F0`, which represents
+240. When the top bit of the smaller value is zero, sign extension and zero extension give the same
+result.
 
-.text
-main:
-    la t0, numbers      # auipc and addi: the address in a register
-    lw t1, numbers      # auipc and lw: the first word
-    li t2, 99
-    sw t2, numbers, t3  # a store to a label names its own temporary
+Stores have no extension choice because they copy bits in the other direction:
+
+| instruction | bytes written from the source register |
+| ----------- | --------------------------------------: |
+| `sb` | the lowest 1 byte |
+| `sh` | the lowest 2 bytes |
+| `sw` | all 4 bytes |
+
+For example, if `t1` contains `0x12345678`, `sb t1, 0(t0)` writes the low byte `0x78`. The other 24
+bits in `t1` stay unchanged. Choose the instruction that matches the size of the value in memory:
+byte, halfword, or word. Halfword accesses must start at an address divisible by 2, and word
+accesses must start at an address divisible by 4 in this course's simulator.
+
+## Calculating an effective address
+
+The memory operand `offset(base)` tells the processor how to calculate an address. The value in the
+base register and the offset in bytes are added:
+
+```text
+effective address = value in base register + offset
 ```
 
-Look at the third line, which has an operand more than a store should have. This is why: the address
-has to be built somewhere, and a load can build it in the very register it is about to fill, because
-that register's old value is about to be thrown away anyway. A store has no such register. It is
-reading a register, not writing one, so it needs you to **lend it one**, and `t3` is the one lent
-here. Afterwards `t3` holds `10010014`, the address the `auipc` worked out, which the store's own
-offset of -20 brought back down to `10010000`.
+The result is called the **effective address**: the address actually used for this access. In
 
-One thing the assembler will not do is arithmetic on a label: `lw t1, numbers+8` is a build error,
-because a label in an operand is that label and nothing added to it.
-
-These label forms cost two instructions every time they run. Inside a loop, do the `la` once before
-the loop starts and use `offset(base)` inside it. That is why `la` is the form you will write most:
-a pointer sitting in a register is what a loop actually wants.
-
-## Walking with a pointer
-
-An array in memory has no length, no bounds and no element names, so a loop over it is built out of
-a pointer and a count.
-
-```riscv|playground|memory
-.data
-numbers: .word 10, 20, 30, 40, 50
-
-.text
-main:
-    la t0, numbers      # where we are in the array
-    li t1, 0            # the running total
-    li t2, 5            # how many are left
-loop:
-    lw t3, 0(t0)        # the element we are on
-    add t1, t1, t3
-    addi t0, t0, 4      # on to the next word
-    addi t2, t2, -1
-    bnez t2, loop
+```riscv
+lw t3, 8(t0)
 ```
 
-`t0` finishes at `10010014`, twenty bytes along and one word past the last element. The
-`addi t0, t0, 4` is the step, and the 4 in it is the size of what is being stepped over: an array of
-bytes would step by 1, an array of halves by 2.
+`t0` is the base register and 8 is the byte offset. If `t0` holds `0x1000`, the effective address is
+`0x1008`. `lw` reads the four bytes beginning there and places the resulting word in `t3`. The value
+in `t0` does not change.
 
-The other way to write that loop keeps `t0` at the base and computes `slli` and `add` on every pass,
-which is two instructions more and gives you the index in a register. Use the pointer when you touch
-every element in order, and the index when you need the index itself, or when the loop jumps around
-the array the way a binary search does.
+A store writes in the opposite direction. Its register operand is the source value:
 
-## How a jump finds its target
-
-Jumps work in distances rather than in any of the three modes above. `beq t0, t1, label` carries the
-number of bytes from the branch to the label, and reaches about 4 kilobytes either way. `jal label`
-carries a distance too, and reaches about a megabyte. `jalr t0, t1, 0` is the one that takes an
-address out of a register, which is how a return and a jump table both work.
-
-In all of them you write a label and the assembler works the distance out.
-
-## Reach into the array yourself
-
-The four words are at `0x10010000`. Leave `numbers[2]` in `t0`, working the address out at run time
-from the index in `t1` instead of writing the offset 8 yourself.
-
-```riscv|playground|memory|exercise
-.data
-numbers: .word 10, 20, 30, 40
-
-.text
-main:
-    li t1, 2            # i = 2
-    # your code here
+```riscv
+sw t3, 8(t0)           # write t3 to the word at address t0 + 8
 ```
 
-```testcase
-{
-    "expectedRegisters": { "t0": 30 }
-}
+Offsets may be zero or negative:
+
+```riscv
+lh  t2, 0(t0)          # read a halfword exactly at the address in t0
+lw  t4, -4(t1)         # read a word four bytes before the address in t1
 ```
+
+Like the immediate in `addi`, the offset in these real load and store instructions is a signed
+12-bit value from -2048 to 2047. It is always counted in bytes, regardless of the access size. An
+offset of 4 means four bytes for `lb`, `lh`, and `lw`; it does not mean four elements.
+
+## Load, work, store
+
+Suppose `t0` holds the address of a word in memory and you want to add 1 to that word. Arithmetic
+instructions work on registers, so use this three-step pattern:
+
+```riscv
+lw   t1, 0(t0)         # load: copy the word from memory into t1
+addi t1, t1, 1         # work: add 1 in the register
+sw   t1, 0(t0)         # store: copy the changed word back to memory
+```
+
+The original memory value remains after the load. Changing `t1` changes only the register; the
+final store writes the changed value back to memory.
+
+The same shape works at other sizes. To change a byte, load it with `lb` or `lbu`, work on the
+32-bit register value, and write its low byte back with `sb`. Your choice between `lb` and `lbu`
+depends on whether the byte should be treated as a signed or unsigned value while it is in the
+register.
+
+## Finding an array element
+
+An array places equal-sized elements next to one another in memory. If a word array begins at
+`0x1000`, its first four elements have these addresses:
+
+| element | address calculation | address |
+| ------- | ------------------- | ------- |
+| `numbers[0]` | `0x1000 + 0 * 4` | `0x1000` |
+| `numbers[1]` | `0x1000 + 1 * 4` | `0x1004` |
+| `numbers[2]` | `0x1000 + 2 * 4` | `0x1008` |
+| `numbers[3]` | `0x1000 + 3 * 4` | `0x100C` |
+
+The general calculation is:
+
+```text
+element address = array base address + index * element size in bytes
+```
+
+If `t0` already holds the address of `numbers` and you want the element at a known index, the byte
+offset can go directly in the memory operand:
+
+```riscv
+lw t1, 8(t0)           # numbers[2], because 2 * 4 = 8
+```
+
+If the index is in a register, calculate the byte offset and address in registers first. For a word
+array, `slli` by two bit positions multiplies a non-negative index by 4:
+
+```riscv
+# t0 = address of numbers, t1 = index i
+slli t2, t1, 2         # byte offset = i * 4
+add  t3, t0, t2        # address of numbers[i]
+lw   t4, 0(t3)         # load numbers[i]
+```
+
+For a byte array, the index is already a byte offset. For a halfword array, the byte offset is the
+index multiplied by 2.
+
+A pointer is a register that holds an address. It can hold the current element's address and move
+to the next element:
+
+```riscv
+# t0 = address of one word element
+lw   t1, 0(t0)         # use the current element
+addi t0, t0, 4         # move the address to the next word
+lw   t2, 0(t0)         # use the next element
+```
+
+The step matches the element size: 1 for bytes, 2 for halfwords, and 4 for words. `addi` changes the
+address held in the register, and the following load uses the ordinary `0(t0)` memory form.
+
+## Check the address and value
+
+Assume `t0` holds `0x1000` and memory contains this word array:
+
+| address | word value |
+| ------- | ---------: |
+| `0x1000` | 10 |
+| `0x1004` | 20 |
+| `0x1008` | 30 |
+| `0x100C` | 40 |
+
+What effective address does `lw t4, 8(t0)` use, and what value does it place in `t4`?
 
 <details>
-<summary>Show solution</summary>
+<summary>Show answer</summary>
 
-```riscv|playground|memory|solution
-.data
-numbers: .word 10, 20, 30, 40
-
-.text
-main:
-    li t1, 2            # i = 2
-    la t2, numbers      # the base
-    slli t3, t1, 2      # i * 4
-    add t3, t2, t3      # &numbers[i]
-    lw t0, 0(t3)        # numbers[i]
-```
+The effective address is `0x1000 + 8`, or `0x1008`. The word at that address is 30, so `t4`
+receives 30.
 
 </details>
 
-The second one wants `numbers[i] = 99` with `i` already in `t1`. The test starts it at 3, so the last
-of the four words is the one that changes and the array ends up as 10, 20, 30, 99.
+## Practice
 
-```riscv|playground|memory|exercise
-.data
-numbers: .word 10, 20, 30, 40
-
-.text
-main:
-    li t1, 3            # i = 3
-    # your code here
-```
-
-```testcase
-{
-    "expectedMemory": [
-        { "type": "number-chunk", "address": "0x10010000", "bytes": 4, "expected": [10, 20, 30, 99] }
-    ]
-}
-```
+1. `t0` holds `0x2004`. What effective address is used by `lh t1, -2(t0)`? Is that address aligned
+   for a halfword?
+2. Memory at the address in `t0` contains the byte `0xFF`. Which load should you use to obtain 255
+   in `t1`? Which load should you use to obtain -1?
+3. `t0` holds the base address of a word array and `t1` holds the index 3. Write instructions that
+   calculate the address of element 3 in `t2` and load that element into `t3`.
+4. `t0` holds the address of a word whose current value is 20. Write the load–work–store sequence
+   that adds 5 and writes 25 back to the same address.
 
 <details>
-<summary>Show solution</summary>
+<summary>Show answers</summary>
 
-```riscv|playground|memory|solution
-.data
-numbers: .word 10, 20, 30, 40
+1. The effective address is `0x2004 - 2`, or `0x2002`. It is aligned because it is divisible by 2.
+2. Use `lbu t1, 0(t0)` to zero-extend `0xFF` and obtain 255. Use `lb t1, 0(t0)` to sign-extend it
+   and obtain -1.
+3. One solution is:
 
-.text
-main:
-    li t1, 3            # i = 3
-    la t2, numbers
-    slli t3, t1, 2      # i * 4
-    add t3, t2, t3      # &numbers[i]
-    li t4, 99
-    sw t4, 0(t3)        # numbers[i] = 99
-```
+   ```riscv
+   slli t2, t1, 2      # 3 * 4 = 12 bytes
+   add  t2, t0, t2     # address of element 3
+   lw   t3, 0(t2)      # load element 3
+   ```
+
+4. One solution is:
+
+   ```riscv
+   lw   t1, 0(t0)
+   addi t1, t1, 5
+   sw   t1, 0(t0)
+   ```
 
 </details>
+
+The pattern to carry forward is small but powerful: use immediates for constants, calculate memory
+addresses in bytes, load values into registers, do the work there, and store results back when
+memory must change.

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { KEY_CODES } from '$lib/languages/peripherals/keyCodes'
 import type { Screen } from '$lib/languages/peripherals/screen/Screen'
 import { Z80Emulator } from '$lib/languages/Z80/Z80Emulator.svelte'
+import { CPU_REGISTER_FILE_ID } from '$lib/languages/GenericEmulator.svelte'
 
 /**
  * The memory-mapped TRS-80 display end to end, against the real Core under node
@@ -140,6 +141,41 @@ describe('the TRS-80 display', () => {
         await pressed.run(5000)
         expect(pressed.errors).toEqual([])
         expect(cellColor(pressed.peripherals.screen, 0)).toBe(WHITE)
+    })
+
+    it('repaints a poked cell, and repaints it back when the Poke is undone', async () => {
+        const emulator = await build(STORE_TWO_CELLS)
+        await emulator.step()
+        const screen = emulator.peripherals.screen
+        expect(cellColor(screen, 2)).toBe(BLACK)
+
+        //a Poke writes the display's memory without going through the Core's write hook, so the
+        //image comes from the resync the Poke ends with, exactly as after an Undo
+        //([ADR 0005](../../../../../docs/adr/0005-restore-screen-state-on-undo.md),
+        //[ADR 0020](../../../../../docs/adr/0020-mirror-the-trs80-display-in-guest-memory.md))
+        expect(emulator.pokeMemory(0x3c02n, new Uint8Array([FULL_BLOCK]))).toBe(true)
+        expect(cellColor(screen, 2)).toBe(WHITE)
+        expect(emulator.latestSteps[0].kind).toBe('poke')
+
+        emulator.undo(1)
+        expect(cellColor(screen, 2)).toBe(BLACK)
+        //and the journal was never involved: the image is the memory the Core rolled back
+        expect(screen.history.sequence).toBe(0)
+    })
+
+    it('keeps a poked register out of the display and out of the Screen journal', async () => {
+        const emulator = await build(STORE_TWO_CELLS)
+        await emulator.run(1000)
+        //the program has ended, and a terminated program is not pokeable (the design record)
+        expect(emulator.canPoke).toBe(false)
+
+        const stepped = await build(STORE_TWO_CELLS)
+        await stepped.step()
+        expect(
+            stepped.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'hl', value: 0x3c00n }])
+        ).toBe(true)
+        expect(cellColor(stepped.peripherals.screen, 0)).toBe(BLACK)
+        expect(stepped.peripherals.screen.history.sequence).toBe(0)
     })
 
     it('blanks the display on a rebuild', async () => {

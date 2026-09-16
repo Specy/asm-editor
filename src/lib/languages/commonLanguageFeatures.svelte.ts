@@ -211,7 +211,14 @@ export function makeRegister(name: string, v: bigint | number, _size: RegisterSi
     }
 }
 
+/**
+ * One entry of a Core's Undo history: either an instruction the program ran, or a Poke a person or
+ * the coding agent made between two instructions
+ * ([the design record](../../../docs/design/pokes.md)). A poke step carries no source location,
+ * since no instruction ran, and the panels read `kind` to tell the two apart.
+ */
 export type ExecutionStep = {
+    kind: 'instruction' | 'poke'
     mutations: MutationOperation[]
     pc: number
     old_ccr: {
@@ -222,14 +229,34 @@ export type ExecutionStep = {
     }
     line: number
     file?: string
+    /** What a Poke wrote, one entry per register and per run of consecutive memory bytes. */
+    writes?: PokeWrite[]
 }
 
+/**
+ * One value a Poke changed, as the panels show it: unsigned bit patterns, and register names in the
+ * editor's own spelling for that language, which is what the Register files list.
+ */
+export type PokeWrite =
+    | { type: 'register'; name: string; old: bigint; new: bigint }
+    | { type: 'memory'; address: bigint; old: number[]; new: number[] }
+
+/** One register write of a Poke; several of them in one call are one step of the Undo history. */
+export type RegisterPoke = { register: string; value: bigint }
+
+/**
+ * One thing an instruction did, as its Core's history reports it. A write carries what it replaced
+ * when the Core keeps it, which is what undo puts back, and what it wrote when the Core reports
+ * that too; neither is reconstructed here, so a value a Core cannot hand over is simply absent
+ * (RARS hands a 64 bit register's old value over as a 32 bit int, so RV64 has none).
+ */
 export type MutationOperation =
     | {
           type: 'WriteRegister'
           value: {
               register: string
-              old: bigint
+              old?: bigint
+              new?: bigint
               size: RegisterSize
           }
       }
@@ -237,7 +264,8 @@ export type MutationOperation =
           type: 'WriteMemory'
           value: {
               address: bigint
-              old: bigint
+              old?: bigint
+              new?: bigint
               size: RegisterSize
           }
       }
@@ -246,6 +274,7 @@ export type MutationOperation =
           value: {
               address: bigint
               old: number[]
+              new?: number[]
           }
       }
     | {
@@ -527,6 +556,22 @@ export type BaseEmulatorActions = {
     toggleBreakpoint: (line: number, file?: string) => void
     /** Returns how many instructions were actually rolled back, which can be fewer than asked. */
     undo: (amount?: number) => number
+    /**
+     * Whether a Poke is possible right now, which is exactly when Step is
+     * ([the design record](../../../docs/design/pokes.md)): after a Build, with no Interrupt
+     * pending, the program not terminated and no Run, Step or input handler owning the Core. The
+     * panels bind to it, so it is reactive.
+     */
+    readonly canPoke: boolean
+    /** Whether that one register of that Register file may be poked; the PC never may. */
+    canPokeRegister: (fileId: string, register: string) => boolean
+    /**
+     * Pokes one or more registers of one Register file as a single step of the Undo history. False
+     * when the Poke was refused or changed nothing; throws when a value does not fit its register.
+     */
+    pokeRegisters: (fileId: string, writes: RegisterPoke[]) => boolean
+    /** The same for a run of memory bytes, which is one step however many bytes it holds. */
+    pokeMemory: (address: bigint, bytes: Uint8Array) => boolean
     /**
      * Ends the current Run at its next slice boundary, preserving the program and undo history.
      * Does nothing when no run is in flight.

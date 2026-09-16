@@ -1,21 +1,53 @@
-Square brackets have been holding a label, a register, or a register and a number. All three are cases
-of one formula, and the formula is more capable than anything you have needed so far.
+# Effective addresses
 
-## One formula
-
-Every memory operand you will ever write on x86 looks like this:
+For the ordinary bracketed memory operands used in this course in 64-bit mode, x86 can calculate an
+address from this pattern:
 
 ```
-[ base + index * scale + displacement ]
+[base + index * scale + displacement]
 ```
 
-- **base** is any of the sixteen registers.
-- **index** is any of them except `rsp`.
-- **scale** is 1, 2, 4 or 8, and nothing else.
-- **displacement** is a constant added on at the end, written as a label, a number, or a sum of both.
+The calculated number is the **effective address**: the address of the first byte that the
+instruction accesses.
 
-Every part is optional. The processor adds up whatever is there, and the number it arrives at is the
-**effective address**, the byte it actually reads or writes.
+- **base** is the value in a 64-bit general-purpose register.
+- **index** is the value in a 64-bit general-purpose register, which may be the same register as the
+  base. `rsp` cannot be the index.
+- **scale** is `1`, `2`, `4`, or `8`.
+- **displacement** is a fixed integer such as `8` or `-16`.
+
+The base, index, and displacement are independently optional, but the expression must contain at
+least one component. The scale belongs to the index, so it is omitted when there is no index.
+
+Here are several valid shapes:
+
+```x86
+    mov r8, [rbx]                 ; base
+    mov r8, [rbx + 8]             ; base + displacement
+    lea r13, [rsi*8]              ; index * scale, with no base
+    mov r8, [rbx + rsi*8]         ; base + index * scale
+    mov r8, [rbx + rsi*8 + 16]    ; all four parts
+```
+
+In each `mov`, the processor calculates the address and then reads a qword from memory because `r8`
+is a 64-bit register.
+
+## Indexing a qword array
+
+In this lesson, array indices start at zero. Index 0 selects the first element, index 1 selects the
+second, and index 2 selects the third. This is called **zero-based indexing**.
+
+Suppose a four-qword array begins at address `0x402000`:
+
+| index | byte offset | effective address | value there |
+| ----: | ----------: | ----------------: | ----------: |
+| 0     | `0 * 8 = 0`  | `0x402000`         | 10          |
+| 1     | `1 * 8 = 8`  | `0x402008`         | 20          |
+| 2     | `2 * 8 = 16` | `0x402010`         | 30          |
+| 3     | `3 * 8 = 24` | `0x402018`         | 40          |
+
+Each qword occupies eight bytes, so the byte offset of index `i` is `i * 8`. If `rbx` contains the
+array's starting address and `rsi` contains the index, `[rbx + rsi*8]` selects that qword.
 
 ```x86|playground|no-flags
 default rel
@@ -26,46 +58,61 @@ arr:    dq 10, 20, 30, 40
 
 section .text
 _start:
-    lea rbx, [arr]              ; rbx = the address of arr
-    mov rcx, 2                  ; an index
+    lea rbx, [rel arr]          ; rbx = address of the first qword
+    mov rsi, 2                  ; zero-based index 2 means the third qword
 
-    mov r8, [arr]               ; displacement only
-    mov r9, [arr + 8]           ; displacement plus a constant
-    mov r10, [rbx]              ; base only
-    mov r11, [rbx + 8]          ; base plus displacement
-    mov r12, [rbx + rcx*8]      ; base plus index times scale
-    mov r13, [rbx + rcx*8 + 8]  ; all four at once
+    mov r8,  [rbx]             ; index 0: address arr + 0, value 10
+    mov r9,  [rbx + 8]         ; index 1: address arr + 8, value 20
+    mov r10, [rbx + rsi*8]     ; index 2: address arr + 16, value 30
+    mov r12, [rbx + rsi*8 + 8] ; address arr + 24, value 40
 
     mov rax, 60
     mov rdi, 0
     syscall
 ```
 
-Six lines, six forms, and the last two are the ones that earn the formula its keep. `arr` is an array
-of qwords, eight bytes each, so element number `rcx` starts at `rbx + rcx * 8`, and the processor does
-that multiplication while it works out the address. No shift, no add, no extra register.
+After the four loads, `r8 = 10`, `r9 = 20`, `r10 = 30`, and `r12 = 40`. Those values remain in the
+same registers when the program exits.
 
-The scale is limited to 1, 2, 4 and 8 because those are the sizes of a byte, a word, a dword and a
-qword, and indexing an array is what the scale is for. An array of anything else, a twenty byte record
-say, needs a real multiplication into a register first.
+The four scale values are an x86 encoding rule. They also match the common strides of byte, word,
+dword, and qword arrays:
 
-Getting the scale wrong is quiet rather than loud. Change `mov r12, [rbx + rcx*8]` to `[rbx + rcx*4]`
-and the line still assembles and still reads eight bytes, but it reads them from eight bytes into the
-array rather than sixteen, so `r12` comes back holding element 1 when you asked for element 2. The
-scale has to match the element size, and nothing checks it for you.
+| element width | byte stride | scale |
+| ------------- | ----------: | ----: |
+| byte          | 1           | 1     |
+| word          | 2           | 2     |
+| dword         | 4           | 4     |
+| qword         | 8           | 8     |
 
-## lea does the arithmetic without the memory
+The processor does not know the declared type of an array and does not choose the scale for you. A
+qword load with scale 4 still reads eight bytes; it simply starts at the wrong address for qword
+indexing. When an element's byte stride is not 1, 2, 4, or 8, calculate the needed byte offset in a
+register before using it in a memory operand.
 
-`lea` computes an effective address and puts it in a register instead of going to memory. That is how
-you get hold of a pointer:
+## `lea` calculates the number
 
+Compare these two instructions when `rbx` is the array address and `rsi` is 2:
+
+```x86
+    mov r12, [rbx + rsi*8]
+    lea r13, [rbx + rsi*8]
 ```
-    lea rbx, [arr]              ; rbx = the address of arr
-    lea rsi, [rbx + rcx*8]      ; rsi = the address of element rcx
+
+`mov` calculates `rbx + rsi * 8`, accesses memory at that address, and puts the qword stored there
+in `r12`. For the array above, that value is 30.
+
+`lea` calculates the same number and puts the number itself in `r13`. It does not access memory. If
+`rbx` is `0x402000`, then `r13` becomes `0x402010`, the address of the qword containing 30.
+
+The name `lea` means **load effective address**. Its bracketed operand describes a calculation, while
+its first operand is the one destination register:
+
+```x86
+    lea r13, [rbx + rsi*8]      ; r13 = address of array[index]
 ```
 
-Since the address unit can multiply by 1, 2, 4 or 8 and then add, `lea` is also a small arithmetic
-instruction that happens to write a third register and leave the flags alone:
+The calculated number does not have to be used as an address. The same allowed scales make `lea`
+useful for a few compact integer calculations:
 
 ```x86|playground|no-flags
 default rel
@@ -73,93 +120,31 @@ global _start
 
 section .text
 _start:
-    mov rcx, 7
+    mov rsi, 7
 
-    lea rax, [rcx + 1]          ; rax = rcx + 1
-    lea rbx, [rcx*8]            ; rbx = rcx * 8
-    lea rdx, [rcx + rcx*4]      ; rdx = rcx * 5
-    lea rsi, [rcx*8 + 3]        ; rsi = rcx * 8 + 3
-
-    mov rax, 60
-    mov rdi, 0
-    syscall
-```
-
-None of those four registers holds the address of anything. `rdx` is 35 because `rcx` was used twice
-in the same operand, once as the base and once as an index scaled by 4, which adds up to five times
-`rcx`. Compilers reach for `lea` constantly for exactly this reason: `add` would have to overwrite
-one of its inputs and would disturb the flags, and `lea` does neither.
-
-`[rcx*8]` with no base is a legal form, and so is `[rcx + rcx*4]` with the same register in both
-slots. The one thing you cannot write is `rsp` as the index, because the encoding uses that slot to
-mean "there is no index here".
-
-## rip relative, and default rel
-
-Here is the payoff for the `default rel` you have typed at the top of every program.
-
-There are two ways to write down where `arr` is. The **absolute** way puts the number `0x402000` into
-the instruction. The **rip relative** way puts the _distance_ from the end of this instruction to
-`arr` into the instruction, and the processor adds that distance to `rip` when it runs.
-
-Two separate things make the second one the form 64 bit code uses.
-
-**Programs do not always land where the linker put them.** Modern operating systems deliberately load
-a program, and each of the libraries it uses, at an address picked at random every single run. The
-technique is called **ASLR**, address space layout randomisation, and the point of it is that an
-attacker who finds a way to make your program jump to an address of their choosing still has to guess
-which address, and guesses wrong. Code written the absolute way stops working the moment it is loaded
-somewhere other than the address written into it. Code written the rip relative way does not care: the
-distance from an instruction to the data next to it is the same wherever the pair of them ends up.
-
-**An address does not fit in the instruction anyway.** The displacement field in an x86-64 instruction
-is 32 bits, and a 64 bit address is not a 32 bit number. The absolute form only works at all because
-the linker happens to put everything in this program down in the low part of the address space, where
-the top 32 bits are zero. Move the data above the 4GB mark and the absolute form has nowhere to put
-the address. A distance, on the other hand, stays small: your code and your data sit next to each
-other, so the gap between them fits into 32 bits with room to spare, whatever the addresses themselves
-turn out to be.
-
-`default rel` says "square brackets holding a label mean rip relative". Without it NASM assembles the
-absolute form, and warns you the first time it does.
-
-```x86|playground|no-flags
-global _start
-
-section .data
-arr:    dq 10, 20
-
-section .text
-_start:
-    mov r8, [arr]               ; absolute, and NASM warns about it
-    mov r9, [rel arr]           ; rip relative, asked for on this one line
-    mov r10, arr                ; the address itself, as an immediate
-    lea r11, [rel arr]          ; the address, worked out from rip
+    lea r12, [rsi + 1]          ; 7 + 1 = 8
+    lea r13, [rsi*8]            ; 7 * 8 = 56
+    lea r14, [rsi + rsi*4]      ; 7 + 7 * 4 = 35
+    lea r15, [rsi*8 + 3]        ; 7 * 8 + 3 = 59
 
     mov rax, 60
     mov rdi, 0
     syscall
 ```
 
-That program has no `default rel`, so the first line takes the absolute form and carries a warning you
-can read under the editor. All four lines work: `r8` and `r9` both read 10, `r10` and `r11` both hold
-`0x402000`. They work because this program was loaded exactly where the linker said it would be, which
-is a promise this simulator makes and a real Linux does not.
-
-The difference between the first two lines is in the bytes of the instructions themselves, and you can
-go and look at them. Type `401000` into the memory panel, which is where your code begins. The first
-instruction carries the four bytes `00 20 40 00` inside it, which is `0x402000` written little endian.
-The second carries a much smaller number in the same place, a few bytes' worth of distance, because
-that is all it needs.
-
-One form cannot be rip relative at all. An address with an index register in it, such as
-`[arr + rcx*8]`, uses the one slot the encoding has for that purpose, so it is always absolute and
-never warns. That is why the arrays earlier in this lecture produced no warning.
+At exit, `r12 = 8`, `r13 = 56`, `r14 = 35`, and `r15 = 59`. In the third calculation, `rsi` fills
+both the base and index roles, so the result is five times `rsi`.
 
 ## Your turn
 
-`grid` is four qwords. Using one instruction and one memory operand, read the element at index `rcx`
-into `r8`. The test sets `rcx` to 3, so the answer is 40.
+`grid` contains four qwords. Read two groups of indexed elements, using `rbx` as the base address and
+each index with the qword scale.
+
+- For the first group, `r12`, `r13`, and `r14` contain indices 3, 0, and 2. Put the selected qwords
+  in `r8`, `r9`, and `r10`.
+- For the second group, `r15`, `rsi`, and `rdx` contain indices 1, 3, and 0. Put the selected qwords
+  in `r12`, `r13`, and `r14`. The first group has already used their original index values, so these
+  registers can now hold results.
 
 ```x86|playground|exercise
 default rel
@@ -170,7 +155,7 @@ grid:   dq 10, 20, 30, 40
 
 section .text
 _start:
-    lea rbx, [grid]
+    lea rbx, [rel grid]
     ; your code here
 
     mov rax, 60
@@ -180,8 +165,22 @@ _start:
 
 ```testcase
 {
-    "startingRegisters": { "rcx": 3 },
-    "expectedRegisters": { "r8": 40 }
+    "startingRegisters": {
+        "r12": 3,
+        "r13": 0,
+        "r14": 2,
+        "r15": 1,
+        "rsi": 3,
+        "rdx": 0
+    },
+    "expectedRegisters": {
+        "r8": 40,
+        "r9": 10,
+        "r10": 30,
+        "r12": 20,
+        "r13": 40,
+        "r14": 10
+    }
 }
 ```
 
@@ -197,8 +196,13 @@ grid:   dq 10, 20, 30, 40
 
 section .text
 _start:
-    lea rbx, [grid]
-    mov r8, [rbx + rcx*8]       ; base, index, scale 8 for a qword
+    lea rbx, [rel grid]
+    mov r8,  [rbx + r12*8]
+    mov r9,  [rbx + r13*8]
+    mov r10, [rbx + r14*8]
+    mov r12, [rbx + r15*8]
+    mov r13, [rbx + rsi*8]
+    mov r14, [rbx + rdx*8]
 
     mov rax, 60
     mov rdi, 0
@@ -207,9 +211,9 @@ _start:
 
 </details>
 
-The second one uses `lea` as arithmetic. Leave `rcx * 9 + 2` in `rdx` using a single `lea` and no
-`mul`, `add` or `shl`. The test sets `rcx` to 4, so `rdx` should end at 38. Nine is eight plus one,
-and the formula has a slot for each.
+Now calculate `9 * x + 2` for three inputs. The inputs are `r8 = 0`, `r9 = 1`, and `r10 = 5`.
+Put the corresponding results 2, 11, and 47 in `r12`, `r13`, and `r14`. Try using `lea` for each
+calculation: nine times a value can be written as the value plus eight times the value.
 
 ```x86|playground|exercise
 default rel
@@ -226,8 +230,16 @@ _start:
 
 ```testcase
 {
-    "startingRegisters": { "rcx": 4 },
-    "expectedRegisters": { "rdx": 38 }
+    "startingRegisters": {
+        "r8": 0,
+        "r9": 1,
+        "r10": 5
+    },
+    "expectedRegisters": {
+        "r12": 2,
+        "r13": 11,
+        "r14": 47
+    }
 }
 ```
 
@@ -240,7 +252,9 @@ global _start
 
 section .text
 _start:
-    lea rdx, [rcx + rcx*8 + 2]  ; rcx once as the base, eight times as the index
+    lea r12, [r8 + r8*8 + 2]
+    lea r13, [r9 + r9*8 + 2]
+    lea r14, [r10 + r10*8 + 2]
 
     mov rax, 60
     mov rdi, 0
@@ -248,3 +262,30 @@ _start:
 ```
 
 </details>
+
+## Label addresses and `default rel`
+
+A label such as `arr` names an address chosen when the program is assembled and linked. In 64-bit
+mode, `default rel` tells NASM to use a RIP-relative reference for a bare label when that instruction
+form allows it. Writing `rel` makes the choice explicit:
+
+```x86
+    mov r8, [rel arr]           ; read the qword at arr
+    lea rbx, [rel arr]          ; calculate the address of arr
+```
+
+`rip` is the **instruction pointer**, the register that identifies the instruction being executed. In
+this addressing form, it supplies the address immediately after the current instruction. The two
+instructions above encode the signed distance from that address to `arr`, and the processor adds the
+distance to `rip` while the instruction runs. The distance must fit in a signed 32-bit displacement.
+This form lets the reference remain valid if the code and nearby data move together.
+
+RIP-relative addressing cannot include an index register in the same memory operand. For indexed
+arrays, first put the label's address in a register, then use that register as the base:
+
+```x86
+    lea rbx, [rel arr]
+    mov r8, [rbx + rsi*8]
+```
+
+This is the practical pattern used throughout the lesson.

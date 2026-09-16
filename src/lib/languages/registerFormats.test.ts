@@ -3,9 +3,12 @@ import {
     COMPACT_SCALE,
     decodeDouble,
     decodeSingle,
+    encodeDouble,
+    encodeSingle,
     formatFloat32,
     formatFloat64,
     isNanBoxed,
+    parseRegisterPoke,
     registerColumnWidth,
     registerFileWidth,
     renderRegister,
@@ -15,6 +18,7 @@ import {
 import {
     makeRegister,
     type RegisterFileDescriptor,
+    type RegisterFormat,
     RegisterSize,
     resolveRegisterFileLayout
 } from '$lib/languages/commonLanguageFeatures.svelte'
@@ -540,5 +544,190 @@ describe('the files the adapters declare', () => {
             'double',
             'double'
         ])
+    })
+})
+
+/**
+ * Committing a chunk back: the Poke a typed chunk asks for
+ * ([the design record](../../../docs/design/pokes.md)). The rendering rules above have to hold in
+ * reverse, so these read the same files: a group replaces its own digits, a lane its own bits, a
+ * MIPS double its pair and a RISC-V single its boxing.
+ */
+
+const cpu = rendering({
+    size: RegisterSize.Long,
+    formats: ['hex'],
+    registers: [{ name: 'd0' }, { name: 'd1' }]
+})
+
+/** The file's registers holding those bits, named as the file names them. */
+function holding(file: RegisterFileRendering, ...bits: bigint[]): RenderableRegister[] {
+    return bits.map((value, index) => ({
+        name: file.layout[index]?.name ?? `r${index}`,
+        value,
+        prev: value
+    }))
+}
+
+function poke(
+    file: RegisterFileRendering,
+    registers: readonly RenderableRegister[],
+    index: number,
+    format: RegisterFormat,
+    chunkIndex: number,
+    text: string,
+    options: { groupSize?: RegisterSize; decimals?: boolean } = {}
+) {
+    return parseRegisterPoke({
+        file,
+        registers,
+        index,
+        format,
+        groupSize: options.groupSize ?? RegisterSize.Long,
+        chunkIndex,
+        text,
+        decimals: options.decimals ?? false
+    })
+}
+
+describe('poking a hex group', () => {
+    const registers = holding(cpu, 0x11223344n, 0n)
+    const byWord = { groupSize: RegisterSize.Word }
+
+    it('replaces only the digits of the group that was typed into', () => {
+        expect(poke(cpu, registers, 0, 'hex', 0, 'ffff', byWord)).toEqual({
+            ok: true,
+            writes: [{ register: 'd0', value: 0xffff3344n }]
+        })
+        expect(poke(cpu, registers, 0, 'hex', 1, 'ffff', byWord)).toEqual({
+            ok: true,
+            writes: [{ register: 'd0', value: 0x1122ffffn }]
+        })
+    })
+
+    it('takes the whole register when the grouping is the register', () => {
+        expect(poke(cpu, registers, 0, 'hex', 0, '0xdeadbeef')).toEqual({
+            ok: true,
+            writes: [{ register: 'd0', value: 0xdeadbeefn }]
+        })
+    })
+
+    it('trims the text and zero fills the digits the commit left out', () => {
+        expect(poke(cpu, registers, 0, 'hex', 0, '  7f  ', byWord)).toEqual({
+            ok: true,
+            writes: [{ register: 'd0', value: 0x007f3344n }]
+        })
+    })
+
+    it('refuses a value wider than the group rather than truncating it', () => {
+        const refused = poke(cpu, registers, 0, 'hex', 0, '1ffff', byWord)
+        expect(refused.ok).toBe(false)
+        expect(refused.ok === false && refused.reason).toContain('16 bits')
+    })
+
+    it('refuses text that is not a number, and an empty commit', () => {
+        expect(poke(cpu, registers, 0, 'hex', 0, 'zz').ok).toBe(false)
+        expect(poke(cpu, registers, 0, 'hex', 0, '   ').ok).toBe(false)
+    })
+
+    it('reads a bare number as a decimal when the Preference draws decimals', () => {
+        expect(poke(cpu, registers, 0, 'hex', 1, '16', { ...byWord, decimals: true })).toEqual({
+            ok: true,
+            writes: [{ register: 'd0', value: 0x11220010n }]
+        })
+        //signed, as the group's hover reads it
+        expect(poke(cpu, registers, 0, 'hex', 1, '-2', { ...byWord, decimals: true })).toEqual({
+            ok: true,
+            writes: [{ register: 'd0', value: 0x1122fffen }]
+        })
+        expect(poke(cpu, registers, 0, 'hex', 1, '-40000', { ...byWord, decimals: true }).ok).toBe(
+            false
+        )
+        expect(poke(cpu, registers, 0, 'hex', 1, '70000', { ...byWord, decimals: true }).ok).toBe(
+            false
+        )
+    })
+
+    it('still reads an explicit 0x as hex while decimals are drawn', () => {
+        expect(poke(cpu, registers, 0, 'hex', 1, '0x1f', { ...byWord, decimals: true })).toEqual({
+            ok: true,
+            writes: [{ register: 'd0', value: 0x1122001fn }]
+        })
+        //a bare hex digit is not a decimal, so it is refused rather than read as something else
+        expect(poke(cpu, registers, 0, 'hex', 1, '1f', { ...byWord, decimals: true }).ok).toBe(
+            false
+        )
+    })
+
+    it('keeps an integer register inside a float file hexadecimal, whatever the Format', () => {
+        expect(poke(x87, holding(x87, 0n, 0n, 0x37fn), 2, 'double', 0, '0x1f')).toEqual({
+            ok: true,
+            writes: [{ register: 'ftag', value: 0x001fn }]
+        })
+    })
+})
+
+describe('poking a float lane', () => {
+    it('encodes a single at the precision of its lane', () => {
+        expect(poke(mipsFpu, holding(mipsFpu, 0n, 0n), 0, 'single', 0, '3')).toEqual({
+            ok: true,
+            writes: [{ register: '$f0', value: 0x40400000n }]
+        })
+        expect(decodeSingle(encodeSingle(0.1))).toBe(Math.fround(0.1))
+        expect(decodeDouble(encodeDouble(0.1))).toBe(0.1)
+    })
+
+    it('takes NaN and the infinities, in any case', () => {
+        const nan = poke(mipsFpu, holding(mipsFpu, 0n, 0n), 0, 'single', 0, 'nan')
+        expect(nan.ok === true && Number.isNaN(decodeSingle(nan.writes[0].value))).toBe(true)
+        const negative = poke(mipsFpu, holding(mipsFpu, 0n, 0n), 0, 'single', 0, '-Infinity')
+        expect(negative.ok === true && decodeSingle(negative.writes[0].value)).toBe(-Infinity)
+    })
+
+    it('refuses text that is not a number', () => {
+        expect(poke(mipsFpu, holding(mipsFpu, 0n, 0n), 0, 'single', 0, '0x10').ok).toBe(false)
+        expect(poke(mipsFpu, holding(mipsFpu, 0n, 0n), 0, 'single', 0, 'three').ok).toBe(false)
+    })
+
+    it('writes a MIPS double to its pair, low word in the even register', () => {
+        expect(poke(mipsFpu, holding(mipsFpu, 0n, 0n), 0, 'double', 0, '1.5')).toEqual({
+            ok: true,
+            writes: [
+                { register: '$f0', value: 0x00000000n },
+                { register: '$f1', value: 0x3ff80000n }
+            ]
+        })
+    })
+
+    it('refuses the odd row of a pair, which draws no value to type into', () => {
+        expect(poke(mipsFpu, holding(mipsFpu, 0n, 0n), 1, 'double', 0, '1.5').ok).toBe(false)
+    })
+
+    it('NaN-boxes a RISC-V single, which is what the Core reads back as one', () => {
+        expect(poke(riscvFpu, holding(riscvFpu, 0n), 0, 'single', 0, '3')).toEqual({
+            ok: true,
+            writes: [{ register: 'ft0', value: 0xffffffff40400000n }]
+        })
+    })
+
+    it('replaces one lane of a wide register and leaves the others alone', () => {
+        const registers = holding(sse, (0x4000000000000000n << 64n) | 0x3ff8000000000000n)
+        expect(poke(sse, registers, 0, 'double', 0, '3')).toEqual({
+            ok: true,
+            writes: [
+                { register: 'xmm0', value: (0x4000000000000000n << 64n) | 0x4008000000000000n }
+            ]
+        })
+        expect(poke(sse, registers, 0, 'double', 1, '3')).toEqual({
+            ok: true,
+            writes: [
+                { register: 'xmm0', value: (0x4008000000000000n << 64n) | 0x3ff8000000000000n }
+            ]
+        })
+    })
+
+    it('refuses a blanked row, which holds nothing to change', () => {
+        const empty = { ...x87, blanks: [false, true, false] }
+        expect(poke(empty, holding(x87, 0n, 0n, 0n), 1, 'double', 0, '1.5').ok).toBe(false)
     })
 })

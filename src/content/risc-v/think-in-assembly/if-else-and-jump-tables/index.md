@@ -1,170 +1,224 @@
-A branch takes a question and turns it into a jump, and that is all the machinery you get. There is
-no `if` and no `else` anywhere in the instruction set: what there is, is a jump that happens
-sometimes, and everything else is how you arrange your code around it.
+This page returns to **RV32**, the 32-bit RISC-V mode used before the RV64 introduction. A branch
+can choose between two paths, and a table of addresses can extend the same idea to several paths.
 
-## Jump over the part that must not run
+## Lay out an if/else
 
-Here is a decision written the way you would say it out loud:
+Suppose `t0` holds `x`, and we want to express this decision:
 
-```
-x is 50
-if x is greater than 10, make x 100
-otherwise, make x 200
-```
-
-The machine cannot do "otherwise". It can only fall into the next instruction or jump somewhere. So
-the code is laid out as two blocks, one after the other, and the branch **skips over** the first one
-when it should not run:
-
-```riscv|playground
-.text
-main:
-    li t0, 50
-    li t1, 10
-    ble t0, t1, else    # if x is NOT greater than 10, skip the next two lines
-    li t0, 100
-    j end
+```text
+if x > 10:
+    x = 100
 else:
-    li t0, 200
-end:
+    x = 200
 ```
 
-Notice what happened to the condition. You wrote "greater than", the branch says `ble`, less than or
-equal. The branch is taken when the `if` is **false**, because being taken means skipping the body.
-Getting this backwards is the classic mistake, and the symptom is a program that does exactly the
-wrong one of two things.
-
-The `j end` matters just as much. Without it, the code that just set `t0` to 100 carries straight on
-into the line that sets it to 200, because the two blocks are simply one after the other in memory
-and nothing separates them. Delete that line and run it: the answer comes out 200 whatever `t0`
-started at.
-
-## Which branch for which question
-
-| the question you are asking | signed        | unsigned   |
-| --------------------------- | ------------- | ---------- |
-| are they equal              | `beq a, b, l` | the same   |
-| are they different          | `bne a, b, l` | the same   |
-| is `a` below `b`            | `blt`         | `bltu`     |
-| is `a` below or equal       | `ble`         | `bleu`     |
-| is `a` above `b`            | `bgt`         | `bgtu`     |
-| is `a` above or equal       | `bge`         | `bgeu`     |
-| is `a` zero                 | `beqz a, l`   | the same   |
-| is `a` not zero             | `bnez a, l`   | the same   |
-| is `a` negative             | `bltz a, l`   | never true |
-| is `a` positive             | `bgtz a, l`   | `bnez`     |
-
-Each of those is one instruction and each takes a label, with the assembler working out the
-distance. A branch reaches about 4 kilobytes in either direction, which is a thousand instructions,
-so in practice you write the label and forget about it. If you ever do go past that, the build says
-`Branch target word address beyond 12-bit range`, and the fix is to branch to a nearby `j`, which
-reaches a megabyte.
-
-## Comparing against a number
-
-A branch compares two registers. Not a register and a number: two registers. So every comparison
-against a constant costs a `li` in front of it to get the constant into a register first.
+A branch has two outcomes: it jumps to its label when its condition is true, or falls through to
+the next instruction when its condition is false. One useful layout is to branch to `else` when
+the original condition `x > 10` is false:
 
 ```riscv|playground
 .text
 main:
-    li t0, 75           # the score
-    li t1, 90
-    bge t0, t1, grade_a
-    li t1, 60
-    bge t0, t1, grade_b
-    li t2, 'C'
-    j done
-grade_a:
-    li t2, 'A'
-    j done
-grade_b:
-    li t2, 'B'
+    li  t0, 50
+    li  t1, 10
+    ble t0, t1, else    # if x <= 10, continue at else
+    li  t0, 100         # the x > 10 body
+    j   done
+else:
+    li  t0, 200         # the x <= 10 body
 done:
 ```
 
-That is a chain: each test is at the label the previous one fell through to, and each answer ends by
-jumping to the end. `t2` comes out at `00000042`, the ASCII code of `B`, because 75 failed the first
-test and passed the second.
+With `x` equal to 50, `ble` falls through, `t0` becomes 100, and `j done` skips the `else` body.
+With `x` equal to 0, `ble` is taken and execution continues at `else`, where `t0` becomes 200.
+Both paths meet at `done`.
 
-The two `li t1` lines are the price of the rule above. They are also the reason to hoist a constant
-out of a loop when the same comparison runs over and over: inside a loop that `li` runs every pass,
-outside it runs once.
+The unconditional `j done` is essential on the first path. Without it, execution would continue
+straight into the `else` body and replace 100 with 200.
 
-## A condition the machine will not answer for you
+The assembler accepts `ble` and `j` as **pseudo-instructions**. It rewrites them using real RV32I
+instructions:
 
-Add two unsigned numbers and the answer can be too big to fit. Nothing is raised, nothing is
-recorded, and the sum simply wraps round. If your program needs to know, it has to look at the
-answer, and the fact to lean on is this: **an unsigned sum that wrapped comes out smaller than
-either of the numbers you added**.
+```riscv
+ble t0, t1, else       # assembler convenience
+bge t1, t0, else       # real branch with the same meaning
+
+j done                 # assembler convenience
+jal zero, done         # real instruction with the same effect
+```
+
+For `ble`, reversing the registers turns `t0 <= t1` into the equivalent question `t1 >= t0`.
+For `j`, writing the destination as `zero` discards the address produced by `jal`, leaving a plain
+unconditional jump.
+
+This gives a reusable shape:
+
+```riscv
+    branch-if-condition-is-false else
+    # instructions for the true path
+    j done
+else:
+    # instructions for the false path
+done:
+```
+
+## Real branches and convenient spellings
+
+The six real comparison branches from the introduction are `beq`, `bne`, `blt`, `bge`, `bltu` and
+`bgeu`. The assembler provides extra spellings by exchanging operands or using the `zero` register.
+
+| question | convenient source spelling | real branch used by the assembler |
+| -------- | --------------------------- | --------------------------------- |
+| `a == b` | `beq a, b, label` | `beq a, b, label` |
+| `a != b` | `bne a, b, label` | `bne a, b, label` |
+| signed `a < b` | `blt a, b, label` | `blt a, b, label` |
+| signed `a >= b` | `bge a, b, label` | `bge a, b, label` |
+| signed `a > b` | `bgt a, b, label` | `blt b, a, label` |
+| signed `a <= b` | `ble a, b, label` | `bge b, a, label` |
+| `a == 0` | `beqz a, label` | `beq a, zero, label` |
+| signed `a < 0` | `bltz a, label` | `blt a, zero, label` |
+
+The unsigned ordering branches follow the same pattern. For example, `bgtu a, b, label` is a
+convenient spelling of `bltu b, a, label`, and `bleu a, b, label` becomes `bgeu b, a, label`.
+
+Each line in this table assembles to one real branch instruction. The convenient spelling gives
+the assembler a clearer way to express the question in the source code.
+
+## Chain tests for several ranges
+
+A branch compares two registers. To compare a value with a constant such as 90, first place that
+constant in a register with `li`.
+
+Here is a grading decision with three possible results:
+
+```text
+90 or above -> A
+60 or above -> B
+below 60    -> C
+```
+
+Test from the highest boundary downward. The first branch whose condition is true selects the
+answer:
 
 ```riscv|playground
 .text
 main:
-    li t0, 0xFFFFFFFF
-    li t1, 2
-    add t2, t0, t1      # wraps round to 1
-    sltu t3, t2, t0     # 1: the sum is below an operand, so it wrapped
-    li t4, 5
-    li t5, 2
-    add t6, t4, t5      # 7, no wrap
-    sltu s0, t6, t4     # 0
+    li  t0, 75          # score
+
+    li  t1, 90
+    bge t0, t1, grade_a
+
+    li  t1, 60
+    bge t0, t1, grade_b
+
+    li  t2, 'C'         # both tests fell through
+    j   done
+grade_a:
+    li  t2, 'A'
+    j   done
+grade_b:
+    li  t2, 'B'
+done:
 ```
 
-One `sltu` recovers, from the answer itself, a fact the hardware never recorded. Signed overflow is
-the same kind of reasoning from different evidence: a signed sum has overflowed exactly when both
-numbers you added had the same sign and the answer came out with the other one.
+For a score of 75, the first test falls through and the second test branches to `grade_b`. The
+register `t2` finishes with `0x00000042`, the character code for `B`.
 
-## j, jal and jr
+This pattern works well when different ranges need different paths: arrange the tests in a useful
+order, branch when one matches, and have every completed path meet at the same ending label.
 
-Three ways to go somewhere with no question attached, and underneath they are two instructions.
+## From a branch chain to a jump table
 
-- **`j label`** is `jal zero, label`: jump, and throw away the note of where you came from.
-- **`jal label`** is `jal ra, label`: jump, and put the address of the next instruction into `ra`,
-  which is how a subroutine gets called. Its own lecture comes later.
-- **`jr t0`** is `jalr zero, t0, 0`: jump to the address held **in a register**, which is what you
-  need when the destination was worked out while the program ran.
+Suppose an index in `t0` selects one of three cases: 0 selects `case0`, 1 selects `case1`, and 2
+selects `case2`. A branch chain can ask about each value in turn:
 
-That last one is worth a program of its own, because it is how a choice between many cases is made
-without testing them one at a time. A label is an address, and an address fits in a `.word`, so a
-list of labels is a table you can index.
+```riscv|playground
+.text
+main:
+    li  t0, 2           # selected case
+    beq t0, zero, case0
+    li  t2, 1
+    beq t0, t2, case1
+    li  t2, 2
+    beq t0, t2, case2
+    j   out_of_range
+
+case0:
+    li  t1, 10
+    j   done
+case1:
+    li  t1, 20
+    j   done
+case2:
+    li  t1, 30
+    j   done
+out_of_range:
+    li  t1, -1
+done:
+```
+
+Each additional case adds another comparison. When the cases are consecutive numbers beginning
+at zero, a **jump table** can store their destination addresses in the same order. The index then
+selects an entry directly.
 
 ```riscv|playground|memory
+.eqv CASE_COUNT, 3
+
 .data
 table: .word case0, case1, case2
 
 .text
 main:
-    li t0, 2            # which case we want
-    la t2, table
-    slli t3, t0, 2      # times 4, since a table entry is a word
-    add t3, t2, t3
-    lw t4, 0(t3)        # the address stored there
-    jr t4
+    li   t0, 2           # selected case
+
+    li   t5, CASE_COUNT
+    bgeu t0, t5, out_of_range
+
+    la   t2, table
+    slli t3, t0, 2       # byte offset = index * 4
+    add  t3, t2, t3      # address of table[index]
+    lw   t4, 0(t3)       # load the selected case address
+    jr   t4              # continue at that address
+
 case0:
-    li t1, 10
-    j done
+    li   t1, 10
+    j    done
 case1:
-    li t1, 20
-    j done
+    li   t1, 20
+    j    done
 case2:
-    li t1, 30
+    li   t1, 30
+    j    done
+out_of_range:
+    li   t1, -1
 done:
 ```
 
-`t4` comes out at `0040002C`, the address of `case2`, which the assembler wrote into the third word
-of the table and the program read back out. Put 0 in `t0` instead and the same five instructions
-land somewhere else entirely.
+There are three valid indices, so the valid range is 0 through 2. The `bgeu` checks `t0` against
+the table length before any address is calculated. An index of 3 or more branches to
+`out_of_range`. A negative RV32 value has a large unsigned interpretation, so it follows that same
+safe path.
 
-One load and one jump, whatever the number of cases, where a chain of `bge` costs two instructions
-for every case it walks past. What the table does not do is check the index: put 7 in `t0` and the
-program reads a word from past the end of the table and jumps to whatever happened to be there.
-Checking the range is yours, and it is one `bgeu` in front of the lookup.
+For a valid index, the lookup reuses the word-array calculation:
 
-## Your turn
+1. `la` places the address of `table` in `t2`.
+2. `slli` multiplies the index by 4 because every RV32 table entry is one four-byte word.
+3. `add` finds the address of the selected table entry.
+4. `lw` reads the case address stored in that entry.
+5. `jr` continues execution at the address in `t4`.
 
-The test starts `t0` at -7. Leave its sign in `t1`: -1 when `t0` is negative, 0 when it is zero and
-1 when it is positive. For -7 that is -1.
+The labels `case0`, `case1` and `case2` stand for addresses. In the data section, the assembler
+places those addresses into the three `.word` entries. The exact numeric addresses depend on where
+the program is assembled; the code uses labels throughout, so it remains independent of those
+numbers.
+
+`jr t4` is another pseudo-instruction. The assembler rewrites it as `jalr zero, t4, 0`. In this
+program its practical meaning is simply “continue at the instruction address held in `t4`.”
+
+## Your turn: classify a signed value
+
+Leave the sign of `t0` in `t1`: -1 for a negative value, 0 for zero, and 1 for a positive value.
+The three tests run the same code with one value from each path.
 
 ```riscv|playground|exercise
 .text
@@ -179,45 +233,71 @@ main:
 }
 ```
 
+```testcase
+{
+    "startingRegisters": { "t0": 0 },
+    "expectedRegisters": { "t1": 0 }
+}
+```
+
+```testcase
+{
+    "startingRegisters": { "t0": 12 },
+    "expectedRegisters": { "t1": 1 }
+}
+```
+
 <details>
 <summary>Show solution</summary>
 
 ```riscv|playground|solution
 .text
 main:
-    bltz t0, negative
-    bgtz t0, positive
-    li t1, 0            # what is left is zero
-    j done
+    blt t0, zero, negative
+    blt zero, t0, positive
+    li  t1, 0           # reaching here means t0 is zero
+    j   done
 negative:
-    li t1, -1
-    j done
+    li  t1, -1
+    j   done
 positive:
-    li t1, 1
+    li  t1, 1
 done:
 ```
 
 </details>
 
-The second one has the three cases and the table written for you, and the test starts `t0` at 1.
-Work out the address of the case and jump to it, so that `t1` comes out at 20.
+## Your turn: complete a checked jump table
+
+The range check and three cases are already present. Complete the four lookup steps so that a valid
+index selects its case. The second test also checks that an index outside the table reaches
+`out_of_range` before the lookup.
 
 ```riscv|playground|memory|exercise
+.eqv CASE_COUNT, 3
+
 .data
 table: .word case0, case1, case2
 
 .text
 main:
-    la t2, table
-    # your code here
+    li   t5, CASE_COUNT
+    bgeu t0, t5, out_of_range
+
+    la   t2, table
+    # calculate the entry address, load the case address and jump to it
+
 case0:
-    li t1, 10
-    j done
+    li   t1, 10
+    j    done
 case1:
-    li t1, 20
-    j done
+    li   t1, 20
+    j    done
 case2:
-    li t1, 30
+    li   t1, 30
+    j    done
+out_of_range:
+    li   t1, -1
 done:
 ```
 
@@ -228,29 +308,49 @@ done:
 }
 ```
 
+```testcase
+{
+    "startingRegisters": { "t0": 5 },
+    "expectedRegisters": { "t1": -1 }
+}
+```
+
 <details>
 <summary>Show solution</summary>
 
 ```riscv|playground|memory|solution
+.eqv CASE_COUNT, 3
+
 .data
 table: .word case0, case1, case2
 
 .text
 main:
-    la t2, table
-    slli t3, t0, 2      # the index times four
-    add t3, t2, t3      # the entry's address
-    lw t4, 0(t3)        # the address it holds
-    jr t4
+    li   t5, CASE_COUNT
+    bgeu t0, t5, out_of_range
+
+    la   t2, table
+    slli t3, t0, 2
+    add  t3, t2, t3
+    lw   t4, 0(t3)
+    jr   t4
+
 case0:
-    li t1, 10
-    j done
+    li   t1, 10
+    j    done
 case1:
-    li t1, 20
-    j done
+    li   t1, 20
+    j    done
 case2:
-    li t1, 30
+    li   t1, 30
+    j    done
+out_of_range:
+    li   t1, -1
 done:
 ```
 
 </details>
+
+An `if/else` uses a conditional branch, fall-through and an unconditional jump to arrange two
+paths. A chain repeats that idea for several tests. A jump table handles consecutive case numbers
+by checking the index, loading the selected label address and jumping through the register.
