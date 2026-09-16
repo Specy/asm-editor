@@ -1,6 +1,6 @@
 {
-    "name": "jal, jr and the calling convention",
-    "description": "jal puts the return address in a register instead of on the stack, which is cheap until a subroutine calls something. The arguments in $a0 to $a3, the answer in $v0, who has to preserve what, and a recursive program drawn frame by frame.",
+    "name": "jal, jr, and the course calling convention",
+    "description": "Use jal and jr to call leaf and non-leaf subroutines, preserve return addresses and saved registers, and pass values with the course's simplified calling convention.",
     "order": 5,
     "topic": "subroutines"
 }

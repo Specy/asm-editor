@@ -1,215 +1,151 @@
-Assembly has no `if` with a body in brackets. It has labels and it has branches, so every decision
-you write is the same flat shape: ask a question, jump somewhere else if the answer means you should
-skip this code, and otherwise fall through into it.
+Most instructions let execution continue with the next line. A conditional branch can change that
+path: when its condition is true, execution moves to a label; when the condition is false, execution
+**falls through** to the next instruction.
 
-On MIPS the asking and the jumping are one instruction, which makes the shape short. Here is the
-decision written out in plain terms first:
+A label names a place in the program. It does not run an instruction, and it does not mark the end
+of a block. These simple rules are enough to build the shapes that higher-level languages call
+`if`, `if/else`, and `else if`.
 
-```
-    if x is greater than 10        take 100
-    otherwise                      take 200
-```
+## A one-armed if
 
-and here is the same thing flattened into labels and jumps, which is the form assembly can express:
-
-```
-        if x is 10 or less, jump to else_branch
-        x = 100
-        jump to end
-else_branch:
-        x = 200
-end:
-```
-
-The condition **flipped**. "Greater than 10" became "10 or less", because the branch is the thing
-that happens when you are **not** doing the first case. That flip catches everybody at least once,
-and the habit to build is: write the condition that sends you away.
-
-In MIPS that flipped condition is the mnemonic you type:
+Suppose `$s0` should become 1 only when `$t0` and `$t1` are equal. Start `$s0` at 0, then branch
+around the assignment when the values are not equal:
 
 ```mips|playground
 .text
 main:
-    li $t0, 50              # the value we are testing
-    li $t1, 10
-    ble $t0, $t1, else      # 10 or less sends us away
-    li $t0, 100             # the greater-than-10 answer
-    j end
+    li $t0, 7
+    li $t1, 7
+    li $s0, 0
+    bne $t0, $t1, done      # different values skip the body
+    li $s0, 1               # reached only when the values are equal
+done:
+    li $v0, 10
+    syscall
+```
+
+Here `bne` means **branch if not equal**. With the two 7s, its condition is false, so execution falls
+through and writes 1. Change either value and the branch is taken; execution continues at `done`,
+leaving `$s0` at 0.
+
+The source-level condition was “when the values are equal,” but the branch asks when to skip that
+work: “when the values are not equal.” Writing the skip condition is a useful habit for one-armed
+decisions.
+
+## Compare and branch
+
+The previous lesson showed two ways to use a comparison. `slt` and `sltu` write a 0 or 1 into a
+register and then execution continues. A compare-and-branch form checks a relationship and decides
+where execution continues in the same source line.
+
+This small table is enough for the examples on this page. Each form compares two registers and
+takes the branch when the stated condition is true.
+
+| form                     | branch when                   |
+| ------------------------ | ----------------------------- |
+| `beq left, right, label` | `left` equals `right`         |
+| `bne left, right, label` | `left` does not equal `right` |
+| `blt left, right, label` | signed `left < right`         |
+| `ble left, right, label` | signed `left <= right`        |
+| `bgt left, right, label` | signed `left > right`         |
+| `bge left, right, label` | signed `left >= right`        |
+
+For unsigned ordering, use the forms with a `u`: `bltu`, `bleu`, `bgtu`, and `bgeu`. Equality only
+asks whether the bits match, so `beq` and `bne` work for both signed and unsigned values. You can
+look these forms up as you work; there is no need to memorize the table now.
+
+## An if/else shape
+
+An `if/else` chooses exactly one of two arms. The conditional branch sends execution to the second
+arm, while `j` skips that arm after the first one has run:
+
+```mips|playground
+.text
+main:
+    li $t0, 50              # value to test
+    li $t1, 10              # threshold
+    ble $t0, $t1, else      # if $t0 <= $t1, take the else arm
+    li $s0, 100             # $t0 > $t1
+    j end                   # do not fall through into else
 else:
-    li $t0, 200             # the other one
+    li $s0, 200             # $t0 <= $t1
 end:
+    li $v0, 10
+    syscall
 ```
 
-`$t0` finishes at 100. Change `li $t0, 50` to `li $t0, 5` and it finishes at 200, which is the
-`else` arm running instead.
+With 50 in `$t0`, `ble` is not taken and execution falls through to the first assignment. The
+instruction `j end` is an unconditional jump, so execution then skips the `else` arm. `$s0`
+finishes at 100.
 
-Now delete the `j end` line and run it again. `$t0` comes out 200 whatever you start it at: the
-program does the true arm, walks straight on into the false arm, and the second answer overwrites
-the first. There is nothing in assembly that ends a branch for you, and forgetting that jump is the
-most common bug in hand written control flow.
+Change the first value to 5. Now the condition `$t0 <= $t1` is true, so `ble` moves execution to
+`else` and `$s0` finishes at 200.
 
-## Which branch asks which question
+Try deleting `j end` and run the original version with 50 again. The first assignment runs, then
+execution falls through the `else` label and the second assignment overwrites it. A label does not
+stop fall-through; the jump is what keeps the two arms separate.
 
-Six of these are real instructions and the rest are pseudo-instructions the assembler builds out of
-`slt`, which "Comparing two numbers" takes apart. When you are writing a program what you want is
-the table.
+## An ordered else-if chain
 
-| you want to jump when   | signed              | unsigned   |
-| ----------------------- | ------------------- | ---------- |
-| `a` equals `b`          | `beq $a, $b, label` | the same   |
-| `a` is not `b`          | `bne $a, $b, label` | the same   |
-| `a` is less than `b`    | `blt`               | `bltu`     |
-| `a` is `b` or less      | `ble`               | `bleu`     |
-| `a` is greater than `b` | `bgt`               | `bgtu`     |
-| `a` is `b` or more      | `bge`               | `bgeu`     |
-| `a` is zero             | `beqz $a, label`    | the same   |
-| `a` is not zero         | `bnez $a, label`    | the same   |
-| `a` is negative         | `bltz $a, label`    | never true |
-| `a` is above zero       | `bgtz $a, label`    | `bnez`     |
-
-Every one of them takes a **label**, and the assembler works out the distance. A branch reaches about
-32 kilobytes either way, which is thousands of instructions, so in practice you write the label and
-forget about it.
-
-The right hand column is the reminder to pick the family your numbers belong to. An address or a
-count of bytes compared with `blt` is being read as a signed number, and one of them above two
-billion comes out negative.
-
-## A chain of decisions
-
-Several cases in a row need nothing new. Each test falls through to the next one, and every arm ends
-by jumping to the same finish.
-
-```
-        if score is 90 or more, jump to grade_a
-        if score is 60 or more, jump to grade_b
-        grade = 'C'
-        jump to done
-grade_a:
-        grade = 'A'
-        jump to done
-grade_b:
-        grade = 'B'
-done:
-```
+More than two cases form a chain of tests. Each failed test falls through to the next one. Put the
+most selective condition first so the first matching case wins.
 
 ```mips|playground
 .text
 main:
-    li $t0, 75              # the score
+    li $t0, 75              # score
     li $t1, 90
-    bge $t0, $t1, grade_a   # 90 or more
-    li $t1, 60
-    bge $t0, $t1, grade_b   # 60 or more
-    li $t2, 'C'             # everything that got this far
+    li $t2, 60
+
+    bge $t0, $t1, grade_a   # score >= 90
+    bge $t0, $t2, grade_b   # score >= 60
+    li $s0, 'C'             # score < 60
     j done
+
 grade_a:
-    li $t2, 'A'
+    li $s0, 'A'
     j done
+
 grade_b:
-    li $t2, 'B'
+    li $s0, 'B'
+
 done:
+    li $v0, 10
+    syscall
 ```
 
-`$t2` holds `0x42`, the ASCII code of `B`, which is the right answer for a score of 75.
+For a score of 75, the first branch is not taken and the second one is taken, so `$s0` receives
+`'B'`. A score of 95 matches the first test and jumps directly to `grade_a`. A score of 40 falls
+through both tests and receives `'C'`.
 
-The `li $t1, 90` and `li $t1, 60` lines are there because `bge` wants two registers, so the number
-it is compared against has to be in one of them. You can write `bge $t0, 90, grade_a` instead and
-the assembler will load the 90 into `$at` on your behalf, which is shorter to read and one more
-instruction to run.
-
-## A decision with no jump in it
-
-When each arm of a decision is a single value rather than a block of work, you can skip the jumping
-entirely. `slt` puts the condition in a register, and `movn` and `movz` copy a register **only if** a
-third register is or is not zero. Three instructions, no labels, and the CPU never has to guess
-which way a branch will go.
-
-```mips|playground
-.text
-main:
-    li $t0, -5
-    li $t1, 3
-    slt $t2, $t0, $t1       # 1 when $t0 is the smaller
-    move $t3, $t0           # assume $t0 is the answer
-    movn $t3, $t1, $t2      # take $t1 instead when $t2 is not zero
-    move $t4, $t1           # the same thing said the other way round
-    movz $t4, $t0, $t2      # take $t0 when $t2 is zero
-```
-
-`$t3` and `$t4` both end up at 3, the larger of the two, reached two different ways.
-`movn $t3, $t1, $t2` reads "move if not zero": it writes `$t1` into `$t3` when `$t2` is not zero, and
-does nothing at all when `$t2` is zero. `movz` is the same instruction with the test the other way
-round, which is why the two halves of the program can start from opposite assumptions and agree.
-
-And when the thing you want is the 1 or the 0 itself rather than two different pieces of code, `slt`
-on its own already is the whole decision.
-
-## Testing one bit
-
-To ask whether a particular bit of a number is set, `and` the number with a value that has only that
-bit in it. Every other bit is wiped out, so the answer is zero when the bit was clear and non-zero
-when it was set, and a `beqz` or a `bnez` turns that into a decision.
-
-```mips|playground
-.text
-main:
-    li $t0, 10              # 1010 in binary
-    andi $t1, $t0, 8        # keep bit 3
-    beqz $t1, clear
-    li $t2, 1               # bit 3 was set
-    j done
-clear:
-    li $t2, 0
-done:
-    andi $t3, $t0, 1        # bit 0, which is 0 in 1010
-    bnez $t3, odd
-    li $t4, 0               # so the number is even
-    j finished
-odd:
-    li $t4, 1
-finished:
-```
-
-`$t2` is 1 because bit 3 of `1010` is set, and `$t4` is 0 because bit 0 is not, which also makes 10
-an even number. The constant you `and` with is the bit's value: 1 for bit 0, 2 for bit 1, 4 for bit
-2, 8 for bit 3, doubling each time.
-
-When the program works out which bit it wants while it runs, the constant will not do. Shift instead:
-`srlv $t1, $t0, $t2` slides bit number `$t2` down to the bottom, and `andi $t1, $t1, 1` keeps that
-bit and throws away everything above it.
-
-## j, b and jr
-
-Three ways to go somewhere unconditionally.
-
-- **`j label`** is the jump, and it carries the target's address in the instruction.
-- **`b label`** is the assembler's name for `beq $zero, $zero, label`, a branch that is always taken.
-  It reaches 32 kilobytes where `j` reaches 256 megabytes, and inside one program they are
-  interchangeable.
-- **`jr $t0`** jumps to the address **in a register**, which is how a program returns from a
-  subroutine (`jr $ra`) and how it jumps through a table of addresses it computed.
-
-A label is an address like any other, so `la $t0, done` puts one in a register and `jr $t0` goes
-there. That is enough to build a jump table: a `.word` list of labels, an index multiplied by four,
-an `lw` to fetch the address you landed on, and a `jr` to go there. The "Jump table" example does
-exactly that.
+The 90 test must come before the 60 test. If the 60 test came first, a score of 95 would match it and
+reach the wrong arm. Each selected arm must also finish at `done` instead of falling into another
+arm. `grade_b` is already directly above `done`, so it reaches the finish by ordinary fall-through.
 
 ## Your turn
 
-The test starts `$t0` at -7. Leave its sign in `$t1`: -1 when `$t0` is negative, 0 when it is zero
-and 1 when it is positive. For -7 that is -1.
+Classify three signed values. For each input, write -1 when it is negative, 0 when it is zero, and 1
+when it is positive:
+
+- classify `$t0` into `$s0`;
+- classify `$t1` into `$s1`;
+- classify `$t2` into `$s2`.
+
+Use signed compare-and-branch forms with `$zero`. The test supplies one negative, one zero, and one
+positive value, so all three outcomes must work. The stop sequence is already present.
 
 ```mips|playground|exercise
 .text
 main:
-    # your code here
+    # classify the three inputs here
+    li $v0, 10
+    syscall
 ```
 
 ```testcase
 {
-    "startingRegisters": { "$t0": -7 },
-    "expectedRegisters": { "$t1": -1 }
+    "startingRegisters": { "$t0": -7, "$t1": 0, "$t2": 12 },
+    "expectedRegisters": { "$s0": -1, "$s1": 0, "$s2": 1 }
 }
 ```
 
@@ -219,33 +155,66 @@ main:
 ```mips|playground|solution
 .text
 main:
-    bltz $t0, negative      # below zero
-    bgtz $t0, positive      # above zero
-    li $t1, 0               # what is left is zero
+    blt $t0, $zero, first_negative
+    bgt $t0, $zero, first_positive
+    li $s0, 0
+    j second
+first_negative:
+    li $s0, -1
+    j second
+first_positive:
+    li $s0, 1
+
+second:
+    blt $t1, $zero, second_negative
+    bgt $t1, $zero, second_positive
+    li $s1, 0
+    j third
+second_negative:
+    li $s1, -1
+    j third
+second_positive:
+    li $s1, 1
+
+third:
+    blt $t2, $zero, third_negative
+    bgt $t2, $zero, third_positive
+    li $s2, 0
     j done
-negative:
-    li $t1, -1
+third_negative:
+    li $s2, -1
     j done
-positive:
-    li $t1, 1
+third_positive:
+    li $s2, 1
+
 done:
+    li $v0, 10
+    syscall
 ```
 
 </details>
 
-The second one starts `$t0` at 75 and wants the grade of the chain above in `$t1`: `'A'` for 90 and
-over, `'B'` for 60 and over, `'C'` otherwise. `'B'` is `0x42`.
+For the second exercise, assign grades to three scores:
+
+- score `$t0` goes in `$s0`;
+- score `$t1` goes in `$s1`;
+- score `$t2` goes in `$s2`.
+
+Use `'A'` for a score of 90 or more, `'B'` for a score of 60 through 89, and `'C'` for a score below 60. Load 90 and 60 into registers once, then use register-to-register branches. The supplied scores
+exercise all three arms, including the boundary at 60.
 
 ```mips|playground|exercise
 .text
 main:
-    # your code here
+    # assign the three grades here
+    li $v0, 10
+    syscall
 ```
 
 ```testcase
 {
-    "startingRegisters": { "$t0": 75 },
-    "expectedRegisters": { "$t1": "0x42" }
+    "startingRegisters": { "$t0": 95, "$t1": 60, "$t2": 40 },
+    "expectedRegisters": { "$s0": "0x41", "$s1": "0x42", "$s2": "0x43" }
 }
 ```
 
@@ -255,16 +224,44 @@ main:
 ```mips|playground|solution
 .text
 main:
-    bge $t0, 90, grade_a    # the constant goes through $at
-    bge $t0, 60, grade_b
-    li $t1, 'C'
+    li $t3, 90
+    li $t4, 60
+
+    bge $t0, $t3, first_a
+    bge $t0, $t4, first_b
+    li $s0, 'C'
+    j second_score
+first_a:
+    li $s0, 'A'
+    j second_score
+first_b:
+    li $s0, 'B'
+
+second_score:
+    bge $t1, $t3, second_a
+    bge $t1, $t4, second_b
+    li $s1, 'C'
+    j third_score
+second_a:
+    li $s1, 'A'
+    j third_score
+second_b:
+    li $s1, 'B'
+
+third_score:
+    bge $t2, $t3, third_a
+    bge $t2, $t4, third_b
+    li $s2, 'C'
     j done
-grade_a:
-    li $t1, 'A'
+third_a:
+    li $s2, 'A'
     j done
-grade_b:
-    li $t1, 'B'
+third_b:
+    li $s2, 'B'
+
 done:
+    li $v0, 10
+    syscall
 ```
 
 </details>

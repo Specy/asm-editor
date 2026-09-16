@@ -1,6 +1,6 @@
 {
-    "name": "Multiply and divide, with the remainder",
-    "description": "Days into hours with mult, seconds into minutes and seconds with div, and the two answers pulled out of hi and lo.",
+    "name": "Multiply and divide with hi and lo",
+    "description": "Convert days to hours and seconds to minutes while learning signed and unsigned multiplication, division, quotients, remainders, and the hi and lo registers.",
     "order": 8,
     "topic": "multiply-and-divide"
 }

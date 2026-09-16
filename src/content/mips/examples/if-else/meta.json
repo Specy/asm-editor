@@ -1,6 +1,6 @@
 {
-    "name": "The bigger of two numbers",
-    "description": "An slt and a branch pick the larger of two registers, and a second branch turns the difference into a distance.",
+    "name": "Maximum and unsigned distance",
+    "description": "A signed comparison selects the maximum and computes the unsigned distance without signed-overflow exceptions.",
     "order": 2,
     "topic": "if-else"
 }

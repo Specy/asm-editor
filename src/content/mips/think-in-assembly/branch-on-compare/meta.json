@@ -1,6 +1,6 @@
 {
     "name": "Branch on compare",
-    "description": "An if in C becomes a goto and a goto becomes one MIPS branch, because the comparison is inside the branch instruction. The condition you invert, the else if chain, and the two instructions that pick a value without jumping anywhere.",
+    "description": "Build one-armed if, if/else, and ordered else-if chains from comparison branches, fall-through, labels, and unconditional jumps.",
     "order": 0,
     "topic": "branching"
 }

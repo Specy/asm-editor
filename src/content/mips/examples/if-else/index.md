@@ -1,9 +1,6 @@
-Two numbers sit in registers, and the program leaves the larger of them in `$t2` and the distance
-between them in `$t4`. Both answers come out of the same pair of instructions, one that works a
-condition out into a register and a branch that reads it.
-
-This is the first program here where some instructions are skipped, which makes it the first one
-worth stepping through slowly: you get to watch which lines the `pc` jumps over.
+This program compares two signed numbers. It leaves their maximum in `$t2` and the unsigned
+distance between them in `$t4`. Step through it once and watch the `pc`: only one of the two paths
+runs.
 
 ```mips|playground|allow-open
 .text
@@ -11,41 +8,43 @@ main:
     li $t0, 37          # a = 37
     li $t1, 64          # b = 64
 
-    slt $t3, $t0, $t1   # is a < b?
-    beqz $t3, a_is_bigger
-    move $t2, $t1       # bigger = b
-    j done
-a_is_bigger:
-    move $t2, $t0       # bigger = a
-done:
+    slt $t3, $t0, $t1   # $t3 = 1 when signed a < signed b
+    beqz $t3, a_is_at_least_b
 
-    sub $t4, $t0, $t1   # distance = a - b
-    bgez $t4, positive  # if(distance >= 0) it is already the answer
-    sub $t4, $zero, $t4 # otherwise flip its sign
-positive:
+    move $t2, $t1       # maximum = b
+    subu $t4, $t1, $t0  # distance = b - a
+    j done
+
+a_is_at_least_b:
+    move $t2, $t0       # maximum = a
+    subu $t4, $t0, $t1  # distance = a - b
+
+done:
+    li $v0, 10
+    syscall
 ```
 
-`slt $t3, $t0, $t1` asks whether `$t0` is less than `$t1` and writes the answer, a 1 or a 0, into
-`$t3`. It is an ordinary instruction with an ordinary destination, so you can see where the answer
-went and read it whenever you like. `beqz $t3, a_is_bigger` on the next line is what acts on it, and
-it jumps when the answer was 0.
+`slt` performs a **signed** comparison. It writes 1 to `$t3` when `a < b`, and 0 otherwise.
+`beqz` then tests only whether `$t3` is zero; a zero test has no signed or unsigned interpretation.
+When `$t3` is 0, execution jumps to `a_is_at_least_b`, which also handles equality.
 
-The `j done` is what separates the two halves. Only one of them may run, so the first one has to
-jump over the second. Delete that line and run it: the program does `move $t2, $t1`, walks straight
-into `a_is_bigger`, and overwrites the answer it just worked out. An `if` with no `else`, like the
-second `sub` below it, has nothing to jump over and needs no such line.
+When `b` is larger, the first path copies `b` to `$t2` and calculates `b - a`. Its `j done` skips
+the other path. When `a` is at least `b`, the branch selects the second path and calculates `a - b`.
+This Playground transfers control immediately after a branch or jump; it has no branch delay slots.
+Classic MIPS material may show a delay-slot instruction instead.
 
-`bgez` further down reads the register the `sub` above it wrote, which saves a comparison
-altogether: the subtraction that worked out the difference has already left its sign in a register,
-and `bgez` looks straight at it.
+Both paths use `subu`, so the subtraction does not raise a signed-overflow exception. The result in
+`$t4` is the correct unsigned magnitude for every pair of signed 32-bit inputs. A magnitude greater
+than `2147483647` has its top bit set, so the signed register view displays the same bits as a
+negative number; use the unsigned or hexadecimal view to inspect that magnitude.
 
-`sub $t4, $zero, $t4` is how a sign is flipped, since 0 minus a number is its negative.
-`neg $t4, $t4` is the assembler's name for that same instruction.
+Run the program as written. At `syscall`, `$t2` should be `64` and `$t4` should be `27`
+(`0x0000001b`). To practise both routes, replace the two `li` values with each row below. Predict the
+route and results before running, then check `$t2` and `$t4` in the register panel.
 
-`slt` and the branches are the **signed** family, which is the one you want for numbers that can go
-below zero. Writing `sltu` there would read both registers as unsigned, and a negative `$t0` would
-then be a very large number.
-
-Change `li $t0, 37` to `li $t0, 99` and step through it again. The answers become 99 and 35, and
-the two branches that were not taken the first time are the ones that are taken now, which is easier
-to follow on the `pc` than to read off the page.
+| `a` | `b` | Expected route    | `$t2` maximum | `$t4` unsigned distance |
+| --- | --- | ----------------- | ------------- | ----------------------- |
+| 37  | 64  | first path        | 64            | 27                      |
+| 99  | 64  | `a_is_at_least_b` | 99            | 35                      |
+| 64  | 64  | `a_is_at_least_b` | 64            | 0                       |
+| -9  | -2  | first path        | -2            | 7                       |

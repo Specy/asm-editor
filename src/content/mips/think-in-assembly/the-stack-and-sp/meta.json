@@ -1,6 +1,6 @@
 {
     "name": "The stack and $sp",
-    "description": "MIPS has no push and no pop: the stack is memory, $sp is an ordinary register, and a push is a subtraction and a store. Saving several registers with one adjustment, local room, and giving every byte of it back.",
+    "description": "Use MIPS register $sp to reserve aligned word slots, push and retrieve values in LIFO order, create local space, and restore the stack pointer exactly.",
     "order": 4,
     "topic": "the-stack"
 }

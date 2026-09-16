@@ -1,72 +1,72 @@
-The stack on this machine is built out of parts you already have. `$sp` is register `$29`, an
-ordinary register in every respect, and the stack itself is ordinary memory near the top of the
-address space. There is no instruction named push and none named pop, and you will find you do not
-miss them: a push is an `addi` and an `sw`, which is two instructions you can already write, and
-being able to see both halves is what makes the rest of this page make sense.
+The stack is a region of ordinary memory used for temporary values. MIPS names register `$29`
+`$sp`, short for **stack pointer**, because programs use it to remember the current top of that
+region. `$sp` is still an ordinary register: instructions can read or change it just like any other
+general-purpose register.
 
-## A push is a subtraction and a store
+In this editor, `$sp` starts at `0x7FFFEFFC`. That initial value is part of the editor's setup, not a
+value that every MIPS program can assume. Stack space is reserved at lower addresses, so the stack
+**grows downward** as values are added.
 
-`$sp` starts at `0x7FFFEFFC`, near the top of the address space, and the stack **grows downwards**.
-So:
+This page uses **word-sized slots**. One word is 4 bytes, so reserving one slot subtracts 4 from
+`$sp`. Addresses used by `lw` and `sw` must be word-aligned: divisible by 4. Starting from
+`0x7FFFEFFC` and moving in steps of 4 keeps every slot aligned.
 
-- a **push** is `addi $sp, $sp, -4` and then `sw` at `0($sp)`,
-- a **pop** is `lw` from `0($sp)` and then `addi $sp, $sp, 4`.
+## Reserve, store, retrieve, release
 
-The 4 is the size of what you are putting there, and it has to keep `$sp` a multiple of 4, because a
-`sw` at an address that is not ends the run.
+MIPS has no `push` or `pop` instruction. The program builds those operations from instructions you
+already know:
+
+- **Push a word:** reserve a slot with `addi $sp, $sp, -4`, then store with `sw`.
+- **Retrieve and pop a word:** load it with `lw`, then release the slot with
+  `addi $sp, $sp, 4`.
+- **Discard and pop a word:** if the value is no longer needed, release the slot with
+  `addi $sp, $sp, 4` alone.
+
+The order matters. A push reserves the slot before writing it. A retrieve-pop reads the value before
+releasing its slot.
 
 ```mips|playground|memory
 .text
 main:
     li $t0, 0x11111111
     li $t1, 0x22222222
-    addi $sp, $sp, -4       # make room
+
+    addi $sp, $sp, -4       # reserve one word
     sw $t0, 0($sp)          # push $t0
-    addi $sp, $sp, -4
+    addi $sp, $sp, -4       # reserve another word
     sw $t1, 0($sp)          # push $t1
-    lw $t2, 0($sp)          # pop into $t2
-    addi $sp, $sp, 4
-    lw $t3, 0($sp)          # pop into $t3
-    addi $sp, $sp, 4
+
+    lw $t2, 0($sp)          # retrieve the last word pushed
+    addi $sp, $sp, 4        # release its slot
+    lw $t3, 0($sp)          # retrieve the first word pushed
+    addi $sp, $sp, 4        # release its slot
+
+    li $v0, 10
+    syscall
 ```
 
-Step through it and watch `$sp` in the registers panel. Before the first push the stack is empty and
-`$sp` holds `7FFFEFFC` (🟢 is the stack pointer, and untouched memory on this machine reads zero):
+Here is the address trace. While the stack holds values, the newest one is at `0($sp)`:
 
-|      address |    value    |
-| -----------: | :---------: |
-| `0x7FFFEFF4` |  00000000   |
-| `0x7FFFEFF8` |  00000000   |
-| `0x7FFFEFFC` | 🟢 00000000 |
+| after this action       | `$sp`        | value at `0x7FFFEFF4` | value at `0x7FFFEFF8` |
+| ----------------------- | ------------ | --------------------- | --------------------- |
+| editor setup            | `0x7FFFEFFC` | `00000000`            | `00000000`            |
+| push `$t0`              | `0x7FFFEFF8` | `00000000`            | `11111111`            |
+| push `$t1`              | `0x7FFFEFF4` | `22222222`            | `11111111`            |
+| retrieve-pop into `$t2` | `0x7FFFEFF8` | `22222222`            | `11111111`            |
+| retrieve-pop into `$t3` | `0x7FFFEFFC` | `22222222`            | `11111111`            |
 
-The `addi` drops `$sp` to `0x7FFFEFF8` and the `sw` writes there:
+The last value pushed is the first one retrieved: `$t2` gets `0x22222222`, then `$t3` gets
+`0x11111111`. This order is called **last in, first out**, or **LIFO**.
 
-|      address |    value    |
-| -----------: | :---------: |
-| `0x7FFFEFF4` |  00000000   |
-| `0x7FFFEFF8` | 🟢 11111111 |
-| `0x7FFFEFFC` |  00000000   |
+Releasing a slot only moves `$sp`; it does not erase memory. That is why both stored values remain
+visible in the last row. The zeroes shown in untouched memory are also editor behavior: this editor
+initializes that memory to zero. A program must not rely on memory it has never written containing
+zero, or any other particular value.
 
-The second pair drops it another 4 and writes underneath:
+## Reserve several slots together
 
-|      address |    value    |
-| -----------: | :---------: |
-| `0x7FFFEFF4` | 🟢 22222222 |
-| `0x7FFFEFF8` |  11111111   |
-| `0x7FFFEFFC` |  00000000   |
-
-Then the two pops read them back in the other order, so `$t2` gets `22222222` and `$t3` gets
-`11111111`, and `$sp` climbs back to `7FFFEFFC`. Last in, first out, and both values are still in
-memory afterwards: popping moves the pointer and erases nothing.
-
-Type `7FFFEFF0` in the memory panel's address box after running and both words are still there. The
-**Stack** tab of the memory panel is already looking at that region.
-
-## One adjustment, several stores
-
-Since a push is just "move the pointer, then write", you can move the pointer once for several
-values and reach each of them with a different offset. Three registers saved this way cost one
-`addi` and three `sw`, instead of three of each.
+Several word slots can share one adjustment. Reserving 12 bytes creates three 4-byte slots reached
+as `0($sp)`, `4($sp)`, and `8($sp)`:
 
 ```mips|playground|memory
 .text
@@ -74,94 +74,101 @@ main:
     li $s0, 1
     li $s1, 2
     li $s2, 3
-    addi $sp, $sp, -12      # one adjustment for three registers
+
+    addi $sp, $sp, -12      # reserve three word-sized slots
     sw $s0, 0($sp)
     sw $s1, 4($sp)
     sw $s2, 8($sp)
-    li $s0, 0xFF            # now destroy all three
+
+    li $s0, 0xFF            # change the registers
     li $s1, 0xFF
     li $s2, 0xFF
-    lw $s0, 0($sp)          # and take them back
+
+    lw $s0, 0($sp)          # restore from the same three slots
     lw $s1, 4($sp)
     lw $s2, 8($sp)
-    addi $sp, $sp, 12
+    addi $sp, $sp, 12       # release exactly the 12 bytes reserved
+
+    li $v0, 10
+    syscall
 ```
 
-All three registers end at the values they started with. While they are saved, `$sp` is at
-`0x7FFFEFF0` and the stack holds:
+The three offsets are aligned, distinct, and inside the reserved 12-byte block. Offset 0 names its
+first word, offset 4 its second, and offset 8 its third. Each load uses the same offset as the store
+whose value it restores.
 
-|      address |    value    | reached as | register |
-| -----------: | :---------: | ---------- | -------- |
-| `0x7FFFEFF0` | 🟢 00000001 | `0($sp)`   | `$s0`    |
-| `0x7FFFEFF4` |  00000002   | `4($sp)`   | `$s1`    |
-| `0x7FFFEFF8` |  00000003   | `8($sp)`   | `$s2`    |
+The `$s0`, `$s1`, and `$s2` names do not give these registers special hardware behavior. The
+processor does not save or restore them automatically. “jal, jr and the calling convention”
+explains the convention attached to their names.
 
-The offsets are yours to choose and the only rule is that the same one is used to save and to
-restore. This is exactly what a subroutine does on entry and exit, and "jal, jr and the calling
-convention" writes that out.
+## Use stack slots as local space
 
-## Room of your own
-
-The other use of the stack is space. `addi $sp, $sp, -16` takes sixteen bytes, which you then reach
-as `0($sp)`, `4($sp)`, `8($sp)` and `12($sp)`, and `addi $sp, $sp, 16` gives them back. Nothing
-allocates it and nothing checks it: the stack is memory, and `$sp` is the only record of which part
-of it is yours.
+Stack slots can also hold temporary values that do not need to stay in registers. This example
+reserves two direct-offset slots, uses them, and releases them:
 
 ```mips|playground|memory
 .text
 main:
-    addi $sp, $sp, -16      # a local array of four words
-    li $t1, 0               # which word we are filling
-fill:
-    sll $t2, $t1, 2         # times 4, one word each
-    add $t2, $sp, $t2       # the address of that word
-    addi $t3, $t1, 10       # the value to write
-    sw $t3, 0($t2)          # and store it there
-    addi $t1, $t1, 1
-    blt $t1, 4, fill
-    lw $t4, 0($sp)          # the first word back
-    lw $t5, 12($sp)         # and the last
-    addi $sp, $sp, 16       # and give the room back
+    addi $sp, $sp, -8       # reserve two word-sized local slots
+    li $t0, 7
+    sw $t0, 0($sp)          # first local value
+    li $t0, 3
+    sw $t0, 4($sp)          # second local value
+
+    lw $t1, 0($sp)
+    lw $t2, 4($sp)
+    add $t3, $t1, $t2       # $t3 = 10
+    addi $sp, $sp, 8        # release exactly the 8 bytes reserved
+
+    li $v0, 10
+    syscall
 ```
 
-`$t4` is 10 and `$t5` is 13, the first and last words of the four the loop filled in. While that
-loop runs, the four words live at `0x7FFFEFEC` to `0x7FFFEFF8`.
+While the block is reserved, `0($sp)` and `4($sp)` belong to this code. After adding 8 back, those
+addresses are available for reuse. Their old bits can remain there, but the program no longer owns
+those slots.
 
-After the last `addi` they are still sitting in memory, unchanged, and they are no longer yours. The
-next piece of code that takes room gets the same addresses and writes over them. So reading below
-`$sp` is not an error and does not stop the program; it just hands you whatever the last user of
-that room left behind, which is the most confusing kind of bug to chase.
+## Restore the stack pointer exactly
 
-## Give every byte back
+Every piece of code that subtracts from `$sp` must add back the same total before it finishes using
+the stack. Reserving 12 bytes and releasing only 8 leaves `$sp` one word too low. Code that expects
+the old stack position would then use the wrong addresses.
 
-A subroutine that moves `$sp` and does not move it back leaves the caller's stack pointer somewhere
-else, and every offset the caller had into the stack is wrong from then on. Worse, the return address
-of a call is on the stack too, which the next lecture is about, so a mismatched adjustment makes a
-`jr $ra` jump to a number that was never an address.
+A function call does not place a return address on the stack automatically. `jal` writes the return
+address into `$ra`; only an explicit store saves `$ra` on the stack. Regardless of what values a
+program stores, the balance rule stays the same: release exactly the number of bytes reserved.
 
-The rule is one line: **whatever a piece of code subtracts from `$sp`, it adds back before it hands
-control on**. Write the two `addi` instructions at the same time, before you fill in what goes
-between them.
-
-There is nothing to stop you breaking it. `$sp` is register `$29` and `add $sp, $sp, $t0` assembles
-as happily as any other addition. The Stack tab of the memory panel and the `$sp` row of the
-registers panel are how you check.
+Because `$sp` is ordinary register `$29`, the processor does not enforce this rule. Watch `$sp` in
+the registers panel and check that it returns to its starting value.
 
 ## One to try
 
-The test starts `$t0` at `0x11111111` and `$t1` at `0x22222222`, and wants them exchanged. Do it
-through the stack, without a third register.
+The test starts `$t0` at `0x11111111`, `$t1` at `0x22222222`, and `$sp` at the editor's usual stack
+address. Swap `$t0` and `$t1` through the stack without using a third register. Finish with `$sp`
+restored to its starting value. The stop sequence is already present.
 
 ```mips|playground|exercise
 .text
 main:
     # your code here
+
+    li $v0, 10
+    syscall
 ```
 
 ```testcase
 {
-    "startingRegisters": { "$t0": "0x11111111", "$t1": "0x22222222" },
-    "expectedRegisters": { "$t0": "0x22222222", "$t1": "0x11111111" }
+    "startingRegisters": {
+        "$t0": "0x11111111",
+        "$t1": "0x22222222",
+        "$sp": "0x7FFFEFFC"
+    },
+    "expectedRegisters": {
+        "$t0": "0x22222222",
+        "$t1": "0x11111111",
+        "$sp": "0x7FFFEFFC",
+        "$v0": 10
+    }
 }
 ```
 
@@ -172,10 +179,17 @@ main:
 .text
 main:
     addi $sp, $sp, -4
-    sw $t0, 0($sp)      # push the old $t0
-    move $t0, $t1       # the new $t0 over the top
-    lw $t1, 0($sp)      # and the old one comes back into $t1
+    sw $t0, 0($sp)          # push the old $t0
+    addi $sp, $sp, -4
+    sw $t1, 0($sp)          # push the old $t1
+
+    lw $t0, 0($sp)          # retrieve the old $t1
     addi $sp, $sp, 4
+    lw $t1, 0($sp)          # retrieve the old $t0
+    addi $sp, $sp, 4
+
+    li $v0, 10
+    syscall
 ```
 
 </details>

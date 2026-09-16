@@ -1,95 +1,88 @@
-The screen and the keyboard are both reached with `lw` and `sw`, and with nothing else. No new
-instruction, no service number, no request of any kind: certain addresses are wired to devices
-instead of to memory, so storing a word at one of them changes a pixel and loading a word from
-another tells you what somebody typed. This arrangement is called **memory mapped I/O**, and it is
-why the two things this page is about need no new syntax at all.
+Framebuffer pixels, keyboard input and console output all use ordinary loads and stores. A program
+stores colour words in a reserved memory area, and the Screen watches that area as a framebuffer. At
+four special addresses, loads and stores talk to keyboard and console device registers instead. The
+special-register arrangement is called **memory-mapped I/O**. The syscalls you already know still
+have a place: service 10 exits, and service 32 gives a moving or polling program a controlled pause.
 
 ## One word is one pixel
 
-The bitmap display is a grid of words somewhere in memory. The **low 24 bits** of each word are its
-colour: red in bits 23 to 16, green in 15 to 8, blue in 7 to 0, and the top byte is ignored. So
-`0x00FF0000` is red, `0x0000FF00` is green, `0x000000FF` is blue and `0x00FFFFFF` is white, which is
-the `#RRGGBB` order you write in CSS with a `0x` on the front.
+The Screen's dimensions come from fixed choices:
 
-The words run **left to right and then top to bottom**, so the pixel below a word is one row of words
-further on. Four parameters say how big the grid is and where it starts, and a fifth says how large
-each word is drawn:
+- **Unit width** and **unit height** are each one of 1, 2, 4, 8, 16 or 32 display pixels. They say
+  how large the Screen draws one framebuffer word.
+- **Display width** and **display height** are each one of 64, 128, 256, 512 or 1024 pixels.
 
-- **unit width** and **unit height**, 1 to 32, how many screen pixels one word covers.
-- **display width** and **height**, 64 to 1024. Divided by the unit size, they give the grid: 256 by
-  256 at a unit of 16 is a 16 by 16 grid of words.
-- **base address**, where the grid starts in memory.
+The word grid has `display width / unit width` columns and
+`display height / unit height` rows. For example, a 256 by 256 display with 16 by 16 units holds a
+16 by 16 grid, or 256 words.
 
-Press Run on this one and watch the Screen panel next to it.
+The low 24 bits of each word hold a colour in **RRGGBB** order: red in bits 23–16, green in bits
+15–8 and blue in bits 7–0. Write the full word as `0x00RRGGBB`. Thus `0x00FF0000` is red,
+`0x0000FF00` is green, `0x000000FF` is blue and `0x00FFFFFF` is white.
+
+This first program reserves a 16 by 16 framebuffer and changes four of its words.
 
 ```mips|playground|open-screen|memory
 # @screen unit=16 width=256 height=256 base=display
 .data
-display: .space 1024        # 16 * 16 words, four bytes each
+display: .space 1024        # 16 * 16 words * 4 bytes
 
 .text
 .globl main
 main:
     la $t0, display
-    li $t1, 0x00FF0000      # red
-    sw $t1, 0($t0)          # the pixel at the top left
-    li $t1, 0x0000FF00      # green
-    sw $t1, 4($t0)          # the one to the right of it
-    li $t1, 0x000000FF      # blue
-    sw $t1, 64($t0)         # 16 words on, so the one below the first
-    li $t1, 0x00FFFFFF      # white
-    sw $t1, 1020($t0)       # the last word of the grid
+    li $t1, 0x00FF0000      # red: top left
+    sw $t1, 0($t0)
+    li $t1, 0x0000FF00      # green: one pixel to the right
+    sw $t1, 4($t0)
+    li $t1, 0x000000FF      # blue: one row below the first pixel
+    sw $t1, 64($t0)
+    li $t1, 0x00FFFFFF      # white: bottom right
+    sw $t1, 1020($t0)
     li $v0, 10
     syscall
 ```
 
-Four `sw` instructions, four pixels. The offsets tell the story: `0` and `4` are neighbours across
-the top, because one pixel is one word and one word is four bytes, and `64` is one row down, because
-a row is 16 words and 16 times 4 is 64.
+The words run left to right, then continue on the next row. Neighbouring words are four bytes apart,
+and one row here occupies `16 * 4 = 64` bytes. The Screen observes these ordinary memory words; they
+are different from the device registers used for the keyboard and console below.
 
-The `.space 1024` is what reserves the memory the grid covers. The panel draws whatever those 256
-words hold, no more and no less, so a program that writes past the end of its reservation is
-scribbling on other data, and one that reserves too little shows you whatever happens to follow it
-in the data section.
+## Build-time Screen configuration
 
-## The @screen line
-
-The five parameters are the Screen panel's **Display** button, and a program can ask for them itself
-with a comment line naming `@screen`. Every Build reads it, before the first instruction runs.
+The first `@screen` comment in the entry file configures the Screen on every Build, before the first
+instruction runs:
 
 ```
 # @screen unit=16 width=256 height=256 base=display
 ```
 
-- **`width`** and **`height`** are the display area in pixels, one of 64, 128, 256, 512 or 1024.
-- **`unit`** is how large one word is drawn, one of 1, 2, 4, 8, 16 or 32. `unitWidth` and
-  `unitHeight` set the two separately.
-- **`base`** is **a label your program defines**, which is the point of it, since the program then
-  never has to know the address. An address such as `0x10010000` works too.
+`unit` sets both unit dimensions; `unitWidth` and `unitHeight` can set them separately. `width` and
+`height` use the fixed display-size choices above. `base` can name a label defined by the program or
+give an address such as `0x10010000`. A label is convenient because the assembler chooses its
+address.
 
-It begins with a `#`, so as far as the assembler is concerned it is a comment and nothing else. The
-editor reads it separately, on every Build, which is why the panel is already the right shape before
-your first instruction runs. You can also set all five by hand with the Screen panel's **Display**
-button.
+Settings left out keep their current Screen values. With no directive, the current configuration
+also remains; a new MIPS project starts with 1 by 1 units, a 512 by 256 display and base address
+`0x10010000`. An unsupported size produces a warning and is replaced by the nearest allowed choice.
+A malformed value or an unknown base label also produces a warning and leaves that setting as it
+was. These warnings do not stop the Build. The assembler itself sees the line only as a comment.
 
-Anything the line gets wrong is a **warning** on that line, never an error: a size that is not on
-the list is replaced by the nearest one that is, and a label that does not exist leaves the base
-address as it was. Whatever you leave out keeps the value it already had.
+## From a row and column to an address
 
-## Working out which word
-
-A pixel at column `x` and row `y` is at
+Suppose `x` is the column and `y` is the row. First skip `y` complete rows, with `columns` words in
+each row. Then move `x` words into that row. Finally convert the word count to bytes:
 
 ```
 base + (y * columns + x) * 4
 ```
 
-which is the two dimensional array of "Arrays and strings" with an element size of 4. When the number
-of columns is a power of two, both multiplications are shifts.
+When the column count is a power of two, shifts perform both multiplications. This loop draws one
+horizontal row in the 16-column framebuffer. It recomputes the formula for each value of `x` so the
+connection between coordinates and addresses stays visible.
 
 ```mips|playground|open-screen|memory
 # @screen unit=16 width=256 height=256 base=display
-.eqv SIDE 16
+.eqv COLUMNS 16
 .data
 display: .space 1024
 
@@ -97,47 +90,122 @@ display: .space 1024
 .globl main
 main:
     la $s0, display
-    li $s1, 0                   # y
-row:
-    li $s2, 0                   # x
-pixel:
-    sll $t0, $s2, 4             # blue from x
-    sll $t1, $s1, 12            # green from y
-    or $t0, $t0, $t1            # the colour of this pixel
-    sll $t2, $s1, 4             # y * SIDE, which is 16
-    add $t2, $t2, $s2           # + x
-    sll $t2, $t2, 2             # times four bytes per word
-    add $t2, $t2, $s0
-    sw $t0, 0($t2)
+    li $s1, 6                   # y: draw row 6
+    li $s2, 0                   # x: start at column 0
+draw:
+    sll $t0, $s1, 4             # y * 16 columns
+    add $t0, $t0, $s2           # y * columns + x
+    sll $t0, $t0, 2             # four bytes per word
+    add $t0, $t0, $s0           # add the framebuffer base
+    sll $t1, $s2, 4             # increasing blue value
+    sw $t1, 0($t0)
     addi $s2, $s2, 1
-    blt $s2, SIDE, pixel
-    addi $s1, $s1, 1
-    blt $s1, SIDE, row
+    blt $s2, COLUMNS, draw
     li $v0, 10
     syscall
 ```
 
-A blue and green ramp over the whole grid, 256 pixels drawn by two nested loops. `sll $t2, $s1, 4` is
-the `y * 16`, and `sll $t2, $t2, 2` afterwards is the four bytes; the two could be one shift of 6,
-and they are written apart so the formula is readable.
+## The keyboard and console registers
 
-`sll $t0, $s2, 4` puts `x`, which runs from 0 to 15, into bits 4 to 7 of the colour, which is the
-top half of the blue byte. Shifting by 20 instead would put it in the red byte, and the same loop
-would paint a completely different picture: the shift amount is the only thing that decides which
-colour a coordinate feeds.
+The addresses from `0xffff0000` through `0xffff000c` are special memory-mapped I/O registers. Each
+register is a word, but the character itself is in the low byte.
 
-## An animation
+|      address | register            | operation and effect                                                     |
+| -----------: | ------------------- | ------------------------------------------------------------------------ |
+| `0xffff0000` | receiver control    | Load it and test bit 0. Ready is 1 when receiver data holds a character. |
+| `0xffff0004` | receiver data       | Load the waiting character. That read consumes it.                       |
+| `0xffff0008` | transmitter control | Bit 0 is Ready and remains 1 because the console can accept a character. |
+| `0xffff000c` | transmitter data    | Store a character code to append its low byte to the console.            |
 
-A moving picture is a loop that erases, moves, draws and then **waits**. Service 32 is what makes it
-move at the same speed whatever your machine is doing, and it costs no instructions, so the
-Playground's budget is spent on drawing rather than on counting.
+Here is console output through the transmitter. Service 10 still ends the program; no output
+syscall is involved.
 
-This one runs until you press Stop.
+```mips|playground|console|no-registers
+.eqv TRANSMITTER_DATA 0xffff000c
+
+.text
+.globl main
+main:
+    li $s0, TRANSMITTER_DATA
+    li $t0, 'H'
+    sw $t0, 0($s0)
+    li $t0, 'i'
+    sw $t0, 0($s0)
+    li $t0, '\n'
+    sw $t0, 0($s0)
+    li $v0, 10
+    syscall
+```
+
+## Polling the keyboard
+
+A key can arrive at any time, so a program repeatedly loads receiver control and checks Ready bit 0.
+When Ready is 1, it loads receiver data. If another character is already queued, that next character
+moves into receiver data and Ready stays 1; otherwise Ready becomes 0. The queue preserves the order
+in which the keys were typed.
+
+Click the Screen before typing. A visible focus ring shows that it owns the keyboard; keys typed
+while another part of the page has focus do not enter this receiver queue.
+
+```mips|playground|open-screen|console|no-registers
+.eqv RECEIVER_CONTROL 0xffff0000
+.eqv RECEIVER_DATA    0xffff0004
+.eqv TRANSMITTER_DATA 0xffff000c
+.data
+banner: .asciiz "Click the Screen, then type. q exits.\n"
+
+.text
+.globl main
+main:
+    li $v0, 4
+    la $a0, banner
+    syscall
+
+poll:
+    lw $t0, RECEIVER_CONTROL
+    andi $t0, $t0, 1            # keep only Ready bit 0
+    bnez $t0, receive
+
+    li $v0, 32                  # avoid a busy-wait while the queue is empty
+    li $a0, 10                  # let 10 ms of program time pass
+    syscall
+    j poll
+
+receive:
+    lw $t1, RECEIVER_DATA       # consuming read
+    andi $t1, $t1, 0xFF
+    sw $t1, TRANSMITTER_DATA    # echo through MMIO
+    li $t2, 'q'
+    bne $t1, $t2, poll
+    li $v0, 10
+    syscall
+```
+
+```testcase
+{ "runFor": 40000 }
+```
+
+This is **polling**: repeatedly asking the device whether work is ready. Service 32 keeps an empty
+poll from turning into a tight busy-wait. The loads, branches, `li` instructions and `syscall`
+instruction still count toward the running instruction budget. The elapsed pause itself adds no
+running instructions, so the program can wait without spending that budget merely to count time.
+
+Keep bit 1 of both control registers clear in this lesson. It requests interrupt-driven I/O, which
+the Playground does not support; the run stops if a program tries to set it. Poll Ready bit 0
+instead.
+
+Automated testcases cannot type into the Screen. A `runFor` testcase such as the one above only runs
+up to that instruction budget and checks that no runtime error occurred. It does not verify the
+keyboard interaction or the rendered Screen image, so try those parts interactively.
+
+## Optional application: a moving dot
+
+The same address calculation and service 32 are enough for a small animation. This program draws a
+dot, waits, erases that word and advances `x`.
 
 ```mips|playground|open-screen
 # @screen unit=16 width=256 height=256 base=display
-.eqv SIDE 16
-.eqv BACKGROUND 0x00101820
+.eqv COLUMNS 16
 .eqv DOT 0x00FFCC33
 .data
 display: .space 1024
@@ -147,32 +215,24 @@ display: .space 1024
 main:
     la $s0, display
     li $s1, 0                   # x
-    li $s2, 1                   # the step, which flips at the edges
+    li $s2, 1                   # direction
 frame:
-    li $t0, BACKGROUND          # paint the whole grid over
-    li $t1, 0
-fill:
-    sll $t2, $t1, 2
-    add $t2, $t2, $s0
-    sw $t0, 0($t2)
-    addi $t1, $t1, 1
-    blt $t1, 256, fill
+    sll $t0, $s1, 2             # x * 4
+    addi $t0, $t0, 512          # row 8: 8 * 16 * 4
+    add $t0, $t0, $s0
+    li $t1, DOT
+    sw $t1, 0($t0)
 
-    sll $t3, $s1, 2             # the dot, on row 8
-    addi $t3, $t3, 512          # 8 rows of 16 words, four bytes each
-    add $t3, $t3, $s0
-    li $t4, DOT
-    sw $t4, 0($t3)
-
-    li $v0, 32                  # let 50 milliseconds of program time pass
+    li $v0, 32
     li $a0, 50
     syscall
 
-    add $s1, $s1, $s2           # move it
-    bltz $s1, flip
-    blt $s1, SIDE, frame
-flip:
-    sub $s2, $zero, $s2         # turn it round at the edge
+    sw $zero, 0($t0)            # erase the old dot
+    add $s1, $s1, $s2
+    bltz $s1, reverse
+    blt $s1, COLUMNS, frame
+reverse:
+    sub $s2, $zero, $s2
     add $s1, $s1, $s2
     add $s1, $s1, $s2
     j frame
@@ -182,197 +242,78 @@ flip:
 { "runFor": 200000 }
 ```
 
-Take the `li $v0, 32` and its `syscall` out and run it again. The dot does not move faster in any
-useful sense: it races through the Playground's two million instructions and the program stops. The
-wait is not a slowdown, it is what makes the speed of the animation a number you chose rather than a
-number your computer chose.
-
-Now count what a frame costs. This one repaints all 256 words and then stores the dot, so 257 stores
-per frame, and it gets away with that because the grid is tiny. Put the same loop on a 64 by 64 grid
-and a frame is 4096 stores. The alternative is to erase only the pixel the dot was on last time,
-which is two stores a frame whatever the grid size, and that is what every program on a real sized
-screen does: the cost of a frame has to depend on what **moved**, not on how big the screen is.
-
-## The keyboard and the console at 0xffff0000
-
-Four words carry one character each way. They are not memory: reading one asks the device something
-and writing one tells it to do something.
-
-|      address | name                | what it does                                                    |
-| -----------: | ------------------- | --------------------------------------------------------------- |
-| `0xffff0000` | receiver control    | bit 0 is **Ready**: a typed character is waiting                |
-| `0xffff0004` | receiver data       | the character, in the low byte. Reading it takes that character |
-| `0xffff0008` | transmitter control | bit 0 is Ready, and here it is always 1                         |
-| `0xffff000c` | transmitter data    | storing a character in the low byte prints it on the console    |
-
-The transmitter is the simpler of the two: a `sw` of a character code appends it to the console, the
-same console `syscall` service 4 writes to. ASCII 12, a form feed, clears the console instead.
-
-```mips|playground|console|no-registers
-.eqv MMIO 0xffff0000
-
-.text
-.globl main
-main:
-    li $s0, MMIO
-    lw $t0, 8($s0)          # the transmitter control register, always Ready
-    li $t1, 'H'
-    sw $t1, 12($s0)         # printed, with no syscall anywhere
-    li $t1, 'i'
-    sw $t1, 12($s0)
-    li $t1, '\n'
-    sw $t1, 12($s0)
-    lw $t2, 0($s0)          # the receiver control, with nobody typing
-    li $v0, 10
-    syscall
-```
-
-The console shows `Hi`, written by two `sw` instructions and no service number anywhere. `$t0` is 1,
-the transmitter's Ready bit, which is always set because the console is always willing to take
-another character. `$t2` is 0, because nobody typed anything.
-
-## Polling the keyboard
-
-A program cannot know when somebody will press a key. What it can do is read the receiver control
-register over and over until the Ready bit turns on, and then read the receiver data register, which
-takes the character and makes room for the next one. That loop is **polling**.
-
-**Click the Screen panel before you type**: the screen only gets the keyboard when it has the focus,
-and a ring around it says so while it does.
-
-```mips|playground|open-screen|console|no-registers
-.eqv MMIO 0xffff0000
-.data
-banner: .asciiz "Click the screen, then type. q ends the program.\n"
-
-.text
-.globl main
-main:
-    li $v0, 4
-    la $a0, banner
-    syscall
-
-    li $s0, MMIO
-poll:
-    lw $t0, 0($s0)          # receiver control
-    andi $t0, $t0, 1        # the Ready bit
-    bnez $t0, take
-    li $v0, 32              # nothing typed yet, so wait instead of spinning
-    li $a0, 10
-    syscall
-    j poll
-take:
-    lw $t1, 4($s0)          # receiver data, which dequeues one character
-    andi $t1, $t1, 0xFF
-    sw $t1, 12($s0)         # echo it through the transmitter
-    li $t2, 'q'
-    beq $t1, $t2, quit
-    j poll
-quit:
-    li $v0, 10
-    syscall
-```
-
-```testcase
-{ "runFor": 40000 }
-```
-
-Type into the screen panel and every character comes back in the console; type `q` and the program
-ends. The `syscall` service 32 in the middle is what stops the poll from burning the instruction
-budget while nothing is happening: a wait costs no instructions, so a program idling on the keyboard
-can idle for as long as you like.
-
-Ready means "the queue is not empty" rather than "exactly one character is here". What does not fit
-in the data register waits behind it, so a program that polls slowly still gets every keystroke in
-order.
-
-## Interrupts, and why the program stops
-
-Bit 1 of either control register is the **interrupt enable** bit: setting it asks the device to
-interrupt your program the moment it has something, rather than being asked over and over. This
-editor does not deliver device interrupts, so a program that set that bit would sit waiting for one
-that never came. Rather than let it hang, a `sw` that sets the bit ends the run with a message
-saying so:
-
-```
-Interrupt-driven I/O is not supported: the program set the interrupt-enable bit (bit 1) of the
-receiver control register at 0xffff0000. Poll the Ready bit (bit 0) instead.
-```
-
-The next lecture is about the interrupt and exception machinery that message is refusing.
-
-## Four things about the panels
-
-- The display is a panel that is always there. You do not have to connect it to a program before
-  running one.
-- Service 30 counts from the start of the run, and a testcase runs on a virtual clock rather than a
-  real one.
-- The only input device is the keyboard. Those four addresses are everything the screen panel
-  can tell a program, so a program here is driven by keystrokes.
-- A testcase cannot type. An automated run leaves the receiver empty for ever, so the two keyboard
-  programs on this page are yours to try by hand, and no test can check them.
-
-The five display parameters, the four registers and the `@screen` settings are all on the
-[MIPS screen documentation page](/documentation/mips/screen).
+Updating only the old and new dot positions is efficient for this animation because only one small
+object changes. Partial redraw is not a universal rule: when most of an image changes, redrawing the
+whole framebuffer can be the simpler approach.
 
 ## Your turn
 
-The grid is 16 by 16 words at `display`. Paint the pixel at column 5, row 3 white, which is
-`0x00FFFFFF`, working the address out from the two coordinates rather than counting the bytes
-yourself. Row 3 column 5 is word `3 * 16 + 5`, which is 53, so the store lands at `0x10010000` plus 212.
+The first exercise uses the 16 by 16 framebuffer below. Starting with `x = 5` and `y = 3`, derive
+the pixel address from the coordinates and store white there. Do not replace the coordinates with a
+precomputed word index, byte offset or absolute address. Leave the check after your code in place;
+it loads through the address you calculated and prints the stored colour as a decimal number. That
+output checks the store-and-load pair; the Screen shows whether you chose the requested pixel.
 
-```mips|playground|open-screen|memory|exercise
+```mips|playground|open-screen|memory|console|exercise
 # @screen unit=16 width=256 height=256 base=display
-.eqv SIDE 16
+.eqv COLUMNS 16
 .data
 display: .space 1024
 
 .text
 .globl main
 main:
-    li $t0, 5               # x
-    li $t1, 3               # y
+    li $t0, 5                   # x
+    li $t1, 3                   # y
+    # Set $t2 to the pixel address and store 0x00FFFFFF there.
     # your code here
+
+    lw $a0, 0($t2)              # exercise check
+    li $v0, 1
+    syscall
+    li $v0, 10
+    syscall
 ```
 
 ```testcase
-{
-    "expectedMemory": [
-        { "type": "number-chunk", "address": "0x100100D4", "bytes": 4, "expected": ["0x00FFFFFF"] }
-    ]
-}
+{ "expectedOutput": "16777215" }
 ```
 
 <details>
 <summary>Show solution</summary>
 
-```mips|playground|open-screen|memory|solution
+```mips|playground|open-screen|memory|console|solution
 # @screen unit=16 width=256 height=256 base=display
-.eqv SIDE 16
+.eqv COLUMNS 16
 .data
 display: .space 1024
 
 .text
 .globl main
 main:
-    li $t0, 5               # x
-    li $t1, 3               # y
-    la $t2, display
-    li $t3, SIDE
-    mul $t4, $t1, $t3       # y * SIDE
-    add $t4, $t4, $t0       # + x
-    sll $t4, $t4, 2         # four bytes per word
-    add $t4, $t4, $t2
-    li $t5, 0x00FFFFFF
-    sw $t5, 0($t4)
+    li $t0, 5                   # x
+    li $t1, 3                   # y
+    sll $t2, $t1, 4             # y * 16 columns
+    add $t2, $t2, $t0           # y * columns + x
+    sll $t2, $t2, 2             # four bytes per word
+    la $t3, display
+    add $t2, $t2, $t3           # framebuffer base + byte offset
+    li $t4, 0x00FFFFFF
+    sw $t4, 0($t2)
+
+    lw $a0, 0($t2)              # exercise check
+    li $v0, 1
+    syscall
     li $v0, 10
     syscall
 ```
 
 </details>
 
-The second one prints `Hi` on the console through the **transmitter data register**, with no
-`syscall` service 4 and no `syscall` service 11.
+For the second exercise, print exactly `Hi` followed by a newline by storing each character in the
+MMIO transmitter data register. Do not use syscall service 4 or 11. The automated check can compare
+the exact console text, but output alone cannot prove which route produced it; checking that the
+stores use `0xffff000c` is part of the exercise.
 
 ```mips|playground|console|exercise
 .text
@@ -382,23 +323,25 @@ main:
 ```
 
 ```testcase
-{
-    "expectedOutput": "Hi"
-}
+{ "expectedOutput": "Hi\n" }
 ```
 
 <details>
 <summary>Show solution</summary>
 
 ```mips|playground|console|solution
+.eqv TRANSMITTER_DATA 0xffff000c
+
 .text
 .globl main
 main:
-    li $s0, 0xffff0000
+    li $s0, TRANSMITTER_DATA
     li $t0, 'H'
-    sw $t0, 12($s0)         # transmitter data
+    sw $t0, 0($s0)
     li $t0, 'i'
-    sw $t0, 12($s0)
+    sw $t0, 0($s0)
+    li $t0, '\n'
+    sw $t0, 0($s0)
     li $v0, 10
     syscall
 ```

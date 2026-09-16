@@ -1,194 +1,168 @@
-Every number so far has been a whole one. `li $t0, 3` and `li $t0, 4` work; there is no value you
-can put in `$t0` that means 3.75, because a 32 bit integer register counts and does not measure.
+A register holds bits. An instruction decides what those bits mean.
 
-Measuring gets a second set of registers and its own instructions, which look like this:
+For example, a CPU register can hold `0x40700000`. An integer instruction reads that pattern as the
+integer 1081081856. The same pattern is the single precision floating point encoding of 3.75, but
+`add` still performs integer addition on it. Floating point arithmetic uses its own registers and
+instructions.
 
-```
+Here is a complete first example:
+
+```mips|playground|fpu
+.data
+left:   .float 1.5
+right:  .float 2.25
+sum:    .float 0.0
+
+.text
+.globl main
+main:
+    l.s $f0, left
+    l.s $f2, right
     add.s $f4, $f0, $f2
-```
-
-Same three operand shape you already know, a different bank of registers, and a suffix saying what
-kind of number it is working on.
-
-They are separate for a reason that is now historical. The first MIPS chips did integers and nothing
-else, and floating point was done in software, a few hundred instructions per multiplication, which
-was hopeless for the graphics and engineering work the machines were sold for. So a second chip, the
-**R2010**, sat beside the main one watching the same stream of instructions: the ones it recognised
-it carried out while the main chip waited, and the rest it ignored. It had its own registers, which
-the main chip could not name.
-
-That arrangement is what **coprocessor** means, and MIPS numbers them. Coprocessor 1 is the floating
-point unit, and coprocessor 0 is the one that holds the registers describing a fault, which the last
-lecture of this course uses. Everything went onto one piece of silicon decades ago and the names
-never changed, which is why the instructions that carry a value between the two banks are still
-spelled `mtc1` and `mfc1`, move to and move from coprocessor 1.
-
-## How a number is stored
-
-A floating point number is three fields: a **sign** bit, an **exponent** and a **mantissa**, the
-digits. The value is the mantissa times two to the power of the exponent, with the sign applied,
-which is scientific notation written in binary.
-
-| type   | bytes | directive | sign | exponent | mantissa | about             |
-| ------ | ----- | --------- | ---- | -------- | -------- | ----------------- |
-| float  | 4     | `.float`  | 1    | 8        | 23       | 7 decimal digits  |
-| double | 8     | `.double` | 1    | 11       | 52       | 16 decimal digits |
-
-Two consequences follow from the mantissa being binary.
-
-**Most decimal fractions cannot be stored exactly.** 0.1 in binary repeats for ever, the way 1/3 does
-in decimal, so what a float holds is the nearest representable number to 0.1, and 0.1 + 0.2 is not
-0.3. That is not a fault in the hardware, it is what happens when a base 10 fraction is written in
-base 2.
-
-**Some values are not numbers.** An exponent of all ones means an **infinity** when the mantissa is
-zero and a **NaN**, not a number, when it is not. One divided by zero is an infinity, zero divided by
-zero is a NaN, and a NaN compared with anything, itself included, answers false.
-
-## The 32 registers of coprocessor 1
-
-`$f0` to `$f31`, 32 bits each, and they are not the `$t` and `$s` registers: `$f0` and `$t0` are two
-different registers that happen to be numbered the same way.
-
-The registers panel shows them on its own **FPU** tab, beside the CPU one. Its Format selector reads
-each register as a double, as a single or as raw hex, because nothing in a register records which of
-the three the program meant.
-
-A **double is a pair**. `$f0` holds its low half and `$f1` its high half, so a program that works in
-doubles uses only the even numbered registers and the odd ones are the halves it does not name. That
-is why the panel's Double format leaves the odd rows blank, and why `l.d $f1, x` stops the run with
-"first register must be even-numbered".
-
-The convention for the names, which the hardware does not enforce:
-
-| registers        | used for                                  |
-| ---------------- | ----------------------------------------- |
-| `$f0`, `$f2`     | return values                             |
-| `$f4` to `$f10`  | temporaries, destroyed by a call          |
-| `$f12`, `$f14`   | the first two floating point arguments    |
-| `$f16`, `$f18`   | more temporaries                          |
-| `$f20` to `$f30` | saved, so a subroutine must put them back |
-
-## Loading, storing and arithmetic
-
-Every instruction carries a suffix saying what it works on: `.s` for a single and `.d` for a double.
-
-```mips|playground|fpu
-.data
-a:      .float 1.5
-b:      .float 2.25
-result: .float 0.0
-
-.text
-.globl main
-main:
-    l.s $f0, a              # load a single
-    l.s $f2, b
-    add.s $f4, $f0, $f2     # 3.75
-    s.s $f4, result         # and store it back
-
-    sub.s $f6, $f2, $f0     # 0.75
-    mul.s $f8, $f0, $f2     # 3.375
-    div.s $f10, $f2, $f0    # 1.5
-    sqrt.s $f12, $f2        # 1.5, since 1.5 squared is 2.25
-    neg.s $f14, $f0         # -1.5
-    abs.s $f16, $f14        # 1.5 again
+    s.s $f4, sum
 
     li $v0, 10
     syscall
 ```
 
-The FPU tab shows `$f4` at `3.75` and `$f6` at `0.75`. Now switch its Format to Hex: `$f4` reads
-`40700000`. That is the same 3.75, and it is what the register has been holding all along. The
-Format selector changes how the panel reads the bits and changes nothing in the machine, because
-nothing in the register records which of the three readings you meant.
+`l.s` loads each input into a floating point register, `add.s` adds them, and `s.s` stores the
+answer. Open the FPU register tab and `$f4` reads 3.75. In Hex format it reads `40700000`: the same
+bits, displayed with a different interpretation.
 
-The shape is the one you already know: destination first, then the two operands. `l.s` and `s.s`
-are the floating point load and store, and they address memory as `offset(base)`, exactly like `lw`
-and `sw`.
+The floating point unit is traditionally called **Coprocessor 1** in MIPS. Early MIPS systems could
+put floating point work on a separate coprocessor chip; modern implementations usually integrate
+it with the CPU, but the name remains in the instruction set. That history explains the separate
+`$f` registers and instruction names such as `mtc1`, which we will use shortly.
 
-Doubles are the same instructions with `.d`, and their registers move in twos.
+## Singles, doubles, and their bits
+
+The `.float` directive writes a 4 byte **single precision** value into memory. The `.double`
+directive writes an 8 byte **double precision** value:
+
+```mips
+.data
+radius:    .float 2.5
+distance:  .double 12345.125
+```
+
+For a normal, finite IEEE 754 value, the stored bits have three jobs:
+
+- the **sign** bit chooses positive or negative;
+- the **exponent** scales the value by a power of two;
+- the **significand** holds the significant binary digits.
+
+| format | bytes | sign bits | exponent bits | stored fraction bits | approximate precision |
+| ------ | ----: | --------: | ------------: | -------------------: | --------------------: |
+| single |     4 |         1 |             8 |                   23 |      7 decimal digits |
+| double |     8 |         1 |            11 |                   52 |     16 decimal digits |
+
+You do not need to memorize the field widths. The practical point is that the significand has a
+fixed size. Many decimal fractions, including 0.1, have no finite binary representation, so the
+machine stores a nearby representable value. A sequence of calculations can therefore finish a
+little above or below the result you would get with exact decimal arithmetic.
+
+Some exponent patterns have special meanings. With the exponent bits all set, a zero fraction
+encodes positive or negative **infinity**. A nonzero fraction encodes **NaN** (not a number).
+Infinity is a value distinct from NaN. NaN is _unordered_: the ordinary comparisons in this lesson
+are false when either operand is NaN.
+
+Many instructions that interpret floating point encodings carry a format suffix. `.s` means single
+and `.d` means double, so `add.s` adds singles and `add.d` adds doubles. Bit-copy instructions such
+as `mtc1` and branch instructions such as `bc1t` do not use that suffix.
+
+## Floating point registers
+
+Coprocessor 1 has 32 registers, `$f0` through `$f31`. Each is 32 bits wide and is separate from the
+CPU register file: `$f0` and `$t0` are unrelated registers.
+
+A single fits in one `$f` register. In this Playground, a double occupies an even/odd pair: the even
+register contains the low 32 bits and the following odd register contains the high 32 bits. For
+example, a double loaded into `$f4` occupies `$f4` and `$f5`. Double instructions name the even
+register.
+
+The Playground's FPU tab can display the registers as Single, Double, or Hex. Its Double view shows
+the combined value on the even row and leaves the odd row blank. These low/high and display details
+describe this Playground; other MIPS tools and targets can present register pairs differently.
+
+## Loading, storing, and calculating
+
+The usual single precision arithmetic instructions have the familiar destination-first shape:
+
+```mips
+add.s  $f4, $f0, $f2    # $f4 = $f0 + $f2
+sub.s  $f4, $f0, $f2    # $f4 = $f0 - $f2
+mul.s  $f4, $f0, $f2    # $f4 = $f0 * $f2
+div.s  $f4, $f0, $f2    # $f4 = $f0 / $f2
+sqrt.s $f4, $f0         # $f4 = square root of $f0
+```
+
+Use the `.d` forms with doubles. The data format has to match the instruction: `add.s` reads one
+32 bit single from each named register, while `add.d` reads two 64 bit register pairs.
+
+`l.s` and `s.s` use the same base-plus-offset addressing you know from `lw` and `sw`. Each single
+takes 4 bytes, so adjacent elements of a float array are 4 bytes apart:
 
 ```mips|playground|fpu
 .data
-a:      .double 1.5
-b:      .double 2.25
-result: .double 0.0
+values: .float 1.5, 2.25, 0.0
 
 .text
 .globl main
 main:
-    l.d $f0, a              # $f0 and $f1 together
-    l.d $f2, b              # $f2 and $f3
-    add.d $f4, $f0, $f2     # into $f4 and $f5
-    s.d $f4, result
+    la $t0, values
+    l.s $f0, 0($t0)
+    l.s $f2, 4($t0)
+    add.s $f4, $f0, $f2
+    s.s $f4, 8($t0)
 
     li $v0, 10
     syscall
 ```
 
-On the Double format `$f4` reads `3.75` and the odd rows are blank. Switch to Hex and the same value
-is `$f4` at `00000000` and `$f5` at `40120000`, the low and high halves of one 64 bit number.
+After the store, the third array element is 3.75. The corresponding double instructions are `l.d`
+and `s.d`; adjacent doubles are 8 bytes apart.
 
-## Crossing the boundary
+## Copying bits and converting values
 
-An integer register and a floating point register hold different encodings, so getting a number from
-one to the other is two steps: move the bits, then convert them.
+There are two different ways for a value to cross between the CPU and FPU register files.
 
-- **`mtc1 $t0, $f0`** copies 32 bits from an integer register into a floating point one, unchanged.
-- **`mfc1 $t0, $f0`** copies them back, unchanged.
-- **`cvt.s.w $f0, $f0`** reads `$f0` as an integer and writes the float with that value.
-- **`cvt.w.s $f0, $f0`** goes the other way, rounding.
-- **`cvt.d.s`** and **`cvt.s.d`** widen a single to a double and narrow it back.
+- `mtc1 $t0, $f0` copies 32 bits from `$t0` to `$f0` unchanged.
+- `mfc1 $t0, $f0` copies 32 bits from `$f0` to `$t0` unchanged.
+- `cvt.s.w $f2, $f0` reads a 32 bit integer in `$f0` and writes the single precision value with the
+  same numeric value.
+- `cvt.w.s $f2, $f0` reads a single in `$f0` and writes a 32 bit integer encoding into `$f2`.
 
-Read the `cvt` names backwards: `cvt.s.w` converts **to** single **from** word.
+Read a conversion name as “convert to the first format from the second.” In `cvt.s.w`, `.s` is the
+destination format and `.w` is a 32 bit integer word.
 
 ```mips|playground|fpu
-.data
-n:      .word 7
-
 .text
 .globl main
 main:
-    lw $t0, n
-    mtc1 $t0, $f0           # the bits of the integer 7, still an integer
-    cvt.s.w $f2, $f0        # 7.0, which is 40E00000
-    sqrt.s $f4, $f2         # 2.6457...
-    cvt.w.s $f6, $f4        # back to an integer: 3, rounded
-    mfc1 $t1, $f6
+    li $t0, 7
+    mtc1 $t0, $f0           # $f0 now contains the unchanged bits 00000007
+    cvt.s.w $f2, $f0        # $f2 now contains the encoding of 7.0
+    sqrt.s $f4, $f2         # about 2.64575
+    cvt.w.s $f6, $f4        # integer 3 in the default rounding mode
+    mfc1 $t1, $f6           # copy that integer encoding back to the CPU
 
     li $v0, 10
     syscall
 ```
 
-`$t1` is 3, not 2. The square root of 7 is about 2.65, and `cvt.w.s` rounds to nearest rather than
-throwing the fraction away, which is the opposite of what most people expect a conversion to do. When
-you want the fraction thrown away, `trunc.w.s` is the instruction. `ceil.w.s` and `floor.w.s` round
-the two other ways.
+At the end, `$t1` is 3. In this Playground's default rounding mode, `cvt.w.s` rounds to the nearest
+integer. `mtc1` and `mfc1` never perform that numeric conversion: they preserve the bit pattern.
+That distinction matters when you want to inspect a float as hex, as the first exercise does.
 
-`$f0` after the `mtc1` is worth a look on both formats. In Hex it reads `00000007`. In Single it
-reads an absurdly small number, a hair above zero, because the bit pattern of the integer 7 is also
-a perfectly valid float and happens to mean that. Nothing changed the bits. The two lines of the
-program did two different things because `mtc1` copies and `cvt.s.w` converts, and telling those
-apart is most of what goes wrong on this page.
+## Comparing and branching
 
-## Comparing
-
-Comparing two floats works differently from anything else you have written. Coprocessor 1 keeps
-eight **condition flags** of its own, and a comparison writes one of them rather than writing a
-register, so asking a question takes two instructions: one to compare, one to branch on the result.
-
-- **`c.lt.s $f0, $f2`** sets condition flag 0 when `$f0` is less than `$f2`, and clears it
-  otherwise.
-- **`bc1t label`** branches when flag 0 is set, and **`bc1f label`** when it is clear.
-
-The three comparisons are `c.eq`, `c.lt` and `c.le`, each in a `.s` and a `.d` form. For "greater
-than", swap the operands and use `c.lt`, the same trick the integer branches use.
+A floating point comparison records a true or false condition inside Coprocessor 1. A following
+`bc1t` branches when that condition is true; `bc1f` branches when it is false.
 
 ```mips|playground|fpu
 .data
-a:      .float 1.5
-b:      .float 2.25
+a: .float 1.5
+b: .float 2.25
 
 .text
 .globl main
@@ -196,84 +170,86 @@ main:
     l.s $f0, a
     l.s $f2, b
 
-    c.lt.s $f0, $f2         # is 1.5 < 2.25?
-    bc1t yes
-    li $t0, 0
-    j after
-yes:
-    li $t0, 1
-after:
-
-    c.eq.s $f0, $f0         # is a equal to itself?
-    bc1t same
-    li $t1, 0
-    j done
-same:
-    li $t1, 1
-done:
+    c.lt.s $f0, $f2         # is a < b?
+    bc1t less
+    li $t0, 0               # false path
+    j compared
+less:
+    li $t0, 1               # true path
+compared:
 
     li $v0, 10
     syscall
 ```
 
-`$t0` and `$t1` both end at 1. Step through it with the FPU tab open: the eight condition flags are
-in their own row above the registers, and the one that flickers is flag 0.
+Here `c.lt.s` means “compare less than, as singles,” so the true path leaves 1 in `$t0`. The other
+common forms are `c.eq.s` for equal and `c.le.s` for less than or equal. Their double precision
+forms end in `.d`.
 
-`c.eq.s $f0, $f0` asks whether a number is equal to itself, which sounds like a waste of an
-instruction and is not. A NaN is the one value for which the answer is no, so this is how a program
-tests whether a calculation produced one.
+A false ordered comparison does not always mean “greater than or equal.” If either operand is NaN,
+`c.eq.s`, `c.lt.s`, and `c.le.s` all produce false. That rule gives a compact NaN check:
 
-The eight flags exist because a comparison may name which one it writes: `c.lt.s 1, $f2, $f0` writes
-flag 1, and `bc1t 1, label` reads flag 1. Two comparisons can then be under way at once without
-overwriting each other.
+```mips
+    c.eq.s $f0, $f0         # every non-NaN value equals itself
+    bc1f value_is_nan
+```
 
-## Passing a float to a subroutine
+This lesson uses the default comparison condition selected by the two-operand form. MIPS can name
+additional floating point condition flags, but one compare followed by one branch is enough for the
+ordinary control flow here.
 
-The convention puts the first two floating point arguments in `$f12` and `$f14` and the answer in
-`$f0`. The integer registers `$a0` to `$a3` carry the integer arguments as before, counted
-separately.
+## The course calling convention
+
+We can extend the simplified calling convention used in this course to floating point code:
+
+| registers                   | course convention                                     |
+| --------------------------- | ----------------------------------------------------- |
+| `$f12`, `$f14`              | first two floating point arguments                    |
+| `$f0`                       | single precision result                               |
+| `$f4`–`$f10`, `$f16`–`$f18` | temporaries a callee may change                       |
+| `$f20`–`$f30`               | saved registers a callee must restore if it uses them |
+
+A double result occupies the `$f0`/`$f1` pair in this Playground. This table is the convention for
+this course, not a universal MIPS ABI; real systems choose conventions for their architecture and
+toolchain.
 
 ```mips|playground|fpu
 .data
-x:      .float 3.0
-y:      .float 4.0
+x: .float 3.0
+y: .float 4.0
 
 .text
 .globl main
 main:
-    l.s $f12, x             # the first argument
-    l.s $f14, y             # the second
-    jal hypot_squared       # $f0 = x*x + y*y
+    l.s $f12, x
+    l.s $f14, y
+    jal squared_length
     sqrt.s $f2, $f0         # 5.0
 
     li $v0, 10
     syscall
 
-# hypot_squared($f12, $f14) -> $f12 * $f12 + $f14 * $f14 in $f0
-hypot_squared:
+# squared_length($f12, $f14) -> $f0
+squared_length:
     mul.s $f0, $f12, $f12
     mul.s $f4, $f14, $f14
     add.s $f0, $f0, $f4
     jr $ra
 ```
 
-`$f2` is 5.0, which is right for sides of 3 and 4. Notice that `hypot_squared` used `$f4` for its
-working and never put it back: `$f4` is a temporary and the convention allows exactly that. Had it
-wanted `$f20` or above, it would have owed the caller a save and a restore.
-
-Printing a float is `syscall` service 2 with the value in `$f12`, and a double is service 3. Both are
-in the "syscall" lecture with the rest.
+The subroutine may change `$f4` because it is a temporary under this course convention. A
+subroutine that uses `$f20` would save and restore it, just as it does for the saved CPU registers.
 
 ## Your turn
 
-`values` holds three floats. Add them up, divide by three, and leave the **bits** of the answer in
-`$t1` with `mfc1`, since a testcase reads the integer registers. The three add up to 9.0, so the
-answer is 3.0, whose bits are `0x40400000`.
+`values` holds four adjacent singles. Load them with base-plus-offset addresses, add them, divide
+the total by `four`, and use `mfc1` to leave the **bits** of the average in `$t1`. The test reads the
+CPU register, so a numeric conversion with `cvt.w.s` would produce the wrong result.
 
 ```mips|playground|fpu|exercise
 .data
-values: .float 1.5, 3.25, 4.25
-three:  .float 3.0
+values: .float 1.5, 2.25, 3.75, 3.5
+four:   .float 4.0
 
 .text
 .globl main
@@ -286,7 +262,7 @@ main:
 
 ```testcase
 {
-    "expectedRegisters": { "$t1": "0x40400000" }
+    "expectedRegisters": { "$t1": "0x40300000" }
 }
 ```
 
@@ -295,20 +271,22 @@ main:
 
 ```mips|playground|fpu|solution
 .data
-values: .float 1.5, 3.25, 4.25
-three:  .float 3.0
+values: .float 1.5, 2.25, 3.75, 3.5
+four:   .float 4.0
 
 .text
 .globl main
 main:
     la $t0, values
-    l.s $f0, 0($t0)         # 1.5
+    l.s $f0, 0($t0)
     l.s $f2, 4($t0)
-    add.s $f0, $f0, $f2     # + 3.25
+    add.s $f0, $f0, $f2
     l.s $f2, 8($t0)
-    add.s $f0, $f0, $f2     # + 4.25, so 9.0
-    l.s $f4, three
-    div.s $f0, $f0, $f4     # 3.0
+    add.s $f0, $f0, $f2
+    l.s $f2, 12($t0)
+    add.s $f0, $f0, $f2
+    l.s $f4, four
+    div.s $f0, $f0, $f4
     mfc1 $t1, $f0
 
     li $v0, 10
@@ -317,14 +295,23 @@ main:
 
 </details>
 
-The second one compares. Leave 1 in `$t0` when the float at `a` is less than the one at `b` and 0
-when it is not, and leave 1 in `$t1` when `a` is a NaN and 0 when it is not. The data holds 1.5 and
-2.5, so the answers are 1 and 0.
+The second exercise checks both outcomes of an ordinary comparison and then checks a supplied NaN.
+For each comparison, follow the branch on one outcome and fall through on the other:
+
+- leave 11 in `$t0` when `low < high`, otherwise leave 22;
+- leave 33 in `$t1` when `large < small`, otherwise leave 44;
+- leave 55 in `$t2` when `not_a_number` is NaN, otherwise leave 66.
+
+The `.word` directive supplies the standard quiet-NaN bit pattern. `l.s` loads those bits for the
+self-comparison; it does not matter that the data was written with `.word` rather than `.float`.
 
 ```mips|playground|fpu|exercise
 .data
-a:      .float 1.5
-b:      .float 2.5
+low:          .float -1.25
+high:         .float 4.5
+large:        .float 8.0
+small:        .float 2.0
+not_a_number: .word 0x7FC00000
 
 .text
 .globl main
@@ -337,7 +324,7 @@ main:
 
 ```testcase
 {
-    "expectedRegisters": { "$t0": 1, "$t1": 0 }
+    "expectedRegisters": { "$t0": 11, "$t1": 44, "$t2": 55 }
 }
 ```
 
@@ -346,26 +333,43 @@ main:
 
 ```mips|playground|fpu|solution
 .data
-a:      .float 1.5
-b:      .float 2.5
+low:          .float -1.25
+high:         .float 4.5
+large:        .float 8.0
+small:        .float 2.0
+not_a_number: .word 0x7FC00000
 
 .text
 .globl main
 main:
-    l.s $f0, a
-    l.s $f2, b
+    l.s $f0, low
+    l.s $f2, high
+    c.lt.s $f0, $f2
+    bc1t first_true
+    li $t0, 22
+    j second_test
+first_true:
+    li $t0, 11
 
-    li $t0, 1
-    c.lt.s $f0, $f2         # a < b?
-    bc1t less
-    li $t0, 0
-less:
+second_test:
+    l.s $f4, large
+    l.s $f6, small
+    c.lt.s $f4, $f6
+    bc1t second_true
+    li $t1, 44
+    j nan_test
+second_true:
+    li $t1, 33
 
-    li $t1, 1
-    c.eq.s $f0, $f0         # a equal to itself? only a NaN is not
-    bc1f isnan
-    li $t1, 0
-isnan:
+nan_test:
+    l.s $f8, not_a_number
+    c.eq.s $f8, $f8
+    bc1f is_nan
+    li $t2, 66
+    j done
+is_nan:
+    li $t2, 55
+done:
 
     li $v0, 10
     syscall
