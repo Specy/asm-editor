@@ -24,7 +24,7 @@ the total size.
 In this 32-bit RISC-V course, every integer register is one word wide. A register therefore always
 has room for 32 bits, even when the useful value began as only one byte or one halfword.
 
-The word *word* does not name the same size on every kind of processor. For the RISC-V machine in
+The word _word_ does not name the same size on every kind of processor. For the RISC-V machine in
 this course, it means 32 bits. **Halfword** means half of that word: 16 bits.
 
 ## One pattern, signed or unsigned
@@ -36,11 +36,11 @@ An unsigned interpretation uses every bit for the value, so its range begins at 
 interpretation in two's complement uses the top bit as the sign bit, leaving half of the patterns
 for negative values. Here are their ranges at each RISC-V size:
 
-| size     | unsigned range       | signed range                    |
-| -------- | -------------------- | ------------------------------- |
-| byte     | 0 to 255             | -128 to 127                     |
-| halfword | 0 to 65,535          | -32,768 to 32,767               |
-| word     | 0 to 4,294,967,295   | -2,147,483,648 to 2,147,483,647 |
+| size     | unsigned range     | signed range                    |
+| -------- | ------------------ | ------------------------------- |
+| byte     | 0 to 255           | -128 to 127                     |
+| halfword | 0 to 65,535        | -32,768 to 32,767               |
+| word     | 0 to 4,294,967,295 | -2,147,483,648 to 2,147,483,647 |
 
 For example, the byte `0xF0` has this bit pattern:
 

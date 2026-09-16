@@ -67,16 +67,16 @@ done:
 The six real comparison branches from the introduction are `beq`, `bne`, `blt`, `bge`, `bltu` and
 `bgeu`. The assembler provides extra spellings by exchanging operands or using the `zero` register.
 
-| question | convenient source spelling | real branch used by the assembler |
-| -------- | --------------------------- | --------------------------------- |
-| `a == b` | `beq a, b, label` | `beq a, b, label` |
-| `a != b` | `bne a, b, label` | `bne a, b, label` |
-| signed `a < b` | `blt a, b, label` | `blt a, b, label` |
-| signed `a >= b` | `bge a, b, label` | `bge a, b, label` |
-| signed `a > b` | `bgt a, b, label` | `blt b, a, label` |
-| signed `a <= b` | `ble a, b, label` | `bge b, a, label` |
-| `a == 0` | `beqz a, label` | `beq a, zero, label` |
-| signed `a < 0` | `bltz a, label` | `blt a, zero, label` |
+| question        | convenient source spelling | real branch used by the assembler |
+| --------------- | -------------------------- | --------------------------------- |
+| `a == b`        | `beq a, b, label`          | `beq a, b, label`                 |
+| `a != b`        | `bne a, b, label`          | `bne a, b, label`                 |
+| signed `a < b`  | `blt a, b, label`          | `blt a, b, label`                 |
+| signed `a >= b` | `bge a, b, label`          | `bge a, b, label`                 |
+| signed `a > b`  | `bgt a, b, label`          | `blt b, a, label`                 |
+| signed `a <= b` | `ble a, b, label`          | `bge b, a, label`                 |
+| `a == 0`        | `beqz a, label`            | `beq a, zero, label`              |
+| signed `a < 0`  | `bltz a, label`            | `blt a, zero, label`              |
 
 The unsigned ordering branches follow the same pattern. For example, `bgtu a, b, label` is a
 convenient spelling of `bltu b, a, label`, and `bleu a, b, label` becomes `bgeu b, a, label`.

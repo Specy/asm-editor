@@ -19,12 +19,12 @@ values. Lane 0 is the low lane and lane 1 is the high lane.
 In the instruction families used here, the final letters say how many values the instruction uses
 and which format it gives those bits:
 
-| suffix | meaning | lanes used in one XMM register |
-| ------ | ------- | ------------------------------ |
-| `ss` | scalar binary32 | one 32-bit value in the low bits |
-| `sd` | scalar binary64 | one 64-bit value in the low lane |
-| `ps` | packed binary32 | four 32-bit lanes |
-| `pd` | packed binary64 | two 64-bit lanes |
+| suffix | meaning         | lanes used in one XMM register   |
+| ------ | --------------- | -------------------------------- |
+| `ss`   | scalar binary32 | one 32-bit value in the low bits |
+| `sd`   | scalar binary64 | one 64-bit value in the low lane |
+| `ps`   | packed binary32 | four 32-bit lanes                |
+| `pd`   | packed binary64 | two 64-bit lanes                 |
 
 **Scalar** means one value. **Packed** means several independent lanes. For example, `addsd` adds
 the low binary64 values, while `addpd` adds both pairs of binary64 lanes.
@@ -141,10 +141,10 @@ _start:
     syscall
 ```
 
-| lane | `xmm0` before | `xmm1` | `xmm0` after |
-| ---: | -------------: | -----: | ------------: |
-| low lane 0 | 1.0 | 10.0 | 11.0 |
-| high lane 1 | 2.0 | 20.0 | 22.0 |
+|        lane | `xmm0` before | `xmm1` | `xmm0` after |
+| ----------: | ------------: | -----: | -----------: |
+|  low lane 0 |           1.0 |   10.0 |         11.0 |
+| high lane 1 |           2.0 |   20.0 |         22.0 |
 
 `mulpd` has the same lane-by-lane shape, with multiplication in place of addition. Neither packed
 operation carries a value from one lane into the other.
@@ -153,12 +153,12 @@ operation carries a value from one lane into the other.
 
 Conversion instructions change the representation of a value:
 
-| instruction | operation |
-| ----------- | --------- |
-| `cvtsi2sd xmm0, rax` | convert the signed qword in `rax` to binary64 in the low lane |
-| `cvttsd2si rax, xmm0` | convert the low binary64 value to a signed qword, truncating toward zero |
-| `cvtsd2si rax, xmm0` | convert the low binary64 value to a signed qword using MXCSR rounding control |
-| `movq rax, xmm0` | copy only the low 64 raw bits, with no numerical conversion |
+| instruction           | operation                                                                     |
+| --------------------- | ----------------------------------------------------------------------------- |
+| `cvtsi2sd xmm0, rax`  | convert the signed qword in `rax` to binary64 in the low lane                 |
+| `cvttsd2si rax, xmm0` | convert the low binary64 value to a signed qword, truncating toward zero      |
+| `cvtsd2si rax, xmm0`  | convert the low binary64 value to a signed qword using MXCSR rounding control |
+| `movq rax, xmm0`      | copy only the low 64 raw bits, with no numerical conversion                   |
 
 The usual MXCSR rounding mode is nearest, with halfway cases going to the result whose low bit is
 even. In that mode, `cvtsd2si` rounds 2.7 to 3. `cvttsd2si` always truncates toward zero, so it
@@ -222,11 +222,11 @@ and condition; masking does not turn every invalid calculation into the same res
 one of four outcomes in `ZF`, `PF`, and `CF`:
 
 | relation of low `xmm0` to low `xmm1` | `ZF` | `PF` | `CF` |
-| ------------------------------------- | ---: | ---: | ---: |
-| greater | 0 | 0 | 0 |
-| less | 0 | 0 | 1 |
-| equal | 1 | 0 | 0 |
-| unordered | 1 | 1 | 1 |
+| ------------------------------------ | ---: | ---: | ---: |
+| greater                              |    0 |    0 |    0 |
+| less                                 |    0 |    0 |    1 |
+| equal                                |    1 |    0 |    0 |
+| unordered                            |    1 |    1 |    1 |
 
 Unordered means at least one operand is a NaN. Test it first with `jp`. Its row also satisfies the
 flag conditions used by `jb` and `je`, so either of those jumps would misclassify a NaN if it ran
@@ -300,9 +300,9 @@ _start:
     syscall
 ```
 
-| lane | comparison | result bits |
-| ---: | ---------- | ----------- |
-| low lane 0 | `1.0 < 2.0`, true | `0xFFFFFFFFFFFFFFFF` |
+|        lane | comparison         | result bits          |
+| ----------: | ------------------ | -------------------- |
+|  low lane 0 | `1.0 < 2.0`, true  | `0xFFFFFFFFFFFFFFFF` |
 | high lane 1 | `5.0 < 4.0`, false | `0x0000000000000000` |
 
 Those all-one and all-zero lanes form a **mask**. They are bit patterns for selecting later data,

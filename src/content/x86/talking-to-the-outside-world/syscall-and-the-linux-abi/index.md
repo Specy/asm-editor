@@ -18,16 +18,16 @@ allowed, and returns a result.
 `syscall` has no written operands. Linux reads the system-call number and as many as six arguments
 from these registers:
 
-| value | register |
-| ----- | -------- |
-| system-call number | `rax` |
-| argument 1 | `rdi` |
-| argument 2 | `rsi` |
-| argument 3 | `rdx` |
-| argument 4 | `r10` |
-| argument 5 | `r8` |
-| argument 6 | `r9` |
-| result or error | `rax` |
+| value              | register |
+| ------------------ | -------- |
+| system-call number | `rax`    |
+| argument 1         | `rdi`    |
+| argument 2         | `rsi`    |
+| argument 3         | `rdx`    |
+| argument 4         | `r10`    |
+| argument 5         | `r8`     |
+| argument 6         | `r9`     |
+| result or error    | `rax`    |
 
 After `syscall`, treat **`rax`, `rcx`, and `r11` as changed**. Linux places the result in `rax`.
 The processor uses `rcx` and `r11` while entering and returning from the kernel, so their previous
@@ -72,11 +72,11 @@ examples.
 
 Linux system-call number 1 is `write`. Its three arguments are:
 
-| register | `write` value |
-| -------- | ------------- |
-| `rdi` | file descriptor |
-| `rsi` | address of the first byte |
-| `rdx` | number of bytes requested |
+| register | `write` value             |
+| -------- | ------------------------- |
+| `rdi`    | file descriptor           |
+| `rsi`    | address of the first byte |
+| `rdx`    | number of bytes requested |
 
 `write` sends bytes to the object named by the descriptor. With descriptor 1 connected to a
 terminal, sending text bytes there makes text appear on that terminal.
@@ -147,11 +147,11 @@ remaining count unchanged, so the separate zero branch prevents an endless retry
 A **file descriptor** is a small integer that names an open I/O object in one process. Linux
 programs normally inherit these three descriptors from the process that starts them:
 
-| descriptor | conventional name | usual connection |
-| ---------: | ----------------- | ---------------- |
-| 0 | standard input | input source |
-| 1 | standard output | ordinary output destination |
-| 2 | standard error | diagnostic output destination |
+| descriptor | conventional name | usual connection              |
+| ---------: | ----------------- | ----------------------------- |
+|          0 | standard input    | input source                  |
+|          1 | standard output   | ordinary output destination   |
+|          2 | standard error    | diagnostic output destination |
 
 Each descriptor names its current connection and may be redirected. Descriptor 1 can name a file,
 and descriptor 2 reaches a console only when standard error is connected there.

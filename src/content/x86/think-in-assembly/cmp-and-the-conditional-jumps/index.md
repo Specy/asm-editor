@@ -66,18 +66,18 @@ flags for either reading; the conditional jump chooses the reading.
 
 These are the comparison conditions used in this lesson:
 
-| relation | jump | flag condition |
-| -------- | ---- | -------------- |
-| equal | `je` / `jz` | `ZF = 1` |
-| not equal | `jne` / `jnz` | `ZF = 0` |
-| less, signed | `jl` | `SF != OF` |
-| less or equal, signed | `jle` | `ZF = 1` or `SF != OF` |
-| greater, signed | `jg` | `ZF = 0` and `SF = OF` |
-| greater or equal, signed | `jge` | `SF = OF` |
-| below, unsigned | `jb` / `jc` | `CF = 1` |
-| below or equal, unsigned | `jbe` | `CF = 1` or `ZF = 1` |
-| above, unsigned | `ja` | `CF = 0` and `ZF = 0` |
-| above or equal, unsigned | `jae` / `jnc` | `CF = 0` |
+| relation                 | jump          | flag condition         |
+| ------------------------ | ------------- | ---------------------- |
+| equal                    | `je` / `jz`   | `ZF = 1`               |
+| not equal                | `jne` / `jnz` | `ZF = 0`               |
+| less, signed             | `jl`          | `SF != OF`             |
+| less or equal, signed    | `jle`         | `ZF = 1` or `SF != OF` |
+| greater, signed          | `jg`          | `ZF = 0` and `SF = OF` |
+| greater or equal, signed | `jge`         | `SF = OF`              |
+| below, unsigned          | `jb` / `jc`   | `CF = 1`               |
+| below or equal, unsigned | `jbe`         | `CF = 1` or `ZF = 1`   |
+| above, unsigned          | `ja`          | `CF = 0` and `ZF = 0`  |
+| above or equal, unsigned | `jae` / `jnc` | `CF = 0`               |
 
 Equality has no signed or unsigned version. Equal bit patterns make the hypothetical subtraction
 zero, so `cmp` sets `ZF`.

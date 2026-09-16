@@ -83,10 +83,10 @@ shape has no separate unconditional jump at the bottom.
 
 The position of the test changes the behavior when the initial count is zero:
 
-| initial count | top-tested loop | unguarded bottom-tested loop |
-| ------------- | --------------- | ---------------------------- |
-| 3 | tests first, then runs three passes | runs three passes, testing after each one |
-| 0 | tests first and skips the body | runs the body once before its first test |
+| initial count | top-tested loop                     | unguarded bottom-tested loop              |
+| ------------- | ----------------------------------- | ----------------------------------------- |
+| 3             | tests first, then runs three passes | runs three passes, testing after each one |
+| 0             | tests first and skips the body      | runs the body once before its first test  |
 
 In RV32, decrementing 0 produces the bit pattern `0xFFFFFFFF`. Repeated decrements eventually wrap
 back to zero, but that takes about 4.3 billion unwanted passes in this simulator. A bottom-tested

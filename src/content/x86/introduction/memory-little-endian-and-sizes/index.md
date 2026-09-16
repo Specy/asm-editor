@@ -20,13 +20,13 @@ value:  dq 0x1122334455667788
 
 The assembler directives used in this lesson describe the program's layout:
 
-| source                         | meaning                                                   |
-| ------------------------------ | --------------------------------------------------------- |
-| `section .text`                | the instructions                                          |
-| `section .data`                | bytes with initial values                                 |
-| `section .bss`                 | space reserved for data, initially filled with zero bytes |
-| `db`, `dw`, `dd`, `dq`         | put 1, 2, 4, or 8 bytes in `.data`                        |
-| `resq 1`                       | reserve one 8-byte quantity in `.bss`                     |
+| source                 | meaning                                                   |
+| ---------------------- | --------------------------------------------------------- |
+| `section .text`        | the instructions                                          |
+| `section .data`        | bytes with initial values                                 |
+| `section .bss`         | space reserved for data, initially filled with zero bytes |
+| `db`, `dw`, `dd`, `dq` | put 1, 2, 4, or 8 bytes in `.data`                        |
+| `resq 1`               | reserve one 8-byte quantity in `.bss`                     |
 
 These directives tell the assembler how to build the program; the processor does not execute them
 as instructions. The names `word`, `dword`, and `qword` mean 2, 4, and 8 bytes. They come from x86's
@@ -84,12 +84,12 @@ _start:
 
 At successive increasing addresses, the fifteen bytes are:
 
-| address range              | label | bytes from low to high address  |
-| -------------------------- | ----- | ------------------------------- |
-| `0x402000`–`0x402007`      | `q`   | `88 77 66 55 44 33 22 11`       |
-| `0x402008`–`0x40200B`      | `d`   | `44 33 22 11`                   |
-| `0x40200C`–`0x40200D`      | `w`   | `22 11`                         |
-| `0x40200E`                 | `b`   | `11`                            |
+| address range         | label | bytes from low to high address |
+| --------------------- | ----- | ------------------------------ |
+| `0x402000`–`0x402007` | `q`   | `88 77 66 55 44 33 22 11`      |
+| `0x402008`–`0x40200B` | `d`   | `44 33 22 11`                  |
+| `0x40200C`–`0x40200D` | `w`   | `22 11`                        |
+| `0x40200E`            | `b`   | `11`                           |
 
 The low byte `0x88` of `q` is at the lowest address, followed by `0x77`, through to the high byte
 `0x11`. An eight-byte load from `q` interprets the same sequence using little-endian order, so `r12`

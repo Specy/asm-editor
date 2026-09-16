@@ -61,14 +61,14 @@ which instruction comes next.
 
 RISC-V has six real branch instructions for comparing two registers.
 
-| instruction form       | branch is taken when                                       |
-| ---------------------- | ---------------------------------------------------------- |
-| `beq t0, t1, label`    | `t0` and `t1` are equal                                    |
-| `bne t0, t1, label`    | `t0` and `t1` are not equal                                |
-| `blt t0, t1, label`    | `t0` is less than `t1`, using signed values                |
-| `bge t0, t1, label`    | `t0` is greater than or equal to `t1`, using signed values |
-| `bltu t0, t1, label`   | `t0` is less than `t1`, using unsigned values              |
-| `bgeu t0, t1, label`   | `t0` is greater than or equal to `t1`, using unsigned values |
+| instruction form     | branch is taken when                                         |
+| -------------------- | ------------------------------------------------------------ |
+| `beq t0, t1, label`  | `t0` and `t1` are equal                                      |
+| `bne t0, t1, label`  | `t0` and `t1` are not equal                                  |
+| `blt t0, t1, label`  | `t0` is less than `t1`, using signed values                  |
+| `bge t0, t1, label`  | `t0` is greater than or equal to `t1`, using signed values   |
+| `bltu t0, t1, label` | `t0` is less than `t1`, using unsigned values                |
+| `bgeu t0, t1, label` | `t0` is greater than or equal to `t1`, using unsigned values |
 
 The names are easier to read when split into parts:
 
@@ -180,26 +180,26 @@ beq  t0, zero, answer
 
 Suppose `t0` contains `0xFFFFFFFB` and `t1` contains 0. Decide whether each branch is taken.
 
-| branch                    | taken or not? |
-| ------------------------- | ------------- |
-| `beq t0, t1, answer`      | ?             |
-| `bne t0, t1, answer`      | ?             |
-| `blt t0, t1, answer`      | ?             |
-| `bge t0, t1, answer`      | ?             |
-| `bltu t0, t1, answer`     | ?             |
-| `bgeu t0, t1, answer`     | ?             |
+| branch                | taken or not? |
+| --------------------- | ------------- |
+| `beq t0, t1, answer`  | ?             |
+| `bne t0, t1, answer`  | ?             |
+| `blt t0, t1, answer`  | ?             |
+| `bge t0, t1, answer`  | ?             |
+| `bltu t0, t1, answer` | ?             |
+| `bgeu t0, t1, answer` | ?             |
 
 <details>
 <summary>Show answers</summary>
 
-| branch | result | reason |
-| ------ | ------ | ------ |
-| `beq`  | not taken | `0xFFFFFFFB` and 0 are different bit patterns |
-| `bne`  | taken | the bit patterns are different |
-| `blt`  | taken | signed -5 is less than 0 |
-| `bge`  | not taken | signed -5 is not greater than or equal to 0 |
-| `bltu` | not taken | unsigned 4,294,967,291 is not less than 0 |
-| `bgeu` | taken | unsigned 4,294,967,291 is greater than or equal to 0 |
+| branch | result    | reason                                               |
+| ------ | --------- | ---------------------------------------------------- |
+| `beq`  | not taken | `0xFFFFFFFB` and 0 are different bit patterns        |
+| `bne`  | taken     | the bit patterns are different                       |
+| `blt`  | taken     | signed -5 is less than 0                             |
+| `bge`  | not taken | signed -5 is not greater than or equal to 0          |
+| `bltu` | not taken | unsigned 4,294,967,291 is not less than 0            |
+| `bgeu` | taken     | unsigned 4,294,967,291 is greater than or equal to 0 |
 
 </details>
 

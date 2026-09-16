@@ -4,12 +4,12 @@ and data.
 
 It is useful to separate four jobs a line can do:
 
-| kind of line | example | what it does |
-| ------------ | ------- | ------------ |
-| instruction | `addi t0, t0, 1` | becomes code that the processor executes |
-| data declaration | `.word 25` | asks the assembler to place bytes in memory |
-| label | `total:` | gives an address a name |
-| other assembler directive | `.text` | guides assembly without becoming an instruction |
+| kind of line              | example          | what it does                                    |
+| ------------------------- | ---------------- | ----------------------------------------------- |
+| instruction               | `addi t0, t0, 1` | becomes code that the processor executes        |
+| data declaration          | `.word 25`       | asks the assembler to place bytes in memory     |
+| label                     | `total:`         | gives an address a name                         |
+| other assembler directive | `.text`          | guides assembly without becoming an instruction |
 
 An **assembler directive** is a command for the assembler. Directives begin with a dot. Some, such
 as `.word`, create data bytes. Others, such as `.text`, control how the source file is assembled.
@@ -34,8 +34,8 @@ layout, not addresses required by the RISC-V instruction set:
 
 | section | first address in this simulator |
 | ------- | ------------------------------- |
-| `.text` | `0x00400000` |
-| `.data` | `0x10010000` |
+| `.text` | `0x00400000`                    |
+| `.data` | `0x10010000`                    |
 
 Labels normally save you from writing either address yourself.
 
@@ -71,14 +71,14 @@ After these two instructions, `t0` holds the address of `score` and `t1` holds t
 
 These common data directives are useful reference material.
 
-| directive | bytes it asks the assembler to place |
-| --------- | ------------------------------------- |
-| `.byte 1, 2, 3` | one byte for each value |
-| `.half 1, 2` | one two-byte halfword for each value |
-| `.word 1, 2` | one four-byte word for each value |
-| `.space 8` | eight reserved bytes, initially zero in this editor |
-| `.ascii "Hi"` | the bytes for `H` and `i`, with no byte added after them |
-| `.asciz "Hi"` | the bytes for `H` and `i`, followed by a zero byte |
+| directive       | bytes it asks the assembler to place                     |
+| --------------- | -------------------------------------------------------- |
+| `.byte 1, 2, 3` | one byte for each value                                  |
+| `.half 1, 2`    | one two-byte halfword for each value                     |
+| `.word 1, 2`    | one four-byte word for each value                        |
+| `.space 8`      | eight reserved bytes, initially zero in this editor      |
+| `.ascii "Hi"`   | the bytes for `H` and `i`, with no byte added after them |
+| `.asciz "Hi"`   | the bytes for `H` and `i`, followed by a zero byte       |
 
 Values separated by commas are placed one after another. Multi-byte numbers use little-endian byte
 order. For example, `.word 0x11223344` appears in increasing memory addresses
@@ -97,11 +97,11 @@ of bytes, whatever kind of value the program stores there.
 For the positive values used in this course, the `.align n` directive moves the next data item
 forward to an address that is a multiple of `2^n`. The `n` is an exponent:
 
-| directive | required boundary |
-| --------- | ----------------- |
+| directive  | required boundary                                |
+| ---------- | ------------------------------------------------ |
 | `.align 1` | a multiple of `2^1 = 2`, suitable for a halfword |
-| `.align 2` | a multiple of `2^2 = 4`, suitable for a word |
-| `.align 3` | a multiple of `2^3 = 8` |
+| `.align 2` | a multiple of `2^2 = 4`, suitable for a word     |
+| `.align 3` | a multiple of `2^3 = 8`                          |
 
 Thus `.align 2` advances to the next address that is a multiple of 4. If the current address already
 is a multiple of 4, it stays there. Otherwise the assembler inserts enough **padding** bytes to
@@ -132,15 +132,15 @@ main:
     la t1, room
 ```
 
-| label or padding | address range | bytes | reason |
-| ---------------- | ------------- | ----- | ------ |
-| `w` | `0x10010000`–`0x10010003` | `44 33 22 11` | one little-endian word |
-| `h` | `0x10010004`–`0x10010005` | `66 55` | one little-endian halfword |
-| `b` | `0x10010006`–`0x10010008` | `01 02 03` | three bytes |
-| `first` | `0x10010009`–`0x1001000A` | `48 69` | `H`, `i`, no terminator |
-| `second` | `0x1001000B`–`0x1001000D` | `48 69 00` | `H`, `i`, zero terminator |
-| padding | `0x1001000E`–`0x1001000F` | `00 00` | added by `.align 2` |
-| `room` | `0x10010010`–`0x10010017` | eight zero bytes | reserved by `.space 8` |
+| label or padding | address range             | bytes            | reason                     |
+| ---------------- | ------------------------- | ---------------- | -------------------------- |
+| `w`              | `0x10010000`–`0x10010003` | `44 33 22 11`    | one little-endian word     |
+| `h`              | `0x10010004`–`0x10010005` | `66 55`          | one little-endian halfword |
+| `b`              | `0x10010006`–`0x10010008` | `01 02 03`       | three bytes                |
+| `first`          | `0x10010009`–`0x1001000A` | `48 69`          | `H`, `i`, no terminator    |
+| `second`         | `0x1001000B`–`0x1001000D` | `48 69 00`       | `H`, `i`, zero terminator  |
+| padding          | `0x1001000E`–`0x1001000F` | `00 00`          | added by `.align 2`        |
+| `room`           | `0x10010010`–`0x10010017` | eight zero bytes | reserved by `.space 8`     |
 
 The next free address after `second` is `0x1001000E`. That address is not a multiple of 4, so
 `.align 2` skips two bytes and `room` begins at `0x10010010`.

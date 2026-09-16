@@ -13,12 +13,12 @@ calculations with `equ`, `$`, and `$$`.
 In the NASM/Linux ELF setup used here, `section` selects an object-file section. Everything that
 follows belongs to that section until another `section` directive selects a different one.
 
-| source section    | what it contains                         | initialized payload in the executable | usual memory access |
-| ----------------- | ---------------------------------------- | -------------------------------------- | ------------------- |
-| `section .text`   | machine instructions                     | yes                                    | read and execute    |
-| `section .rodata` | initialized data that code should not change | yes                                | read only           |
-| `section .data`   | initialized data that code may change    | yes                                    | read and write      |
-| `section .bss`    | reserved storage that starts filled with zero bytes | no                           | read and write      |
+| source section    | what it contains                                    | initialized payload in the executable | usual memory access |
+| ----------------- | --------------------------------------------------- | ------------------------------------- | ------------------- |
+| `section .text`   | machine instructions                                | yes                                   | read and execute    |
+| `section .rodata` | initialized data that code should not change        | yes                                   | read only           |
+| `section .data`   | initialized data that code may change               | yes                                   | read and write      |
+| `section .bss`    | reserved storage that starts filled with zero bytes | no                                    | read and write      |
 
 These names and protections are conventions implemented by the ELF object metadata and this
 course's linker setup; they are not properties that NASM imposes on every possible program format.
@@ -33,11 +33,11 @@ storage is not free while the program runs.
 
 The layout can be summarized as:
 
-| part of the program | source of its initial contents |
-| ------------------- | ------------------------------ |
-| `.text`             | instruction bytes in the file  |
-| `.rodata`           | initialized bytes in the file  |
-| `.data`             | initialized bytes in the file  |
+| part of the program | source of its initial contents                  |
+| ------------------- | ----------------------------------------------- |
+| `.text`             | instruction bytes in the file                   |
+| `.rodata`           | initialized bytes in the file                   |
+| `.data`             | initialized bytes in the file                   |
 | `.bss`              | a reserved range supplied as zero-filled memory |
 
 ## Emitting initialized data
@@ -46,11 +46,11 @@ The directives `db`, `dw`, `dd`, and `dq` emit initialized values. Their names m
 **define word**, **define doubleword**, and **define quadword**.
 
 | directive | unit emitted for each numeric value |
-| --------- | -----------------------------------: |
-| `db`      | 1 byte                              |
-| `dw`      | 2 bytes                             |
-| `dd`      | 4 bytes                             |
-| `dq`      | 8 bytes                             |
+| --------- | ----------------------------------: |
+| `db`      |                              1 byte |
+| `dw`      |                             2 bytes |
+| `dd`      |                             4 bytes |
+| `dq`      |                             8 bytes |
 
 Place them in `.rodata` when the program should only read the values, or in `.data` when it should
 also modify them:
@@ -75,10 +75,10 @@ The `.bss` directives `resb`, `resw`, `resd`, and `resq` reserve a count of unit
 
 | directive | size of each reserved unit |
 | --------- | -------------------------: |
-| `resb`    | 1 byte                     |
-| `resw`    | 2 bytes                    |
-| `resd`    | 4 bytes                    |
-| `resq`    | 8 bytes                    |
+| `resb`    |                     1 byte |
+| `resw`    |                    2 bytes |
+| `resd`    |                    4 bytes |
+| `resq`    |                    8 bytes |
 
 The operand is a unit count, not a byte count:
 

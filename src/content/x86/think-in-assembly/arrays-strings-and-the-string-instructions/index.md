@@ -111,11 +111,11 @@ that byte to a quoted `db` value. The explicit `, 0` creates it.
 
 For the smaller declaration `message: db "Hi!", 0`, memory contains:
 
-| address       | byte | meaning |
-| ------------- | ---- | ------- |
-| `message + 0` | `48` | `H` |
-| `message + 1` | `69` | `i` |
-| `message + 2` | `21` | `!` |
+| address       | byte | meaning    |
+| ------------- | ---- | ---------- |
+| `message + 0` | `48` | `H`        |
+| `message + 1` | `69` | `i`        |
+| `message + 2` | `21` | `!`        |
 | `message + 3` | `00` | terminator |
 
 A byte-at-a-time walk examines offsets 0, 1, 2, and 3. The load at offset 3 reads the terminator;
@@ -128,12 +128,12 @@ characters.
 This lesson uses four byte-form string instructions. They use fixed registers rather than written
 operands:
 
-| instruction | operation | pointer change when `DF=0` | pointer change when `DF=1` |
-| ----------- | --------- | -------------------------- | -------------------------- |
-| `movsb` | copy byte `[rsi]` to `[rdi]` | `rsi += 1`, `rdi += 1` | `rsi -= 1`, `rdi -= 1` |
-| `stosb` | store `al` at `[rdi]` | `rdi += 1` | `rdi -= 1` |
-| `scasb` | set flags for `al - [rdi]` | `rdi += 1` | `rdi -= 1` |
-| `cmpsb` | set flags for `[rsi] - [rdi]` | `rsi += 1`, `rdi += 1` | `rsi -= 1`, `rdi -= 1` |
+| instruction | operation                     | pointer change when `DF=0` | pointer change when `DF=1` |
+| ----------- | ----------------------------- | -------------------------- | -------------------------- |
+| `movsb`     | copy byte `[rsi]` to `[rdi]`  | `rsi += 1`, `rdi += 1`     | `rsi -= 1`, `rdi -= 1`     |
+| `stosb`     | store `al` at `[rdi]`         | `rdi += 1`                 | `rdi -= 1`                 |
+| `scasb`     | set flags for `al - [rdi]`    | `rdi += 1`                 | `rdi -= 1`                 |
+| `cmpsb`     | set flags for `[rsi] - [rdi]` | `rsi += 1`, `rdi += 1`     | `rsi -= 1`, `rdi -= 1`     |
 
 The **direction flag**, `DF`, is persistent processor state. `cld` clears it for forward movement;
 `std` sets it for backward movement. A string instruction does not restore the old direction when

@@ -38,11 +38,11 @@ _start:
 
 Trace the stack with a symbolic starting value. Immediately before `call sum`, let `rsp = S`.
 
-| moment | `rsp` | stack and `rip` effect |
-| ------ | ----- | ---------------------- |
-| before `call` | `S` | the next instruction is `mov r12, rax` |
+| moment            | `rsp`   | stack and `rip` effect                                               |
+| ----------------- | ------- | -------------------------------------------------------------------- |
+| before `call`     | `S`     | the next instruction is `mov r12, rax`                               |
 | on entry to `sum` | `S - 8` | `[S - 8]` holds the address of `mov r12, rax`; `rip` points at `sum` |
-| after `ret` | `S` | `rip` holds the address loaded from `[S - 8]` |
+| after `ret`       | `S`     | `rip` holds the address loaded from `[S - 8]`                        |
 
 There is no tag saying that the qword at `[S - 8]` is a return address. `ret` simply loads the
 qword at `[rsp]` into `rip` and adds 8 to `rsp`. If `sum` pushed a value and failed to pop it, its
@@ -58,23 +58,23 @@ lets separately written functions agree on those details.
 
 This table covers the integer and pointer subset used in this lesson:
 
-| value | location |
-| ----- | -------- |
-| integer/pointer argument 1 | `rdi` |
-| integer/pointer argument 2 | `rsi` |
-| integer/pointer argument 3 | `rdx` |
-| integer/pointer argument 4 | `rcx` |
-| integer/pointer argument 5 | `r8` |
-| integer/pointer argument 6 | `r9` |
+| value                             | location  |
+| --------------------------------- | --------- |
+| integer/pointer argument 1        | `rdi`     |
+| integer/pointer argument 2        | `rsi`     |
+| integer/pointer argument 3        | `rdx`     |
+| integer/pointer argument 4        | `rcx`     |
+| integer/pointer argument 5        | `r8`      |
+| integer/pointer argument 6        | `r9`      |
 | further integer/pointer arguments | the stack |
-| one integer/pointer return value | `rax` |
+| one integer/pointer return value  | `rax`     |
 
 The convention also assigns responsibility for preserving general-purpose registers:
 
-| kind | registers | responsibility |
-| ---- | --------- | -------------- |
-| caller-saved | `rax`, `rcx`, `rdx`, `rsi`, `rdi`, `r8`–`r11` | the caller saves any value it needs after a call |
-| callee-saved | `rbx`, `rbp`, `r12`–`r15` | a function that changes one restores the value it inherited |
+| kind         | registers                                     | responsibility                                              |
+| ------------ | --------------------------------------------- | ----------------------------------------------------------- |
+| caller-saved | `rax`, `rcx`, `rdx`, `rsi`, `rdi`, `r8`–`r11` | the caller saves any value it needs after a call            |
+| callee-saved | `rbx`, `rbp`, `r12`–`r15`                     | a function that changes one restores the value it inherited |
 
 `rsp` is special stack state. At the point just before `ret`, a function must have restored `rsp`
 to its entry value, where the return address is waiting. The `ret` then removes that address and
@@ -123,11 +123,11 @@ The `call` then pushes an eight-byte return address, so on function entry `rsp` 
 
 For example, if the caller has aligned `rsp = S`, the boundary looks like this:
 
-| moment | stack pointer modulo 16 |
-| ------ | ----------------------- |
-| immediately before `call` | 0 |
-| on entry to the callee | 8 |
-| after the callee's `ret` | 0 |
+| moment                    | stack pointer modulo 16 |
+| ------------------------- | ----------------------- |
+| immediately before `call` | 0                       |
+| on entry to the callee    | 8                       |
+| after the callee's `ret`  | 0                       |
 
 The playground starts `_start` with a 16-byte-aligned `rsp`. A direct call from `_start` therefore
 meets the rule as long as earlier instructions have not changed `rsp`. Inside a function, pushes
@@ -227,13 +227,13 @@ Why does `[rbp + 16]` hold `g`? The caller places `g` on the stack, `call` place
 address below it, and `push rbp` places the saved frame pointer below that. After `mov rbp, rsp`,
 the layout is:
 
-| location | contents | placed there by |
-| -------- | -------- | --------------- |
-| `[rbp + 24]` | alignment padding | `sub rsp, 8` |
-| `[rbp + 16]` | seventh argument `g` | `push 7` |
-| `[rbp + 8]` | return address | `call seventh` |
-| `[rbp]` | caller's `rbp` | `push rbp` |
-| below `rbp` | local storage, if reserved | the callee |
+| location     | contents                   | placed there by |
+| ------------ | -------------------------- | --------------- |
+| `[rbp + 24]` | alignment padding          | `sub rsp, 8`    |
+| `[rbp + 16]` | seventh argument `g`       | `push 7`        |
+| `[rbp + 8]`  | return address             | `call seventh`  |
+| `[rbp]`      | caller's `rbp`             | `push rbp`      |
+| below `rbp`  | local storage, if reserved | the callee      |
 
 Arguments already on the stack have positive offsets from `rbp`; locals reserved after the frame
 is established have negative offsets. The caller removes its stack argument and padding after the

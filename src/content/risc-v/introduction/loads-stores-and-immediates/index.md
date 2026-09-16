@@ -6,11 +6,11 @@ the operand notation it uses.
 
 The real RISC-V instructions in this lecture use three important operand forms:
 
-| form | example | meaning |
-| ---- | ------- | ------- |
-| register | `t0` | the 32-bit value currently in that register |
-| immediate | `7` or `-4` | a constant written as part of the instruction |
-| base plus offset | `8(t0)` | memory at the address obtained from `t0 + 8` |
+| form             | example     | meaning                                       |
+| ---------------- | ----------- | --------------------------------------------- |
+| register         | `t0`        | the 32-bit value currently in that register   |
+| immediate        | `7` or `-4` | a constant written as part of the instruction |
+| base plus offset | `8(t0)`     | memory at the address obtained from `t0 + 8`  |
 
 These forms are often called **addressing modes**. The form an instruction accepts depends on the
 instruction. For example, `addi` accepts registers and an immediate, while a load or store accepts
@@ -57,8 +57,7 @@ immediate. The source register keeps its value unless it is also the destination
 addi t0, t0, 4         # replace t0 with t0 + 4
 ```
 
-The immediate in a real `addi` instruction is a signed 12-bit value, so it can be from -2048 to
-2047. `li` is easier when your aim is simply to put a constant in a register, and the assembler can
+The immediate in a real `addi` instruction is a signed 12-bit value, so it can be from -2048 to 2047. `li` is easier when your aim is simply to put a constant in a register, and the assembler can
 also expand `li` when the requested constant is too large for one `addi`.
 
 ## Loading and storing
@@ -70,27 +69,26 @@ data from a register into memory.
 The instructions choose how many bytes are copied. Loads of a byte or halfword also choose how the
 smaller value fills the rest of the 32-bit destination register:
 
-| instruction | bytes read | result in the register |
-| ----------- | ---------: | ---------------------- |
-| `lb`  | 1 | sign-extend the byte to 32 bits |
-| `lbu` | 1 | zero-extend the byte to 32 bits |
-| `lh`  | 2 | sign-extend the halfword to 32 bits |
-| `lhu` | 2 | zero-extend the halfword to 32 bits |
-| `lw`  | 4 | copy the complete 32-bit word |
+| instruction | bytes read | result in the register              |
+| ----------- | ---------: | ----------------------------------- |
+| `lb`        |          1 | sign-extend the byte to 32 bits     |
+| `lbu`       |          1 | zero-extend the byte to 32 bits     |
+| `lh`        |          2 | sign-extend the halfword to 32 bits |
+| `lhu`       |          2 | zero-extend the halfword to 32 bits |
+| `lw`        |          4 | copy the complete 32-bit word       |
 
 Sign extension copies the smaller value's top bit into the new high bits; zero extension fills the
 new high bits with zero. If memory contains the byte `0xF0`, `lb` produces
-`0xFFFFFFF0`, which represents -16 as a signed value. `lbu` produces `0x000000F0`, which represents
-240. When the top bit of the smaller value is zero, sign extension and zero extension give the same
+`0xFFFFFFF0`, which represents -16 as a signed value. `lbu` produces `0x000000F0`, which represents 240. When the top bit of the smaller value is zero, sign extension and zero extension give the same
 result.
 
 Stores have no extension choice because they copy bits in the other direction:
 
 | instruction | bytes written from the source register |
-| ----------- | --------------------------------------: |
-| `sb` | the lowest 1 byte |
-| `sh` | the lowest 2 bytes |
-| `sw` | all 4 bytes |
+| ----------- | -------------------------------------: |
+| `sb`        |                      the lowest 1 byte |
+| `sh`        |                     the lowest 2 bytes |
+| `sw`        |                            all 4 bytes |
 
 For example, if `t1` contains `0x12345678`, `sb t1, 0(t0)` writes the low byte `0x78`. The other 24
 bits in `t1` stay unchanged. Choose the instruction that matches the size of the value in memory:
@@ -157,12 +155,12 @@ register.
 An array places equal-sized elements next to one another in memory. If a word array begins at
 `0x1000`, its first four elements have these addresses:
 
-| element | address calculation | address |
-| ------- | ------------------- | ------- |
-| `numbers[0]` | `0x1000 + 0 * 4` | `0x1000` |
-| `numbers[1]` | `0x1000 + 1 * 4` | `0x1004` |
-| `numbers[2]` | `0x1000 + 2 * 4` | `0x1008` |
-| `numbers[3]` | `0x1000 + 3 * 4` | `0x100C` |
+| element      | address calculation | address  |
+| ------------ | ------------------- | -------- |
+| `numbers[0]` | `0x1000 + 0 * 4`    | `0x1000` |
+| `numbers[1]` | `0x1000 + 1 * 4`    | `0x1004` |
+| `numbers[2]` | `0x1000 + 2 * 4`    | `0x1008` |
+| `numbers[3]` | `0x1000 + 3 * 4`    | `0x100C` |
 
 The general calculation is:
 
@@ -207,12 +205,12 @@ address held in the register, and the following load uses the ordinary `0(t0)` m
 
 Assume `t0` holds `0x1000` and memory contains this word array:
 
-| address | word value |
-| ------- | ---------: |
-| `0x1000` | 10 |
-| `0x1004` | 20 |
-| `0x1008` | 30 |
-| `0x100C` | 40 |
+| address  | word value |
+| -------- | ---------: |
+| `0x1000` |         10 |
+| `0x1004` |         20 |
+| `0x1008` |         30 |
+| `0x100C` |         40 |
 
 What effective address does `lw t4, 8(t0)` use, and what value does it place in `t4`?
 
@@ -243,19 +241,19 @@ receives 30.
    and obtain -1.
 3. One solution is:
 
-   ```riscv
-   slli t2, t1, 2      # 3 * 4 = 12 bytes
-   add  t2, t0, t2     # address of element 3
-   lw   t3, 0(t2)      # load element 3
-   ```
+    ```riscv
+    slli t2, t1, 2      # 3 * 4 = 12 bytes
+    add  t2, t0, t2     # address of element 3
+    lw   t3, 0(t2)      # load element 3
+    ```
 
 4. One solution is:
 
-   ```riscv
-   lw   t1, 0(t0)
-   addi t1, t1, 5
-   sw   t1, 0(t0)
-   ```
+    ```riscv
+    lw   t1, 0(t0)
+    addi t1, t1, 5
+    sw   t1, 0(t0)
+    ```
 
 </details>
 

@@ -100,11 +100,11 @@ pair if their widths or positions do not match a documented form.
 
 Instruction mnemonics are easier to learn in small families:
 
-| family         | examples                                         | purpose                                  |
-| -------------- | ------------------------------------------------ | ---------------------------------------- |
-| moving values  | `mov`, `movzx`, `movsx`, `lea`, `xchg`           | transfer values or produce addresses     |
-| arithmetic     | `add`, `sub`, `inc`, `dec`, `neg`, `imul`, `div` | calculate with integers                  |
-| logic and bits | `and`, `or`, `xor`, `not`, `test`, `shl`, `shr`  | work with bit patterns                   |
+| family         | examples                                         | purpose                                 |
+| -------------- | ------------------------------------------------ | --------------------------------------- |
+| moving values  | `mov`, `movzx`, `movsx`, `lea`, `xchg`           | transfer values or produce addresses    |
+| arithmetic     | `add`, `sub`, `inc`, `dec`, `neg`, `imul`, `div` | calculate with integers                 |
+| logic and bits | `and`, `or`, `xor`, `not`, `test`, `shl`, `shr`  | work with bit patterns                  |
 | comparison     | `cmp`, `test`                                    | record information for a later decision |
 | control flow   | `jmp`, conditional jumps, `call`, `ret`          | choose which instruction runs next      |
 

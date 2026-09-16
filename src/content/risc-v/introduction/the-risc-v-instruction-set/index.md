@@ -102,12 +102,12 @@ extension is an additional group of instructions that a processor may support.
 
 You can see this organization in names such as `RV32I` and `RV32IM`:
 
-| part | meaning |
-| ---- | ------- |
-| `RV` | RISC-V |
-| `32` | the integer registers are 32 bits wide |
-| `I` | the base integer instruction set |
-| `M` | an added extension for integer multiplication and division |
+| part | meaning                                                    |
+| ---- | ---------------------------------------------------------- |
+| `RV` | RISC-V                                                     |
+| `32` | the integer registers are 32 bits wide                     |
+| `I`  | the base integer instruction set                           |
+| `M`  | an added extension for integer multiplication and division |
 
 Thus, `RV32I` names the 32-bit base. `RV32IM` names that same base with the `M` extension added. A
 processor that implements an extension understands its real instructions; a processor that does

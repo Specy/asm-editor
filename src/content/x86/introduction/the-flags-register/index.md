@@ -6,12 +6,12 @@ bits together in the flags row.
 
 This lesson uses four arithmetic status flags:
 
-| flag | meaning after an operation |
-| ---- | -------------------------- |
-| `ZF` | The result used to compute the flags is zero. |
-| `SF` | The top bit of the result used to compute the flags is 1. |
+| flag | meaning after an operation                                                                 |
+| ---- | ------------------------------------------------------------------------------------------ |
+| `ZF` | The result used to compute the flags is zero.                                              |
+| `SF` | The top bit of the result used to compute the flags is 1.                                  |
 | `CF` | An unsigned addition carried out of the chosen width, or an unsigned subtraction borrowed. |
-| `OF` | The mathematical signed result is outside the signed range for the chosen width. |
+| `OF` | The mathematical signed result is outside the signed range for the chosen width.           |
 
 `ZF` is the **zero flag**, `SF` the **sign flag**, `CF` the **carry flag**, and `OF` the
 **overflow flag**. The panel also displays other flags, including `PF` and `AF`. They may change
@@ -26,13 +26,14 @@ For a byte operation, only eight result bits are retained. Its top bit is bit 7,
 is 0 to 255, and its signed range is -128 to 127. These two byte additions therefore set different
 flags:
 
-| operation | byte result | `ZF` | `SF` | `CF` | `OF` |
-| --------- | ----------- | ---: | ---: | ---: | ---: |
-| `0x7F + 1` | `0x80` | 0 | 1 | 0 | 1 |
-| `0xFF + 1` | `0x00` | 1 | 0 | 1 | 0 |
+| operation  | byte result | `ZF` | `SF` | `CF` | `OF` |
+| ---------- | ----------- | ---: | ---: | ---: | ---: |
+| `0x7F + 1` | `0x80`      |    0 |    1 |    0 |    1 |
+| `0xFF + 1` | `0x00`      |    1 |    0 |    1 |    0 |
 
 In the first row, signed 127 plus 1 is outside the signed byte range, so `OF` is 1. The unsigned
 answer 128 fits, so `CF` is 0. In the second row, unsigned 255 plus 1 needs a ninth bit, so `CF` is
+
 1. Read as signed, `0xFF` is -1, and -1 plus 1 is 0, so `OF` is 0.
 
 Subtraction gives `CF` the related unsigned meaning of a borrow. A qword calculation of `3 - 5`

@@ -1692,7 +1692,6 @@ target:
         ])
     })
 
-
     it('repaints the bitmap display on a Poke into it and on its Undo', async () => {
         const emulator = await build(DATA + EXIT)
         expect(pixelAt(emulator, 0, 0)).toBe(0x000000)

@@ -175,11 +175,11 @@ made the high half all ones and formed the intended signed value -17.
 behavior is:
 
 | `a` | `b` | `a AND b` | `a OR b` | `a XOR b` |
-| ---: | ---: | --------: | -------: | --------: |
-| 0 | 0 | 0 | 0 | 0 |
-| 0 | 1 | 0 | 1 | 1 |
-| 1 | 0 | 0 | 1 | 1 |
-| 1 | 1 | 1 | 1 | 0 |
+| --: | --: | --------: | -------: | --------: |
+|   0 |   0 |         0 |        0 |         0 |
+|   0 |   1 |         0 |        1 |         1 |
+|   1 |   0 |         0 |        1 |         1 |
+|   1 |   1 |         1 |        1 |         0 |
 
 A **mask** is a bit pattern chosen to control these operations. It specifies what happens at every
 bit position, including the positions containing zero:
@@ -261,11 +261,11 @@ _start:
 A shift moves bits within a fixed-width destination. Bits that pass an end are discarded, and the
 new positions are filled according to the instruction:
 
-| qword instruction | new bits | numerical meaning |
-| ----------------- | -------- | ----------------- |
-| `shl rax, n` | zeroes enter at the low end | multiply by `2^n` modulo `2^64` |
-| `shr rax, n` | zeroes enter at the high end | unsigned division by `2^n` |
-| `sar rax, n` | copies of the sign bit enter at the high end | signed shift rounding downward |
+| qword instruction | new bits                                     | numerical meaning               |
+| ----------------- | -------------------------------------------- | ------------------------------- |
+| `shl rax, n`      | zeroes enter at the low end                  | multiply by `2^n` modulo `2^64` |
+| `shr rax, n`      | zeroes enter at the high end                 | unsigned division by `2^n`      |
+| `sar rax, n`      | copies of the sign bit enter at the high end | signed shift rounding downward  |
 
 For `shl`, high bits that do not fit are lost, so the mathematical multiplication is exact only
 when its result fits in the qword. `shr` gives the quotient from unsigned division by the power of

@@ -39,12 +39,12 @@ second, and index 2 selects the third. This is called **zero-based indexing**.
 
 Suppose a four-qword array begins at address `0x402000`:
 
-| index | byte offset | effective address | value there |
-| ----: | ----------: | ----------------: | ----------: |
-| 0     | `0 * 8 = 0`  | `0x402000`         | 10          |
-| 1     | `1 * 8 = 8`  | `0x402008`         | 20          |
-| 2     | `2 * 8 = 16` | `0x402010`         | 30          |
-| 3     | `3 * 8 = 24` | `0x402018`         | 40          |
+| index |  byte offset | effective address | value there |
+| ----: | -----------: | ----------------: | ----------: |
+|     0 |  `0 * 8 = 0` |        `0x402000` |          10 |
+|     1 |  `1 * 8 = 8` |        `0x402008` |          20 |
+|     2 | `2 * 8 = 16` |        `0x402010` |          30 |
+|     3 | `3 * 8 = 24` |        `0x402018` |          40 |
 
 Each qword occupies eight bytes, so the byte offset of index `i` is `i * 8`. If `rbx` contains the
 array's starting address and `rsi` contains the index, `[rbx + rsi*8]` selects that qword.
@@ -79,10 +79,10 @@ dword, and qword arrays:
 
 | element width | byte stride | scale |
 | ------------- | ----------: | ----: |
-| byte          | 1           | 1     |
-| word          | 2           | 2     |
-| dword         | 4           | 4     |
-| qword         | 8           | 8     |
+| byte          |           1 |     1 |
+| word          |           2 |     2 |
+| dword         |           4 |     4 |
+| qword         |           8 |     8 |
 
 The processor does not know the declared type of an array and does not choose the scale for you. A
 qword load with scale 4 still reads eight bytes; it simply starts at the wrong address for qword

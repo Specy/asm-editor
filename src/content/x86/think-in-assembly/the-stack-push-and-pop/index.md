@@ -49,29 +49,29 @@ _start:
 In this playground, `rsp` begins at `0x4FFFFFFFFED0`. Before either push, the nearby qwords look
 like this (the green marker shows `rsp`):
 
-| address | value |
-| ------: | :---: |
-| `0x4FFFFFFFFEC0` | `0000000000000000` |
-| `0x4FFFFFFFFEC8` | `0000000000000000` |
+|          address |         value         |
+| ---------------: | :-------------------: |
+| `0x4FFFFFFFFEC0` |  `0000000000000000`   |
+| `0x4FFFFFFFFEC8` |  `0000000000000000`   |
 | `0x4FFFFFFFFED0` | 🟢 `0000000000000001` |
 
 The first push subtracts 8, making `rsp` equal to `0x4FFFFFFFFEC8`, and stores the first value
 there:
 
-| address | value |
-| ------: | :---: |
-| `0x4FFFFFFFFEC0` | `0000000000000000` |
+|          address |         value         |
+| ---------------: | :-------------------: |
+| `0x4FFFFFFFFEC0` |  `0000000000000000`   |
 | `0x4FFFFFFFFEC8` | 🟢 `1111111111111111` |
-| `0x4FFFFFFFFED0` | `0000000000000001` |
+| `0x4FFFFFFFFED0` |  `0000000000000001`   |
 
 The second push subtracts another 8, making `rsp` equal to `0x4FFFFFFFFEC0`, and stores the second
 value:
 
-| address | value |
-| ------: | :---: |
+|          address |         value         |
+| ---------------: | :-------------------: |
 | `0x4FFFFFFFFEC0` | 🟢 `2222222222222222` |
-| `0x4FFFFFFFFEC8` | `1111111111111111` |
-| `0x4FFFFFFFFED0` | `0000000000000001` |
+| `0x4FFFFFFFFEC8` |  `1111111111111111`   |
+| `0x4FFFFFFFFED0` |  `0000000000000001`   |
 
 `pop r8` reads the qword at the current `rsp`, so `r8` receives
 `0x2222222222222222`. It then raises `rsp` by 8. `pop r9` reads the next qword, so `r9` receives

@@ -231,8 +231,7 @@ main:
 
 </details>
 
-Next, leave the length of `text`, excluding its terminator, in `t0`. For `"Assembly"` the answer is
-8.
+Next, leave the length of `text`, excluding its terminator, in `t0`. For `"Assembly"` the answer is 8.
 
 ```riscv|playground|memory|exercise
 .data

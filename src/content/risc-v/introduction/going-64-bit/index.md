@@ -41,10 +41,10 @@ main:
 
 After the loads, the registers contain:
 
-| register | value              | reason |
-| -------- | ------------------ | ------ |
-| `t1`     | `11223344AABBCCDD` | `ld` loaded the complete doubleword |
-| `t2`     | `FFFFFFFFAABBCCDD` | `lw` copied bit 31 into the upper 32 bits |
+| register | value              | reason                                     |
+| -------- | ------------------ | ------------------------------------------ |
+| `t1`     | `11223344AABBCCDD` | `ld` loaded the complete doubleword        |
+| `t2`     | `FFFFFFFFAABBCCDD` | `lw` copied bit 31 into the upper 32 bits  |
 | `t3`     | `00000000AABBCCDD` | `lwu` filled the upper 32 bits with zeroes |
 
 The four bytes read by both word loads represent `0xAABBCCDD`. In RV64, `lw` treats that word as a
@@ -102,12 +102,12 @@ Use this decision rule:
 
 The naming pattern is regular enough to use as a lookup:
 
-| operation | full 64-bit form | 32-bit-result form |
-| --------- | ---------------- | ------------------ |
-| add       | `add`, `addi`    | `addw`, `addiw`    |
-| subtract  | `sub`            | `subw`             |
-| shift     | `sll`, `srl`, `sra` | `sllw`, `srlw`, `sraw` |
-| multiply  | `mul`            | `mulw`              |
+| operation           | full 64-bit form             | 32-bit-result form               |
+| ------------------- | ---------------------------- | -------------------------------- |
+| add                 | `add`, `addi`                | `addw`, `addiw`                  |
+| subtract            | `sub`                        | `subw`                           |
+| shift               | `sll`, `srl`, `sra`          | `sllw`, `srlw`, `sraw`           |
+| multiply            | `mul`                        | `mulw`                           |
 | divide or remainder | `div`, `divu`, `rem`, `remu` | `divw`, `divuw`, `remw`, `remuw` |
 
 Immediate shift forms follow the same pattern, such as `slliw`, `srliw` and `sraiw`. You do not
