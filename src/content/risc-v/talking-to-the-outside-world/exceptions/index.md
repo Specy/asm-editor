@@ -23,7 +23,7 @@ from the 32 general-purpose registers. These are the CSR instruction forms used 
 | instruction       | meaning                                        |
 | ----------------- | ---------------------------------------------- |
 | `csrr rd, csr`    | read a CSR into general-purpose register `rd`  |
-| `csrw csr, rs`    | write general-purpose register `rs` into a CSR |
+| `csrw rs, csr`    | write general-purpose register `rs` into a CSR |
 | `csrsi csr, mask` | OR the immediate mask into a CSR               |
 
 So `csrsi ustatus, 1` ORs in the mask `1` (`...0001` in binary), setting bit 0. Without enabling
@@ -53,7 +53,7 @@ last_value: .word 0
 .globl main
 main:
     la t0, handler
-    csrw utvec, t0              # CSR first, source register second
+    csrw t0, utvec              # source register first, CSR second
     csrsi ustatus, 1            # OR in mask 1: enable bit 0
 
     la t1, w                    # w ends in ...01 because padding was disabled
@@ -75,7 +75,7 @@ handler:
 
     csrr t0, uepc               # address of the faulting lw
     addi t0, t0, 4              # all instructions assembled here are 32-bit (4 bytes)
-    csrw uepc, t0               # resume at the following instruction
+    csrw t0, uepc               # resume at the following instruction
 
     lw t1, 4(sp)
     lw t0, 0(sp)
@@ -135,7 +135,7 @@ w:   .word 0x12345678
 main:
     li sp, 0x7FFFEFFC
     la t0, handler
-    csrw utvec, t0
+    csrw t0, utvec
     li t0, 0x13579BDF
     csrsi ustatus, 1
     la t1, w
@@ -179,7 +179,7 @@ w:   .word 0x12345678
 main:
     li sp, 0x7FFFEFFC
     la t0, handler
-    csrw utvec, t0
+    csrw t0, utvec
     li t0, 0x13579BDF
     csrsi ustatus, 1
     la t1, w
@@ -193,7 +193,7 @@ handler:
     sw t0, 0(sp)
     csrr t0, uepc
     addi t0, t0, 4              # skip this four-byte lw
-    csrw uepc, t0
+    csrw t0, uepc
     lw t0, 0(sp)
     addi sp, sp, 4
     uret

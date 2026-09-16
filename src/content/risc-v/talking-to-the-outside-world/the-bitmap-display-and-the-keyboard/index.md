@@ -11,11 +11,11 @@ belong to device registers, so reading or writing them can have an effect outsid
 The Screen panel can display a region of memory as a grid of pixels. Each pixel is one four-byte
 word. Its low 24 bits are colour bytes:
 
-| bits | colour byte |
-| ---- | ----------- |
-| 23 through 16 | red |
-| 15 through 8 | green |
-| 7 through 0 | blue |
+| bits          | colour byte |
+| ------------- | ----------- |
+| 23 through 16 | red         |
+| 15 through 8  | green       |
+| 7 through 0   | blue        |
 
 The high byte is ignored. Thus `0x00FF0000` is red, `0x0000FF00` is green,
 `0x000000FF` is blue, and `0x00FFFFFF` is white. This is the familiar `#RRGGBB` order written as
@@ -116,12 +116,12 @@ control bits; the two data registers carry characters. They are accessed with or
 takes a character from the input queue, and storing transmitter data sends a character to the
 console.
 
-| address | register | use |
-| ------: | -------- | --- |
-| `0xffff0000` | receiver control | bit 0 is **Ready** when a typed character is waiting |
-| `0xffff0004` | receiver data | low byte is the next character; reading it takes that character |
-| `0xffff0008` | transmitter control | bit 0 is Ready; it is always 1 here |
-| `0xffff000c` | transmitter data | storing a low-byte character prints it on the console |
+|      address | register            | use                                                             |
+| -----------: | ------------------- | --------------------------------------------------------------- |
+| `0xffff0000` | receiver control    | bit 0 is **Ready** when a typed character is waiting            |
+| `0xffff0004` | receiver data       | low byte is the next character; reading it takes that character |
+| `0xffff0008` | transmitter control | bit 0 is Ready; it is always 1 here                             |
+| `0xffff000c` | transmitter data    | storing a low-byte character prints it on the console           |
 
 For the programs on this page, inspect bit 0 of either control register.
 
@@ -190,6 +190,10 @@ take:
 quit:
     li a7, 10
     ecall
+```
+
+```testcase
+{ "runFor": 40000 }
 ```
 
 In this Playground, service 32 lets an empty polling loop wait without spending its instruction

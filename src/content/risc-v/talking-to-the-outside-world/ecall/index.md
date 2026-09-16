@@ -323,6 +323,10 @@ main:
     ecall
 ```
 
+```testcase
+{ "input": ["9"] }
+```
+
 </details>
 
 Finally, read one short line into the supplied buffer and print it unchanged. With input `cat`, the
@@ -365,6 +369,10 @@ main:
     ecall
     li a7, 10
     ecall
+```
+
+```testcase
+{ "input": ["cat\n"] }
 ```
 
 </details>

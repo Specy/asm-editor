@@ -17,11 +17,11 @@ one 32-bit register, so a complete product uses two instructions:
 
 This gives a direct rule for choosing a pair:
 
-| complete product | low half | high half |
-| ---------------- | -------- | --------- |
-| signed × signed | `mul` | `mulh` |
-| unsigned × unsigned | `mul` | `mulhu` |
-| signed × unsigned | `mul` | `mulhsu` |
+| complete product    | low half | high half |
+| ------------------- | -------- | --------- |
+| signed × signed     | `mul`    | `mulh`    |
+| unsigned × unsigned | `mul`    | `mulhu`   |
+| signed × unsigned   | `mul`    | `mulhsu`  |
 
 Operand order matters for `mulhsu`: its first source is the signed value. If a calculation is
 described as unsigned × signed, supply the sources in swapped order so the signed value comes first:
@@ -39,10 +39,10 @@ main:
 
 All three instructions read the same bits. The interpretation changes the full product:
 
-| interpretation | complete 64-bit product | high half | low half |
-| -------------- | ----------------------- | --------- | -------- |
-| signed: -1 × 2 | `0xFFFFFFFFFFFFFFFE` | `FFFFFFFF` | `FFFFFFFE` |
-| unsigned: 4,294,967,295 × 2 | `0x00000001FFFFFFFE` | `00000001` | `FFFFFFFE` |
+| interpretation              | complete 64-bit product | high half  | low half   |
+| --------------------------- | ----------------------- | ---------- | ---------- |
+| signed: -1 × 2              | `0xFFFFFFFFFFFFFFFE`    | `FFFFFFFF` | `FFFFFFFE` |
+| unsigned: 4,294,967,295 × 2 | `0x00000001FFFFFFFE`    | `00000001` | `FFFFFFFE` |
 
 Thus `t2` is `FFFFFFFE` in both cases, while `t3` and `t4` differ. Pair `t2` with `t3` for the
 signed product and with `t4` for the unsigned product.
@@ -96,11 +96,11 @@ main:
 RISC-V defines register results for division by zero. The instruction executes without an ISA
 exception. Add a guard whenever zero is invalid for your program.
 
-| operation | quotient | remainder |
-| --------- | -------- | --------- |
-| signed `x / 0` | `-1` (`0xFFFFFFFF`) | `x` |
-| unsigned `x / 0` | `0xFFFFFFFF` | `x` |
-| signed `-2147483648 / -1` | `-2147483648` (`0x80000000`) | 0 |
+| operation                 | quotient                     | remainder |
+| ------------------------- | ---------------------------- | --------- |
+| signed `x / 0`            | `-1` (`0xFFFFFFFF`)          | `x`       |
+| unsigned `x / 0`          | `0xFFFFFFFF`                 | `x`       |
+| signed `-2147483648 / -1` | `-2147483648` (`0x80000000`) | 0         |
 
 The last row is the one signed division whose mathematical quotient does not fit in a 32-bit signed
 word. Its quotient wraps to the original `0x80000000` bit pattern. These specified register results
@@ -341,7 +341,7 @@ main:
 ```testcase
 {
     "startingRegisters": { "t0": -1, "t1": 2 },
-    "expectedRegisters": { "t2": "0xFFFFFFFE", "t3": "0xFFFFFFFF" }
+    "expectedRegisters": { "t2": -2, "t3": -1 }
 }
 ```
 

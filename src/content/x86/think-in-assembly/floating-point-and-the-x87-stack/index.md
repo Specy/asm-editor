@@ -18,10 +18,10 @@ double_value:   dq 1.5      ; eight-byte binary64
 
 Each format divides its bits into three fields:
 
-| format | total bits | sign | exponent | stored fraction |
-| ------ | ---------: | ---: | -------: | --------------: |
-| binary32 | 32 | 1 bit | 8 bits | 23 bits |
-| binary64 | 64 | 1 bit | 11 bits | 52 bits |
+| format   | total bits |  sign | exponent | stored fraction |
+| -------- | ---------: | ----: | -------: | --------------: |
+| binary32 |         32 | 1 bit |   8 bits |         23 bits |
+| binary64 |         64 | 1 bit |  11 bits |         52 bits |
 
 For binary64, the sign bit selects positive or negative. The 11-bit exponent records a power of
 two, using a bias of 1023 for normal values. The 52 stored fraction bits describe the significant
@@ -30,13 +30,13 @@ bit does not need a place in the encoding.
 
 The exponent field also identifies special cases:
 
-| exponent field | fraction field | meaning |
-| -------------- | -------------- | ------- |
-| neither all zeroes nor all ones | any | normal finite value; implicit leading `1` |
-| all zeroes | all zeroes | positive or negative zero |
-| all zeroes | nonzero | subnormal value; no implicit leading `1` |
-| all ones | all zeroes | positive or negative infinity |
-| all ones | nonzero | NaN, “not a number” |
+| exponent field                  | fraction field | meaning                                   |
+| ------------------------------- | -------------- | ----------------------------------------- |
+| neither all zeroes nor all ones | any            | normal finite value; implicit leading `1` |
+| all zeroes                      | all zeroes     | positive or negative zero                 |
+| all zeroes                      | nonzero        | subnormal value; no implicit leading `1`  |
+| all ones                        | all zeroes     | positive or negative infinity             |
+| all ones                        | nonzero        | NaN, “not a number”                       |
 
 Subnormal values let the format represent very small magnitudes close to zero. Infinities and NaNs
 are results that floating-point instructions can carry through later calculations. Operations that
@@ -123,22 +123,22 @@ that value.
 
 These forms are enough for the examples on this page:
 
-| instruction | value and stack effect |
-| ----------- | ---------------------- |
-| `fld dword [x]` | push the binary32 value stored in four bytes at `x` |
-| `fld qword [x]` | push the binary64 value stored in eight bytes at `x` |
-| `fld1` | push the exactly representable value 1.0 |
-| `fild word [n]` | read a signed 16-bit integer, convert it, and push it |
-| `fild dword [n]` | read a signed 32-bit integer, convert it, and push it |
-| `fild qword [n]` | read a signed 64-bit integer, convert it, and push it |
-| `faddp st1, st0` | put old `st(1) + st(0)` in old `st(1)`, then pop |
-| `fsubp st1, st0` | put old `st(1) - st(0)` in old `st(1)`, then pop |
-| `fmulp st1, st0` | put old `st(1) * st(0)` in old `st(1)`, then pop |
-| `fdivp st1, st0` | put old `st(1) / st(0)` in old `st(1)`, then pop |
-| `fstp dword [x]` | round `st(0)` to binary32, store four bytes, then pop |
-| `fstp qword [x]` | round `st(0)` to binary64, store eight bytes, then pop |
-| `fistp word [n]` | round to a signed 16-bit integer, store two bytes, then pop |
-| `fistp dword [n]` | round to a signed 32-bit integer, store four bytes, then pop |
+| instruction       | value and stack effect                                        |
+| ----------------- | ------------------------------------------------------------- |
+| `fld dword [x]`   | push the binary32 value stored in four bytes at `x`           |
+| `fld qword [x]`   | push the binary64 value stored in eight bytes at `x`          |
+| `fld1`            | push the exactly representable value 1.0                      |
+| `fild word [n]`   | read a signed 16-bit integer, convert it, and push it         |
+| `fild dword [n]`  | read a signed 32-bit integer, convert it, and push it         |
+| `fild qword [n]`  | read a signed 64-bit integer, convert it, and push it         |
+| `faddp st1`       | put old `st(1) + st(0)` in old `st(1)`, then pop              |
+| `fsubp st1`       | put old `st(1) - st(0)` in old `st(1)`, then pop              |
+| `fmulp st1`       | put old `st(1) * st(0)` in old `st(1)`, then pop              |
+| `fdivp st1`       | put old `st(1) / st(0)` in old `st(1)`, then pop              |
+| `fstp dword [x]`  | round `st(0)` to binary32, store four bytes, then pop         |
+| `fstp qword [x]`  | round `st(0)` to binary64, store eight bytes, then pop        |
+| `fistp word [n]`  | round to a signed 16-bit integer, store two bytes, then pop   |
+| `fistp dword [n]` | round to a signed 32-bit integer, store four bytes, then pop  |
 | `fistp qword [n]` | round to a signed 64-bit integer, store eight bytes, then pop |
 
 The default x87 rounding mode is nearest, with a value exactly halfway between two candidates going
@@ -164,7 +164,7 @@ section .text
 _start:
     fld qword [a]           ; stack: [1.5]
     fld qword [b]           ; stack: [2.25, 1.5]
-    faddp st1, st0          ; stack: [3.75]
+    faddp st1               ; stack: [3.75]
     fstp qword [out]        ; stack: []
 
     mov r8, [out]           ; r8 = 0x400E000000000000
@@ -175,7 +175,7 @@ _start:
 ```
 
 The second `fld` changes the logical names without moving 1.5 between physical registers. Before
-the addition, `st(0)` is 2.25 and `st(1)` is 1.5. `faddp st1, st0` writes 3.75 into the old
+the addition, `st(0)` is 2.25 and `st(1)` is 1.5. `faddp st1` writes 3.75 into the old
 `st(1)`, pops the old top, and exposes the result as the new `st(0)`. The store writes the binary64
 bits to memory and empties the stack.
 
@@ -187,9 +187,9 @@ operand. This sequence calculates `(10.0 - 4.0) / 2.0`:
 ```x86
     fld qword [ten]         ; stack: [10.0]
     fld qword [four]        ; stack: [4.0, 10.0]
-    fsubp st1, st0          ; old st(1) - old st(0): stack [6.0]
+    fsubp st1               ; old st(1) - old st(0): stack [6.0]
     fld qword [two]         ; stack: [2.0, 6.0]
-    fdivp st1, st0          ; old st(1) / old st(0): stack [3.0]
+    fdivp st1               ; old st(1) / old st(0): stack [3.0]
     fstp qword [answer]     ; stack: []
 ```
 
@@ -216,11 +216,11 @@ An ordinary integer conditional jump needs flags in `rflags`. The x87 instructio
 Its four possible results are:
 
 | relation of old `st(0)` to old `st(1)` | `ZF` | `PF` | `CF` |
-| --------------------------------------- | ---: | ---: | ---: |
-| greater | 0 | 0 | 0 |
-| less | 0 | 0 | 1 |
-| equal | 1 | 0 | 0 |
-| unordered | 1 | 1 | 1 |
+| -------------------------------------- | ---: | ---: | ---: |
+| greater                                |    0 |    0 |    0 |
+| less                                   |    0 |    0 |    1 |
+| equal                                  |    1 |    0 |    0 |
+| unordered                              |    1 |    1 |    1 |
 
 **Unordered** means that at least one operand is a NaN. A quiet NaN is a NaN encoding intended to
 flow through ordinary calculations without signaling the invalid-operation exception in this
@@ -318,9 +318,9 @@ section .text
 _start:
     fld qword [left]        ; stack: [10.0]
     fld qword [subtract]    ; stack: [4.0, 10.0]
-    fsubp st1, st0          ; stack: [6.0]
+    fsubp st1               ; stack: [6.0]
     fld qword [divisor]     ; stack: [2.0, 6.0]
-    fdivp st1, st0          ; stack: [3.0]
+    fdivp st1               ; stack: [3.0]
     fstp qword [out]        ; stack: []
 
     mov r8, [out]
@@ -334,7 +334,7 @@ _start:
 
 Now compare four pairs: less, equal, greater, and unordered. Write byte `-1`, `0`, `1`, or `2` to
 the corresponding position in `results`. Load the final four bytes into `r8d`. For every pair,
-load the right operand first and the left operand second, use `fucomip st0, st1`, discard the one
+load the right operand first and the left operand second, use `fucomip st1`, discard the one
 remaining x87 value, and test `jp` before the ordered branches.
 
 ```x86|playground|x87|memory|exercise
@@ -398,7 +398,7 @@ _start:
 compare_next:
     fld qword [rsi + rbx*8]     ; stack: [right]
     fld qword [rdi + rbx*8]     ; stack: [left, right]
-    fucomip st0, st1            ; compare left with right; stack: [right]
+    fucomip st1                 ; compare left with right; stack: [right]
     fstp st0                    ; stack: []; integer flags unchanged
 
     jp compare_unordered        ; PF first: NaN was present

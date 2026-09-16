@@ -1,6 +1,5 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import type { JsMips, JsUndoGroup } from '@specy/mips'
 import { MIPSEmulator } from '$lib/languages/MIPS/MIPSEmulator.svelte'
 import {
     MARS_INTERRUPT_ENABLE_BIT,
@@ -1693,57 +1692,6 @@ target:
         ])
     })
 
-    //Kept as a reproducer for a dev server whose optimized dependency cache still holds the 3.5
-    //Core after the editor has moved to 3.6. The supported 3.6 contract requires `newValue`, so
-    //this must not become compatibility behaviour in the adapter.
-    it.skip('keeps older grouped history readable when it has no written values', async () => {
-        const emulator = await build(
-            `        .data
-word:   .word   0
-        .text
-main:
-        li      $t0, 0x1234
-        la      $t1, word
-        sw      $t0, 0($t1)
-` + EXIT
-        )
-
-        //First let the current Core produce a real memory back step, then remove only the additive
-        //field to model @specy/mips 3.5 or a Vite dependency cached before a local Core relink.
-        for (
-            let count = 0;
-            count < 8 &&
-            !emulator.latestSteps[0]?.mutations.some((mutation) => mutation.type === 'WriteMemory');
-            count++
-        ) {
-            await emulator.step()
-        }
-        const core = (emulator as unknown as { mips: JsMips }).mips
-        const withoutWrittenValues = core.getUndoGroups().map((group) => ({
-            ...group,
-            steps: group.steps.map((step) => {
-                const legacy: Partial<typeof step> = { ...step }
-                Reflect.deleteProperty(legacy, 'newValue')
-                return legacy
-            })
-        })) as unknown as JsUndoGroup[]
-        core.getUndoGroups = () => withoutWrittenValues
-
-        expect(() => emulator._getUndoHistory(8)).not.toThrow()
-        const memory = emulator
-            ._getUndoHistory(8)
-            .flatMap((step) => step.mutations)
-            .find((mutation) => mutation.type === 'WriteMemory')
-        expect(memory?.value).toMatchObject({ old: 0n, size: RegisterSize.Long })
-        expect(memory?.value).not.toHaveProperty('new')
-
-        //A register row must not turn the missing value into zero either.
-        const register = emulator
-            ._getUndoHistory(8)
-            .flatMap((step) => step.mutations)
-            .find((mutation) => mutation.type === 'WriteRegister')
-        expect(register?.value).not.toHaveProperty('new')
-    })
 
     it('repaints the bitmap display on a Poke into it and on its Undo', async () => {
         const emulator = await build(DATA + EXIT)
