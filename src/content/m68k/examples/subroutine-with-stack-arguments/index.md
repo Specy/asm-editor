@@ -2,13 +2,9 @@
 square them, and returns their sum in `d0`. It needs a local variable to hold the first square while
 the second call runs, and that local lives on the stack too, in a frame `link` builds for it.
 
-A subroutine with its arguments in registers passed everything in `d0` and `d1`. That works until a
-subroutine has to keep something across a call, because the call is free to destroy any register it
-likes.
-
-**You need to know:** the "bsr, rts, link and unlk" lecture and the "The stack, -(sp) and movem"
-lecture. What is new here is `a6` as a frame pointer, it stays still in the middle of the frame while
-`sp` keeps moving, so `8(a6)` names the same argument from the first instruction to the last.
+Passing arguments in registers works until a subroutine has to hold on to something **across** a
+call. Whatever it calls is free to destroy any register it likes, so the value has to be somewhere
+the callee will not reach.
 
 ```m68k|playground|memory|no-flags|allow-open
     move.l #4, -(sp)        ; the second argument, b
@@ -61,6 +57,7 @@ middle of a computation does not lose what it was holding. `unlk a6` puts `sp` b
 address and pops the old `a6`, and the `add.l #8, sp` in the caller is the eight bytes of arguments
 being given back. `d0` and `d7` come out at `00000019`, which is 25, from 9 plus 16.
 
-Try changing `add.l #8, sp` to `add.l #4, sp`. The answer is still right, and `a7` ends at
-`00FFFFFC` instead of `01000000`: four bytes of stack the program will never get back, which in a
-loop is how a program runs out of it.
+Change `add.l #8, sp` to `add.l #4, sp` and run it. The answer is still 25, every register is still
+right, and nothing reports anything. The only sign is `a7`, which ends at `00FFFFFC` instead of
+`01000000`: four bytes of stack that the program can never get back. Do that inside a loop and it
+eats the stack a little at a time until something important is underneath it.

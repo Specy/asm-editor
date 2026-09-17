@@ -2,14 +2,10 @@ A square you steer. The arrow keys set which way it is going and it keeps going 
 coming back in at the opposite edge when it leaves the screen. **Click the Screen panel first**: the
 screen only gets the keyboard when it has the focus, and a ring around it says so while it does.
 
-A bouncing ball drew a picture that changed on its own. This one asks the keyboard, once per frame,
-what is being held down right now, and the answer changes what the next frame will look like.
+Once a frame, the program asks the keyboard what is being held down at this instant, and the answer
+decides what the next frame looks like.
 
-**You need to know:** the "A bouncing ball" Example and the "The screen, keyboard and mouse through
-traps" lecture. What is new here is task 19, which takes four key codes packed into `d1.l` and
-answers with four bytes saying which of them are down at this instant.
-
-```m68k|playground|screen|no-registers|no-flags|allow-open
+```m68k|playground|open-screen|no-registers|no-flags|allow-open
 CELL    equ 40
 STEP    equ 8
 RIGHT   equ 640-40
@@ -133,6 +129,5 @@ Polling every frame is enough for keys held down: task 19 reports a key that was
 between two polls, so a tap is not missed. What it does not tell you is that a key was pressed
 **again**, which is why a game that wants one action per press keeps the last answer and compares.
 
-Try changing the `clr.w d5` under `cmp.w #RIGHT, d5` to `move.w #RIGHT, d5`. The square stops against
-the right edge instead of coming back in at the left, which is the same two instructions doing
-clamping instead of wrapping.
+Wrapping at the edges and stopping at them are the same two instructions with a different value
+written: `clr.w d5` sends the square back to zero, and `move.w #RIGHT, d5` would pin it where it is.

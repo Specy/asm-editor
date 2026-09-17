@@ -2,13 +2,9 @@ Twelve words laid out as three rows of four. The program adds up a whole column,
 stepping through memory a row at a time, and then reads one element by its row and column. The
 column total ends in `iy` and the element in `de`.
 
-Every array up to here was one line of memory. A 2D array is the same line read in rows, and the two
-numbers you write in C as `grid[row][col]` have to be turned into one offset before anything can be
-read.
-
-**You need to know:** the "Arrays, strings and ix" lecture and the "Addressing on the Z80" lecture.
-What is new here is the stride, the distance in bytes between one row and the next, which is what
-walking a column adds every pass.
+Every array up to here was one line of memory. A grid is the same line, read as rows: memory has no
+idea it is two dimensional, so the row and the column have to be turned into a single distance from
+the start before anything can be read.
 
 ```z80|playground|memory|no-flags|allow-open
 ROWS    equ 3
@@ -24,7 +20,7 @@ STRIDE  equ COLS * 2        ; one row of the array, in bytes
     ld e, a
     ld d, 0
     ld ix, grid
-    add ix, de              ; ix = &grid[0][col]
+    add ix, de              ; ix = the top of the column
     ld hl, 0                ; total = 0
     ld b, ROWS
 column:
@@ -77,13 +73,10 @@ here, so `row * COLS` is two `add hl, hl`, and the doubling for the element size
 number of columns that is **not** a power of two would need the shift and add routine from Multiply
 and divide, which is what makes a power of two the size every 8 bit program picks for a grid.
 
-`de` comes out at `00C8`, which is 200, the second element of the last row. Reading it takes two
+`de` comes out at `00C8`, 200, the second element of the last row. Reading it takes two
 instructions, `ld e, (hl)` and then `ld d, (hl)` after an `inc hl`, because a word is two bytes and
 every load here moves one.
 
 Walking a **row** would be the same loop with `inc hl` twice and no `add` at all, since the elements
 of a row sit next to each other. A column is the direction the array is not laid out in, and it
 costs one addition per pass to say so.
-
-Try changing `ld c, 1` to `ld c, 3`. `iy` comes out at `01BC`, which is 444, and `de` at `0190`,
-which is 400: one line moves both halves, because the column is a value both of them read.

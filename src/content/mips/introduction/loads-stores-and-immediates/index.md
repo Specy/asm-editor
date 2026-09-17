@@ -1,68 +1,110 @@
-The instruction set lecture wrote an instruction's operands as `destination` and `source` without
-saying what can go in them. This is what can, and the way an operand is written is its **addressing
-mode**. MIPS has three, which is fewer than any other machine in this editor.
+The operands you have used so far name values in two ways: a register such as `$t0`, or an
+immediate number such as `7`. Loads and stores add a third form that names a location in memory.
 
-| mode             | written  | in C               |
-| ---------------- | -------- | ------------------ |
-| register         | `$t0`    | `x`                |
-| immediate        | `7`      | `7`                |
-| base plus offset | `4($t0)` | `p[1]`, `*(p + 1)` |
+| kind      | example  | meaning                                          |
+| --------- | -------- | ------------------------------------------------ |
+| register  | `$t0`    | use a register                                   |
+| immediate | `7`      | use the number written in the instruction        |
+| memory    | `4($t0)` | use memory at the address in `$t0`, plus 4 bytes |
 
-The first two name a value the CPU already has or the assembler already knows. The third names an
-address, and only a load or a store may use it.
+The instruction decides what an operand does. In `addi $t1, $t0, 7`, `$t0` is a register source,
+`7` is an immediate source, and `$t1` is the register destination. A memory operand such as
+`4($t0)` is used by a load or store. Other instructions in this lesson do not read or write
+memory.
 
-## Arithmetic never reaches memory
+## Load from memory, store to memory
 
-MIPS is a **load/store architecture**, which means exactly this: `lw`, `lh`, `lb`, `lbu`, `lhu`,
-`sw`, `sh` and `sb` are the only instructions that touch memory, and everything else works on
-registers. There is no `add` that reads a variable, no `cmp` against a word in memory, no
-increment of a counter that lives at an address.
+A **load** copies data from memory into a register. A **store** copies data from a register into
+memory. The first operand changes role between them:
 
-So the shape of every program that works on data in memory is the same three steps: load it into a
-register, do the work there, store it back. On the M68K, where `add.l total, d0` adds the long at a
-label straight into a register, that is one instruction; here it is three, and the reason the design
-went that way is that a load can take many cycles and an `add` takes one, so the two are kept apart.
-
-## offset(base)
-
-`lw $t3, 4($t2)` reads the word at the address `$t2 + 4`. The register is the **base**, the number is
-the **offset** in bytes, and the offset is a signed 16 bit constant the assembler puts inside the
-instruction. That is the whole mode: one register, one constant, added while the instruction runs.
-
-```mips|playground|memory
-.data
-numbers: .word 10, 20, 30, 40
-
-.text
-main:
-    li $t0, 7               # immediate
-    move $t1, $t0           # register
-    la $t2, numbers         # the address of the label, nothing read
-    lw $t3, 0($t2)          # numbers[0]
-    lw $t4, 4($t2)          # numbers[1]
-    addi $t7, $t2, 12       # a pointer at numbers[3]
-    lw $t8, -4($t7)         # and one word back from it
+```text
+lw destination register, memory       # register <- memory
+sw source register, memory            # register -> memory
 ```
 
-The four words sit at `0x10010000`, where `.data` puts the first label:
+Here is that difference in a runnable program:
 
-| address      | value      | which element |
-| ------------ | ---------- | ------------- |
-| `0x10010000` | `0000000A` | `numbers[0]`  |
-| `0x10010004` | `00000014` | `numbers[1]`  |
-| `0x10010008` | `0000001E` | `numbers[2]`  |
-| `0x1001000C` | `00000028` | `numbers[3]`  |
+```mips|playground|memory
+.data
+numbers: .word 10, 20
 
-`$t3` comes out at 10 and `$t4` at 20. `$t7` is `1001000C`, and `$t8` is 30, because the offset may
-be negative and `-4($t7)` is one word back.
+.text
+main:
+    la $t0, numbers         # $t0 gets the address of numbers
+    lw $t1, 0($t0)          # load:  memory -> $t1, so $t1 becomes 10
+    li $t2, 99
+    sw $t2, 4($t0)          # store: $t2 -> memory, so the second word becomes 99
+    li $v0, 10
+    syscall
+```
 
-Two things the mode cannot do. It cannot add two registers, so there is no `lw $t0, ($t1 + $t2)`. And
-it cannot scale anything, so an index has to be turned into a byte offset by your own code.
+Build the program and step through it. `la` puts an address in `$t0`; it does not read the value at
+that address. The following `lw` uses the address and reads the first word. The `sw` goes in the
+other direction and changes memory.
 
-## Indexing an array
+A common mistake is to read `sw $t2, 4($t0)` as though `$t2` were a destination. It is the source:
+the store copies the value already in `$t2` to memory. The store does not replace `$t2`.
 
-C hides the size of an element: `numbers[i]` means the address of `numbers` plus `i` times four,
-because the elements are 4 byte words. MIPS makes you write both halves of that.
+## The suffix says how much data moves
+
+The letters `b`, `h`, and `w` match the sizes from the previous lesson: byte, half, and word.
+
+| size | load          | store | bytes moved |
+| ---- | ------------- | ----- | ----------: |
+| byte | `lb` or `lbu` | `sb`  |           1 |
+| half | `lh` or `lhu` | `sh`  |           2 |
+| word | `lw`          | `sw`  |           4 |
+
+Word and half accesses must begin at the aligned addresses introduced earlier: a word at a
+multiple of 4 and a half at a multiple of 2. A byte can begin at any address.
+
+A store writes only the low part of its source register. `sb` writes the low 8 bits, `sh` writes
+the low 16 bits, and `sw` writes all 32 bits. Stores do not have separate signed and unsigned
+forms because the bit pattern written to memory is the same either way.
+
+Loads of a byte or half need one extra choice because every register is 32 bits wide. The loaded
+value must be extended to fill the register:
+
+- `lb` and `lh` **sign-extend**: they copy the loaded value's highest bit into the new leading bits.
+- `lbu` and `lhu` **zero-extend**: they fill the new leading bits with zeroes.
+
+The difference is visible with the byte pattern `F0`. The previous lesson showed that `F0` is -16
+as a signed byte and 240 as an unsigned byte:
+
+```mips|playground|memory
+.data
+byte_value: .byte 0xF0
+            .align 1
+half_value: .half 0xFFF0
+
+.text
+main:
+    la $t0, byte_value
+    lb  $t1, 0($t0)         # FFFFFFF0: sign-extended, read as -16
+    lbu $t2, 0($t0)         # 000000F0: zero-extended, read as 240
+    la $t3, half_value
+    lh  $t4, 0($t3)         # FFFFFFF0: sign-extended, read as -16
+    lhu $t5, 0($t3)         # 0000FFF0: zero-extended, read as 65520
+    li $v0, 10
+    syscall
+```
+
+Each pair of loads reads the same bits from memory. Only the new leading bits differ. Sign
+extension preserves the signed reading -16; zero extension produces the positive unsigned
+reading. A word already fills the entire register, so `lw` does not need signed and unsigned
+versions.
+
+## Read `offset(base)` one part at a time
+
+In `4($t0)`, `$t0` is the **base register**. It must hold an address. The `4` is the **offset**,
+measured in bytes. The processor adds them to find the memory address:
+
+```text
+memory address = value in base register + byte offset
+```
+
+The parentheses do not mean “load `$t0`.” They mean “use `$t0` as the base of a memory address.”
+The load or store mnemonic says whether data moves from that address or to it.
 
 ```mips|playground|memory
 .data
@@ -70,97 +112,66 @@ numbers: .word 10, 20, 30, 40
 
 .text
 main:
-    la $t0, numbers
+    la $t0, numbers         # base address: 0x10010000
+    lw $t1, 0($t0)          # address + 0 bytes:  numbers[0] = 10
+    lw $t2, 4($t0)          # address + 4 bytes:  numbers[1] = 20
+    lw $t3, 8($t0)          # address + 8 bytes:  numbers[2] = 30
+    addi $t4, $t0, 12       # address of numbers[3]
+    lw $t5, -4($t4)         # that address - 4 bytes: numbers[2] = 30
+    li $v0, 10
+    syscall
+```
+
+Each word occupies four bytes, so neighbouring words begin four addresses apart. That is why an
+offset of 4 reaches the second word, not the fifth. The offset may be negative; `-4($t4)` means
+four bytes before the address in `$t4`.
+
+Use `la` once to put a label's address in a register, then use explicit forms such as `0($t0)` and
+`4($t0)`. This keeps the base address visible while you step through the program. The assembler
+also accepts some load and store forms written directly with a label, but the `la` plus
+`offset(base)` pattern is the one to use in this course.
+
+The offset is a fixed number written in the instruction. It cannot be another register, so a form
+such as `lw $t0, $t1($t2)` is not available. When an index is in a register, calculate the element
+address in registers first.
+
+## Calculate an array element address
+
+For an array of four-byte words, element `i` begins `i * 4` bytes after the array's base address:
+
+```text
+address of numbers[i] = address of numbers + i * 4
+```
+
+You can multiply a value by 4 with the `add` instruction you already know: double it once, then
+double the result.
+
+```mips|playground|memory
+.data
+numbers: .word 10, 20, 30, 40
+
+.text
+main:
+    la $t0, numbers         # base address
     li $t1, 2               # i = 2
-    sll $t2, $t1, 2         # i * 4, the size of a word
-    add $t3, $t0, $t2       # &numbers[i]
-    lw $t4, 0($t3)          # numbers[i]
-    lw $t5, 4($t3)          # numbers[i + 1]
-    li $t6, 99
-    sw $t6, 0($t3)          # numbers[i] = 99
+    add $t2, $t1, $t1       # i * 2
+    add $t2, $t2, $t2       # i * 4, a byte offset
+    add $t3, $t0, $t2       # address of numbers[i]
+    lw $t4, 0($t3)          # load numbers[i], so $t4 becomes 30
+    li $t5, 99
+    sw $t5, 0($t3)          # store 99 in numbers[i]
+    li $v0, 10
+    syscall
 ```
 
-`$t4` comes out at 30 and `$t5` at 40, and after the `sw` the word at `0x10010008` reads `00000063`,
-which is 99. `sll $t2, $t1, 2` is the multiplication by 4: shifting left by 2 multiplies by 4, and
-every size on this machine is a power of two, so a shift is always what you want here.
-
-Once the address is in a register, the constant offset does the rest of the work: `0($t3)` and
-`4($t3)` are two neighbouring elements out of one computed address, and a loop over pairs pays for
-the arithmetic once.
-
-Try changing `li $t1, 2` to `li $t1, 0` and watching which word changes instead.
-
-## The assembler's label forms
-
-`lw $t5, numbers` is not one of the three modes. It is a pseudo-instruction, and the assembler turns
-it into a `lui` that puts the address in `$at` and a real `lw` through it.
-
-```mips|playground|memory
-.data
-numbers: .word 10, 20, 30, 40
-
-.text
-main:
-    la $t0, numbers         # lui and ori: the address in a register
-    lw $t1, numbers         # lui and lw: the first word
-    lw $t2, numbers+8       # the same, eight bytes further on
-    li $t3, 8
-    lw $t4, numbers($t3)    # lui, addu and lw: a label plus a register
-```
-
-`$t1` is 10, `$t2` is 30 and `$t4` is 30 as well. Click each of those lines after building and the
-editor prints what they became: two instructions for the first three, three for the last, and every
-one of them writes `$at`.
-
-That is the trade. `lw $t1, numbers` reads like C and costs two instructions and `$at` every time it
-runs, so inside a loop you do the `la` once, before the loop, and use `offset(base)` inside it.
-`la` is the one you will write most, because a pointer in a register is what the loop wants.
-
-## Walking with a pointer
-
-An array in memory has no length, no bounds and no element names, so a loop over it is built out of a
-pointer and a count.
-
-```mips|playground|memory
-.data
-numbers: .word 10, 20, 30, 40, 50
-
-.text
-main:
-    la $t0, numbers         # p = numbers
-    li $t1, 0               # sum = 0
-    li $t2, 5               # left = 5
-loop:
-    lw $t3, 0($t0)          # *p
-    add $t1, $t1, $t3       # sum += *p
-    addi $t0, $t0, 4        # p++, which on a word is four bytes
-    addi $t2, $t2, -1       # left--
-    bnez $t2, loop
-```
-
-`$t1` comes out at `00000096`, which is 150, and `$t0` at `10010014`, twenty bytes on and one word
-past the last element. The `addi $t0, $t0, 4` is C's `p++` written out, because C hides the size of
-what a pointer points at and assembly does not.
-
-The other way to write that loop keeps `$t0` at the base and computes `sll` and `add` on every pass,
-which is four instructions instead of one and gives you the index in a register. Use the pointer when
-you touch every element in order, and the index when you need the index itself, or when the loop
-jumps around the array the way a binary search does.
-
-## Branches and jumps are addressed differently
-
-None of the three modes applies to the instruction stream. `beq $t0, $t1, label` holds a distance in
-words from the branch to the label, so it reaches about 32 kilobytes either way. `j label` and
-`jal label` hold the label's word address in 26 bits, which reaches anywhere in the same 256 megabyte
-quarter of memory. `jr $t0` takes a full 32 bit address out of a register, which is how a jump table
-and a subroutine return both work.
-
-You write a label in all four and the assembler works out which of those it needs.
+There are two different additions here. The first two `add` instructions turn the index into a
+byte offset. The third adds that offset to the base address. Once `$t3` holds the complete element
+address, `0($t3)` means memory at exactly that address.
 
 ## Your turn
 
-The four words are at `0x10010000`. Leave `numbers[2]` in `$t0`, working the address out at run time
-from the index in `$t1` rather than writing the offset 8 yourself.
+The first exercise starts with `i = 2`. Leave `numbers[i]` in `$t0`. Calculate `i * 4` with two
+`add` instructions rather than writing the fixed offset 8.
 
 ```mips|playground|memory|exercise
 .data
@@ -168,8 +179,10 @@ numbers: .word 10, 20, 30, 40
 
 .text
 main:
-    li $t1, 2           # i = 2
-    # your code here
+    li $t1, 2               # i = 2
+    # calculate the address and load numbers[i] into $t0
+    li $v0, 10
+    syscall
 ```
 
 ```testcase
@@ -187,17 +200,20 @@ numbers: .word 10, 20, 30, 40
 
 .text
 main:
-    li $t1, 2           # i = 2
-    la $t2, numbers     # the base
-    sll $t3, $t1, 2     # i * 4
-    add $t3, $t2, $t3   # &numbers[i]
-    lw $t0, 0($t3)      # numbers[i]
+    li $t1, 2               # i = 2
+    la $t2, numbers         # base address
+    add $t3, $t1, $t1       # i * 2
+    add $t3, $t3, $t3       # i * 4, in bytes
+    add $t3, $t2, $t3       # address of numbers[i]
+    lw $t0, 0($t3)          # load memory -> $t0
+    li $v0, 10
+    syscall
 ```
 
 </details>
 
-The second one wants `numbers[i] = 99` with `i` already in `$t1`. The test starts it at 3, so the
-last of the four words is the one that changes and the array ends up as 10, 20, 30, 99.
+For the second exercise, `i = 3`. Store 99 in `numbers[i]`. Again calculate the byte offset with
+two `add` instructions, and remember that the register holding 99 is the first operand of `sw`.
 
 ```mips|playground|memory|exercise
 .data
@@ -205,8 +221,10 @@ numbers: .word 10, 20, 30, 40
 
 .text
 main:
-    li $t1, 3           # i = 3
-    # your code here
+    li $t1, 3               # i = 3
+    # calculate the address and store 99 in numbers[i]
+    li $v0, 10
+    syscall
 ```
 
 ```testcase
@@ -226,12 +244,15 @@ numbers: .word 10, 20, 30, 40
 
 .text
 main:
-    li $t1, 3           # i = 3
-    la $t2, numbers
-    sll $t3, $t1, 2     # i * 4
-    add $t3, $t2, $t3   # &numbers[i]
+    li $t1, 3               # i = 3
+    la $t2, numbers         # base address
+    add $t3, $t1, $t1       # i * 2
+    add $t3, $t3, $t3       # i * 4, in bytes
+    add $t3, $t2, $t3       # address of numbers[i]
     li $t4, 99
-    sw $t4, 0($t3)      # numbers[i] = 99
+    sw $t4, 0($t3)          # store $t4 -> memory
+    li $v0, 10
+    syscall
 ```
 
 </details>

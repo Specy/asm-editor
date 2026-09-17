@@ -2,8 +2,9 @@
 pops it back into the program counter. That pair is the whole of calling and returning on the Z80,
 and it uses the stack from the previous lecture with no new machinery at all.
 
-Getting the arguments in and the answer out takes more, and this is where the Z80 is thinner than the
-other machines in this editor.
+Getting the arguments in and the answer out is where the work is, because the CPU has no opinion
+about it at all. Nothing in the instruction set says where an argument goes. It is an agreement
+between two pieces of code, and you write both of them.
 
 ## The call, and arguments in registers
 
@@ -44,14 +45,14 @@ The `jp done` above `triple` is there because a subroutine is code like any othe
 would otherwise walk straight into it after the `ld b, a`. Falling into a subroutine gives you a `ret`
 with nothing of yours on the stack, which pops whatever is there and jumps to it.
 
-There is no `call (hl)`. Calling through a pointer, which is `f()` in C where `f` is a variable,
-means pushing a return address of your own and then `jp (hl)`, and most Z80 code reaches for a jump
-table and `jp (hl)` instead.
+There is no `call (hl)`. If you want to call a subroutine whose address the program worked out while
+it was running, rather than one you named in the source, you have to push a return address yourself
+and then `jp (hl)`. Most Z80 code avoids the whole question by using a jump table and `jp (hl)`.
 
 ## Conditional calls and returns
 
-`call` and `ret` both take the eight conditions from the F register lecture, which the M68K and MIPS
-have no equivalent of.
+`call` and `ret` both take the same conditions a jump does, so a subroutine can return early without
+a jump over a `ret`, and a call can be made only when a flag says so.
 
 ```z80|playground|no-flags
     .org 0x8000
@@ -75,7 +76,7 @@ mark:
 ; check(x): counts in b, and does nothing at all for zero
 check:
     or a
-    ret z           ; if(x == 0) return;
+    ret z           ; nothing to do when x is zero
     inc b
     ret
 
@@ -86,8 +87,9 @@ done:
 `c` comes out at `01`, so `mark` ran once out of two `call z` instructions, and `b` comes out at `01`
 as well, so `check` did its work once out of two calls.
 
-`ret cc` is the more useful of the two forms, because it turns an early exit into one byte. `ret z`
-is the `if (x == 0) return;` guard that starts half the functions you have written in C.
+`ret cc` is the more useful of the two, because it turns an early exit into a single byte. A
+subroutine that has nothing to do when its argument is zero starts with `or a` and `ret z`, and that
+is the whole guard.
 
 ## Saving registers
 
@@ -143,12 +145,43 @@ destroyed. `exx` works for a leaf routine and the stack works everywhere.
 Registers run out. When a subroutine takes more arguments than you want to spend registers on, the
 caller pushes them and the subroutine reads them where they landed.
 
-The return address is on top of them, because `call` pushed it last, so from inside the subroutine
-`sp` is the return address, `sp + 2` is the last argument pushed and `sp + 4` the one before it.
+This is the point where people lose the thread, so it is worth drawing. Watch the stack through the
+three instructions that set the call up, with 🟢 marking where `sp` points and `????` meaning memory
+nobody has written.
 
-And here is the thin part. **The Z80 cannot address memory at an offset from `sp`.** The M68K writes
-`4(sp)`, MIPS writes `8($sp)`, and this machine has no such mode: the address has to be worked out in
-`hl` first.
+Before anything is pushed, `sp` is at the top of memory:
+
+| address  | value |
+| -------- | :---: |
+| `0xFFF9` | ????  |
+| `0xFFFB` | ????  |
+| `0xFFFD` | ????  |
+| `0xFFFF` |  🟢   |
+
+The caller pushes `y` and then `x`, so the **last** argument pushed ends up nearest the top:
+
+| address  |   value   |
+| -------- | :-------: |
+| `0xFFF9` |   ????    |
+| `0xFFFB` | 🟢 `0016` |
+| `0xFFFD` |  `0014`   |
+| `0xFFFF` |           |
+
+Then `call` pushes the return address on top of both of them, and jumps:
+
+| address  |   value   | what it is                   |
+| -------- | :-------: | ---------------------------- |
+| `0xFFF9` | 🟢 `800B` | where to carry on afterwards |
+| `0xFFFB` |  `0016`   | `x`, 22                      |
+| `0xFFFD` |  `0014`   | `y`, 20                      |
+| `0xFFFF` |           |                              |
+
+So from inside the subroutine, `sp` itself is the return address, `sp + 2` is `x` and `sp + 4` is
+`y`. The subroutine did not have to be told where they are; the order of the pushes decided it.
+
+Now the awkward part. You know `x` is at `sp + 2`, and there is **no way to write that**. No
+instruction reads memory at an offset from `sp`, and `(sp+2)` does not assemble. The address has to
+be built in `hl` first, and then read through `(hl)`.
 
 ```z80|playground|no-flags
     .org 0x8000
@@ -181,18 +214,22 @@ done:
     halt
 ```
 
-`hl` comes out at `002A`, which is 42. `ld hl, 2` and `add hl, sp` is the whole idiom: `hl` now holds
-`sp + 2`, and reading through `(hl)` with `inc hl` between reads walks up the arguments.
+`ld hl, 2` then `add hl, sp` is the whole idiom, and it is worth memorising: `hl` now holds `sp + 2`,
+which by the table above is the address of `x`. From there `inc hl` between reads walks up through
+the arguments in the order they were pushed.
 
-The two `pop bc` after the call are the caller giving the four bytes back, and somebody has to do it
-or `sp` walks downwards a little further at every call until it reaches your data. Here the caller
-does it, which is the convention C uses.
+The two `pop bc` after the call are the caller taking its four bytes back. Somebody has to, or `sp`
+creeps a little further down at every call until it eventually reaches your data and starts writing
+over it. Here the caller does it, which is one of the two possible agreements; the subroutine could
+do it instead, as long as both sides agree which.
 
 ## ix as a frame pointer
 
-The catch with `sp + 2` is that `sp` moves: push anything inside the subroutine and every offset
-changes. The M68K has `link` and `unlk` to build a fixed frame pointer; the Z80 has no such
-instruction, and `ix` is used for it by hand.
+The catch with `sp + 2` is that `sp` moves. Push anything inside the subroutine and every offset you
+worked out is suddenly two bytes wrong, and you have to keep count in your head of how deep you
+currently are. The fix is to copy `sp` once, at the top, into a register that will then sit still for
+the rest of the subroutine. `ix` is the register for it, because `(ix+dd)` reads memory at a fixed
+offset from it, which is exactly the mode `sp` lacks.
 
 ```z80|playground|no-flags
     .org 0x8000
@@ -231,9 +268,9 @@ done:
 | `0xFFFB` |  `0016`   | `(ix+4)`   | `x`, which is 22   |
 | `0xFFFD` |  `0014`   | `(ix+6)`   | `y`, which is 20   |
 
-That block is a **stack frame**, and `ix` holding its bottom is the **frame pointer**, which is what a
-C compiler builds for every function that has local variables and parameters on the stack. Local
-variables would go below it, at negative displacements, made room for with a `ld hl, -4` and
+That block is a **stack frame**: everything one call needs, in one stretch of stack, at known
+distances from a single fixed point. `ix` holding that point is the **frame pointer**. Local
+variables go below it, at negative displacements, made room for with a `ld hl, -4` and
 `add hl, sp` before `ld sp, hl`.
 
 `ld ix, 0` and `add ix, sp` is two instructions for what one `ld ix, sp` would do, and there is no
@@ -278,7 +315,7 @@ back the `n` that call pushed.
 The `push af` is what makes it work. `a` is one register and every call needs its own copy of `n`, so
 the copy goes on the stack, where every call gets a different address for free.
 
-## Your turn
+## Two subroutines to write
 
 Write a subroutine called `square` that squares the number in `a` and leaves the answer in `hl`. The
 test starts `a` at 7, so `hl` comes back at 49, which is `0031`. The Z80 has no multiply, so add `a`

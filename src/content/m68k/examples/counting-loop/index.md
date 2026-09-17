@@ -2,13 +2,8 @@ Twenty bytes of room are reserved in memory and a loop writes the numbers 1 to 1
 per pass. The answer is in the memory panel: type `2000` in its address box and the ten words are
 there, `0001` to `000A`.
 
-The bigger of two numbers ran a fixed handful of instructions. This is the first program that runs
-the same three instructions over and over, and the first one that writes into memory the assembler
-put nothing in.
-
-**You need to know:** the "Loops and dbra" lecture and the "org, equ, dc and ds" lecture. What is new
-here is that the destination of a `move` can be an address held in a register, `(a0)` writes the word
-where `a0` points and the `addq.l` under it moves `a0` on to the next element.
+It is also the first program here that writes into memory the assembler put nothing into: the room
+was reserved and never filled, so whatever the loop does not write stays as it was.
 
 ```m68k|playground|memory|no-flags|allow-open
 count equ 10
@@ -27,8 +22,9 @@ numbers: ds.w count
 ```
 
 `ds.w count` reserves ten words and writes nothing into them, so before the run the twenty bytes at
-`$2000` read `FF`. `lea numbers, a0` puts their address in `a0`, and from there the loop only ever
-talks about `(a0)`, which is C's `*p`.
+`$2000` read `FF`. `lea numbers, a0` puts their address in `a0`, and from there the loop never names
+`numbers` again: everything it writes it writes through `(a0)`, the memory `a0` is pointing at right
+now.
 
 The `2` in `addq.l #2, a0` is the size of one element, and it is yours to get right: nothing in
 `(a0)` knows that the thing it wrote was a word. Write `#4` there instead and the numbers land four
@@ -39,6 +35,5 @@ room that was reserved for them.
 number you give it. Step through the loop and `a0` climbs by 2 at every `addq`, from `00002000`
 to `00002014`, while `d1` walks down to `0000FFFF`, which is the word -1 that ended it.
 
-Try changing `addq.w #1, d0` to `addq.w #2, d0`. The array fills with 1, 3, 5 and the rest of the odd
-numbers up to 19, because the counter that ends the loop and the number being written are two
-different registers doing two different jobs.
+Notice that the register the loop counts with and the register it writes are two different registers
+doing two different jobs. Nothing ties them together except that you wrote them into the same loop.

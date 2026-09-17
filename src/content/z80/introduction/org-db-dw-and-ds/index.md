@@ -1,10 +1,12 @@
-Every program so far started with `.org 0x8000` and put its data after the `halt`. Let's now go
-through the directives that decide where things land. A **directive** is a line addressed to the
-assembler, and none of them is an instruction the Z80 executes.
+Some lines in a program are not for the CPU at all. `.org 0x8000` never runs; neither does a line of
+numbers you want sitting in memory before the first instruction. Those lines are **directives**,
+which means they are addressed to the assembler, and they are how you decide what is in memory and
+where.
 
-There is no data section here. MIPS and RISC-V make you write `.data` and `.text` and the assembler
-puts each in a region of its own; the Z80 assembler lays bytes down **in the order you wrote them**,
-and where they end up is entirely `.org`'s business.
+There is no data section and no code section. The assembler lays bytes down **in the order you
+wrote them**, whether those bytes are instructions or numbers, and the only thing that decides where
+they land is `.org`. Keeping your data out of the path the CPU will walk is your job, not the
+assembler's.
 
 ## org
 
@@ -30,8 +32,8 @@ and `de` at `9003`, the address `text` stands for. The bytes at `0x9000` read
 `2A 34 12 48 69 21 00 01 02 03`, which is the four directives in order with nothing between them.
 
 The program has two blocks now, one at `0x8000` and one at `0x9000`, and the run still starts at the
-lowest address with code in it. `.org` can move backwards as well as forwards, which most assemblers
-refuse, and a second `.org` at a lower address does not change where the program starts.
+lowest address with code in it. `.org` can move backwards as well as forwards, and a second `.org` at
+a lower address does not change where the program starts.
 
 Writing the code first and the data at a `.org` of its own is the layout these pages use, because it
 keeps a program readable when the data grows. The other two layouts you will see are data after the
@@ -51,20 +53,20 @@ letter: .db 'A'              ; one byte, 41
 mixed:  .db "Line", 10, 0    ; a string, a newline and a terminator
 ```
 
-`.asciz "Hi"` is `.db "Hi", 0`: it puts the zero terminator on for you, which is the convention C
-strings use and the one every string in this course uses.
+`.asciz "Hi"` is `.db "Hi", 0`: it puts the zero terminator on for you, and every string in this
+course ends in one.
 
-This assembler accepts `defb`, `db`, `.db`, `.byte`, `defm`, `dm`, `.dm`, `.text` and `.ascii` as
-spellings of the same directive, because it grew out of several older ones. These pages write `.db`
-and `.asciz`.
+You will see this directive spelled other ways in code written elsewhere, `defb` and `db` among
+them, because Z80 assemblers were written independently of each other for thirty years and each
+picked its own name. This assembler takes most of them. These pages write `.db`.
 
 ## dw, the word directive
 
 `.dw` writes 16 bit values, low byte first, which is the little endian order from the memory lecture.
 `.dw 0x1234` puts `34 12` in memory, and `ld hl, (word1)` reads them back as `0x1234`.
 
-A label is a 16 bit value, so `.dw label` writes an address, which is how you build a table of
-pointers. The synonyms are `defw`, `dw`, `.dw` and `.word`.
+A label is a 16 bit value, so `.dw label` writes an address, which is how you build a table that
+holds the addresses of other things.
 
 ## ds, the reservation directive
 
@@ -90,7 +92,9 @@ right after them at `0x9007`. Afterwards the first two bytes of `buffer` hold th
 wrote. `.ds` moved the address along without putting anything in memory, which is why `marker` is
 where it is.
 
-The spellings are `defs`, `ds`, `.ds`, `.block` and a couple more.
+Reserving room is not the same as writing zeroes into it. `.ds` moves the assembler's idea of where
+it is up to, and what those bytes actually contain when the program starts is whatever was already
+there.
 
 ## equ, the name for a number
 
@@ -110,7 +114,7 @@ NEWLINE equ 10
     halt
 ```
 
-`a` comes out at `14`, which is 20, `b` at `0A` and `hl` at `0028`, which is 40. `*`, `+` and `-` all
+`*`, `+` and `-` all
 work on a name that was already defined. `=` and `.equ` are the same directive under other names.
 
 The two things `equ` is for: a number that appears in more than one place, like the size of an array,
@@ -118,22 +122,23 @@ and a number whose meaning would otherwise be invisible, like a field offset or 
 of them turn a change in one line into a change everywhere.
 
 ```z80|playground|memory|no-flags
-X       equ 0           ; the field offsets of a three byte record
+X       equ 0           ; the offsets into a three byte bundle
 Y       equ 1
 LIVES   equ 2
 
     .org 0x8000
     ld ix, player
-    ld a, (ix+LIVES)    ; a = player->lives
-    ld b, (ix+X)        ; b = player->x
+    ld a, (ix+LIVES)    ; a = the player's lives
+    ld b, (ix+X)        ; b = the player's x
     halt
 
     .org 0x9000
 player: .db 10, 20, 3
 ```
 
-`a` comes out at `03` and `b` at `0A`. Try adding a fourth field, `SCORE equ 3`, a fourth byte to the
-record and a `ld c, (ix+SCORE)`: nothing else on the page has to change.
+`a` comes out at `03` and `b` at `0A`. Adding a fourth field to the bundle is a `SCORE equ 3`, a
+fourth byte on the `.db` line and a `ld c, (ix+SCORE)`, and nothing else in the program has to know
+about it.
 
 ## Where the program starts
 
@@ -157,7 +162,7 @@ which is 99, because the program then starts at the top like everything else.
 Most programs do not need it. `jp start` at the top of the file does the same job in three bytes and
 one obvious line, and that is what the Example programs of this course use.
 
-## Your turn
+## Put some data in memory
 
 Lay out three bytes at `0x9000` holding the 16 bit number `0x1234` and then the byte `0x56`, and
 leave that `0x56` in `a`. The data is your `.dw` and `.db`, and the code is one `ld` and the `halt`.
@@ -192,8 +197,8 @@ leave that `0x56` in `a`. The data is your `.dw` and `.db`, and the code is one 
 
 </details>
 
-The second one is a record of three bytes at `0x9000`, holding 10, 20 and 3. Give the three field
-offsets names with `equ`, point `ix` at the record and leave the third field, the 3, in `a`.
+The second has three bytes at `0x9000` holding 10, 20 and 3, which belong together. Give their
+offsets names with `equ`, point `ix` at the first of them and leave the third, the 3, in `a`.
 
 ```z80|playground|exercise|memory
     .org 0x8000

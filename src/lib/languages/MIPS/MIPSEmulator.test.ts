@@ -13,7 +13,9 @@ import type { ProjectDisplay } from '$lib/languages/mars/marsDisplay'
 import type { Testcase } from '$lib/Project.svelte'
 import { Keyboard } from '$lib/languages/peripherals/Keyboard'
 import { ProgramClock } from '$lib/languages/peripherals/ProgramClock'
-import { InterpreterStatus } from '$lib/languages/commonLanguageFeatures.svelte'
+import { InterpreterStatus, RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
+import { CPU_REGISTER_FILE_ID } from '$lib/languages/GenericEmulator.svelte'
+import { FileSystem } from '$lib/languages/peripherals/FileSystem'
 
 /**
  * The MARS bitmap display and keyboard-and-display registers against the real Core under node: what
@@ -43,6 +45,7 @@ type Options = {
     /** A virtual clock, so an animated example's frame waits do not make the test sleep. */
     virtualClock?: boolean
     limit?: number
+    fileSystem?: FileSystem
 }
 
 async function build(code: string, options: Options = {}) {
@@ -51,7 +54,8 @@ async function build(code: string, options: Options = {}) {
         display: options.display ?? SMALL,
         peripherals: {
             keyboard,
-            clock: options.virtualClock ? new ProgramClock({ mode: 'virtual' }) : undefined
+            clock: options.virtualClock ? new ProgramClock({ mode: 'virtual' }) : undefined,
+            fileSystem: options.fileSystem
         }
     })
     //the constructor starts a semantic check, and `_checkCode` assembles a throwaway Core whose
@@ -98,6 +102,322 @@ const SCREEN_TESTCASE: Testcase = {
 }
 
 const EXIT = '        li      $v0, 10\n        syscall\n'
+
+describe('MIPS FileSystem', () => {
+    const WRITE_FILE = `
+        .data
+path:   .asciiz "output.txt"
+payload:.asciiz "hello"
+        .text
+main:
+        li      $v0, 13
+        la      $a0, path
+        li      $a1, 1
+        li      $a2, 0
+        syscall
+        move    $s0, $v0
+        li      $v0, 15
+        move    $a0, $s0
+        la      $a1, payload
+        li      $a2, 5
+        syscall
+        move    $a0, $s0
+        li      $v0, 16
+        syscall
+${EXIT}`
+
+    it('persists guest bytes, keeps the host locked through exit, and undoes the write', async () => {
+        const fileSystem = new FileSystem()
+        const emulator = await run(WRITE_FILE, { fileSystem })
+        expect(emulator.errors).toEqual([])
+        expect(fileSystem.readText('output.txt')).toBe('hello')
+        expect(fileSystem.locked).toBe(true)
+
+        for (let count = 0; count < 12 && fileSystem.readText('output.txt') === 'hello'; count++) {
+            emulator.undo(1)
+        }
+        expect(fileSystem.readText('output.txt')).toBe('')
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(fileSystem.readText('output.txt')).toBe('hello')
+        emulator.clear()
+        expect(fileSystem.locked).toBe(false)
+    })
+
+    it('keeps generated Files when Stop ends the session', async () => {
+        const fileSystem = new FileSystem()
+        const emulator = await run(WRITE_FILE, { fileSystem })
+        emulator.clear()
+        expect(fileSystem.locked).toBe(false)
+        expect(fileSystem.readText('output.txt')).toBe('hello')
+    })
+
+    it('lets a guest read exact bytes from a Project File', async () => {
+        const fileSystem = new FileSystem({
+            'input.txt': { encoding: 'plain', content: 'hello' }
+        })
+        const emulator = await run(
+            `
+        .data
+path:   .asciiz "input.txt"
+buffer: .space  5
+        .text
+main:
+        li      $v0, 13
+        la      $a0, path
+        li      $a1, 0
+        li      $a2, 0
+        syscall
+        move    $s0, $v0
+        li      $v0, 14
+        move    $a0, $s0
+        la      $a1, buffer
+        li      $a2, 5
+        syscall
+        lbu     $s1, 1($a1)
+        move    $a0, $s0
+        li      $v0, 16
+        syscall
+${EXIT}`,
+            { fileSystem }
+        )
+        expect(emulator.errors).toEqual([])
+        expect(emulator.registers.find((register) => register.name === '$s1')?.value).toBe(101n)
+    })
+
+    /**
+     * MARS reports a failed file syscall through the return value so a program can branch on it.
+     * Letting the FileSystem's error reach the Core instead ended the run at the syscall, where no
+     * program could handle it and the error-handling branch every exercise asks for was unreachable.
+     */
+    it('answers a failed guest file operation with -1 instead of ending the run', async () => {
+        const AFTER = '        li      $v0, 4\n        la      $a0, ok\n        syscall\n'
+        const emulator = await run(
+            `
+        .data
+path:   .asciiz "missing.txt"
+ok:     .asciiz "AFTER"
+        .text
+main:
+        li      $v0, 13
+        la      $a0, path
+        li      $a1, 0
+        li      $a2, 0
+        syscall
+        move    $s0, $v0
+${AFTER}${EXIT}`,
+            { fileSystem: new FileSystem() }
+        )
+        expect(emulator.stdOut).toContain('AFTER')
+        expect(emulator.registers.find((register) => register.name === '$s0')?.value).toBe(-1n)
+    })
+
+    it('ignores closing a descriptor the program never opened, as MARS does', async () => {
+        const emulator = await run(
+            `
+        .data
+ok:     .asciiz "AFTER"
+        .text
+main:
+        li      $v0, 16
+        li      $a0, 42
+        syscall
+        li      $v0, 4
+        la      $a0, ok
+        syscall
+${EXIT}`,
+            { fileSystem: new FileSystem() }
+        )
+        expect(emulator.stdOut).toContain('AFTER')
+        expect(emulator.errors).toEqual([])
+    })
+
+    /**
+     * One Undo rolls back one Core step's file operations, and no more. The Core's backstep stack is
+     * capped by the history Setting, so anything keyed to its depth collapses many steps onto one
+     * value once it saturates — a single Undo then reversed every write the program had made.
+     */
+    it('rolls back one write per Undo even when the Core history is small', async () => {
+        const fileSystem = new FileSystem()
+        const code = `
+        .data
+path:   .asciiz "log.txt"
+byte:   .asciiz "x"
+        .text
+main:
+        li      $v0, 13
+        la      $a0, path
+        li      $a1, 1
+        li      $a2, 0
+        syscall
+        move    $s0, $v0
+        li      $s1, 0
+loop:
+        li      $v0, 15
+        move    $a0, $s0
+        la      $a1, byte
+        li      $a2, 1
+        syscall
+        addi    $s1, $s1, 1
+        blt     $s1, 10, loop
+${EXIT}`
+        const emulator = MIPSEmulator(code, { peripherals: { fileSystem } })
+        await emulator.check()
+        //a history far shorter than the number of file operations the program performs
+        await emulator.compile(8, code)
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(fileSystem.readText('log.txt')).toBe('x'.repeat(10))
+
+        const lengths = [10]
+        for (let step = 0; step < 40 && emulator.canUndo; step++) {
+            emulator.undo(1)
+            lengths.push(fileSystem.readText('log.txt').length)
+        }
+        const drops = lengths.slice(1).map((length, i) => lengths[i] - length)
+        //every Undo either rolls back a single write or none at all; never a batch of them
+        expect(drops.every((drop) => drop === 0 || drop === 1)).toBe(true)
+    })
+
+    it('keeps Testcase file writes isolated and does not leave a resumable Core behind', async () => {
+        const fileSystem = new FileSystem()
+        const emulator = MIPSEmulator(WRITE_FILE, { peripherals: { fileSystem } })
+        const results = await emulator.test(
+            WRITE_FILE,
+            [SCREEN_TESTCASE, SCREEN_TESTCASE],
+            INSTRUCTION_LIMIT,
+            200
+        )
+        expect(results).toHaveLength(2)
+        expect(results.every((result) => result.passed)).toBe(true)
+        expect(fileSystem.files['output.txt']).toBeUndefined()
+        expect(fileSystem.locked).toBe(false)
+        expect(emulator.canExecute).toBe(false)
+        expect(await emulator.step()).toBe(false)
+    })
+})
+
+describe('MIPS source set', () => {
+    it('assembles included Files and retains their source identity', async () => {
+        const sources = {
+            entry: 'main.s',
+            files: {
+                'main.s': { encoding: 'plain' as const, content: '.include "lib.s"\n' },
+                'lib.s': {
+                    encoding: 'plain' as const,
+                    content: '.text\nmain:\nli $s0, 7\nli $v0, 10\nsyscall\n'
+                }
+            }
+        }
+        const emulator = MIPSEmulator(sources)
+        await emulator.check()
+        await emulator.compile(20, sources)
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.registers.find((register) => register.name === '$s0')?.value).toBe(7n)
+        expect(emulator.currentFile).toBe('lib.s')
+        expect(emulator.buildArtifacts).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ file: 'lib.s', line: 2, opcode: '24100007' })
+            ])
+        )
+    })
+
+    it('warns on an included @screen directive without applying it', async () => {
+        const sources = {
+            entry: 'main.s',
+            files: {
+                'main.s': { encoding: 'plain' as const, content: '.include "lib.s"\n' },
+                'lib.s': {
+                    encoding: 'plain' as const,
+                    content: '# @screen width=128\n.text\nmain:\nli $v0, 10\nsyscall\n'
+                },
+                'unused.s': {
+                    encoding: 'plain' as const,
+                    content: '# @screen width=256\n'
+                }
+            }
+        }
+        const emulator = MIPSEmulator(sources, { display: SMALL })
+        await emulator.check()
+        await emulator.compile(20, sources)
+        expect(emulator.getDisplay?.()?.display.width).toBe(SMALL.width)
+        expect(emulator.compilerDiagnostics).toMatchObject([
+            { severity: 'warning', file: 'lib.s', lineIndex: 0 }
+        ])
+        expect(emulator.compilerDiagnostics[0]?.message).toContain('only the Entry file main.s')
+        expect(
+            emulator.compilerDiagnostics.some((diagnostic) => diagnostic.file === 'unused.s')
+        ).toBe(false)
+    })
+
+    it('keeps every repeated-include instruction and address in its inline expansion', async () => {
+        const sources = {
+            entry: 'main.s',
+            files: {
+                'main.s': {
+                    encoding: 'plain' as const,
+                    content: '.text\nmain:\n.include "increment.s"\n.include "increment.s"\n' + EXIT
+                },
+                'increment.s': {
+                    encoding: 'plain' as const,
+                    content: 'addiu $s0, $s0, 1\n'
+                }
+            }
+        }
+        const emulator = MIPSEmulator(sources)
+        await emulator.check()
+        await emulator.compile(20, sources)
+        const expansion = emulator.decorations.find(
+            (decoration) => decoration.file === 'increment.s'
+        )
+        expect(expansion?.instructions).toHaveLength(2)
+        expect(
+            new Set(expansion?.instructions?.map((instruction) => instruction.address)).size
+        ).toBe(2)
+    })
+
+    it('names a .globl callee in the call stack, wherever the label was declared', async () => {
+        const sources = {
+            entry: 'main.s',
+            files: {
+                'main.s': {
+                    encoding: 'plain' as const,
+                    content:
+                        '.include "fibonacci.s"\n.text\n.globl main\nmain:\njal fibonacci\n' + EXIT
+                },
+                'fibonacci.s': {
+                    encoding: 'plain' as const,
+                    content: '.text\n.globl fibonacci\nfibonacci:\njr $ra\n'
+                }
+            }
+        }
+        const emulator = MIPSEmulator(sources)
+        await emulator.check()
+        await emulator.compile(20, sources)
+        //.globl moves the label out of the local symbol table, and a Core that only looked there
+        //used to throw on every step for as long as the frame stayed on the stack
+        for (let step = 0; step < 10 && emulator.callStack.length === 0; step++) {
+            await emulator.step()
+        }
+        expect(emulator.errors).toEqual([])
+        expect(emulator.callStack).toMatchObject([{ name: 'fibonacci', file: 'fibonacci.s' }])
+    })
+
+    it('reports a missing Entry as a file-aware compiler diagnostic', async () => {
+        const sources = {
+            entry: 'missing.s',
+            files: { 'other.s': { encoding: 'plain' as const, content: EXIT } }
+        }
+        const emulator = MIPSEmulator(sources)
+        const diagnostics = await emulator.check()
+        expect(diagnostics).toMatchObject([
+            { severity: 'error', file: 'missing.s', message: 'Entry file not found: missing.s' }
+        ])
+        await expect(emulator.compile(20, sources)).rejects.toThrow(
+            'Entry file not found: missing.s'
+        )
+        expect(emulator.compilerErrors[0]?.file).toBe('missing.s')
+    })
+})
 
 describe('MIPS bitmap display', () => {
     it('maps one word to one logical pixel, low 24 bits as the color', async () => {
@@ -486,5 +806,923 @@ loop:   li      $v0, 32
         expect(emulator.paused).toBe(true)
         expect(emulator.errors).toEqual([])
         expect(performance.now() - pressed).toBeLessThan(1_000)
+    })
+})
+
+/**
+ * The MIPS32 Release 2 instructions the Core gained on top of Release 1, and the FPU control
+ * register moves. MARS has no unit tests of its own, so these run against the same Core the editor
+ * uses.
+ */
+describe('MIPS32 Release 2 instructions', () => {
+    function valueOf(emulator: Emulator, name: string): number {
+        const register = emulator.registers.find((candidate) => candidate.name === name)
+        if (!register) throw new Error(`No register named ${name}`)
+        return Number(register.value)
+    }
+
+    it('reverses bytes with wsbh and rotr together', async () => {
+        const emulator = await run(
+            `        .text\nmain:\n        li      $t0, 0xAABBCCDD
+        wsbh    $s0, $t0
+        rotr    $s1, $s0, 16
+` + EXIT
+        )
+        expect(emulator.errors).toEqual([])
+        //wsbh swaps the bytes inside each halfword, and rotating by 16 swaps the halves
+        expect(valueOf(emulator, '$s0')).toBe(0xbbaaddcc | 0)
+        expect(valueOf(emulator, '$s1')).toBe(0xddccbbaa | 0)
+    })
+
+    it('rotates instead of discarding the bits it shifts out', async () => {
+        const emulator = await run(
+            `        .text\nmain:\n        li      $t0, 0x80000001
+        li      $t1, 1
+        rotrv   $s0, $t0, $t1
+        rotr    $s1, $t0, 4
+        srl     $s2, $t0, 1
+` + EXIT
+        )
+        expect(emulator.errors).toEqual([])
+        expect(valueOf(emulator, '$s0')).toBe(0xc0000000 | 0)
+        expect(valueOf(emulator, '$s1')).toBe(0x18000000)
+        //srl drops the low bit, which is the difference rotr exists to make
+        expect(valueOf(emulator, '$s2')).toBe(0x40000000)
+    })
+
+    it('sign extends a byte and a halfword in one instruction', async () => {
+        const emulator = await run(
+            `        .text\nmain:\n        li      $t0, 0x000000FF
+        seb     $s0, $t0
+        li      $t1, 0x00008000
+        seh     $s1, $t1
+        li      $t2, 0x0000007F
+        seb     $s2, $t2
+` + EXIT
+        )
+        expect(emulator.errors).toEqual([])
+        expect(valueOf(emulator, '$s0')).toBe(-1)
+        expect(valueOf(emulator, '$s1')).toBe(-32768)
+        expect(valueOf(emulator, '$s2')).toBe(127)
+    })
+
+    it('reads the FP condition code through cfc1 and writes it back through ctc1', async () => {
+        const emulator = await run(
+            `        .data
+one:    .float  1.0
+two:    .float  2.0
+        .text
+main:
+        l.s     $f0, one
+        l.s     $f2, two
+        c.lt.s  $f0, $f2
+        cfc1    $s0, $f31
+        cfc1    $s1, $f25
+        c.lt.s  $f2, $f0
+        cfc1    $s2, $f25
+        li      $t9, 1
+        ctc1    $t9, $f25
+        cfc1    $s3, $f25
+        bc1t    taken
+        li      $s4, 0
+        j       done
+taken:
+        li      $s4, 111
+done:
+` + EXIT
+        )
+        expect(emulator.errors).toEqual([])
+        //FCSR keeps condition code 0 at bit 23, while FCCR reports it in bit 0
+        expect(valueOf(emulator, '$s0')).toBe(0x00800000)
+        expect(valueOf(emulator, '$s1')).toBe(1)
+        expect(valueOf(emulator, '$s2')).toBe(0)
+        expect(valueOf(emulator, '$s3')).toBe(1)
+        //and the flag ctc1 wrote is the same one bc1t branches on
+        expect(valueOf(emulator, '$s4')).toBe(111)
+    })
+})
+
+/**
+ * The full set of 16 c.cond.fmt comparisons, which the Core generates from one condition code
+ * rather than spelling out. The interesting half of the table is what each one does with a NaN.
+ */
+describe('MIPS floating point comparisons', () => {
+    function valueOf(emulator: Emulator, name: string): number {
+        const register = emulator.registers.find((candidate) => candidate.name === name)
+        if (!register) throw new Error(`No register named ${name}`)
+        return Number(register.value)
+    }
+
+    const FLOATS = `        .data
+one:    .float  1.0
+two:    .float  2.0
+        .text
+main:
+        l.s     $f0, one
+        l.s     $f2, two
+        li      $t0, 0x7FC00000
+        mtc1    $t0, $f4
+`
+
+    it('agrees with the ordering when neither operand is NaN', async () => {
+        //the flagged form writes eight different condition codes, so one cfc1 reads them all
+        const emulator = await run(
+            FLOATS +
+                `        c.un.s  0, $f0, $f2
+        c.eq.s  1, $f0, $f2
+        c.olt.s 2, $f0, $f2
+        c.ole.s 3, $f0, $f2
+        c.ult.s 4, $f0, $f2
+        c.f.s   5, $f0, $f2
+        c.ngt.s 6, $f0, $f2
+        c.seq.s 7, $f0, $f2
+        cfc1    $s0, $f25
+` +
+                EXIT
+        )
+        expect(emulator.errors).toEqual([])
+        //flags 2, 3, 4 and 6 hold: 1.0 is ordered, less than and not greater than 2.0
+        expect(valueOf(emulator, '$s0')).toBe(0b01011100)
+    })
+
+    it('separates the ordered and unordered conditions on a NaN', async () => {
+        const emulator = await run(
+            FLOATS +
+                `        c.un.s  0, $f0, $f4
+        c.eq.s  1, $f0, $f4
+        c.ueq.s 2, $f0, $f4
+        c.olt.s 3, $f0, $f4
+        c.ult.s 4, $f0, $f4
+        c.ngt.s 5, $f0, $f4
+        c.lt.s  6, $f0, $f4
+        c.ngl.s 7, $f0, $f4
+        cfc1    $s0, $f25
+` +
+                EXIT
+        )
+        expect(emulator.errors).toEqual([])
+        //every ordered condition fails against a NaN and every unordered one holds, which is
+        //what makes c.un the only way to test for NaN at all
+        expect(valueOf(emulator, '$s0')).toBe(0b10110101)
+    })
+
+    it('gives a signalling comparison the same answer as its quiet counterpart', async () => {
+        const emulator = await run(
+            FLOATS +
+                `        c.lt.s  0, $f0, $f4
+        c.olt.s 1, $f0, $f4
+        c.le.s  2, $f0, $f2
+        c.ole.s 3, $f0, $f2
+        cfc1    $s0, $f25
+` +
+                EXIT
+        )
+        expect(emulator.errors).toEqual([])
+        //FP exceptions are not tracked, so lt matches olt and le matches ole
+        expect(valueOf(emulator, '$s0')).toBe(0b00001100)
+    })
+
+    it('compares doubles the same way', async () => {
+        const emulator = await run(
+            `        .data
+done:   .double 1.0
+dtwo:   .double 2.0
+        .text
+main:
+        l.d     $f6, done
+        l.d     $f8, dtwo
+        li      $t1, 0x7FF80000
+        mtc1    $zero, $f10
+        mtc1    $t1, $f11
+        c.un.d  0, $f6, $f8
+        c.olt.d 1, $f6, $f8
+        c.un.d  2, $f6, $f10
+        c.olt.d 3, $f6, $f10
+        c.ult.d 4, $f6, $f10
+        c.eq.d  5, $f6, $f6
+        c.ngt.d 6, $f6, $f10
+        c.f.d   7, $f6, $f8
+        cfc1    $s0, $f25
+` + EXIT
+        )
+        expect(emulator.errors).toEqual([])
+        expect(valueOf(emulator, '$s0')).toBe(0b01110110)
+    })
+
+    it('still writes flag 0 from the form that does not name one', async () => {
+        const emulator = await run(
+            FLOATS +
+                `        move    $t2, $zero
+        ctc1    $t2, $f25
+        c.lt.s  $f0, $f2
+        cfc1    $s0, $f25
+        ctc1    $t2, $f25
+        c.lt.s  $f2, $f0
+        cfc1    $s1, $f25
+` +
+                EXIT
+        )
+        expect(emulator.errors).toEqual([])
+        expect(valueOf(emulator, '$s0')).toBe(1)
+        expect(valueOf(emulator, '$s1')).toBe(0)
+    })
+
+    it('accepts bal, sync, pref and wait', async () => {
+        const emulator = await run(
+            `        .data
+buf:    .word   42
+        .text
+main:
+        li      $s0, 0
+        bal     subroutine
+        li      $s1, 7
+        la      $t0, buf
+        sync
+        sync    1
+        pref    0, 0($t0)
+        wait
+        lw      $s2, 0($t0)
+` +
+                EXIT +
+                `
+subroutine:
+        li      $s0, 99
+        jr      $ra
+`
+        )
+        expect(emulator.errors).toEqual([])
+        //bal linked and returned
+        expect(valueOf(emulator, '$s0')).toBe(99)
+        expect(valueOf(emulator, '$s1')).toBe(7)
+        //and none of the three no-ops disturbed memory
+        expect(valueOf(emulator, '$s2')).toBe(42)
+    })
+})
+
+/**
+ * A pseudo-instruction assembles into more than one real instruction, so one source line owns
+ * several machine words. Each word belongs to the line that wrote the pseudo-instruction and to no
+ * other line: the Build hover reads `buildArtifacts` by line, so a line that borrowed the word its
+ * neighbour emitted would report the wrong machine code for the instruction under the cursor.
+ */
+describe('MIPS Build artifacts', () => {
+    function wordsByLine(emulator: Emulator): Record<number, string[]> {
+        const grouped: Record<number, string[]> = {}
+        for (const artifact of emulator.buildArtifacts) {
+            const words = (grouped[artifact.line] ??= [])
+            words.push(`0x${artifact.address.toString(16)}:${artifact.opcode}`)
+        }
+        return grouped
+    }
+
+    it('gives each expanded pseudo-instruction its own words and never a neighbouring line', async () => {
+        const emulator = await build(
+            '        .text\nmain:\n' +
+                '        addi    $t0, $zero, 1\n' +
+                '        li      $t1, 0x12345678\n' +
+                '        move    $t2, $t1\n' +
+                EXIT
+        )
+        expect(emulator.errors).toEqual([])
+        //`li` of a value wider than 16 bits is the two-word case, `move` and the `li` in EXIT the
+        //one-word case; every address is emitted exactly once, in ascending order, with no repeat
+        //across the line boundary.
+        expect(wordsByLine(emulator)).toEqual({
+            2: ['0x400000:20080001'],
+            3: ['0x400004:3c011234', '0x400008:34295678'],
+            4: ['0x40000c:00095021'],
+            5: ['0x400010:2402000a'],
+            6: ['0x400014:0000000c']
+        })
+    })
+
+    it('keeps an expansion inside the File that wrote it', async () => {
+        const sources = {
+            entry: 'main.s',
+            files: {
+                'main.s': { encoding: 'plain' as const, content: '.include "lib.s"\n' },
+                'lib.s': {
+                    encoding: 'plain' as const,
+                    content: '.text\nmain:\nli $t1, 0x12345678\nli $v0, 10\nsyscall\n'
+                }
+            }
+        }
+        const emulator = MIPSEmulator(sources)
+        await emulator.check()
+        await emulator.compile(20, sources)
+        expect(emulator.errors).toEqual([])
+        //the entry File contributes no instruction of its own, so it must claim none of these
+        expect(emulator.buildArtifacts.map((artifact) => artifact.file)).toEqual([
+            'lib.s',
+            'lib.s',
+            'lib.s',
+            'lib.s'
+        ])
+        expect(wordsByLine(emulator)).toEqual({
+            2: ['0x400000:3c011234', '0x400004:34295678'],
+            3: ['0x400008:2402000a'],
+            4: ['0x40000c:0000000c']
+        })
+    })
+})
+
+/**
+ * Assembling the output of a C compiler. gcc writes a good deal of MIPS that MARS had no use for,
+ * and some it did: the relocation operators that reach a symbol in two halves, and the directives
+ * that name sections and reserve uninitialized storage.
+ */
+describe('MIPS gcc output', () => {
+    function valueOf(emulator: Emulator, name: string): number {
+        const register = emulator.registers.find((candidate) => candidate.name === name)
+        if (!register) throw new Error(`No register named ${name}`)
+        return Number(register.value)
+    }
+
+    it('reaches a symbol through %hi and %lo, loading and storing', async () => {
+        const emulator = await run(
+            `        .data
+val:    .word   0x1234
+        .text
+        .globl  main
+main:
+        lui     $t0, %hi(val)
+        lw      $s0, %lo(val)($t0)
+        li      $t1, 99
+        sw      $t1, %lo(val)($t0)
+        lw      $s1, %lo(val)($t0)
+        addiu   $s2, $t0, %lo(val)
+        la      $s3, val
+        subu    $s4, $s2, $s3
+` + EXIT
+        )
+        expect(emulator.errors).toEqual([])
+        expect(valueOf(emulator, '$s0')).toBe(0x1234)
+        expect(valueOf(emulator, '$s1')).toBe(99)
+        //the address built from the two halves must be the one 'la' produces
+        expect(valueOf(emulator, '$s4')).toBe(0)
+    })
+
+    it('places data in the sections a compiler names', async () => {
+        const emulator = await run(
+            `        .rdata
+        .p2align 2
+c:      .4byte  0x11223344
+        .bss
+        .align  2
+a:      .zero   4
+b:      .zero   4
+        .text
+        .globl  main
+main:
+        la      $s0, a
+        la      $s1, b
+        subu    $s2, $s1, $s0
+        la      $s3, c
+        lw      $s4, 0($s3)
+` + EXIT
+        )
+        expect(emulator.errors).toEqual([])
+        //.zero used to reserve nothing, so these two labels shared an address
+        expect(valueOf(emulator, '$s2')).toBe(4)
+        //and .4byte used to store nothing
+        expect(valueOf(emulator, '$s4')).toBe(0x11223344)
+    })
+
+    it('allocates .comm and .lcomm without leaving the text segment', async () => {
+        const emulator = await run(
+            `        .text
+        .comm   total,4,4
+        .lcomm  scratch,8
+        .globl  main
+main:
+        la      $s0, total
+        la      $s1, scratch
+        subu    $s2, $s1, $s0
+        li      $t0, 7
+        sw      $t0, 0($s0)
+        lw      $s3, 0($s0)
+` + EXIT
+        )
+        expect(emulator.errors).toEqual([])
+        expect(valueOf(emulator, '$s2')).toBe(4)
+        expect(valueOf(emulator, '$s3')).toBe(7)
+    })
+
+    it('assembles a compiler generated file without a single diagnostic', async () => {
+        const source =
+            `        .file   1 "sum.c"
+        .section .mdebug.abi32
+        .previous
+        .nan    legacy
+        .module fp=xx
+        .module nooddspreg
+        .abicalls
+        .text
+        .rdata
+        .align  2
+$LC0:
+        .ascii  "sum=\\000"
+        .data
+        .align  2
+        .type   values, @object
+        .size   values, 16
+values:
+        .4byte  1
+        .4byte  2
+        .4byte  3
+        .4byte  4
+        .comm   total,4,4
+        .text
+        .align  2
+        .globl  sum
+        .set    nomips16
+        .set    nomicromips
+        .type   sum, @function
+        .ent    sum
+sum:
+        .frame  $sp,0,$31
+        .mask   0x00000000,0
+        .fmask  0x00000000,0
+        move    $2,$0
+        move    $3,$0
+        blez    $5,$L4
+$L3:
+        sll     $6,$3,2
+        addu    $6,$4,$6
+        lw      $6,0($6)
+        addu    $2,$2,$6
+        addiu   $3,$3,1
+        bne     $3,$5,$L3
+$L4:
+        jr      $31
+        .end    sum
+        .size   sum, .-sum
+        .align  2
+        .globl  main
+        .type   main, @function
+        .ent    main
+main:
+        .frame  $sp,8,$31
+        addiu   $sp,$sp,-8
+        sw      $31,4($sp)
+        lui     $4,%hi(values)
+        addiu   $4,$4,%lo(values)
+        li      $5,4
+        jal     sum
+        lui     $6,%hi(total)
+        sw      $2,%lo(total)($6)
+        lui     $6,%hi(total)
+        lw      $s0,%lo(total)($6)
+        lw      $31,4($sp)
+        addiu   $sp,$sp,8
+        .end    main
+        .size   main, .-main
+        .ident  "GCC: (Debian 12.2.0-14) 12.2.0"
+` + EXIT
+        const emulator = await run(source)
+        expect(emulator.errors).toEqual([])
+        //the linker and debugger metadata gcc emits must not each raise a squiggle
+        expect(emulator.compilerDiagnostics).toEqual([])
+        //1 + 2 + 3 + 4, stored through %lo and read back through it
+        expect(valueOf(emulator, '$s0')).toBe(10)
+    })
+
+    it('does not execute the delay slot, which a compiler fills', async () => {
+        const emulator = await run(
+            `        .text
+        .globl  main
+main:
+        li      $s0, 0
+        beq     $zero, $zero, target
+        li      $s0, 99
+        li      $s0, 1
+target:
+` + EXIT
+        )
+        expect(emulator.errors).toEqual([])
+        //MARS runs straight past a taken branch, so the instruction gcc puts in the
+        //delay slot never runs. Compile with -fno-delayed-branch to get a nop there.
+        expect(valueOf(emulator, '$s0')).toBe(0)
+    })
+})
+
+/**
+ * The FPU and CP0 Register files against the real Core: what MARS holds in coprocessor 1 and
+ * coprocessor 0 reaches the files the panel shows, and the Core's backstepper rolls a floating-point
+ * write back ([the design record](../../../../docs/design/register-files.md)).
+ */
+describe('MIPS Register files', () => {
+    /**
+     * This MARS fork has no `li.s`, so 1.5 comes out of a `.float`. `add.s` doubles it, `cvt.d.s`
+     * builds a double in the `$f4`/`$f5` pair and `c.lt.s` writes condition flag 0.
+     */
+    const FLOATS =
+        `        .data
+value:  .float  1.5
+        .text
+main:
+        l.s     $f0, value
+        add.s   $f2, $f0, $f0
+        cvt.d.s $f4, $f0
+        c.lt.s  $f0, $f2
+` + EXIT
+
+    function fileOf(emulator: Emulator, id: string) {
+        const file = emulator.registerFiles.find((candidate) => candidate.id === id)
+        if (!file) throw new Error(`No register file named ${id}`)
+        return file
+    }
+
+    function fileValueOf(emulator: Emulator, id: string, name: string): bigint {
+        const register = fileOf(emulator, id).registers.find((candidate) => candidate.name === name)
+        if (!register) throw new Error(`No register named ${name} in ${id}`)
+        return register.value
+    }
+
+    it('lists the CPU file first, holding the very general registers', async () => {
+        const emulator = await run(FLOATS)
+        expect(emulator.registerFiles.map((file) => file.id)).toEqual(['cpu', 'fpu', 'cp0'])
+        expect(emulator.registerFiles.map((file) => file.label)).toEqual(['CPU', 'FPU', 'CP0'])
+        expect(emulator.registerFiles[0].registers).toBe(emulator.registers)
+    })
+
+    it('reads the FPU registers, the pair a double occupies and the condition flags', async () => {
+        const emulator = await run(FLOATS)
+        expect(emulator.errors).toEqual([])
+        const fpu = fileOf(emulator, 'fpu')
+        expect(fpu.registers).toHaveLength(32)
+        expect(fileValueOf(emulator, 'fpu', '$f0')).toBe(0x3fc00000n)
+        expect(fileValueOf(emulator, 'fpu', '$f2')).toBe(0x40400000n)
+        //a double lives in the even/odd pair, low word in the even register, as MARS stores it:
+        //1.5 as a double is 0x3ff8000000000000
+        expect(fileValueOf(emulator, 'fpu', '$f4')).toBe(0x00000000n)
+        expect(fileValueOf(emulator, 'fpu', '$f5')).toBe(0x3ff80000n)
+        //`c.lt.s` with no flag number writes flag 0, and 1.5 is less than 3
+        expect(fpu.flags.map((flag) => flag.name)).toEqual(['0', '1', '2', '3', '4', '5', '6', '7'])
+        expect(fpu.flags.map((flag) => flag.value)).toEqual([1, 0, 0, 0, 0, 0, 0, 0])
+    })
+
+    it('reads the four coprocessor 0 registers MARS implements', async () => {
+        const emulator = await run(FLOATS)
+        const cp0 = fileOf(emulator, 'cp0')
+        expect(cp0.registers.map((register) => register.name)).toEqual([
+            '$8 (vaddr)',
+            '$12 (status)',
+            '$13 (cause)',
+            '$14 (epc)'
+        ])
+        //status holds MARS's reset value until an exception changes it, the other three stay at 0
+        expect(cp0.registers.map((register) => register.value)).toEqual([0n, 0x0000ff11n, 0n, 0n])
+    })
+
+    it('leaves a $f register to highlight after the step that wrote it', async () => {
+        const emulator = await build(FLOATS)
+        //`l.s` of a label assembles to `lui $at` and `lwc1`, so the third step is the `add.s`
+        for (let step = 0; step < 3; step++) await emulator.step()
+        const f2 = fileOf(emulator, 'fpu').registers[2]
+        expect(f2.value).toBe(0x40400000n)
+        expect(f2.prev).toBe(0n)
+    })
+
+    it('restores a floating-point write on Undo, as the Core backsteps it', async () => {
+        const emulator = await build(FLOATS)
+        for (let step = 0; step < 3; step++) await emulator.step()
+        emulator.undo(1)
+        const f2 = fileOf(emulator, 'fpu').registers[2]
+        expect(f2.value).toBe(0n)
+        //the value the rollback took away is what the panel highlights against
+        expect(f2.prev).toBe(0x40400000n)
+    })
+
+    /**
+     * An address error taken with a handler installed at MARS's exception vector. Loading from
+     * address 1 is unaligned, so before the jump MARS writes the faulting address into
+     * `$8 (vaddr)`, the exception code into `$13 (cause)` and the exception level bit into
+     * `$12 (status)`. The handler steps the return address past the faulting instruction, because
+     * `eret` returns to `$14 (epc)` and re-running the load would take the same exception forever.
+     */
+    const ADDRESS_ERROR =
+        `        .text
+main:
+        lw      $t0, 1($zero)
+` +
+        EXIT +
+        `        .ktext  0x80000180
+        mfc0    $k0, $14
+        addiu   $k0, $k0, 4
+        mtc0    $k0, $14
+        eret
+`
+
+    it('names a coprocessor 0 write in the undo history as the CP0 file names it', async () => {
+        const emulator = await build(ADDRESS_ERROR)
+        expect(emulator.errors).toEqual([])
+        //the faulting load and the three handler instructions up to `mtc0`, stopping before the
+        //`eret` that clears the exception level bit again
+        for (let step = 0; step < 4; step++) await emulator.step()
+        const written = emulator.latestSteps
+            .flatMap((step) => step.mutations)
+            .filter((mutation) => mutation.type === 'WriteRegister')
+            .map((mutation) => mutation.value.register)
+        expect(written).toContain('$12 (status)')
+        expect(written).toContain('$13 (cause)')
+        expect(written).toContain('$8 (vaddr)')
+        //vaddr is the address the load asked for, cause holds exception code 4 (address error on
+        //load) in bits 2 to 6, status has the exception level bit set over MARS's reset value of
+        //0x0000ff11, and epc is the address of the load, which the handler has just stepped past
+        const cp0 = fileOf(emulator, 'cp0')
+        expect(cp0.registers.map((register) => register.value)).toEqual([
+            0x00000001n,
+            0x0000ff13n,
+            0x00000010n,
+            0x00400004n
+        ])
+    })
+
+    it('shows zeros for both files before a Build and refuses an unknown file', () => {
+        const emulator = MIPSEmulator('')
+        expect(emulator._getRegisterFileValues('fpu')).toEqual(new Array(32).fill(0n))
+        expect(emulator._getRegisterFileValues('cp0')).toEqual([0n, 0n, 0n, 0n])
+        expect(() => emulator._getRegisterFileValues('cp1')).toThrow('Unknown register file: cp1')
+    })
+
+    it('writes a register of either file through the Core setters', async () => {
+        const emulator = await run(FLOATS)
+        emulator._setRegisterFileValue('fpu', '$f6', 0xffffffffn)
+        emulator._setRegisterFileValue('cp0', '$13 (cause)', 0x8000000fn)
+        //the setters bypass the backstepper, so a preset is visible at the next refresh and is not
+        //an entry the simulation can step back over
+        expect(emulator._getRegisterFileValues('fpu')[6]).toBe(0xffffffffn)
+        expect(emulator._getRegisterFileValues('cp0')[2]).toBe(0x8000000fn)
+    })
+})
+
+describe('MIPS diagnostic spans', () => {
+    //`_checkCode` builds its own throwaway Core, which is the path that squiggles a program that
+    //does not assemble, so the spans are read from `check()` rather than from a Build
+    const BAD = [
+        '        .text',
+        'main:',
+        '        addi    $t0, $t1, notanumber',
+        '        bogusinstr $t0',
+        ''
+    ].join('\n')
+
+    it('spans the whole token a diagnostic points at', async () => {
+        const emulator = MIPSEmulator(BAD)
+        const diagnostics = await emulator.check()
+        const operand = diagnostics.find((d) => d.message.includes('notanumber'))
+        //`notanumber` is the 27th through 36th character of its line
+        expect(operand?.lineIndex).toBe(2)
+        expect(operand?.column).toBe(27)
+        expect(operand?.endColumn).toBe(37)
+        const operator = diagnostics.find((d) => d.message.includes('bogusinstr'))
+        expect(operator?.column).toBe(9)
+        expect(operator?.endColumn).toBe(19)
+    })
+})
+
+/**
+ * Pokes against the real Core ([the design record](../../../../docs/design/pokes.md)): a register or
+ * memory value changed between two instructions is one entry of MARS's own undo history, listed as
+ * a row of its own and undone like an instruction
+ * ([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md)).
+ */
+describe('MIPS Pokes', () => {
+    const POKEABLE =
+        `        .data
+buffer: .space  2048
+        .text
+main:
+        li      $t0, 5
+        li      $t1, 6
+        addu    $t2, $t0, $t1
+` + EXIT
+
+    /** Past the 64 words the 64 by 64 display mirrors, so a memory Poke there draws nothing. */
+    const BUFFER = 0x10010400n
+
+    /** Opens a File, writes to it and closes it, one syscall each, without ending the program. */
+    const WRITE_FILE =
+        `        .data
+path:   .asciiz "output.txt"
+payload:.asciiz "hello"
+        .text
+main:
+        li      $v0, 13
+        la      $a0, path
+        li      $a1, 1
+        li      $a2, 0
+        syscall
+        move    $s0, $v0
+        li      $v0, 15
+        move    $a0, $s0
+        la      $a1, payload
+        li      $a2, 5
+        syscall
+        move    $a0, $s0
+        li      $v0, 16
+        syscall
+` + EXIT
+
+    function registerOf(emulator: Emulator, name: string) {
+        const register = emulator.registers.find((candidate) => candidate.name === name)
+        if (!register) throw new Error(`No register named ${name}`)
+        return register
+    }
+
+    function fileValue(emulator: Emulator, id: string, name: string): bigint {
+        const file = emulator.registerFiles.find((candidate) => candidate.id === id)
+        const register = file?.registers.find((candidate) => candidate.name === name)
+        if (!register) throw new Error(`No register named ${name} in ${id}`)
+        return register.value
+    }
+
+    it('records a poked CPU register as a step of its own and undoes it', async () => {
+        const emulator = await build(POKEABLE)
+        await emulator.step()
+        expect(registerOf(emulator, '$t0').value).toBe(5n)
+        expect(emulator.canPoke).toBe(true)
+        expect(
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: '$t0', value: 0x2an }])
+        ).toBe(true)
+        expect(registerOf(emulator, '$t0').value).toBe(0x2an)
+
+        const [poke] = emulator.latestSteps
+        expect(poke.kind).toBe('poke')
+        //no instruction ran, so the row has neither a PC nor a line to jump to
+        expect(poke.pc).toBe(-1)
+        expect(poke.line).toBe(-1)
+        expect(poke.writes).toEqual([{ type: 'register', name: '$t0', old: 5n, new: 0x2an }])
+        expect(poke.mutations).toEqual([
+            {
+                type: 'WriteRegister',
+                value: { register: '$t0', old: 5n, new: 0x2an, size: RegisterSize.Long }
+            }
+        ])
+
+        expect(emulator.canUndo).toBe(true)
+        expect(emulator.undo(1)).toBe(1)
+        expect(registerOf(emulator, '$t0').value).toBe(5n)
+        //the Poke is gone from the history and the instruction under it is back on top
+        expect(emulator.latestSteps[0].kind).toBe('instruction')
+    })
+
+    it('never offers the program counter, hi or lo, which MARS has no setter for', async () => {
+        const emulator = await build(POKEABLE)
+        await emulator.step()
+        expect(emulator.canPokeRegister(CPU_REGISTER_FILE_ID, '$t0')).toBe(true)
+        for (const register of ['pc', 'hi', 'lo', '$zero']) {
+            expect(emulator.canPokeRegister(CPU_REGISTER_FILE_ID, register)).toBe(false)
+        }
+        expect(emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'pc', value: 0n }])).toBe(
+            false
+        )
+        //a value that leaves the register as it is changes nothing and records nothing
+        expect(emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: '$t0', value: 5n }])).toBe(
+            false
+        )
+        expect(emulator.latestSteps[0].kind).toBe('instruction')
+    })
+
+    it('records nothing when the panel pokes back the hex a negative register shows', async () => {
+        const emulator = await build(POKEABLE)
+        await emulator.step()
+        //MARS keeps its registers in an `Int32Array`, so a register of all ones reads `-1n` here
+        //while the row draws `ffffffff` and sends that back unsigned: the two are the same bits
+        expect(
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: '$t0', value: 0xffffffffn }])
+        ).toBe(true)
+        expect(registerOf(emulator, '$t0').value).toBe(-1n)
+        expect(
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: '$t0', value: 0xffffffffn }])
+        ).toBe(false)
+        //one Poke, one row: the second commit left the history where the first put it
+        expect(emulator.latestSteps.filter((step) => step.kind === 'poke')).toHaveLength(1)
+    })
+
+    it('pokes a register of the FPU and of the CP0 file, each as one step', async () => {
+        const emulator = await build(POKEABLE)
+        await emulator.step()
+        expect(emulator.pokeRegisters('fpu', [{ register: '$f2', value: 0x40400000n }])).toBe(true)
+        expect(fileValue(emulator, 'fpu', '$f2')).toBe(0x40400000n)
+        expect(emulator.latestSteps[0].writes).toEqual([
+            { type: 'register', name: '$f2', old: 0n, new: 0x40400000n }
+        ])
+
+        expect(
+            emulator.pokeRegisters('cp0', [{ register: '$13 (cause)', value: 0x8000000fn }])
+        ).toBe(true)
+        expect(fileValue(emulator, 'cp0', '$13 (cause)')).toBe(0x8000000fn)
+        //the Core spells a coprocessor 0 register with its MIPS number, which is how the file
+        //spells it too
+        expect(emulator.latestSteps[0].writes).toEqual([
+            { type: 'register', name: '$13 (cause)', old: 0n, new: 0x8000000fn }
+        ])
+
+        //two Pokes, two entries: each Undo takes one of them back
+        emulator.undo(1)
+        expect(fileValue(emulator, 'cp0', '$13 (cause)')).toBe(0n)
+        expect(fileValue(emulator, 'fpu', '$f2')).toBe(0x40400000n)
+        emulator.undo(1)
+        expect(fileValue(emulator, 'fpu', '$f2')).toBe(0n)
+    })
+
+    it('pokes a run of memory bytes as one step, whatever its length', async () => {
+        const emulator = await build(POKEABLE)
+        await emulator.step()
+        expect(emulator.pokeMemory(BUFFER, new Uint8Array([1, 2, 3, 4]))).toBe(true)
+        expect([...emulator.readMemoryBytes(BUFFER, 4)]).toEqual([1, 2, 3, 4])
+
+        const [poke] = emulator.latestSteps
+        expect(poke.kind).toBe('poke')
+        expect(poke.writes).toEqual([
+            { type: 'memory', address: BUFFER, old: [0, 0, 0, 0], new: [1, 2, 3, 4] }
+        ])
+        expect(poke.mutations).toEqual([
+            {
+                type: 'WriteMemoryBytes',
+                value: { address: BUFFER, old: [0, 0, 0, 0], new: [1, 2, 3, 4] }
+            }
+        ])
+
+        //four bytes are one entry, so one Undo takes all four back
+        expect(emulator.undo(1)).toBe(1)
+        expect([...emulator.readMemoryBytes(BUFFER, 4)]).toEqual([0, 0, 0, 0])
+    })
+
+    it('restores the poked value when the step made after the Poke is undone too', async () => {
+        const emulator = await build(POKEABLE)
+        await emulator.step()
+        emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: '$t0', value: 0x2an }])
+        //`addu $t2, $t0, $t1` runs on the poked value, which is what a Poke is for
+        await emulator.step()
+        await emulator.step()
+        expect(registerOf(emulator, '$t2').value).toBe(0x30n)
+        expect(emulator.latestSteps.map((step) => step.kind)).toEqual([
+            'instruction',
+            'instruction',
+            'poke',
+            'instruction'
+        ])
+
+        //the two instructions and then the Poke, each one step
+        expect(emulator.undo(3)).toBe(3)
+        expect(registerOf(emulator, '$t0').value).toBe(5n)
+        expect(registerOf(emulator, '$t2').value).toBe(0n)
+    })
+
+    it('groups one instruction into one row, as `undo` pops it', async () => {
+        const emulator = await build(
+            `        .text
+main:
+        jal     target
+target:
+` + EXIT
+        )
+        await emulator.step()
+        //`jal` restores both `$ra` and the program counter, which used to be two History rows and
+        //made "Undo to here" on row N undo N instructions rather than N rows
+        expect(emulator.latestSteps).toHaveLength(1)
+        const [step] = emulator.latestSteps
+        expect(step.kind).toBe('instruction')
+        expect(step.mutations.map((mutation) => mutation.type)).toEqual([
+            'WriteRegister',
+            'WriteRegister'
+        ])
+    })
+
+    it('repaints the bitmap display on a Poke into it and on its Undo', async () => {
+        const emulator = await build(DATA + EXIT)
+        expect(pixelAt(emulator, 0, 0)).toBe(0x000000)
+        //the framebuffer is little endian, so the low byte of the word comes first
+        expect(emulator.pokeMemory(0x10010000n, new Uint8Array([0x44, 0x33, 0x22, 0x11]))).toBe(
+            true
+        )
+        expect(pixelAt(emulator, 0, 0)).toBe(0x223344)
+        emulator.undo(1)
+        expect(pixelAt(emulator, 0, 0)).toBe(0x000000)
+    })
+
+    it('leaves the FileSystem journal alone when a Poke is undone', async () => {
+        const fileSystem = new FileSystem()
+        //the File does not exist until the open syscall runs, and it is gone again once that
+        //syscall is rolled back
+        const written = () =>
+            fileSystem.files['output.txt'] ? fileSystem.readText('output.txt') : ''
+        const emulator = await build(WRITE_FILE, { fileSystem })
+        for (let step = 0; step < 16 && written() !== 'hello'; step++) {
+            await emulator.step()
+        }
+        expect(written()).toBe('hello')
+
+        emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: '$t0', value: 0x2an }])
+        //a Poke has no instruction identity, so undoing it rolls back nothing of the session whose
+        //frames are keyed by the syscall's address
+        expect(emulator.undo(1)).toBe(1)
+        expect(written()).toBe('hello')
+        //the write syscall is still the entry under it, and undoing far enough still takes it back
+        for (let step = 0; step < 16 && written() === 'hello'; step++) emulator.undo(1)
+        expect(written()).toBe('')
     })
 })

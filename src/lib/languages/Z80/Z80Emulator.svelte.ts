@@ -3,6 +3,8 @@ import {
     assemble,
     type AssemblyResult,
     type ExecutionRecord,
+    isPokeRecord,
+    type PokeWrite as CorePokeWrite,
     type RegisterSet,
     SourceMap,
     StopReason,
@@ -14,12 +16,14 @@ import {
     type Instruction
 } from '$lib/languages/BaseEmulator.svelte'
 import {
+    type BuildArtifact,
     type Diagnostic,
     type EmulatorDecoration,
     type EmulatorSettings,
     type ExecutionStep,
     makeLabelColor,
     type MutationOperation,
+    type PokeWrite,
     RegisterSize,
     type StackFrame
 } from '$lib/languages/commonLanguageFeatures.svelte'
@@ -35,6 +39,8 @@ import {
 import type { ExecutionGeneration } from '$lib/languages/ExecutionController'
 import type { Testcase } from '$lib/Project.svelte'
 import { Z80Device } from '$lib/languages/Z80/Z80Device'
+import { Trs80Devices } from '$lib/languages/Z80/trs80/Trs80Devices'
+import { parseZ80ScreenDirective } from '$lib/languages/Z80/trs80/z80ScreenDirective'
 import { ScreenInstructionHistory } from '$lib/languages/peripherals/screen/ScreenInstructionHistory'
 import {
     Z80_DEFAULT_ORG,
@@ -45,6 +51,13 @@ import {
     Z80_STARTING_REGISTER_NAMES,
     type Z80RegisterName
 } from '$lib/languages/Z80/Z80-model'
+import {
+    assemblyFiles,
+    resolveFilePath,
+    sourceText,
+    type BuildInput,
+    type BuildSources
+} from '$lib/projectFiles'
 
 /**
  * The `RegisterSet` field behind each register the panel shows. The alternate registers are spelled
@@ -84,8 +97,8 @@ const CHUNK_TARGET_FRACTION = 1 / 4
 
 const NOT_INITIALIZED_ERROR = 'Interpreter not initialized'
 
-export function Z80Emulator(baseCode: string, options: EmulatorSettings = {}) {
-    return new AsmEditorZ80Emulator(baseCode, options)
+export function Z80Emulator(source: BuildInput, options: EmulatorSettings = {}) {
+    return new AsmEditorZ80Emulator(source, options)
 }
 
 class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> {
@@ -93,10 +106,18 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
     private assembly: AssemblyResult | null = null
     private sourceMap: SourceMap | null = null
     private device: Z80Device | null = null
+    /** The memory-mapped TRS-80 display and keyboard matrix (ADR 0020), built with the machine. */
+    private trs80: Trs80Devices | null = null
+    /**
+     * Whether the source asked for the memory-mapped display with a `; @screen trs80` comment. Read
+     * at compile time so the Screen is in the right mode before the first instruction, including
+     * during a testcase run, rather than part way through.
+     */
+    private cellModeRequested = false
     private screenInstructions: ScreenInstructionHistory | null = null
     /** Echo is drawn while an IN is suspended; commit it with that IN when it succeeds. */
     private pendingEchoBefore: number | null = null
-    private sourceLines: string[] = []
+    private sourceLines: Record<string, string[]> = {}
     /**
      * One past the last byte of every assembled segment. The Z80 has no "end of program": running
      * past the last instruction just executes whatever the RAM holds (zeroes decode as `nop`), so
@@ -111,9 +132,9 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
      */
     private lastInstructionAddress: number | null = null
 
-    constructor(code: string, options: EmulatorSettings) {
+    constructor(source: BuildInput, options: EmulatorSettings) {
         super(
-            code,
+            source,
             {
                 systemSize: RegisterSize.Word,
                 registerNames: [...Z80_REGISTER_NAMES],
@@ -144,6 +165,10 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         this.device?.reset()
         this.screenInstructions?.clear()
         this.pendingEchoBefore = null
+        //`resetPeripherals` has just taken the Screen out of whatever mode it was in, so the device
+        //must not go on believing it owns it. A Build replaces this object anyway; this keeps Stop
+        //from leaving one behind that disagrees with the Screen in front of it
+        this.trs80?.disable()
     }
 
     protected positionStackTabOnCompile(): void {
@@ -171,21 +196,23 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         this.state.registers.find((register) => register.name === 'a')?.setSize(RegisterSize.Byte)
     }
 
-    _checkCode(code: string): Diagnostic[] {
+    _checkCode(sources: BuildSources): Diagnostic[] {
         //`check()` would do, but the macro attribution below needs the assembled lines, and the
         //assembler does the same work either way
-        return toDiagnostics(assemble(code), code.split('\n'))
+        const result = assemble(assemblyFiles(sources), { entryPathname: sources.entry })
+        return [...toDiagnostics(result, sourceLinesOf(sources)), ...this.screenDirective(sources)]
     }
 
-    _compile(code: string): CompileResult {
+    _compile(sources: BuildSources): CompileResult {
         this.machine = null
         this.assembly = null
         this.sourceMap = null
         this.device = null
         this.cliffBreakpoints = []
-        this.sourceLines = code.split('\n')
-        const result = assemble(code)
-        const diagnostics = toDiagnostics(result, this.sourceLines)
+        this.sourceLines = sourceLinesOf(sources)
+        const result = assemble(assemblyFiles(sources), { entryPathname: sources.entry })
+        const directive = this.screenDirective(sources)
+        const diagnostics = [...toDiagnostics(result, this.sourceLines), ...directive]
         //the assembler has no warning concept: every diagnostic it produces is an error
         if (result.hasErrors()) {
             return {
@@ -199,13 +226,28 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         this.cliffBreakpoints = result
             .segments()
             .map((segment) => segment.address + segment.bytes.length)
-        return { ok: true }
+        return { ok: true, diagnostics }
+    }
+
+    /**
+     * The Screen mode the program's `; @screen` comment asks for, remembered for `_initialize`, and
+     * the warnings the directive earned. A source with no directive draws with the port commands,
+     * which is what every Z80 program did before ADR 0020.
+     */
+    private screenDirective(sources: BuildSources): Diagnostic[] {
+        const { mode, diagnostics } = parseZ80ScreenDirective(sourceText(sources))
+        this.cellModeRequested = mode === 'cells'
+        return diagnostics.map((diagnostic) => ({ ...diagnostic, file: sources.entry }))
     }
 
     _initialize(undoSize: number): void {
         const assembly = this.assembly
         if (!assembly) throw new Error(NOT_INITIALIZED_ERROR)
         const peripherals = this._peripherals
+        const trs80 = new Trs80Devices({
+            screen: peripherals.screen,
+            keyboard: peripherals.keyboard
+        })
         const device = new Z80Device({
             write: (text) => peripherals.terminal.write(text),
             hasInput: () => peripherals.terminal.hasPendingInput(),
@@ -214,6 +256,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
             screen: peripherals.screen,
             keyboard: peripherals.keyboard,
             mouse: peripherals.mouse,
+            cells: trs80,
             onGraphicalUse: () =>
                 peripherals.terminal.useKeyboardInput(peripherals.keyboard, (text) =>
                     device.echo(text)
@@ -261,17 +304,37 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
                     before,
                     changed ? () => device.restoreDrawingState(state) : undefined
                 )
-            }
+            },
+            //false, never true: the Core stores and journals a write it performed itself, and
+            //claiming the write here would leave Undo unable to roll the display back (ADR 0020)
+            onMemoryWrite: (address, value) => trs80.noteWrite(address, value),
+            onMemoryRead: (address) => trs80.readMemory(address),
+            //the memory panel and the disassembler read constantly; without this every repaint
+            //would poll the keyboard matrix and eat the program's keystrokes
+            onDebugRead: () => undefined
         })
+        trs80.attach(machine.memory)
+        //the mode the source asked for, in place before the program is even loaded: enabling blanks
+        //video RAM the way the ROM's clear does, and a program is allowed to assemble an image
+        //straight into those addresses, which the blank would otherwise wipe
+        if (this.cellModeRequested) {
+            trs80.enable()
+            trs80.clearVideoRam()
+        }
         //throws only for an assembly with errors, which `_compile` already refused
         machine.loadAssembly(assembly)
+        //so an assembled-in screen is on the display before the first instruction runs
+        trs80.resync()
         this.device = device
+        this.trs80 = trs80
         this.machine = machine
         this.screenInstructions = screenInstructions
         this.lastInstructionAddress = null
     }
 
     _dispose(): void {
+        this.trs80?.detach()
+        this.trs80 = null
         this.machine = null
         this.assembly = null
         this.sourceMap = null
@@ -280,20 +343,44 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         this.lastInstructionAddress = null
     }
 
+    _beginPoke(): void {
+        this.requireMachine().beginPoke()
+    }
+
+    _endPoke(): boolean {
+        return this.requireMachine().endPoke()
+    }
+
     _canUndo(): boolean {
         const record = this.machine?.getHistory(1)[0]
-        return !!record && (this.screenInstructions?.canUndoAfter(record.tStateCountBefore) ?? true)
+        if (!record) return false
+        //a Poke on top is the Core's alone to roll back: it drew nothing, and the Screen journal
+        //keys its records by the t-states of an instruction, which a Poke never spent
+        //([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md))
+        if (isPokeRecord(record)) return true
+        return this.screenInstructions?.canUndoAfter(record.tStateCountBefore) ?? true
     }
 
     _undo(): void {
         const machine = this.requireMachine()
         const record = machine.getHistory(1)[0]
         machine.undo()
-        if (record) this.screenInstructions?.undoAfter(record.tStateCountBefore)
+        if (record && !isPokeRecord(record)) {
+            this.screenInstructions?.undoAfter(record.tStateCountBefore)
+        }
         //the core restores the registers but not `instructionAddress`, so without this the panel
-        //would keep naming the instruction that was just undone. The newest surviving record is
-        //the one that ran last, and there always is one while the machine could undo at all.
-        this.lastInstructionAddress = machine.getHistory(1)[0]?.address ?? null
+        //would keep naming the instruction that was just undone. The newest surviving instruction
+        //is the one that ran last, and there always is one while the machine could undo at all.
+        this.lastInstructionAddress = this.newestInstructionAddress()
+    }
+
+    /**
+     * Repaints the memory-mapped display after the Core rolled its memory back: cell mode journals
+     * nothing, so the image comes from the bytes the Core has just restored
+     * ([ADR 0005](../../../../docs/adr/0005-restore-screen-state-on-undo.md)).
+     */
+    _resyncScreenFromMemory(): void {
+        this.trs80?.resync()
     }
 
     _getStatus(): EmulatorStatus {
@@ -337,6 +424,9 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
                 maxInstructions: Math.min(chunk, budget - instructions),
                 breakpoints: stops
             })
+            //the cells the chunk wrote, painted once rather than one store at a time; inside the
+            //measurement, because it is part of what the chunk cost the host
+            this.trs80?.flush()
             const spentMs = performance.now() - startedAt
             this.trackLastInstruction(result.instructions > 0, result.reason)
             instructions += result.instructions
@@ -368,20 +458,30 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
 
     async _runTestcase(_testcase: Testcase, haltLimit: number): Promise<void> {
         const execution = this.executionController.capture()
-        //the testcase input is served by the terminal's scripted source, swapped in by the caller.
-        //No user breakpoints during a test, but the cliff ones still have to stop the machine.
-        await this.runWithInput(execution, toInstructionLimit(haltLimit), [])
+        try {
+            //the testcase input is served by the terminal's scripted source, swapped in by the
+            //caller. No user breakpoints during a test, but the cliff ones still have to stop the
+            //machine.
+            await this.runWithInput(execution, toInstructionLimit(haltLimit), [])
+        } finally {
+            //A test run has no slice loop to flush the display's dirty range, and the Core the test
+            //leaves behind is still read for the Screen, so without this a TRS-80 program's output
+            //is a blank image in every testcase.
+            this.trs80?.flush()
+        }
     }
 
     async _step(): Promise<{ terminated: boolean }> {
         const machine = this.requireMachine()
         const execution = this.executionController.capture()
         let reason = machine.step()
+        this.trs80?.flush()
         if (reason === StopReason.WAITING_FOR_INPUT) {
             //the `in` was rolled back, so nothing has executed yet: feed the device (or let the
             //wait it asked for elapse) and retry it
             await this.serveInputStop(execution)
             reason = machine.step()
+            this.trs80?.flush()
         }
         this.executionController.ensureCurrent(execution)
         this.trackLastInstruction(reason !== StopReason.WAITING_FOR_INPUT, reason)
@@ -429,12 +529,13 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
     }
 
     _setRegisterValue(register: Z80RegisterName, value: bigint, _size?: RegisterSize): void {
-        const regs = this.requireMachine().z80.regs
-        //the core clamps `a` itself but stores the 16 bit pairs verbatim, so writing 0x12345 to HL
-        //would leave a value no Z80 instruction could have produced. Masking both also keeps the
-        //conversion below inside the range `Number` can represent exactly.
-        const mask = register === 'a' ? 0xffn : 0xffffn
-        regs[coreRegisterKey(register)] = Number(value & mask)
+        //the machine clamps the value to what the register can hold and journals the write when a
+        //Poke is open ([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md)); the
+        //truncation here is only so the conversion stays inside the range `Number` is exact in
+        this.requireMachine().setRegisterValue(
+            coreRegisterKey(register),
+            Number(BigInt.asUintN(16, value))
+        )
     }
 
     _readMemoryBytes(address: bigint, length: bigint): Uint8Array {
@@ -450,12 +551,14 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
     }
 
     _writeMemoryBytes(address: bigint, data: Uint8Array): void {
-        const memory = this.requireMachine().memory
+        const machine = this.requireMachine()
         const start = Number(address)
+        //the Z80 does not wrap around and the machine's host write does, so the bytes past the top
+        //of RAM are dropped here rather than landing back at address 0
         const writable = Math.max(0, Math.min(data.length, Z80_MEMORY_SIZE - start))
-        //direct RAM access, like the other adapters' testcase setup: it bypasses the memory hooks
-        //and the history journal, which is what setting up a program's initial state should do
-        if (writable > 0) memory.set(data.subarray(0, writable), start)
+        //outside a Poke this is the direct write a testcase's preset memory wants, bypassing the
+        //memory hooks and the history; inside one the machine journals the bytes it overwrites
+        if (writable > 0) machine.writeMemoryBytes(start, data.subarray(0, writable))
     }
 
     _getNextInstruction(): Instruction | null {
@@ -476,7 +579,8 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         return {
             address,
             lineNumber: location.lineNumber,
-            code: this.sourceLines[location.lineNumber]?.trim() ?? ''
+            file: location.pathname,
+            code: this.sourceLines[location.pathname]?.[location.lineNumber]?.trim() ?? ''
         }
     }
 
@@ -496,6 +600,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
                 destination: BigInt(frame.callSiteAddress),
                 sp: BigInt(frame.stackAddress),
                 line: sourceMap.addressToLocation(frame.targetAddress)?.lineNumber ?? -1,
+                file: sourceMap.addressToLocation(frame.targetAddress)?.pathname,
                 color: makeLabelColor(i, frame.stackAddress)
             }))
     }
@@ -511,9 +616,26 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
             //the state the instruction produced is the state the next one found, and for the newest
             //record it is the machine as it stands now
             const after = records[i + 1]?.stateBefore.regs ?? machine.z80.regs
+            if (isPokeRecord(record)) {
+                //a Poke ran no instruction, so its row has no PC and no line to go to; what it
+                //changed is in its writes, and `f` is not among them, so the flags do not move
+                const writes = record.writes.map(convertPokeWrite)
+                steps.push({
+                    kind: 'poke',
+                    pc: record.address,
+                    line: -1,
+                    old_ccr: { bits: record.stateBefore.regs.f },
+                    new_ccr: { bits: after.f },
+                    writes,
+                    mutations: writes.map(pokeWriteToMutation)
+                })
+                continue
+            }
             steps.push({
+                kind: 'instruction',
                 pc: record.address,
                 line: this.sourceMap?.addressToLocation(record.address)?.lineNumber ?? -1,
+                file: this.sourceMap?.addressToLocation(record.address)?.pathname,
                 old_ccr: { bits: record.stateBefore.regs.f },
                 new_ccr: { bits: after.f },
                 mutations: this.recordToMutations(record, after)
@@ -532,6 +654,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
             if (expanded.length === 0) continue
             decorations.push({
                 type: 'below-line',
+                file: line.fileInfo.pathname,
                 note: 'Expanded macro',
                 belowLine: line.lineNumber,
                 //shiki has no z80 grammar, `asm` is the closest thing that highlights mnemonics
@@ -540,6 +663,22 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         }
         //Z80 has no generated code panel, only the per line expansion decorations
         return { decorations, code: '' }
+    }
+
+    protected _getBuildArtifacts(): BuildArtifact[] {
+        const assembly = this.assembly
+        if (!assembly) return []
+        return assembly.asm.assembledLines
+            .filter(
+                (line): line is AssembledLine & { lineNumber: number } =>
+                    line.lineNumber !== undefined && line.binary.length > 0
+            )
+            .map((line) => ({
+                file: normalizedCorePath(line.fileInfo.pathname),
+                line: line.lineNumber,
+                address: BigInt(line.address),
+                opcode: line.binary.map((byte) => byte.toString(16).padStart(2, '0')).join(' ')
+            }))
     }
 
     _stringifyError(error: unknown, _line?: number): string {
@@ -653,6 +792,24 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         this.lastInstructionAddress = this.requireMachine().z80.instructionAddress
     }
 
+    /**
+     * Where the machine last executed: the newest record that is an instruction. A Poke ran none and
+     * carries no instruction address, so it is looked past
+     * ([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md)). The window grows because
+     * a run of Pokes can be any length; the usual one Poke costs a window of two.
+     */
+    private newestInstructionAddress(): number | null {
+        const machine = this.machine
+        if (!machine) return null
+        for (let window = 2; ; window *= 2) {
+            const records = machine.getHistory(window)
+            for (let i = records.length - 1; i >= 0; i--) {
+                if (!isPokeRecord(records[i])) return records[i].address
+            }
+            if (records.length < window) return null
+        }
+    }
+
     private recordToMutations(record: ExecutionRecord, after: RegisterSet): MutationOperation[] {
         const mutations: MutationOperation[] = []
         const before = record.stateBefore.regs
@@ -661,11 +818,14 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
             if (name === 'pc') continue
             const key = CORE_REGISTER_BY_NAME[name]
             if (before[key] === after[key]) continue
+            //the record holds the state the instruction found and the next one the state it left,
+            //so both sides of the write are the Core's own to report
             mutations.push({
                 type: 'WriteRegister',
                 value: {
                     register: name,
                     old: BigInt(before[key]),
+                    new: BigInt(after[key]),
                     size: name === 'a' ? RegisterSize.Byte : RegisterSize.Word
                 }
             })
@@ -676,6 +836,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
                 value: {
                     address: BigInt(write.address),
                     old: BigInt(write.before),
+                    new: BigInt(write.value),
                     size: RegisterSize.Byte
                 }
             })
@@ -692,12 +853,12 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
     }
 
     /** 0 based editor lines to the addresses they assembled to; a line with no code has none. */
-    private toBreakpointAddresses(lines: number[]): number[] {
+    private toBreakpointAddresses(lines: { file: string; line: number }[]): number[] {
         const sourceMap = this.sourceMap
         if (!sourceMap) return []
         const addresses: number[] = []
-        for (const line of lines) {
-            const address = sourceMap.locationToAddress(line)
+        for (const breakpoint of lines) {
+            const address = sourceMap.locationToAddress(breakpoint.line, breakpoint.file)
             if (address !== undefined) addresses.push(address)
         }
         return addresses
@@ -714,10 +875,64 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
     }
 }
 
+/**
+ * One value a Poke wrote, as the panels show it: the machine spells the shadow registers `afPrime`,
+ * the panel and the History row spell them `af'`.
+ */
+function convertPokeWrite(write: CorePokeWrite): PokeWrite {
+    if (write.type === 'register') {
+        return {
+            type: 'register',
+            name: editorRegisterName(write.name),
+            old: BigInt(write.old),
+            new: BigInt(write.new)
+        }
+    }
+    return {
+        type: 'memory',
+        address: BigInt(write.address),
+        old: [...write.old],
+        new: [...write.new]
+    }
+}
+
+/** The mutation list a poked value reads as, so the coding agent sees a Poke as it sees a write. */
+function pokeWriteToMutation(write: PokeWrite): MutationOperation {
+    if (write.type === 'register') {
+        return {
+            type: 'WriteRegister',
+            value: {
+                register: write.name,
+                old: write.old,
+                new: write.new,
+                size: write.name === 'a' ? RegisterSize.Byte : RegisterSize.Word
+            }
+        }
+    }
+    return {
+        type: 'WriteMemoryBytes',
+        value: { address: write.address, old: write.old, new: write.new }
+    }
+}
+
+/** The inverse of `CORE_REGISTER_BY_NAME`: a machine key back to the name the panel draws. */
+function editorRegisterName(key: string): string {
+    const name = Z80_REGISTER_NAMES.find((candidate) => CORE_REGISTER_BY_NAME[candidate] === key)
+    return name ?? key
+}
+
 function coreRegisterKey(register: Z80RegisterName): CoreRegisterKey {
     const key = CORE_REGISTER_BY_NAME[register]
     if (!key) throw new Error(`Unsupported register: ${register}`)
     return key
+}
+
+function normalizedCorePath(path: string): string {
+    try {
+        return resolveFilePath(path)
+    } catch {
+        return path
+    }
 }
 
 /**
@@ -734,22 +949,34 @@ function toInstructionLimit(limit: number | undefined): number {
     return !limit || limit <= 0 ? Number.MAX_SAFE_INTEGER : limit
 }
 
-function toDiagnostics(result: AssemblyResult, sourceLines: string[]): Diagnostic[] {
+function toDiagnostics(
+    result: AssemblyResult,
+    sourceLines: Record<string, string[]>
+): Diagnostic[] {
     return result.diagnostics.map((diagnostic) => {
         const lineIndex = diagnostic.lineNumber ?? expansionLineOf(result, diagnostic.message) ?? 0
         return {
             severity: 'error',
+            file: diagnostic.pathname,
             lineIndex,
             //the assembler reports the offending line, not a column inside it
             column: 0,
             line: {
-                line: sourceLines[lineIndex] ?? '',
+                line: sourceLines[diagnostic.pathname]?.[lineIndex] ?? '',
                 line_index: lineIndex
             },
             message: diagnostic.message,
             formatted: diagnostic.message
         }
     })
+}
+
+function sourceLinesOf(sources: BuildSources): Record<string, string[]> {
+    return Object.fromEntries(
+        Object.entries(sources.files).flatMap(([path, file]) =>
+            file.encoding === 'plain' ? [[path, file.content.split('\n')]] : []
+        )
+    )
 }
 
 /**

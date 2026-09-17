@@ -1,13 +1,9 @@
 Two subroutines that call themselves. `factorial(8)` comes back as 40320 in `d6`, and `fib(10)` comes
 back as 55 in `d7`, and neither of them has a loop anywhere: the repetition is the calls.
 
-Stack arguments and a stack frame built one frame for one call. Recursion is the same instructions
-with nothing added, because `link` subtracts from wherever `sp` happens to be, so every call gets a
-frame of its own at a fresh address and `8(a6)` means this call's argument.
-
-**You need to know:** the "Stack arguments and a stack frame" Example and the "bsr, rts, link and
-unlk" lecture. What is new here is a subroutine calling itself, which needs no mechanism the previous
-program did not already use.
+Recursion needs no instruction you have not already seen. `link` subtracts from wherever `sp`
+happens to be at the time, so every call gets a frame of its own at a fresh address, and `8(a6)`
+always means the argument of the call you are inside right now.
 
 ```m68k|playground|memory|no-flags|allow-open
     move.l #8, -(sp)        ; n = 8
@@ -73,10 +69,12 @@ the return address `bsr` pushes and four for the `a6` that `link` pushes. Step i
 `a7` drops by twelve at each one, down to `00FFFFA0` at the deepest, where `n` is 1 and the recursion
 turns round. `fib` takes sixteen, because of the long of local room it asked for.
 
-`fib` is the expensive one: `fib(n)` calls itself twice, so the number of calls roughly doubles for
-every 1 you add to `n`, and the whole program is 2137 instructions for a number you could get with a
-loop and two registers. Recursion is written to be read, not to be quick.
+`fib` is the expensive one. `fib(n)` calls itself twice, so the number of calls roughly doubles for
+every 1 you add to `n`, and the whole program comes to 2137 instructions for a number a loop and two
+registers would have reached in a few dozen.
 
-Try changing `move.l #8, -(sp)` to `move.l #9, -(sp)` and `d6` comes out at `00058980`, which is the
-right answer, 362880. Change it to `move.l #10, -(sp)` and `d6` comes out at `00055F00`, which is
-352000 and simply wrong: `mulu` multiplies two **words**, and 362880 does not fit in one.
+`factorial` has a ceiling, and it is worth going and finding. Change `move.l #8, -(sp)` to
+`move.l #9, -(sp)` and `d6` comes out at `00058980`, which is 362880 and correct. Change it to
+`move.l #10, -(sp)` and `d6` comes out at `00055F00`, which is 352000 and simply wrong. `mulu`
+multiplies two **words**, and 362880 has already outgrown one, so the tenth multiplication threw
+away the top of its input. Nothing was reported.

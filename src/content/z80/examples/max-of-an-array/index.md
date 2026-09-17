@@ -6,15 +6,11 @@ Sum of an array read every element and needed nothing from the ones before it. H
 to compare the element against something the loop is carrying, which is the shape of every "find the
 best one" program there is.
 
-**You need to know:** the "Arrays, strings and ix" lecture and the "The F register" lecture. What is
-new here is the signed comparison, which the Z80 has no condition for and which is written out of
-`S` and `P/V` every time it is needed.
-
 ```z80|playground|memory|no-flags|allow-open
 count equ 8
 
     .org 0x8000
-    ld hl, numbers  ; p = numbers
+    ld hl, numbers  ; hl = the start of the array
     ld a, (hl)      ; best = numbers[0]
     ld c, a
     inc hl
@@ -24,7 +20,7 @@ count equ 8
 loop:
     inc e           ; i++
     ld a, c         ; best
-    cp (hl)         ; best - *p
+    cp (hl)         ; best minus the byte hl points at
     jp pe, flipped  ; the subtraction overflowed, so S is inverted
     jp m, take      ; it did not, so S tells the truth
     jr next
@@ -33,10 +29,10 @@ flipped:
     jr next
 take:
     ld a, (hl)
-    ld c, a         ; best = *p
+    ld c, a         ; that byte is the new best
     ld d, e         ; where = i
 next:
-    inc hl          ; p++
+    inc hl          ; on to the next byte
     djnz loop
     halt
 
@@ -49,8 +45,9 @@ loop itself has only seven elements left and starts with an answer that is alrea
 part of the array it has seen. Starting `c` at 0 instead would be a different program, one that
 answers 0 for an array of negative numbers.
 
-The five instructions in the middle are one comparison. `cp (hl)` computes `best - *p` and sets the
-flags from it, and **`best < *p` as signed bytes is true when `S` and `P/V` differ**: `P/V` says the
+The five instructions in the middle are one comparison. `cp (hl)` subtracts the byte `hl` points at
+from the best so far and sets the flags from the result, and **the best is smaller, as signed bytes,
+exactly when `S` and `P/V` differ**: `P/V` says the
 subtraction overflowed, and when it did the sign of the answer is the opposite of the truth. So
 `jp pe` picks which of the two readings of `S` to use, and `jp m` and `jp p` are those two readings.
 Neither `pe` nor `m` nor `p` has a `jr` form, which is why all three are a `jp`.
@@ -59,8 +56,9 @@ Neither `pe` nor `m` nor `p` has a `jr` form, which is why all three are a `jp`.
 is number 0. The panel shows them as `bc` at `0063` and `de` at `0407`, `e` being the index the walk
 finished on.
 
-Try replacing the five jumps and the `flipped` label between `cp (hl)` and `take` with the single
-line `jr nc, next`, which is the unsigned comparison. `bc` comes out at `00FC` and `de` at `0107`,
-because read as an unsigned byte the `-4` in the array is `FC`, which is 252, and nothing in the
-array beats it. One instruction against five is what the signed comparison costs on this machine,
-and it is why 8 bit programs keep their numbers unsigned wherever they can.
+If five jumps to do one comparison looks like too much, replace all of them and the `flipped` label
+with the single line `jr nc, next`, the unsigned comparison, and run it. The program reports 252 as
+the largest. Read as an unsigned byte the `-4` in the array is `FC`, which is 252, so nothing beats
+it and the smallest number in the array is confidently returned as the biggest. One instruction
+against five is what the signed comparison costs, and it is why 8 bit programs keep their numbers
+unsigned wherever they can.

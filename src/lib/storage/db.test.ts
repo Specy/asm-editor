@@ -77,7 +77,7 @@ describe('the version 2 upgrade', () => {
         await db.projects.add({
             ...legacyRow,
             id: 'future1',
-            files: { 'main.m68k': { encoding: 'base64', content: 'AAAA' } },
+            files: { 'main.m68k': { encoding: 'future-binary', content: 'AAAA' } },
             entry: 'main.m68k',
             settings: {}
         } as never)

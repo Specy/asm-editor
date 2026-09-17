@@ -7,14 +7,14 @@
 ; Screen: 256 by 192, the default. Press Stop to end it.
 
 ; --- ports -------------------------------------------------------------------
-P_PEN   equ 0x10        ; pen color, one 3-3-2 byte
-P_FILL  equ 0x11        ; fill color
-P_X     equ 0x13
-P_Y     equ 0x14
-P_X2    equ 0x15
-P_Y2    equ 0x16
-P_CMD   equ 0x17        ; one drawing operation per write
-P_FRAME equ 0x41        ; waits for the next animation frame
+P_PEN   equ 0x20        ; pen color, one 3-3-2 byte
+P_FILL  equ 0x21        ; fill color
+P_X     equ 0x23
+P_Y     equ 0x24
+P_X2    equ 0x25
+P_Y2    equ 0x26
+P_CMD   equ 0x27        ; one drawing operation per write
+P_FRAME equ 0x51        ; waits for the next animation frame
 
 ; --- commands ----------------------------------------------------------------
 C_ELLIPSE equ 6         ; filled ellipse inscribed in (X, Y)-(X2, Y2)

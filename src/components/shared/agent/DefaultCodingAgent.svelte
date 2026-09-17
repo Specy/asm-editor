@@ -2,14 +2,18 @@
     export {
         DEFAULT_CODING_AGENT_TOOL_NAMES,
         DEFAULT_CODING_AGENT_WORKFLOW_NAMES,
-        SUPPORTED_LANGUAGES
+        SUPPORTED_LANGUAGES,
+        DEFAULT_TAKE_LINES,
+        MAX_TAKE_LINES
     } from './defaultCodingAgent/types'
+    export { AssemblyCodingHarness } from './defaultCodingAgent/harness'
     export type {
         AgentToolAllowList,
         AgentWorkflow,
         AgentWorkflowAllowList,
         DefaultCodingAgentToolName,
         DefaultCodingAgentWorkflowName,
+        DefaultCodingAgentToolContext,
         SupportedLanguage
     } from './defaultCodingAgent/types'
 </script>
@@ -18,6 +22,9 @@
     import AiAgent from '$cmp/shared/agent/AiAgent.svelte'
     import { ThemeStore } from '$stores/themeStore.svelte'
     import type { Emulator } from '$lib/languages/Emulator'
+    import type { FileSystem } from '$lib/languages/peripherals/FileSystem'
+    import { fileText, type ProjectFiles } from '$lib/projectFiles'
+    import { defaultEntryPath } from '$lib/Project.svelte'
     import type { RegisteredTool } from '@discerns/sdk'
     import {
         DEFAULT_CODING_AGENT_TOOL_NAMES,
@@ -36,7 +43,11 @@
 
     interface Props {
         editorLanguage: SupportedLanguage | null
-        editorCode: string
+        editorCode?: string
+        files?: ProjectFiles
+        entry?: string
+        fileSystem?: FileSystem
+        activePath?: string
         emulatorInstance: Emulator | null
         style?: string
         canUpdateLanguage?: boolean
@@ -49,7 +60,11 @@
 
     let {
         editorLanguage = $bindable(),
-        editorCode = $bindable(),
+        editorCode = $bindable(''),
+        files = $bindable(undefined),
+        entry = $bindable(undefined),
+        fileSystem,
+        activePath = $bindable(undefined),
         emulatorInstance,
         style,
         canUpdateLanguage = true,
@@ -62,15 +77,115 @@
 
     let accent = $derived(ThemeStore.get('accent').color)
 
+    const effectiveEntry = $derived(
+        entry ?? (editorLanguage ? defaultEntryPath(editorLanguage) : 'main.s')
+    )
+
+    let internalFiles = $state<Record<string, string>>({})
+
+    $effect(() => {
+        if (!fileSystem && !files && editorCode !== undefined) {
+            const current = internalFiles[effectiveEntry]
+            if (current !== editorCode) {
+                internalFiles[effectiveEntry] = editorCode
+            }
+        }
+    })
+
     const defaultToolFactories = $derived.by(() => {
         return createDefaultCodingAgentTools({
             canUpdateLanguage,
-            canUseSetCode: allowListAllows(allowToolList, 'set_code'),
+            canEditCode:
+                allowListAllows(allowToolList, 'replace_file_content') ||
+                allowListAllows(allowToolList, 'write_to_file'),
             getEditorLanguage: () => editorLanguage,
             setEditorLanguage: (language) => (editorLanguage = language),
-            getEditorCode: () => editorCode,
-            setEditorCode: (code) => (editorCode = code),
-            getEmulator: () => emulatorInstance
+            getEmulator: () => emulatorInstance,
+
+            getFiles: () => {
+                if (fileSystem) return fileSystem.files
+                if (files) return files
+                if (Object.keys(internalFiles).length > 0) return internalFiles
+                return { [effectiveEntry]: editorCode ?? '' }
+            },
+            getFile: (path) => {
+                const target = path || activePath || effectiveEntry
+                if (fileSystem) {
+                    try {
+                        return fileSystem.readText(target)
+                    } catch {
+                        return null
+                    }
+                }
+                if (files && target in files) {
+                    return fileText(files[target])
+                }
+                if (target in internalFiles) {
+                    return internalFiles[target]
+                }
+                if (target === effectiveEntry) {
+                    return editorCode ?? ''
+                }
+                return null
+            },
+            setFile: (path, nextCode) => {
+                const target = path || activePath || effectiveEntry
+                if (fileSystem) {
+                    fileSystem.writeText(target, nextCode)
+                }
+                if (files) {
+                    files = { ...files, [target]: { encoding: 'plain', content: nextCode } }
+                }
+                internalFiles[target] = nextCode
+                if (target === effectiveEntry || (!files && !fileSystem)) {
+                    editorCode = nextCode
+                }
+            },
+            deleteFile: (path) => {
+                if (fileSystem) {
+                    try {
+                        fileSystem.remove(path)
+                    } catch {
+                        // ignore
+                    }
+                }
+                if (files) {
+                    const next = { ...files }
+                    delete next[path]
+                    files = next
+                }
+                delete internalFiles[path]
+                if (activePath === path) {
+                    activePath = effectiveEntry
+                }
+            },
+            getEntryPath: () => effectiveEntry,
+            getActivePath: () => activePath ?? effectiveEntry,
+            setActivePath: (path) => (activePath = path),
+
+            getEditorCode: () => {
+                if (fileSystem) {
+                    try {
+                        return fileSystem.readText(effectiveEntry)
+                    } catch {
+                        // ignore
+                    }
+                }
+                if (files && effectiveEntry in files) {
+                    return fileText(files[effectiveEntry])
+                }
+                return internalFiles[effectiveEntry] ?? editorCode ?? ''
+            },
+            setEditorCode: (code) => {
+                if (fileSystem) {
+                    fileSystem.writeText(effectiveEntry, code)
+                }
+                if (files) {
+                    files = { ...files, [effectiveEntry]: { encoding: 'plain', content: code } }
+                }
+                internalFiles[effectiveEntry] = code
+                editorCode = code
+            }
         })
     })
 

@@ -2,12 +2,9 @@ Eight words in memory, sorted from smallest to largest where they lie. The loop 
 neighbours and swaps them when they are the wrong way round, and it does that as many times as there
 are elements, so the largest number reaches the end on the first pass and the rest follow.
 
-Every loop up to here read an array once. This one reads it seven times, with an inner loop that
-walks the array and an outer loop that says how often, and the two counters have to be kept apart.
-
-**You need to know:** the "Loops and dbra" lecture and the "Fill an array with the numbers from 1 to
-10" Example. What is new here is nesting: the inner counter is set **inside** the outer loop, because
-it has to start again from the top on every pass.
+One pass over the array is not enough to sort it: a number that has to travel a long way only moves
+one place per pass. So there are two loops here, an inner one that walks the array and an outer one
+that says how many times, and the two counters have to be kept apart.
 
 ```m68k|playground|memory|no-flags|allow-open
 count equ 8
@@ -46,5 +43,5 @@ Run it with the memory panel on `2000` and the eight words read 1, 4, 8, 15, 16,
 that order. It took 220 instructions to sort eight numbers, and it would take about four times as
 many to sort sixteen, because both loops grow with the array.
 
-Try changing `bge in_order` to `ble in_order`. The same program sorts the other way round, largest
-first, because the only thing that says which order you wanted is that one condition.
+The only thing in the whole program that says which order you wanted is the condition on that one
+branch.

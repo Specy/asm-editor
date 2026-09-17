@@ -1,0 +1,6 @@
+{
+    "name": "The bigger of two numbers",
+    "description": "Two numbers in memory and the larger of them in a register: a compare, a conditional jump with the condition inverted, and why it has to be the signed one.",
+    "order": 2,
+    "topic": "if-else"
+}

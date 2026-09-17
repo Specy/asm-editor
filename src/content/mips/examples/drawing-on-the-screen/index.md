@@ -2,15 +2,10 @@ A picture in a handful of shapes: two rectangles for the sky and the ground, a d
 rectangle for the house, six rows of decreasing width for its roof and one more rectangle for the
 door. Press Run and watch the Screen panel next to the program.
 
-Print a string asked the environment for a line of text. The screen asks nothing of anybody. It is a
-block of memory, one word per pixel, and every shape on it is a loop of `sw` instructions that your
-program writes.
+The screen asks nothing of anybody. It is a block of memory, one word per pixel, and every shape on
+it is a loop of `sw` instructions that your program writes.
 
-**You need to know:** the "The bitmap display and the keyboard registers" lecture and the "A 2D
-array" Example. What is new here is a shape as a subroutine: `fill_rect` and `fill_disc` are the two
-the rest of the program calls, because nothing in the machine draws anything.
-
-```mips|playground|screen|no-registers|allow-open
+```mips|playground|open-screen|no-registers|allow-open
 # @screen unit=8 width=256 height=256 base=display
 .eqv SIDE 32                # words across and down
 .eqv SKY 0x0070B0E0
@@ -137,9 +132,9 @@ label your own program defines, so the grid starts wherever the assembler put it
 is 32, which is why `SIDE` is 32 and why `.space 4096` is exactly the right amount of room: 32 by 32
 words of four bytes each.
 
-A colour is the low 24 bits of a word, red in bits 23 to 16, green in 15 to 8 and blue in 7 to 0. So
-`0x0070B0E0` is `rgb(112, 176, 224)`, a pale blue, and the order is the `#RRGGBB` you write in CSS
-with a `0x` on the front. The M68K's screen takes the same three bytes the other way round.
+A colour is the low 24 bits of a word, red in bits 23 to 16, green in 15 to 8 and blue in 7 to 0.
+So `0x0070B0E0` is a pale blue made of 112 red, 176 green and 224 blue, and the order is the
+`#RRGGBB` you write in CSS with a `0x` on the front.
 
 The address of the pixel at column `x` and row `y` is `base + (y * SIDE + x) * 4`, which is the 2D
 array of the Example before this one with an element size of four. Both subroutines here work that
@@ -151,21 +146,23 @@ because the pixels of a row sit next to each other in memory. `fill_disc` comput
 because it only writes the ones it keeps. A cell is inside the disc when `dx * dx + dy * dy` is
 under `r * r`, which is Pythagoras with the square root left off both sides.
 
-The colour is in `$s0` and the grid's address in `$s1`, and neither is an argument. The M68K's
-screen has a pen colour and a fill colour of its own that a task sets; here the hardware has no such
-thing, so this program keeps its own current colour in a saved register and every drawing subroutine
-reads it from there. `$s0` to `$s7` are the registers a subroutine has to give back, so `fill_rect`
-writing only `$t` registers is what makes that work.
+The colour is in `$s0` and the grid's address in `$s1`, and neither is passed as an argument. That
+is a decision this program made: both are the same for nearly every shape it draws, so instead of
+handing them to every subroutine it keeps them in two saved registers and the subroutines read them
+from there. It works because `$s0` to `$s7` are the registers a subroutine has to hand back
+untouched, and `fill_rect` writes nothing but `$t` registers.
 
 The whole picture is 6495 instructions out of the two million a Playground gets, and 1251 of those
 are the `sw` instructions themselves: a 32 by 32 grid is 1024 words, and the sky and the ground
 between them cover every one of those before anything else is drawn on top.
 
-There is no text in the picture. The M68K has a task that draws a string at a pixel position; the
-bitmap display has nothing of the kind, and a caption under a house has to be either drawn letter by
-letter out of pixels or printed to the console instead.
+Notice that there is no writing anywhere in the picture. The screen here is pixels and nothing but
+pixels: there is no service that puts a string at a position on it, so a caption under the house
+would have to be drawn letter by letter out of coloured cells, out of a font you had built yourself.
+Text goes to the console instead, which is why the games later on print their scores there.
 
-Try changing the sun's `li $a0, 26` to `li $a0, 29`, which moves its centre three cells right. Its
-right hand edge is cut off at column 31, and the cells that fell off it appear at the **left** of
-the next row down, because nothing between the coordinates and the `sw` checks that the column is
-still on the screen: a grid is one line of memory and column 32 of a row is column 0 of the next.
+Move the sun's centre three cells right, by changing its `li $a0, 26` to `li $a0, 29`, and run it.
+Part of the sun appears at the **left** hand edge of the row below it. Nothing between the
+coordinates and the `sw` checks that a column is still on the screen, and since the grid is one long
+line of memory, column 32 of a row is simply column 0 of the next one. Clipping is something a
+program does for itself or does not get.

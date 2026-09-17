@@ -1,43 +1,8 @@
-Thirty two registers hold thirty two words, and a program has more than that to keep. Everything else
-lives in memory, which MIPS reaches with a 32 bit address and with nothing but the load and store
-instructions.
+Memory is a long sequence of bytes. Each byte has its own numeric **address**, so an address tells
+you exactly where one byte is stored.
 
-## The address space
-
-An address is 32 bits, so it runs from `0x00000000` to `0xFFFFFFFF`: four gigabytes. Nothing in the
-hardware divides that up, and this simulator follows MARS in putting each thing at a fixed address:
-
-| from         | what is there                                                 |
-| ------------ | ------------------------------------------------------------- |
-| `0x00400000` | **text**, the instructions you wrote                          |
-| `0x10000000` | global data                                                   |
-| `0x10008000` | where `$gp` starts                                            |
-| `0x10010000` | **static data**, where `.data` puts your first label          |
-| `0x10040000` | the **heap**, which the memory syscall hands out              |
-| `0x7fffeffc` | where `$sp` starts, and the **stack** grows downwards from it |
-| `0x80000180` | kernel text, where an exception handler goes                  |
-| `0xffff0000` | the memory-mapped devices, the screen and the keyboard        |
-
-A byte nobody has written reads **0** here. Open the memory panel of any program on this page, look
-anywhere your program did not touch, and every byte is `00`. That is this simulator's choice, and the
-M68K's is the opposite, so a program that reads uninitialised memory behaves differently on the two.
-
-The instructions are the one region you cannot read. `lw $t0, 0x00400000($zero)` ends the run with
-
-```
-Cannot read directly from text segment!0x00400000
-```
-
-The assembled program is there, at four bytes per instruction, and this simulator keeps it where a
-load cannot reach it. Everything else in the table is memory like any other.
-
-## Little endian
-
-MIPS is **little endian**: the **least** significant byte of a word goes at the **lowest** address.
-The word `0x12345678` written at `0x10010000` is `78` at `0x10010000`, `56` at `0x10010001`, `34` at
-`0x10010002` and `12` at `0x10010003`, which is backwards from the way you wrote the number down.
-
-Build this one with the memory panel open, type `10010000` in its address box, then Run.
+A MIPS **word** is 32 bits, or 4 bytes. Declaring one word therefore uses four consecutive
+addresses:
 
 ```mips|playground|memory
 .data
@@ -46,135 +11,110 @@ value:  .word 0x12345678
 .text
 main:
     la $t0, value
-    lbu $t1, 0($t0)     # the byte at value
-    lbu $t2, 1($t0)     # the one after it
-    lbu $t3, 2($t0)
-    lbu $t4, 3($t0)
-    lhu $t5, 0($t0)     # the low half
-    lhu $t6, 2($t0)     # and the high half
-    lw $t7, 0($t0)      # the whole word
+    li $v0, 10
+    syscall
 ```
 
-| address      | byte | in    |
-| ------------ | ---- | ----- |
-| `0x10010000` | `78` | `$t1` |
-| `0x10010001` | `56` | `$t2` |
-| `0x10010002` | `34` | `$t3` |
-| `0x10010003` | `12` | `$t4` |
+Build and Run the program. The register panel shows `$t0` as `10010000`, which is the hexadecimal
+address `0x10010000`. The `0x` prefix marks a number as hexadecimal; the register panel leaves that
+prefix out. In the memory panel, each two-digit entry such as `78` or `FF` is one byte written in
+hexadecimal.
 
-`$t5` comes out at `00005678` and `$t6` at `00001234`, the two halves each read back the right way
-round, and `$t7` at `12345678`, the whole word as you wrote it. A load of a word or a half puts the
-bytes back in order; only reading them one at a time shows you which way they are stored.
+## The part of the address map we need
 
-The M68K is big endian and stores the same word as `12 34 56 78`. Nothing about a program that only
-reads and writes whole words changes between the two. What changes is a program that takes a word
-apart a byte at a time, which is what the table above does.
+This Playground places the two sections you already know at fixed starting addresses:
 
-## The size is in the instruction's name
+| starting address | section | what it contains     |
+| ---------------- | ------- | -------------------- |
+| `0x00400000`     | `.text` | program instructions |
+| `0x10010000`     | `.data` | declared data        |
 
-MIPS has no size suffix. Which instruction you use says how many bytes it touches, and the loads say
-what to do with the bits above them:
+The first declaration in `.data` begins at `0x10010000`. Each byte advances the address by one, so
+a four-byte word there occupies addresses `0x10010000` through `0x10010003`. The next free address
+is `0x10010004`.
 
-| instruction | bytes | what it does                                    |
-| ----------- | ----- | ----------------------------------------------- |
-| `lb`        | 1     | loads a byte and **sign extends** it to 32 bits |
-| `lbu`       | 1     | loads a byte and fills the rest with zeroes     |
-| `lh`        | 2     | loads a half and sign extends it                |
-| `lhu`       | 2     | loads a half and fills the rest with zeroes     |
-| `lw`        | 4     | loads a whole word                              |
-| `sb`        | 1     | stores the **lowest byte** of the register      |
-| `sh`        | 2     | stores the lowest half                          |
-| `sw`        | 4     | stores the whole word                           |
+## Little-endian byte order
 
-The stores have no signed and unsigned pair, because a store writes the bits it is given and there is
-nothing above them to fill in.
+The word `0x12345678` contains four bytes. Written as pairs of hexadecimal digits, they are `12`,
+`34`, `56`, and `78`. The rightmost pair, `78`, is the **least significant byte**: it contributes
+the smallest part of the number. The leftmost pair, `12`, is the **most significant byte**.
+
+MIPS in this Playground uses **little-endian** byte order. It places the least significant byte at
+the lowest address:
+
+| address      | byte |
+| ------------ | ---- |
+| `0x10010000` | `78` |
+| `0x10010001` | `56` |
+| `0x10010002` | `34` |
+| `0x10010003` | `12` |
+
+Open the memory panel at `10010000` and compare these four entries with the declaration. The bytes
+appear as `78 56 34 12`, even though the word was written as `0x12345678`. Little endian describes
+this order in memory. The declared value is still the word `0x12345678`.
+
+Byte order matters when a multi-byte value is examined as separate bytes. A one-byte declaration
+already occupies a single address, so there is no group of bytes to order.
+
+## Align word-sized locations
+
+A word-sized location is **aligned** when its first address is a multiple of 4. In hexadecimal,
+addresses ending in `0`, `4`, `8`, or `C` are multiples of 4.
+
+The directive `.align n` advances the next declaration to an address that is a multiple of
+2<sup>n</sup>. Therefore `.align 2` advances to a multiple of 2<sup>2</sup>, or 4 bytes:
 
 ```mips|playground|memory
 .data
-room:   .space 8
+name:   .asciiz "MIPS"
+        .align 2
+buffer: .space 8
 
 .text
 main:
-    la $t0, room
-    li $t1, 0xAABBCCDD
-    sw $t1, 0($t0)      # four bytes at room
-    li $t2, 0x11
-    sb $t2, 4($t0)      # one byte, four along
-    li $t3, 0x2233
-    sh $t3, 6($t0)      # two bytes, six along
-    lw $t4, 4($t0)      # and read those three back as one word
+    la $t0, name
+    la $t1, buffer
+    li $v0, 10
+    syscall
 ```
 
-The eight bytes at `0x10010000` come out as `DD CC BB AA 11 00 33 22`, and `$t4` reads `22330011`.
-The `sb` wrote one byte and left the one after it alone, the `sh` wrote two, and the `lw` picked up
-all four as a little endian word, which is why the `11` your program stored first ends up at the
-bottom of it.
+The string uses five bytes: four characters followed by the zero byte added by `.asciiz`. It
+occupies addresses `0x10010000` through `0x10010004`. The next free address is `0x10010005`, and
+`.align 2` advances it to `0x10010008`. After Run, `$t0` contains `10010000` and `$t1` contains
+`10010008`. The three skipped bytes are padding between the string and `buffer`.
 
-`0($t0)`, `4($t0)` and `6($t0)` are the only addressing mode there is: a register plus a constant
-offset in bytes. "Loads, stores and immediates" is the lecture on it.
+This Playground automatically aligns a `.word` declaration. An explicit `.align 2` immediately
+before `.word` is therefore redundant for the assembler, but it makes the four-byte boundary clear
+to a reader. Strings and `.space` use exactly their stated number of bytes; they do not by
+themselves align a following byte-data label such as `buffer`. Use `.align 2` when that label must
+begin on a word boundary.
 
-## Alignment
+Bytes reserved by `.space` initially appear as `00` in this Playground. The source-level meaning
+of `.space 8` is simply “reserve eight bytes.” Treat those bytes as room for future data rather
+than as eight meaningful zero values.
 
-A word has to start at an address that is a **multiple of 4**, and a half at a multiple of 2. A byte
-can go anywhere. Break the rule and the run ends with a message naming the address:
+## Try these
 
-```
-store address not aligned on word boundary 0x10010003
-```
-
-A load says `fetch address` instead of `store address`, and a half says `halfword boundary`.
-
-The assembler keeps `.word` and `.half` aligned for you: put a `.byte` in front of a `.word` and it
-leaves the gap, so `.word` data is always safe. What it does **not** align is `.space` and the
-strings, because those are byte data and a byte needs no alignment. So a buffer you reserve after an
-odd length string starts at an odd address, and the first `sw` into it ends the run.
-
-`.align n` is the fix: it moves the next thing up to a multiple of 2 to the `n`, so `.align 2` gives
-you a multiple of 4.
-
-```mips|playground|memory
-.data
-label:  .asciiz "Hi"     # three bytes, so what follows would start at 0x10010003
-        .align 2         # push it up to the next multiple of four
-counts: .space 8
-
-.text
-main:
-    la $t0, label
-    la $t1, counts
-    li $t2, 42
-    sw $t2, 0($t1)
-    lw $t3, 0($t1)
-```
-
-`$t0` is `10010000` and `$t1` is `10010004`, the three bytes of `"Hi"` rounded up to four, and
-`$t3` comes back at 42.
-
-Delete the `.align 2` line and press Build and Run. `counts` moves to `0x10010003`, the `sw` stops
-the program, and the message under the editor gives you that address. Then put it back.
-
-Two more addresses end a run. One outside everything in the table, such as `lw $t1, 4($zero)`, says
-`address out of range 0x00000004`. And a loop that never stops is simply cut off when the Playground's
-two million instructions run out, with no message at all, which is what an accidental infinite loop
-looks like here.
-
-## Your turn
-
-The word at `value` is `0x12345678`. Leave its **lowest** byte in `$t0`, which is the `0x78`, and its
-**highest** byte in `$t1`, which is the `0x12`, each as a number on its own with zeroes above it.
+Declare the word `0x0A0B0C0D` at `marker`, then put `marker`'s address in `$t0`. Before running the
+program, predict the four bytes you will see starting at `0x10010000`.
 
 ```mips|playground|memory|exercise
 .data
-value:  .word 0x12345678
+marker:
+    # declare one word here
 
 .text
 main:
-    # your code here
+    # put marker's address in $t0
+    li $v0, 10
+    syscall
 ```
 
 ```testcase
 {
-    "expectedRegisters": { "$t0": "0x78", "$t1": "0x12" }
+    "expectedRegisters": { "$t0": "0x10010000" },
+    "expectedMemory": [{ "type": "number-chunk", "address": "0x10010000", "bytes": 4, "expected":
+["0x0A0B0C0D"] }]
 }
 ```
 
@@ -183,33 +123,38 @@ main:
 
 ```mips|playground|memory|solution
 .data
-value:  .word 0x12345678
+marker: .word 0x0A0B0C0D
 
 .text
 main:
-    la $t2, value
-    lbu $t0, 0($t2)     # the lowest byte is at the lowest address
-    lbu $t1, 3($t2)     # and the highest is three bytes on
+    la $t0, marker
+    li $v0, 10
+    syscall
 ```
+
+The memory panel shows `0D 0C 0B 0A` from the lowest address to the highest.
 
 </details>
 
-The second one has a string of five bytes and a buffer after it, so the buffer starts at an odd
-address. Make it word aligned and store `0x11223344` in its first word.
+The string below uses five bytes. Add one directive so `buffer` begins at the next address that is
+a multiple of 4, then put `buffer`'s address in `$t0`.
 
 ```mips|playground|memory|exercise
 .data
 name:   .asciiz "MIPS"
+        # add the alignment directive here
 buffer: .space 8
 
 .text
 main:
-    # your code here
+    la $t0, buffer
+    li $v0, 10
+    syscall
 ```
 
 ```testcase
 {
-    "expectedMemory": [{ "type": "number-chunk", "address": "0x10010008", "bytes": 4, "expected": ["0x11223344"] }]
+    "expectedRegisters": { "$t0": "0x10010008" }
 }
 ```
 
@@ -224,9 +169,9 @@ buffer: .space 8
 
 .text
 main:
-    la $t0, buffer          # now at 0x10010008
-    li $t1, 0x11223344
-    sw $t1, 0($t0)
+    la $t0, buffer
+    li $v0, 10
+    syscall
 ```
 
 </details>

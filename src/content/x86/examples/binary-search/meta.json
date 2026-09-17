@@ -1,0 +1,6 @@
+{
+    "name": "Binary search",
+    "description": "A sorted array searched by halving the range every pass, with the middle found by a shift and the two lines that stop the loop looping for ever.",
+    "order": 15,
+    "topic": "binary-search"
+}

@@ -1,0 +1,6 @@
+{
+    "name": "Recursion: factorial and Fibonacci",
+    "description": "Two subroutines that call themselves, one making a chain of calls and one a tree, and the pushes that keep a value alive across a call.",
+    "order": 12,
+    "topic": "factorial-and-fibonacci"
+}

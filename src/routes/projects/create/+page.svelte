@@ -121,8 +121,7 @@
             <p
                 style="margin-top: 2rem; background: rgba(var(--RGB-red), 0.1); padding: 1rem; border-radius: 0.5rem;"
             >
-                X86 is experimental. We are deciding between FASM and NASM syntax, it might have
-                bugs. Please report any issues you find.
+                X86 is experimental and might have bugs. Please report any issues you find.
             </p>
         {/if}
     </div>

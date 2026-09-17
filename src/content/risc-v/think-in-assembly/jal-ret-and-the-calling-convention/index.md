@@ -1,147 +1,179 @@
-`jal label` writes the address of the next instruction into `ra` and jumps to the label. `ret` jumps
-back to it. That pair is the whole of calling and returning on RISC-V, and it touches no memory at
-all: on the M68K a `bsr` pushes the return address and an `rts` pops it, and here it goes in a
-register.
+`jal label` makes a call in two steps: it writes the address of the next instruction into `ra`, then
+jumps to `label`. `ret` jumps to the address in `ra`, so execution continues immediately after the
+call.
 
-Both of them are shorthand. `jal label` is `jal ra, label`, and the register it writes is an operand
-you are allowed to name; `ret` is `jalr zero, ra, 0`, which jumps to the address in `ra` and throws
-away the return address it would have written, because a return has nowhere to come back from.
+The longer spelling of `jal label` is `jal ra, label`. `ret` is a pseudo-instruction for
+`jalr zero, ra, 0`: jump to the address in `ra` and discard the new link address. Neither instruction
+moves `sp` or accesses memory.
 
-## A subroutine that calls nothing
+## Align the playground stack before a call
 
-The agreement in this course is the standard one: arguments arrive in `a0` to `a7`, the answer leaves
-in `a0`.
+The standard RISC-V calling convention requires `sp` to be a multiple of 16 when a procedure begins
+and throughout its execution. The playground starts it at `0x7FFFEFFC`, as the previous lesson
+showed. That address is word-aligned, but it is not a multiple of 16.
+
+Each `main` on this page therefore begins with:
+
+```riscv
+    addi sp, sp, -12       # 0x7FFFEFFC -> 0x7FFFEFF0
+```
+
+Now `sp` is 16-byte aligned before `main` makes a call. After the call, `main` adds 12 to restore the
+playground's original stack boundary. In an environment that already supplies an ABI-aligned stack,
+this playground setup would be unnecessary. The playground enters `main` directly with its own
+unaligned value, so treat the first adjustment as startup setup; the convention-following examples
+begin with the calls made after it.
+
+## Pass an argument and return a result
+
+The calling convention lets separately written callers and subroutines agree on where values go.
+The first eight arguments use `a0` through `a7`. A one-word result comes back in `a0`.
 
 ```riscv|playground
 .text
 .globl main
 main:
-    li a0, 10               # x = 10
-    jal triple              # x = triple(x)
-    mv s0, a0
-    li a7, 10
-    ecall
+    addi sp, sp, -12       # align the playground stack
+    li a0, 10              # argument n = 10
+    jal triple             # a0 = triple(n)
+    mv s0, a0              # keep the result where it is easy to inspect
+    addi sp, sp, 12        # restore the playground's initial sp
+    j end
 
-# triple(n): n arrives in a0, the answer leaves in a0
+# triple(n): n arrives in a0; the result leaves in a0
 triple:
     add t0, a0, a0
     add a0, t0, a0
     ret
+end:
 ```
 
-`s0` comes out at 30. Step through it and watch `ra`: it is 0 until the `jal`, then `00400008`, the
-address of the `mv` that follows the call, and the `ret` puts the `pc` back there.
+`s0` finishes at 30. Step through the `jal`: `ra` becomes `0040000C`, the address of the `mv` after
+the call. The `ret` copies that address into the program counter, and `main` continues there.
 
-The `li a7, 10` and `ecall` before `triple:` are what stop the program. Take them out and it walks
-into the subroutine, runs it, and the `ret` jumps back to the `mv` it has already done, round and
-round until the Playground gives up.
+`triple` is a **leaf subroutine** because it does not call another subroutine. Its `ra` remains
+unchanged between entry and `ret`, so `triple` needs no stack frame.
 
-`triple` is a **leaf**: it calls nothing, so `ra` is safe for as long as it runs and the subroutine
-needs no stack, no saving and no prologue. Most small subroutines are leaves, and that is what makes
-a register return address worth having.
+The `j end` keeps execution from falling through into `triple` after `main` has finished its work.
+In this playground, `end` names the address just after the last assembled instruction, and reaching
+the end of the program completes the run. The jump is ordinary control flow, not a hardware exit
+operation.
 
-## There is only one ra
+## One ra, and two calls that need it
 
-A subroutine that calls something else has a problem: the `jal` inside it overwrites `ra` with a new
-return address, and the one it needed is gone. So a subroutine that is not a leaf saves `ra` on the
-stack on the way in and loads it back on the way out.
+A subroutine that makes a call is a **non-leaf subroutine**. Its own caller's return address arrives
+in `ra`, but its inner `jal` replaces `ra` with a new address. The non-leaf subroutine must preserve
+the return address it will need later.
 
 ```riscv|playground|memory
 .text
 .globl main
 main:
+    addi sp, sp, -12       # align the playground stack
     li a0, 5
     jal quadruple
     mv s0, a0
-    li a7, 10
-    ecall
+    addi sp, sp, 12
+    j end
 
-# quadruple(n): calls doubled twice, so it has to keep ra
+# quadruple(n): calls doubled twice, so it preserves its own ra
 quadruple:
-    addi sp, sp, -16
-    sw ra, 0(sp)            # the return address into main
+    addi sp, sp, -16       # one aligned stack frame
+    sw ra, 0(sp)
     jal doubled
-    jal doubled             # the answer of the first call is already in a0
-    lw ra, 0(sp)            # and back it comes
+    jal doubled            # the first result is already the next argument
+    lw ra, 0(sp)
     addi sp, sp, 16
     ret
 
-# doubled(n): a leaf, so it needs no stack at all
+# doubled(n): a leaf
 doubled:
     add a0, a0, a0
     ret
+end:
 ```
 
-`s0` comes out at 20. Take the two `ra` lines out and run it again: the second `jal doubled`
-overwrites `ra` with an address inside `quadruple`, so the `ret` at the end returns into the middle
-of `quadruple` instead of into `main`, and the program loops.
+On entry to `quadruple`, `sp` is `0x7FFFEFF0`. Its 16-byte frame lowers `sp` to `0x7FFFEFE0` and
+keeps it 16-byte aligned:
 
-Those four lines around the body are the **prologue** and the **epilogue**, and they are what a C
-compiler writes for every function that calls another one. The frame is 16 bytes for one word,
-because the ABI asks for `sp` to stay a multiple of 16.
+|      address |    value    | reached as | use                        |
+| -----------: | :---------: | ---------- | -------------------------- |
+| `0x7FFFEFE0` | 🟢 0040000C | `0(sp)`    | return address into `main` |
+| `0x7FFFEFE4` |  00000000   | `4(sp)`    | unused frame space         |
+| `0x7FFFEFE8` |  00000000   | `8(sp)`    | unused frame space         |
+| `0x7FFFEFEC` |  00000000   | `12(sp)`   | unused frame space         |
 
-Nothing had to be moved between the two calls, since the answer of `doubled` comes back in `a0` and
-`a0` is where the next call wants its argument.
+The first two frame instructions are the **prologue**; the final load, stack adjustment and `ret` are
+the **epilogue**. After the epilogue, `sp` is back at `0x7FFFEFF0` and `ra` once again points into
+`main`. `s0` finishes at 20.
 
-## Who preserves what
+If the save and restore of `ra` are removed, the second `jal doubled` leaves `ra` pointing inside
+`quadruple`. Its final `ret` then returns to the epilogue again instead of returning to `main`.
 
-The convention names two groups of registers, and the whole point of the split is that a caller and a
-subroutine written by two different people still work together.
+## Who preserves which registers
 
-| registers                        | who keeps them                         |
-| -------------------------------- | -------------------------------------- |
-| `t0` to `t6`, `a0` to `a7`, `ra` | the **caller**, if it still wants them |
-| `s0` to `s11`, `sp`              | the **subroutine**, before it returns  |
+Calls also need an agreement about ordinary register values. The standard convention divides them
+into two groups:
 
-So a subroutine may write any `t` register it likes without telling anyone, and must put back any `s`
-register it touches. A caller holding something in `t3` across a call has to save it itself.
+| registers                        | preservation rule                                      |
+| -------------------------------- | ------------------------------------------------------ |
+| `t0` to `t6`, `a0` to `a7`, `ra` | caller saves a value if it needs that value after call |
+| `s0` to `s11`, `sp`              | callee restores any of these registers that it changes |
+
+The first group is **caller-saved**. A caller does not save every register in the group; it saves
+only values that must survive the call. Argument registers belong here because a call commonly uses
+them for its arguments and result.
+
+The second group is **callee-saved**. A subroutine may use an `s` register, provided it restores the
+value that was there when it entered. A returning subroutine must also restore `sp` to its entry
+value.
 
 ```riscv|playground|memory
 .text
 .globl main
 main:
-    li t0, 111              # a temporary
-    li s0, 222              # a saved register
+    addi sp, sp, -12
+    li t0, 111             # a caller-saved value
+    li s0, 222             # a callee-saved value
     li a0, 3
     jal scribble
-    mv t1, t0               # what is left of the temporary
-    mv s1, s0               # and of the saved one
-    li a7, 10
-    ecall
+    mv t1, t0              # value left by the subroutine
+    mv s1, s0              # caller's original value
+    addi sp, sp, 12
+    j end
 
-# scribble(n): destroys t0 freely and borrows s0 properly
+# scribble(n): uses t0 freely and borrows s0
 scribble:
     addi sp, sp, -16
-    sw s0, 0(sp)            # the caller's s0, kept
-    li t0, 999              # a temporary, nobody's to keep
-    li s0, 999              # borrowed, and given back below
+    sw s0, 0(sp)
+    li t0, 999
+    li s0, 999
     add a0, a0, a0
     lw s0, 0(sp)
     addi sp, sp, 16
     ret
+end:
 ```
 
-`t1` comes out at 999 and `s1` at 222. The subroutine destroyed the caller's `t0` and was entitled
-to; it destroyed the caller's `s0` too, and put it back, which is why `main` still has its 222.
+`t1` finishes at 999 because `scribble` may replace `t0`. `s1` finishes at 222 because `scribble`
+saves and restores `s0`. This leaf uses a frame to preserve `s0`; it has no reason to save `ra`.
 
-`ra` is in the caller's column, which reads oddly until you notice what it means: a subroutine may
-destroy `ra`, and a caller that still wants its own return address has to have saved it. That is
-exactly what the prologue of `quadruple` did, and it is why the rule and the prologue are the same
-rule.
+The same caller-saved rule explains the earlier `quadruple` prologue. As the caller of `doubled`,
+`quadruple` needs its incoming `ra` after both inner calls, so it stores that value in its frame.
 
-Nothing in the machine enforces any of this. It is what the comment above the label says, and the
-reason to follow the standard one instead of inventing your own is that every other RISC-V program
-does.
+These rules are an agreement followed by software, not behavior enforced by the processor. They let
+code that follows the same RISC-V ABI call each other safely.
 
-## Arguments past the eighth
+## Arguments after the eighth
 
-Eight registers hold eight arguments, twice what MIPS gives you. A ninth goes on the stack, and the
-**caller** puts it there and takes it back off.
+If a call has more than eight arguments, the caller places the remaining arguments on the stack.
+Here the caller reserves one aligned 16-byte block for arguments nine and ten:
 
 ```riscv|playground|memory
 .text
 .globl main
 main:
+    addi sp, sp, -12       # align the playground stack
     li a0, 1
     li a1, 2
     li a2, 3
@@ -150,18 +182,18 @@ main:
     li a5, 6
     li a6, 7
     li a7, 8
-    addi sp, sp, -16
+    addi sp, sp, -16       # stack arguments, still 16-byte aligned
     li t0, 9
-    sw t0, 0(sp)            # the ninth argument
+    sw t0, 0(sp)
     li t0, 10
-    sw t0, 4(sp)            # and the tenth
+    sw t0, 4(sp)
     jal sum10
-    addi sp, sp, 16         # the caller takes the room back
+    addi sp, sp, 16        # caller releases the argument block
     mv s0, a0
-    li a7, 10
-    ecall
+    addi sp, sp, 12
+    j end
 
-# sum10(a..j): eight in registers, i at 0(sp) and j at 4(sp)
+# sum10(a..j): eight arguments in a0..a7; i at 0(sp), j at 4(sp)
 sum10:
     add a0, a0, a1
     add a0, a0, a2
@@ -175,126 +207,116 @@ sum10:
     lw t2, 4(sp)
     add a0, a0, t2
     ret
+end:
 ```
 
-`s0` comes out at 55, which is 1 to 10 added up. While `sum10` runs, `sp` is at `0x7FFFEFEC` and the
-stack holds:
+While `sum10` runs, `sp` is `0x7FFFEFE0`:
 
-|      address |    value    | reached as | what it is |
-| -----------: | :---------: | ---------- | ---------- |
-| `0x7FFFEFEC` | 🟢 00000009 | `0(sp)`    | `i`        |
-| `0x7FFFEFF0` |  0000000A   | `4(sp)`    | `j`        |
+|      address |    value    | reached as | argument |
+| -----------: | :---------: | ---------- | -------- |
+| `0x7FFFEFE0` | 🟢 00000009 | `0(sp)`    | ninth    |
+| `0x7FFFEFE4` |  0000000A   | `4(sp)`    | tenth    |
 
-`jal` pushes nothing, which is why `0(sp)` inside the subroutine is the argument and not a return
-address. The catch is that `sp` moves: push anything inside `sum10` and every offset above changes,
-and that is what `fp` exists for. `mv fp, sp` at the top of a subroutine gives you a pointer that
-stays still while `sp` moves, and then the arguments are at `0(fp)` and `4(fp)` whatever else the
-subroutine does. `fp` is `s0`, a saved register, so a subroutine that uses it saves the caller's copy
-first.
+`jal` itself pushes nothing, so the ninth argument really is at `0(sp)` when this leaf begins.
+`sum10` returns 55 in `a0`, and `main` copies it to `s0`.
 
-`a7` is the eighth argument here and the `ecall` service number two lines later, which is the same
-register doing two jobs at two moments. Loading the service number after the call is what keeps them
-apart.
+Stack offsets are always measured from the current value of `sp`. If `sum10` reserved a 16-byte
+frame, the incoming ninth and tenth arguments would then be at `16(sp)` and `20(sp)` until that
+frame was released.
 
-## Recursion needs nothing new
+## Recursion uses one frame per call
 
-A subroutine that calls itself gets a fresh frame at a fresh address every time, because every
-prologue subtracts from wherever `sp` happens to be. The same `0(sp)` in the source is a different
-address in every call.
+A recursive subroutine is a non-leaf subroutine that calls itself. Every active call needs its own
+return address and its own saved values. Repeating the prologue creates a fresh frame at a lower
+address each time.
 
 ```riscv|playground|memory
 .text
 .globl main
 main:
+    addi sp, sp, -12
     li a0, 5
     jal factorial
     mv s0, a0
-    li a7, 10
-    ecall
+    addi sp, sp, 12
+    j end
 
-# factorial(n): n in a0, the answer in a0
+# factorial(n): n arrives in a0; the result leaves in a0
 factorial:
     addi sp, sp, -16
-    sw ra, 4(sp)            # this call's return address
-    sw a0, 0(sp)            # and its own n
+    sw ra, 4(sp)           # this call's return address
+    sw a0, 0(sp)           # this call's n
     li t0, 2
-    blt a0, t0, base        # if(n < 2) return 1
+    blt a0, t0, base       # if n < 2, return 1
     addi a0, a0, -1
-    jal factorial           # a0 = factorial(n - 1)
-    lw t1, 0(sp)            # our n back, since the call destroyed a0
-    mul a0, a0, t1          # n * factorial(n - 1)
-    j fret
+    jal factorial          # a0 = factorial(n - 1)
+    lw t1, 0(sp)           # recover this call's n
+    mul a0, a0, t1
+    j finish
 base:
     li a0, 1
-fret:
+finish:
     lw ra, 4(sp)
     addi sp, sp, 16
     ret
+end:
 ```
 
-`s0` comes out at `00000078`, which is 120. At the deepest point, with `a0` down to 1, the stack
-holds five frames of sixteen bytes each, of which each uses the first two words:
+`s0` finishes at `00000078`, or 120. At the deepest point, `a0` is 1 and five calls are active.
+Each has a separate 16-byte frame:
 
-|      address |    value    | what it is                             |
-| -----------: | :---------: | -------------------------------------- |
-| `0x7FFFEFAC` | 🟢 00000001 | `n` of the innermost call              |
-| `0x7FFFEFB0` |  00400030   | its return address, inside `factorial` |
-| `0x7FFFEFBC` |  00000002   | `n` of the call before it              |
-| `0x7FFFEFC0` |  00400030   |                                        |
-| `0x7FFFEFCC` |  00000003   |                                        |
-| `0x7FFFEFD0` |  00400030   |                                        |
-| `0x7FFFEFDC` |  00000004   |                                        |
-| `0x7FFFEFE0` |  00400030   |                                        |
-| `0x7FFFEFEC` |  00000005   | `n` of the first call                  |
-| `0x7FFFEFF0` |  00400008   | its return address, inside `main`      |
+|      address |    value    | what it is                            |
+| -----------: | :---------: | ------------------------------------- |
+| `0x7FFFEFA0` | 🟢 00000001 | `n` of the innermost call             |
+| `0x7FFFEFA4` |  00400034   | its return address inside `factorial` |
+| `0x7FFFEFB0` |  00000002   | `n` of the preceding call             |
+| `0x7FFFEFB4` |  00400034   | its return address                    |
+| `0x7FFFEFC0` |  00000003   | `n` of the preceding call             |
+| `0x7FFFEFC4` |  00400034   | its return address                    |
+| `0x7FFFEFD0` |  00000004   | `n` of the preceding call             |
+| `0x7FFFEFD4` |  00400034   | its return address                    |
+| `0x7FFFEFE0` |  00000005   | `n` of the first call                 |
+| `0x7FFFEFE4` |  0040000C   | return address into `main`            |
 
-The eight bytes between one pair and the next are the padding that keeps `sp` a multiple of 16.
-Four of the five return addresses are the same `00400030`, the `lw t1, 0(sp)` after the recursive
-`jal`, and the outermost one points into `main`. Nothing had to be reserved and nothing had to be
-named: the stack pointer chose all ten addresses.
+The unused eight bytes at the top of each frame make its total size 16 bytes, so every active `sp`
+is aligned. Four return addresses are `00400034`, the `lw t1, 0(sp)` after the recursive call. The
+outermost return address is different because that call came from `main`.
 
-The `lw t1, 0(sp)` after the call is there because `a0` is a caller-saved register and the recursive
-call destroyed it. Saving it in the prologue and reloading it afterwards is this subroutine being its
-own caller.
+After a recursive call, `a0` holds its result. The current call reloads its old `n` from the frame
+because the inner call was allowed to replace `a0`. On the way back out, every epilogue restores one
+`ra` and raises `sp` by 16. The Call stack panel shows the five active `factorial` calls while the
+run is stopped at its deepest point.
 
-The editor's **Call stack** tab lists the calls that are open, which for a run stopped part way
-through this program is `factorial` five times over.
+## Write a leaf subroutine
 
-## Calling an address
-
-`jalr t0` jumps to the address **in** `t0` and writes the return address into `ra`, which is how a
-program calls a function pointer or a routine out of a table. `la t0, triple` and `jalr t0` do what
-`jal triple` does, with the address worked out while the program runs.
-
-The full form is `jalr rd, rs, offset`, so `jalr ra, t0, 0` is the same instruction written out, and
-`ret` is that form with `zero` as the destination and `ra` as the source. One instruction covers the
-call through a pointer, the return and the tail call, which is what happens when you give a machine
-`zero` and let it stand in for the operands you did not need.
-
-`call label` is the pseudo-instruction for a subroutine too far away for `jal` to reach, which is
-more than a megabyte. It costs two instructions and destroys `t1`, so inside a program you write here
-`jal` is the one to use.
-
-## Your turn
-
-Write a subroutine called with `jal` that squares the number in `a0` and leaves the answer in `a0`,
-then ends the program. The test starts `a0` at 7, so it comes out at 49.
-
-The answer stays in `a0` through the exit, which is the one place RISC-V is kinder than MIPS: there
-the answer and the service number share `$v0`, so an answer left in it is destroyed by the line that
-ends the program. Here the service number is in `a7` and `a0` is untouched.
+Keep `main` unchanged and complete `square`. It receives 7 in `a0`, returns 49 in `a0`, and uses
+`ret` to continue at the stack-restoring instruction in `main`.
 
 ```riscv|playground|exercise
 .text
 .globl main
 main:
+    addi sp, sp, -12
+    jal square
+    addi sp, sp, 12
+    j end
+
+# square(n): n arrives in a0; the result leaves in a0
+square:
     # your code here
+end:
 ```
 
 ```testcase
 {
-    "startingRegisters": { "a0": 7 },
-    "expectedRegisters": { "a0": 49 }
+    "startingRegisters": {
+        "a0": 7,
+        "sp": "0x7FFFEFFC"
+    },
+    "expectedRegisters": {
+        "a0": 49,
+        "sp": "0x7FFFEFFC"
+    }
 }
 ```
 
@@ -305,32 +327,40 @@ main:
 .text
 .globl main
 main:
+    addi sp, sp, -12
     jal square
-    li a7, 10
-    ecall
+    addi sp, sp, 12
+    j end
 
-# square(n): n in a0, the answer in a0
+# square(n): n arrives in a0; the result leaves in a0
 square:
     mul a0, a0, a0
     ret
+end:
 ```
 
 </details>
 
-The second one hands you `doubled`, a leaf, and asks for `quad`, which must call it twice and come
-back to `main`. `quad` is not a leaf, so write its prologue and its epilogue too. The test starts
-`a0` at 5, so `s0` comes out at 20.
+A final register value cannot reveal which path produced it. Step through your program as well:
+`jal` should enter `square`, `ra` should name the following `addi`, and `ret` should take execution
+back there.
+
+## Write a non-leaf subroutine
+
+Keep `main` and `doubled` unchanged. Complete `quad` so it calls `doubled` twice, returns to `main`,
+and restores both `ra` and `sp`. The starting argument is 5, so `s0` finishes at 20.
 
 ```riscv|playground|memory|exercise
 .text
 .globl main
 main:
+    addi sp, sp, -12
     jal quad
     mv s0, a0
-    li a7, 10
-    ecall
+    addi sp, sp, 12
+    j end
 
-# quad(n): calls doubled twice and returns to main
+# quad(n): call doubled twice and return to main
 quad:
     # your code here
 
@@ -338,12 +368,19 @@ quad:
 doubled:
     add a0, a0, a0
     ret
+end:
 ```
 
 ```testcase
 {
-    "startingRegisters": { "a0": 5 },
-    "expectedRegisters": { "s0": 20 }
+    "startingRegisters": {
+        "a0": 5,
+        "sp": "0x7FFFEFFC"
+    },
+    "expectedRegisters": {
+        "s0": 20,
+        "sp": "0x7FFFEFFC"
+    }
 }
 ```
 
@@ -354,15 +391,16 @@ doubled:
 .text
 .globl main
 main:
+    addi sp, sp, -12
     jal quad
     mv s0, a0
-    li a7, 10
-    ecall
+    addi sp, sp, 12
+    j end
 
-# quad(n): calls doubled twice and returns to main
+# quad(n): call doubled twice and return to main
 quad:
     addi sp, sp, -16
-    sw ra, 0(sp)        # the return address into main
+    sw ra, 0(sp)
     jal doubled
     jal doubled
     lw ra, 0(sp)
@@ -373,6 +411,12 @@ quad:
 doubled:
     add a0, a0, a0
     ret
+end:
 ```
 
 </details>
+
+The value testcase alone cannot prove that `quad` made both calls or preserved `ra`. Step through it
+to verify that structure: each call to `doubled` replaces `ra`, the `lw` recovers the address in
+`main`, and the final `ret` uses that recovered address. At the end, `sp` is back at the playground's
+starting value.

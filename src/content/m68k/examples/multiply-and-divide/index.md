@@ -2,12 +2,8 @@ Two unit conversions, one in each direction. The first turns 365 days into hours
 the second turns 1000 seconds into 16 minutes and 40 seconds with a `divu`, which answers both
 questions at once and packs the two answers into one register.
 
-Every program up to here added and subtracted. These two instructions are the ones with rules of
-their own, and the rules are about sizes: their source is a word, and a division gives back a word
-and a word.
-
-**You need to know:** the "Arithmetic, logic and bits" lecture. What is new here is taking a packed
-answer apart, `swap` exchanges the two words of a register and an `and` keeps the one you want.
+Multiply and divide are the two instructions with rules of their own, and the rules are all about
+size: the source is a word, and a division hands back a word and a word in one register.
 
 ```m68k|playground|no-flags|allow-open
     move.w #365, d0     ; days = 365
@@ -32,9 +28,11 @@ division is `0028 0010`: 16 minutes in the low word and 40 seconds in the high o
 `d3` and swapping the words is how you get at the remainder, and the two `andi.l` lines throw away
 the half of the register that belongs to the other answer.
 
-`d2` comes out at 16 and `d3` at 40. The quotient has to fit in those sixteen bits: when it does
-not, `divu` sets `V` and leaves the register exactly as it was, so a division of numbers you did not
-choose yourself is followed by a `bvs`. Dividing by zero ends the run with "Division by zero".
+The quotient has to fit in those sixteen bits. When it does not, `divu` sets `V` and leaves the
+register exactly as it was, so a division of numbers you did not choose yourself wants a `bvs` after
+it. Dividing by zero ends the run with "Division by zero".
 
-Try changing `move.w #365, d0` to `move.l #65901, d0`. `d0` still comes out at 8760, because 65901 is
-65536 plus 365 and `mulu` never looked above the low word.
+The word-sized source catches people the same way. Change `move.w #365, d0` to `move.l #65901, d0`
+and run it: `d0` still comes out at 8760. 65901 is 65536 plus 365, and `mulu` never looked above the
+low word, so the extra 65536 was silently dropped and the answer is the one for a number you did not
+ask about.

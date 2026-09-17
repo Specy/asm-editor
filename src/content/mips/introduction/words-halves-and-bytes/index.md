@@ -1,209 +1,171 @@
-Memory is bytes and a register is 32 bits, and neither of them holds a number in the sense C means
-it. What the bits mean is decided by the instruction that reads them, and on MIPS that decision is
-made twice: once by which of a signed and unsigned pair you picked, and once by how much of the
-register the instruction touched.
+MIPS uses three common sizes for numbers and bit patterns:
 
-## Three ways of writing a number
+| name               | bits | bytes | hexadecimal digits |
+| ------------------ | ---: | ----: | -----------------: |
+| byte               |    8 |     1 |                  2 |
+| half (or halfword) |   16 |     2 |                  4 |
+| word               |   32 |     4 |                  8 |
 
-The assembler reads decimal, hexadecimal and a character literal. There is no `#` in front: an
-operand made of digits is a number and an operand beginning with `$` is a register.
+Every MIPS register holds one full word. Memory can also hold individual bytes and halves. The size
+matters because the same pattern can represent a different number when it is read at a different
+width.
 
-| written | base                  |
-| ------- | --------------------- |
-| `100`   | decimal               |
-| `0x64`  | hexadecimal           |
-| `'d'`   | the ASCII code of `d` |
+Hexadecimal makes the boundaries easy to see because two hexadecimal digits represent one byte.
+For the word `0x12345678`, the same 32 bits can be grouped like this:
 
-All three of those are 100, and the last one because ASCII gives the letter `d` the code `0x64`.
-There is **no binary literal**: `0b1100100` is a build error. Negative numbers take a minus sign.
+```text
+word:    12345678
+halves:  1234 | 5678
+bytes:   12 | 34 | 56 | 78
+```
 
-The assembler also does no arithmetic. `li $t0, 4*2` does not assemble, and `.word 2+3` writes two
-words, a 2 and a 3, because the `+` separates them rather than adding them. The one place a sum is
-allowed is an address, where `lw $t0, numbers+8` means eight bytes past the label.
+This diagram groups the bits inside the value. In memory, the Playground displays the four bytes in
+little-endian order, as the previous lesson showed.
+
+The registers panel has **B**, **W**, and **L** view buttons. For MIPS, **B** divides each register
+into four bytes, **W** divides it into two halves, and **L** shows the whole 32-bit word. These
+buttons change how the panel groups the value; they do not change the bits in the register.
+
+## Decimal and hexadecimal source values
+
+Write an ordinary decimal number with digits, such as `100`. Write a hexadecimal number with the
+prefix `0x`, such as `0x64`. A negative decimal value uses a minus sign.
 
 ```mips|playground
 .text
 main:
-    li $t0, 100         # decimal
-    li $t1, 0x64        # hexadecimal
-    li $t2, 'd'         # a character
-    li $t3, -1          # negative
-    li $t4, 2147483647  # the largest signed word
-    li $t5, -2147483648 # and the smallest
+    li $t0, 100
+    li $t1, 0x64
+    li $t2, -1
+    li $v0, 10
+    syscall
 ```
 
-`$t0`, `$t1` and `$t2` all come out at `00000064`. `$t3` is `FFFFFFFF`, `$t4` is `7FFFFFFF` and
-`$t5` is `80000000`.
+Build the program and step through the three `li` instructions. `$t0` and `$t1` both become
+`00000064`: decimal `100` and hexadecimal `0x64` are two source spellings for the same value.
+`$t2` becomes `FFFFFFFF`.
 
-## Byte, half, word
+Hover over these register values. The panel shows both a signed and an unsigned reading when those
+readings differ. Then switch among **B**, **W**, and **L** to see the byte, half, and word boundaries.
+The register still contains the same 32 bits in every view.
 
-The three sizes have names, and MIPS uses them in the names of its instructions:
+## Declare each size in memory
 
-- a **byte**, 1 byte, 8 bits, which `lb`, `lbu` and `sb` move.
-- a **half**, 2 bytes, 16 bits, which `lh`, `lhu` and `sh` move.
-- a **word**, 4 bytes, 32 bits, which `lw` and `sw` move, and which is the size of every register.
-
-A word here is 4 bytes. On the M68K a word is 2 and the 4 byte size is called a long, so the same
-word means two different things on the two machines, which is worth checking whenever you read a
-manual for a machine you do not know.
-
-Everything else on MIPS is 32 bits and says nothing about size, because there is no arithmetic on
-part of a register. `add`, `and`, `sll` and the rest read all 32 bits of their operands and write all
-32 bits of their destination. The only instructions that touch fewer are the loads and stores above,
-because memory is where the smaller things live.
-
-## The same bits, two readings
-
-`FFFFFFFF` is 4294967295 read as an unsigned word and -1 read as a signed one, and nothing in the
-register says which. The signed reading is **two's complement**: the top bit is the sign, and
-negating a number means flipping every bit and adding 1.
-
-Where the answer really is different, MIPS gives you two instructions and you pick:
-
-| signed | unsigned | what they differ about                     |
-| ------ | -------- | ------------------------------------------ |
-| `slt`  | `sltu`   | which of two registers is smaller          |
-| `slti` | `sltiu`  | the same against a constant                |
-| `lb`   | `lbu`    | what fills the 24 bits above a loaded byte |
-| `lh`   | `lhu`    | the 16 bits above a loaded half            |
-| `sra`  | `srl`    | what comes in at the top of a right shift  |
-| `div`  | `divu`   | division                                   |
-| `mult` | `multu`  | multiplication                             |
-
-```mips|playground
-.text
-main:
-    li $t0, -1              # FFFFFFFF: -1 signed, 4294967295 unsigned
-    li $t1, 1
-    slt $t2, $t0, $t1       # is -1 less than 1? signed
-    sltu $t3, $t0, $t1      # is 4294967295 less than 1? unsigned
-    li $t4, -20
-    sra $t5, $t4, 2         # -20 / 4, the sign dragged along
-    srl $t6, $t4, 2         # the same bits, zeroes coming in
-```
-
-`$t2` comes out at 1 and `$t3` at 0, from the same two registers. `$t5` is `FFFFFFFB`, which is -5,
-and `$t6` is `3FFFFFFB`, which is 1073741819. Two instructions, the same input bits, two right
-answers to two different questions.
-
-The registers panel has the same choice. The **B**, **W** and **L** buttons in its header cut each
-register into bytes, halves or one word, and hovering a value shows its signed and unsigned readings
-side by side.
-
-## Sign extension
-
-Copying a byte into a 32 bit register has to decide what goes in the 24 bits above it. `0xF0` as an
-unsigned byte is 240, and as a signed byte it is -16, and as a word 240 is `000000F0` while -16 is
-`FFFFFFF0`. **Sign extension** is filling the bits above with copies of the top bit, which is what
-keeps a signed number the same number in a bigger box.
-
-MIPS does not have an instruction for it, it has a pair of loads: `lb` sign extends and `lbu` fills
-with zeroes, and `lh` and `lhu` do the same for a half.
-
-The same choice is made about the 16 bit constant inside an instruction, and here the two families
-split the other way:
-
-- **`addi`, `addiu`, `slti`, `sltiu`** and the load and store offsets **sign extend** their constant,
-  so `-1` written in the instruction is `FFFFFFFF` by the time it is added.
-- **`andi`, `ori`, `xori`** **zero extend** theirs, so `0xFFFF` in one of those is `0000FFFF` and
-  never touches the top half of the register.
+The `.byte`, `.half`, and `.word` directives place values of the three sizes in memory:
 
 ```mips|playground|memory
 .data
-byte:   .byte 0xF0
+small:  .byte 0x7F
         .align 1
-half:   .half 0xFFFF
+middle: .half 0x1234
+        .align 2
+large:  .word 0x12345678
 
 .text
 main:
-    la $t0, byte
-    lb $t1, 0($t0)          # sign extended: FFFFFFF0
-    lbu $t2, 0($t0)          # zero filled: 000000F0
-    la $t3, half
-    lh $t4, 0($t3)           # FFFFFFFF
-    lhu $t5, 0($t3)          # 0000FFFF
-    addi $t6, $zero, -1      # the constant is sign extended
-    ori $t7, $zero, 0xFFFF   # and this one is not
-    andi $t8, $t6, 0xFFFF    # so this keeps the low half of -1
+    la $t0, small
+    la $t1, middle
+    la $t2, large
+    li $v0, 10
+    syscall
 ```
 
-`$t1` is `FFFFFFF0` and `$t2` is `000000F0`, the same byte in memory read twice. `$t6` is
-`FFFFFFFF`, `$t7` is `0000FFFF`, and `$t8` is `0000FFFF`: the `andi` masked -1 down to its low half
-because its own constant had zeroes above it.
+Build and run the program, then open the memory panel at `0x10010000`. The byte at `small` uses one
+address. After one padding byte, the half at `middle` uses two addresses. The word at `large` uses
+four addresses.
 
-`addiu` is the confusing name of the group. The `u` says the instruction does not trap on overflow;
-it does **not** mean the constant is unsigned, and `addiu $t0, $zero, -1` really does put `FFFFFFFF`
-in `$t0`.
+The panel shows these bytes from low address to high address:
 
-## How much of an instruction a constant gets
-
-A MIPS instruction is 32 bits and it has to name two registers and an operation, so there are 16 bits
-left for a constant. Anything from -32768 to 65535 goes into one instruction. Anything else takes
-two: `lui` puts the top 16 bits in place and clears the bottom ones, and an `ori` or an `addiu` puts
-the bottom half in.
-
-`li` hides that. Give it a small number and you get one instruction, give it a large one and you get
-two, and the second of them goes through `$at`.
-
-```mips|playground
-.text
-main:
-    li $t0, 32767           # fits, so one instruction
-    li $t1, 100000          # does not, so lui and ori through $at
-    move $t2, $at           # and here is what it left behind
-    lui $t3, 0x1234         # the top half, written by hand
-    ori $t3, $t3, 0x5678    # and the bottom half
+```text
+7F 00 34 12 78 56 34 12
 ```
 
-`$t1` comes out at `000186A0`, which is 100000, `$t2` at `00010000`, which is the `lui` half of it
-sitting in `$at`, and `$t3` at `12345678`. Click on the `li $t1, 100000` line after building and the
-editor prints the two instructions it became underneath.
+The `00` after `7F` is padding added by `.align 1`, which moves `middle` to a multiple-of-two
+address. The following `.align 2` moves `large` to a multiple-of-four address. The bytes of each
+multi-byte value appear least significant first because this Playground is little endian.
 
-## Overflow
+## One pattern can have two numeric readings
 
-Add 1 to the largest signed word and the answer wraps round to the smallest. MIPS gives you two
-opinions about that, one instruction each:
+An **unsigned** value uses every bit to represent zero or a positive number. A **signed** value uses
+the highest bit to distinguish the negative half of the range. MIPS uses **two's complement** for
+signed values.
 
-- **`add`, `addi` and `sub`** raise an **arithmetic overflow** exception when the true answer does
-  not fit in a signed 32 bit word. Nothing is written, and the run ends with
-  `Runtime exception at ...: arithmetic overflow` unless the program installed a handler.
-- **`addu`, `addiu` and `subu`** never do. The answer wraps and the program carries on, which is what
-  C does and what nearly all real MIPS code uses.
+For a fixed width, you can find the magnitude of a negative two's-complement pattern by flipping
+every bit and adding 1. Consider the byte `11110000`:
 
-```mips|playground
-.text
-main:
-    li $t0, 0x7FFFFFFF      # the largest signed word
-    addu $t1, $t0, $t0      # one past it twice over, wrapped
-    li $t2, -1
-    addu $t3, $t2, $t2
-    addiu $t4, $t0, 1       # and the immediate form
+```text
+original:          11110000
+flip every bit:    00001111
+add 1:             00010000   = 16
 ```
 
-`$t1` comes out at `FFFFFFFE`, `$t3` at `FFFFFFFE` as well, and `$t4` at `80000000`, which read as
-signed is the most negative word there is. Change `addu $t1, $t0, $t0` to `add $t1, $t0, $t0` and
-press Run: the program stops on that line and the message says `arithmetic overflow`.
+Its highest bit is 1, so its signed reading is -16. If all eight bits are read as unsigned, the same
+pattern is 240.
 
-There is no flag left behind either way. A program that wants to know whether an unsigned addition
-carried has to work it out, usually by comparing the answer with one of the operands, and that is the
-subject of "Comparing without flags".
+Width is part of the interpretation. The table follows the same low eight bits, `F0`, and pads them
+with leading zeroes at the wider widths. `F0` is negative when treated as one byte, while `00F0`
+and `000000F0` are positive because their highest bit is 0:
+
+| pattern    | width | unsigned reading | signed reading |
+| ---------- | ----- | ---------------: | -------------: |
+| `F0`       | byte  |              240 |            -16 |
+| `00F0`     | half  |              240 |            240 |
+| `000000F0` | word  |              240 |            240 |
+
+Positive patterns whose highest bit is 0 have the same signed and unsigned reading. Patterns whose
+highest bit is 1 fall in the upper half of the unsigned range and the negative half of the signed
+range.
+
+## Ranges
+
+Each size has a fixed number of bit patterns. A byte has 2<sup>8</sup>, or 256, patterns; a half has
+2<sup>16</sup>, or 65,536; and a word has 2<sup>32</sup>, or 4,294,967,296. Signed and unsigned
+readings divide those same patterns differently:
+
+| size |     unsigned range |                    signed range |
+| ---- | -----------------: | ------------------------------: |
+| byte |           0 to 255 |                     -128 to 127 |
+| half |        0 to 65,535 |               -32,768 to 32,767 |
+| word | 0 to 4,294,967,295 | -2,147,483,648 to 2,147,483,647 |
+
+Use this table as a reference; there is no need to memorize every endpoint. The recurring pattern is
+that an unsigned value starts at 0, while a signed value gives half of its patterns to negative
+numbers.
+
+## Check your reading
+
+For each pattern, state its unsigned and signed readings before opening the answer.
+
+1. The byte `FF`
+2. The half `8000`
+3. The word `FFFFFFFF`
+
+<details>
+<summary>Show answers</summary>
+
+1. `FF` is 255 unsigned and -1 signed.
+2. `8000` is 32,768 unsigned and -32,768 signed.
+3. `FFFFFFFF` is 4,294,967,295 unsigned and -1 signed.
+
+</details>
 
 ## Your turn
 
-The test starts `$t0` at -16, which the panel shows as `FFFFFFF0`. Divide it by 16 twice with
-shifts: the signed answer in `$t1`, which is -1, and the unsigned answer in `$t2`, which is
-`0x0FFFFFFF`.
+A register always holds a word. Use decimal operands with `li` so `$t0` displays `000000FF` and
+`$t1` displays `FFFFFFFF`. The first is the unsigned value of the byte pattern `FF`; the second is
+the signed value represented by an all-ones word.
 
 ```mips|playground|exercise
 .text
 main:
-    # your code here
+    # put the two values in $t0 and $t1
+    li $v0, 10
+    syscall
 ```
 
 ```testcase
 {
-    "startingRegisters": { "$t0": -16 },
-    "expectedRegisters": { "$t1": -1, "$t2": "0x0FFFFFFF" }
+    "expectedRegisters": { "$t0": 255, "$t1": -1 }
 }
 ```
 
@@ -213,27 +175,47 @@ main:
 ```mips|playground|solution
 .text
 main:
-    sra $t1, $t0, 4     # the sign bit dragged along
-    srl $t2, $t0, 4     # zeroes coming in at the top
+    li $t0, 255
+    li $t1, -1
+    li $v0, 10
+    syscall
 ```
 
 </details>
 
-The second one has one byte in memory holding `0xF0`. Leave it in `$t0` read as a signed number,
-which is -16, and in `$t1` read as unsigned, which is 240.
+Now declare one byte at `small`, one half at `middle`, and one word at `large`. Use the values shown
+in the comments. The alignment directives are already present. The three addresses will show that
+the declarations reserve 1, 2, and 4 bytes.
 
 ```mips|playground|memory|exercise
 .data
-value:  .byte 0xF0
+small:  # declare the byte 0x7F
+        .align 1
+middle: # declare the half 0x1234
+        .align 2
+large:  # declare the word 0x12345678
 
 .text
 main:
-    # your code here
+    la $t0, small
+    la $t1, middle
+    la $t2, large
+    li $v0, 10
+    syscall
 ```
 
 ```testcase
 {
-    "expectedRegisters": { "$t0": -16, "$t1": 240 }
+    "expectedRegisters": {
+        "$t0": "0x10010000",
+        "$t1": "0x10010002",
+        "$t2": "0x10010004"
+    },
+    "expectedMemory": [
+        { "type": "number", "address": "0x10010000", "bytes": 1, "expected": "0x7F" },
+        { "type": "number", "address": "0x10010002", "bytes": 2, "expected": "0x1234" },
+        { "type": "number", "address": "0x10010004", "bytes": 4, "expected": "0x12345678" }
+    ]
 }
 ```
 
@@ -242,13 +224,19 @@ main:
 
 ```mips|playground|memory|solution
 .data
-value:  .byte 0xF0
+small:  .byte 0x7F
+        .align 1
+middle: .half 0x1234
+        .align 2
+large:  .word 0x12345678
 
 .text
 main:
-    la $t2, value
-    lb $t0, 0($t2)      # sign extended
-    lbu $t1, 0($t2)     # zero filled
+    la $t0, small
+    la $t1, middle
+    la $t2, large
+    li $v0, 10
+    syscall
 ```
 
 </details>

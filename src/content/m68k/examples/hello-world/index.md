@@ -2,12 +2,8 @@ The first program of the ladder that anybody outside the editor could see the re
 line, then prints a second line with a number at the end of it, and ends itself. The answer is in the
 console panel under the program instead of in a register.
 
-Everything up to here left its result in the registers or in memory, because printing is a request to
-the environment and the M68K has one instruction for making requests. This is that instruction.
-
-**You need to know:** the "trap #15 and its tasks" lecture. What is new here is the whole shape of a
-request, the task number in `d0.b` says what you want, the other registers carry the arguments, and
-`trap #15` hands it over.
+Printing is not something the CPU can do. It is a request to whatever is running the program, and
+the M68K has one instruction for making requests, which is `trap`.
 
 ```m68k|playground|console|no-registers|no-flags|allow-open
     lea greeting, a1    ; the address of the string
@@ -41,5 +37,5 @@ number in `d1`, which is how a line with a value in it is written without printi
 separately. `move.b #9, d0` and `trap #15` is task 9, terminate, and it is how you stop before your
 data rather than falling off the end of the program.
 
-Try changing the first `move.b #13, d0` to `move.b #14, d0`. Task 14 prints without the new line, so
-the console reads `Hello, world!The answer is 42` all on one line.
+Task 13 and task 14 differ only in the new line at the end, which is why the strings themselves carry
+no line breaks: where the lines fall is decided by which task you asked for.

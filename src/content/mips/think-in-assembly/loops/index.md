@@ -1,154 +1,144 @@
-A loop is a comparison, a branch out of it and a jump backwards, which we can now write. The M68K has
-`dbra`, one instruction that counts and jumps at once; MIPS has nothing of the kind, so the counter
-and the branch are yours to write and how you write them decides how much the loop costs.
+A loop sends execution backwards so a group of instructions can run again. MIPS has no single
+instruction that means `while` or `for`; you build the repetition from branches, jumps, and labels.
 
-## The loop written out
+Most loops have the same five parts:
 
-Adding up the numbers from 1 to 10, in C, then flattened, then assembled:
+1. **Initialization** gives the counter and any result registers their starting values.
+2. **Test** decides whether the loop is finished.
+3. **Body** does the work for one pass.
+4. **Update** changes the value used by the test.
+5. **Jump** sends execution back to the test.
 
-```c
-int sum = 0;
-for (int i = 1; i <= 10; i++) sum += i;
-```
+Keeping those parts visible makes a loop easier to write and debug.
 
-```c
-    int sum = 0;
-    int i = 1;
-while_start:
-    if (i > 10) goto while_end;
-    sum += i;
-    i++;
-    goto while_start;
-while_end:
-```
+## Test before the body
+
+This loop adds the numbers from 1 through 10. Its test is at the top, so execution checks the
+counter before every pass through the body.
 
 ```mips|playground
 .text
 main:
-    li $t0, 0               # sum = 0
-    li $t1, 1               # i = 1
-while_start:
-    bgt $t1, 10, while_end  # while(i <= 10)
-    add $t0, $t0, $t1       # sum += i
-    addi $t1, $t1, 1        # i++
-    j while_start
-while_end:
+    li $t0, 0               # running total
+    li $t1, 1               # counter: first number to add
+    li $t2, 10              # last number to add
+
+loop_test:
+    bgt $t1, $t2, loop_end  # finished when the counter is past 10
+    add $t0, $t0, $t1       # body: add this number
+    addi $t1, $t1, 1        # update: move to the next number
+    j loop_test             # test again
+
+loop_end:
+    li $v0, 10
+    syscall
 ```
 
-`$t0` comes out at `00000037`, which is 55, and `$t1` at 11, one past the last value it used. The
-`j while_start` is what makes it a loop, and it is the same instruction an `if` uses to jump forward.
+The first test sees `$t1` equal to 1, so the branch is not taken and the body adds 1. After the
+update, the jump returns to `loop_test` with `$t1` equal to 2. This continues through 10. The update
+then makes `$t1` equal to 11, and the next test branches to `loop_end`.
 
-`bgt $t1, 10, while_end` is a pseudo-instruction with a constant in it, so it costs three real
-instructions: an `addi` to put the 10 in `$at`, an `slt` and a `bne`. That makes six instructions a
-pass, four of them the machinery of the loop and one the work.
+For this loop, `$t0` finishes at 55 and `$t1` finishes at 11. That final 11 follows from this
+particular test and update: 10 is used, then the counter advances once before the loop discovers it
+is finished.
 
-## Counting down to zero
+A loop with its test at the top can run its body zero times. If the counter had started at 11, the
+first instruction at `loop_test` would branch straight to `loop_end`.
 
-`bnez` and `beqz` are real instructions that compare against `$zero`, and they cost one. So a loop
-whose counter runs **down to zero** is half the size of the same loop counting up.
+## Test after the body
+
+The test can also go at the bottom. Here is the same sum with a counter that starts at 10 and counts
+down to zero:
 
 ```mips|playground
 .text
 main:
-    li $t0, 0               # sum = 0
-    li $t1, 10              # n = 10
+    li $t0, 0               # running total
+    li $t1, 10              # numbers still to add
+
+    beq $t1, $zero, loop_end # a zero count skips the body
 loop:
-    add $t0, $t0, $t1       # sum += n
-    addi $t1, $t1, -1       # n--
-    bnez $t1, loop          # until it reaches zero
+    add $t0, $t0, $t1       # body
+    addi $t1, $t1, -1       # update
+    bne $t1, $zero, loop    # repeat while the count is not zero
+
+loop_end:
+    li $v0, 10
+    syscall
 ```
 
-`$t0` is 55 again and `$t1` ends at 0, out of three instructions a pass instead of six. Two things
-changed: the test moved to the **bottom** of the loop, which makes it a `do while`, and it compares
-against zero, which needs no `slt` and no `$at`.
+Once execution reaches `loop`, the body runs before the next test. That gives this shape a useful
+rule: the count is positive at the start of every pass. The `beq` before `loop` establishes that
+rule by handling zero separately. At the bottom, `bne` performs the test and the backward jump
+together.
 
-The test at the bottom is what makes it cheaper and it is also what to watch: the body runs once
-before anything is checked, so a loop written this way with a count of 0 runs once and then counts
-down through every negative number. When the count can be zero, test it before you enter:
-
-```
-    beqz $t1, loop_end
-loop:
-    ...
-```
-
-Counting down also means the counter is no longer the index. When the body needs to know which pass
-it is on, either count up and pay for the comparison, or keep a second register.
+Without the guard, a starting count of zero would still run the body once. The update would then
+change the count to -1, so the bottom test would send execution backwards again. A bottom-tested
+loop therefore needs an explicit guard whenever zero is a valid starting count.
 
 ## Nested loops
 
-Nothing new: an inner loop sits between two lines of the outer one, with its own counter in its own
-register, reset at the top of every outer pass.
+A loop can contain another loop. The inner loop must receive a fresh starting value for every pass
+through the outer loop.
+
+This example visits two rows with three columns in each row. `$t0` counts the visits.
 
 ```mips|playground
 .text
 main:
-    li $t0, 0               # total = 0
-    li $t1, 3               # rows left
-outer:
-    li $t2, 4               # columns left, reset on every outer pass
-inner:
-    addi $t0, $t0, 1        # total++
-    addi $t2, $t2, -1
-    bnez $t2, inner
-    addi $t1, $t1, -1
-    bnez $t1, outer
+    li $t0, 0               # cells visited
+    li $t1, 0               # rows completed
+    li $t3, 2               # total rows
+    li $t4, 3               # columns in each row
+
+outer_test:
+    bge $t1, $t3, loop_end
+    li $t2, 0               # reset columns for this row
+
+inner_test:
+    bge $t2, $t4, outer_update
+    addi $t0, $t0, 1        # visit one cell
+    addi $t2, $t2, 1        # one more column completed
+    j inner_test
+
+outer_update:
+    addi $t1, $t1, 1        # one more row completed
+    j outer_test
+
+loop_end:
+    li $v0, 10
+    syscall
 ```
 
-`$t0` comes out at 12, which is 3 times 4. The `li $t2, 4` has to be **inside** the outer loop: move
-it above `outer:` and the inner counter is 0 on the second pass, so the first `addi` takes it to -1
-and the loop runs four billion times. Try it and watch the Playground stop, silently, when its two
-million instructions run out.
+Each time execution reaches `outer_test`, `$t1` is the number of complete rows. After the outer
+test, `li $t2, 0` resets the column counter before the inner loop begins. Inside that loop, `$t2` is
+the number of columns already visited in the current row. These are useful **invariants**: facts
+that remain true whenever execution reaches the same point in a loop.
 
-That silence is what an accidental infinite loop looks like here. There is no message: the program
-simply stops where it had got to, and the registers panel shows a counter at some enormous number.
+The inner loop adds 3 to `$t0` before reaching `outer_update`. The outer loop does that twice, so
+`$t0` finishes at 6. If the reset of `$t2` were outside the outer loop, the second row would begin
+with `$t2` still equal to 3 and would visit no columns.
 
-## Walking an array
+## Write two loops
 
-A loop over memory does not need a counter at all. Put a label after the last element, load its
-address, and run until the pointer reaches it.
-
-```mips|playground|memory
-.data
-numbers: .word 10, 20, 30, 40, 50
-end:
-
-.text
-main:
-    la $t0, numbers         # p = numbers
-    la $t1, end             # the address one past the last element
-    li $t2, 0               # sum = 0
-loop:
-    beq $t0, $t1, done      # while(p != end)
-    lw $t3, 0($t0)          # *p
-    add $t2, $t2, $t3       # sum += *p
-    addi $t0, $t0, 4        # p++
-    j loop
-done:
-```
-
-`$t2` comes out at `00000096`, which is 150, and `$t0` and `$t1` are both `10010014`, twenty bytes
-past the start. `end:` is a label with nothing under it, so it is the address the next thing would
-have gone at, which is one past the array. Add a sixth number to the `.word` line and the loop adds
-it without a single other change, which is what the counted version cannot do.
-
-`beq` between two pointers is exact, since the pointer lands on `end` and not past it. A `blt`
-against a length would work too, and `bltu` is the one to use there, because addresses are unsigned.
-
-## Your turn
-
-Add up the numbers from 1 to 10 with a loop and leave 55 in `$t0`. Both directions work; the one
-counting down is three instructions a pass.
+Add the numbers from 1 through 10 with a top-tested loop. Leave the sum in `$t0`. Keep the counter in
+`$t1`; after the loop it should be 11. The stop sequence is already in place.
 
 ```mips|playground|exercise
 .text
 main:
-    # your code here
+    # initialize the loop here
+
+    # write the test, body, update, and backward jump here
+
+loop_end:
+    li $v0, 10
+    syscall
 ```
 
 ```testcase
 {
-    "expectedRegisters": { "$t0": 55 }
+    "expectedRegisters": { "$t0": 55, "$t1": 11, "$v0": 10 }
 }
 ```
 
@@ -158,29 +148,42 @@ main:
 ```mips|playground|solution
 .text
 main:
-    li $t0, 0               # sum = 0
-    li $t1, 10              # n = 10
-loop:
-    add $t0, $t0, $t1       # sum += n
-    addi $t1, $t1, -1       # n--
-    bnez $t1, loop
+    li $t0, 0
+    li $t1, 1
+    li $t2, 10
+
+loop_test:
+    bgt $t1, $t2, loop_end
+    add $t0, $t0, $t1
+    addi $t1, $t1, 1
+    j loop_test
+
+loop_end:
+    li $v0, 10
+    syscall
 ```
 
 </details>
 
-The second one starts `$t0` at 64 and asks how many times it can be halved before it reaches 1.
-Leave that count in `$t1`, which for 64 is 6, and use a shift for the halving.
+For the second exercise, `$t0` and `$t1` hold two repeat counts. Use a separate guarded,
+bottom-tested loop for each count:
+
+- add 1 to `$s0` exactly `$t0` times;
+- add 1 to `$s1` exactly `$t1` times.
+
+Initialize both result registers to zero. The supplied inputs make the first loop skip its body and
+the second loop run four times. Finish with the stop sequence shown in the examples.
 
 ```mips|playground|exercise
 .text
 main:
-    # your code here
+    # initialize the results and write both loops here
 ```
 
 ```testcase
 {
-    "startingRegisters": { "$t0": 64 },
-    "expectedRegisters": { "$t1": 6 }
+    "startingRegisters": { "$t0": 0, "$t1": 4 },
+    "expectedRegisters": { "$t0": 0, "$t1": 0, "$s0": 0, "$s1": 4, "$v0": 10 }
 }
 ```
 
@@ -190,13 +193,25 @@ main:
 ```mips|playground|solution
 .text
 main:
-    li $t1, 0               # count = 0
-loop:
-    ble $t0, 1, done        # while(n > 1)
-    srl $t0, $t0, 1         # n /= 2
-    addi $t1, $t1, 1        # count++
-    j loop
-done:
+    li $s0, 0
+    li $s1, 0
+
+    beq $t0, $zero, first_end
+first_loop:
+    addi $s0, $s0, 1
+    addi $t0, $t0, -1
+    bne $t0, $zero, first_loop
+
+first_end:
+    beq $t1, $zero, second_end
+second_loop:
+    addi $s1, $s1, 1
+    addi $t1, $t1, -1
+    bne $t1, $zero, second_loop
+
+second_end:
+    li $v0, 10
+    syscall
 ```
 
 </details>

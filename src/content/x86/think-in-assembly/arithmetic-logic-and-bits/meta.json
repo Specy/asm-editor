@@ -1,0 +1,6 @@
+{
+    "name": "Arithmetic, logic and bits",
+    "description": "Fixed-width arithmetic, full and truncated products, prepared dividends, bit masks, tests, shifts and rotates in x86-64.",
+    "order": 2,
+    "topic": "arithmetic"
+}

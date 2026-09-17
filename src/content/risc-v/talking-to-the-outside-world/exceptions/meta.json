@@ -1,0 +1,6 @@
+{
+    "name": "When an instruction cannot be carried out",
+    "description": "Set up utvec and ustatus, then handle a misaligned load by reading its fault details, moving uepc past the instruction, and returning safely with uret.",
+    "order": 2,
+    "topic": "interrupts"
+}

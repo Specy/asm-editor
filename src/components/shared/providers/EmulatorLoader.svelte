@@ -7,11 +7,13 @@
     import type { EmulatorSettings } from '$lib/languages/commonLanguageFeatures.svelte'
     import { createInjectedPeripherals } from '$lib/languages/peripherals/peripheralSet'
     import Column from '$cmp/shared/layout/Column.svelte'
+    import type { BuildInput } from '$lib/projectFiles'
 
     // Define the props the component expects
     interface Props {
         language: AvailableLanguages
         code: string
+        source?: BuildInput
         children: Snippet<[Emulator]>
         loading?: Snippet
         settings?: Omit<EmulatorSettings, 'language'>
@@ -21,6 +23,7 @@
     let {
         language,
         code = $bindable(),
+        source,
         children,
         loading,
         settings,
@@ -37,7 +40,7 @@
     )
 
     const emulatorPromise = untrack(() =>
-        createEmulator(language, code, {
+        createEmulator(language, source ?? code, {
             ...settings,
             language,
             peripherals: injectedPeripherals

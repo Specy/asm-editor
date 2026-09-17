@@ -6,10 +6,6 @@ Bubble sort left an array in order. This is what being in order is worth: every 
 away half of what is left, so an array of a thousand elements takes about ten reads and one of a
 million takes about twenty.
 
-**You need to know:** the "Bubble sort" Example and the "Addressing on the Z80" lecture. What is new
-here is a loop that jumps straight to an element instead of walking to it, which on this machine is
-an address worked out by hand every time round.
-
 ```z80|playground|memory|no-flags|allow-open
 count equ 12
 
@@ -58,10 +54,10 @@ away, which is the rounding down that `(low + high) / 2` wants. It is the unsign
 right here because an index is never negative.
 
 `high` is **one past** the range it is looking in, so it starts at `count` and the loop runs while
-`low < high`. The M68K page keeps the last index instead and lets it go down to -1, which it can
-afford because it is working in longs. Here `low` and `high` are bytes, and a byte that goes below
-zero comes back as 255, which as an unsigned comparison is the largest number there is and would
-keep the loop going forever. Nothing in the program ever subtracts past zero now.
+`low < high`. The obvious alternative, keeping the last valid index and stopping when it goes below
+zero, does not survive here: `low` and `high` are bytes, and a byte that drops below zero comes back
+as 255, which an unsigned comparison reads as the largest number there is. The loop would never end.
+Written this way nothing in the program ever subtracts past zero.
 
 The four instructions after `ld hl, numbers` are how a byte gets added to a pair, because there is
 no `add hl, a`: the low half is added in `a`, and the carry out of that addition is what `inc h`
@@ -78,6 +74,7 @@ The two probes are 38 and then 91. Each one either matches, or moves `low` past 
 brings `high` down to it, and the loop ends when `low` catches `high` up. `e` comes out at `09`,
 which is the index of 91, so `de` reads `5B09`: the target in `d` and the answer in `e`.
 
-Try changing `ld d, 91` to `ld d, 90`, which is not in the array. `de` comes out at `5AFF`, the `FF`
-that `ld e, 0xFF` put there before the loop started, because a search that finds nothing has to say
-so and 0 is a perfectly good index.
+Search for 90, which is not in the array, and `de` comes out at `5AFF`. The `FF` is what
+`ld e, 0xFF` put there before the loop started and never overwrote. A search has to be able to
+report "not here", and it cannot do that by returning 0, because 0 is a perfectly good index; so the
+answer for "not found" is a value no index can be.

@@ -11,6 +11,8 @@
  */
 
 /** What the Emulator asks an adapter to execute. */
+import type { SourceBreakpoint } from './commonLanguageFeatures.svelte'
+
 export type ExecutionSliceRequest = {
     /**
      * The most instructions this slice may execute: what is left of the run's overall limit. Always
@@ -24,7 +26,24 @@ export type ExecutionSliceRequest = {
      */
     timeBudgetMs: number
     /** The 0-based editor lines the run must stop on; the adapter maps them to addresses. */
-    breakpoints: number[]
+    breakpoints: SourceBreakpoint[]
+    /**
+     * Whether a breakpoint on the instruction the program counter is *already* on lets this slice
+     * past it. True for the first slice of a Run and false for every one after it, which is the
+     * whole of the rule that makes Run move: the instruction a Run starts on runs even when a
+     * breakpoint names it, and every breakpoint the run then reaches stops it before the
+     * instruction executes.
+     *
+     * It is about the Core call that starts the slice, not the slice: an adapter that re-enters its
+     * Core inside one slice — to answer an interrupt, or to spend its budget in chunks — passes it
+     * to the first of those calls only. The instruction after an answered interrupt has not run
+     * yet, so a breakpoint on it has to stop the run; skipping it there is what made the
+     * instruction after every M68K trap unbreakable.
+     *
+     * An adapter whose Core checks its breakpoints *after* executing an instruction (MARS, RARS and
+     * the Z80 machine) already behaves this way and ignores it.
+     */
+    skipBreakpointAtPc: boolean
     /**
      * The whole run's instruction limit, which `instructionBudget` counts down from. Only for what
      * an adapter tells the user: the M68K Core reports an exhausted limit by throwing an error that
@@ -48,13 +67,15 @@ export type ExecutionSliceRequest = {
  *
  * - `budget`: the slice ran out of instructions or time. Nothing is wrong, run the next slice.
  * - `breakpoint`: the Core stopped on one of the requested breakpoints.
+ * - `paused`: the program itself asked the Core to pause, as M68K's `simhalt` does.
  * - `terminated`: the program ended, normally or with an exception the adapter already reported.
  * - `limit`: the Core refused to continue because of a limit of its own.
  * - `wait`: the program asked for time to pass ([ADR 0010](../../../docs/adr/0010-program-time-without-clock-pacing.md)).
  *   The adapter puts the wait in `wait`; the scheduler awaits it through the execution generation so
  *   Stop cancels it, and then runs the next slice.
  */
-export type ExecutionSliceReason = 'budget' | 'breakpoint' | 'terminated' | 'limit' | 'wait'
+export type ExecutionSliceReason =
+    'budget' | 'breakpoint' | 'paused' | 'terminated' | 'limit' | 'wait'
 
 export type ExecutionSlice = {
     reason: ExecutionSliceReason

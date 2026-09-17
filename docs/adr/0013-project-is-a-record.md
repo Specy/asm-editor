@@ -13,5 +13,5 @@ The project format is growing a map of Files so that a Project can later hold se
 
 ## Consequences
 
-- A File's content is always stored as a string together with an `encoding` (`plain` today, `base64` when the first binary arrives), so one form survives every serialization: IndexedDB, the exported file, the share link. A reader that meets an encoding it does not know fails; it never reads the string as text.
-- A Project with several Files has no single-file export; a folder or zip export is designed when multi-file editing arrives.
+- A File's content is always stored as a string together with an `encoding` (`plain` for valid UTF-8 text and `base64` for arbitrary bytes), so one form survives IndexedDB and share-link serialization. A reader that meets an encoding it does not know fails; it never reads the string as text.
+- [ADR 0019](./0019-zip-project-archives.md) subsequently chose a standard ZIP container for lossless whole-Project export. Its manifest and archive-only `files/` prefix serialize the Project record without turning that representation into the program-visible Files tree.

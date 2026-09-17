@@ -1,6 +1,6 @@
 {
-    "name": "Length of a string",
-    "description": "A walk to the zero byte at the end of a string, with the length worked out as the difference between two addresses.",
+    "name": "Byte length of a string",
+    "description": "Measure a zero-terminated string in bytes by subtracting its start address from its terminator address.",
     "order": 6,
     "topic": "string-length"
 }

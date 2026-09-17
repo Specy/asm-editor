@@ -93,6 +93,31 @@ describe('Screen undo', () => {
         ])
     })
 
+    it('restores the color a pixel covered, not just the background', () => {
+        //a single pixel is journaled as a packed number rather than as a four-byte image, so what
+        //the packing carries is what Undo can give back
+        expectExactRewind([
+            (screen) => screen.setPenColor(RED),
+            (screen) => screen.drawRectangle(0, 0, 8, 8),
+            (screen) => screen.setPenColor(GREEN),
+            (screen) => screen.drawPixel(3, 3),
+            (screen) => screen.setPenColor(BLUE),
+            (screen) => screen.drawPixel(3, 3),
+            (screen) => screen.drawPixel(12, 12)
+        ])
+    })
+
+    it('undoes a pixel outside the Screen as the no-op it was', () => {
+        expectExactRewind([
+            (screen) => screen.setPenColor(RED),
+            (screen) => screen.drawPixel(-1, 4),
+            (screen) => screen.drawPixel(4, -1),
+            (screen) => screen.drawPixel(16, 4),
+            (screen) => screen.drawPixel(4, 16),
+            (screen) => screen.drawPixel(15, 15)
+        ])
+    })
+
     it('restores the image a clear wiped, and the cursor it homed', () => {
         expectExactRewind([
             (screen) => screen.setPenColor(RED),
@@ -185,14 +210,15 @@ describe('Screen history budget', () => {
         expect(screen.history.bytes).toBe(0)
         screen.setPenColor(RED)
         expect(screen.history.bytes).toBe(RECORD_OVERHEAD_BYTES)
+        //a single pixel is recorded as a packed number, so it costs the overhead and no pixels
         screen.drawPixel(1, 1)
-        expect(screen.history.bytes).toBe(2 * RECORD_OVERHEAD_BYTES + 4)
+        expect(screen.history.bytes).toBe(2 * RECORD_OVERHEAD_BYTES)
         screen.clear()
-        expect(screen.history.bytes).toBe(3 * RECORD_OVERHEAD_BYTES + 4 + 16 * 16 * 4)
+        expect(screen.history.bytes).toBe(3 * RECORD_OVERHEAD_BYTES + 16 * 16 * 4)
     })
 
     it('drops the oldest records once the budget is exceeded', () => {
-        const screen = makeScreen(2 * (RECORD_OVERHEAD_BYTES + 4))
+        const screen = makeScreen(2 * RECORD_OVERHEAD_BYTES)
         for (let index = 0; index < 5; index++) screen.drawPixel(index, index)
         expect(screen.history.depth).toBe(2)
         expect(screen.history.sequence).toBe(5)
@@ -221,9 +247,9 @@ describe('Screen history budget', () => {
         const screen = makeScreen()
         for (let index = 0; index < 5; index++) screen.drawPixel(index, index)
         expect(screen.history.depth).toBe(5)
-        screen.history.byteBudget = 2 * (RECORD_OVERHEAD_BYTES + 4)
+        screen.history.byteBudget = 2 * RECORD_OVERHEAD_BYTES
         expect(screen.history.depth).toBe(2)
-        expect(screen.history.bytes).toBe(2 * (RECORD_OVERHEAD_BYTES + 4))
+        expect(screen.history.bytes).toBe(2 * RECORD_OVERHEAD_BYTES)
     })
 
     it('never undoes with a budget of zero', () => {
@@ -232,6 +258,81 @@ describe('Screen history budget', () => {
         screen.clear()
         expect(screen.canUndo()).toBe(false)
         expect(screen.undo()).toBe(false)
+    })
+
+    it('still counts the operations of a Screen with a budget of zero', () => {
+        //nothing is retained, but an adapter reads `sequence` and `depth` to learn that the Screen
+        //cannot be rolled back; a Screen that stopped counting would let a CPU Undo run against an
+        //image that stayed where it was (ADR 0005)
+        const screen = makeScreen(0)
+        const mark = screen.history.sequence
+        screen.drawPixel(1, 1)
+        screen.clear()
+        expect(screen.history.sequence).toBe(mark + 2)
+        expect(screen.history.depth).toBe(0)
+        expect(screen.undoToSequence(mark)).toBe(false)
+    })
+
+    it('draws the same image whether or not the journal keeps anything', () => {
+        //a clear and a present hand the journal the image they replace instead of copying it, and
+        //fall back to overwriting in place when nothing would keep the copy: the two paths have to
+        //put the same pixels on the Screen
+        const run = (screen: Screen) => {
+            screen.setPenColor(RED)
+            screen.setFillColor(GREEN)
+            screen.drawRectangle(1, 1, 9, 9)
+            screen.setDoubleBuffering(true)
+            screen.clear(BLUE)
+            screen.drawEllipse(2, 2, 12, 12)
+            screen.present()
+            screen.drawPixel(0, 0)
+            screen.clear()
+            screen.drawLine(0, 0, 15, 15)
+            screen.present()
+            screen.setDoubleBuffering(false)
+            screen.clear(GREEN)
+            screen.drawPixel(5, 5)
+            return {
+                visible: Array.from(screen.visiblePixels),
+                drawing: Array.from(screen.drawingPixels),
+                cursor: [screen.cursorColumn, screen.cursorRow]
+            }
+        }
+        expect(run(makeScreen(0))).toEqual(run(makeScreen()))
+    })
+
+    it('rewinds exactly while the budget is recycling the images it drops', () => {
+        //a clear and a present hand their old image to the journal and take one back from what the
+        //budget dropped. A buffer handed out while a retained record still pointed at it would show
+        //up as an Undo restoring the wrong frame, so this runs long enough for every image in play
+        //to have been through the pool, and checks the retained frames one by one.
+        const size = 16 * 16 * 4
+        //room for a handful of full-image records, so eviction runs on every frame
+        const screen = makeScreen(5 * (RECORD_OVERHEAD_BYTES + size))
+        screen.setDoubleBuffering(true)
+        const frame = (index: number) => {
+            screen.clear(index % 2 === 0 ? BLACK : BLUE)
+            screen.setPenColor(index % 3 === 0 ? RED : GREEN)
+            screen.drawRectangle(index % 8, index % 8, (index % 8) + 6, (index % 8) + 6)
+            screen.present()
+        }
+        const states: ReturnType<typeof snapshot>[] = []
+        for (let index = 0; index < 40; index++) {
+            states.push(snapshot(screen))
+            frame(index)
+        }
+        //however few the budget kept, each one has to land exactly where it was
+        let index = states.length - 1
+        while (screen.canUndo()) {
+            //one frame is a clear, a pen color, a rectangle and a present
+            const target = states[index]
+            for (let step = 0; step < 4 && screen.canUndo(); step++) screen.undo()
+            if (!screen.canUndo()) break
+            expect(snapshot(screen)).toEqual(target)
+            index--
+        }
+        //the budget is small, so this is a partial rewind: what matters is that it was exact
+        expect(index).toBeLessThan(states.length - 1)
     })
 
     it('forgets everything on reset', () => {

@@ -85,6 +85,11 @@
             onClick={() => (menuOpen = false)}
         />
         <MenuLink
+            href="/documentation/m68k/exceptions"
+            title="Exceptions"
+            onClick={() => (menuOpen = false)}
+        />
+        <MenuLink
             href="/documentation/m68k/directive"
             title="Directives"
             onClick={() => (menuOpen = false)}

@@ -1,6 +1,6 @@
 {
     "name": "Arrays, strings and (a0)+",
-    "description": "Walking memory with an address register that steps itself, indexing it with a scaled register instead, and the two loops that every string on this machine is made of.",
+    "description": "Traverse and index equal-size array elements, then measure and copy zero-terminated byte strings safely.",
     "order": 3,
     "topic": "data-in-memory"
 }

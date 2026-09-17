@@ -254,9 +254,10 @@
             {/snippet}
             <div class="description" class:textShadow={textShadowPrimary}>
                 Feature rich tools to help you debug your code. Includes breakpoints, stepping,
-                undo, stack tracer, register/memory diffing, decimal/hexadecimal conversions,
-                stdout/stdin/errors, customisable shortcuts and settings, formatter and more. You
-                can also customise the theme of the editor to your liking.
+                undo, poking registers and memory, stack tracer, register/memory diffing,
+                decimal/hexadecimal conversions, stdout/stdin/errors, customisable shortcuts and
+                settings, formatter and more. You can also customise the theme of the editor to your
+                liking.
             </div>
         </MainPageSection>
         <MainPageSection id="peripherals" imageUrl="/images/ASM-Peripherals.webp" reverse>

@@ -10,6 +10,7 @@
         Z80_SCREEN_COMMAND_DOCS,
         type Z80PortGroup
     } from '$lib/languages/Z80/Z80-documentation'
+    import { TRS80_KEY_ROW_DOCS, TRS80_MEMORY_DOCS } from '$lib/languages/Z80/trs80/trs80Display'
 
     interface Props {
         disableLinks?: boolean
@@ -72,7 +73,7 @@
                 <Card gap="0.8rem" padding="1rem" background="secondary" style="width: 100%;">
                     <h3 class="sub-title">Commands</h3>
                     <p class="note">
-                        Written to the command port, <code>0x17</code>. One write runs one operation
+                        Written to the command port, <code>0x27</code>. One write runs one operation
                         on the coordinates and colors already set.
                     </p>
                     <div class="rows">
@@ -86,6 +87,59 @@
                                         simpleCode
                                     />
                                 </span>
+                            </div>
+                        {/each}
+                    </div>
+                </Card>
+                <Card gap="0.8rem" padding="1rem" background="secondary" style="width: 100%;">
+                    <h3 class="sub-title">The TRS-80 display</h3>
+                    <p class="note">
+                        Command <code>14</code> switches the screen to the memory-mapped display of
+                        the TRS-80, the machine this Z80 emulator descends from — the one graphics
+                        interface here that programs written elsewhere already target. A program can
+                        also ask for it before it starts, with a
+                        <code>; @screen trs80</code> comment, which is what a program brought in
+                        from outside needs. The drawing commands above are not available in this
+                        mode, and console output goes only to the terminal: on this machine,
+                        printing
+                        <em>is</em> storing a byte.
+                    </p>
+                    <div class="rows">
+                        {#each TRS80_MEMORY_DOCS as row (row.range)}
+                            <div class="row">
+                                <span class="tag">{row.range}</span>
+                                <span class="sub-description">
+                                    <strong>{row.title}</strong>
+                                    <MarkdownRenderer
+                                        source={row.description}
+                                        {disableLinks}
+                                        simpleCode
+                                    />
+                                </span>
+                            </div>
+                        {/each}
+                    </div>
+                    <p class="note">
+                        Port <code>0x00</code> is the machine's joystick, and the reason the ports
+                        above start at <code>0x10</code>: nothing of this editor's is mapped there,
+                        so a program's joystick poll reads an empty bus floating high —
+                        <code>0xFF</code>, exactly what the machine answers with none attached.
+                        While the character port lived at <code>0x00</code> that poll stopped the
+                        program to wait for a line nobody was typing. Everything else the machine
+                        decodes is at <code>0x75</code> or above, clear of this map entirely.
+                    </p>
+                    <p class="note">
+                        Characters <code>0x20</code> to <code>0x7F</code> are text. Characters
+                        <code>128</code>
+                        to <code>191</code> are 2 by 3 blocks of chunky pixels — the low six bits
+                        are the blocks, bit 0 top-left then across and down — so the screen is also
+                        a 128 by 48 pixel grid. <code>191</code> is solid and <code>128</code> is blank.
+                    </p>
+                    <div class="rows">
+                        {#each TRS80_KEY_ROW_DOCS as keys, row (row)}
+                            <div class="row">
+                                <span class="tag">row {row}</span>
+                                <span class="sub-description">{keys}</span>
                             </div>
                         {/each}
                     </div>

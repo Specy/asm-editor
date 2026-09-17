@@ -1,215 +1,205 @@
-A program is instructions and the data they work on, and something has to say which lines are which.
-The M68K assembler has no answer to that: it walks your source from top to bottom and puts each line
-at the next free address. MIPS has **sections**, so the two are separated by name and land in
-different parts of memory.
+A MIPS source file can contain both instructions and data. The assembler places those two kinds of
+content in separate areas of memory:
 
-## .data and .text
+- `.text` selects the area for instructions.
+- `.data` selects the area for declared bytes.
 
-`.data` opens a data section and `.text` opens a code section. Everything after one of them belongs
-to it until the next one, and the assembler collects all the `.data` in your file into one block and
-all the `.text` into another.
+These lines are **directives**. A directive is an instruction for the assembler while it builds the
+program; it is not an instruction that the processor runs. The assembler gathers the contents of
+each section into its own memory area, even if a source file switches between `.data` and `.text`.
 
-- **`.text`** goes at `0x00400000`, four bytes per instruction.
-- **`.data`** goes at `0x10010000`, as many bytes as each directive asks for.
+When the program runs, the processor's next executed address must point to an instruction in the
+text area. The data area is there for the program to use, but it is not part of the instruction
+sequence.
 
-`.data 0x10008000` with an address after it puts that section somewhere else, which is what a program
-that wants its data at a fixed place does.
+## Place instructions and data
+
+Here is a small file with both sections:
 
 ```mips|playground|memory
-.eqv COUNT 4
-
 .data
 message: .asciiz "Hi"
-        .align 2
-numbers: .word 10, 20, 30, 40
-buffer:  .space 8
+marker:  .byte 7
+         .align 2
+values:  .word 10, 20
+room:    .space 8
 
 .text
-.globl main
 main:
     la $t0, message
-    la $t1, numbers
-    la $t2, buffer
-    li $t3, COUNT
-    li $v0, 10          # service 10: end the program
+    la $t1, values
+    la $t2, room
+    li $v0, 10
     syscall
 ```
 
-`$t0` comes out at `10010000`, `$t1` at `10010004` and `$t2` at `10010014`. Open the memory panel at
-`10010000` and the first bytes are `48 69 00 00`, the two characters of `"Hi"`, its terminator and
-the byte the `.align 2` skipped over.
+Build it, then open the memory panel at `0x10010000`. The assembler has placed the declarations one
+after another:
 
-That is the shape of every MIPS program in this course: constants at the top, a data section, then a
-text section with `main` in it and a `syscall` at the end.
+| label     | address      | content placed there                     |
+| --------- | ------------ | ---------------------------------------- |
+| `message` | `0x10010000` | `H`, `i`, and a zero byte                |
+| `marker`  | `0x10010003` | one byte containing 7                    |
+| `values`  | `0x10010004` | two four-byte words containing 10 and 20 |
+| `room`    | `0x1001000C` | eight reserved bytes                     |
 
-## The data directives
+A name followed by a colon is a **label**. A label names the address of whatever comes immediately
+after it. Here, `message` names the first byte of the text `Hi`, while `values` names the first of
+the two words.
 
-| directive           | what it writes                                         |
-| ------------------- | ------------------------------------------------------ |
-| `.word 1, 2, 3`     | one 4 byte word per value, aligned to a multiple of 4  |
-| `.half 1, 2`        | one 2 byte half per value, aligned to a multiple of 2  |
-| `.byte 1, 2, 3`     | one byte per value, anywhere                           |
-| `.ascii "Hi"`       | the characters, with **no** terminator                 |
-| `.asciiz "Hi"`      | the characters and a zero byte after them              |
-| `.space 8`          | that many bytes, left at zero and not aligned          |
-| `.align n`          | moves the next thing up to a multiple of 2 to the `n`  |
-| `.float`, `.double` | floating point numbers, which this course does not use |
+The three `la` lines make those addresses visible in registers. `la` means **load address**: for
+example, `la $t1, values` puts the address named by `values` into `$t1`. It does not read the word
+stored at that address. Compare it with `li`, which puts a number itself into a register:
+
+```mips
+la $t0, room       # $t0 gets room's address: 0x1001000C
+li $t0, 12         # $t0 gets the number 12
+```
+
+The final two lines are the course's standard stop sequence. For now, use them together at the end
+of a runnable program:
+
+```mips
+li $v0, 10
+syscall
+```
+
+You will learn what `syscall` does in the module about talking to the outside world.
+
+## Directives for common data
+
+The directives below are enough for the data in this part of the course:
+
+| directive       | what the assembler places in memory                |
+| --------------- | -------------------------------------------------- |
+| `.word 10, 20`  | two four-byte words                                |
+| `.byte 1, 2, 3` | three individual bytes                             |
+| `.asciiz "Hi"`  | the bytes for `H` and `i`, followed by a zero byte |
+| `.space 8`      | eight bytes of reserved room                       |
+
+Each comma-separated value produces another item. For example, `.word 10, 20` places two words and
+therefore uses eight bytes. `.byte 1, 2, 3` uses three bytes.
+
+The `z` in `.asciiz` is a reminder that the assembler adds a zero byte. You may also encounter
+`.ascii "Hi"`; it places only the two character bytes. In concrete size terms:
+
+| source         | bytes reserved |
+| -------------- | -------------- |
+| `.ascii "Hi"`  | 2              |
+| `.asciiz "Hi"` | 3              |
+
+Use `.asciiz` for course strings unless an exercise explicitly asks for the version without the
+extra zero.
+
+`.space` reserves a number of bytes without giving each byte a separate declaration. In this
+Playground those bytes initially appear as zeroes. The important fact is the size: `.space 8`
+reserves eight consecutive addresses.
+
+## Keep words aligned
+
+A word occupies four bytes. A word is **aligned** when its first address is a multiple of four.
+The directive `.align 2` moves the next declaration forward, if necessary, to such an address.
+For this lesson, remember the practical pair:
+
+```mips
+.align 2       # next declaration begins at a multiple of 4
+.word 99       # a four-byte value
+```
+
+The `2` may look surprising. For `.align`, it is an exponent: `2` means a boundary of
+2<sup>2</sup>, or 4, bytes.
+
+Try one prediction before building this example:
 
 ```mips|playground|memory
 .data
-w:      .word 0x11223344
-h:      .half 0x5566
-b:      .byte 1, 2, 3
-s1:     .ascii "Hi"
-s2:     .asciiz "Hi"
+tag:    .asciiz "Hi"
         .align 2
-room:   .space 8
+value:  .word 99
 
 .text
 main:
-    la $t0, w
-    la $t1, h
-    la $t2, b
-    la $t3, s1
-    la $t4, s2
-    la $t5, room
+    la $t0, tag
+    la $t1, value
     li $v0, 10
     syscall
 ```
 
-| label  | address      | bytes         | what it is                          |
-| ------ | ------------ | ------------- | ----------------------------------- |
-| `w`    | `0x10010000` | `44 33 22 11` | one word, lowest byte first         |
-| `h`    | `0x10010004` | `66 55`       | one half                            |
-| `b`    | `0x10010006` | `01 02 03`    | three single bytes                  |
-| `s1`   | `0x10010009` | `48 69`       | `H` and `i`, and nothing after them |
-| `s2`   | `0x1001000B` | `48 69 00`    | the same two, terminated            |
-| `room` | `0x10010010` | eight zeroes  | reserved, and word aligned          |
+`tag` starts at `0x10010000` and uses three bytes. Without `.align 2`, the next free address would
+be `0x10010003`. Predict where `value` will begin after the alignment, then build and inspect `$t1`.
+It begins at `0x10010004`, the next multiple of four. The assembler leaves one padding byte between
+the string and the word.
 
-`s1` runs straight into `s2`, so a program that prints `s1` prints `HiHi`: `.ascii` writes what you
-gave it and no more, and a string with nothing marking its end is a string nothing can find the end
-of. `.asciiz` is the one to use, and the `z` is for the zero.
+When a `.word` follows bytes or a string, writing `.align 2` makes that boundary visible in the
+source instead of asking the reader to infer it. Later memory lessons will explain why aligned
+addresses matter to word operations.
 
-`room` would have started at `0x1001000E` without the `.align 2`, which is even but not a multiple of
-four, so the first `sw` into it would have ended the run. `.word` and `.half` align themselves;
-`.space` and the two string directives do not.
+## Labels and named numbers
 
-## Labels and .eqv
+A label and a named number may look similar in source, but they stand for different things:
 
-A label goes at the start of a line and ends with a colon. It is a name for the address of whatever
-comes next, and nothing distinguishes a label on an instruction from a label on a `.word`: both are
-addresses, and `la $t0, main` is as legal as `la $t0, numbers`.
+| source             | meaning                                  | example use      |
+| ------------------ | ---------------------------------------- | ---------------- |
+| `.eqv SIZE 4`      | `SIZE` becomes the fixed number 4        | `li $t0, SIZE`   |
+| `values: .word 10` | `values` becomes the address of the word | `la $t1, values` |
 
-`.eqv` gives a name to a number, without a colon and without a comma, and the assembler replaces the
-name with the number everywhere it appears. It reserves no memory and produces no instruction.
+`.eqv` reserves no memory. It simply lets you give a useful name to a fixed number:
 
-```mips|playground|memory
-.eqv SIZE 4
-.eqv LIMIT 100
+```mips|playground
+.eqv COUNT 3
 
 .data
-values: .word SIZE, LIMIT
+values: .word 100, 200, 300
 
 .text
 main:
-    li $t0, SIZE            # the number 4, inside the instruction
-    li $t1, LIMIT
-    lw $t2, values          # the word at values, read from memory
-    sll $t3, $t0, 2         # SIZE * 4, done by the program
+    li $t0, COUNT       # the number 3
+    la $t1, values      # an address
     li $v0, 10
     syscall
 ```
 
-`$t0` and `$t2` both come out at 4, and they got there in completely different ways: `SIZE` became a
-`4` inside the instruction, while `values` became the address `0x10010000` and the instruction went
-to memory for what was there. `$t3` is 16.
+Use the forms shown here: give `.eqv` a name and one number, and list separate data values with
+commas. Calculations performed while a program runs belong in instructions, which later lessons
+will introduce as they are needed.
 
-The assembler does no arithmetic. `li $t0, SIZE*4` is a build error and `.word 2+3` writes two words,
-a 2 and a 3, so a name multiplied by something has to be multiplied by the program, as the `sll`
-above does. The one exception is an address: `lw $t2, values+4` means four bytes past the label, and
-that the assembler will work out.
+## Choose the starting instruction
 
-Use `.eqv` for anything you would write as a `#define` in C: the length of an array, the size of an
-element, a syscall number, a screen width.
-
-## Where a program starts, and where it stops
-
-Execution begins at the **first instruction in `.text`**, whatever it is called. Put a subroutine at
-the top of your file and the program runs the subroutine, hits its `jr $ra` with `$ra` still 0, and
-ends with `invalid program counter value: 0x00000000`.
-
-`.globl main` fixes that. It marks the label `main` as global, and a global `main` becomes the entry
-point wherever in the file it is written.
+In the small programs so far, `main` has been the first instruction in `.text`. When it is not,
+place `.globl main` directly below `.text`:
 
 ```mips|playground
 .text
 .globl main
 
-helper:
+unused:
     li $t9, 111
-    jr $ra
 
 main:
-    li $t0, 1
-    jal helper          # call it, so $ra holds somewhere to come back to
-    li $t1, 2
+    li $t0, 42
     li $v0, 10
     syscall
 ```
 
-`$t0` is 1, `$t9` is 111 and `$t1` is 2, so `main` ran first and `helper` ran when it was called.
-Delete the `.globl main` line and press Run: the program starts at `helper`, and the `jr $ra` on its
-second line jumps to address 0.
+In this Playground, a global label named `main` selects `main` as the program's starting point.
+That is all you need from `.globl` here. Calls between parts of a program and labels shared between
+files come later.
 
-The other end matters as much. **A MIPS program ends with `li $v0, 10` and `syscall`**, and without
-it execution carries straight on into whatever is written next. If that is a subroutine, the program
-runs it, returns to the middle of `main` through the `$ra` the last call left there, and goes round
-until the Playground's instruction budget runs out. Every program in this course that has a
-subroutine ends with those two lines before the first one.
+## Two to write
 
-## The rest of the directives
-
-- **`.globl name`** makes a label visible outside the file. `main` is the one that matters here.
-- **`.extern name size`** declares a label defined somewhere else and reserves `size` bytes for it in
-  the global data area, which is what `$gp` points near.
-- **`.ktext`** and **`.kdata`** are the kernel forms of `.text` and `.data`, and `.ktext 0x80000180`
-  is where an exception handler goes. "Exceptions, coprocessor 0 and interrupts" uses them.
-- **`.macro`** and **`.end_macro`** define a name that expands into the lines between them, with `%`
-  in front of each parameter.
-- **`.include "file.asm"`** pulls in another file, which this editor's single-file projects have no
-  use for.
-
-```mips|playground
-.macro double(%reg)
-    add %reg, %reg, %reg
-.end_macro
-
-.text
-main:
-    li $t0, 5
-    double($t0)
-    double($t0)
-    li $v0, 10
-    syscall
-```
-
-`$t0` comes out at 20. A macro is copied into the program at every use, so those two lines are two
-`add` instructions, and a macro that took ten lines would be ten instructions each time. A
-subroutine is the alternative that costs one call.
-
-## Your turn
-
-Write a data section holding the three words 100, 200 and 300 at `values`, followed by eight bytes of
-room at `room`, and leave the address of `room` in `$t0`. Three words take twelve bytes, so it comes
-out at `0x1001000C`.
+Write a data section holding the three words 100, 200, and 300 at `values`, followed by eight bytes
+of room at `room`. Then put the address of `room` in `$t0`. The starter already includes the stop
+sequence, so you can press Run when you finish.
 
 ```mips|playground|memory|exercise
 .data
-    # your data here
+    # declare values and room here
 
 .text
 main:
-    # your code here
+    # put room's address in $t0
+    li $v0, 10
+    syscall
 ```
 
 ```testcase
@@ -231,34 +221,32 @@ room:   .space 8
 
 .text
 main:
-    la $t0, room        # the address of the reserved bytes
+    la $t0, room
     li $v0, 10
     syscall
 ```
 
 </details>
 
-The second one has the subroutine written above `main`, so the program starts in the wrong place and
-ends on a jump to address 0. Add the one line that makes `main` the entry point.
+For the second exercise, `main` is not the first instruction in `.text`. Insert one directive
+directly below `.text` so that the Playground starts at `main`. When it works, `$t0` will be 42 and
+the earlier instruction will not change `$t9`.
 
 ```mips|playground|exercise
 .text
 
-helper:
+unused:
     li $t9, 111
-    jr $ra
 
 main:
-    li $t0, 1
-    jal helper
-    li $t1, 2
+    li $t0, 42
     li $v0, 10
     syscall
 ```
 
 ```testcase
 {
-    "expectedRegisters": { "$t0": 1, "$t1": 2, "$t9": 111 }
+    "expectedRegisters": { "$t0": 42, "$t9": 0 }
 }
 ```
 
@@ -269,16 +257,22 @@ main:
 .text
 .globl main
 
-helper:
+unused:
     li $t9, 111
-    jr $ra
 
 main:
-    li $t0, 1
-    jal helper
-    li $t1, 2
+    li $t0, 42
     li $v0, 10
     syscall
 ```
 
 </details>
+
+Keep this short map nearby while writing programs:
+
+- `.data` selects declarations of bytes; `.text` selects instructions.
+- A label such as `values:` names an address.
+- `.eqv SIZE 4` gives the fixed number 4 a name and reserves no memory.
+- `.word`, `.byte`, `.asciiz`, and `.space` place or reserve data.
+- `.align 2` moves the next declaration to a multiple-of-four address.
+- `.globl main` tells this Playground to start at `main` when it is not the first instruction.

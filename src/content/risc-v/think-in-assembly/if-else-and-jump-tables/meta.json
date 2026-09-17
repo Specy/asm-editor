@@ -1,0 +1,6 @@
+{
+    "name": "if, else and jump tables",
+    "description": "Lay out if/else paths with branches and fall-through, chain tests for several ranges, and use a checked table of addresses to select among consecutive cases.",
+    "order": 0,
+    "topic": "branching"
+}

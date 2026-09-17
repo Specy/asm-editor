@@ -6,10 +6,6 @@ The bigger of two numbers chose between two paths with a `cp` and a jump. A chai
 three or four cases and gets slower with every one you add, since a value at the bottom of the chain
 is compared against everything above it first. A table is looked up once whatever the value is.
 
-**You need to know:** the "jp, jr and the conditions" lecture and the "Addressing on the Z80"
-lecture. What is new here is a jump to an address the program worked out, `jp (hl)` goes to whatever
-`hl` holds, which nothing in the source names.
-
 ```z80|playground|memory|no-flags|allow-open
     .org 0x8000
     ld d, 6             ; x = 6
@@ -66,7 +62,8 @@ gave that label. Put the memory panel on `9000` and the eight bytes read `13 80 
 which little endian is `0x8013`, `0x8017`, `0x801B` and `0x8022`, four addresses inside your own
 code. A label is nothing but an address, and this is what that sentence is for.
 
-The five instructions from `ld l, a` down to `add hl, bc` are C's `table[op]`. The index is widened
+The five instructions from `ld l, a` down to `add hl, bc` work out where the entry for `op` sits in
+the table. The index is widened
 into a pair, doubled with `add hl, hl` because an address is two bytes, and added to the base, which
 is the shape every indexed read takes here: the Z80 has no base plus index mode, so `(hl)` is the
 only thing that reads what came out.
@@ -84,6 +81,5 @@ address _in_ `hl`.
 arm ends with `jr done` for the same reason the two halves of an `if` do: the arms are laid out one
 after another and nothing stops the program running into the next one.
 
-Try changing `ld a, 2` to `ld a, 3` and `a` comes out at `02`, which is 6 divided by 3. With
-`ld a, 0` it comes out at `09`. Nothing else in the program moves, and there is no comparison
-anywhere in it to change.
+Put 3 in `a` instead of 2 and the same program divides, and with 0 it adds. That one byte is the
+whole of the decision: there is no comparison anywhere in the program to add a case to.

@@ -1,0 +1,6 @@
+{
+    "name": "call, ret and the System V convention",
+    "description": "How call and ret use the stack, how System V passes integer and pointer values, who preserves each register, how to align stack frames and stack arguments, and how recursion keeps per-call state.",
+    "order": 5,
+    "topic": "subroutines"
+}

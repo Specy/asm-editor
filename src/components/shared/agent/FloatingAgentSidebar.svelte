@@ -7,6 +7,8 @@
         AgentWorkflowAllowList
     } from './DefaultCodingAgent.svelte'
     import type { Emulator } from '$lib/languages/Emulator'
+    import type { FileSystem } from '$lib/languages/peripherals/FileSystem'
+    import type { ProjectFiles } from '$lib/projectFiles'
     import type { RegisteredTool } from '@discerns/sdk'
 
     interface Props {
@@ -14,7 +16,11 @@
         openSize?: string
         verticalOffset?: string
         editorLanguage: SupportedLanguage | null
-        editorCode: string
+        editorCode?: string
+        files?: ProjectFiles
+        entry?: string
+        fileSystem?: FileSystem
+        activePath?: string
         emulatorInstance: Emulator | null
         canUpdateLanguage?: boolean
         additionalInstructions?: string
@@ -29,7 +35,11 @@
         openSize,
         verticalOffset = '0px',
         editorLanguage = $bindable(),
-        editorCode = $bindable(),
+        editorCode = $bindable(''),
+        files = $bindable(undefined),
+        entry = $bindable(undefined),
+        fileSystem,
+        activePath = $bindable(undefined),
         emulatorInstance,
         canUpdateLanguage,
         additionalInstructions,
@@ -73,6 +83,10 @@
         <DefaultCodingAgent
             bind:editorLanguage
             bind:editorCode
+            bind:files
+            bind:entry
+            bind:activePath
+            {fileSystem}
             {emulatorInstance}
             {canUpdateLanguage}
             {additionalInstructions}

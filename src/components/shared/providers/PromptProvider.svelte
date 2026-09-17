@@ -1,6 +1,7 @@
 <script lang="ts">
     import { Prompt, PromptType } from '$stores/promptStore.svelte'
     import { fade } from 'svelte/transition'
+    import { tick } from 'svelte'
 
     import Button from '$cmp/shared/button/Button.svelte'
     import Input from '$cmp/shared/input/Input.svelte'
@@ -12,10 +13,18 @@
 
     let value = $state('')
     let currentId = $state(0)
+    let inputEl = $state<HTMLInputElement | undefined>()
     $effect(() => {
         if (Prompt.id !== currentId) {
             currentId = Prompt.id
             value = ''
+            //every prompt takes the keyboard, not just the ones that arrive with the form off the
+            //screen. A program that asks twice in a row — EASy68K's task 18 for each of two numbers —
+            //asks again before this form has finished leaving, and Svelte keeps the element it was
+            //about to remove rather than building a new one: the input's own mount-time focus never
+            //runs again, and the answer the user clicked Ok for leaves the focus on that button.
+            //After a tick, so the element of the prompt now being asked is the one focused.
+            tick().then(() => inputEl?.focus())
         }
     })
 </script>
@@ -37,6 +46,7 @@
             <Input
                 focus
                 bind:value
+                bind:el={inputEl}
                 hideStatus
                 style="color: var(--primary-text); background-color: var(--primary);"
             />

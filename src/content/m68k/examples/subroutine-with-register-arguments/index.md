@@ -3,13 +3,8 @@ smaller number and the remainder of the division, and go round until the remaind
 program calls it as a subroutine, with the two arguments in `d0` and `d1` and the answer coming back
 in `d0`.
 
-This is the first program on the ladder that calls anything. Everything before it was one block of
-code running once, and this one has a piece of code with a name that the rest of the program hands
-work to.
-
-**You need to know:** the "bsr, rts, link and unlk" lecture and the "Multiply and divide, with the
-remainder" Example. What is new here is the call itself, `bsr` pushes the address of the instruction
-after it and jumps, and `rts` pops that address back and carries on there.
+Up to now every program has been one block of code running once through. This one has a named piece
+of code that the rest of the program hands work to and gets an answer back from.
 
 ```m68k|playground|no-flags|allow-open
     move.l #84, d0      ; a = 84
@@ -50,5 +45,5 @@ at the `rts`, because the return address is on the stack for as long as the subr
 `d0` and `d2` both come out at `0000000C`, which is 12: 84 and 36 are both 12 times something and
 nothing larger divides them both.
 
-Try changing the two numbers to 1071 and 462. The answer is 21, and the loop goes round one more
-time to find it.
+The number of times round the loop depends only on the two numbers, never on how big they are: 1071
+and 462 take one pass more than 84 and 36 do.

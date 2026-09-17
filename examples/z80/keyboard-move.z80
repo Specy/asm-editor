@@ -10,16 +10,16 @@
 ;
 ; Screen: 256 by 192, the default. Press Stop to end it.
 
-P_CHAR  equ 0x00        ; console: prints a character and draws it at the text cursor
-P_PEN   equ 0x10
-P_FILL  equ 0x11
-P_X     equ 0x13
-P_Y     equ 0x14
-P_X2    equ 0x15
-P_Y2    equ 0x16
-P_CMD   equ 0x17
-P_KEY   equ 0x21        ; 1 while the key whose code is in B is held
-P_FRAME equ 0x41
+P_CHAR  equ 0x10        ; console: prints a character and draws it at the text cursor
+P_PEN   equ 0x20
+P_FILL  equ 0x21
+P_X     equ 0x23
+P_Y     equ 0x24
+P_X2    equ 0x25
+P_Y2    equ 0x26
+P_CMD   equ 0x27
+P_KEY   equ 0x31        ; 1 while the key whose code is in B is held
+P_FRAME equ 0x51
 
 C_RECT    equ 4
 C_BUF_ON  equ 11

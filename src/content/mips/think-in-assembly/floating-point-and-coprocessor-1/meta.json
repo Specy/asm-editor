@@ -1,0 +1,6 @@
+{
+    "name": "Floating point and Coprocessor 1",
+    "description": "Load and calculate with single and double precision, then convert, compare, and pass single precision values.",
+    "order": 6,
+    "topic": "floating-point"
+}

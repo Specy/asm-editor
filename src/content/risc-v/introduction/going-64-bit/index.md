@@ -1,19 +1,27 @@
-Every program so far has been RV32: 32 bit registers, a word of four bytes, and a `li` that fills a
-whole register with one constant. RISC-V also has a 64 bit form, **RV64**, and this editor runs it
-as a language of its own. Open the projects page, press Create project, and pick **RISC-V-64** in the
-language dropdown instead of **RISC-V**; every Playground on this page is already in it.
+The programs so far have used **RV32**, the 32-bit form of RISC-V. In this editor, that is the
+**RISC-V** project type. RISC-V also has a 64-bit form called **RV64**. To create an RV64 project,
+choose **RISC-V-64** instead. Every Playground on this page already uses that mode.
 
-## The registers get twice as wide
+The project mode matters because it sets the width of the integer registers and the instructions
+available to the program. RV32 and RV64 source often looks similar, but the same instruction can
+produce a wider result in RV64.
 
-RV64 is the same instruction set with 64 bit registers. `add`, `sub`, `and`, `or`, `slt`, `mul`,
-`div` and the branches all read and write the full 64 bits, and nothing about how you write them
-changes. What is new is a fourth size, the **doubleword** of 8 bytes, and the three instructions
-that move one:
+## Wider registers and doublewords
 
-- **`.dword`** writes an 8 byte value in the data section, the way `.word` writes a 4 byte one.
-- **`ld`** loads a doubleword into a register and **`sd`** stores one.
-- **`lwu`** loads a word and fills the 32 bits above it with zeroes, which `lw` cannot do any more:
-  in RV64 `lw` sign extends what it read into the top half of the register.
+RV64 still has the same 32 integer registers with the same names. Each register now holds 64 bits,
+so the register panel displays sixteen hexadecimal digits instead of eight. A register can contain
+any 64-bit pattern. The bits do not carry a permanent signed or unsigned type.
+
+Plain arithmetic and logic instructions such as `add`, `sub`, `and` and `slli` operate on all 64
+bits in RV64. Addresses also occupy 64-bit registers.
+
+Memory gains one more useful size: an 8-byte **doubleword**.
+
+- `.dword` places an 8-byte value in the data section.
+- `ld` loads an 8-byte doubleword into a register.
+- `sd` stores a register as an 8-byte doubleword in memory.
+
+This example copies one doubleword and also loads its low word in two different ways:
 
 ```riscv64|playground|memory
 .data
@@ -23,126 +31,96 @@ copy: .dword 0
 .text
 main:
     la t0, big
-    ld t1, 0(t0)        # all eight bytes into one register
-    lw t2, 0(t0)        # the low word, sign extended into 64 bits
-    lwu t3, 0(t0)       # the low word, with zeroes above it
+    ld  t1, 0(t0)       # load all eight bytes
+    lw  t2, 0(t0)       # load four bytes and sign extend
+    lwu t3, 0(t0)       # load four bytes and zero extend
+
     la t4, copy
-    sd t1, 0(t4)        # and eight bytes back out
+    sd  t1, 0(t4)       # store all eight bytes
 ```
 
-`t1` comes out at `11223344AABBCCDD`, all sixteen hex digits of it, because a register on this
-language holds 64 bits and the panel shows every one of them. `t2` is
-`FFFFFFFFAABBCCDD` and `t3` is `00000000AABBCCDD`, the same four bytes read twice: `AABBCCDD` has
-its top bit set, so `lw` filled the space above with ones and `lwu` with zeroes.
+After the loads, the registers contain:
 
-The eight bytes at `copy`, which is `0x10010008`, read `DD CC BB AA 44 33 22 11`. Still little
-endian, and now eight bytes of it.
+| register | value              | reason                                     |
+| -------- | ------------------ | ------------------------------------------ |
+| `t1`     | `11223344AABBCCDD` | `ld` loaded the complete doubleword        |
+| `t2`     | `FFFFFFFFAABBCCDD` | `lw` copied bit 31 into the upper 32 bits  |
+| `t3`     | `00000000AABBCCDD` | `lwu` filled the upper 32 bits with zeroes |
 
-The addresses did not grow. `sp` still starts at `0x7FFFEFFC`, `gp` at `0x10008000` and your data at
-`0x10010000`, so the memory map of the previous lecture is the one you still have, sitting in the
-bottom four gigabytes of a 64 bit address.
+The four bytes read by both word loads represent `0xAABBCCDD`. In RV64, `lw` treats that word as a
+signed 32-bit value and **sign extends** it: the word's top bit, bit 31, is copied into every bit
+above it. `lwu` treats the word as unsigned and **zero extends** it instead.
 
-## The w instructions
+The bytes stored at `copy` are `DD CC BB AA 44 33 22 11` in increasing address order. RV64 uses the
+same little-endian byte order as RV32. The editor also keeps its data in the familiar displayed
+address range; wider registers do not move this example to a visibly different part of memory.
 
-A 32 bit `add` on a 64 bit machine is a real thing to want: C's `int` is 32 bits on almost every
-64 bit target, so `a + b` on two `int`s has to wrap at 32 bits and not at 64. RV64 gives you a
-second copy of the arithmetic for it, with a **`w`** on the end.
+## Arithmetic on 32-bit values
 
-A `w` instruction reads the low 32 bits of its operands, computes a 32 bit answer, and **sign
-extends that answer into all 64 bits** of the destination. Sign extending is what keeps the two
-halves of the machine consistent: a 32 bit value living in a 64 bit register always has its top half
-holding copies of bit 31, so `blt` and `slt` on it give the answer a 32 bit machine would give.
+RV64 programs still work with many 32-bit values, including values loaded from `.word` data. For
+these, RV64 provides arithmetic instructions whose names end in **`w`**. Here `w` means that the
+result is a 32-bit word.
 
-| 64 bits       | low 32 bits, sign extended |
-| ------------- | -------------------------- |
-| `add`, `addi` | `addw`, `addiw`            |
-| `sub`, `neg`  | `subw`, `negw`             |
-| `sll`, `slli` | `sllw`, `slliw`            |
-| `srl`, `srli` | `srlw`, `srliw`            |
-| `sra`, `srai` | `sraw`, `sraiw`            |
-| `mul`         | `mulw`                     |
-| `div`, `divu` | `divw`, `divuw`            |
-| `rem`, `remu` | `remw`, `remuw`            |
+A `w` operation follows three steps:
+
+1. Use the low 32 bits of the input register or registers.
+2. Compute a 32-bit result, discarding anything beyond those 32 bits.
+3. Sign extend that result to fill the 64-bit destination register.
+
+Sign extension in step 3 is a rule of these particular operations. It is not a rule for every
+32-bit-looking pattern held in an RV64 register. A plain 64-bit instruction can leave bit 31 set
+while bits 32 through 63 remain zero.
+
+Compare the plain and `w` forms in this example:
 
 ```riscv64|playground
 .text
 main:
-    li t0, 0x40000000
-    add t1, t0, t0      # 64 bit, so the answer has room
-    addw t2, t0, t0     # the same sum in 32 bits, then sign extended
-    li t3, 1000000
-    mul t4, t3, t3      # the whole product
-    mulw t5, t3, t3     # its low 32 bits, sign extended
-    sext.w t6, t1       # the low 32 bits of a register, sign extended
-    zext.w s0, t2       # and the same 32 bits zero filled
+    li   t0, 0x40000000
+    add  t1, t0, t0     # full 64-bit addition
+    addw t2, t0, t0     # 32-bit result, then sign extended
+
+    li   t3, 0x80000000
+    add  t4, t3, t3     # the carry remains in bit 32
+    addw t5, t3, t3     # the carry is outside the low 32 bits
 ```
 
-`t1` comes out at `0000000080000000` and `t2` at `FFFFFFFF80000000`: the same 32 bit answer, and the
-`w` form put copies of its top bit above it. `t4` is `000000E8D4A51000`, which is
-1000000000000, and `t5` is `FFFFFFFFD4A51000`, the bottom eight hex digits of it with a sign on top,
-which is the wrapped 32 bit product. `t6` and `s0` are `sext.w` and `zext.w`, the two instructions
-that do that widening to a value already in a register.
+The first pair produces `0000000080000000` in `t1` and `FFFFFFFF80000000` in `t2`. Their low 32
+bits match, but their complete 64-bit patterns do not. `add` produced a 64-bit result. `addw`
+produced the 32-bit pattern `80000000`, then copied bit 31 into the upper half.
 
-So the rule for writing RV64 by hand: use the plain instruction when the value is an address or a
-64 bit number, and the `w` form when you are working on something that is 32 bits wide because C
-said so.
+The second pair makes the 32-bit wrap visible. `t4` becomes `0000000100000000`, while `t5` becomes
+`0000000000000000`. The `addw` result keeps only the low 32 bits, so the carry into bit 32 is
+discarded; the remaining 32-bit result is zero.
 
-## What this simulator gets wrong
+Use this decision rule:
 
-Two of the shift instructions are wrong here, and everything else on this page runs the way the
-specification says.
+- Use a plain instruction for an address or a calculation that should use all 64 bits.
+- Use a `w` instruction when the calculation should wrap to 32 bits and leave a sign-extended
+  32-bit result.
+- When loading a word, choose `lw` for sign extension and `lwu` for zero extension.
 
-**`slli`, `srli` and `srai` with a shift amount of 31 or less are carried out on the low 32 bits
-only, and the answer is sign extended.** The same shifts with an amount of 32 or more are carried
-out on all 64 bits and are right. The register forms, `sll`, `srl` and `sra`, are right at every
-amount.
+The naming pattern is regular enough to use as a lookup:
 
-```riscv64|playground
-.text
-main:
-    li t0, 1
-    slli t1, t0, 32     # 32 or more, so all 64 bits: 0x100000000
-    slli t2, t0, 31     # 31 or less, so the low 32 and a sign: 0xFFFFFFFF80000000
-    li t3, 31
-    sll t4, t0, t3      # the register form, and the right answer: 0x80000000
-    li t5, 0x11223344
-    slli t6, t5, 8      # the top byte is shifted off the end and lost
-```
+| operation           | full 64-bit form             | 32-bit-result form               |
+| ------------------- | ---------------------------- | -------------------------------- |
+| add                 | `add`, `addi`                | `addw`, `addiw`                  |
+| subtract            | `sub`                        | `subw`                           |
+| shift               | `sll`, `srl`, `sra`          | `sllw`, `srlw`, `sraw`           |
+| multiply            | `mul`                        | `mulw`                           |
+| divide or remainder | `div`, `divu`, `rem`, `remu` | `divw`, `divuw`, `remw`, `remuw` |
 
-`t1` is `0000000100000000`, which is 2 to the 32 and what the shift should give. `t2` is
-`FFFFFFFF80000000`, where a 64 bit shift of 1 by 31 is `0000000080000000`, and `t4` is that right
-answer out of the register form. `t6` is `0000000022334400`: the `11` at the top of `t5` was shifted
-out of a 32 bit register instead of moving up into the second half of a 64 bit one.
-
-`li` is built out of those shifts, so **a `li` of a constant that needs more than 32 bits comes out
-wrong**. Its expansion is a `lui`, an `addiw` and then a run of `slli` and `addi` pairs with shift
-amounts of 11 and 10, every one of them in the broken range.
-
-```riscv64|playground
-.text
-main:
-    li t0, 42                   # small constants are fine
-    li t1, 0x12345678           # so is anything that fits in 32 bits
-    li t2, 0x1122334455667788   # this one does not survive
-    li t3, 0x11223344
-    slli t3, t3, 32             # a shift of 32, so the top half lands correctly
-    li t4, 0x55667788
-    add t3, t3, t4              # and the bottom half is added in
-```
-
-`t0` is 42 and `t1` is `0000000012345678`, both right. `t2` comes out at `0000000055667788`, which
-is the bottom half of the number you asked for with nothing above it. `t3` is
-`1122334455667788`, the whole number, put together out of two `li`s that each fit in 32 bits, one
-`slli` of 32 and one `add`.
-
-That three line pattern is the workaround for any 64 bit constant, with one thing to watch: if the
-bottom half has its top bit set, the `li` that loads it sign extends and the `add` carries ones into
-the top half, so use `zext.w` on it before adding.
+Immediate shift forms follow the same pattern, such as `slliw`, `srliw` and `sraiw`. You do not
+need to memorize the table. First decide whether the calculation is 64 bits or 32 bits, then choose
+the matching form.
 
 ## Your turn
 
-`big` holds the doubleword `0x1122334455667788`. Leave its **top** 32 bits in `t1`, which is
-`0x11223344`, and its **bottom** 32 bits with zeroes above them in `t2`, which is `0x55667788`.
+`big` holds the doubleword `0x1122334455667788`. Leave its **top** 32 bits in `t1`, as
+`0x0000000011223344`, and its **bottom** 32 bits in `t2`, as `0x0000000055667788`.
+
+Hint: the high word begins four bytes after `big`. Make sure both results have zeroes in their upper
+32 bits.
 
 ```riscv64|playground|memory|exercise
 .data
@@ -168,39 +146,9 @@ big: .dword 0x1122334455667788
 
 .text
 main:
-    la t0, big
-    ld t3, 0(t0)
-    srli t1, t3, 32     # 32 or more, so this shift is the 64 bit one
-    zext.w t2, t3       # the low word with the top half cleared
-```
-
-</details>
-
-The second one wants `0x00ABCDEF12345678` in `t0`, which `li` cannot give you. Build it out of two
-constants that each fit in 32 bits.
-
-```riscv64|playground|exercise
-.text
-main:
-    # your code here
-```
-
-```testcase
-{
-    "expectedRegisters": { "t0": "0x00ABCDEF12345678" }
-}
-```
-
-<details>
-<summary>Show solution</summary>
-
-```riscv64|playground|solution
-.text
-main:
-    li t0, 0x00ABCDEF
-    slli t0, t0, 32     # the top half into place
-    li t1, 0x12345678
-    add t0, t0, t1      # and the bottom half added in
+    la  t0, big
+    lwu t2, 0(t0)       # low word, zero extended
+    lwu t1, 4(t0)       # high word starts four bytes later
 ```
 
 </details>

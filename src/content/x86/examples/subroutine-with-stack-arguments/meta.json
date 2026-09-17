@@ -1,0 +1,6 @@
+{
+    "name": "Stack arguments and a stack frame",
+    "description": "A subroutine with seven arguments, so the seventh goes on the stack, with a frame pointer, room for locals and a borrowed callee saved register.",
+    "order": 11,
+    "topic": "subroutine-with-stack-arguments"
+}

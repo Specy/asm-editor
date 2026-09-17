@@ -36,6 +36,29 @@ export const MARS_INTERRUPT_ENABLE_BIT = 0x2
 const FORM_FEED = 12
 
 /**
+ * How many framebuffer words one bit of the dirty map covers.
+ *
+ * The grid used to be tracked as a single minimum-to-maximum interval, so a program storing two
+ * words at opposite ends of it had the whole grid read back out of the Core and converted, once per
+ * flush. Measured in the headless shell on a program written for it — two words a frame on a 256 by
+ * 256 word grid, sleeping 16 ms, so it should reach 60 frames a second — that was 29 delivered
+ * frames a second with **47% of the wall clock inside the Core's `wasm-bindgen` memory-read glue**,
+ * turning 262 144 bytes into a JavaScript array every frame.
+ *
+ * A block is a kilobyte of Core memory, so a scattered store re-reads 256 words instead of the
+ * grid, and a program writing the whole grid still flushes it as one run.
+ */
+const DIRTY_BLOCK_WORDS = 256
+
+/**
+ * How many separate runs of dirty blocks a flush will read before giving up and reading one span
+ * from the first to the last. Each run is a call into the Core's memory-read glue, which has a
+ * fixed cost per call on top of the words it returns; past a handful of runs the span between them
+ * is cheaper to read whole than to reach for piece by piece.
+ */
+const MAX_DIRTY_RUNS = 8
+
+/**
  * A character the environment's byte cannot hold, the substitution `Z80Device` also makes: the
  * registers are one byte wide and dropping the keystroke would look like a stuck program.
  */
@@ -86,7 +109,12 @@ export class MarsDevices {
     private words = new Int32Array(0)
     /** How many words of the grid the Core will actually let us read, see `probeReadableWords`. */
     private readableWords = 0
-    /** The words written since the last flush, inclusive, or null when nothing changed. */
+    /**
+     * Which `DIRTY_BLOCK_WORDS`-sized blocks of the grid have been written since the last flush.
+     * `dirtyFrom` and `dirtyTo` are the first and last dirty block, so a flush that finds two of
+     * them does not walk the whole map, and -1 when nothing has changed.
+     */
+    private dirtyBlocks = new Uint8Array(0)
     private dirtyFrom = -1
     private dirtyTo = -1
     /** Whether the receiver data register is holding a character the program has not read yet. */
@@ -154,12 +182,30 @@ export class MarsDevices {
      */
     flush(): void {
         if (this.dirtyFrom < 0) return
-        const from = this.dirtyFrom
-        const to = this.dirtyTo + 1
-        this.dirtyFrom = -1
-        this.dirtyTo = -1
-        this.readInto(from, to)
-        this.host.screen.syncFramebuffer(this.words, from, to)
+        const firstBlock = this.dirtyFrom
+        const lastBlock = this.dirtyTo
+        //the runs are collected before anything is read, so the cap can be applied to all of them
+        const runs: number[] = []
+        for (let block = firstBlock; block <= lastBlock; block++) {
+            if (this.dirtyBlocks[block] === 0) continue
+            const start = block
+            while (block + 1 <= lastBlock && this.dirtyBlocks[block + 1] !== 0) block++
+            runs.push(start, block)
+        }
+        this.resetDirty()
+        if (runs.length === 0) return
+        if (runs.length > MAX_DIRTY_RUNS * 2) {
+            //too scattered to be worth a call each: one span from the first block to the last, which
+            //is what this did for every shape of write before the map existed
+            runs.splice(0, runs.length, firstBlock, lastBlock)
+        }
+        for (let index = 0; index < runs.length; index += 2) {
+            const from = runs[index] * DIRTY_BLOCK_WORDS
+            //a block past the end of the grid is impossible: the map is sized from the same words
+            const to = Math.min(this.words.length, (runs[index + 1] + 1) * DIRTY_BLOCK_WORDS)
+            this.readInto(from, to)
+            this.host.screen.syncFramebuffer(this.words, from, to)
+        }
     }
 
     /**
@@ -168,8 +214,7 @@ export class MarsDevices {
      * ([ADR 0005](../../../../docs/adr/0005-restore-screen-state-on-undo.md)).
      */
     resync(): void {
-        this.dirtyFrom = -1
-        this.dirtyTo = -1
+        this.resetDirty()
         if (!this.core || !this.geometry) return
         this.readInto(0, this.readableWords)
         this.host.screen.syncFramebuffer(this.words, 0, this.readableWords)
@@ -189,6 +234,12 @@ export class MarsDevices {
         this.core = null
         this.readableWords = 0
         this.receiverArmed = false
+        this.resetDirty()
+    }
+
+    /** Forgets every dirty block, without touching how the map is sized. */
+    private resetDirty(): void {
+        if (this.dirtyFrom >= 0) this.dirtyBlocks.fill(0, this.dirtyFrom, this.dirtyTo + 1)
         this.dirtyFrom = -1
         this.dirtyTo = -1
     }
@@ -197,6 +248,7 @@ export class MarsDevices {
         const geometry = marsDisplayGeometry(display)
         this.geometry = geometry
         this.words = new Int32Array(geometry.words)
+        this.dirtyBlocks = new Uint8Array(Math.ceil(geometry.words / DIRTY_BLOCK_WORDS))
         this.host.screen.useFramebuffer(geometry.columns, geometry.rows)
         this.dirtyFrom = -1
         this.dirtyTo = -1
@@ -222,8 +274,11 @@ export class MarsDevices {
             //is what gets re-read; `value` is deliberately ignored
             const index = ((address >>> 0) - base) >>> 2
             if (index >= this.words.length) return
-            if (this.dirtyFrom < 0 || index < this.dirtyFrom) this.dirtyFrom = index
-            if (index > this.dirtyTo) this.dirtyTo = index
+            const block = (index / DIRTY_BLOCK_WORDS) | 0
+            if (this.dirtyBlocks[block] !== 0) return
+            this.dirtyBlocks[block] = 1
+            if (this.dirtyFrom < 0 || block < this.dirtyFrom) this.dirtyFrom = block
+            if (block > this.dirtyTo) this.dirtyTo = block
         })
         this.framebufferHandle = handle
         this.handles.push(handle)

@@ -1,0 +1,6 @@
+{
+    "name": "Bubble sort",
+    "description": "Nested loops over six numbers in memory, comparing each pair of neighbours and swapping them, with both elements reached from one index register.",
+    "order": 13,
+    "topic": "bubble-sort"
+}

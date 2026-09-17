@@ -1,0 +1,6 @@
+{
+    "name": "Comparing two numbers",
+    "description": "Compare MIPS register values by branching immediately with beq, bne, and comparison pseudo-branches, or by keeping a 0-or-1 result with slt and sltu.",
+    "order": 7,
+    "topic": "flags"
+}

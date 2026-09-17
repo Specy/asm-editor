@@ -1,113 +1,68 @@
-`trap #15` is one of sixteen trap instructions, and the trap instructions are a few of 256 causes
-that can take the program counter away from your program. On a real 68000 all of them work the same
-way, through a table at the bottom of memory.
+Sooner or later a program of yours divides by zero, or reads a word at an odd address, and the run
+stops with a red message under the editor instead of finishing. This lecture is about what that is,
+why the messages are worded the way they are, and what you write so that it does not happen.
 
-## The vector table
+## Where the words in those messages come from
 
-The first 1024 bytes of a 68000's memory, `$000000` to `$0003FF`, are **256 vectors** of four bytes
-each. A vector is the address of the code that deals with one cause, and the CPU finds it by
-multiplying the cause's **vector number** by 4 and reading the long there.
+Some things an instruction asks for cannot be done. There is no answer to a division by zero, and a
+word cannot be fetched from an odd address. A CPU has to do something when it meets one, and what the
+68000 does is stop your program and run a piece of code that somebody else wrote for exactly that
+situation. Such a piece of code is a **handler**, and the interruption itself is an **exception**.
 
-| vector | address | cause                                            |
-| -----: | ------- | ------------------------------------------------ |
-|      0 | `$0000` | the supervisor stack pointer the CPU starts with |
-|      1 | `$0004` | the program counter the CPU starts with          |
-|      2 | `$0008` | bus error                                        |
-|      3 | `$000C` | address error, a word or long at an odd address  |
-|      4 | `$0010` | illegal instruction                              |
-|      5 | `$0014` | division by zero                                 |
-|      6 | `$0018` | the `chk` instruction, an index out of range     |
-|      7 | `$001C` | the `trapv` instruction, on overflow             |
-|      8 | `$0020` | privilege violation                              |
-|      9 | `$0024` | trace, one vector per instruction for a debugger |
-| 10, 11 | `$0028` | an instruction beginning `1010` or `1111`        |
-|     24 | `$0060` | spurious interrupt                               |
-|  25-31 | `$0064` | the seven interrupt levels, one vector each      |
-|  32-47 | `$0080` | `trap #0` to `trap #15`                          |
-| 64-255 | `$0100` | interrupt vectors devices supply themselves      |
+The CPU finds the right handler through a table. The first 1024 bytes of a 68000's memory are 256
+slots of four bytes each, and each slot holds the address of one handler. Every cause has a slot
+number: a division by zero is number 5, an address error is number 3, and `trap #0` to `trap #15` are
+numbers 32 to 47, which is why `trap #15`, the last of the sixteen, lives at slot 47.
 
-So `trap #15` is vector 47, at `$0000BC`, and a division by zero is vector 5, at `$000014`. The first
-two entries are why a 68000 needs no boot code of its own: on reset it loads `a7` from `$0000` and
-the program counter from `$0004` and starts running.
+Two of the slots are not handlers at all. Slot 0 holds the value the CPU puts in `a7` when it is
+switched on and slot 1 holds the address it starts running at, which is how a 68000 gets going
+without any boot code of its own.
 
-Filling that table in is the first thing an operating system does, and on a machine with no operating
-system it is the first thing the program does.
+## None of that happens here
 
-## What the CPU does when one happens
+The simulator has no handlers and no table. When one of those causes turns up, the run ends and a
+message appears, and that is the whole story. Three consequences are worth knowing about.
 
-The steps are the same for every cause, and this is what "handling an exception" means in hardware:
-
-1. It finishes, or abandons, the instruction it is on.
-2. It makes an internal copy of the status register and then sets the **S** bit, switching to
-   **supervisor mode**, and clears the **T** bit so the handler is not traced.
-3. It pushes an **exception frame** onto the supervisor stack: the program counter and that copy of
-   the status register, six bytes for most causes. A bus or address error pushes eight more bytes
-   describing what went wrong, since the instruction has to be abandoned halfway.
-4. It reads the vector and loads it into the program counter, and the handler starts.
-5. The handler ends with `rte`, return from exception, which pops the status register and the program
-   counter back and carries on where the program left off.
-
-Three words for causes that go through this machinery:
-
-- An **exception** is the CPU refusing to carry out the instruction it is on: the address error, the
-  division by zero, the illegal instruction. Your program caused it, at an instruction you can point
-  at.
-- An **interrupt** comes from a device between two instructions. The 68000 has seven levels, and the
-  three bits in the status register that hold the **interrupt mask** say which levels it will listen
-  to right now, so a program can raise the mask to keep a piece of code from being stopped halfway.
-  Level 7 is non-maskable and gets through regardless.
-- A **trap** is an instruction you ran on purpose to hand control over, which is the previous two
-  lectures.
-
-## What this editor does
-
-None of the above happens here. Five things are different, and each of them changes what you write.
-
-**The only trap that assembles is `trap #15`.** `trap #14` fails to build with "Only implemented TRAP
-is 15 for IO, received 14". There are no trap vectors, so there is nothing for the other fifteen to
-point at.
-
-**There is no vector table.** The bottom of memory is memory like the rest of it, and writing there
-changes nothing about how the simulator behaves.
+**The bottom of memory is ordinary memory.** Writing addresses into it changes nothing.
 
 ```m68k|playground|memory|no-flags
-    move.l #$12345678, $0000    ; vector 0 on a real 68000
-    move.l #$00001000, $0004    ; vector 1
+    move.l #$12345678, $0000    ; slot 0 on a real 68000
+    move.l #$00001000, $0004    ; slot 1
     move.l $0000, d0
     move.l $0004, d1
 ```
 
-`d0` comes out at `12345678` and `d1` at `00001000`, and the memory panel at `$0000` shows the eight
-bytes sitting there. On a 68000 you would have just set the reset stack pointer and the reset program
-counter.
+The eight bytes are sitting at `$0000` in the memory panel and the simulator has taken no notice
+whatsoever. On a real 68000 you would have just changed where the machine starts up.
 
-**`rte` does not exist here**, and neither do `stop`, `chk` or `trapv`: all four are build errors
-saying the instruction is unknown. There is no supervisor mode either, so there is nothing for a
-privilege violation to be violated.
+**`trap #15` is the only trap that does anything.** All sixteen encodings assemble, but running
+`trap #0` through `trap #14` ends the run with an unknown-trap error, because there is nothing behind
+them to run.
 
-**A fault ends the run and puts a message under the editor.** These are the ones you will meet:
+**The instructions that exist to work with handlers are not here.** `rte`, `stop` and `reset` are
+recognised and refuse to build, each with its own reason. `chk`, `trapv` and `illegal` do run, and
+they end the run with their fault rather than jumping to a handler.
+
+## The messages
+
+These are the faults you will actually meet, and each message names the line it happened on.
 
 | what you did                          | the message                                                         |
 | ------------------------------------- | ------------------------------------------------------------------- |
 | `divu` or `divs` by zero              | `Division by zero`                                                  |
 | a word or long at an odd address      | `Address error: Tried to read/write to an odd memory address "..."` |
 | read past the end of the 16 megabytes | `Memory read out of bounds: ... maximum: 0x1000000`                 |
+| `chk` with a value outside its bounds | `CHK exception: ... is outside 0.....`                              |
+| `trapv` while V is set                | `Overflow exception: TRAPV ran while the overflow flag was set`     |
+| run `illegal`                         | `Illegal instruction exception`                                     |
 | a loop that never ends                | `Execution limit of 2000000 instructions reached`                   |
 
-Each of them names the line, and each of them stops the program where a real 68000 would have jumped
-to vector 5, vector 3 or vector 2 and carried on inside your handler.
+## Check before the instruction faults
 
-**No device raises an interrupt.** EASy68K has a task to turn the mouse interrupt on (60) and one for
-the keyboard (62), and both are refused here with the reason: mouse input is polled with task 61, and
-keyboard input with tasks 7 and 19. The screen never interrupts anything either.
-
-## What you write instead of a handler
-
-Two habits replace the two things the vector table would have done for you.
-
-**Check before the instruction faults.** A division by zero ends the run, so a program that did not
-choose the divisor tests it first; and `divu` reports a quotient too large for 16 bits in `V` without
-faulting, so that gets checked after.
+With nothing to catch a fault, the only place left to deal with one is in front of it. A division by
+zero ends the run, so a program that did not choose its own divisor tests it first. A quotient too
+large for 16 bits does not fault at all, it just sets `V` and leaves the register alone, so that one
+gets checked afterwards.
 
 ```m68k|playground
     move.l #1000, d0
@@ -128,13 +83,18 @@ ok:
 end:
 ```
 
-`d2` comes out at `FFFFFFFF`, the -1 that says the divisor was zero, and the run ends normally. Try
-changing `move.l #0, d1` to `move.l #3, d1` and `d2` becomes the packed answer instead; change it to
-`move.l #1, d1` and the quotient does not fit, so `V` is set and `d2` comes out at -2.
+`d2` comes out at `FFFFFFFF`, the -1 that means the divisor was zero, and the run ends normally
+rather than stopping on an error. Take the `tst.w d1` and its `beq` out and run it again: same
+divisor, same division, and this time the program dies on the `divu`.
 
-**Poll instead of waiting to be told.** A keyboard interrupt would have run a handler the moment a
-key went down. Task 7 asks whether a character is waiting and answers at once, so the program goes
-and looks between whatever else it is doing.
+## Poll instead of waiting to be told
+
+On a real machine a keypress would raise an **interrupt**, which is a device stopping the CPU between
+two instructions to say that something happened, and a handler would deal with it. Nothing here
+interrupts anything. What you get instead are tasks that answer immediately: task 7 says whether a
+character is waiting, task 61 says where the mouse is, task 19 says which keys are down.
+
+So the program goes and looks, on its own schedule, in between whatever else it is doing.
 
 ```m68k|playground|console|no-flags
     move.w #9, d3           ; look ten times
@@ -165,49 +125,16 @@ nothing: dc.b 'nothing was typed', 0
 ```
 
 Press Run and then type a character into the input box quickly: the loop catches it and prints it
-back. Wait instead and the ten passes run out and it prints `nothing was typed`. The `trap #15` task
-23 in the middle is what stops the poll from burning the whole instruction budget, and a game does
-the same thing once a frame.
+back. Wait instead and the ten passes run out and it prints `nothing was typed`.
 
-## A vector table of your own
-
-The mechanism the CPU uses is a table of addresses indexed by a number, and nothing stops you from
-building one. A cause number scaled by 4 picks a long out of a table, and `jsr (a1)` calls it.
-
-```m68k|playground|memory|no-flags
-    move.l #1, d1           ; the cause number
-    lea handlers, a0
-    move.l d1, d2
-    lsl.l #2, d2            ; four bytes per entry
-    move.l (a0, d2), a1     ; the handler's address, out of the table
-    jsr (a1)                ; and call it
-    bra end
-
-zero:
-    move.l #100, d0
-    rts
-one:
-    move.l #200, d0
-    rts
-two:
-    move.l #300, d0
-    rts
-end:
-
-    org $2000
-handlers: dc.l zero, one, two
-```
-
-`d0` comes out at 200, from the handler at index 1. The memory panel at `$2000` shows the three
-addresses the assembler wrote there, which is exactly the shape of the table at `$0000` on a real
-68000: `dc.l` of labels, read as addresses, jumped through.
-
-Try changing `move.l #1, d1` to `move.l #2, d1` and watch `d0` come out at 300.
+The task 23 in the middle is what keeps the poll from burning the whole instruction budget on doing
+nothing. Take it out and ten passes go by in microseconds, long before your hand reaches the
+keyboard. A game does the same thing once a frame, and that lecture is the one on the screen.
 
 ## Your turn
 
-The test starts `d0` at 1000 and `d1` at 0. Divide `d0` by `d1` without ending the run: leave the
-quotient in `d2` when the division is possible, and `$FFFFFFFF` in `d2` when the divisor is zero.
+`d0` holds 1000 and `d1` holds 0. Divide `d0` by `d1` and do not let the run end: leave the quotient
+in `d2` when the division is possible, and `$FFFFFFFF` in `d2` when the divisor is zero.
 
 ```m68k|playground|exercise
 * your code here
@@ -232,65 +159,6 @@ quotient in `d2` when the division is possible, and `$FFFFFFFF` in `d2` when the
 bad:
     move.l #-1, d2
 end:
-```
-
-</details>
-
-The second one hands you three handlers and a table of their addresses at `$2000`. The test starts
-`d0` at 2, and wants the handler at that index called, so `d1` comes back at 300.
-
-```m68k|playground|memory|exercise
-* work out the address and call it here
-
-    bra end
-
-zero:
-    move.l #100, d1
-    rts
-one:
-    move.l #200, d1
-    rts
-two:
-    move.l #300, d1
-    rts
-end:
-
-    org $2000
-handlers: dc.l zero, one, two
-```
-
-```testcase
-{
-    "startingRegisters": { "d0": 2 },
-    "expectedRegisters": { "d1": 300 }
-}
-```
-
-<details>
-<summary>Show solution</summary>
-
-```m68k|playground|memory|solution
-    lea handlers, a0
-    move.l d0, d2
-    lsl.l #2, d2        ; four bytes per entry
-    move.l (a0, d2), a1 ; the handler's address
-    jsr (a1)
-
-    bra end
-
-zero:
-    move.l #100, d1
-    rts
-one:
-    move.l #200, d1
-    rts
-two:
-    move.l #300, d1
-    rts
-end:
-
-    org $2000
-handlers: dc.l zero, one, two
 ```
 
 </details>

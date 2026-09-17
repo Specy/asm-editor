@@ -1,0 +1,7 @@
+{
+    "name": "Moving values around",
+    "description": "An immediate, a register and a variable in memory, moved about with mov and multiplied, with the one memory write visible in the memory panel.",
+    "order": 0,
+    "topic": "moving-values",
+    "template": 1
+}

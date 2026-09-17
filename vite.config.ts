@@ -6,7 +6,15 @@ import { defineConfig } from 'vitest/config'
 //import devtoolsJson from 'vite-plugin-devtools-json';
 export default defineConfig({
     server: {
-        port: 4173
+        port: 4173,
+        fs: {
+            // `npm run emulators:local` points the `@specy/*` packages at their submodule
+            // checkouts, so Vite resolves a linked Core's assets to their real path under
+            // `emulators/` instead of `node_modules/`. Without this the `.wasm` files fall
+            // outside the serving allow list and the 403 page itself reaches
+            // `WebAssembly.instantiate`, which reports a bad magic word.
+            allow: ['emulators']
+        }
     },
     optimizeDeps: {
         exclude: ['@specy/s68k', '@specy/x86', '@battlefieldduck/xterm-svelte']
@@ -31,14 +39,39 @@ export default defineConfig({
             emitFile: true,
             filename: 'stats.html'
         })
-         */
+        */
     ],
+    worker: {
+        format: 'es',
+        plugins: () => [wasm()]
+    },
     // The tests run on the app's own Vite config so a test resolves `$lib`, `$cmp` and the other
     // SvelteKit aliases exactly like the app does, and so the Svelte plugin compiles any `.svelte.ts`
     // module a test reaches. Peripheral logic itself stays plain TypeScript, which is why the
-    // environment is node: nothing under test needs a DOM.
+    // default environment is node: nothing under test needs a DOM.
+    //
+    // `*.dom.test.ts` is the exception. Mounting a component needs a DOM and Svelte's browser
+    // build, so those files run in their own project; the two never share an environment.
     test: {
-        environment: 'node',
-        include: ['src/**/*.test.ts']
+        projects: [
+            {
+                extends: true,
+                test: {
+                    name: 'node',
+                    environment: 'node',
+                    include: ['src/**/*.test.ts'],
+                    exclude: ['src/**/*.dom.test.ts']
+                }
+            },
+            {
+                extends: true,
+                resolve: { conditions: ['browser'] },
+                test: {
+                    name: 'dom',
+                    environment: 'jsdom',
+                    include: ['src/**/*.dom.test.ts']
+                }
+            }
+        ]
     }
 })

@@ -2,13 +2,8 @@
 turns a number into characters itself. Services 1, 34 and 35 do the same job in one request; this is
 what they do inside, and it is the program every language writes once and then hides in a library.
 
-Read two numbers and print their sum handed a number to a service and got text back. Here the only
-service used is the one that prints a string, and everything between the number and the string is
-yours.
-
-**You need to know:** the "Multiply and divide, with the remainder" Example and the "syscall"
-lecture. What is new here is that the digits come out backwards, the lowest one first, so the buffer
-is filled from its end towards its front.
+The only service this program uses is the one that prints a string. Everything between a number and
+that string is the program's own work, and that work is what this page is about.
 
 ```mips|playground|console|allow-open
 .data
@@ -64,14 +59,14 @@ Dividing by the base and keeping the remainder gives you one digit, and it is th
 the digits arrive in the opposite order to the one they are printed in, and the two ways round that
 are to reverse the buffer afterwards or to write it backwards in the first place.
 
-`div` answers both halves at once, the quotient in `lo` and the remainder in `hi`, so one
-instruction and two `mf` moves are the whole of a pass. The M68K writes the same three lines as a
-`divu`, a `swap` and two masks, because it packs both answers into the two halves of one register.
+`div` is exactly the right instruction for this, because one pass of the loop needs both of its
+answers: the remainder is the digit and the quotient is what you carry on dividing. One `div`, one
+`mfhi` and one `mflo`, and the pass has everything it needs.
 
-Writing backwards costs an `addi` before every store. The M68K has `-(a1)`, an addressing mode that
-subtracts and then writes in one instruction; the only mode a MIPS store has is `offset(base)`, so
-the pointer is moved by an instruction of its own and `$t0` is left pointing at the first character,
-which is what service 4 is then given.
+Writing the buffer backwards costs an `addi` before every store, since a store addresses memory as
+`offset(base)` and cannot move the pointer itself. The pay off is that when the loop ends, `$t0` is
+already sitting on the first character of the answer, which is precisely the address service 4 wants
+handed to it.
 
 A digit is a number from 0 to `base - 1` and it has to become a character. `'0'` is 48, so adding it
 turns 0 to 9 into `'0'` to `'9'`; `'A'` is 65 and a 10 has to become that, so the amount added
@@ -84,5 +79,6 @@ becomes the new `n`, and when it reaches zero there is nothing left to divide. T
 bytes because the longest answer is a 32 bit number in base 2, and after the binary run `$t0` comes
 out at `10010011`, seventeen bytes down from `buffer_end`.
 
-Try changing `li $a1, 2` to `li $a1, 36`, the largest base the digits reach. The third line of the
-console becomes `11PR`.
+Change `li $a1, 2` to `li $a1, 36` and the third line of the console becomes `11PR`. Thirty six is
+as far as this subroutine goes, because 10 digits and 26 letters is every character it knows how to
+make.

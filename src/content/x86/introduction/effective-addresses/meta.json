@@ -1,0 +1,6 @@
+{
+    "name": "Effective addresses",
+    "description": "Calculate x86-64 addresses with a base, scaled index and displacement; index arrays; and distinguish memory access with mov from address calculation with lea.",
+    "order": 5,
+    "topic": "addressing-modes"
+}

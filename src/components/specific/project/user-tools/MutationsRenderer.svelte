@@ -2,12 +2,15 @@
     import { createEventDispatcher } from 'svelte'
     import MutationStep from './MutationStep.svelte'
     import type { ExecutionStep } from '$lib/languages/commonLanguageFeatures.svelte'
+    import type { AvailableLanguages } from '$lib/Project.svelte'
     interface Props {
         steps: ExecutionStep[]
         statusRegisterNames: string[]
+        /** The Target, which names the widths a written mutation reports. */
+        language: AvailableLanguages
     }
 
-    let { steps, statusRegisterNames }: Props = $props()
+    let { steps, statusRegisterNames, language }: Props = $props()
 
     const dispatch = createEventDispatcher<{ undo: number }>()
 </script>
@@ -18,6 +21,7 @@
     {/if}
     {#each steps as step, i (i)}
         <MutationStep
+            {language}
             flags={statusRegisterNames}
             {step}
             on:undo={() => {

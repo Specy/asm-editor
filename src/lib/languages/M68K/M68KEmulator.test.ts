@@ -1,6 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { M68KEmulator } from '$lib/languages/M68K/M68KEmulator.svelte'
+import { CPU_REGISTER_FILE_ID } from '$lib/languages/GenericEmulator.svelte'
+import { RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
+import type { Testcase } from '$lib/Project.svelte'
 import { M68K_TRAP_DOCS, screenColorOf } from '$lib/languages/M68K/M68K-traps'
 import { Keyboard } from '$lib/languages/peripherals/Keyboard'
 import { KEY_CODES, letterKeyCode } from '$lib/languages/peripherals/keyCodes'
@@ -54,6 +57,70 @@ function pixelAt(emulator: Awaited<ReturnType<typeof run>>, x: number, y: number
     const pixels = screen.visiblePixels
     return (pixels[offset] << 16) | (pixels[offset + 1] << 8) | pixels[offset + 2]
 }
+
+describe('M68K diagnostics', () => {
+    it('preserves the Core hint in the text shown by diagnostic renderers', async () => {
+        const emulator = M68KEmulator('    mova d0,d1')
+        const [diagnostic] = await emulator.check()
+
+        expect(diagnostic.hint).toContain('Did you mean `move`?')
+        expect(diagnostic.formatted).toBe(`${diagnostic.message}\n${diagnostic.hint}`)
+        emulator.dispose()
+    })
+})
+
+describe('M68K Project Files', () => {
+    it('assembles included source with its own file identity', async () => {
+        const sources = {
+            entry: 'src/main.m68k',
+            files: {
+                'src/main.m68k': {
+                    encoding: 'plain' as const,
+                    content: '    org $1000\n    include "lib/helper.m68k"\n'
+                },
+                'src/lib/helper.m68k': {
+                    encoding: 'plain' as const,
+                    content: '    moveq #7,d0\n'
+                }
+            }
+        }
+        const emulator = M68KEmulator(sources)
+        await emulator.compile(0, sources)
+        expect(emulator.currentFile).toBe('src/lib/helper.m68k')
+        expect(emulator.buildArtifacts).toEqual([
+            {
+                file: 'src/lib/helper.m68k',
+                line: 0,
+                address: 0x1000n
+            }
+        ])
+        await emulator.step()
+        expect(registerOf(emulator, 'D0')).toBe(7n)
+        emulator.dispose()
+    })
+
+    it('incbin embeds exact UTF-8 bytes independently of their storage encoding', async () => {
+        for (const note of [
+            { encoding: 'plain' as const, content: 'è' },
+            { encoding: 'base64' as const, content: 'w6g=' }
+        ]) {
+            const sources = {
+                entry: 'main.m68k',
+                files: {
+                    'main.m68k': {
+                        encoding: 'plain' as const,
+                        content: '    org $1000\n    incbin "note.txt"\n'
+                    },
+                    'note.txt': note
+                }
+            }
+            const emulator = M68KEmulator(sources)
+            await emulator.compile(0, sources)
+            expect(emulator.readMemoryBytes(0x1000n, 2)).toEqual(new Uint8Array([0xc3, 0xa8]))
+            emulator.dispose()
+        }
+    })
+})
 
 function inkCount(emulator: Awaited<ReturnType<typeof run>>): number {
     const pixels = emulator.peripherals.screen.visiblePixels
@@ -423,6 +490,78 @@ describe('M68K input in graphical use', () => {
     })
 })
 
+describe('M68K breakpoints', () => {
+    /**
+     * Two prompts in a row with a breakpoint on the instruction between them: the Core resumes a
+     * program after every answered trap, and it used to be told to skip a breakpoint on the
+     * instruction it resumed at, which is the instruction right after the trap. A breakpoint there
+     * stopped nothing and the whole Run went by
+     * ([ADR 0023](../../../../docs/adr/0023-run-continues-past-the-breakpoint-it-is-parked-on.md)).
+     */
+    const TWO_PROMPTS = [
+        '    lea first,a1',
+        '    move.b #18,d0',
+        '    trap #15',
+        '    move.l d1,d2',
+        '    lea second,a1',
+        '    move.b #18,d0',
+        '    trap #15',
+        '    add.l d1,d2',
+        '    move.b #9,d0',
+        '    trap #15',
+        "first:  dc.b 'First: ',0",
+        "second: dc.b 'Second: ',0"
+    ].join('\n')
+
+    it('stops on a breakpoint on the instruction after a trap', async () => {
+        const code = ORG + TWO_PROMPTS
+        const emulator = M68KEmulator(code)
+        await emulator.compile(0, code)
+        emulator.peripherals.terminal.useScriptedInput(['5', '7'])
+        //`move.l d1,d2`, the line after the first trap, counting the ORG as line 0
+        emulator.toggleBreakpoint(4)
+
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.line).toBe(4)
+        expect(emulator.terminated).toBe(false)
+        expect(registerOf(emulator, 'D1')).toBe(5n)
+        expect(registerOf(emulator, 'D2')).toBe(0n)
+
+        //and Run continues from the breakpoint it is parked on rather than stopping on it again
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.terminated).toBe(true)
+        expect(registerOf(emulator, 'D2')).toBe(12n)
+    })
+
+    it('stops again on the same breakpoint when the program comes back round to it', async () => {
+        //the skip is for the instruction the Run starts on, not for the address: a loop that closes
+        //on its breakpoint stops every time it reaches it
+        const code =
+            ORG +
+            [
+                '    move.l #3,d0',
+                'loop:',
+                '    sub.l #1,d0',
+                '    bne loop',
+                '    move.b #9,d0',
+                '    trap #15'
+            ].join('\n')
+        const emulator = M68KEmulator(code)
+        await emulator.compile(0, code)
+        emulator.toggleBreakpoint(3)
+
+        for (const remaining of [3n, 2n, 1n]) {
+            await emulator.run(INSTRUCTION_LIMIT)
+            expect(emulator.line).toBe(3)
+            expect(registerOf(emulator, 'D0')).toBe(remaining)
+        }
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.terminated).toBe(true)
+    })
+})
+
 describe('M68K program time tasks', () => {
     it('reads the clock in hundredths of a second with task 8', async () => {
         const code = ORG + trap(8) + trap(9)
@@ -464,6 +603,142 @@ describe('M68K unsupported tasks', () => {
     it('lets the Core name the drawing mode it refused', async () => {
         const emulator = await run(trap(92, ['    move.b #14,d1']) + trap(9))
         expect(emulator.errors.join('\n')).toContain('Unsupported drawing mode: 14')
+    })
+})
+
+/**
+ * Pokes against the real Core ([the design record](../../../../docs/design/pokes.md),
+ * [ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md)): a poked value is one step of
+ * the same history the instructions use, told apart by its kind, and undone like any other.
+ */
+describe('M68K Pokes', () => {
+    const TWO_MOVES = ['    move.l #1,d0', '    move.l #2,d1'].join('\n') + '\n'
+
+    /** Built with a history, and stopped between two instructions, which is when a Poke is possible. */
+    async function stepped(body: string, steps = 1) {
+        const code = ORG + body
+        const emulator = M68KEmulator(code)
+        await emulator.compile(200, code)
+        for (let i = 0; i < steps; i++) await emulator.step()
+        return emulator
+    }
+
+    it('records a poked register as a step of its own, and undoes it', async () => {
+        const emulator = await stepped(TWO_MOVES + trap(9))
+        expect(registerOf(emulator, 'D0')).toBe(1n)
+        expect(emulator.canPoke).toBe(true)
+        const line = emulator.line
+
+        expect(
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'D0', value: 0xcafen }])
+        ).toBe(true)
+        expect(registerOf(emulator, 'D0')).toBe(0xcafen)
+
+        const [step] = emulator.latestSteps
+        expect(step.kind).toBe('poke')
+        //no instruction ran, so the row has no line to go to
+        expect(step.line).toBe(-1)
+        expect(step.writes).toEqual([{ type: 'register', name: 'D0', old: 1n, new: 0xcafen }])
+        expect(emulator.canUndo).toBe(true)
+
+        //a Poke changed no flag, so the Status flags highlight nothing: the CCR the row reports as
+        //the one before it is the CCR the machine is on
+        for (const flag of emulator.statusRegisters) expect(flag.prev).toBe(flag.value)
+        //and the line the panel is on is still the instruction the program is about to run
+        expect(emulator.line).toBe(line)
+
+        emulator.undo(1)
+        expect(registerOf(emulator, 'D0')).toBe(1n)
+        expect(emulator.latestSteps[0].kind).toBe('instruction')
+    })
+
+    it('names the width an instruction wrote, which the Core spells by name', async () => {
+        //serde crosses the `Size` enum as its variant name, not the number the types declare, and a
+        //row that lost the width read "undefined bytes"
+        const emulator = await stepped('    move.w #2,d1\n' + trap(9))
+        const [step] = emulator.latestSteps
+        expect(step.kind).toBe('instruction')
+        expect(step.mutations).toContainEqual({
+            type: 'WriteRegister',
+            value: { register: 'd1', old: 0n, new: 2n, size: RegisterSize.Word }
+        })
+    })
+
+    it('refuses a value the register cannot hold, and records nothing for a value it already has', async () => {
+        const emulator = await stepped(TWO_MOVES + trap(9))
+        expect(() =>
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [
+                { register: 'D0', value: 0x1_0000_0000n }
+            ])
+        ).toThrow('does not fit D0')
+        //poking what is already there is not a change, so there is nothing to undo
+        expect(emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'D0', value: 1n }])).toBe(
+            false
+        )
+        expect(emulator.latestSteps[0].kind).toBe('instruction')
+
+        //the widest value the register can hold is not the same thing as one too wide for it
+        expect(
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'D0', value: 0xffffffffn }])
+        ).toBe(true)
+        expect(registerOf(emulator, 'D0')).toBe(0xffffffffn)
+        expect(emulator.latestSteps[0].writes).toEqual([
+            { type: 'register', name: 'D0', old: 1n, new: 0xffffffffn }
+        ])
+    })
+
+    it('records poked memory as one step, however many bytes it spans', async () => {
+        const emulator = await stepped(TWO_MOVES + trap(9))
+        const bytes = new Uint8Array([0xde, 0xad, 0xbe, 0xef])
+
+        expect(emulator.pokeMemory(0x3000n, bytes)).toBe(true)
+        expect([...emulator.readMemoryBytes(0x3000n, 4)]).toEqual([...bytes])
+
+        const [step] = emulator.latestSteps
+        expect(step.kind).toBe('poke')
+        //memory this program never wrote starts at 0xFF on this Core
+        expect(step.writes).toEqual([
+            { type: 'memory', address: 0x3000n, old: [255, 255, 255, 255], new: [...bytes] }
+        ])
+
+        emulator.undo(1)
+        expect([...emulator.readMemoryBytes(0x3000n, 4)]).toEqual([255, 255, 255, 255])
+    })
+
+    it('puts back the value the program found when the instruction after a Poke is undone too', async () => {
+        const emulator = await stepped(TWO_MOVES + trap(9))
+        emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'D1', value: 0x55n }])
+        //the second move overwrites the poked value, so undoing both has to walk back through it
+        await emulator.step()
+        expect(registerOf(emulator, 'D1')).toBe(2n)
+
+        emulator.undo(1)
+        expect(registerOf(emulator, 'D1')).toBe(0x55n)
+        emulator.undo(1)
+        expect(registerOf(emulator, 'D1')).toBe(0n)
+    })
+
+    it('leaves the Screen journal where it is when a Poke is undone', async () => {
+        const body =
+            trap(80, ['    move.l #$00FFFFFF,d1']) +
+            trap(82, ['    move.l #10,d1', '    move.l #10,d2']) +
+            trap(9)
+        //the two moves and the trap of each task: seven instructions, and the pixel is drawn
+        const emulator = await stepped(body, 7)
+        const screen = emulator.peripherals.screen
+        expect(inkCount(emulator)).toBe(1)
+        const journaled = screen.history.sequence
+
+        expect(
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'D2', value: 0x99n }])
+        ).toBe(true)
+        expect(screen.history.sequence).toBe(journaled)
+
+        //a Poke drew nothing, so undoing it must not pop the record of the instruction that did
+        emulator.undo(1)
+        expect(screen.history.sequence).toBe(journaled)
+        expect(inkCount(emulator)).toBe(1)
+        expect(registerOf(emulator, 'D2')).toBe(10n)
     })
 })
 
@@ -558,6 +833,7 @@ describe('M68K slices', () => {
                 instructionBudget: number
                 timeBudgetMs: number
                 breakpoints: number[]
+                skipBreakpointAtPc: boolean
                 runInstructionLimit: number
                 speedCorrection: number
             }) => Promise<unknown>
@@ -567,6 +843,7 @@ describe('M68K slices', () => {
                 instructionBudget: 5,
                 timeBudgetMs: 50,
                 breakpoints: [],
+                skipBreakpointAtPc: true,
                 runInstructionLimit: 200,
                 speedCorrection: 1
             })
@@ -585,6 +862,7 @@ describe('M68K slices', () => {
                     instructionBudget: number
                     timeBudgetMs: number
                     breakpoints: number[]
+                    skipBreakpointAtPc: boolean
                     runInstructionLimit: number
                     speedCorrection: number
                 }) => Promise<{ reason: string; instructions: number }>
@@ -593,6 +871,7 @@ describe('M68K slices', () => {
             instructionBudget: 1_000_000,
             timeBudgetMs: 1,
             breakpoints: [],
+            skipBreakpointAtPc: true,
             runInstructionLimit: 1_000_000,
             speedCorrection: 1
         })
@@ -720,5 +999,35 @@ describe('examples/m68k', () => {
         expectStoppedAtLimit(emulator)
         //a disc of the brush radius around the pointer, in the aqua the program picks
         expect(pixelAt(emulator, 200, 150)).toBe(0x00ffff)
+    })
+})
+
+describe('M68K testcases', () => {
+    /**
+     * `simhalt` pauses the Core rather than terminating it, and an interactive Run stops there. A
+     * Testcase used to resume past it and assert against whatever followed — which in the usual
+     * EASy68K layout is the program's subroutines.
+     */
+    it('stops at simhalt instead of running into the code after it', async () => {
+        const code = `${ORG}start:
+    move.w #1,d0
+    simhalt
+after:
+    move.w #99,d1
+    simhalt
+`
+        const testcase: Testcase = {
+            input: [],
+            expectedOutput: '',
+            startingRegisters: {},
+            expectedRegisters: { D0: 1n, D1: 0n },
+            startingMemory: [],
+            expectedMemory: []
+        }
+        const emulator = M68KEmulator(code)
+        await emulator.check()
+        const [result] = await emulator.test(code, [testcase], INSTRUCTION_LIMIT, 100)
+        expect(result.errors).toEqual([])
+        expect(result.passed).toBe(true)
     })
 })

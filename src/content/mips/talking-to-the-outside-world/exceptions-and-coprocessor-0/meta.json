@@ -1,0 +1,6 @@
+{
+    "name": "Exceptions and coprocessor 0",
+    "description": "How this Playground records synchronous exceptions in coprocessor 0, enters a handler, and returns with eret. EPC may be advanced when the handler chooses to skip the faulting instruction.",
+    "order": 2,
+    "topic": "interrupts"
+}

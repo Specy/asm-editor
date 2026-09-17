@@ -1,61 +1,117 @@
-Four questions about one number, none of them answered with arithmetic. Is 182 odd, what is it times
-eight, what are its bottom four bits, and how many of its 32 bits are ones. The answers land in
-`$t1` to `$t4`.
+Put the 32-bit pattern `0x000000B6`—decimal 182—in a register and ask five questions about its
+bits:
 
-The instructions of the Example before this one treat a register as a number. These four treat the
-same register as 32 bits side by side, which is the other way to read one and often the cheaper way.
+1. Is its low bit 0 or 1?
+2. What 32-bit pattern results from shifting it left by three places?
+3. What value is in its bottom four bits?
+4. How many of its 32 bits are 1?
+5. How many 0 bits come before its first 1 when you read from the top?
 
-**You need to know:** the "Arithmetic, logic and bits" lecture. What is new here is that a masked
-bit is already a 0 or a 1, so counting one costs an `add` and no branch at all.
+The answers go to `$t1`, `$t2`, `$t3`, `$t4`, and `$t8`.
 
 ```mips|playground|allow-open
 .text
 main:
-    li $t0, 182         # n = 182, which is 10110110 in binary
+    li $t0, 182         # 0x000000B6
 
-    andi $t1, $t0, 1    # 1 when n is odd, 0 when it is even
+    andi $t1, $t0, 1    # low bit: 0 for even, 1 for odd
 
-    sll $t2, $t0, 3     # n * 8, three places left is eight times
+    sll $t2, $t0, 3     # shift left 3 places; keep the low 32 bits
 
-    andi $t3, $t0, 0xF  # the low nibble on its own
+    andi $t3, $t0, 0xF  # keep the low four bits
 
-    li $t4, 0           # bits = 0
-    move $t5, $t0       # a copy to take apart
-    li $t6, 32          # 32 bits to look at
+    li $t4, 0           # count of 1 bits
+    move $t5, $t0       # working copy
+    li $t6, 32          # examine exactly 32 bits
 count:
-    andi $t7, $t5, 1    # the lowest bit
-    add $t4, $t4, $t7   # add it, since it is 0 or 1
-    srl $t5, $t5, 1     # and bring the next one down
+    andi $t7, $t5, 1    # isolate the current low bit
+    add $t4, $t4, $t7   # add either 0 or 1
+    srl $t5, $t5, 1     # bring the next bit down
     addi $t6, $t6, -1
     bnez $t6, count
 
-    clz $t8, $t0        # how many zero bits above the highest set one
+    clz $t8, $t0        # leading zero count
+
+    li $v0, 10
+    syscall
 ```
 
-`andi $t1, $t0, 1` is C's `n & 1`, and the answer is the value: `$t1` comes out at 0 because 182 is
-even, and it would be 1 for an odd number, with nothing else to read and no flag anywhere. The M68K
-tests that bit with `btst`, which sets `Z` to 1 when the bit **was 0**, and then needs an `sne` to
-turn the flag back into a number.
+```testcase
+{
+    "expectedRegisters": {
+        "$t1": 0,
+        "$t2": 1456,
+        "$t3": 6,
+        "$t4": 5,
+        "$t5": 0,
+        "$t8": 24,
+        "$v0": 10
+    }
+}
+```
 
-Shifting left by three multiplies by eight, since every place a bit moves left doubles what it is
-worth. `$t2` comes out at `000005B0`, which is 1456. The shift amount is five bits, so 0 to 31, and
-`sllv` takes it from a register when the program worked it out.
+## Read one bit with a mask
 
-`andi $t3, $t0, 0xF` keeps the four bits the mask has set and clears everything else, so `$t3` is 6,
-the `6` of `0xB6`. That is how any field is taken out of a packed value: mask what you want, then
-shift it down to the bottom if it was not there already. The constant of `andi` is 16 bits, so a
-mask that reaches into the top half of a register goes through `li` and a register first.
+`andi $t1, $t0, 1` extracts the low bit. The mask has only bit 0 set, so the instruction clears
+bits 31 through 1 and keeps bit 0. That bit is 0 for an even value and 1 for an odd value. Here
+`$t1` is 0 because 182 is even. The result is already the value a program can branch on, add, or
+store.
 
-The loop runs 32 times, once per bit, and does C's `count += n & 1; n >>= 1;`. `srl` is the shift
-that brings zeroes in at the top. `sra` copies the sign bit down instead, which is what divides a
-signed number by two, and here the register is a row of bits to take apart. `$t4` comes out at 5,
-the number of ones in `10110110`. The M68K writes the same loop around its carry flag, shifting the
-bottom bit into `C` and branching on it; here the masked bit is a number and `add $t4, $t4, $t7`
-counts it without a branch.
+The same idea keeps a wider field. The mask `0xF` is binary `1111`, so
+`andi $t3, $t0, 0xF` keeps the bottom four bits and clears the rest. The bottom byte of the input is
+`0xB6`, so those four bits are `0110` and `$t3` is 6. To extract a field elsewhere in a packed
+pattern, mask the field and then shift it down to bit 0.
 
-`clz $t8, $t0` counts the leading zeroes, the run of 0 bits from the top down, and comes out at 24:
-the highest set bit of 182 is bit 7, and there are 24 bits above it. That is how a program finds the
-position of the top bit of a number in one instruction.
+The immediate encoded by `andi` is an unsigned 16-bit pattern, from `0x0000` through `0xFFFF`, and
+the processor fills the upper 16 bits of the mask with zeroes. A 32-bit mask such as `0xF0000000`
+therefore uses two source lines: load the mask into a register with `li`, then use `and` with two
+registers.
 
-Try changing `li $t0, 182` to `li $t0, 183`, one more. `$t1` becomes 1 because the number is now
-odd, `$t3` becomes 7, and `$t4` becomes 6.
+## Shift within 32 bits
+
+Every place moved left doubles a bit's value, so shifting left three places corresponds to
+multiplication by 8. For this input, `$t2` becomes 1456.
+
+The register still has only 32 bits. `sll` discards bits that leave the top and fills the bottom
+with zeroes, so its result is the low 32 bits of the mathematical product, or multiplication modulo
+`2^32`. It does not raise an arithmetic-overflow trap. For example, shifting `0x40000000` left by
+three produces `0x00000000`: its only 1 bit is shifted beyond bit 31 and discarded.
+
+The shift amount written in `sll` is a 5-bit field, so it can be from 0 through 31. When the amount
+comes from a register, `sllv` uses the low five bits of that register as the amount.
+
+## Count all 32 bits
+
+The loop makes exactly 32 passes, one for each bit in the original pattern. On each pass it masks
+the working copy's low bit, adds that 0 or 1 to `$t4`, and shifts the next bit into place. The five
+1 bits in `0x000000B6` leave `$t4` equal to 5. Because `srl` fills from the top with zeroes, the
+working copy in `$t5` is also 0 after the loop.
+
+An arithmetic right shift, `sra`, copies the old top bit into the new top bit. It would still count
+the original bits correctly in this particular loop because the loop stops after exactly 32
+passes. After 32 arithmetic shifts, however, a pattern with bit 31 set leaves the working copy full
+of ones instead of zero. That choice would break a different popcount loop whose stopping rule was
+“repeat until the working copy reaches zero.”
+
+## Count the zeroes at the top
+
+`clz` means **count leading zeroes**. It counts consecutive 0 bits from bit 31 downward and stops at
+the first 1. The top 1 in `0x000000B6` is bit 7, so 24 zeroes come before it and `$t8` is 24.
+`clz` of zero is defined as 32 because all 32 bits are zero.
+
+For any nonzero pattern, the index of its highest set bit is `31 - clz`. Zero has no set bit, so it
+has no highest set-bit index.
+
+Here are four useful edge cases to predict before changing the first `li`, then check in the
+playground. Hex values in `$t2` show the complete 32-bit result.
+
+| Input pattern       | `$t1` low bit | `$t2` left 3 | `$t3` low four | `$t4` ones | `$t8` leading zeroes | `$t5` after loop |
+| ------------------- | ------------: | -----------: | -------------: | ---------: | -------------------: | ---------------: |
+| `0x00000000`        |             0 | `0x00000000` |              0 |          0 |                   32 |     `0x00000000` |
+| `0xFFFFFFFF` (`-1`) |             1 | `0xFFFFFFF8` |             15 |         32 |                    0 |     `0x00000000` |
+| `0x80000000`        |             0 | `0x00000000` |              0 |          1 |                    0 |     `0x00000000` |
+| `0x40000000`        |             0 | `0x00000000` |              0 |          1 |                    1 |     `0x00000000` |
+
+Finally, change 182 to 183. The new low bit makes `$t1` equal 1, the shifted result in `$t2`
+becomes 1464, the low four bits in `$t3` become 7, and the count in `$t4` becomes 6. The highest
+set bit stays at bit 7, so `$t8` stays 24.

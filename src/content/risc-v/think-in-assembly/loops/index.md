@@ -1,116 +1,150 @@
-A loop is a comparison, a branch out of it and a jump backwards, which we can now write. The M68K has
-`dbra`, one instruction that counts and jumps at once; RISC-V has nothing of the kind, so the counter
-and the branch are yours to write and how you write them decides how much the loop costs.
+A loop repeats a group of instructions. Assembly builds that repetition from the control-flow tools
+you already know: labels, conditional branches and unconditional jumps.
 
-## The loop written out
+One execution of the repeated group is called a **pass**. Most loops also have a value that changes
+on every pass, such as a counter or a pointer. The branch tests that changing value to decide
+whether another pass should run.
 
-Adding up the numbers from 1 to 10, in C, then flattened, then assembled:
+## Translate a while loop
 
-```c
-int sum = 0;
-for (int i = 1; i <= 10; i++) sum += i;
+Start with a familiar counted loop. This one adds the numbers from 1 through 10:
+
+```text
+sum = 0
+i = 1
+while i <= 10:
+    sum = sum + i
+    i = i + 1
 ```
 
-```c
-    int sum = 0;
-    int i = 1;
-while_start:
-    if (i > 10) goto while_end;
-    sum += i;
-    i++;
-    goto while_start;
-while_end:
+A `while` loop tests its condition before each pass. We can flatten it into labels and jumps:
+
+```text
+sum = 0
+i = 1
+loop_test:
+    if i > 10, go to loop_end
+    sum = sum + i
+    i = i + 1
+    go to loop_test
+loop_end:
 ```
+
+The branch asks the opposite question from the original `while` condition. As long as `i <= 10`,
+the branch falls through into the body. Once `i > 10`, it branches to `loop_end`.
+
+Here is the same layout in RISC-V:
 
 ```riscv|playground
 .text
 main:
-    li t0, 0            # sum = 0
-    li t1, 1            # i = 1
-    li t2, 10           # the bound, which has to be in a register
-while_start:
-    bgt t1, t2, while_end   # while(i <= 10)
-    add t0, t0, t1      # sum += i
-    addi t1, t1, 1      # i++
-    j while_start
-while_end:
+    li   t0, 0             # sum = 0
+    li   t1, 1             # i = 1
+    li   t2, 10            # upper bound
+loop_test:
+    bgt  t1, t2, loop_end  # if i > 10, leave the loop
+    add  t0, t0, t1        # sum += i
+    addi t1, t1, 1         # i++
+    j    loop_test
+loop_end:
 ```
 
-`t0` comes out at `00000037`, which is 55, and `t1` at 11, one past the last value it used. The
-`j while_start` is what makes it a loop, and it is the same instruction an `if` uses to jump forward.
+After ten passes, `t0` contains `00000037`, which is 55. The last pass uses 10, increments `t1`
+to 11 and jumps back to the test. This time the branch is taken, so execution reaches `loop_end`.
 
-`li t2, 10` is outside the loop because every RISC-V branch compares two registers: a bound that is a
-constant in the C has to be in a register in the assembly, and putting the `li` inside the loop would
-run it on every pass for nothing.
+This is a **top-tested loop** because the test comes before the body. If the condition is already
+false at the first test, the body runs zero times.
 
-That is four instructions a pass, three of them the machinery of the loop and one the work.
+## Put the test at the bottom
 
-## The test at the bottom
+A loop can also place its test after the body. This is a **bottom-tested loop**: the body runs first,
+and the branch then decides whether to begin another pass. High-level languages often call this
+control-flow shape a `do while` loop.
 
-The branch at the top and the jump at the bottom do the same job twice over. Move the test to the
-**bottom** and the jump goes away, which makes it a `do while` and costs three instructions a pass
-instead of four.
+Here is a bottom-tested version of the sum. The counter begins at 10 and counts down to zero:
+
+`bnez t1, loop` branches to `loop` when `t1 != 0`. It is the assembler convenience for
+`bne t1, zero, loop`.
 
 ```riscv|playground
 .text
 main:
-    li t0, 0            # sum = 0
-    li t1, 10           # n = 10
+    li   t0, 0             # sum = 0
+    li   t1, 10            # numbers left to add
 loop:
-    add t0, t0, t1      # sum += n
-    addi t1, t1, -1     # n--
-    bnez t1, loop       # until it reaches zero
+    add  t0, t0, t1        # sum += t1
+    addi t1, t1, -1        # one fewer number remains
+    bnez t1, loop          # begin another pass while t1 != 0
+loop_end:
 ```
 
-`t0` is 55 again and `t1` ends at 0. Two things changed: the test moved to the bottom, and the
-counter runs **down to zero**, so the comparison is `bnez` against `zero` and no register holds the
-bound.
+`t0` again finishes at 55, and `t1` finishes at 0. The branch goes directly back to `loop`, so this
+shape has no separate unconditional jump at the bottom.
 
-The test at the bottom is what to watch: the body runs once before anything is checked, so a loop
-written this way with a count of 0 runs once and then counts down through every negative number.
-When the count can be zero, test it before you enter:
+The position of the test changes the behavior when the initial count is zero:
 
-```
-    beqz t1, loop_end
+| initial count | top-tested loop                     | unguarded bottom-tested loop              |
+| ------------- | ----------------------------------- | ----------------------------------------- |
+| 3             | tests first, then runs three passes | runs three passes, testing after each one |
+| 0             | tests first and skips the body      | runs the body once before its first test  |
+
+In RV32, decrementing 0 produces the bit pattern `0xFFFFFFFF`. Repeated decrements eventually wrap
+back to zero, but that takes about 4.3 billion unwanted passes in this simulator. A bottom-tested
+loop whose count may be zero therefore needs a test before entry. Here is the complete safe shape:
+
+```riscv|playground
+.text
+main:
+    li   t0, 0             # sum = 0
+    li   t1, 0             # numbers left to add; try 3 as well
+    beqz t1, loop_end      # a zero count has no first pass
 loop:
-    ...
+    add  t0, t0, t1
+    addi t1, t1, -1
+    bnez t1, loop
+loop_end:
 ```
 
-Counting down also means the counter is no longer the index. When the body needs to know which pass
-it is on, either count up and keep the bound in a register, or keep a second register.
+With an initial count of 0, `beqz` branches straight to `loop_end`. With an initial count of 3, the
+body adds 3, 2 and 1, leaving 6 in `t0`.
+
+Counting down is convenient when the body only needs to know how many passes remain. When the body
+uses an increasing value as an index, an upward counter and a separate bound often express the job
+more directly.
 
 ## Nested loops
 
-Nothing new: an inner loop sits between two lines of the outer one, with its own counter in its own
-register, reset at the top of every outer pass.
+A **nested loop** is one loop inside the body of another. Each loop has its own counter. The inner
+counter is initialized inside the outer body so that every outer pass starts a fresh inner loop.
 
 ```riscv|playground
 .text
 main:
-    li t0, 0            # total = 0
-    li t1, 3            # rows left
+    li   t0, 0             # total = 0
+    li   t1, 3             # rows left
 outer:
-    li t2, 4            # columns left, reset on every outer pass
+    li   t2, 4             # four columns for this row
 inner:
-    addi t0, t0, 1      # total++
+    addi t0, t0, 1         # total++
     addi t2, t2, -1
     bnez t2, inner
     addi t1, t1, -1
     bnez t1, outer
+done:
 ```
 
-`t0` comes out at 12, which is 3 times 4. The `li t2, 4` has to be **inside** the outer loop: move it
-above `outer:` and the inner counter is 0 on the second pass, so the first `addi` takes it to -1 and
-the loop runs four billion times. Try it and watch the Playground stop, silently, when its two
-million instructions run out.
+The inner loop runs four passes for each of three outer passes, so `t0` finishes at 12. On each
+visit to `outer`, `li t2, 4` resets the column count before execution reaches `inner`.
 
-That silence is what an accidental infinite loop looks like here. There is no message: the program
-simply stops where it had got to, and the registers panel shows a counter at some enormous number.
+If `t2` were initialized above `outer`, it would still be 0 when the second row began. The inner
+body would decrement that 0 to `0xFFFFFFFF` and then run about 4.3 billion unwanted passes before
+the 32-bit counter wrapped back to zero. Placing each initialization with the loop that needs it
+makes the reset visible.
 
-## Walking an array
+## Walk through an array
 
-A loop over memory does not need a counter at all. Put a label after the last element, load its
-address, and run until the pointer reaches it.
+A pointer can be the changing value in a loop. Put a label immediately after an array, load that
+label's address and advance the pointer until it reaches the end address.
 
 ```riscv|playground|memory
 .data
@@ -119,30 +153,34 @@ end:
 
 .text
 main:
-    la t0, numbers      # p = numbers
-    la t1, end          # the address one past the last element
-    li t2, 0            # sum = 0
-loop:
-    beq t0, t1, done    # while(p != end)
-    lw t3, 0(t0)        # *p
-    add t2, t2, t3      # sum += *p
-    addi t0, t0, 4      # p++
-    j loop
+    la   t0, numbers       # address of the current word
+    la   t1, end           # address just after the array
+    li   t2, 0             # sum = 0
+loop_test:
+    beq  t0, t1, done      # all words have been visited
+    lw   t3, 0(t0)
+    add  t2, t2, t3
+    addi t0, t0, 4         # advance by one word
+    j    loop_test
 done:
 ```
 
-`t2` comes out at `00000096`, which is 150, and `t0` and `t1` are both `10010014`, twenty bytes past
-the start. `end:` is a label with nothing under it, so it is the address the next thing would have
-gone at, which is one past the array. Add a sixth number to the `.word` line and the loop adds it
-without a single other change, which is what the counted version cannot do.
+`end:` declares no data of its own. It names the address immediately after the final word, which is
+`0x10010014` for this array in the simulator. At the end, `t0` and `t1` both contain that address.
 
-`beq` between two pointers is exact, since the pointer lands on `end` and not past it. A `blt`
-against a length would work too, and `bltu` is the one to use there, because addresses are unsigned.
+If another value is appended to the `.word` line, the assembler places `end` after the new final
+word. The loop then visits the added word. A counted loop can also adapt when its length is updated;
+the end label is useful here because it keeps this particular boundary beside the data it describes.
 
-## Your turn
+Equality is enough in this example because the pointer advances by exactly four bytes and lands on
+`end`. A loop written as “continue while the current address is below the end address” would compare
+those two addresses with `bltu`, since addresses use unsigned ordering. An index-and-length loop
+would instead compare the index with the length.
 
-Add up the numbers from 1 to 10 with a loop and leave 55 in `t0`. Both directions work; the one
-counting down is three instructions a pass and needs no register for the bound.
+## Three loops to write
+
+Add the numbers from 1 through 10 with a loop and leave 55 in `t0`. You can count upward or
+downward.
 
 ```riscv|playground|exercise
 .text
@@ -162,18 +200,19 @@ main:
 ```riscv|playground|solution
 .text
 main:
-    li t0, 0            # sum = 0
-    li t1, 10           # n = 10
+    li   t0, 0
+    li   t1, 10
 loop:
-    add t0, t0, t1      # sum += n
-    addi t1, t1, -1     # n--
+    add  t0, t0, t1       # add the current number
+    addi t1, t1, -1
     bnez t1, loop
+done:
 ```
 
 </details>
 
-The second one starts `t0` at 64 and asks how many times it can be halved before it reaches 1. Leave
-that count in `t1`, which for 64 is 6, and use a shift for the halving.
+For the second loop, `t0` supplies a count that may be zero. Add 3 to `t1` exactly `t0` times.
+The tests expect 12 when the count is 4 and 0 when the count is 0.
 
 ```riscv|playground|exercise
 .text
@@ -183,8 +222,15 @@ main:
 
 ```testcase
 {
-    "startingRegisters": { "t0": 64 },
-    "expectedRegisters": { "t1": 6 }
+    "startingRegisters": { "t0": 4 },
+    "expectedRegisters": { "t1": 12 }
+}
+```
+
+```testcase
+{
+    "startingRegisters": { "t0": 0 },
+    "expectedRegisters": { "t1": 0 }
 }
 ```
 
@@ -194,14 +240,64 @@ main:
 ```riscv|playground|solution
 .text
 main:
-    li t1, 0            # count = 0
-    li t2, 1
+    li   t1, 0
+    beqz t0, done          # guard the bottom-tested loop
 loop:
-    ble t0, t2, done    # while(n > 1)
-    srli t0, t0, 1      # n /= 2
-    addi t1, t1, 1      # count++
-    j loop
+    addi t1, t1, 3
+    addi t0, t0, -1
+    bnez t0, loop
 done:
 ```
 
 </details>
+
+The third loop walks through the five words from `numbers` to `end` and leaves their total in `t2`.
+Use `t0` as the current address and `t1` as the end address.
+
+```riscv|playground|memory|exercise
+.data
+numbers: .word 3, 9, 27, 81, 243
+end:
+
+.text
+main:
+    # your code here
+```
+
+```testcase
+{
+    "expectedRegisters": { "t2": 363 }
+}
+```
+
+<details>
+<summary>Show solution</summary>
+
+```riscv|playground|memory|solution
+.data
+numbers: .word 3, 9, 27, 81, 243
+end:
+
+.text
+main:
+    la   t0, numbers
+    la   t1, end
+    li   t2, 0
+loop:
+    lw   t3, 0(t0)
+    add  t2, t2, t3
+    addi t0, t0, 4
+    bne  t0, t1, loop
+done:
+```
+
+The supplied array has five elements, so this bottom-tested loop has a first word to process. After
+the fifth word, `bne` falls through to `done`, which is where this small program ends.
+
+</details>
+
+Both top-tested and bottom-tested loops are useful. Choose the shape from the required behavior,
+especially whether zero passes are possible. As a secondary consideration, a bottom test can use
+one conditional branch per pass, while a top-tested layout commonly uses a conditional branch and
+an unconditional jump. Those control-flow instructions are the small amount of work that makes the
+repetition happen.

@@ -1,6 +1,6 @@
 {
     "name": "Getting started with MIPS",
-    "description": "The architecture this editor runs, the 32 registers and the memory it works with, and how a program is written down. It ends with a first program whose answer you read in the registers panel.",
+    "description": "Build and step through one MIPS instruction, then learn what the architecture is and why it is useful for studying assembly.",
     "order": 0,
     "topic": "introduction"
 }

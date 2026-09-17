@@ -1,3 +1,13 @@
+import { FileSystem } from './languages/peripherals/FileSystem'
+import {
+    cleanFiles,
+    fileText,
+    isValidFilePath,
+    ProjectFormatError,
+    type ProjectFiles
+} from './projectFiles'
+export { FILE_ENCODINGS, isValidFilePath, ProjectFormatError } from './projectFiles'
+export type { ProjectFiles, ProjectFile, FileEncoding } from './projectFiles'
 import { BASE_CODE, COMMENT_CHARACTER, LANGUAGE_EXTENSIONS } from './Config'
 import {
     DEFAULT_PROJECT_DISPLAY as MARS_DEFAULT_DISPLAY,
@@ -21,25 +31,10 @@ export const AVAILABLE_LANGUAGES: readonly AvailableLanguages[] = [
 export type AvailableProgrammingLanguages = 'c'
 
 /**
- * How a File's content string is read back. `plain` is the text itself. The set is open, `base64`
- * being the one the first binary File will add, and a reader that meets one it does not know fails
- * rather than reading the string as text ([ADR 0013](../../docs/adr/0013-project-is-a-record.md)).
- */
-export type FileEncoding = 'plain'
-export const FILE_ENCODINGS: readonly FileEncoding[] = ['plain']
-
-export type ProjectFile = {
-    encoding: FileEncoding
-    content: string
-}
-
-/** Path to File. Paths are relative, `/` separated, with an extension; see `isValidFilePath`. */
-export type ProjectFiles = Record<string, ProjectFile>
-
-/**
  * A Project as stored and shared: a record of typed parts, of which only `files` is visible to the
- * assembler and the program ([ADR 0013](../../docs/adr/0013-project-is-a-record.md)). `entry` is
- * always a key of `files`; `settings` holds only what was decided for this Project
+ * assembler and the program ([ADR 0013](../../docs/adr/0013-project-is-a-record.md)). `entry` is a
+ * canonical path and may deliberately name a missing File; `settings` holds only what was decided
+ * for this Project
  * ([ADR 0014](../../docs/adr/0014-settings-split-by-effect.md)).
  */
 export interface ProjectData {
@@ -83,14 +78,6 @@ export type StoredProject = Partial<
  */
 export { DEFAULT_PROJECT_DISPLAY, type ProjectDisplay } from './languages/mars/marsDisplay'
 
-/** A stored or imported project whose files cannot be read as this version's format. */
-export class ProjectFormatError extends Error {
-    constructor(message: string) {
-        super(message)
-        this.name = 'ProjectFormatError'
-    }
-}
-
 export function isAvailableLanguage(value: unknown): value is AvailableLanguages {
     return typeof value === 'string' && (AVAILABLE_LANGUAGES as string[]).includes(value)
 }
@@ -100,51 +87,11 @@ export function defaultEntryPath(language: AvailableLanguages): string {
     return `main.${LANGUAGE_EXTENSIONS[language]}`
 }
 
-/**
- * The path rules, which the drive peripheral will inherit: relative, `/` separated, no leading
- * slash, no empty, `.` or `..` segment, and a file name with an extension. Folders exist only
- * through the paths of the Files in them.
- */
-export function isValidFilePath(path: string): boolean {
-    if (typeof path !== 'string' || path.length === 0) return false
-    if (path.includes('\\')) return false
-    for (let i = 0; i < path.length; i++) if (path.charCodeAt(i) < 0x20) return false
-    const segments = path.split('/')
-    if (segments.some((segment) => segment === '' || segment === '.' || segment === '..'))
-        return false
-    const name = segments[segments.length - 1] ?? ''
-    const dot = name.lastIndexOf('.')
-    return dot > 0 && dot < name.length - 1
-}
-
-function cleanFiles(raw: unknown): ProjectFiles {
-    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
-        throw new ProjectFormatError('The files of this project are not a map of path to file')
-    }
-    const files: ProjectFiles = {}
-    for (const [path, file] of Object.entries(raw as Record<string, unknown>)) {
-        if (!isValidFilePath(path)) {
-            throw new ProjectFormatError(`"${path}" is not a valid file path`)
-        }
-        if (typeof file !== 'object' || file === null) {
-            throw new ProjectFormatError(`The file "${path}" has no content`)
-        }
-        const { encoding, content } = file as Record<string, unknown>
-        if (!(FILE_ENCODINGS as unknown[]).includes(encoding)) {
-            throw new ProjectFormatError(
-                `The file "${path}" uses the encoding "${String(encoding)}", which this version of the editor does not know`
-            )
-        }
-        if (typeof content !== 'string') {
-            throw new ProjectFormatError(`The content of the file "${path}" is not a string`)
-        }
-        files[path] = { encoding: encoding as FileEncoding, content }
-    }
-    return files
-}
-
 function pickEntry(entry: unknown, files: ProjectFiles, language: AvailableLanguages): string {
-    if (typeof entry === 'string' && entry in files) return entry
+    if (typeof entry === 'string') {
+        if (!isValidFilePath(entry)) throw new ProjectFormatError(`Invalid entry path: ${entry}`)
+        return entry
+    }
     const preferred = defaultEntryPath(language)
     if (preferred in files) return preferred
     return Object.keys(files)[0] ?? preferred
@@ -152,21 +99,21 @@ function pickEntry(entry: unknown, files: ProjectFiles, language: AvailableLangu
 
 /**
  * Every stored, exported or shared shape into the current one. A version 1 `code` becomes the
- * default Entry file; a project without any program gets the language's empty one; an entry that
- * names no File falls back to `main.<ext>` or the first File. Throws a `ProjectFormatError` for
+ * default Entry file; a project without any program gets the language's empty one; a missing Entry
+ * remains missing so the editor and assembler can report it. Throws a `ProjectFormatError` for
  * files this version cannot read, which is the one thing a project is not silently repaired from.
  */
 export function normalizeProjectData(raw: StoredProject | undefined): ProjectData {
     const language = isAvailableLanguage(raw?.language) ? raw.language : 'M68K'
     let files = raw?.files !== undefined ? cleanFiles(raw.files) : {}
-    if (Object.keys(files).length === 0) {
+    if (raw?.files === undefined) {
         const content = typeof raw?.code === 'string' ? raw.code : BASE_CODE[language]
         files = { [defaultEntryPath(language)]: { encoding: 'plain', content } }
     }
     const now = Date.now()
     return {
         id: raw?.id ?? '',
-        files,
+        files: cleanFiles(files),
         entry: pickEntry(raw?.entry, files, language),
         settings: cleanProjectSettings(raw?.settings),
         createdAt: raw?.createdAt ?? now,
@@ -190,7 +137,8 @@ export function projectContentEquals(a: ProjectData, b: ProjectData): boolean {
 
 /** The Entry file's text, which is what a Build assembles and what an exported file's body is. */
 export function entryFileContent(project: ProjectData): string {
-    return project.files[project.entry]?.content ?? ''
+    const file = project.files[project.entry]
+    return file ? fileText(file) : ''
 }
 
 function contentKey(project: ProjectData): string {
@@ -290,7 +238,8 @@ const CODE_SEPARATOR = '---METADATA---'
 
 /**
  * The metadata block of an exported file, version 2: the Entry file's text is the file's body and
- * everything else is here, other Files included (there are none until multi-file editing exists).
+ * everything else is here, other Files included. Complete multi-file export uses an archive;
+ * this representation remains for compatible legacy linked source files.
  * Version 1 had `code` as the body and no `entry`, `settings` or `files`.
  */
 type ProjectMetadata = {
@@ -380,6 +329,12 @@ export function makeProjectFromExternal(codeAndMeta: string): ExternalImport {
 
 export function makeProject(data?: StoredProject) {
     const state = $state(normalizeProjectData(data))
+    const fileSystem = new FileSystem(state.files, {
+        read: () => state.files,
+        write: (files) => {
+            state.files = files
+        }
+    })
 
     function toObject(): ProjectData {
         return $state.snapshot({
@@ -429,13 +384,15 @@ export function makeProject(data?: StoredProject) {
     }
 
     function getCode(): string {
-        return state.files[state.entry]?.content ?? ''
+        const file = state.files[state.entry]
+        //Compatibility for the remaining single-code bindings. Multi-file consumers use `files`
+        //directly; a missing or binary Entry has no editable text value and must still render so
+        //the sidebar can expose it without decoding storage bytes into the editor.
+        return file?.encoding === 'plain' ? file.content : ''
     }
 
     function setCode(code: string) {
-        const file = state.files[state.entry]
-        if (file) file.content = code
-        else state.files[state.entry] = { encoding: 'plain', content: code }
+        fileSystem.writeText(state.entry, code)
     }
 
     /**
@@ -444,6 +401,12 @@ export function makeProject(data?: StoredProject) {
      * rather than kept from before.
      */
     function set(data: Partial<StoredProject>) {
+        //Only a merge that actually touches Files or the Entry path is a host file edit. Taking the
+        //lock for every merge meant saving a shared Project after a Build threw instead of saving,
+        //because a Debug session stays open through termination until Stop.
+        if (data.files !== undefined || data.code !== undefined || data.entry !== undefined) {
+            fileSystem.assertEditable()
+        }
         const legacyCode = typeof data.code === 'string' && data.files === undefined
         const merged = normalizeProjectData({
             ...toObject(),
@@ -454,6 +417,7 @@ export function makeProject(data?: StoredProject) {
     }
 
     return {
+        fileSystem,
         get id() {
             return state.id
         },
@@ -499,12 +463,11 @@ export function makeProject(data?: StoredProject) {
             setCode(v)
         },
         set files(v: ProjectFiles) {
-            state.files = cleanFiles(v)
-            state.entry = pickEntry(state.entry, state.files, state.language)
+            fileSystem.replace(v)
         },
         set entry(v: string) {
-            if (!(v in state.files))
-                throw new ProjectFormatError(`"${v}" is not a file of this project`)
+            fileSystem.assertEditable()
+            if (!isValidFilePath(v)) throw new ProjectFormatError(`Invalid entry path: ${v}`)
             state.entry = v
         },
         set settings(v: ProjectSettingsDecisions) {
@@ -514,6 +477,7 @@ export function makeProject(data?: StoredProject) {
             state.name = v
         },
         set language(v: AvailableLanguages) {
+            fileSystem.assertEditable()
             state.language = v
         },
         set description(v: string) {

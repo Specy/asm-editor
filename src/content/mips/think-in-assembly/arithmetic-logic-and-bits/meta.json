@@ -1,6 +1,6 @@
 {
     "name": "Arithmetic, logic and bits",
-    "description": "Multiplication and division answer into hi and lo, two registers outside the 32, and division by zero says nothing unless you used the pseudo-instruction. Then the masks, the shifts and the fields you pull out of a word with them.",
+    "description": "Use hi and lo for multiplication and division results, apply bitwise logic and fixed shifts, and extract fields with masks.",
     "order": 2,
     "topic": "arithmetic"
 }

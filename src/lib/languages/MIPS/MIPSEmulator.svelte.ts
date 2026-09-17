@@ -1,12 +1,18 @@
+import { guestFileFailure } from '$lib/languages/peripherals/FileSystem'
 import {
     BackStepAction,
     ConfirmResult,
     type HandlerMapFns,
     type JsBackStep,
+    type JsInstructionUndoGroup,
     type JsMips,
+    type JsPokeUndoGroup,
+    type JsPokeWrite,
     type JsProgramStatement,
     MIPS,
     type MIPSAssembleError,
+    MIPS_COPROCESSOR0_REGISTER_NUMBERS,
+    type MipsTokenizedLine,
     registerHandlers,
     type RegisterName,
     unimplementedHandler
@@ -17,12 +23,16 @@ import {
     type Instruction
 } from '$lib/languages/BaseEmulator.svelte'
 import {
+    type BuildArtifact,
     type Diagnostic,
     type EmulatorDecoration,
     type EmulatorSettings,
     type ExecutionStep,
     makeLabelColor,
     type MutationOperation,
+    type PokeWrite,
+    type RegisterFileDescriptor,
+    type SourceBreakpoint,
     RegisterSize,
     type StackFrame
 } from '$lib/languages/commonLanguageFeatures.svelte'
@@ -40,49 +50,36 @@ import {
 } from '$lib/languages/mars/marsDisplay'
 import {
     applyScreenDirective,
+    ignoredIncludedScreenDiagnostics,
     readScreenLabelProbe,
     SCREEN_LABEL_PROBE_ADDRESS,
     screenLabelProbeSource
 } from '$lib/languages/mars/screenDirective'
+import {
+    makeTokenSpanIndex,
+    tokenSpanEnd,
+    type TokenSpanIndex
+} from '$lib/languages/mars/tokenSpans'
+import {
+    sourceText,
+    textAssemblyFiles,
+    updateEntryText,
+    type BuildInput,
+    type BuildSources
+} from '$lib/projectFiles'
+import {
+    MIPSCoprocessor0RegisterNames,
+    MIPSCoprocessor1RegisterNames,
+    MIPSNumericRegisterNames,
+    MIPSRegisterNames,
+    type MIPSRegisterName
+} from './MIPS-registers'
 
-export const MIPSNumericRegisterNames: readonly RegisterName[] = [
-    '$zero',
-    '$at',
-    '$v0',
-    '$v1',
-    '$a0',
-    '$a1',
-    '$a2',
-    '$a3',
-    '$t0',
-    '$t1',
-    '$t2',
-    '$t3',
-    '$t4',
-    '$t5',
-    '$t6',
-    '$t7',
-    '$s0',
-    '$s1',
-    '$s2',
-    '$s3',
-    '$s4',
-    '$s5',
-    '$s6',
-    '$s7',
-    '$t8',
-    '$t9',
-    '$k0',
-    '$k1',
-    '$gp',
-    '$sp',
-    '$fp',
-    '$ra'
-]
-
-export type MIPSRegisterName = RegisterName | 'pc' | 'hi' | 'lo'
-
-export const MIPSRegisterNames: MIPSRegisterName[] = [...MIPSNumericRegisterNames, 'pc', 'hi', 'lo']
+export {
+    MIPSNumericRegisterNames,
+    MIPSRegisterNames,
+    type MIPSRegisterName
+} from './MIPS-registers'
 
 const READ_CHAR_QUESTION = 'Enter a character'
 const READ_DOUBLE_QUESTION = 'Enter a double'
@@ -92,24 +89,61 @@ const READ_STRING_QUESTION = 'Enter a string'
 
 /**
  * How many instructions the TeaVM compiled Core runs in a millisecond, used to turn a slice's time
- * budget into a halt limit. Measured in phase 8 on a compute-only loop under node, built with the
- * shipped undo history: about 1 100 to 1 200, so the phase 7 estimate stands.
+ * budget into a halt limit. Measured on a compute-only loop under node, built with the shipped undo
+ * history: about 11 000. The earlier estimate of 6 500 was taken while the Core read the
+ * self-modifying-code setting out of a string map on every instruction fetch and the delayed
+ * branching setting on every branch - each a hash lookup and a `Boolean.parseBoolean`, which
+ * lowercases a fresh string - fetched through five calls that re-checked alignment and both text
+ * segments, assembled every aligned word load and store a byte at a time, and found a register by
+ * scanning all thirty-two. The estimate of 1 000 before that was taken while MARS still entered a
+ * monitor on every register access, every memory table access, every backstep push and once more
+ * around each instruction; TeaVM compiles those to real monitor enter and exit calls and this Core
+ * is single threaded, so dropping them made the same loop about five times faster.
  */
-const MIPS_INSTRUCTIONS_PER_MS = 1_000
+const MIPS_INSTRUCTIONS_PER_MS = 11_022
 
 /**
  * How much wall time one `simulate*` call aims at, which is also how far a chunk that turns out to
  * sleep can carry the slice past its deadline before the next check (`marsSlice.ts`). A millisecond
- * is about a thousand instructions of compute and fifty calls in a compute slice, which the call
- * overhead measured there puts at half a percent of throughput.
+ * is about eleven thousand instructions of compute and fifty calls in a compute slice, which the
+ * call overhead measured there puts at half a percent of throughput.
  */
 const MIPS_CHUNK_TARGET_MS = 1
 
 const INVALID_CHARACTER_ERROR = 'Invalid character'
 const INVALID_NUMBER_ERROR = 'Invalid number'
 
-export function MIPSEmulator(baseCode: string, options: EmulatorSettings = {}) {
-    return new AsmEditorMIPSEmulator(baseCode, options)
+/** The compare flags `c.cond.s` writes, numbered as MARS's Coproc 1 tab labels them. */
+const MIPS_CONDITION_FLAG_NAMES = ['0', '1', '2', '3', '4', '5', '6', '7']
+
+/**
+ * The two Register files MARS holds beside the general registers, named as its Coproc 1 and Coproc 0
+ * tabs name them ([the design record](../../../../docs/design/register-files.md)). The FPU is 32 bits
+ * wide and a double lives in an even/odd pair, so it declares `pairedDoubles`, and the eight compare
+ * flags are its own Status flags. CP0 is read as hexadecimal only: its four registers are bit fields,
+ * not numbers.
+ */
+const MIPS_REGISTER_FILES: RegisterFileDescriptor[] = [
+    {
+        id: 'fpu',
+        label: 'FPU',
+        size: RegisterSize.Long,
+        formats: ['single', 'double', 'hex'],
+        pairedDoubles: true,
+        flagNames: MIPS_CONDITION_FLAG_NAMES,
+        registers: MIPSCoprocessor1RegisterNames.map((name) => ({ name }))
+    },
+    {
+        id: 'cp0',
+        label: 'CP0',
+        size: RegisterSize.Long,
+        formats: ['hex'],
+        registers: MIPSCoprocessor0RegisterNames.map((name) => ({ name }))
+    }
+]
+
+export function MIPSEmulator(source: BuildInput, options: EmulatorSettings = {}) {
+    return new AsmEditorMIPSEmulator(source, options)
 }
 
 class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
@@ -135,14 +169,15 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
      */
     private currentExecution: ExecutionGeneration = this.executionController.capture()
 
-    constructor(code: string, options: EmulatorSettings) {
+    constructor(source: BuildInput, options: EmulatorSettings) {
         super(
-            code,
+            source,
             {
                 systemSize: RegisterSize.Long,
                 registerNames: [...MIPSRegisterNames],
                 hiddenRegisters: ['$zero'],
-                endianness: 'little'
+                endianness: 'little',
+                registerFiles: MIPS_REGISTER_FILES
             },
             {
                 ...options,
@@ -200,23 +235,52 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
     }
 
     _canUndo(): boolean {
-        return this.mips?.canUndo ?? false
+        const mips = this.mips
+        if (!mips?.canUndo) return false
+        const group = mips.getUndoGroups()[0]
+        //a Poke belongs to no instruction, so the FileSystem session, whose frames are keyed by a
+        //syscall's address, has nothing to say about undoing one
+        //([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md))
+        if (!group || group.kind === 'poke') return true
+        return this.fileSystemSession?.canUndoAfter(group.pc) ?? true
     }
 
-    _checkCode(code: string): Diagnostic[] {
+    /**
+     * Opens the Core's Poke transaction: `setRegisterValue`, `setCoprocessor1Value`,
+     * `setCoprocessor0Value` and `setMemoryBytes` journal into it instead of writing straight
+     * through, and `endPoke` records the lot as one entry of the undo history
+     * ([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md)).
+     */
+    _beginPoke(): void {
+        this.requireMips().beginPoke()
+    }
+
+    _endPoke(): boolean {
+        return this.requireMips().endPoke()
+    }
+
+    _checkCode(sources: BuildSources): Diagnostic[] {
         //the same warnings the Build reports, so the squiggle on a `@screen` line is there while it
         //is being typed and does not vanish half a second after a Build replaces this list
-        const directive = this.readScreenDirective(code).diagnostics
-        const result = MIPS.makeMipsFromSource(code).assemble()
-        return [...directive, ...result.errors.map(assembleErrorToDiagnostic)]
+        const directive = this.readScreenDirective(sources).diagnostics
+        const files = textAssemblyFiles(sources)
+        const mips = MIPS.makeMipsFromFiles(files, sources.entry)
+        const result = mips.assemble()
+        const lines = tokenizedLines(mips)
+        const spans = makeTokenSpanIndex(lines)
+        return [
+            ...directive,
+            ...includedScreenDiagnostics(files, sources.entry, lines),
+            ...result.errors.map((error) => assembleErrorToDiagnostic(error, spans))
+        ]
     }
 
-    _compile(code: string, undoSize: number): CompileResult {
+    _compile(sources: BuildSources, undoSize: number): CompileResult {
         this.mips = null
         //before the Core is built, so the first instruction and a Testcase alike run on the display
         //the source asked for; the label probe assembles a throwaway Core, which the real assembly
         //below then supersedes on the singletons both of them share
-        const configured = this.readScreenDirective(code)
+        const configured = this.readScreenDirective(sources)
         this.display = configured.display
         this.displayOrigin = configured.origin
         this.displayBaseLabel = configured.baseLabel
@@ -224,15 +288,19 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         //a re-sync here would repaint the Screen `clear()` has just blanked with the last program's
         //memory — and a build that then fails never reaches `_initialize` to put it right again
         this.devices.resetScreen(this.display)
-        const mips = MIPS.makeMipsFromSource(code)
+        const files = textAssemblyFiles(sources)
+        const mips = MIPS.makeMipsFromFiles(files, sources.entry)
         //`assemble()` allocates the backstep ring buffer from the size that `setUndoSize` stored, so
         //the size has to be set *before* assembling: setting it afterwards would only size the next
         //compile's buffer (legacy ordering was setUndoSize -> assemble -> setUndoEnabled)
         mips.setUndoSize(Math.max(1, normalizeUndoSize(undoSize)))
         const result = mips.assemble()
+        const lines = tokenizedLines(mips)
+        const spans = makeTokenSpanIndex(lines)
         const diagnostics = [
             ...configured.diagnostics,
-            ...result.errors.map(assembleErrorToDiagnostic)
+            ...includedScreenDiagnostics(files, sources.entry, lines),
+            ...result.errors.map((error) => assembleErrorToDiagnostic(error, spans))
         ]
         //`hasErrors` only means "the collection is non-empty", and warnings share that collection,
         //so a warnings-only program would be rejected despite having assembled fine
@@ -282,10 +350,18 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
      * `normalizeMarsDisplay` also covers the semantic check the base constructor starts before this
      * subclass's fields exist, when there is no current display to layer onto yet.
      */
-    private readScreenDirective(code: string) {
-        return applyScreenDirective(code, normalizeMarsDisplay(this.display), (label) =>
-            this.resolveLabelAddress(code, label)
+    private readScreenDirective(sources: BuildSources) {
+        const code = sourceText(sources)
+        const configured = applyScreenDirective(code, normalizeMarsDisplay(this.display), (label) =>
+            this.resolveLabelAddress(sources, label)
         )
+        return {
+            ...configured,
+            diagnostics: configured.diagnostics.map((diagnostic) => ({
+                ...diagnostic,
+                file: sources.entry
+            }))
+        }
     }
 
     /**
@@ -294,9 +370,16 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
      * at a fixed address and that word is read back: the assembler itself resolves the name, which is
      * what makes `.eqv` names, forward references and text labels all work.
      */
-    private resolveLabelAddress(code: string, label: string): number | null {
+    private resolveLabelAddress(sources: BuildSources, label: string): number | null {
         try {
-            const probe = MIPS.makeMipsFromSource(screenLabelProbeSource(code, label))
+            const probeSources = updateEntryText(
+                sources,
+                screenLabelProbeSource(sourceText(sources), label)
+            )
+            const probe = MIPS.makeMipsFromFiles(
+                textAssemblyFiles(probeSources),
+                probeSources.entry
+            )
             const result = probe.assemble()
             //a program that does not assemble has no labels to resolve; its own errors are reported
             if (result.errors.some((error) => !error.isWarning)) return null
@@ -323,6 +406,7 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
                 name:
                     mips.getLabelAtAddress(address) ?? `0x${address.toString(16).padStart(8, '0')}`,
                 line: (this.statementAtAddress(address)?.sourceLine ?? 0) - 1,
+                file: this.statementAtAddress(address)?.sourcePath,
                 color: makeLabelColor(i, frame.sp)
             }
         })
@@ -332,13 +416,14 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         const mips = this.mips
         if (!mips) return { decorations: [], code: '' }
         // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Scratch map is populated and read locally with no tracked consumer.
-        const joined = new Map<number, JsProgramStatement[]>()
+        const joined = new Map<string, JsProgramStatement[]>()
         for (const statement of mips.getCompiledStatements()) {
-            const arr = joined.get(statement.sourceLine)
+            const key = `${statement.sourcePath}:${statement.sourceLine}`
+            const arr = joined.get(key)
             if (arr) {
                 arr.push(statement)
             } else {
-                joined.set(statement.sourceLine, [statement])
+                joined.set(key, [statement])
             }
         }
         const decorations: EmulatorDecoration[] = []
@@ -354,13 +439,29 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
             )
             decorations.push({
                 type: 'below-line',
+                file: original.sourcePath,
                 note: 'Assembled instructions',
                 belowLine: original.sourceLine,
-                md: `\`\`\`mips\n${lines.join('\n')}\n\`\`\``
+                md: `\`\`\`mips\n${lines.join('\n')}\n\`\`\``,
+                //the same indented text the Markdown form uses, so an expansion lines up with the
+                //source instruction it came from rather than starting at the Editor's left edge
+                instructions: statements.map((statement, index) => ({
+                    address: BigInt(statement.address),
+                    code: lines[index] ?? formatStatement(statement.assemblyStatement)
+                }))
             })
         }
         //MIPS has no generated code panel, only the per-line expansion decorations
         return { decorations, code: '' }
+    }
+
+    protected _getBuildArtifacts(): BuildArtifact[] {
+        return (this.mips?.getCompiledStatements() ?? []).map((statement) => ({
+            file: statement.sourcePath,
+            line: statement.sourceLine - 1,
+            address: BigInt(statement.address >>> 0),
+            opcode: (statement.binaryStatement >>> 0).toString(16).padStart(8, '0')
+        }))
     }
 
     _getFlags(): { name: string; value: number; prev?: number }[] {
@@ -404,6 +505,65 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         )
     }
 
+    /**
+     * One flat Core call per file, as [ADR 0021](../../../../docs/adr/0021-register-files-from-core-exports.md)
+     * has it. MARS hands both arrays over as `Int32Array` of signed 32 bit ints, so a pattern with
+     * the top bit set reads back negative and `>>> 0` is what turns it into the bit pattern the
+     * panel renders. Without a Core there is nothing to read and the file shows zeros, as the CPU
+     * registers do before a Build.
+     */
+    _getRegisterFileValues(id: string): bigint[] {
+        const mips = this.mips
+        if (id === 'fpu') {
+            if (!mips) return new Array(MIPSCoprocessor1RegisterNames.length).fill(0n)
+            return Array.from(mips.getCoprocessor1Values(), (value) => BigInt(value >>> 0))
+        }
+        if (id === 'cp0') {
+            if (!mips) return new Array(MIPSCoprocessor0RegisterNames.length).fill(0n)
+            return Array.from(mips.getCoprocessor0Values(), (value) => BigInt(value >>> 0))
+        }
+        throw new Error(`Unknown register file: ${id}`)
+    }
+
+    /**
+     * The FPU's eight compare flags, the only file of the two that has any. No `prev` is reported:
+     * MARS remembers a previous value only inside its backstep stack, so `GenericEmulator` diffs
+     * each flag against what the last refresh read.
+     */
+    _getRegisterFileFlags(id: string): { name: string; value: number; prev?: number }[] {
+        if (id === 'cp0') return []
+        if (id !== 'fpu') throw new Error(`Unknown register file: ${id}`)
+        const flags = this.mips?.getConditionFlags() ?? []
+        return MIPS_CONDITION_FLAG_NAMES.map((name, index) => ({
+            name,
+            value: flags[index] ?? 0
+        }))
+    }
+
+    /**
+     * Writes one register of a Register file, for a preset value. The Core's setters bypass the
+     * backstepper, so such a write never becomes an entry the simulation can step back over.
+     */
+    _setRegisterFileValue(id: string, register: string, value: bigint): void {
+        const mips = this.requireMips()
+        const word = Number(BigInt.asUintN(32, value))
+        if (id === 'fpu') {
+            const index = MIPSCoprocessor1RegisterNames.indexOf(register)
+            if (index < 0) throw new Error(`No FPU register named ${register}`)
+            mips.setCoprocessor1Value(index, word)
+            return
+        }
+        if (id === 'cp0') {
+            const index = MIPSCoprocessor0RegisterNames.indexOf(register)
+            if (index < 0) throw new Error(`No CP0 register named ${register}`)
+            //coprocessor 0 is sparse, so the setter takes the register's MIPS number and not its
+            //position in the file
+            mips.setCoprocessor0Value(MIPS_COPROCESSOR0_REGISTER_NUMBERS[index], word)
+            return
+        }
+        throw new Error(`Unknown register file: ${id}`)
+    }
+
     _getRegisterValuesRecord(): Record<MIPSRegisterName, bigint> {
         const values = this._getRegisterValues()
         return Object.fromEntries(
@@ -415,20 +575,37 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         return this._hasTerminated() ? EmulatorStatus.Terminated : EmulatorStatus.Running
     }
 
+    /**
+     * The history as `undo()` pops it: one entry per executed instruction or Poke, rather than the
+     * one row per back step the panel used to show, where a `jal` was two rows and "Undo to here"
+     * on row N undid N instructions ([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md)).
+     */
     _getUndoHistory(max: number): ExecutionStep[] {
         const mips = this.mips
         if (!mips) return []
         return mips
-            .getUndoStack()
+            .getUndoGroups()
             .slice(0, max)
-            .map((step) => ({
-                pc: step.pc,
-                //MIPS has no condition code register, the UI reads these only for M68K
-                old_ccr: { bits: 0 },
-                new_ccr: { bits: 0 },
-                line: (this.statementAtAddress(step.pc)?.sourceLine ?? 0) - 1,
-                mutations: [backstepToMutation(step)]
-            }))
+            .map((group) =>
+                group.kind === 'poke' ? pokeGroupToStep(group) : this.instructionGroupToStep(group)
+            )
+    }
+
+    /** One executed instruction, with every value it overwrote as a mutation of the same row. */
+    private instructionGroupToStep(group: JsInstructionUndoGroup): ExecutionStep {
+        const statement = this.statementAtAddress(group.pc)
+        return {
+            kind: 'instruction',
+            pc: group.pc,
+            //MIPS has no condition code register, the UI reads these only for M68K
+            old_ccr: { bits: 0 },
+            new_ccr: { bits: 0 },
+            line: (statement?.sourceLine ?? 0) - 1,
+            file: statement?.sourcePath,
+            //the Core reports the back steps newest first, which is the order they are undone in;
+            //a row reads as what the instruction did, so it lists them in the order they happened
+            mutations: [...group.steps].reverse().map(backstepToMutation)
+        }
     }
 
     _hasTerminated(): boolean {
@@ -479,7 +656,17 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
     }
 
     _undo(): void {
-        this.requireMips().undo()
+        const mips = this.requireMips()
+        const group = mips.getUndoGroups()[0]
+        //the FileSystem session keys its frames by the syscall's address, and a Poke has no
+        //instruction identity to undo file operations by, so it is rolled back by the Core alone
+        //([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md))
+        const pc = group?.kind === 'instruction' ? group.pc : undefined
+        if (pc !== undefined && !(this.fileSystemSession?.canUndoAfter(pc) ?? true)) {
+            throw new Error('FileSystem Undo history exhausted')
+        }
+        mips.undo()
+        if (pc !== undefined) this.fileSystemSession?.undoAfter(pc)
     }
 
     /**
@@ -508,8 +695,15 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
                     //`simulate*` does not say whether the limit or a breakpoint stopped it; the line
                     //the program is about to execute does, because a run stopped on a breakpoint is
                     //parked on it
-                    const line = this._getNextInstruction()?.lineNumber ?? -1
-                    return line >= 0 && request.breakpoints.includes(line) ? 'breakpoint' : 'ran'
+                    const instruction = this._getNextInstruction()
+                    return instruction &&
+                        request.breakpoints.some(
+                            (breakpoint) =>
+                                breakpoint.file === instruction.file &&
+                                breakpoint.line === instruction.lineNumber
+                        )
+                        ? 'breakpoint'
+                        : 'ran'
                 }
             )
         } finally {
@@ -588,7 +782,15 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
 
     private makeHandlers(): HandlerMapFns {
         const terminal = this._peripherals.terminal
-        return {
+        const instructionOperation = <T>(operation: () => T): T => {
+            const files = this.fileSystemSession
+            if (!files) throw new Error('FileSystem is not running')
+            //MARS advances PC before it invokes a syscall handler; the Core's backstep record is
+            //keyed by the address of the syscall itself. Every handler is wrapped, not just the ones
+            //that touch a File, so a frame exists for each step that could have created one.
+            return files.performInstruction(this.requireMips().programCounter - 4, operation)
+        }
+        const handlers: HandlerMapFns = {
             readChar: () => this.readCharacter('ReadChar', READ_CHAR_QUESTION),
             readDouble: () => this.readNumber('ReadDouble', READ_DOUBLE_QUESTION),
             readFloat: () => this.readNumber('ReadFloat', READ_FLOAT_QUESTION),
@@ -617,10 +819,46 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
             stdOut: (buffer: number[]) => terminal.write(decodeBuffer(buffer)),
             stdErr: (buffer: number[]) => terminal.write(decodeBuffer(buffer)),
 
-            readFile: unimplementedHandler('readFile'),
-            writeFile: unimplementedHandler('writeFile'),
-            openFile: unimplementedHandler('openFile'),
-            closeFile: unimplementedHandler('closeFile'),
+            //MARS reports a failed file operation through the syscall's return value so the
+            //program can branch on it. Letting a FileSystem error reach the Core instead ends the
+            //run at the syscall, which no program can handle. Only `open` and `read` have a value
+            //to carry the failure; a stale `close` is ignored the way MARS ignores it, and a
+            //failed `write` has nowhere to report, so it surfaces as a run error and the program
+            //carries on rather than dying mid-instruction.
+            readFile: (descriptor, _destination, length) => {
+                try {
+                    const bytes = this.fileSystemSession!.read(descriptor, length)
+                    //0 is end of file; -1 is reserved for a read that failed.
+                    return [bytes.length, Array.from(bytes)]
+                } catch (error) {
+                    return [guestFileFailure(error), []]
+                }
+            },
+            writeFile: (descriptor, buffer) => {
+                try {
+                    this.fileSystemSession!.write(descriptor, handlerBytes(buffer))
+                } catch (error) {
+                    guestFileFailure(error)
+                }
+            },
+            openFile: (path, flags, append) => {
+                try {
+                    return this.fileSystemSession!.open(
+                        path,
+                        flags === 0 ? 'read' : append ? 'append' : 'write'
+                    )
+                } catch (error) {
+                    return guestFileFailure(error)
+                }
+            },
+            closeFile: (descriptor) => {
+                try {
+                    this.fileSystemSession!.close(descriptor)
+                } catch (error) {
+                    //A descriptor the program never had, or closed already: not an error.
+                    guestFileFailure(error)
+                }
+            },
             stdIn: unimplementedHandler('stdIn'),
 
             sleep: (milliseconds: number) => this.sleep(milliseconds),
@@ -628,6 +866,17 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
             //of a Testcase, which starts at zero so elapsed-time output is reproducible (ADR 0010)
             time: () => this._peripherals.clock.now()
         }
+        //The same syscall address can select a different service on a later iteration. Empty
+        //markers for non-file handlers keep an older File diff from being paired only by equal PC.
+        return Object.fromEntries(
+            Object.entries(handlers).map(([name, handler]) => [
+                name,
+                (...args: unknown[]) =>
+                    instructionOperation(() =>
+                        (handler as (...parameters: unknown[]) => unknown)(...args)
+                    )
+            ])
+        ) as HandlerMapFns
     }
 
     private statementAtAddress(address: number): JsProgramStatement | null {
@@ -662,9 +911,26 @@ function toHaltLimit(limit: number | undefined): number {
 }
 
 function decodeBuffer(buffer: number[]): string {
-    return new TextDecoder().decode(new Uint8Array(buffer))
+    return new TextDecoder().decode(handlerBytes(buffer))
 }
 
+/** TeaVM currently exposes a Java byte[] as either the promised array or one nested typed array. */
+function handlerBytes(buffer: unknown): Uint8Array {
+    const first = Array.isArray(buffer) && buffer.length === 1 ? buffer[0] : undefined
+    const value =
+        first && typeof first === 'object' && 'data' in first && ArrayBuffer.isView(first.data)
+            ? first.data
+            : Array.isArray(first) || ArrayBuffer.isView(first)
+              ? first
+              : buffer
+    if (ArrayBuffer.isView(value)) {
+        return new Uint8Array(value.buffer, value.byteOffset, value.byteLength).slice()
+    }
+    if (Array.isArray(value)) return Uint8Array.from(value, (byte) => Number(byte) & 0xff)
+    throw new Error('Core returned an invalid byte buffer')
+}
+
+/** @specy/mips 3.0 currently unboxes returned read bytes as TeaVM Byte objects. */
 function isMIPSNumericRegisterName(register: string): register is RegisterName {
     return MIPSNumericRegisterNames.some((candidate) => candidate === register)
 }
@@ -680,15 +946,43 @@ function toNumericRegisterName(register: MIPSRegisterName): RegisterName {
     return register
 }
 
-function calculateBreakpoints(mips: JsMips, breakpoints: number[]): number[] {
-    return breakpoints
-        .map((line) => {
-            //`state.breakpoints` holds 0 based editor lines, the core indexes source lines from 1
-            const statement = mips.getStatementAtSourceLine(line + 1)
-            if (!statement) return -1
-            return statement.address
-        })
-        .filter((address) => address !== -1)
+/**
+ * One source line can assemble to several machine statements — a pseudo-instruction like `la`, or a
+ * macro invocation — and every one of them reports that line. Breaking on all of them stopped the
+ * run once per generated instruction, so a single visible breakpoint took several Runs to clear.
+ * Only the first address of the expansion is a breakpoint: it is where the line is entered.
+ */
+function calculateBreakpoints(mips: JsMips, breakpoints: SourceBreakpoint[]): number[] {
+    return breakpoints.flatMap((breakpoint) => {
+        const statements = mips.getStatementsAtSourceLocation(breakpoint.file, breakpoint.line + 1)
+        const entry = statements.reduce<number | undefined>(
+            (lowest, statement) =>
+                lowest === undefined || statement.address < lowest ? statement.address : lowest,
+            undefined
+        )
+        return entry === undefined ? [] : [entry]
+    })
+}
+
+/** The tokenized source of a build, or nothing when the Core will not give it up. */
+function tokenizedLines(mips: JsMips): MipsTokenizedLine[] {
+    try {
+        return mips.getTokenizedLines()
+    } catch {
+        return []
+    }
+}
+
+function includedScreenDiagnostics(
+    files: Readonly<Record<string, string>>,
+    entry: string,
+    lines: readonly MipsTokenizedLine[]
+): Diagnostic[] {
+    return ignoredIncludedScreenDiagnostics(
+        files,
+        entry,
+        lines.map((line) => line.sourcePath)
+    )
 }
 
 function toInstruction(statement: JsProgramStatement | null | undefined): Instruction | null {
@@ -696,18 +990,21 @@ function toInstruction(statement: JsProgramStatement | null | undefined): Instru
     return {
         address: BigInt(statement.address),
         lineNumber: statement.sourceLine - 1,
+        file: statement.sourcePath,
         code: statement.source
     }
 }
 
-function assembleErrorToDiagnostic(error: MIPSAssembleError): Diagnostic {
+function assembleErrorToDiagnostic(error: MIPSAssembleError, spans: TokenSpanIndex): Diagnostic {
     return {
         severity: error.isWarning ? 'warning' : 'error',
-        lineIndex: error.lineNumber - 1,
-        column: error.columnNumber,
+        file: error.sourcePath,
+        lineIndex: error.sourceLine - 1,
+        column: error.sourceColumn,
+        endColumn: tokenSpanEnd(spans, error.sourcePath, error.sourceLine, error.sourceColumn),
         line: {
             line: '',
-            line_index: error.lineNumber
+            line_index: error.sourceLine
         },
         message: error.message,
         formatted: error.message
@@ -726,15 +1023,71 @@ function formatStatement(statement: string) {
     return statement
 }
 
+/**
+ * One Poke: everything a single `beginPoke`/`endPoke` transaction wrote, as one row of the History
+ * panel ([the design record](../../../../docs/design/pokes.md)). No instruction ran, so it carries
+ * no PC and no source line, and its mutations are the values it overwrote, which is what the panel
+ * diffs a poked cell against.
+ */
+function pokeGroupToStep(group: JsPokeUndoGroup): ExecutionStep {
+    const writes = group.writes.map(pokeWrite)
+    return {
+        kind: 'poke',
+        pc: -1,
+        old_ccr: { bits: 0 },
+        new_ccr: { bits: 0 },
+        line: -1,
+        file: undefined,
+        writes,
+        mutations: writes.map(pokeWriteToMutation)
+    }
+}
+
+/**
+ * One value a Poke wrote, in the panels' reading: unsigned bit patterns, and the Core's own
+ * register spellings, which are the ones the Register files list (`$t0`, `$f2`, `$13 (cause)`).
+ */
+function pokeWrite(write: JsPokeWrite): PokeWrite {
+    if (write.type === 'memory') {
+        return {
+            type: 'memory',
+            address: BigInt(write.address >>> 0),
+            old: [...write.old],
+            new: [...write.new]
+        }
+    }
+    //every register the Core reports is a signed 32 bit int, the FPU and CP0 ones included
+    return {
+        type: 'register',
+        name: write.name,
+        old: BigInt(write.old >>> 0),
+        new: BigInt(write.new >>> 0)
+    }
+}
+
+function pokeWriteToMutation(write: PokeWrite): MutationOperation {
+    if (write.type === 'memory') {
+        return {
+            type: 'WriteMemoryBytes',
+            value: { address: write.address, old: write.old, new: write.new }
+        }
+    }
+    return {
+        type: 'WriteRegister',
+        //every MIPS register is a word wide, in all three files
+        value: { register: write.name, old: write.old, new: write.new, size: RegisterSize.Long }
+    }
+}
+
 function backstepToMutation(step: JsBackStep): MutationOperation {
     if (step.action === BackStepAction.REGISTER_RESTORE) {
-        return makeRegisterBackstepMutation(getRegisterFileName(step.param1))
+        return makeRegisterBackstepMutation(getRegisterFileName(step.param1), step)
     }
     if (step.action === BackStepAction.COPROC0_REGISTER_RESTORE) {
-        return makeRegisterBackstepMutation(getCP0RegisterName(step.param1))
+        return makeRegisterBackstepMutation(getCP0RegisterName(step.param1), step)
     }
     if (step.action === BackStepAction.COPROC1_REGISTER_RESTORE) {
-        return makeRegisterBackstepMutation(getCP1RegisterName(step.param1))
+        return makeRegisterBackstepMutation(getCP1RegisterName(step.param1), step)
     }
     const memorySize = getMemoryBackstepSize(step.action)
     if (memorySize !== undefined) {
@@ -743,12 +1096,17 @@ function backstepToMutation(step: JsBackStep): MutationOperation {
             value: {
                 address: BigInt(step.param1),
                 size: memorySize,
-                old: 0n
+                //the word, half or byte the store replaced and the one it left, each in the low
+                //bits of the signed int the facade hands over
+                old: BigInt.asUintN(8 * memorySize, BigInt(step.param2)),
+                new: BigInt.asUintN(8 * memorySize, BigInt(step.newValue))
             }
         }
     }
     if (step.action === BackStepAction.PC_RESTORE) {
-        return makeRegisterBackstepMutation('$pc')
+        //`addPCRestore` puts the old program counter in `param1`, and the address the
+        //instruction set in `newValue`
+        return makeRegisterBackstepMutation('$pc', step, step.param1)
     }
     if (step.action === BackStepAction.COPROC1_CONDITION_CLEAR) {
         return {
@@ -779,15 +1137,29 @@ const backStepActionMap = {
     [BackStepAction.COPROC1_CONDITION_SET]: 'Coproc1 condition set',
     [BackStepAction.DO_NOTHING]: 'Do nothing',
     [BackStepAction.REGISTER_RESTORE]: 'Register restore',
-    [BackStepAction.PC_RESTORE]: 'PC restore'
+    [BackStepAction.PC_RESTORE]: 'PC restore',
+    //a Poke is read out of its group's `writes` and never through a back step, but the map has to
+    //stay exhaustive over the Core's actions
+    [BackStepAction.POKE]: 'Poke'
 } satisfies Record<BackStepAction, string>
 
-function makeRegisterBackstepMutation(register: string): MutationOperation {
+/**
+ * A register restore as a write: `old` is the value the back step puts back and `new` the value
+ * the write left, both reported by the facade as signed 32 bit ints, the way every register
+ * getter does. The old value is `param2` unless the caller says otherwise (the PC keeps its in
+ * `param1`).
+ */
+function makeRegisterBackstepMutation(
+    register: string,
+    step: JsBackStep,
+    old: number = step.param2
+): MutationOperation {
     return {
         type: 'WriteRegister',
         value: {
             register,
-            old: 0n,
+            old: BigInt(old >>> 0),
+            new: BigInt(step.newValue >>> 0),
             size: RegisterSize.Long
         }
     }
@@ -801,19 +1173,11 @@ function getRegisterFileName(index: number) {
     return `GPR[${index}]`
 }
 
-function getCP0RegisterName(index: number) {
-    switch (index) {
-        case 8:
-            return 'CP0 $8 (vaddr)'
-        case 12:
-            return 'CP0 $12 (status)'
-        case 13:
-            return 'CP0 $13 (cause)'
-        case 14:
-            return 'CP0 $14 (epc)'
-        default:
-            return `CP0[${index}]`
-    }
+function getCP0RegisterName(registerNumber: number) {
+    //coprocessor 0 is sparse, so a backstep entry carries the register's MIPS number and the file
+    //has to be searched for that number rather than indexed by it
+    const index = (MIPS_COPROCESSOR0_REGISTER_NUMBERS as readonly number[]).indexOf(registerNumber)
+    return MIPSCoprocessor0RegisterNames[index] ?? `CP0[${registerNumber}]`
 }
 
 function getCP1RegisterName(index: number) {
@@ -837,6 +1201,7 @@ function getMemoryBackstepSize(action: BackStepAction): RegisterSize | undefined
         case BackStepAction.COPROC1_CONDITION_CLEAR:
         case BackStepAction.COPROC1_CONDITION_SET:
         case BackStepAction.DO_NOTHING:
+        case BackStepAction.POKE:
             return undefined
     }
     const exhaustiveAction: never = action

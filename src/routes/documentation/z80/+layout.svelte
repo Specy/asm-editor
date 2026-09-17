@@ -12,8 +12,7 @@
     import MenuLink from '../m68k/instruction/MenuLink.svelte'
     import InstructionsMenu from '../m68k/InstructionsMenu.svelte'
     import { LANGUAGE_THEMES } from '$lib/Config'
-    import { DEFAULT_THEME, ThemeStore } from '$stores/themeStore.svelte'
-    import { onMount } from 'svelte'
+    import ThemeScope from '$cmp/shared/providers/ThemeScope.svelte'
     import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
     import { z80InstructionEntries } from '$lib/languages/Z80/Z80-documentation'
     import Sidebar from '$cmp/shared/layout/Sidebar.svelte'
@@ -21,14 +20,6 @@
     interface Props {
         children?: import('svelte').Snippet
     }
-
-    let oldTheme = ThemeStore.getChosenTheme()
-
-    onMount(() => {
-        if (ThemeStore.meta.id !== DEFAULT_THEME.id) return //prefer the user's theme
-        ThemeStore.select(LANGUAGE_THEMES.Z80, true)
-        return () => ThemeStore.select(oldTheme, true)
-    })
 
     let { children }: Props = $props()
 
@@ -49,80 +40,86 @@
     ])
 </script>
 
-<Navbar style="border-bottom-left-radius: 0;">
-    <Row gap="0.6rem" align="center" flex1>
-        <a class="icon" href={resolve('/', {})} title="Go to the home">
-            <img src="/favicon.png" alt="logo" />
-        </a>
-        <a class="icon" href={resolve('/projects', {})} title="Go to your projects"> Projects </a>
+<ThemeScope theme={LANGUAGE_THEMES.Z80}>
+    <Navbar style="border-bottom-left-radius: 0;">
+        <Row gap="0.6rem" align="center" flex1>
+            <a class="icon" href={resolve('/', {})} title="Go to the home">
+                <img src="/favicon.png" alt="logo" />
+            </a>
+            <a class="icon" href={resolve('/projects', {})} title="Go to your projects">
+                Projects
+            </a>
 
-        <a href={resolve('/documentation', {})}> Docs </a>
-        <a href={resolve('/learn/courses', {})}> Learn </a>
-        <a class="icon ai" href={resolve('/chat', {})} title="AI Chat">
-            <div class="hidden-very-small">
-                <SparklesIcon />
+            <a href={resolve('/documentation', {})}> Docs </a>
+            <a href={resolve('/learn/courses', {})}> Learn </a>
+            <a class="icon ai" href={resolve('/chat', {})} title="AI Chat">
+                <div class="hidden-very-small">
+                    <SparklesIcon />
+                </div>
+                AI Chat
+            </a>
+            <div class="mobile-only" style="margin-left: auto; margin-right: 0.5rem">
+                <Icon onClick={() => (menuOpen = !menuOpen)}>
+                    {#if menuOpen}
+                        <FaTimes />
+                    {:else}
+                        <FaBars />
+                    {/if}
+                </Icon>
             </div>
-            AI Chat
-        </a>
-        <div class="mobile-only" style="margin-left: auto; margin-right: 0.5rem">
-            <Icon onClick={() => (menuOpen = !menuOpen)}>
-                {#if menuOpen}
-                    <FaTimes />
-                {:else}
-                    <FaBars />
-                {/if}
-            </Icon>
-        </div>
-    </Row>
-</Navbar>
+        </Row>
+    </Navbar>
 
-<Sidebar bind:menuOpen>
-    <Column gap="1rem" padding="0 1rem">
-        <MenuLink href="/documentation/z80" title="Z80" onClick={() => (menuOpen = false)} />
-        <MenuLink
-            href="/documentation/z80/directive"
-            title="Directives"
-            onClick={() => (menuOpen = false)}
-        />
-        <MenuLink
-            href="/documentation/z80/registers"
-            title="Registers & Flags"
-            onClick={() => (menuOpen = false)}
-        />
-        <MenuLink
-            href="/documentation/z80/io"
-            title="Input/Output"
-            onClick={() => (menuOpen = false)}
-        />
-        <MenuLink
-            href="/documentation/z80/all"
-            title="Complete documentation"
-            onClick={() => (menuOpen = false)}
-        />
-    </Column>
-    <TogglableSection
-        open={true}
-        sectionStyle="margin-left: 0; padding-left: 0.5rem;"
-        style="padding: 0 0.5rem;"
-    >
-        {#snippet title()}
-            <h2 style="font-size: 1rem; font-weight: normal; margin-left: -0.1rem">Instructions</h2>
-        {/snippet}
-        <input bind:value={search} placeholder="Search" class="instruction-search" />
-        <InstructionsMenu
-            hrefBase="/documentation/z80/instruction"
-            instructions={filteredInstructions}
-            onClick={() => (menuOpen = false)}
-            {currentInstructionName}
-        />
-    </TogglableSection>
-
-    {#snippet content()}
-        <Column flex1 style="padding-top: 4rem;">
-            {@render children?.()}
+    <Sidebar bind:menuOpen>
+        <Column gap="1rem" padding="0 1rem">
+            <MenuLink href="/documentation/z80" title="Z80" onClick={() => (menuOpen = false)} />
+            <MenuLink
+                href="/documentation/z80/directive"
+                title="Directives"
+                onClick={() => (menuOpen = false)}
+            />
+            <MenuLink
+                href="/documentation/z80/registers"
+                title="Registers & Flags"
+                onClick={() => (menuOpen = false)}
+            />
+            <MenuLink
+                href="/documentation/z80/io"
+                title="Input/Output"
+                onClick={() => (menuOpen = false)}
+            />
+            <MenuLink
+                href="/documentation/z80/all"
+                title="Complete documentation"
+                onClick={() => (menuOpen = false)}
+            />
         </Column>
-    {/snippet}
-</Sidebar>
+        <TogglableSection
+            open={true}
+            sectionStyle="margin-left: 0; padding-left: 0.5rem;"
+            style="padding: 0 0.5rem;"
+        >
+            {#snippet title()}
+                <h2 style="font-size: 1rem; font-weight: normal; margin-left: -0.1rem">
+                    Instructions
+                </h2>
+            {/snippet}
+            <input bind:value={search} placeholder="Search" class="instruction-search" />
+            <InstructionsMenu
+                hrefBase="/documentation/z80/instruction"
+                instructions={filteredInstructions}
+                onClick={() => (menuOpen = false)}
+                {currentInstructionName}
+            />
+        </TogglableSection>
+
+        {#snippet content()}
+            <Column flex1 style="padding-top: 4rem;">
+                {@render children?.()}
+            </Column>
+        {/snippet}
+    </Sidebar>
+</ThemeScope>
 
 <style lang="scss">
     .instruction-search {

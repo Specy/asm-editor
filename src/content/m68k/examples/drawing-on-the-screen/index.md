@@ -3,14 +3,10 @@ rectangle with an outline for the house, three lines and a flood fill for its ro
 rectangle for the door and a line of text under it. Press Run and watch the Screen panel next to the
 program.
 
-Print a string asked the environment for a line of text. The screen is the same kind of request, one
-`trap #15` per shape, with the numbers in `d1` to `d4` and nothing written to any address.
+Every shape is one `trap #15`, with its numbers in `d1` to `d4`. Nothing is written to an address:
+there is no block of memory that is the picture.
 
-**You need to know:** the "The screen, keyboard and mouse through traps" lecture and the "Print a
-string" Example. What is new here is that the screen has two colours of its own, a pen for lines,
-outlines and text and a fill for the insides of shapes, and each of them is set by a task of its own.
-
-```m68k|playground|screen|no-registers|no-flags|allow-open
+```m68k|playground|open-screen|no-registers|no-flags|allow-open
 SKY     equ $00E0B070       ; a colour is $00BBGGRR: blue, green, then red
 GRASS   equ $003C9648
 SUN     equ $0000D2FF
@@ -119,7 +115,7 @@ label: dc.b 'Seven shapes and a line of text', 0
 ```
 
 A colour is a long written `$00BBGGRR`, blue in the high byte and red in the lowest, which is
-EASy68K's order and backwards from the `#RRGGBB` of CSS. `SKY equ $00E0B070` is therefore
+backwards from the `#RRGGBB` of CSS. `SKY equ $00E0B070` is therefore
 `rgb(112, 176, 224)`, a pale blue.
 
 A rectangle and an ellipse take the same four numbers, the corners of a box: `d1` and `d2` are its
@@ -148,6 +144,5 @@ Every `trap #15` costs one instruction out of the two million a Playground gets,
 does, so a picture is counted in shapes: this one is 26 traps and a filled rectangle is one of them,
 while the same rectangle drawn a pixel at a time with task 82 would be 43200.
 
-Try changing the `move.b #87, d0` under the house's four corners to `move.b #90, d0`. Task 90 draws
-the outline of that same box and nothing inside it, so the walls become a white frame with the sky
-showing through.
+Every filled shape has an outline-only twin one task number away, so the house's `move.b #87, d0`
+becomes `move.b #90, d0` and the walls turn into a frame with the sky behind them.

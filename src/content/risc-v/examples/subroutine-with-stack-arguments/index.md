@@ -3,13 +3,9 @@ square them, and returns their sum in `a0`. It needs a local variable to hold th
 the second call runs, and that local lives on the stack too, in a frame the subroutine builds for
 itself.
 
-A subroutine with its arguments in registers passed everything in `a0` and `a1` and kept nothing.
-That works until a subroutine has to hold something across a call, because there is only one `ra`
-and the call is free to destroy any temporary it likes.
-
-**You need to know:** the "The stack and `sp`" lecture and the "jal, ret and the calling convention"
-lecture. What is new here is `fp` as a frame pointer, it stays still while `sp` keeps moving, so
-`0(fp)` names the same argument from the first instruction to the last.
+Passing everything in registers works right up until a subroutine has to keep something while it
+calls somebody else. There is one `ra`, and a call is free to destroy any temporary register it
+likes, so anything that has to survive a call needs somewhere else to live.
 
 ```riscv|playground|memory|allow-open
 .text
@@ -54,10 +50,11 @@ main:
     mv s2, a0               # the answer
 ```
 
-There is no `link` here and no `unlk`, and no `push` and no `pop` either. The M68K builds and takes
-down a frame with one instruction each; on RISC-V the prologue is an `addi` that moves `sp` down and
-a `sw` for everything the subroutine promised to give back, and the epilogue is the same lines the
-other way round.
+A subroutine's **prologue** is the first few lines: one `addi` that moves `sp` down to claim some
+room, then a `sw` for everything the subroutine has promised to hand back untouched. The
+**epilogue** at the bottom is those same lines run backwards. There is no single instruction that
+builds a frame, and no single instruction that takes one down: you write out what your subroutine
+actually needs, which means a leaf subroutine that needs nothing writes neither.
 
 While the second `jal square` is running, the stack looks like this, with 🟢 on the stack pointer:
 
@@ -86,8 +83,7 @@ caller's copy goes on the stack first.
 puts the caller's value back before returning; `t0` in `main` it destroys freely, and that is why
 `main` reads the answer out of `a0` and not out of anything it was holding.
 
-`a0` and `s2` both come out at `00000019`, which is 25, from 9 plus 16.
-
-Try changing `addi sp, sp, 16` in `main` to `addi sp, sp, 8`. The answer is still right, and `sp`
-ends at `7FFFEFF4` instead of `7FFFEFFC`: eight bytes of stack the program will never get back,
-which in a loop is how a program runs out of it.
+Whoever moves `sp` down has to move it back up by the same amount. Change the `addi sp, sp, 16` at
+the bottom of `main` to `addi sp, sp, 8` and the answer is still 25, so nothing looks wrong: `sp`
+just finishes at `7FFFEFF4` instead of `7FFFEFFC`. Those eight bytes are gone for good. Put that
+mistake inside a loop and the stack runs out.

@@ -3,7 +3,7 @@
     import { toast } from '$stores/toastStore'
     import Controls from '$cmp/specific/project/Controls.svelte'
     import { clampBigInt, formatTime } from '$lib/utils'
-    import { preferencesStore } from '$stores/preferencesStore.svelte'
+    import { registerColumnWidth } from '$lib/languages/registerFormats'
     import { resolveProjectSettings } from '$lib/projectSettings'
     import { rewriteScreenDirective } from '$lib/languages/mars/screenDirective'
     import MemoryControls from '$cmp/specific/project/memory/MemoryControls.svelte'
@@ -11,7 +11,8 @@
     import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE, TESTCASE_INSTRUCTION_LIMIT } from '$lib/Config'
     import StatusCodesVisualiser from '$cmp/specific/project/cpu/StatusCodesRenderer.svelte'
     import RegistersVisualiser from '$cmp/specific/project/cpu/RegistersRenderer.svelte'
-    import { onMount, type Snippet } from 'svelte'
+    import RegisterFilesPanel from '$cmp/specific/project/cpu/RegisterFilesPanel.svelte'
+    import { onMount, type Snippet, untrack } from 'svelte'
     import { getM68kErrorMessage } from '$lib/languages/M68K/M68kUtils'
     import type { AvailableLanguages, Testcase, TestcaseResult } from '$lib/Project.svelte'
     import { type Emulator } from '$lib/languages/Emulator'
@@ -22,6 +23,7 @@
     import {
         makeColorizedLabels,
         makeRegister,
+        type RegisterPoke,
         RegisterSize
     } from '$lib/languages/commonLanguageFeatures.svelte'
     import ScreenRenderer from '$cmp/specific/project/screen/ScreenRenderer.svelte'
@@ -49,6 +51,8 @@
         showRegisters?: boolean
         showFlags?: boolean
         showScreen?: boolean
+        /** Whether the Screen panel starts unfolded; the small layout folds it away by default. */
+        openScreen?: boolean
         embedded?: boolean
         language?: AvailableLanguages
         emulator: Emulator
@@ -56,6 +60,11 @@
         children?: Snippet
         forceMemoryRight?: boolean
         layout?: Layout
+        /**
+         * The Register file the panel opens on, a Playground's `fpu`/`cp0`/`csr`/`sse`/`x87` flag.
+         * Undefined, and an id this language has not got, open the CPU file.
+         */
+        initialRegisterFile?: string
     }
 
     let {
@@ -68,13 +77,15 @@
         showTestcases: showTestcasesProp,
         showPc: showPcProp,
         showScreen: showScreenProp,
+        openScreen = false,
         testcases = $bindable([]),
         embedded = false,
         emulator = $bindable(),
         controls,
         children,
         forceMemoryRight = false,
-        layout = 'small'
+        layout = 'small',
+        initialRegisterFile = undefined
     }: Props = $props()
     let showMemory = $derived(showMemoryProp ?? true)
     let showFlags = $derived(showFlagsProp ?? true)
@@ -82,10 +93,9 @@
     let showConsole = $derived(showConsoleProp ?? layout === 'fullscreen')
     let showTestcases = $derived(showTestcasesProp ?? false)
     let showPc = $derived(showPcProp ?? layout === 'fullscreen')
-    //hidden for x86, which has no graphics device, and behind the same setting as the project page
-    let showScreen = $derived(
-        showScreenProp ?? (preferencesStore.values.showScreen.value && languageHasScreen(language))
-    )
+    //A shared editor only shows the Screen when its caller asks for it. Documentation playgrounds
+    //derive that explicit request from their `screen` fence flag; x86 has no graphics device.
+    let showScreen = $derived((showScreenProp ?? false) && languageHasScreen(language))
     //no Project here, so a Playground runs on the language's default Settings
     const settings = $derived(resolveProjectSettings(language, undefined))
     //no project to save it in here, so the lecture, exam, embed and chat surfaces get the popover
@@ -108,14 +118,53 @@
         if (configured.origin === 'directive') display = configured.display
     }
     //the small layout has no room to spare, so the Screen starts folded away behind its toggle
-    let screenOpen = $state(false)
+    //unless the caller asked for it open: a lecture whose program draws wants the drawing visible
+    let screenOpen = $state(openScreen)
     let groupSize = $state(RegisterSize.Word)
+
+    //the Playground's half of the Poke availability rule
+    //([the design record](../../../../docs/design/pokes.md)): a Playground has no read-only flag,
+    //so it is the Core being busy that closes the rows. The Emulator owns the other half
+    const pokeable = $derived(!running && !building && emulator.canPoke)
+
+    /** One commit of a register chunk, which is one Poke; a value too wide for it throws. */
+    function pokeRegisters(fileId: string, writes: RegisterPoke[]) {
+        try {
+            emulator.pokeRegisters(fileId, writes)
+        } catch (e) {
+            toast.error(getM68kErrorMessage(e))
+        }
+    }
+
+    /** One commit of a memory selection, which is one Poke however many bytes it covers. */
+    function pokeMemory(address: bigint, bytes: Uint8Array) {
+        try {
+            emulator.pokeMemory(address, bytes)
+        } catch (e) {
+            toast.error(getM68kErrorMessage(e))
+        }
+    }
+    //the fullscreen register column is pinned to the width of the CPU file, as the project page's is:
+    //it sits in the same `min-content` row as the memory panel, so a column that followed the visible
+    //tab would slide that panel sideways every time a tab was picked. The inline column beside the
+    //editor is already a fixed 18rem and needs none of this
+    let registersColumnWidth = $derived(registerColumnWidth(emulator.registerFiles, groupSize))
+    //empty for a language with a single file, which has no tab to pick and goes on sizing its column
+    //by what the column holds, exactly as it always did. `min-width` is set with the width because a
+    //`fit-content` minimum would otherwise let the widest file win the argument anyway
+    let registersColumnStyle = $derived(
+        registersColumnWidth
+            ? `width: ${registersColumnWidth}; min-width: ${registersColumnWidth};`
+            : ''
+    )
     let testcasesVisible = $state(false)
     let testcasesResult: TestcaseResult[] = $state([])
     let editor: monaco.editor.IStandaloneCodeEditor | undefined = $state()
 
     $effect(() => {
-        emulator.setCode(code)
+        //Tracked read outside `untrack`, so editing the playground keeps arming the live check.
+        const source = code
+        untrack(() => emulator.setCode(source))
     })
 
     onMount(() => {
@@ -144,6 +193,18 @@
             showPc ? '2.25rem' : '0px',
             '1rem'
         ].join(' + ')})`
+    )
+
+    //the small layout splits the CPU file into two name/value pairs per line, which is what fits
+    //beside a 32 bit value in an 18rem column. A 64 bit language (x86, RISC-V-64) draws twice the
+    //digits, so a second pair on the line would only squeeze both until their groups wrapped: those
+    //languages get one pair per line and scroll instead
+    let smallRegistersGridStyle = $derived(
+        `grid-template-columns: ${
+            Number(emulator.systemSize) > RegisterSize.Long
+                ? 'min-content 1fr'
+                : 'min-content 1fr min-content 1fr'
+        }; gap: 0.1rem; height: 100%; justify-content: space-evenly;`
     )
 
     let showRegsColumn = $derived(
@@ -216,7 +277,12 @@
             bind:editor
             bind:code
             codeOverride={emulator.compiledCode}
-            breakpoints={emulator.breakpoints}
+            breakpoints={emulator.breakpoints
+                .filter(
+                    (breakpoint) =>
+                        breakpoint.file === (emulator.buildSources?.entry ?? emulator.entry)
+                )
+                .map((breakpoint) => breakpoint.line)}
             diagnostics={emulator.compilerDiagnostics}
             {language}
             highlightedLine={emulator.line}
@@ -305,6 +371,7 @@
         {#if showPc}
             <RegistersVisualiser
                 systemSize={emulator.systemSize}
+                {language}
                 size={emulator.systemSize}
                 style="flex: unset; overflow: unset; padding: 0;"
                 gridStyle="padding: 0.2rem 0.7rem"
@@ -319,20 +386,19 @@
             </div>
         {/if}
         {#if showRegisters}
-            <RegistersVisualiser
+            <RegisterFilesPanel
                 systemSize={emulator.systemSize}
+                {language}
                 size={groupSize}
-                hiddenRegistersNames={emulator.hiddenRegisters}
-                gridStyle="
-                    grid-template-columns: min-content 1fr min-content 1fr;
-                    gap: 0.1rem;
-                    height: 100%;
-                    justify-content: space-evenly;
-                "
+                initialFileId={initialRegisterFile}
+                gridStyle={smallRegistersGridStyle}
                 style={`flex: unset; max-height: ${embedded ? `calc(var(--screen-height) - ${sizes})` : '15.85rem'}; min-height: 15.85rem;`}
-                registers={emulator.registers}
-                on:registerClick={async (e) => {
-                    handleRegisterClick(e.detail.value)
+                files={emulator.registerFiles}
+                {pokeable}
+                canPokeRegister={(fileId, name) => emulator.canPokeRegister(fileId, name)}
+                onPoke={pokeRegisters}
+                onRegisterClick={(register) => {
+                    handleRegisterClick(register.value)
                 }}
             />
         {/if}
@@ -363,18 +429,21 @@
             currentAddress={emulator.memory.global.address}
             sp={emulator.sp}
             callStackAddresses={makeColorizedLabels(emulator.callStack)}
+            {pokeable}
+            onPoke={pokeMemory}
         />
     </div>
 {/snippet}
 
 {#snippet fullscreenRegsColumn()}
-    <div class="column fullscreen-registers-column" style="gap: 0.4rem">
+    <div class="column fullscreen-registers-column" style="gap: 0.4rem; {registersColumnStyle}">
         {#if emulator.statusRegisters && emulator.statusRegisters.length > 0 && showFlags}
             <StatusCodesVisualiser statusCodes={emulator.statusRegisters} />
         {/if}
         {#if showPc}
             <RegistersVisualiser
                 systemSize={emulator.systemSize}
+                {language}
                 style="flex: unset; overflow: unset; padding: 0;"
                 gridStyle="padding: 0.2rem 0.7rem"
                 size={emulator.systemSize}
@@ -384,14 +453,18 @@
             />
         {/if}
         {#if showRegisters}
-            <RegistersVisualiser
+            <RegisterFilesPanel
                 systemSize={emulator.systemSize}
+                {language}
                 size={groupSize}
+                initialFileId={initialRegisterFile}
                 style="flex: 1; min-height: 0;"
-                hiddenRegistersNames={emulator.hiddenRegisters}
-                registers={emulator.registers}
-                on:registerClick={async (e) => {
-                    handleRegisterClick(e.detail.value)
+                files={emulator.registerFiles}
+                {pokeable}
+                canPokeRegister={(fileId, name) => emulator.canPokeRegister(fileId, name)}
+                onPoke={pokeRegisters}
+                onRegisterClick={(register) => {
+                    handleRegisterClick(register.value)
                 }}
             />
         {/if}
@@ -422,6 +495,8 @@
             currentAddress={emulator.memory.global.address}
             sp={emulator.sp}
             callStackAddresses={makeColorizedLabels(emulator.callStack)}
+            {pokeable}
+            onPoke={pokeMemory}
         />
     </div>
 {/snippet}
@@ -471,6 +546,7 @@
     {#if showTestcases}
         <TestcasesEditor
             systemSize={emulator.systemSize}
+            {language}
             editable={!embedded}
             registerNames={emulator.registers.map((r) => r.name)}
             startingRegisterNames={emulator.startingRegisterNames}
@@ -729,7 +805,7 @@
             width: unset;
             max-height: unset;
             align-items: center;
-            flex-direction: column-reverse;
+            flex-direction: column;
         }
 
         .fullscreen-registers-column {

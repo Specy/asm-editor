@@ -1,142 +1,215 @@
-A loop is a comparison, a branch out of it and a jump backwards, which we can now write. The M68K
-also has one instruction that does the counting and the jumping together, and it is the one you will
-actually use.
+# Loops and dbra
 
-## The loop written out
+A branch can go to a label above itself. That backward branch is what lets a group of instructions
+run again.
 
-Adding up the numbers from 1 to 10, in C, then flattened, then assembled:
+Here is a loop that adds the values from 1 through 10. Read it as four jobs:
 
-```c
-int sum = 0;
-for (int i = 1; i <= 10; i++) sum += i;
+1. **Test before the body.** Leave when the current value is greater than 10.
+2. **Body.** Add the current value to the total.
+3. **Update.** Increase the current value by 1.
+4. **Backward branch.** Return to the test.
+
+```m68k|playground|pc
+    move.l #0, d0       ; total = 0
+    move.l #1, d1       ; current value = 1
+loop_test:
+    cmp.l #10, d1       ; compare the current value with 10
+    bgt loop_done       ; leave when it is greater than 10
+    add.l d1, d0        ; body: add the current value
+    add.l #1, d1        ; update: move to the next value
+    bra loop_test       ; backward branch: test again
+loop_done:
 ```
 
+The first two passes, the tenth pass, and the final test look like this:
+
+| visit to `loop_test` | `d1` before the test | is `d1 > 10`? | body changes `d0` to | update changes `d1` to | next step      |
+| -------------------- | -------------------: | ------------- | -------------------: | ---------------------: | -------------- |
+| first                |                    1 | no            |                    1 |                      2 | branch back    |
+| second               |                    2 | no            |                    3 |                      3 | branch back    |
+| tenth                |                   10 | no            |                   55 |                     11 | branch back    |
+| final test           |                   11 | yes           |      body is skipped |      update is skipped | leave the loop |
+
+The backward `bra` does not decide whether the loop should continue. It simply returns to
+`loop_test`. The `cmp` and `bgt` make the decision on every visit.
+
+This loop terminates because `d1` changes on every pass: it increases by 1 and eventually becomes
+11, which satisfies the exit condition. The body sees exactly the ten values 1 through 10, so it
+runs ten times. If the initial value in `d1` were already 11, the first test would branch to
+`loop_done`; the body and update would run zero times. Testing before the body gives a loop this
+zero-pass possibility.
+
+## Count passes with familiar instructions
+
+Sometimes the body should run a fixed number of times. One register can hold the number of passes
+still to perform. This version also adds 1 through 10, but `d1` is now a pass counter and `d2` holds
+the value added by the body:
+
 ```m68k|playground|no-flags
-    clr.l d0            ; sum = 0
-    move.l #1, d1       ; i = 1
-while_start:
-    cmp.l #10, d1       ; while(i <= 10)
-    bgt while_end
-    add.l d1, d0        ; sum += i
-    addq.l #1, d1       ; i++
-    bra while_start
-while_end:
+    move.l #0, d0       ; total = 0
+    move.l #10, d1      ; 10 passes remain
+    move.l #1, d2       ; first value to add
+
+    tst.l d1
+    beq count_done      ; a requested count of 0 skips the body
+count_loop:
+    add.l d2, d0        ; body
+    add.l #1, d2        ; prepare the next value
+    sub.l #1, d1        ; one fewer pass remains
+    bne count_loop      ; repeat while the count is not zero
+count_done:
 ```
 
-`d0` comes out at `00000037`, which is 55, and `d1` at 11, one past the last value it used. Four of
-those seven instructions are the loop machinery and one is the work.
+The `sub` is immediately before `bne`, so the branch reads the flags produced by the counter
+update. The counter progresses like this:
 
-`clr.l d0` is `move.l #0, d0` written shorter, and `addq.l #1, d1` is `add.l #1, d1` in a shorter
-encoding, which is what `addq` is for: adding a number from 1 to 8, which is what a loop counter
-does.
+| `d1` before the body | `d1` after `sub.l #1,d1` | action after the update |
+| -------------------: | -----------------------: | ----------------------- |
+|                   10 |                        9 | branch back             |
+|                    9 |                        8 | branch back             |
+|                  ... |                      ... | branch back             |
+|                    2 |                        1 | branch back             |
+|                    1 |                        0 | fall through            |
 
-## dbra does the counting
+There are ten starting values from 10 down through 1, so there are ten body executions. The top
+`tst` handles the separate case of zero requested passes before execution reaches the body.
 
-`dbra dn, label` subtracts 1 from the low word of `dn` and branches to the label unless the result is
--1. One instruction replaces the `subq` and the `bne`, and the loop becomes:
+## Let `dbra` update and test the counter
+
+The M68K instruction `dbra Dn,label` combines the final two loop-control instructions. Its name is
+commonly read as “decrement and branch again.” Its exact steps are:
+
+1. Decrement only the low word of data register `Dn`.
+2. If the new low word is not `$FFFF`, branch to `label`.
+3. If the new low word is `$FFFF`, fall through to the next instruction.
+
+`dbra` preserves the upper word of the register and does not change the CCR flags.
+
+Because the decrement happens after the body, a counter starting at 9 gives ten passes:
 
 ```m68k|playground|no-flags
-    clr.l d0            ; sum = 0
-    move.w #9, d1       ; ten times round
-    move.l #10, d2      ; the number to add this time
+    move.l #0, d0       ; total = 0
+    move.w #9, d1       ; 10 passes: initialize to 10 - 1
+    move.l #1, d2       ; first value to add
 loop:
-    add.l d2, d0        ; sum += n
-    subq.l #1, d2       ; n--
+    add.l d2, d0
+    add.l #1, d2
     dbra d1, loop
 ```
 
-`d0` is 55 again. Two things about that counter:
+| body execution | low word before `dbra` | low word after decrement | result       |
+| -------------- | ---------------------: | -----------------------: | ------------ |
+| first          |                `$0009` |                  `$0008` | branch       |
+| second         |                `$0008` |                  `$0007` | branch       |
+| ...            |                    ... |                      ... | branch       |
+| ninth          |                `$0001` |                  `$0000` | branch       |
+| tenth          |                `$0000` |                  `$FFFF` | fall through |
 
-**It runs one more time than the number you put in it.** `dbra` stops at -1, not at 0, so a counter
-of 9 gives ten passes: 9, 8, 7, down to 0, and then the pass that takes it to -1 and falls through.
-Write `move.w #count-1, d1` when you know how many times you want, and let the assembler do the
-subtraction.
+For an intended count of `N` passes, where `N` is from 1 through 65,536, initialize the counter's
+low word to `N - 1`. The body then runs once for each low-word value from `N - 1` down through 0.
+After the last execution, `dbra` changes the low word from 0 to `$FFFF` and leaves the loop. This is
+the off-by-one rule to remember: **passes = initial low word + 1**.
 
-**It is a word.** `dbra` reads and writes only the low 16 bits of the register, so the most a single
-`dbra` loop can run is 65536 times, and whatever is in the high word is left there and ignored.
+### The counter is one word
+
+Only the low 16 bits take part in the count. The upper 16 bits remain exactly as they were:
 
 ```m68k|playground|no-flags
-    move.l #$FFFF0003, d1   ; only the low word is the count
-    clr.l d0
+    move.l #$ABCD0003, d1
+    move.l #0, d0
 loop:
-    addq.l #1, d0
+    add.l #1, d0
     dbra d1, loop
 ```
 
-The loop runs four times, so `d0` comes out at 4, and `d1` ends at `FFFFFFFF`: the low word walked
-down to `FFFF`, which is the word -1, and the `FFFF` above it was never touched. This is why the
-counter of a `dbra` loop is set with `move.w` and read as a word.
+The body runs four times, for the starting low-word values 3, 2, 1, and 0. At the end, `d0` is 4
+and `d1` is `$ABCDFFFF`. The upper word `$ABCD` was preserved, while the low word reached the
+ending value `$FFFF`.
 
-After the loop, the counter is `$FFFF` and not zero, which catches people who then want to reuse the
-register.
+A 16-bit word has 65,536 different bit patterns, so one `dbra` can control at most 65,536 passes.
+That largest count starts with the low word `$FFFF`; after the first body execution it becomes
+`$FFFE` and branches, and it eventually reaches 0 before the final decrement ends the loop.
 
-## db\<cc\> leaves the loop early
+### Guard a count that can be zero
 
-`dbra` is the plain member of a family. `db<cc> dn, label` takes a condition, and it goes round again
-only when the condition is **false** and the counter has not run out. So `dbeq` means "keep going
-until something is equal or we run out of elements", which is a search.
-
-```m68k|playground|memory
-    lea numbers, a0
-    move.w #5, d1       ; six elements, so five
-    move.l #30, d2      ; the value we are looking for
+The label in a `dbra` loop is normally placed at the body. Without an earlier guard, this body-first
+shape always executes at least once: execution reaches the body before `dbra` gets its first chance
+to test the counter. If a requested count can be zero, test it before preparing and entering the
 loop:
-    cmp.l (a0)+, d2     ; d2 minus the next element
-    dbeq d1, loop       ; round again unless it matched or the counter ran out
-    seq d3              ; d3 = $FF when the loop stopped on a match
-
-    org $2000
-numbers: dc.l 10, 20, 30, 40, 50, 60
-```
-
-The 30 is the third element, so the loop goes round three times and stops. `d1` comes out at 3,
-`a0` at `0000200C`, four bytes past the element that matched, and `d3` at `000000FF`.
-
-`d3` is `$FF` because `db<cc>` writes no flags at all: the `Z` that `seq` reads is still the one the
-last `cmp` left. That is how you tell the two ways out of the loop apart, since `dbeq` falls through
-both when it found something and when it ran out. The other way to tell is the counter, which is
-`$FFFF` only when the loop ran out.
-
-`dbne` is the same idea for "keep going while they are equal", and every condition of the branch
-family has a `db` version.
-
-## Nested loops
-
-Nothing new: an inner loop is a loop between two lines of the outer one, with its own counter in its
-own register, reset at the top of every outer pass.
 
 ```m68k|playground|no-flags
-    clr.l d0            ; total = 0
-    move.w #2, d1       ; the outer loop runs 3 times
+    move.l #0, d0       ; count the body executions
+                       ; d2 holds the requested count, from 0 through 65536
+    tst.l d2
+    beq done            ; zero requested passes
+    move.l d2, d1
+    sub.l #1, d1        ; prepare N - 1
+loop:
+    add.l #1, d0
+    dbra d1, loop
+done:
+```
+
+With `d2` equal to 0, the branch reaches `done` and the body runs zero times. With `d2` equal to 1,
+`d1` is prepared as 0, the body runs once, and `dbra` falls through after changing the low word to
+`$FFFF`.
+
+## Reset the inner counter in a nested loop
+
+A loop can contain another loop. Each outer pass needs a fresh inner count, so the inner counter is
+initialized at the beginning of every outer pass:
+
+```m68k|playground|no-flags
+    move.l #0, d0       ; count all inner-body executions
+    move.w #2, d1       ; 3 outer passes
 outer:
-    move.w #3, d2       ; the inner loop runs 4 times
+    move.w #3, d2       ; reset for 4 inner passes
 inner:
-    addq.l #1, d0       ; total++
+    add.l #1, d0
     dbra d2, inner
     dbra d1, outer
 ```
 
-`d0` comes out at 12, which is 3 times 4. The `move.w #3, d2` has to be **inside** the outer loop:
-put it above `outer:` and the inner counter is `$FFFF` on the second pass, which makes the inner loop
-run 65536 times. Try moving that line up one and pressing Run to watch it happen.
+The inner body runs four times during each of three outer passes, so `d0` ends at 12.
 
-The Playground stops a program after two million instructions and says so, with "Execution limit of
-2000000 instructions reached (maybe an infinite loop?)". That message is what a loop with a broken
-counter looks like, and it is the reason `dbra` reads its counter as a word rather than a long: a
-long counter that starts wrong runs for four billion passes.
+If `move.w #3,d2` were placed before `outer:`, only the first outer pass would begin with 3. That
+first inner loop would leave the low word of `d2` at `$FFFF`. On the second outer pass, the body
+would execute once before `dbra` changed `$FFFF` to `$FFFE` and branched. Including that first
+execution, the inner body would run 65,536 times on that pass. The third outer pass would do the
+same. The mistaken program would therefore finish with `d0` equal to 131,076 instead of 12.
+Resetting `d2` inside the outer loop restores the intended four inner executions every time.
 
-## Your turn
+## Check your understanding
 
-Add up the numbers from 1 to 10 with a `dbra` loop and leave 55 in `d0`. The counter belongs in a
-data register of your choice, and `d0` starts at 0 in the test.
+### 1. Test before the body
+
+Write two top-tested loops using `cmp`, a conditional branch, an update, and a backward `bra`.
+
+- `d0` starts at 4. Add each value from `d0` through 7 to `d1`, increasing `d0` by 1 after each
+  addition. Initialize `d1` to 0. The loop should stop with `d0` equal to 8 and `d1` equal to 22.
+- `d2` starts at 8 and `d3` contains a sentinel. Use the same upper limit of 7 and add `d2` to `d3`
+  only inside the loop body. Because the first test should leave immediately, both registers must
+  keep their starting values.
 
 ```m68k|playground|exercise
-* your code here
+; your code here
 ```
 
 ```testcase
 {
-    "expectedRegisters": { "d0": 55 }
+    "startingRegisters": {
+        "d0": 4,
+        "d1": "0xDEADBEEF",
+        "d2": 8,
+        "d3": "0xA5A5A5A5"
+    },
+    "expectedRegisters": {
+        "d0": 8,
+        "d1": 22,
+        "d2": 8,
+        "d3": "0xA5A5A5A5"
+    }
 }
 ```
 
@@ -144,29 +217,49 @@ data register of your choice, and `d0` starts at 0 in the test.
 <summary>Show solution</summary>
 
 ```m68k|playground|solution
-    clr.l d0            ; sum = 0
-    move.w #9, d1       ; ten passes
-    move.l #10, d2      ; the number to add this time
-loop:
-    add.l d2, d0        ; sum += n
-    subq.l #1, d2       ; n--
-    dbra d1, loop
+    move.l #0, d1
+sum_test:
+    cmp.l #7, d0
+    bgt sum_done
+    add.l d0, d1
+    add.l #1, d0
+    bra sum_test
+sum_done:
+
+zero_test:
+    cmp.l #7, d2
+    bgt all_done
+    add.l d2, d3
+    add.l #1, d2
+    bra zero_test
+all_done:
 ```
 
 </details>
 
-The second one starts `d0` at 64 and wants to know how many times it can be halved before it reaches
+### 2. Prepare a `dbra` counter
 
-1. Leave that count in `d1`, which for 64 is 6.
+Make a `dbra` loop whose body adds 3 to `d0` exactly five times. `d0` starts at 0. The full value
+of the counter register `d1` starts at `$A5A5BEEF`; initialize only its low word with the value that
+gives five passes.
+
+The final values should demonstrate all three parts of the rule: five body executions make `d0`
+equal 15, `dbra` leaves the low word at `$FFFF`, and the upper word `$A5A5` is preserved.
 
 ```m68k|playground|exercise
-* your code here
+; your code here
 ```
 
 ```testcase
 {
-    "startingRegisters": { "d0": 64 },
-    "expectedRegisters": { "d1": 6 }
+    "startingRegisters": {
+        "d0": 0,
+        "d1": "0xA5A5BEEF"
+    },
+    "expectedRegisters": {
+        "d0": 15,
+        "d1": "0xA5A5FFFF"
+    }
 }
 ```
 
@@ -174,14 +267,10 @@ The second one starts `d0` at 64 and wants to know how many times it can be halv
 <summary>Show solution</summary>
 
 ```m68k|playground|solution
-    clr.l d1            ; count = 0
+    move.w #4, d1       ; five passes use an initial low word of five minus one
 loop:
-    cmp.l #1, d0        ; while(d0 > 1)
-    bls done
-    lsr.l #1, d0        ; d0 /= 2
-    addq.l #1, d1       ; count++
-    bra loop
-done:
+    add.l #3, d0
+    dbra d1, loop
 ```
 
 </details>

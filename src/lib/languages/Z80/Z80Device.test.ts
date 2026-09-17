@@ -36,6 +36,21 @@ function makeDevice() {
     const screen = new Screen({ width: 256, height: 192, cell: SCREEN_CELL_8X8 })
     const keyboard = new Keyboard({ holdIntervalMs: 0 })
     const mouse = new Mouse({ screen, keyboard })
+    //a stand-in for the memory-mapped display: the port device only ever asks it whether it is on
+    //and tells it to switch, so a test can drive both modes without a Core
+    const cells = {
+        isEnabled: false,
+        enable() {
+            cells.isEnabled = true
+        },
+        disable() {
+            cells.isEnabled = false
+        },
+        resyncs: 0,
+        resync() {
+            cells.resyncs += 1
+        }
+    }
     const device = new Z80Device({
         write: (text) => {
             output += text
@@ -45,6 +60,7 @@ function makeDevice() {
         screen,
         keyboard,
         mouse,
+        cells,
         onGraphicalUse: () => {
             graphicalUses += 1
         }
@@ -54,6 +70,7 @@ function makeDevice() {
         screen,
         keyboard,
         mouse,
+        cells,
         get output() {
             return output
         },
@@ -93,7 +110,7 @@ describe('Z80Device port decoding', () => {
         expect(Z80Device.portNameOf(Z80_PORTS.CHAR)).toBe('CHAR')
         expect(Z80Device.portNameOf(busAddress(Z80_PORTS.WORD, 0x12))).toBe('WORD')
         expect(Z80Device.portNameOf(busAddress(Z80_PORTS.MOUSE_X, 2))).toBe('MOUSE_X')
-        expect(Z80Device.portNameOf(0x50)).toBeUndefined()
+        expect(Z80Device.portNameOf(0x00)).toBeUndefined()
     })
 
     it('groups the ports the way the documentation does', () => {
@@ -115,9 +132,12 @@ describe('Z80Device port decoding', () => {
 
     it('reads an empty bus and drops writes on ports with nothing attached', () => {
         const { device, output } = makeDevice()
-        expect(device.readPort(0x50)).toBe(Z80_UNCONNECTED_PORT_VALUE)
-        device.writePort(0x50, 0x41)
+        expect(device.readPort(0x60)).toBe(Z80_UNCONNECTED_PORT_VALUE)
+        device.writePort(0x60, 0x41)
         expect(output).toBe('')
+        //port 0 is deliberately one of them: it is the TRS-80's joystick, and a program polling it
+        //expects exactly this floating-high answer (ADR 0011, ADR 0020)
+        expect(device.readPort(0x00)).toBe(Z80_UNCONNECTED_PORT_VALUE)
     })
 })
 
@@ -536,5 +556,64 @@ describe('Z80Device write-only and read-only ports', () => {
         const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
         for (let port = 0; port < 256; port++) expect(() => device.readPort(port)).not.toThrow()
         spy.mockRestore()
+    })
+})
+
+/**
+ * The two Screen modes through the port map
+ * ([ADR 0020](../../../../docs/adr/0020-mirror-the-trs80-display-in-guest-memory.md)). What the
+ * memory-mapped display does with the memory it mirrors is `Trs80Devices`' half; this is what the
+ * ports do once it is on.
+ */
+describe('Z80 screen modes', () => {
+    it('switches with the two mode commands and starts on the drawing one', () => {
+        const { device, cells } = makeDevice()
+        expect(cells.isEnabled).toBe(false)
+        device.writePort(Z80_PORTS.SCREEN_COMMAND, Z80_SCREEN_COMMANDS.MODE_CELLS)
+        expect(cells.isEnabled).toBe(true)
+        device.writePort(Z80_PORTS.SCREEN_COMMAND, Z80_SCREEN_COMMANDS.MODE_DRAWING)
+        expect(cells.isEnabled).toBe(false)
+    })
+
+    it('names the drawing command that the memory-mapped display has no room for', () => {
+        const { device } = makeDevice()
+        device.writePort(Z80_PORTS.SCREEN_COMMAND, Z80_SCREEN_COMMANDS.MODE_CELLS)
+        expect(() => draw(device, Z80_SCREEN_COMMANDS.PIXEL)).toThrow(/PIXEL/)
+        expect(() => draw(device, Z80_SCREEN_COMMANDS.CLEAR)).toThrow(/0x3C00/)
+        expect(() => device.readPort(Z80_PORTS.SCREEN_PIXEL)).toThrow(/pixel-color/)
+        expect(() => device.writePort(Z80_PORTS.SCREEN_CURSOR_ROW, 0)).toThrow(/text cursor/)
+        //a command number nothing decodes is dropped in either mode, as an unconnected port is
+        expect(() => device.writePort(Z80_PORTS.SCREEN_COMMAND, 99)).not.toThrow()
+    })
+
+    it('repaints the cells when the ink or the paper changes', () => {
+        const { device, cells, screen } = makeDevice()
+        device.writePort(Z80_PORTS.SCREEN_COMMAND, Z80_SCREEN_COMMANDS.MODE_CELLS)
+        const before = cells.resyncs
+        device.writePort(Z80_PORTS.SCREEN_PEN_COLOR, 0xe0)
+        expect(cells.resyncs).toBe(before + 1)
+        //the fill port is the paper of a cell display, so it adopts the background with it
+        device.writePort(Z80_PORTS.SCREEN_FILL_COLOR, 0x03)
+        expect(cells.resyncs).toBe(before + 2)
+        expect(screen.backgroundColor).toBe(expandColor(0x03))
+    })
+
+    it('keeps console output in the transcript, off a display that has no text cursor', () => {
+        const view = makeDevice()
+        view.device.writePort(Z80_PORTS.SCREEN_COMMAND, Z80_SCREEN_COMMANDS.MODE_CELLS)
+        view.device.writePort(Z80_PORTS.CHAR, 0x41)
+        view.device.echo('A')
+        expect(view.output).toBe('A')
+        //nothing was drawn: on this machine printing is storing a byte, which is the program's job
+        expect(view.screen.history.sequence).toBe(0)
+    })
+
+    it('leaves console reads on the prompt, the only view of typing a cell display has', () => {
+        const view = makeDevice()
+        view.device.writePort(Z80_PORTS.SCREEN_COMMAND, Z80_SCREEN_COMMANDS.MODE_CELLS)
+        //a screen port, which is what makes a run graphical for every other Z80 program (ADR 0009)
+        view.device.writePort(Z80_PORTS.SCREEN_PEN_COLOR, 0xff)
+        expect(view.graphicalUses).toBe(0)
+        expect(view.device.isGraphical).toBe(false)
     })
 })

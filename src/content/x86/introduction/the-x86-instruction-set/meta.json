@@ -1,0 +1,6 @@
+{
+    "name": "The x86 instruction set",
+    "description": "How x86 mnemonics combine register, immediate, and memory operands, how widths select operation sizes, and how to check the forms each instruction supports.",
+    "order": 4,
+    "topic": "instruction-set"
+}

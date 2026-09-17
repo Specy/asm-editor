@@ -25,6 +25,7 @@ function request(overrides: Partial<ExecutionSliceRequest> = {}): ExecutionSlice
         instructionBudget: 1_000_000,
         timeBudgetMs: COMPUTE_SLICE_MS,
         breakpoints: [],
+        skipBreakpointAtPc: true,
         runInstructionLimit: 1_000_000,
         speedCorrection: 1
     }

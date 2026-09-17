@@ -1,41 +1,80 @@
-Two numbers go into registers, the program works out the perimeter of the rectangle they describe,
-and the answer stays in `$t2`. Nothing is read from memory and nothing branches: every value is in a
-register from the first instruction to the last, which is what the registers panel next to the
-program shows you.
-
-This is the first program of the ladder, and the ones after it are built out of the same two steps:
-a number into a register, and an instruction that reads two registers and writes a third.
-
-**You need to know:** the "Getting started with MIPS" lecture and the "The 32 registers and their
-names" lecture. What is new here is the destination being an operand of its own, so an `add` can
-leave both of the numbers it read exactly as they were.
+This program loads a width and height, computes the rectangle's perimeter in another register, and
+keeps both inputs unchanged. Select **Build**, then use **Step** to watch each destination register
+change.
 
 ```mips|playground|allow-open
 .text
 main:
-    li $t0, 30          # width = 30
-    li $t1, 12          # height = 12
-    add $t2, $t0, $t1   # half = width + height
-    add $t2, $t2, $t2   # perimeter = half + half
+    li   $t0, 30          # width
+    li   $t1, 12          # height
+    add  $t2, $t0, $t1   # width + height
+    add  $t2, $t2, $t2   # perimeter = 2 * (width + height)
 
-    move $t3, $t2       # a copy of the answer
-    add $t4, $t2, $zero # the same copy, written out
-    sub $t5, $t0, $t1   # how much wider than tall it is
+    move $t3, $t2         # copy the perimeter
+    add  $t4, $t2, $zero  # copy it again with addition
+    sub  $t5, $t0, $t1   # width - height
+
+    li   $v0, 10          # exit
+    syscall
 ```
 
-`li $t0, 30` puts the number 30 into `$t0`, and there is no `#` in front of it: an operand that is a
-number is a number, and an operand that is a register has a `$`. The two `add` instructions are one
-C line, `perimeter = 2 * (width + height)`, and `add $t2, $t2, $t2` adds a register to itself, which
-is how you double a number without a multiplication.
+Arithmetic instructions use the destination-first shape
+`instruction destination, source, source`. The first `add` reads `$t0` and `$t1` but writes only
+`$t2`, so the original width and height remain available. The second `add` doubles their sum.
 
-The M68K writes that pair as a copy and two adds, because an `add.l d1, d0` has two operands and one
-of them has to be the destination. Here the destination is named separately, so `add $t2, $t0, $t1`
-leaves 30 in `$t0` and 12 in `$t1` and nothing else moves.
+`move $t3, $t2` and `add $t4, $t2, $zero` are equivalent copy idioms here: each reads `$t2` and
+writes the same value to a different destination. `move` is a pseudo-instruction; treat it as a
+clear request to copy, without assuming one exact assembler expansion.
 
-`$t2`, `$t3` and `$t4` all come out at `00000054`, which is 84. `move $t3, $t2` is a
-pseudo-instruction and the line under it is what the assembler turns it into: adding `$zero`, which
-always reads 0, copies a register.
+Subtraction makes source order visible. `sub $t5, $t0, $t1` means `$t5 = $t0 - $t1`, so swapping
+the last two operands would produce `12 - 30 = -18` instead.
 
-Try changing `sub $t5, $t0, $t1` to `sub $t5, $t1, $t0`. `$t5` comes out at `FFFFFFEE` instead of
-`00000012`, which is -18: the order of the two operands after the destination decides which way
-round the subtraction goes, and the registers panel shows you the bits either way.
+Once the program stops after the exit syscall, the registers panel shows these useful values:
+
+| Register | Meaning             | Decimal |          Hex |
+| -------- | ------------------- | ------: | -----------: |
+| `$t0`    | width, preserved    |      30 | `0x0000001E` |
+| `$t1`    | height, preserved   |      12 | `0x0000000C` |
+| `$t2`    | perimeter           |      84 | `0x00000054` |
+| `$t3`    | copied perimeter    |      84 | `0x00000054` |
+| `$t4`    | copied perimeter    |      84 | `0x00000054` |
+| `$t5`    | width minus height  |      18 | `0x00000012` |
+| `$v0`    | exit service number |      10 | `0x0000000A` |
+
+Now compute the same two results for inputs supplied by the test: leave the perimeter in `$t2` and
+`$t0 - $t1` in `$t3`, while preserving `$t0` and `$t1`. Predict the four data values before you
+select **Test**. After it passes, choose another input pair by editing `startingRegisters` in the
+testcase, update the four data values in `expectedRegisters`, and select **Test** again.
+
+```mips|playground|exercise
+.text
+main:
+    # $t0 and $t1 are supplied by the test.
+    # Compute the perimeter in $t2 and $t0 - $t1 in $t3.
+
+    li   $v0, 10
+    syscall
+```
+
+```testcase
+{
+    "startingRegisters": { "$t0": 7, "$t1": 4 },
+    "expectedRegisters": { "$t0": 7, "$t1": 4, "$t2": 22, "$t3": 3, "$v0": 10 }
+}
+```
+
+<details>
+<summary>Show solution</summary>
+
+```mips|playground|solution
+.text
+main:
+    add  $t2, $t0, $t1
+    add  $t2, $t2, $t2
+    sub  $t3, $t0, $t1
+
+    li   $v0, 10
+    syscall
+```
+
+</details>

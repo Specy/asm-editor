@@ -2,14 +2,6 @@ Forty bytes of room are reserved in memory and a loop writes the numbers 1 to 10
 per pass. The answer is in the memory panel: type `10010000` in its address box and the ten words
 are there, `00000001` to `0000000A`.
 
-The bigger of two numbers ran a fixed handful of instructions. This is the first program that runs
-the same four instructions over and over, and the first one that writes into memory the assembler
-put nothing in.
-
-**You need to know:** the "Loops" lecture and the ".data, .text and directives" lecture. What is new
-here is that the destination of a `sw` is an address held in a register, `0(t0)` writes the word
-where `t0` points and the `addi` under it moves `t0` on to the next element.
-
 ```riscv|playground|memory|allow-open
 .eqv COUNT, 10
 
@@ -18,40 +10,41 @@ numbers: .space 40      # ten words, four bytes each
 
 .text
 main:
-    la t0, numbers      # p points at the first element
-    li t1, 1            # n = 1
-    li t2, COUNT        # ten of them to write
+    la t0, numbers      # where to write next
+    li t1, 1            # what to write
+    li t2, COUNT        # how many still to go
 fill:
-    sw t1, 0(t0)        # *p = n
-    addi t0, t0, 4      # step p on to the next word
-    addi t1, t1, 1      # n++
+    sw t1, 0(t0)        # write it
+    addi t0, t0, 4      # step on to the next word
+    addi t1, t1, 1      # next number
     addi t2, t2, -1     # one less to go
     bnez t2, fill
 ```
 
-`.space 40` reserves forty bytes and writes nothing into them, so before the run the memory panel
-shows zeroes. `la t0, numbers` puts their address in `t0`, and from there the loop only ever talks
-about `0(t0)`, which is C's `*p`.
+Three registers, three jobs, and keeping them apart is the whole trick of the program. `t0` is
+**where**, `t1` is **what**, and `t2` is **how many are left**. Only `t2` decides when to stop. Here
+are all three at the top of each pass:
 
-The `4` in `addi t0, t0, 4` is the size of one element, and it is yours to get right: nothing in
-`sw` knows how far apart the words you are writing should be. Write `8` there instead and the
-numbers land eight bytes apart, with an untouched zero between each pair and the last five written
-past the end of the room that was reserved for them.
+| pass | `t0` (where) | `t1` (what) | `t2` (left) |
+| ---- | ------------ | ----------- | ----------- |
+| 1    | `10010000`   | 1           | 10          |
+| 2    | `10010004`   | 2           | 9           |
+| 3    | `10010008`   | 3           | 8           |
+| ...  | ...          | ...         | ...         |
+| 10   | `10010024`   | 10          | 1           |
+| gone | `10010028`   | 11          | 0           |
 
-Three registers do three different jobs here. `t0` is where to write, `t1` is what to write, and
-`t2` is how many are left, and it is the only one the branch looks at. The M68K writes those last
-two lines as one `dbra`, an instruction that decrements a register and branches in one go; RISC-V
-has nothing of the kind, so the counter is an `addi` and the branch is a `bnez` next to it.
+The last row is the state the program stops in. `t0` and `t1` have both gone one step too far, which
+is normal and harmless: nothing reads them again. `t2` reaching 0 is what let the `bnez` fall
+through.
 
-Counting **down** to zero is why the branch is a `bnez` and not a comparison. `bnez t2, fill` is
-`bne t2, zero, fill` written short, and `zero` costs nothing to read; the count-up version would be
-`blt t1, t3, fill` with the bound sitting in a register of its own, because every RISC-V branch
-compares two registers and none of them takes a constant.
+`sw t1, 0(t0)` writes the word to whatever address `t0` holds, so moving `t0` on by 4 is what turns
+one instruction into ten different destinations. That 4 is the size of a word, and it is yours to
+get right: the store itself has no idea how far apart the things you are storing should be. Put an
+`8` there and the numbers land eight bytes apart, with an untouched zero between each pair, and the
+last five spill past the forty bytes `.space` reserved.
 
-Step through the loop and `t0` climbs by 4 at every `addi`, from `10010000` to `10010028`, while
-`t2` walks down to 0, which is what ended it. `t1` finishes at 11, one past the last number it
-wrote.
-
-Try changing `addi t1, t1, 1` to `addi t1, t1, 2`. The array fills with 1, 3, 5 and the rest of the
-odd numbers up to 19, because the counter that ends the loop and the number being written are two
-different registers doing two different jobs.
+Counting down rather than up is why the last line is a `bnez` and not a comparison. A branch here
+looks at two registers, and `zero` is a register that is always available and always reads 0, so
+"has this hit zero yet" is free. Counting up to ten would need the 10 loaded into a fourth register
+for the branch to compare against.

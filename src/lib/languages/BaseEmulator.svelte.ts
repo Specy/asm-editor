@@ -2,11 +2,13 @@ import {
     type Diagnostic,
     type EmulatorDecoration,
     type ExecutionStep,
+    type RegisterFileDescriptor,
     RegisterSize,
     type StackFrame
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import type { ExecutionSlice, ExecutionSliceRequest } from '$lib/languages/ExecutionSlice'
 import type { Testcase } from '$lib/Project.svelte'
+import type { BuildSources } from '$lib/projectFiles'
 
 type MaybePromise<T> = T | PromiseLike<T>
 
@@ -47,6 +49,7 @@ export enum EmulatorStatus {
 export type Instruction = {
     address: bigint
     lineNumber: number
+    file: string
     code: string
 }
 
@@ -55,17 +58,30 @@ export type EmulatorConfig<R extends string> = {
     registerNames: R[]
     endianness?: 'little' | 'big'
     hiddenRegisters?: R[]
+    /**
+     * The Register files this adapter exposes *beyond* the CPU one, which `GenericEmulator` builds
+     * from `registerNames` itself. An adapter that declares any must implement
+     * `_getRegisterFileValues` (and `_getRegisterFileFlags` when a file names flags).
+     */
+    registerFiles?: RegisterFileDescriptor[]
 }
 
 export abstract class BaseEmulator<R extends string> {
     protected _registerNames: R[]
     protected _systemSize: RegisterSize
     protected _endianness: 'little' | 'big'
+    protected _registerFiles: RegisterFileDescriptor[]
 
     constructor(options: EmulatorConfig<R>) {
         this._registerNames = options.registerNames
         this._systemSize = options.systemSize
         this._endianness = options.endianness ?? 'little'
+        this._registerFiles = options.registerFiles ?? []
+    }
+
+    /** The declared Register files other than the CPU one, in the order the panel shows them. */
+    getRegisterFileDescriptors(): RegisterFileDescriptor[] {
+        return this._registerFiles
     }
 
     getSystemSize(): RegisterSize {
@@ -96,9 +112,9 @@ export abstract class BaseEmulator<R extends string> {
      * assembly and therefore have to be told the depth *before* the code is assembled (MIPS).
      * Languages whose core does not care can ignore the parameter.
      */
-    abstract _compile(code: string, undoSize: number): MaybePromise<CompileResult>
+    abstract _compile(sources: BuildSources, undoSize: number): MaybePromise<CompileResult>
 
-    abstract _checkCode(code: string): MaybePromise<Diagnostic[]>
+    abstract _checkCode(sources: BuildSources): MaybePromise<Diagnostic[]>
 
     /** Restores one CPU instruction and its associated peripheral effects. */
     abstract _undo(): void
@@ -137,6 +153,49 @@ export abstract class BaseEmulator<R extends string> {
     abstract _getRegisterValue(register: R, size?: RegisterSize): bigint
 
     abstract _setRegisterValue(register: R, value: bigint, size?: RegisterSize): void
+
+    /**
+     * The values of one declared Register file, as unsigned bit patterns in the order the
+     * descriptor lists its registers. Called once per file per panel refresh, so an adapter reads
+     * the whole file out of its Core in one flat call
+     * ([ADR 0021](../../../docs/adr/0021-register-files-from-core-exports.md)) instead of a call
+     * per register. Required of any adapter that declares a file, and it has to be a method rather
+     * than a field holding an arrow function: `GenericEmulator` builds the files from its own
+     * constructor, which runs before a subclass's field initialisers, so a hook written as a
+     * property is still undefined at the moment it is demanded.
+     */
+    _getRegisterFileValues?(id: string): bigint[]
+
+    /**
+     * The Status flags of one declared Register file, in `flagNames` order. `prev` is optional: a
+     * Core that does not remember the previous value leaves it out and `GenericEmulator` diffs
+     * against what the flag held at the last refresh, as it does for a register. Required of any
+     * adapter whose files name flags, and refused at construction when one of them does not, so it
+     * has to be a method and not an arrow-function field for the same reason as the one above.
+     */
+    _getRegisterFileFlags?(id: string): { name: string; value: number; prev?: number }[]
+
+    /**
+     * Which registers of one declared Register file hold no value at this refresh, in descriptor
+     * order, for a file whose registers can be empty rather than zero: the x87 stack, whose tag
+     * word says which slots are live. Optional; a file that never blanks needs nothing.
+     */
+    _getRegisterFileBlanks?(id: string): boolean[]
+
+    /** Writes one register of a declared Register file, named as the descriptor names it. */
+    _setRegisterFileValue?(id: string, register: string, value: bigint): void
+
+    /**
+     * Opens the Core's Poke transaction ([ADR 0022](../../../docs/adr/0022-core-native-poke-records.md)):
+     * everything written through `_setRegisterValue`, `_setRegisterFileValue` and
+     * `_writeMemoryBytes` until `_endPoke` is journaled as one entry of the Core's own Undo
+     * history, instead of being the direct write those setters are outside a transaction, which is
+     * what a Testcase's starting values rely on.
+     */
+    abstract _beginPoke(): void
+
+    /** Closes it, answering whether the Core recorded an entry (a history of 0 records nothing). */
+    abstract _endPoke(): boolean
 
     abstract _hasTerminated(): boolean
 

@@ -1,6 +1,6 @@
 {
     "name": "Compare and branch",
-    "description": "cmp subtracts and keeps the flags, and one of fourteen conditional branches reads them. The operand order that decides what your comparison means, the signed and unsigned families, and the instruction between the two that quietly breaks it.",
+    "description": "Use CCR flags to guide control flow with bra and conditional branches. Compare signed and unsigned values, test zero, and build forward if and if/else shapes.",
     "order": 0,
     "topic": "branching"
 }

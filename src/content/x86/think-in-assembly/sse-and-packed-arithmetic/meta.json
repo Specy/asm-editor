@@ -1,0 +1,6 @@
+{
+    "name": "SSE2 scalar and packed arithmetic",
+    "description": "Use x86-64's 128-bit XMM registers for scalar and packed binary floating-point arithmetic, conversions, comparisons, and ordinary System V calls.",
+    "order": 7,
+    "topic": "sse"
+}

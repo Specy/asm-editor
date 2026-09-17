@@ -9,6 +9,7 @@ import {
     Z80_PORT_GROUP_DOCS,
     Z80_SCREEN_COMMAND_DOCS
 } from '$lib/languages/Z80/Z80-model'
+import { TRS80_KEY_ROW_DOCS, TRS80_MEMORY_DOCS } from '$lib/languages/Z80/trs80/trs80Display'
 import {
     DEFAULT_PROJECT_DISPLAY,
     formatMarsBaseAddress,
@@ -36,24 +37,28 @@ export const DEFAULT_CODING_AGENT_WORKFLOW_DEFINITIONS = {
             'why is my code wrong'
         ],
         requiredTools: [
-            'get_code',
+            'list_files',
+            'view_file',
             'compile',
-            'update_breakpoints',
+            'list_breakpoints',
+            'set_breakpoint',
+            'remove_breakpoint',
             'run_to_completion',
             'step',
             'get_emulator_state',
-            'set_code'
+            'replace_file_content',
+            'write_to_file'
         ],
         verification:
             'Re-run or step the corrected region and compare stdout/registers/memory with the expected behavior.',
         description: `When the user says something is broken, produces the wrong result, crashes, or behaves unexpectedly.
-1. Call get_code to read the current editor contents and breakpoints.
-2. Compile first. If there are assembler errors and set_code is available, fix those before debugging runtime behavior.
+1. Use list_files or view_file to inspect project files. Use start_line and end_line with view_file to read specific regions (up to 150 lines per call).
+2. Compile first. If there are assembler errors, fix them with replace_file_content (or write_to_file) before debugging runtime behavior.
 3. State one concrete hypothesis about the wrong line or region.
-4. Set a breakpoint just before or inside the suspected region, then run_to_completion to reach it.
+4. Set a breakpoint just before or inside the suspected region (specifying path for multi-file). Call list_breakpoints to verify where breakpoints are placed and see the surrounding instructions, then run_to_completion to reach it.
 5. Step through the region and use returned latestSteps, registers, stdout, flags, and memory to test the hypothesis.
 6. If you overshoot, use undo and step 1 to re-observe the mutation.
-7. Explain the bug using observed values, then patch with set_code and verify the behavior.`
+7. Explain the bug using observed values, then patch with replace_file_content (specifying exact target_content and replacement_content) and verify the behavior.`
     },
     write_new_code_from_scratch: {
         name: 'Write new code from scratch',
@@ -68,13 +73,13 @@ export const DEFAULT_CODING_AGENT_WORKFLOW_DEFINITIONS = {
             'from scratch',
             'show me code'
         ],
-        requiredTools: ['set_code', 'compile', 'run_to_completion', 'step'],
+        requiredTools: ['write_to_file', 'compile', 'run_to_completion', 'step'],
         verification:
             'For examples/snippets, compile only and report assembler validity; do not run or step unless the user explicitly asks for execution.',
         description: `When the user asks for a fresh program or snippet.
 1. Pick the requested language, or choose the best supported language when the user leaves it open.
-2. Start from the matching template in <templates> and call set_code with the complete program.
-3. If set_code reports compile_error, fix the code before explaining it.
+2. Start from the matching template in <templates> and call write_to_file with the complete program.
+3. If write_to_file reports compile_error, fix the code before explaining it.
 4. Compile and report whether it is valid.
 5. Do not call run_to_completion or step for examples/snippets unless the user explicitly asks to execute/debug it.
 6. If the user explicitly asks to execute/debug, compile first, then use run_to_completion or step and validate behavior.`
@@ -96,13 +101,21 @@ export const DEFAULT_CODING_AGENT_WORKFLOW_DEFINITIONS = {
             'insert this into the program',
             'add a feature to the current program'
         ],
-        requiredTools: ['get_code', 'set_code', 'compile', 'run_to_completion', 'step'],
+        requiredTools: [
+            'list_files',
+            'view_file',
+            'replace_file_content',
+            'write_to_file',
+            'compile',
+            'run_to_completion',
+            'step'
+        ],
         verification:
             'If behavior changed, run or step the changed path. Syntax alone is not enough.',
         description: `When the user asks to add, change, or refactor code already in the editor.
-1. Call get_code first.
+1. Call list_files or view_file first to inspect existing code. Use start_line and end_line to read the relevant lines.
 2. Make the smallest complete edit that satisfies the request. Preserve unrelated labels, comments, data, and structure.
-3. Call set_code with the full updated program.
+3. Call replace_file_content with the exact target_content to replace and replacement_content. Use write_to_file if creating a new file.
 4. Compile before calling run_to_completion or step.
 5. If behavior changed, verify with run_to_completion or step. If verification fails, debug before reporting success.`
     },
@@ -180,7 +193,7 @@ function renderWorkflowInstructions(enabledWorkflows: AgentWorkflow[]) {
 }
 
 function renderTemplates(enabledToolNames: DefaultCodingAgentToolName[]) {
-    if (!hasTool(enabledToolNames, 'set_code')) return ''
+    if (!hasTool(enabledToolNames, 'write_to_file')) return ''
 
     const initialCodes = Object.entries(BASE_CODE)
         .map(([language, code]) => `\`\`\`${language}\n${code}\n\`\`\``)
@@ -194,47 +207,150 @@ ${initialCodes}
 }
 
 function renderCorePrinciples(enabledToolNames: DefaultCodingAgentToolName[]) {
-    const canSetCode = hasTool(enabledToolNames, 'set_code')
-    const canUpdateBreakpoints = hasTool(enabledToolNames, 'update_breakpoints')
+    const canEditCode =
+        hasTool(enabledToolNames, 'replace_file_content') ||
+        hasTool(enabledToolNames, 'write_to_file')
+    const canManageBreakpoints =
+        hasTool(enabledToolNames, 'set_breakpoint') ||
+        hasTool(enabledToolNames, 'remove_breakpoint') ||
+        hasTool(enabledToolNames, 'list_breakpoints')
 
     return [
         '- Observe before claiming. When diagnosing behavior, use emulator tools to inspect actual registers, flags, stdout, memory, pc, and latestSteps.',
-        canSetCode
-            ? '- Preserve user work. Before changing existing code, call get_code. Never replace unrelated code unless the user explicitly asks for a rewrite.'
+        canEditCode
+            ? '- Preserve user work. Before changing existing code, call view_file (or list_files). Never replace unrelated code or files unless the user explicitly asks for a rewrite.'
             : '- Read-only code context. You cannot edit the editor here; analyze the visible code and suggest changes in chat only.',
-        canSetCode
-            ? '- set_code checks assembler syntax. If it succeeds, do not compile again just for syntax. If behavior matters, run or step and verify observed results.'
+        canEditCode
+            ? '- Code edits: Use replace_file_content for surgical edits (providing exact target_content and replacement_content) and write_to_file for fresh files or full rewrites. Edits check assembler syntax immediately. If an edit succeeds, do not compile again just for syntax. If behavior matters, run or step and verify observed results.'
             : '',
         '- Tool results are authoritative. Do not say the editor changed, the code compiles, or the bug is fixed unless a tool result confirms it.',
         '- Follow tool errorKind and nextAction fields. A compile_error means fix assembler errors; execution_state usually means compile/reset first; emulator_unavailable means wait or explain that the emulator is still loading.',
-        canUpdateBreakpoints
-            ? '- Use breakpoints as inspection points. The emulator stops at the breakpoint line before executing that instruction. Breakpoints only work on lines with executable instructions; comments/empty lines/non-instruction lines will not stop execution.'
+        canManageBreakpoints
+            ? '- Use breakpoints as inspection points. Set breakpoints with set_breakpoint (by instruction, address, or line) and remove them with remove_breakpoint. Inspect active breakpoints with list_breakpoints (which shows surrounding instructions). The emulator stops at the breakpoint line before executing that instruction. Specify the file path when working with multiple files.'
             : ''
     ]
         .filter(Boolean)
         .join('\n')
 }
 
+/**
+ * The Register files the emulators expose
+ * ([the design record](../../../../../docs/design/register-files.md)), as one tip beside the other
+ * register guidance: the model has to know the other files exist and that a float one reads as a
+ * number before it can ask for them. Example names rather than full lists, since the file it opens
+ * comes back naming its own registers. Which tool holds the complete state and which ones
+ * abbreviate it is written from the allow list, as the neighbouring tips are, so the tip never
+ * sends the model to a tool it does not have.
+ */
+function renderRegisterFileInformation(enabledToolNames: DefaultCodingAgentToolName[]) {
+    const abbreviating = (['step', 'run_to_completion', 'undo'] as const).filter((name) =>
+        hasTool(enabledToolNames, name)
+    )
+    const listed =
+        abbreviating.length > 1
+            ? `${abbreviating.slice(0, -1).join(', ')} and ${abbreviating[abbreviating.length - 1]}`
+            : abbreviating[0]
+    //the sentence names as many tools as the allow list holds, so both of its verbs follow the
+    //count: the subject is one tool, or two of them, or all three
+    const several = abbreviating.length > 1
+    const listVerb = several ? 'list' : 'lists'
+    const skipVerb = several ? 'skip' : 'skips'
+    const whereTheStateIs = [
+        abbreviating.length
+            ? `${listed} ${listVerb} only the registers that are not zero, plus the even half of a live MIPS double pair, and ${skipVerb} a row that holds nothing, such as an empty x87 stack slot`
+            : '',
+        hasTool(enabledToolNames, 'get_emulator_state')
+            ? 'get_emulator_state lists every file in full, where a row that holds nothing reads empty'
+            : ''
+    ].filter(Boolean)
+
+    return [
+        "- Register files: registers is the CPU file, and registerFiles holds the language's other files.",
+        'MIPS has FPU ($f0 to $f31, with condition flags) and CP0; RISC-V has FPU (ft0, fa0, fs0 and the rest of f0 to f31) and CSR (fcsr, cycle, instret and more); x86 has SSE (xmm0 to xmm15) and x87 (st0 to st7).',
+        'A float register reads as a decimal such as 3.5, a wide one as its lanes, with the raw hex and the other precision in other; integer registers such as mxcsr keep the usual decimal/hex shape.',
+        whereTheStateIs.length ? `${whereTheStateIs.join('; ')}.` : ''
+    ]
+        .filter(Boolean)
+        .join(' ')
+}
+
+/**
+ * Pokes ([the design record](../../../../../docs/design/pokes.md)), as one paragraph beside the
+ * other execution guidance: a Poke is the debugger changing a value the program is about to read,
+ * it is a step of the same history the instructions are in, and it has two things it never writes.
+ * Written from the allow list like the neighbouring tips, so it names only the tools the agent has.
+ */
+function renderPokeInformation(enabledToolNames: DefaultCodingAgentToolName[]) {
+    const poking = (['poke_register', 'poke_memory'] as const).filter((name) =>
+        hasTool(enabledToolNames, name)
+    )
+    const listed = poking.length > 1 ? poking.join(' and ') : poking[0]
+    const verb = poking.length > 1 ? 'change' : 'changes'
+
+    return [
+        `- Pokes: ${listed} ${verb} a value of the paused program between two instructions, which is what a debugger does when it tries a fix without editing the code, reaches a branch the program never takes, or sets up a state that would take many instructions to arrive at.`,
+        'A Poke is one step of the same history the instructions are in: undo reverts it like an instruction, and latestSteps lists it with kind poke and the old and new value of everything it wrote.',
+        'The program counter and the status flags are never pokeable, nor is a register the emulator cannot set such as $zero; poke the values an instruction reads and step to see what it does with them.',
+        'Poke only what you are testing, and say what you poked when you report results: those values are yours, not the program’s.'
+    ].join(' ')
+}
+
 function renderToolSelectionTips(enabledToolNames: DefaultCodingAgentToolName[]) {
     const tips = [
+        hasTool(enabledToolNames, 'list_files')
+            ? '- Use list_files to see all files in the project, their sizes, line counts, and which file is the entry point.'
+            : '',
+        hasTool(enabledToolNames, 'view_file')
+            ? '- view_file accepts path, start_line, and end_line (1-indexed). It returns raw file lines (at most 150 lines per call). Use start_line and end_line to inspect specific regions.'
+            : '',
+        hasTool(enabledToolNames, 'replace_file_content')
+            ? '- replace_file_content performs exact snippet replacement with target_content and replacement_content. Use start_line and end_line bounds to disambiguate if a snippet appears multiple times.'
+            : '',
+        hasTool(enabledToolNames, 'write_to_file')
+            ? '- write_to_file creates a new file or completely writes an existing file. For existing files, prefer replace_file_content to avoid accidental overwrites.'
+            : '',
+        hasTool(enabledToolNames, 'list_breakpoints')
+            ? '- Use list_breakpoints to see all active breakpoints and the surrounding code (previous and next 3 instructions), clearly marking the breakpoint line.'
+            : '',
+        hasTool(enabledToolNames, 'set_breakpoint')
+            ? '- Use set_breakpoint to set breakpoints by instruction text, address, or line number without manual counting.'
+            : '',
+        hasTool(enabledToolNames, 'remove_breakpoint')
+            ? '- Use remove_breakpoint to remove a breakpoint by instruction, address, line, or pass all: true to clear all breakpoints.'
+            : '',
         hasTool(enabledToolNames, 'step') && hasTool(enabledToolNames, 'run_to_completion')
             ? '- step and run_to_completion already return registers, pc, sp, status registers, stdout, current line, and latestSteps. Call get_emulator_state after them only when you need callStack, breakpoints, canUndo, currentInterrupt, or a full refresh.'
+            : '',
+        hasTool(enabledToolNames, 'get_emulator_state') ||
+        hasTool(enabledToolNames, 'step') ||
+        hasTool(enabledToolNames, 'run_to_completion') ||
+        hasTool(enabledToolNames, 'undo')
+            ? renderRegisterFileInformation(enabledToolNames)
             : '',
         hasTool(enabledToolNames, 'read_memory')
             ? '- Use read_memory only when register/stdout state is insufficient, such as inspecting arrays, strings, the stack, or data sections.'
             : '',
+        hasTool(enabledToolNames, 'poke_register') || hasTool(enabledToolNames, 'poke_memory')
+            ? renderPokeInformation(enabledToolNames)
+            : '',
         hasTool(enabledToolNames, 'run_to_completion') &&
-        hasTool(enabledToolNames, 'update_breakpoints')
+        (hasTool(enabledToolNames, 'set_breakpoint') ||
+            hasTool(enabledToolNames, 'list_breakpoints'))
             ? '- run_to_completion respects breakpoints and halts before executing the instruction on the breakpoint line. Set breakpoints on real instruction lines, not comments or blank lines.'
             : '',
         hasTool(enabledToolNames, 'step') && hasTool(enabledToolNames, 'undo')
             ? '- undo plus step 1 is the pattern for re-observing a single mutation.'
             : '',
         hasTool(enabledToolNames, 'get_line_from_address')
-            ? '- Use get_line_from_address to map pc and call stack addresses back to source lines.'
+            ? '- Use get_line_from_address to map pc and call stack addresses back to source lines and files.'
             : '',
         hasTool(enabledToolNames, 'compile')
-            ? `- If canExecute is false, compile before stepping or running${hasTool(enabledToolNames, 'set_code') ? ', or fix compile_error results from set_code' : ''}.`
+            ? `- If canExecute is false, compile before stepping or running${
+                  hasTool(enabledToolNames, 'replace_file_content') ||
+                  hasTool(enabledToolNames, 'write_to_file')
+                      ? ', or fix compile_error results from code edit tools'
+                      : ''
+              }.`
             : ''
     ].filter(Boolean)
 
@@ -276,7 +392,9 @@ const M68K_TRAP_INFORMATION = M68K_TRAP_GROUP_DOCS.map((group) =>
     ].join('\n')
 ).join('\n\n')
 
-/** The tasks that stop the program, so the agent does not reach for one and then debug the error. */
+/**
+ * The tasks that stop the program, so the agent does not reach for one and then debug the error.
+ */
 const M68K_REJECTED_TRAP_INFORMATION = M68K_REJECTED_TRAP_TASKS.map(
     (task) => `${task.task} (${task.title})`
 ).join(', ')
@@ -286,8 +404,21 @@ const Z80_SCREEN_COMMAND_INFORMATION = Z80_SCREEN_COMMAND_DOCS.map(
     (command) => `- ${command.command}: ${command.description}`
 ).join('\n')
 
+/**
+ * The TRS-80's memory-mapped display, which has no ports at all: generated from the same tables the
+ * documentation page renders, so the agent writes stores rather than reaching for a drawing command
+ * that this mode rejects (ADR 0020).
+ */
+const Z80_TRS80_INFORMATION = [
+    ...TRS80_MEMORY_DOCS.map((row) => `- ${row.range} (${row.title}): ${row.description}`),
+    `- Keyboard rows, in order: ${TRS80_KEY_ROW_DOCS.map((keys, row) => `row ${row} is ${keys}`).join('; ')}.`,
+    '- Characters 0x20 to 0x7F are text; 128 to 191 are 2 by 3 blocks of chunky pixels, the low six bits being the blocks, bit 0 top-left then across and down. 191 is solid, 128 is blank.',
+    '- The drawing commands and the text cursor are not available in this mode and stop the program with an error; console output goes to the terminal only. Animate by composing a frame in RAM and copying it in with one `ldir`, which is what this machine does instead of double buffering.',
+    "- Port 0x00 is the machine's joystick and is deliberately not in the editor's port map, so a poll of it reads an empty bus: 0xFF, none attached, which is what the machine answers. Everything else the machine decodes is at 0x75 or above, clear of the ports listed here."
+].join('\n')
+
 function toPortNumber(port: number): string {
-    //the ports are written in hexadecimal everywhere else, and a program writes `out (0x17), a`
+    //the ports are written in hexadecimal everywhere else, and a program writes `out (0x27), a`
     return `0x${port.toString(16).padStart(2, '0').toUpperCase()}`
 }
 
@@ -309,7 +440,7 @@ function MARS_SCREEN_INFORMATION(service: string, argument: string): string {
 }
 
 const EMULATOR_INFORMATION = `# Emulator Information
-The editor supports one editable assembly file, an output-only console and, for M68K, MIPS, RISC-V and Z80, a pixel screen with a keyboard and a mouse. There are no imported ROMs and no produced binaries.
+The editor supports assembly projects with one or more assembly files, an output-only console and, for M68K, MIPS, RISC-V and Z80, a pixel screen with a keyboard and a mouse. There are no imported ROMs and no produced binaries.
 
 ## M68K
 - Uses Easy68K-style syntax and big-endian memory.
@@ -342,8 +473,12 @@ ${MARS_SCREEN_INFORMATION('a7', 'a0')}
 - Ports outside the map are an empty bus: writes are dropped and reads answer 0xFF.
 ${Z80_PORT_INFORMATION}
 
-### Screen commands, written to port 0x17
-${Z80_SCREEN_COMMAND_INFORMATION}`
+### Screen commands, written to port 0x27
+${Z80_SCREEN_COMMAND_INFORMATION}
+
+### The TRS-80 memory-mapped display
+Reached with screen command 14, or before the program starts with a "; @screen trs80" comment line. This is the real machine's interface, so a program written for a TRS-80 elsewhere runs here; use it when the user asks for that machine, and use the ports above otherwise.
+${Z80_TRS80_INFORMATION}`
 
 export function buildDefaultCodingAgentPrompt({
     enabledToolNames,

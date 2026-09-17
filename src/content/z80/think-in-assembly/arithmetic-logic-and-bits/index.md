@@ -1,5 +1,6 @@
-The loops so far counted with `inc` and `add`. Let's now go through everything the Z80 can compute
-with, which is a short list, and then through the two things it cannot do at all.
+Everything the Z80 can compute with fits on one page, and once you have seen the list you have seen
+all of it. Two things you would expect to find are not on it, and the second half of this lecture is
+about writing those two out by hand.
 
 ## Bytes, through the accumulator
 
@@ -73,11 +74,13 @@ it left in the carry, which is a bug that only shows up half the time.
 Adding a byte at a time is the only way when the number is 24 or 32 bits wide: three or four pieces,
 one `add` and then `adc` for the rest.
 
-## No multiplication, no division
+## Multiplying and dividing by hand
 
-The Z80 has **no multiply instruction and no divide instruction**. The M68K has `mulu` and `divu`,
-MIPS and RISC-V have `mul` and `div`, and here you write them out. Both are the algorithm you were
-taught for long multiplication, in base 2 instead of base 10.
+Multiplication and division are the two pieces of school arithmetic the Z80 does not do for you.
+There is no `mul` and no `div`; you write them out, and what you write is the long multiplication
+and long division you were taught at school, done in base 2 instead of base 10. Base 2 makes them
+much easier than they sound, because every digit is either 0 or 1: you are never multiplying by 7,
+only deciding whether to add or not.
 
 Multiplying is shift and add. Look at each bit of the multiplier from the bottom up: if it is 1, add
 the multiplicand to the total, and double the multiplicand every time round.
@@ -115,7 +118,7 @@ skip:
 `hl` reaches `002A`, which is 42, at the end of the loop. Eight times round whatever the numbers are,
 and the answer is 16 bits wide because two bytes multiplied need two bytes.
 
-The five instructions after it multiply by a **constant**, which is much cheaper, because you know
+The eight instructions after it multiply by a **constant**, which is much cheaper, because you know
 the bits in advance and `add hl, hl` doubles a pair in one instruction. Ten is eight plus two, so
 `hl` comes out at `00FA`, which is 250, and the same trick works for any constant: write it as a sum
 of powers of two.
@@ -144,7 +147,7 @@ fine for dividing by 7 and slow for dividing by 2; dividing by a power of two is
 
 ## Logic, masks and single bits
 
-`and`, `or` and `xor` are C's `&`, `|` and `^`, one bit position at a time with no carrying between
+`and`, `or` and `xor` work one bit position at a time, with no carrying between
 them, and `cpl` is `~`. All four work on `a`.
 
 A **mask** is a number written for the pattern of its bits, and the three operators are the three
@@ -185,9 +188,8 @@ The four instructions after it are the ones that work on a single bit:
 - **`res n, r`** forces it to 0.
 
 All three take `n` from 0 to 7, any 8 bit register, `(hl)` or `(ix+dd)`, and none of them touches the
-carry. In C they are `x & (1 << n)`, `x |= (1 << n)` and `x &= ~(1 << n)`, and the Z80 does each in
-one instruction with the bit number written into the opcode. `d` comes out at `08` and `e` at `01`.
-Try changing `bit 0, a` to `bit 5, a` and watch `Z` go to 1, since bit 5 is clear.
+carry. The bit number is part of the instruction itself, not a value in a register, so `bit 3, a`
+and `bit 5, a` are two different instructions and neither of them costs a mask or a shift.
 
 ## Shifts
 
@@ -224,7 +226,7 @@ the high half is, because the carry has to be produced before the instruction th
 `add hl, hl` doubles a pair in one instruction and is what you write when it is `hl` you are
 doubling.
 
-## Your turn
+## Two sums to write
 
 The test starts `a` at 25. Leave `a` times 10 in `hl`, which is 250, or `00FA`. No loop is needed,
 `add hl, hl` and one saved copy will do it.

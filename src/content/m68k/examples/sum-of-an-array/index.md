@@ -2,12 +2,9 @@ Six numbers are written into memory by the assembler, and the program adds them 
 total in `d0`. There is one loop, it runs a fixed number of times and there is no condition inside
 it, so the thing to look at is how the program gets from one number to the next.
 
-An array does not fit in the registers and its elements have no names of their own, so the program
-keeps the address of the next element in an address register and increments it as it goes.
-
-**You need to know:** the "Loops and dbra" lecture and the "Arrays, strings and `(a0)+`" lecture.
-What is new here is walking memory with a pointer, `(a0)` reads the memory `a0` points at and `(a0)+`
-reads it and then steps `a0` forward by the size of the read.
+An array does not fit in the registers, and its elements have no names of their own. What the program
+keeps instead is the address of the next one, in an address register, and moves that along as it
+goes.
 
 ```m68k|playground|memory|no-flags|allow-open
     lea numbers, a0     ; a0 points at the first number
@@ -26,6 +23,6 @@ time round. They sit at `$1014`, right after the code, on the first page the mem
 Step through the loop and you can watch `a0` grow by two at every `add.w`, and when the program stops
 `d0` holds 108.
 
-Try adding a seventh number to the `dc.w` line. `d0` still comes out at 108, because `count` is what
-the loop counts with and you did not touch it. Change `count equ 6` to `count equ 7` and it adds the
-new one too.
+Add a seventh number to the `dc.w` line and run it. `d0` still comes out at 108. The loop counts with
+`count`, not with the array, and nothing anywhere checks that the two agree, so the seventh number is
+simply never read. Change `count equ 6` to `count equ 7` and it is.

@@ -1,0 +1,6 @@
+{
+    "name": "The 16 registers and their halves",
+    "description": "The sixteen general-purpose integer register families, their overlapping 64-, 32-, 16-, and 8-bit names, and how narrow writes affect the remaining bits.",
+    "order": 1,
+    "topic": "registers"
+}

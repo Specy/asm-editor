@@ -1,64 +1,120 @@
-A program is instructions and the data they work on, and something has to say which lines are which.
-The M68K assembler has no answer to that: it walks your source from top to bottom and puts each line
-at the next free address. RISC-V has **sections**, so the two are separated by name and land in
-different parts of memory.
+An assembly source file contains instructions, data declarations and assembler directives. Data
+declarations describe bytes the program will use. Directives guide the assembler as it arranges code
+and data.
 
-## .data and .text
+It is useful to separate four jobs a line can do:
 
-`.data` opens a data section and `.text` opens a code section. Everything after one of them belongs
-to it until the next one, and the assembler collects all the `.data` in your file into one block and
-all the `.text` into another.
+| kind of line              | example          | what it does                                    |
+| ------------------------- | ---------------- | ----------------------------------------------- |
+| instruction               | `addi t0, t0, 1` | becomes code that the processor executes        |
+| data declaration          | `.word 25`       | asks the assembler to place bytes in memory     |
+| label                     | `total:`         | gives an address a name                         |
+| other assembler directive | `.text`          | guides assembly without becoming an instruction |
 
-- **`.text`** goes at `0x00400000`, four bytes per instruction.
-- **`.data`** goes at `0x10010000`, as many bytes as each directive asks for.
+An **assembler directive** is a command for the assembler. Directives begin with a dot. Some, such
+as `.word`, create data bytes. Others, such as `.text`, control how the source file is assembled.
+The processor does not fetch or execute directives.
 
-`.data 0x10000000` with an address after it puts that section somewhere else, which is what a
-program that wants its data at a fixed place does.
+## The text and data sections
 
-```riscv|playground|memory
-.eqv COUNT, 4
+Instructions and static data occupy separate regions of memory. A **section** identifies the region
+for the following lines:
 
+- `.text` begins a text section, where instructions are assembled.
+- `.data` begins a data section, where static data is laid out.
+
+The section lasts until another section directive changes it. A file can switch between the two,
+although putting data first and text second is usually easiest to read.
+
+Code and data are both stored as bits. In this editor, the text region holds instructions and the
+data region provides storage for loads and stores. Branches can target instruction labels in `.text`.
+
+The addresses below belong to this editor's 32-bit RISC-V simulator. They are its chosen memory
+layout, not addresses required by the RISC-V instruction set:
+
+| section | first address in this simulator |
+| ------- | ------------------------------- |
+| `.text` | `0x00400000`                    |
+| `.data` | `0x10010000`                    |
+
+Labels normally save you from writing either address yourself.
+
+## Labels name places
+
+You have already used a label as the destination of a branch. The same notation names data:
+
+```riscv
 .data
-message: .asciz "Hi"
-         .align 2
-numbers: .word 10, 20, 30, 40
-buffer:  .space 8
+score:   .word 25
+letters: .byte 65, 66, 67
 
 .text
-.globl main
 main:
-    la t0, message
-    la t1, numbers
-    la t2, buffer
-    li t3, COUNT
-    li a7, 10           # service 10: end the program
-    ecall
+    la t0, score
+    la t1, letters
 ```
 
-`t0` comes out at `10010000`, `t1` at `10010004` and `t2` at `10010014`. Open the memory panel at
-`10010000` and the first bytes are `48 69 00 00`, the two characters of `"Hi"`, its terminator and
-the byte the `.align 2` skipped over.
+`score` is the address where the word begins, and `letters` is the address of the first byte. In the
+text section, `main` is the address of the instruction after it. A label creates no bytes or
+instruction. It gives a name to the address of whatever comes next.
 
-That is the shape of every RISC-V program in this course: constants at the top, a data section, then
-a text section with `main` in it and an `ecall` at the end.
+`la` places such an address in a register. Read the word at `score` with a load:
 
-## The data directives
+```riscv
+la t0, score
+lw t1, 0(t0)
+```
 
-| directive           | what it writes                                         |
-| ------------------- | ------------------------------------------------------ |
-| `.word 1, 2, 3`     | one 4 byte word per value, aligned to a multiple of 4  |
-| `.dword 1, 2`       | one 8 byte value each, which "Going 64-bit" uses       |
-| `.half 1, 2`        | one 2 byte half per value, aligned to a multiple of 2  |
-| `.byte 1, 2, 3`     | one byte per value, anywhere                           |
-| `.ascii "Hi"`       | the characters, with **no** terminator                 |
-| `.asciz "Hi"`       | the characters and a zero byte after them              |
-| `.string "Hi"`      | another name for `.asciz`                              |
-| `.space 8`          | that many bytes, left at zero and not aligned          |
-| `.align n`          | moves the next thing up to a multiple of 2 to the `n`  |
-| `.float`, `.double` | floating point numbers, which this course does not use |
+After these two instructions, `t0` holds the address of `score` and `t1` holds the value 25.
 
-The spelling is `.asciz`, with one `i` and one `z`. MIPS writes `.asciiz`, and a program moved
-between the two assemblers trips over that line first.
+## Directives that create data
+
+These common data directives are useful reference material.
+
+| directive       | bytes it asks the assembler to place                     |
+| --------------- | -------------------------------------------------------- |
+| `.byte 1, 2, 3` | one byte for each value                                  |
+| `.half 1, 2`    | one two-byte halfword for each value                     |
+| `.word 1, 2`    | one four-byte word for each value                        |
+| `.space 8`      | eight reserved bytes, initially zero in this editor      |
+| `.ascii "Hi"`   | the bytes for `H` and `i`, with no byte added after them |
+| `.asciz "Hi"`   | the bytes for `H` and `i`, followed by a zero byte       |
+
+Values separated by commas are placed one after another. Multi-byte numbers use little-endian byte
+order. For example, `.word 0x11223344` appears in increasing memory addresses
+as `44 33 22 11`.
+
+`.ascii` writes the characters you provide. `.asciz` also appends a zero byte, often called a
+**terminator**. Code for a zero-terminated string needs that terminator; without it, the code
+continues into the following bytes. A string can instead use `.ascii` with its length stored
+separately.
+
+`.space` is useful for a buffer: an area the running program fills. The number after it is a count
+of bytes, whatever kind of value the program stores there.
+
+## Aligning the next item
+
+For the positive values used in this course, the `.align n` directive moves the next data item
+forward to an address that is a multiple of `2^n`. The `n` is an exponent:
+
+| directive  | required boundary                                |
+| ---------- | ------------------------------------------------ |
+| `.align 1` | a multiple of `2^1 = 2`, suitable for a halfword |
+| `.align 2` | a multiple of `2^2 = 4`, suitable for a word     |
+| `.align 3` | a multiple of `2^3 = 8`                          |
+
+Thus `.align 2` advances to the next address that is a multiple of 4. If the current address already
+is a multiple of 4, it stays there. Otherwise the assembler inserts enough **padding** bytes to
+reach that address.
+
+In this assembler, `.half` and `.word` align their own starting addresses. `.byte`, `.ascii`,
+`.asciz` and `.space` do not. Put `.align 2` before a `.space` buffer if the program will access that
+buffer with `lw` or `sw`.
+
+## Inspect one data layout
+
+Build this example and open the memory panel at `10010000`. The two instructions place the addresses
+of `w` and `room` in `t0` and `t1`, where you can compare them with the table.
 
 ```riscv|playground|memory
 .data
@@ -73,44 +129,28 @@ room:   .space 8
 .text
 main:
     la t0, w
-    la t1, h
-    la t2, b
-    la t3, first
-    la t4, second
-    la t5, room
-    li a7, 10
-    ecall
+    la t1, room
 ```
 
-| label    | address      | bytes         | what it is                          |
-| -------- | ------------ | ------------- | ----------------------------------- |
-| `w`      | `0x10010000` | `44 33 22 11` | one word, lowest byte first         |
-| `h`      | `0x10010004` | `66 55`       | one half                            |
-| `b`      | `0x10010006` | `01 02 03`    | three single bytes                  |
-| `first`  | `0x10010009` | `48 69`       | `H` and `i`, and nothing after them |
-| `second` | `0x1001000B` | `48 69 00`    | the same two, terminated            |
-| `room`   | `0x10010010` | eight zeroes  | reserved, and word aligned          |
+| label or padding | address range             | bytes            | reason                     |
+| ---------------- | ------------------------- | ---------------- | -------------------------- |
+| `w`              | `0x10010000`–`0x10010003` | `44 33 22 11`    | one little-endian word     |
+| `h`              | `0x10010004`–`0x10010005` | `66 55`          | one little-endian halfword |
+| `b`              | `0x10010006`–`0x10010008` | `01 02 03`       | three bytes                |
+| `first`          | `0x10010009`–`0x1001000A` | `48 69`          | `H`, `i`, no terminator    |
+| `second`         | `0x1001000B`–`0x1001000D` | `48 69 00`       | `H`, `i`, zero terminator  |
+| padding          | `0x1001000E`–`0x1001000F` | `00 00`          | added by `.align 2`        |
+| `room`           | `0x10010010`–`0x10010017` | eight zero bytes | reserved by `.space 8`     |
 
-`first` runs straight into `second`, so a program that prints `first` prints `HiHi`: `.ascii` writes
-what you gave it and no more, and a string with nothing marking its end is a string nothing can find
-the end of. `.asciz` is the one to use, and the `z` is for the zero.
+The next free address after `second` is `0x1001000E`. That address is not a multiple of 4, so
+`.align 2` skips two bytes and `room` begins at `0x10010010`.
 
-`room` would have started at `0x1001000E` without the `.align 2`, which is even but not a multiple of
-four, so the first `sw` into it would have ended the run. `.word`, `.half` and `.dword` align
-themselves; `.space` and the two string directives do not.
+## Constants with .eqv
 
-## Labels and .eqv
+`.eqv` gives a number a name for the assembler to use. It reserves no memory and produces no
+instruction. Constants are usually written before the sections so they are easy to find:
 
-A label goes at the start of a line and ends with a colon. It is a name for the address of whatever
-comes next, and nothing distinguishes a label on an instruction from a label on a `.word`: both are
-addresses, and `la t0, main` is as legal as `la t0, numbers`. The one name a label may not have is a
-register's, so `s1:` and `ra:` are build errors and `sum:` is fine.
-
-`.eqv` gives a name to a number, and the assembler replaces the name with the number everywhere it
-appears. It reserves no memory and produces no instruction. The comma between the two operands is
-optional, so `.eqv SIZE, 4` and `.eqv SIZE 4` both work.
-
-```riscv|playground|memory
+```riscv
 .eqv SIZE, 4
 .eqv LIMIT, 100
 
@@ -119,108 +159,37 @@ values: .word SIZE, LIMIT
 
 .text
 main:
-    li t0, SIZE         # the number 4, inside the instruction
-    li t1, LIMIT
-    lw t2, values       # the word at values, read from memory
-    slli t3, t0, 2      # SIZE * 4, done by the program
-    li a7, 10
-    ecall
+    li t0, SIZE
+    la t4, values
+    lw t2, 0(t4)
 ```
 
-`t0` and `t2` both come out at 4, and they got there in completely different ways: `SIZE` became a
-`4` inside the instruction, while `values` became the address `0x10010000` and the instruction went
-to memory for what was there. `t3` is 16.
+Here, `SIZE` means the number 4 while the file is assembled, so `li t0, SIZE` places 4 in `t0`.
+The label `values` means a memory address, so `la t4, values` places that address in `t4`, and
+`lw t2, 0(t4)` reads the word stored there. `t0` receives 4 from the assembled constant. `t2`
+receives 4 from the word in memory.
 
-The assembler does no arithmetic. `li t0, SIZE*4` is a build error, and so is `lw t2, values+4`,
-which the MIPS assembler would have taken. A name multiplied by something has to be multiplied by
-the program, as the `slli` above does, and an offset from a label has to go in the `offset(base)` of
-the load.
+This is the distinction to keep:
 
-Use `.eqv` for anything you would write as a `#define` in C: the length of an array, the size of an
-element, a service number, a screen width.
+- an `.eqv` name stands for a number known while assembling;
+- a label stands for an address in the assembled program; and
+- a load reads a value from memory at an address.
 
-## Where a program starts, and where it stops
+## Lay out and find a buffer
 
-Execution begins at the **first instruction in `.text`**, whatever it is called. Put a subroutine at
-the top of your file and the program runs the subroutine, hits its `ret` with `ra` still 0, and ends
-with `Instruction load access error`, because address 0 has no code in it.
+Write a data section that stores the three words 100, 200 and 300 at `values`, followed by eight
+reserved bytes at `room`. Then leave the address of `room` in `t0`.
 
-`.globl main` fixes that. It marks the label `main` as global, and a global `main` becomes the entry
-point wherever in the file it is written. `.global` is the same directive under a second spelling.
-
-```riscv|playground
-.text
-.globl main
-
-helper:
-    li t6, 111
-    ret
-
-main:
-    li t0, 1
-    jal helper          # call it, so ra holds somewhere to come back to
-    li t1, 2
-    li a7, 10
-    ecall
-```
-
-`t0` is 1, `t6` is 111 and `t1` is 2, so `main` ran first and `helper` ran when it was called.
-Delete the `.globl main` line and press Run: the program starts at `helper`, and the `ret` on its
-second line jumps to address 0.
-
-The other end matters as much. **A RISC-V program ends with `li a7, 10` and `ecall`**, and without
-it execution carries straight on into whatever is written next. If that is a subroutine, the program
-runs it, returns to the middle of `main` through the `ra` the last call left there, and goes round
-until the Playground's instruction budget runs out. Every program in this course that has a
-subroutine ends with those two lines before the first one.
-
-A program with no subroutines can leave them out, which is what the first lectures did: with nothing
-after the last instruction, the simulator has no next instruction to run and stops.
-
-## The rest of the directives
-
-- **`.globl name`** makes a label visible outside the file. `main` is the one that matters here.
-- **`.extern name size`** declares a label defined somewhere else and reserves `size` bytes for it in
-  the global data area, which is what `gp` points near.
-- **`.macro`** and **`.end_macro`** define a name that expands into the lines between them, with `%`
-  in front of each parameter.
-- **`.include "file.asm"`** pulls in another file, which this editor's single-file projects have no
-  use for.
-- **`.section`** names a section the way `gcc` writes it, and is there so that compiler output
-  assembles.
-
-```riscv|playground
-.macro double(%reg)
-    add %reg, %reg, %reg
-.end_macro
-
-.text
-main:
-    li t0, 5
-    double(t0)
-    double(t0)
-    li a7, 10
-    ecall
-```
-
-`t0` comes out at 20. A macro is copied into the program at every use, so those two lines are two
-`add` instructions, and a macro that took ten lines would be ten instructions each time. A
-subroutine is the alternative that costs one call. Build it and the two expanded lines are marked
-`<2>` in the disassembly, which is the macro expansion depth.
-
-## Your turn
-
-Write a data section holding the three words 100, 200 and 300 at `values`, followed by eight bytes of
-room at `room`, and leave the address of `room` in `t0`. Three words take twelve bytes, so it comes
-out at `0x1001000C`.
+Three words occupy twelve bytes, so `room` should begin at `0x1001000C` in this simulator. The code
+has only one instruction, and the editor stops after executing that last instruction.
 
 ```riscv|playground|memory|exercise
 .data
-    # your data here
+    # declare values and room here
 
 .text
 main:
-    # your code here
+    # load the address of room here
 ```
 
 ```testcase
@@ -242,54 +211,44 @@ room:   .space 8
 
 .text
 main:
-    la t0, room         # the address of the reserved bytes
-    li a7, 10
-    ecall
+    la t0, room
 ```
 
 </details>
 
-The second one has the subroutine written above `main`, so the program starts in the wrong place and
-ends on a jump to address 0. Add the one line that makes `main` the entry point.
+## A compact program shape for this editor
 
-```riscv|playground|exercise
-.text
+This is a complete small program for the editor using a constant, static data and run-time code:
 
-helper:
-    li t6, 111
-    ret
+```riscv|playground|memory
+.eqv STEP, 1
 
-main:
-    li t0, 1
-    jal helper
-    li t1, 2
-    li a7, 10
-    ecall
-```
+.data
+value: .word 41
 
-```testcase
-{
-    "expectedRegisters": { "t0": 1, "t1": 2, "t6": 111 }
-}
-```
-
-<details>
-<summary>Show solution</summary>
-
-```riscv|playground|solution
 .text
 .globl main
-
-helper:
-    li t6, 111
-    ret
-
 main:
-    li t0, 1
-    jal helper
-    li t1, 2
-    li a7, 10
-    ecall
+    la   t0, value
+    lw   t1, 0(t0)
+    addi t1, t1, STEP
+    sw   t1, 0(t0)
 ```
 
-</details>
+Each piece has one job:
+
+- `.eqv STEP, 1` declares an assembler-time constant. Leave this part out when no named constants
+  are needed.
+- `.data` switches to static data, and `value: .word 41` creates a named word there. A program with
+  no static data can omit this section.
+- `.text` switches to instructions.
+- `.globl main` tells this editor to use the label `main` as the program's entry point.
+- Paired with `.globl main`, `main:` names the intended entry instruction.
+- The four instructions find the word, load it, add one and store 42 back. After the final
+  instruction, this editor reaches the end of the text and stops.
+
+When `.globl main` is absent, the editor starts at the first instruction in `.text`. `.globl main`
+makes the intended entry point explicit.
+
+Instructions do the work at run time. Data directives place initial bytes in memory. Labels name
+addresses. Other directives tell the assembler how to arrange the file.

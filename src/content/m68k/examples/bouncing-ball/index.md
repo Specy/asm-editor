@@ -2,15 +2,11 @@ A ball crosses the screen and turns round at every edge, and a bar along the top
 the program has been running. It never stops on its own: press Run, watch it, and press Stop when you
 have had enough.
 
-Drawing shapes on the screen drew one picture and ended. This one draws a new picture forty or fifty
-times a second, which brings two problems with it: the reader must never see a half drawn frame, and
-the ball must move at the same speed whatever the machine underneath is doing.
+Drawing a picture once is easy. Drawing a new one forty or fifty times a second brings two problems
+with it: nobody must ever see a half drawn frame, and the ball has to move at the same speed
+whatever the machine underneath happens to be doing.
 
-**You need to know:** the "Drawing shapes on the screen" Example and the "The screen, keyboard and
-mouse through traps" lecture. What is new here is double buffering, task 92 mode 17 sends every
-drawing to an off screen image and task 94 shows the whole of it at once.
-
-```m68k|playground|screen|no-registers|no-flags|allow-open
+```m68k|playground|open-screen|no-registers|no-flags|allow-open
 SIZE    equ 40
 LIMITX  equ 640-40
 LIMITY  equ 480-40
@@ -115,7 +111,5 @@ The ball's position and step are two words each in memory, and the four edges ar
 either branch knowing which way it was going. `LIMITX equ 640-40` is the largest `x` the ball's left
 edge may have, worked out by the assembler out of the screen width and the ball's size.
 
-Try changing `move.l #2, d1` under task 23 to `move.l #10, d1`. The ball crawls, because it moves
-five pixels per frame and the frames are now a tenth of a second apart, while the bar at the top
-races: it is drawn from program time, and program time is what you just made pass five times faster
-per frame.
+The delay is also why the bar at the top and the ball keep in step. Both are measured against program
+time, so slowing the frames down slows the ball and stretches the bar by the same factor.

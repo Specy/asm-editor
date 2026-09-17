@@ -1,73 +1,49 @@
 <script lang="ts">
+    import SegmentedControl from '$cmp/specific/project/cpu/SegmentedControl.svelte'
     import { RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
+    import type { AvailableLanguages } from '$lib/Project.svelte'
+    import { REGISTER_SIZES, sizeName } from '$lib/languages/sizeNames'
 
+    /**
+     * The width grouping strip of the register panel: `SegmentedControl` with the sizes the panel
+     * offers baked in, so the two strips the header shows side by side are the same control and the
+     * same size.
+     *
+     * Each button is named as the Target names that width (`sizeNames.ts`): the same two bytes are
+     * a `W` to a 68000 reader and an `H` to a MIPS one, and a strip that called it `W` to both
+     * would be teaching one of them the wrong word. The width itself never changes — only the name
+     * on the button — so a picked size still means the same grouping in every language.
+     */
     interface Props {
         style?: string
+        /** The size to draw as picked, which the caller owns: the control never writes it back. */
         selected?: RegisterSize
         maxSize: RegisterSize
+        /** The Target whose names the buttons carry. */
+        language: AvailableLanguages
+        /**
+         * The only way a pick leaves the control, so the caller stays the one place the grouping
+         * lives: the Register file panel clamps it to the visible file, and what it shows here and
+         * what it stores are therefore not always the same value.
+         */
+        onSelect: (size: RegisterSize) => void
     }
 
-    let { maxSize, style = '', selected = $bindable(RegisterSize.Word) }: Props = $props()
+    let { maxSize, language, style = '', selected = RegisterSize.Word, onSelect }: Props = $props()
 
-    const sizes = $derived(
-        [RegisterSize.Byte, RegisterSize.Word, RegisterSize.Long, RegisterSize.Double].filter(
-            (v) => v <= maxSize
-        )
+    //the option ids are the sizes written out, because a segmented control speaks in strings, and
+    //the written-out name is the tooltip: one letter is not enough to tell `Dword` from `Doubleword`
+    const options = $derived(
+        REGISTER_SIZES.filter((size) => size <= maxSize).map((size) => {
+            const name = sizeName(size, language)
+            return { id: String(size), label: name.short, title: name.long }
+        })
     )
-    const sizeMap = {
-        [RegisterSize.Byte]: 'B',
-        [RegisterSize.Word]: 'W',
-        [RegisterSize.Long]: 'L',
-        [RegisterSize.Double]: 'D'
-    } satisfies Record<RegisterSize, string>
 </script>
 
-<div class="size-selector-2" {style}>
-    {#each sizes as size (size)}
-        <button
-            onclick={() => {
-                selected = size
-            }}
-            class="size-selector-2-button"
-            class:size-selector-2-button-selected={selected === size}
-        >
-            {sizeMap[size]}
-        </button>
-    {/each}
-</div>
-
-<style>
-    .size-selector-2 {
-        border-radius: 0.4rem;
-        overflow: hidden;
-        display: flex;
-        height: fit-content;
-    }
-
-    .size-selector-2-button {
-        display: flex;
-        justify-content: center;
-        cursor: pointer;
-        align-items: center;
-        font-family: Rubik;
-        padding: 0.25rem 0.5rem;
-        background-color: var(--secondary);
-        color: var(--secondary-text);
-        transition: background-color 0.2s;
-    }
-
-    .size-selector-2-button:hover:not(.size-selector-2-button-selected):not(:active) {
-        background-color: rgba(var(--RGB-accent2), 0.3);
-    }
-
-    .size-selector-2-button:active {
-        background-color: var(--accent2);
-        color: var(--accent2-text);
-    }
-
-    .size-selector-2-button-selected {
-        transition: background-color 0s;
-        background-color: var(--accent2);
-        color: var(--accent2-text);
-    }
-</style>
+<SegmentedControl
+    {options}
+    {style}
+    selected={String(selected)}
+    onSelect={(id) => onSelect(Number(id) as RegisterSize)}
+/>

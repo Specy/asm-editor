@@ -1,0 +1,6 @@
+{
+    "name": "Getting started with x86",
+    "description": "Meet x86-64, NASM syntax, and the Linux-style environment used by this course. See why x86 still matters and how the course moves from its core building blocks to programs that use them.",
+    "order": 0,
+    "topic": "introduction"
+}

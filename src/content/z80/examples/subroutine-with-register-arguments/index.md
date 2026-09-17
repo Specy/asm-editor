@@ -6,10 +6,6 @@ This is the first program on the ladder that calls anything. Everything before i
 code running once, and this one has a piece of code with a name that the rest of the program hands
 work to.
 
-**You need to know:** the "call, ret and passing values" lecture and the "The F register" lecture.
-What is new here is the call itself, `call` pushes the address of the instruction after it and
-jumps, and `ret` pops that address back and carries on there.
-
 ```z80|playground|no-flags|allow-open
     .org 0x8000
     ld a, 84        ; x = 84
@@ -19,11 +15,11 @@ jumps, and `ret` pops that address back and carries on there.
     jp done
 
 ; gcd(x, y): x arrives in a and y in b, the answer leaves in a.
-; It works in c, which the caller has to expect.
+; It works in c, so the caller must not leave anything there.
 gcd:
     cp b            ; x - y
     ret z           ; while(x != y)
-    jr nc, bigger   ; if(x < y) swap them, so a always holds the larger
+    jr nc, bigger   ; x below y, so swap them: a holds the larger
     ld c, a
     ld a, b
     ld b, c
@@ -41,8 +37,8 @@ convention** is exactly this comment written once for a whole program instead of
 subroutine.
 
 `ret z` is the conditional return, and it is the loop's exit: `cp b` sets `Z` when the two numbers
-are equal, and one byte of instruction turns that into "we are done, go back to the caller". The
-M68K and MIPS have nothing like it and write a jump over an unconditional return instead.
+are equal, and one byte of instruction turns that into "we are done, go back to the caller". Without
+it you would need a jump over a plain `ret`, two instructions where this is one.
 
 The `jp done` above `gcd` is not optional. A subroutine is ordinary code sitting at an ordinary
 address, so without that jump the program would walk into `gcd` after the `ld c, a` and reach a
@@ -54,11 +50,13 @@ the call. `ret` reads those two bytes back into the program counter and puts `sp
 `a`, `b` and `c` all come out at `0C`, which is 12: 84 and 36 are both 12 times something and
 nothing larger divides them both.
 
-Euclid's method is usually written with a remainder, `a = a % b`, and that is what the M68K page
-does with its `divu`. The Z80 has no division, and the remainder of a division is what is left after
-subtracting the divisor as many times as it goes, so subtracting once per pass is the same algorithm
-with the inner loop unrolled into the outer one. That costs one pass per subtraction, and the whole
-program is 31 instructions for these two numbers.
+Euclid's method is usually written with a remainder: replace the larger number with what is left
+when you divide it by the smaller. This machine has no division, and it does not need one here. The
+remainder of a division is whatever is left after subtracting the divisor as many times as it goes,
+so subtracting once per pass and looping is the same algorithm with the division spread out over the
+outer loop. It costs one pass per subtraction, and the whole program is 31 instructions for these
+two numbers.
 
-Try changing the two numbers to 250 and 3. The answer is 1, and the program takes 436 instructions
-to find it, because 3 has to come off 250 eighty-three times before the pair is anywhere near equal.
+The cost of doing it by subtraction shows up as soon as the two numbers are far apart. Feed it 250
+and 3 and the answer, 1, takes 436 instructions to find, because 3 has to come off 250 eighty-three
+times before the pair is anywhere near equal.

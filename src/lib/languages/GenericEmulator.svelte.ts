@@ -6,12 +6,17 @@ import {
 import {
     type BaseEmulatorActions,
     type BaseEmulatorState,
+    type BuildArtifact,
     createMemoryTab,
     type EmulatorSettings,
     InterpreterStatus,
     makeGenericDiagnostic,
     makeRegister,
-    numbersOfSizeToSlice
+    numbersOfSizeToSlice,
+    type RegisterFile,
+    type RegisterPoke,
+    type RegisterSize,
+    resolveRegisterFileLayout
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import { Terminal } from '$lib/languages/peripherals/Terminal.svelte'
 import {
@@ -40,6 +45,15 @@ import {
 import { ExecutionController, type ExecutionGeneration } from '$lib/languages/ExecutionController'
 import { Prompt } from '$stores/promptStore.svelte'
 import structuredClone from '@ungap/structured-clone'
+import {
+    normalizeBuildInput,
+    ProjectFormatError,
+    sourceText,
+    updateEntryText,
+    type BuildInput,
+    type BuildSources
+} from '$lib/projectFiles'
+import { FileSystem, type FileSystemSession } from '$lib/languages/peripherals/FileSystem'
 
 /**
  * How often the panels a user watches — registers, memory, the call stack, the undo history — are
@@ -49,14 +63,58 @@ import structuredClone from '@ungap/structured-clone'
  * per trap held the main thread at 76% busy and delivered 32 frames a second, and refreshing at
  * most this often held it at 47% and delivered 40.
  */
-const RUNNING_PANEL_REFRESH_MS = 16
+export const RUNNING_PANEL_REFRESH_MS = 16
+
+/**
+ * The same, while a Screen is being animated. Re-reading the panels does not only cost the reads:
+ * `pc` moving republishes the editor's pseudo-instruction zones, and Monaco re-measures them.
+ * Profiled in the headless shell on `m68k/bouncing-ball.x68`, Monaco's layout queries, the Svelte
+ * runtime and the memory grid were together about 60 of the 340 ms/s of main thread the workload
+ * used, with nothing in the editor changing.
+ *
+ * A program drawing on a Screen is one the user is watching the Screen of, and ten updates a second
+ * is still live for a register that is being read rather than stepped through. The moment the
+ * drawing stops, the activity window closes and the panels go back to a refresh a frame.
+ */
+export const ANIMATING_PANEL_REFRESH_MS = 250
+
+/** The CPU Register file's id, which is always the first file `createRegisterFiles` builds. */
+export const CPU_REGISTER_FILE_ID = 'cpu'
+
+/**
+ * The program counter as the languages spell it. It is the one register a Poke never writes
+ * ([the design record](../../../docs/design/pokes.md)): moving it is a jump and not a value change,
+ * and it is drawn as a row of the CPU file like any other, so it has to be named to be kept out.
+ */
+const PROGRAM_COUNTER_NAMES = ['pc', 'rip']
+
+function isProgramCounterName(register: string): boolean {
+    return PROGRAM_COUNTER_NAMES.includes(register.toLowerCase())
+}
+
+function buildSourcesEqual(left: BuildSources, right: BuildSources): boolean {
+    if (left.entry !== right.entry) return false
+    const leftPaths = Object.keys(left.files)
+    const rightPaths = Object.keys(right.files)
+    if (leftPaths.length !== rightPaths.length) return false
+    return leftPaths.every((path) => {
+        const leftFile = left.files[path]
+        const rightFile = right.files[path]
+        return (
+            leftFile !== undefined &&
+            rightFile !== undefined &&
+            leftFile.encoding === rightFile.encoding &&
+            leftFile.content === rightFile.content
+        )
+    })
+}
 
 export abstract class GenericEmulator<T, R extends string>
     extends BaseEmulator<R>
     implements BaseEmulatorActions, BaseEmulatorState
 {
     protected state: Omit<BaseEmulatorState, 'code' | 'stdOut'>
-    protected _code: string
+    protected _sources: BuildSources
     protected _emulatorOptions: Required<Omit<EmulatorSettings, 'peripherals' | 'display'>>
     protected readonly _peripherals: EmulatorPeripherals
     /**
@@ -88,13 +146,25 @@ export abstract class GenericEmulator<T, R extends string>
      */
     private pauseRequested = false
     private runInFlight = false
+    protected fileSystemSession: FileSystemSession | null = null
+    private _buildSources: BuildSources | undefined = $state()
     /** Number of core operations currently in flight, see `duringCoreOperation`. */
     private coreOperations = 0
+    /**
+     * The reactive twin of `coreOperations`, kept in step with it: the panels bind to `canPoke`,
+     * which has to re-evaluate when a Run, Step or input handler takes the Core and again when it
+     * gives it back, and a plain field would never tell them.
+     */
+    private coreBusy = $state(false)
     private coreOperationTail: Promise<void> = Promise.resolve()
     private coreIdleWaiters: (() => void)[] = []
     protected readonly executionController = new ExecutionController(() => Prompt.cancel())
 
-    constructor(code: string, options: EmulatorConfig<R>, emulatorOptions: EmulatorSettings = {}) {
+    constructor(
+        source: BuildInput,
+        options: EmulatorConfig<R>,
+        emulatorOptions: EmulatorSettings = {}
+    ) {
         super(options)
         this._emulatorOptions = {
             globalPageSize: emulatorOptions.globalPageSize ?? PAGE_SIZE,
@@ -104,11 +174,18 @@ export abstract class GenericEmulator<T, R extends string>
             stackAddress: emulatorOptions.stackAddress ?? 0x7ffffffcn,
             initialMemoryValue: emulatorOptions.initialMemoryValue ?? 0x0,
             language: emulatorOptions.language ?? 'M68K',
+            automaticChecking: emulatorOptions.automaticChecking ?? true,
             screenHistoryBudgetMb:
                 emulatorOptions.screenHistoryBudgetMb ??
-                projectSettingDefault('screenHistoryBudgetMb', emulatorOptions.language ?? 'M68K')
+                projectSettingDefault('screenHistoryBudgetMb', emulatorOptions.language ?? 'M68K'),
+            fileSystemHistoryBudgetMb:
+                emulatorOptions.fileSystemHistoryBudgetMb ??
+                projectSettingDefault(
+                    'fileSystemHistoryBudgetMb',
+                    emulatorOptions.language ?? 'M68K'
+                )
         }
-        this._code = $state(code)
+        this._sources = $state(normalizeBuildInput(source))
         this._peripherals = {
             ...createInjectedPeripherals(
                 this._emulatorOptions.language,
@@ -121,12 +198,15 @@ export abstract class GenericEmulator<T, R extends string>
         this.state = $state({
             systemSize: options.systemSize,
             registers: [],
+            registerFiles: [],
             startingRegisterNames: [...options.registerNames],
             hiddenRegisters: options.hiddenRegisters ?? [], //TODO should this be state?
             pc: 0n,
             terminated: false,
             line: -1,
+            currentFile: this._sources.entry,
             decorations: [],
+            buildArtifacts: [],
             statusRegisters: [],
             compilerDiagnostics: [],
             callStack: [],
@@ -160,17 +240,25 @@ export abstract class GenericEmulator<T, R extends string>
                 ]
             }
         })
+        //built before the clear below, because `setRegisters` keeps the CPU file pointed at the
+        //register array it rebuilds
+        this.state.registerFiles = this.createRegisterFiles()
         this.clear()
-        void this.semanticCheck()
+        if (this._emulatorOptions.automaticChecking) void this.semanticCheck()
     }
 
     protected abstract getInstance(): T | null
+
+    protected _getBuildArtifacts(): BuildArtifact[] {
+        return []
+    }
 
     protected addDecorations() {
         if (!this.getInstance()) return
         const decorations = this._getCompiledCode()
         this.state.decorations = decorations.decorations
         this.state.compiledCode = decorations.code
+        this.state.buildArtifacts = this._getBuildArtifacts()
     }
 
     protected addError(error: string) {
@@ -223,6 +311,7 @@ export abstract class GenericEmulator<T, R extends string>
      */
     private async duringCoreOperation<T>(operation: () => Promise<T>): Promise<T> {
         this.coreOperations += 1
+        this.coreBusy = true
         const previous = this.coreOperationTail
         let release!: () => void
         this.coreOperationTail = new Promise<void>((resolve) => {
@@ -234,6 +323,7 @@ export abstract class GenericEmulator<T, R extends string>
         } finally {
             release()
             this.coreOperations -= 1
+            this.coreBusy = this.coreOperations > 0
             if (this.coreOperations === 0) {
                 const waiters = this.coreIdleWaiters
                 this.coreIdleWaiters = []
@@ -255,17 +345,133 @@ export abstract class GenericEmulator<T, R extends string>
             //check that a newer one superseded in the meantime is dropped instead of assembling.
             await this.waitForIdleCore()
             if (checkId !== this.semanticCheckId) return []
-            const diagnostics = await this._checkCode(this._code)
-            if (checkId !== this.semanticCheckId) return diagnostics
+            //MARS and RARS keep part of their active machine in generated module globals. Running
+            //their checker while a built machine is retained would replace those globals. The
+            //Build diagnostics already describe the immutable Build snapshot, so expose those to
+            //explicit callers until Stop instead of silently reporting that the program is clean.
+            if (this.fileSystemSession) return this.state.compilerDiagnostics
+            const diagnostics = await this._checkCode($state.snapshot(this._sources))
+            //Re-checked after the round trip as well as before it: a Build may have started and
+            //taken the FileSystem in the meantime, and its diagnostics describe the Build snapshot.
+            if (checkId !== this.semanticCheckId || this.fileSystemSession) return diagnostics
             this.state.compilerDiagnostics = diagnostics
             this.state.errors = []
             return diagnostics
         } catch (e) {
-            console.error(e)
+            if (!(e instanceof ProjectFormatError)) console.error(e)
             if (checkId !== this.semanticCheckId) return []
-            const error = this._stringifyError(e)
-            this.addError(error)
-            return [makeGenericDiagnostic(error)]
+            const error = e instanceof ProjectFormatError ? e.message : this._stringifyError(e)
+            const diagnostic = { ...makeGenericDiagnostic(error), file: this._sources.entry }
+            this.state.compilerDiagnostics = [diagnostic]
+            this.state.errors = []
+            return [diagnostic]
+        }
+    }
+
+    /**
+     * The Register files this Emulator shows, built once: the CPU file, whose `registers` is the
+     * very array `state.registers` is, and then one file per declared descriptor with its registers
+     * zeroed and its Status flags at 0. The files themselves and their flags live for the whole
+     * session; a clear rebuilds a file's Register objects so that nothing is left to highlight,
+     * exactly as `setRegisters` rebuilds the CPU ones.
+     *
+     * A declared file the adapter cannot read is a programming error, not something to show as a
+     * panel of zeros, so both read hooks are demanded here rather than missed at the first refresh.
+     * This runs from the constructor, before a subclass's field initialisers, so the hooks have to
+     * be methods on the adapter and not fields holding arrow functions; the errors say so, because
+     * an adapter written the second way looks from the outside as though it implements them.
+     */
+    private createRegisterFiles(): RegisterFile[] {
+        const descriptors = this.getRegisterFileDescriptors()
+        if (descriptors.length > 0 && !this._getRegisterFileValues) {
+            throw new Error(
+                `${this.constructor.name} declares the register files ` +
+                    `${descriptors.map((file) => file.id).join(', ')} but does not implement ` +
+                    '_getRegisterFileValues as a method (a field holding an arrow function is ' +
+                    'still undefined while this constructor runs)'
+            )
+        }
+        const withFlags = descriptors.filter((file) => (file.flagNames?.length ?? 0) > 0)
+        if (withFlags.length > 0 && !this._getRegisterFileFlags) {
+            throw new Error(
+                `${this.constructor.name} declares Status flags on the register files ` +
+                    `${withFlags.map((file) => file.id).join(', ')} but does not implement ` +
+                    '_getRegisterFileFlags as a method (a field holding an arrow function is ' +
+                    'still undefined while this constructor runs)'
+            )
+        }
+        const cpu: RegisterFile = {
+            id: CPU_REGISTER_FILE_ID,
+            label: 'CPU',
+            size: this._systemSize,
+            formats: ['hex'],
+            layout: this._registerNames.map((name) => ({
+                name,
+                size: this._systemSize,
+                kind: 'integer'
+            })),
+            hiddenRegisters: this.state.hiddenRegisters,
+            registers: this.state.registers,
+            flags: [],
+            blanks: []
+        }
+        return [
+            cpu,
+            ...descriptors.map((descriptor) => {
+                const layout = resolveRegisterFileLayout(descriptor)
+                return {
+                    ...descriptor,
+                    layout,
+                    registers: layout.map((register) =>
+                        makeRegister(register.name, 0n, register.size)
+                    ),
+                    flags: (descriptor.flagNames ?? []).map((name) => ({
+                        name,
+                        value: 0,
+                        prev: 0
+                    })),
+                    blanks: layout.map(() => false)
+                } satisfies RegisterFile
+            })
+        ]
+    }
+
+    /**
+     * Every declared Register file, read back out of the Core beside the CPU registers, whichever
+     * tab the panel happens to be showing: a highlight then always means "changed since the last
+     * refresh". One `_getRegisterFileValues` call per file (and one `_getRegisterFileFlags` for a
+     * file that has flags, one `_getRegisterFileBlanks` when the adapter can blank rows) and nothing
+     * allocated besides the arrays the adapter returns.
+     *
+     * Without a Core there is nothing to read and the files hold the zeros they were built with,
+     * which is what the CPU file shows before a Build too.
+     */
+    private updateRegisterFiles(): void {
+        const files = this.state.registerFiles
+        if (files.length < 2 || !this.getInstance()) return
+        for (let i = 1; i < files.length; i++) {
+            const file = files[i]
+            const values = this._getRegisterFileValues!(file.id)
+            for (let j = 0; j < file.registers.length; j++) {
+                file.registers[j].setValue(values[j] ?? 0n)
+            }
+            if (this._getRegisterFileBlanks) {
+                const blanks = this._getRegisterFileBlanks(file.id)
+                for (let j = 0; j < file.blanks.length; j++) {
+                    file.blanks[j] = blanks[j] === true
+                }
+            }
+            if (file.flags.length === 0) continue
+            const flags = this._getRegisterFileFlags!(file.id)
+            for (let j = 0; j < file.flags.length; j++) {
+                const flag = file.flags[j]
+                const read = flags[j]
+                const value = read?.value ? 1 : 0
+                //a Core that reports no previous value is diffed against the last refresh, which is
+                //what the file itself still holds at this point
+                flag.prev = read?.prev === undefined ? flag.value : read.prev ? 1 : 0
+                flag.value = value
+            }
         }
     }
 
@@ -277,6 +483,37 @@ export abstract class GenericEmulator<T, R extends string>
         this.state.registers = (override ?? this._getRegisterValues()).map((reg, i) => {
             return makeRegister(this._registerNames[i], reg, this._systemSize)
         })
+        const cpu = this.state.registerFiles[0]
+        //the CPU file is the register array itself, never a copy of it
+        if (cpu) cpu.registers = this.state.registers
+        //a caller that rebuilt the CPU registers out of a live Core wants the other files read at
+        //the same moment, or the panel shows a refreshed CPU next to stale Register files. A
+        //caller that passed its own values did not read the Core at all, and during construction
+        //there is no instance to read, which is the case `updateRegisterFiles` guards against.
+        if (!override) this.updateRegisterFiles()
+    }
+
+    /**
+     * Every file other than the CPU one back to zero, with no previous value left to highlight
+     * against, as the freshly built CPU registers are. `clear` calls this itself rather than
+     * letting `setRegisters` infer it: a caller that seeds the CPU registers with its own values
+     * while a Core is live wants the other files left as the last refresh read them, not blanked,
+     * and reading them belongs to the refresh paths, which all go through `updateRegisters`, and to
+     * the branch of `setRegisters` that reads the Core itself.
+     */
+    private resetRegisterFiles(): void {
+        const files = this.state.registerFiles
+        for (let i = 1; i < files.length; i++) {
+            const file = files[i]
+            file.registers = file.layout.map((register) =>
+                makeRegister(register.name, 0n, register.size)
+            )
+            for (const flag of file.flags) {
+                flag.value = 0
+                flag.prev = 0
+            }
+            file.blanks.fill(false)
+        }
     }
 
     protected getRegistersValue() {
@@ -289,6 +526,7 @@ export abstract class GenericEmulator<T, R extends string>
         this.getRegistersValue().forEach((reg, i) => {
             this.state.registers[i].setValue(reg)
         })
+        this.updateRegisterFiles()
         this.state.sp = this._getSp()
     }
 
@@ -349,6 +587,26 @@ export abstract class GenericEmulator<T, R extends string>
         }
     }
 
+    private selectInstruction(instruction: { file: string; lineNumber: number } | null): void {
+        this.state.line = instruction?.lineNumber ?? -1
+        if (instruction) this.state.currentFile = instruction.file
+    }
+
+    private selectLastExecuted(fallback = -1): void {
+        try {
+            const instruction = this._getLastInstruction?.()
+            if (instruction) {
+                this.selectInstruction(instruction)
+                return
+            }
+            const [step] = this._getUndoHistory(1)
+            this.state.line = step?.line ?? fallback
+            if (step?.file) this.state.currentFile = step.file
+        } catch {
+            this.state.line = fallback
+        }
+    }
+
     protected updateData() {
         const settings = preferencesStore
         if (!this.getInstance()) return
@@ -392,6 +650,10 @@ export abstract class GenericEmulator<T, R extends string>
         this._emulatorOptions.screenHistoryBudgetMb = megabytes
     }
 
+    setFileSystemHistoryBudgetMb(megabytes: number): void {
+        this._emulatorOptions.fileSystemHistoryBudgetMb = megabytes
+    }
+
     /**
      * The adapter knows which peripheral effects belong to the next CPU undo record and preflights
      * them against the Screen's byte budget. Unrelated CPU instructions remain undoable even if an
@@ -432,6 +694,9 @@ export abstract class GenericEmulator<T, R extends string>
     // ----- public api ----- //
     clear(): void {
         this.executionController.invalidate()
+        this.fileSystemSession?.stop()
+        this.fileSystemSession = null
+        this._buildSources = undefined
         this.pauseRequested = false
         //a new program is a new speed, and the estimates in the adapters are where it starts again
         this.speedCorrection = 1
@@ -448,7 +713,9 @@ export abstract class GenericEmulator<T, R extends string>
             pc: 0n,
             sp: 0n,
             decorations: [],
+            buildArtifacts: [],
             line: -1,
+            currentFile: this._sources.entry,
             interrupt: undefined,
             errors: [],
             canUndo: false,
@@ -481,23 +748,39 @@ export abstract class GenericEmulator<T, R extends string>
             }
         }
         this.setRegisters(new Array(this._registerNames.length).fill(0))
+        this.resetRegisterFiles()
         this.updateStatusRegisters()
     }
 
-    async compile(historySize: number, codeOverride: string | undefined): Promise<void> {
+    async compile(historySize: number, sourceOverride: BuildInput | undefined): Promise<void> {
         //Build must cancel an active run/input wait before queuing for its Core lock.
         if (this.coreOperations > 0) this.clear()
-        return this.duringCoreOperation(() => this.compileInternal(historySize, codeOverride))
+        return this.duringCoreOperation(() =>
+            this.compileInternal(historySize, sourceOverride, this._peripherals.fileSystem)
+        )
     }
 
     private async compileInternal(
         historySize: number,
-        codeOverride: string | undefined
+        sourceOverride: BuildInput | undefined,
+        fileSystem: FileSystem
     ): Promise<void> {
         this.clear()
+        //A Build supersedes live checking the same way a newer check supersedes an older one: the
+        //debounced check is disarmed and any check already in flight fails its id comparison when
+        //it settles, so it cannot overwrite the Build's diagnostics with a separately assembled
+        //opinion — or clear the errors that made the Build fail.
+        this.semanticCheckId += 1
+        this.debouncer[1]()
         const execution = this.executionController.capture()
+        let entry = this._sources.entry
         try {
-            const result = await this._compile(codeOverride ?? this._code, historySize)
+            const sources =
+                sourceOverride === undefined
+                    ? $state.snapshot(this._sources)
+                    : normalizeBuildInput(sourceOverride)
+            entry = sources.entry
+            const result = await this._compile(sources, historySize)
             this.executionController.ensureCurrent(execution)
             if (!result.ok) {
                 this.state.compilerDiagnostics = result.diagnostics
@@ -508,10 +791,18 @@ export abstract class GenericEmulator<T, R extends string>
             //warnings the assembler emitted while succeeding are shown
             this.state.compilerDiagnostics = result.diagnostics ?? []
             this._initialize(historySize)
+            const megabytes = this._emulatorOptions.fileSystemHistoryBudgetMb
+            this.fileSystemSession = fileSystem.beginSession(
+                Number.isFinite(megabytes) && megabytes >= 0 ? megabytes * 1024 * 1024 : 0,
+                Number.isFinite(historySize) ? Math.max(0, Math.floor(historySize)) : 0
+            )
+            this._buildSources = sources
             this.addDecorations()
             this.state.canExecute = true
             this.state.canUndo = false
-            this.state.line = this._getNextInstruction()?.lineNumber ?? -1
+            const instruction = this._getNextInstruction()
+            this.state.line = instruction?.lineNumber ?? -1
+            this.state.currentFile = instruction?.file ?? sources.entry
             this.updateRegisters()
             this.positionStackTabOnCompile()
             this.updateMemory()
@@ -522,6 +813,12 @@ export abstract class GenericEmulator<T, R extends string>
             //assembler errors already live in state.compilerDiagnostics and are rendered from there,
             //pushing them into state.errors too would render the whole list twice
             if (e instanceof CompilationFailedError) throw e
+            if (e instanceof ProjectFormatError) {
+                const report = e.message
+                const diagnostic = { ...makeGenericDiagnostic(report), file: entry }
+                this.state.compilerDiagnostics = [diagnostic]
+                throw new CompilationFailedError(report, [diagnostic])
+            }
             this.addError(this._stringifyError(e))
             this.debouncer[1]()
             throw e
@@ -535,10 +832,14 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     getLineFromAddress(address: bigint): number {
-        if (!this.getInstance()) return -1
+        return this.getSourceLocationFromAddress(address)?.line ?? -1
+    }
+
+    getSourceLocationFromAddress(address: bigint): { file: string; line: number } | null {
+        if (!this.getInstance()) return null
         const statement = this._getInstructionAt(address)
-        if (!statement) return -1
-        return statement.lineNumber
+        if (!statement) return null
+        return { file: statement.file, line: statement.lineNumber }
     }
 
     resetSelectedLine(): void {
@@ -556,6 +857,7 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     async run(haltLimit: number): Promise<InterpreterStatus> {
+        if (!this.state.canExecute) return InterpreterStatus.Terminated
         const execution = this.executionController.capture()
         return this.duringCoreOperation(() =>
             this.executionController.isCurrent(execution)
@@ -603,6 +905,10 @@ export abstract class GenericEmulator<T, R extends string>
     /** The loop itself, so `runSlices` can own the flags a pause needs whichever way the run ends. */
     private async sliceLoop(haltLimit: number, execution: ExecutionGeneration): Promise<void> {
         let remaining = haltLimit
+        //only the slice this Run starts with may run the instruction the program counter is on when
+        //a breakpoint names it, which is what makes Run continue from a breakpoint instead of
+        //stopping on it again for ever (`skipBreakpointAtPc`)
+        let firstSlice = true
         while (remaining > 0) {
             //the slice boundary is the only place a pause can be taken: a slice is the Core running,
             //and nothing here can interrupt it once it has started
@@ -620,9 +926,11 @@ export abstract class GenericEmulator<T, R extends string>
                 instructionBudget: remaining,
                 timeBudgetMs: targetMs,
                 breakpoints: this.state.breakpoints,
+                skipBreakpointAtPc: firstSlice,
                 runInstructionLimit: haltLimit,
                 speedCorrection: this.speedCorrection
             })
+            firstSlice = false
             this.learnSliceSpeed(
                 slice,
                 targetMs,
@@ -687,21 +995,33 @@ export abstract class GenericEmulator<T, R extends string>
      * animation budget for as long as they draw, with no frames to show for it.
      */
     private sliceTimeBudgetMs(): number {
+        return this.screenIsAnimating() ? SCREEN_SLICE_MS : COMPUTE_SLICE_MS
+    }
+
+    /**
+     * Whether a Screen somebody is painting has changed within `SCREEN_ACTIVITY_MS`. Both the slice
+     * budget and the panel refresh ask, so the window lives here rather than in either of them; it
+     * is advanced by asking, which is why a caller that asks more often than once a slice only makes
+     * the window more current.
+     */
+    private screenIsAnimating(): boolean {
         const screen = this._peripherals.screen
-        if (!screen.watched) return COMPUTE_SLICE_MS
+        if (!screen.watched) return false
         const now = performance.now()
         if (screen.version !== this.lastScreenVersion) {
             this.lastScreenVersion = screen.version
             this.screenActiveUntil = now + SCREEN_ACTIVITY_MS
         }
-        return now < this.screenActiveUntil ? SCREEN_SLICE_MS : COMPUTE_SLICE_MS
+        return now < this.screenActiveUntil
     }
 
     /**
      * The panels, refreshed from inside a running program — the path an adapter takes when its Core
-     * stops on an interrupt. Reading the registers, a page of memory per tab, the call stack and the
-     * undo history is not free, and none of it can be seen more than once a display frame, so it is
-     * rate limited to `RUNNING_PANEL_REFRESH_MS` rather than done per interrupt.
+     * stops on an interrupt. Reading the registers of every Register file, a page of memory per
+     * tab, the call stack and the undo history is not free, and none of it can be seen more than
+     * once a display frame, so it is rate limited to `RUNNING_PANEL_REFRESH_MS` rather than done
+     * per interrupt, and to `ANIMATING_PANEL_REFRESH_MS` while a Screen is being drawn on, where
+     * the frames are what the user is watching and the refresh is competing for the thread.
      *
      * `force` is for the interrupts that suspend the program for the user: an input prompt is read
      * beside the panels, and the user has all the time in the world to notice that they are one
@@ -710,7 +1030,10 @@ export abstract class GenericEmulator<T, R extends string>
      */
     protected refreshRunningPanels(force: boolean): void {
         const now = performance.now()
-        if (!force && now - this.lastPanelRefresh < RUNNING_PANEL_REFRESH_MS) return
+        const interval = this.screenIsAnimating()
+            ? ANIMATING_PANEL_REFRESH_MS
+            : RUNNING_PANEL_REFRESH_MS
+        if (!force && now - this.lastPanelRefresh < interval) return
         this.lastPanelRefresh = now
         this.updateRegisters()
         this.updateStatusRegisters()
@@ -721,18 +1044,46 @@ export abstract class GenericEmulator<T, R extends string>
 
     /**
      * Everything the user inspects, read back out of the Core: the current line, whether Undo is
-     * available, and the register, memory, status-register and program-counter views. The end of a
-     * run does this, and so does a pause, which would otherwise leave every panel showing what it
-     * held when Run was pressed.
+     * available, and the register (every Register file, not only the visible tab), memory,
+     * status-register and program-counter views. The end of a run does this, and so does a pause,
+     * which would otherwise leave every panel showing what it held when Run was pressed.
      */
+    /**
+     * The end of a run that threw: the failing instruction is reported, and the panels are brought
+     * up to date. A program that ends on a runtime error is exactly when the registers and memory
+     * that caused it are worth looking at, and the Core's history still holds the instructions that
+     * ran, so Undo is offered rather than left reading as unavailable. Both are guarded: a Core that
+     * just failed may no longer be readable, and that must not replace the error the user needs.
+     */
+    private reportRuntimeFailure(error: unknown): void {
+        console.error(error)
+        let instruction: { file: string; lineNumber: number } | null = null
+        try {
+            //the failing instruction is the last one that was attempted, not the one after it
+            instruction = this._getLastInstruction?.() ?? this._getNextInstruction()
+        } catch (lookupError) {
+            console.error(lookupError)
+        }
+        const line = instruction?.lineNumber ?? -1
+        this.addError(this._stringifyError(error, line >= 0 ? line + 1 : undefined))
+        this.state.terminated = true
+        this.selectInstruction(instruction)
+        try {
+            this.state.canUndo = this.canUndoStep()
+            this.refreshCoreViews()
+        } catch (refreshError) {
+            console.error(refreshError)
+        }
+    }
+
     private refreshVisibleState(terminated: boolean): void {
         try {
             const ins = this._getNextInstruction()
             //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
             if (!terminated) {
-                this.state.line = ins?.lineNumber ?? -1
+                this.selectInstruction(ins)
             } else {
-                this.state.line = this.getLastExecutedLine()
+                this.selectLastExecuted()
             }
         } catch {
             this.state.line = terminated ? this.getLastExecutedLine() : -1
@@ -769,20 +1120,7 @@ export abstract class GenericEmulator<T, R extends string>
             if (!this.executionController.isCurrent(execution)) {
                 return InterpreterStatus.Terminated
             }
-            console.error(e)
-            let line = -1
-            try {
-                //the failing instruction is the last one that was attempted, not the one after it
-                line =
-                    this._getLastInstruction?.()?.lineNumber ??
-                    this._getNextInstruction()?.lineNumber ??
-                    -1
-            } catch (e) {
-                console.error(e)
-            }
-            this.addError(this._stringifyError(e, line >= 0 ? line + 1 : undefined))
-            this.state.terminated = true
-            this.state.line = line
+            this.reportRuntimeFailure(e)
         }
         return InterpreterStatus.TerminatedWithException
     }
@@ -790,7 +1128,21 @@ export abstract class GenericEmulator<T, R extends string>
     protected debouncer = createDebouncer(500)
 
     setCode(code: string): void {
-        this._code = code
+        const entry = this._sources.files[this._sources.entry]
+        if (entry?.encoding === 'plain' && entry.content === code) return
+        this._sources = updateEntryText(this._sources, code)
+        if (this.fileSystemSession || !this._emulatorOptions.automaticChecking) return
+        this.debouncer[0](() => void this.semanticCheck())
+    }
+
+    setSources(sources: BuildInput): void {
+        const normalized = normalizeBuildInput(sources)
+        if (buildSourcesEqual(this._sources, normalized)) return
+        this._sources = normalized
+        //A guest may update live source while the debugger still owns a Core built from the old
+        //snapshot. MARS and RARS assembly mutates module globals used by that Core, so live checking
+        //resumes only after Stop.
+        if (this.fileSystemSession || !this._emulatorOptions.automaticChecking) return
         this.debouncer[0](() => void this.semanticCheck())
     }
 
@@ -903,6 +1255,7 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     async step(): Promise<boolean> {
+        if (!this.state.canExecute) return false
         const execution = this.executionController.capture()
         return this.duringCoreOperation(() =>
             this.executionController.isCurrent(execution)
@@ -913,20 +1266,20 @@ export abstract class GenericEmulator<T, R extends string>
 
     private async stepInternal(): Promise<boolean> {
         this.state.paused = false
-        let lastLine = -1
+        let attemptedInstruction: { file: string; lineNumber: number } | null = null
         const execution = this.executionController.capture()
         try {
             if (!this.getInstance()) throw new Error('Interpreter not initialized')
-            lastLine = this._getNextInstruction()?.lineNumber ?? -1
+            attemptedInstruction = this._getNextInstruction()
             const result = await this._step()
             this.executionController.ensureCurrent(execution)
             this.state.terminated = result.terminated
             if (result.terminated) {
-                this.state.line = this.getLastExecutedLine(lastLine)
+                this.selectLastExecuted(attemptedInstruction?.lineNumber ?? -1)
             } else {
                 try {
                     const ins = this._getNextInstruction()
-                    this.state.line = ins?.lineNumber ?? -1
+                    this.selectInstruction(ins)
                 } catch {}
             }
 
@@ -936,9 +1289,13 @@ export abstract class GenericEmulator<T, R extends string>
         } catch (e) {
             if (!this.executionController.isCurrent(execution)) return false
             console.error(e)
-            this.addError(this._stringifyError(e, lastLine >= 0 ? lastLine + 1 : undefined))
+            try {
+                attemptedInstruction = this._getLastInstruction?.() ?? attemptedInstruction
+            } catch {}
+            const line = attemptedInstruction?.lineNumber ?? -1
+            this.addError(this._stringifyError(e, line >= 0 ? line + 1 : undefined))
             this.state.terminated = true
-            this.state.line = lastLine
+            this.selectInstruction(attemptedInstruction)
             throw e
         }
         this.refreshCoreViews()
@@ -988,6 +1345,7 @@ export abstract class GenericEmulator<T, R extends string>
             const ins = this._getNextInstruction()
             //shows the next instruction, if it't not available it means the code has terminated, so show the last instruction
             this.state.line = ins?.lineNumber ?? this.getLastExecutedLine()
+            if (ins) this.state.currentFile = ins.file
             this.state.canUndo = false
 
             this.updateRegisters()
@@ -1002,45 +1360,34 @@ export abstract class GenericEmulator<T, R extends string>
             if (!this.executionController.isCurrent(execution)) {
                 return InterpreterStatus.Terminated
             }
-            console.error(e)
-            let line = -1
-            try {
-                //the failing instruction is the last one that was attempted, not the one after it
-                line =
-                    this._getLastInstruction?.()?.lineNumber ??
-                    this._getNextInstruction()?.lineNumber ??
-                    -1
-            } catch (e) {
-                console.error(e)
-            }
-            this.addError(this._stringifyError(e, line >= 0 ? line + 1 : undefined))
-            this.state.terminated = true
-            this.state.line = line
+            this.reportRuntimeFailure(e)
         }
         return InterpreterStatus.TerminatedWithException
     }
 
-    async test(code: string, testcases: Testcase[], haltLimit: number, historySize = 0) {
+    async test(sources: BuildInput, testcases: Testcase[], haltLimit: number, historySize = 0) {
         //held across the whole loop: `validateTestcase` reads registers and memory back out of the
         //core between two runs, which a semantic check must not be able to slip into either
         return this.duringCoreOperation(() =>
-            this.testInternal(code, testcases, haltLimit, historySize)
+            this.testInternal(sources, testcases, haltLimit, historySize)
         )
     }
 
     private async testInternal(
-        code: string,
+        sources: BuildInput,
         testcases: Testcase[],
         haltLimit: number,
         historySize = 0
     ) {
         const terminal = this._peripherals.terminal
         const results: TestcaseResult[] = []
+        const snapshot = normalizeBuildInput(sources)
         for (const original of testcases) {
             const testcase = structuredClone($state.snapshot(original)) as Testcase
             try {
                 //The whole testcase loop already owns the Core operation lock.
-                await this.compileInternal(historySize, code)
+                const isolatedFileSystem = new FileSystem(snapshot.files)
+                await this.compileInternal(historySize, snapshot, isolatedFileSystem)
                 await this.runTestcaseInternal(testcase, haltLimit)
                 const errors = await this.validateTestcase(testcase)
                 results.push({
@@ -1051,6 +1398,9 @@ export abstract class GenericEmulator<T, R extends string>
             } catch (e) {
                 console.error(e)
                 this.addError(this._stringifyError(e))
+            } finally {
+                this.fileSystemSession?.stop()
+                this.fileSystemSession = null
             }
         }
         const passedTests = results.filter((r) => r.passed)
@@ -1066,20 +1416,38 @@ export abstract class GenericEmulator<T, R extends string>
             }
             terminal.write(`\n✅ ${passedTests.length} testcases passed \n`)
         }
+        if (testcases.length > 0) {
+            //The final Core remains readable for registers, memory, Screen and result reporting,
+            //but its isolated FileSystem session has been released. It is therefore a Test result,
+            //not an interactive Debug session that can be undone and resumed.
+            this._buildSources = undefined
+            this.state.canExecute = false
+            this.state.canUndo = false
+        }
         return results
     }
 
-    toggleBreakpoint(line: number): void {
-        const index = this.state.breakpoints.indexOf(line)
-        if (index === -1) this.state.breakpoints.push(line)
+    toggleBreakpoint(line: number, file = this._buildSources?.entry ?? this._sources.entry): void {
+        const index = this.state.breakpoints.findIndex(
+            (breakpoint) => breakpoint.line === line && breakpoint.file === file
+        )
+        if (index === -1) this.state.breakpoints.push({ file, line })
         else this.state.breakpoints.splice(index, 1)
     }
 
-    undo(amount: number | undefined): void {
+    /**
+     * Rolls back up to `amount` instructions and returns how many it actually managed. It can be
+     * fewer: the Screen or the FileSystem journal may have dropped the inverses for older
+     * instructions under its budget, and stopping there is the only way to keep what the panels show
+     * consistent with the Files and the image. Callers that asked for a specific number of steps
+     * should say so when they get fewer, rather than leave the user looking at a History panel that
+     * did not move as far as they clicked.
+     */
+    undo(amount?: number): number {
         //Undo is synchronous. An unfinished step/run/input handler still owns the Core.
-        if (this.coreOperations > 0) return
+        if (this.coreOperations > 0 || !this.state.canExecute) return 0
         try {
-            if (!this.getInstance()) return
+            if (!this.getInstance()) return 0
             const undoCount = Math.max(0, Math.floor(amount ?? 1))
             let undone = 0
             for (; undone < undoCount && this.canUndoStep(); undone++) {
@@ -1092,7 +1460,7 @@ export abstract class GenericEmulator<T, R extends string>
             //a whole region and only the state it ends in is shown
             if (undone > 0) this._resyncScreenFromMemory?.()
             const instruction = this._getNextInstruction()
-            this.state.line = instruction?.lineNumber ?? -1
+            this.selectInstruction(instruction)
             this.state.canUndo = this.canUndoStep()
             this.state.terminated = this._hasTerminated()
             this.updateRegisters()
@@ -1100,12 +1468,181 @@ export abstract class GenericEmulator<T, R extends string>
             this.updateMemory()
             this.updateData()
             this.updateStatusRegisters()
+            return undone
         } catch (e) {
             this.addError(this._stringifyError(e))
             this.state.terminated = true
             console.error(e)
             throw e
         }
+    }
+
+    /**
+     * Whether a Poke is possible right now, which is exactly when a Step is
+     * ([the design record](../../../docs/design/pokes.md)): after a Build, after a Step, at a
+     * breakpoint or after a Pause, with no Interrupt pending and the program not terminated. A Poke
+     * is a synchronous Core operation like Undo, so it is refused too while a Run, Step or input
+     * handler owns the Core. The Project's read-only flag is the caller's half of the rule; the
+     * Emulator knows nothing about Projects.
+     */
+    get canPoke(): boolean {
+        return (
+            this.state.canExecute &&
+            !this.state.terminated &&
+            this.state.interrupt === undefined &&
+            !this.coreBusy
+        )
+    }
+
+    /**
+     * Whether that register of that Register file may be poked. The CPU file offers the registers a
+     * Testcase may seed, which is the set its Core has a setter for, minus the hidden ones (MIPS's
+     * `$zero`, RISC-V's `zero`) and minus the program counter under any spelling. Another file
+     * offers the rows its layout names, except one the last refresh blanked: an empty x87 stack slot
+     * holds no value to change.
+     */
+    canPokeRegister(fileId: string, register: string): boolean {
+        if (!this.canPoke) return false
+        if (fileId === CPU_REGISTER_FILE_ID) {
+            if (isProgramCounterName(register)) return false
+            if (!this.state.startingRegisterNames.includes(register)) return false
+            return !this.state.hiddenRegisters.includes(register)
+        }
+        const file = this.state.registerFiles.find((candidate) => candidate.id === fileId)
+        if (!file) return false
+        const index = file.layout.findIndex((candidate) => candidate.name === register)
+        if (index === -1) return false
+        return file.blanks[index] !== true
+    }
+
+    /**
+     * How wide the register at that row is, in bits. The CPU file is asked for the width the
+     * register ended up with rather than the one the file declares, because an adapter may narrow a
+     * register after the file is built (the Z80's byte wide `a`); every other file has its widths in
+     * its layout.
+     */
+    private pokeRegisterBits(file: RegisterFile, index: number): bigint {
+        const narrowed = file.id === CPU_REGISTER_FILE_ID ? file.registers[index]?.size : undefined
+        return 8n * BigInt(narrowed ?? file.layout[index].size)
+    }
+
+    /**
+     * Pokes one or more registers of one Register file as a single step of the Core's Undo history
+     * ([ADR 0022](../../../docs/adr/0022-core-native-poke-records.md)), and answers whether the Core
+     * recorded one: a history of zero applies the Poke but keeps nothing to undo, as it does for an
+     * instruction. Several writes belong in one call when they are one change the user made, which
+     * is how a MIPS double reaches its even/odd register pair.
+     *
+     * Refused, with no transaction opened, when the availability rule does not hold, when there is
+     * nothing to write, or when any of the registers may not be poked. A value too wide for its
+     * register throws instead of being truncated silently, the way the panels refuse such a commit,
+     * and a write that leaves the value as it is drops out, so a Poke that changes nothing records
+     * nothing.
+     */
+    pokeRegisters(fileId: string, writes: RegisterPoke[]): boolean {
+        if (!this.canPoke || writes.length === 0 || !this.getInstance()) return false
+        const file = this.state.registerFiles.find((candidate) => candidate.id === fileId)
+        if (!file) return false
+        if (!writes.every((write) => this.canPokeRegister(fileId, write.register))) return false
+        if (fileId !== CPU_REGISTER_FILE_ID && !this._setRegisterFileValue) return false
+        const pending: { register: string; value: bigint; size: RegisterSize }[] = []
+        for (const write of writes) {
+            const index = file.layout.findIndex((candidate) => candidate.name === write.register)
+            //a register the Core offers as a starting value but the CPU file does not draw has no
+            //row to take a width from, so there is nothing to check the value against
+            if (index === -1) return false
+            const bits = this.pokeRegisterBits(file, index)
+            if (write.value < 0n || write.value >> bits !== 0n) {
+                throw new Error(
+                    `0x${write.value.toString(16)} does not fit ${write.register}, ` +
+                        `which is ${bits} bits wide`
+                )
+            }
+            //a write that changes nothing is dropped, with both sides masked to the register's
+            //width: MIPS and RISC-V hand their CPU registers back signed, so a register of all
+            //ones reads `-1n` in the panel while a poked value is unsigned by contract, and an
+            //unmasked comparison would record a `Wrote 0xFFFFFFFF to $t0 (was 0xFFFFFFFF)` step of its own
+            const stored = file.registers[index]?.value
+            const width = Number(bits)
+            if (
+                stored !== undefined &&
+                BigInt.asUintN(width, stored) === BigInt.asUintN(width, write.value)
+            ) {
+                continue
+            }
+            pending.push({
+                register: write.register,
+                value: write.value,
+                size: Number(file.registers[index]?.size ?? file.layout[index].size) as RegisterSize
+            })
+        }
+        if (pending.length === 0) return false
+        try {
+            let recorded = false
+            this._beginPoke()
+            try {
+                for (const write of pending) {
+                    if (fileId === CPU_REGISTER_FILE_ID) {
+                        this._setRegisterValue(write.register as R, write.value, write.size)
+                    } else {
+                        this._setRegisterFileValue!(fileId, write.register, write.value)
+                    }
+                }
+            } finally {
+                //the transaction is closed even when a setter threw, or the Core goes on journaling
+                //into an entry nothing will ever end, and the panels are refreshed either way: a
+                //setter that threw leaves whatever the writes before it changed, which the Core
+                //recorded and the next Undo would revert
+                recorded = this._endPoke()
+                this.refreshAfterPoke()
+            }
+            return recorded
+        } catch (e) {
+            this.addError(this._stringifyError(e))
+            console.error(e)
+            throw e
+        }
+    }
+
+    /**
+     * Pokes a run of memory bytes, which is one step of the history however many bytes it holds.
+     * Refused by the same availability rule as `pokeRegisters`, and dropped when the bytes are
+     * already what memory holds.
+     */
+    pokeMemory(address: bigint, bytes: Uint8Array): boolean {
+        if (!this.canPoke || bytes.length === 0 || !this.getInstance()) return false
+        try {
+            if (isMemoryChunkEqual(this._readMemoryBytes(address, BigInt(bytes.length)), bytes)) {
+                return false
+            }
+            let recorded = false
+            this._beginPoke()
+            try {
+                this._writeMemoryBytes(address, bytes)
+            } finally {
+                recorded = this._endPoke()
+                //an image that lives in Core memory is re-read rather than journaled, exactly as
+                //after an Undo ([ADR 0005](../../../docs/adr/0005-restore-screen-state-on-undo.md),
+                //[ADR 0020](../../../docs/adr/0020-mirror-the-trs80-display-in-guest-memory.md)),
+                //and a write that threw part way through is shown rather than left hidden
+                this._resyncScreenFromMemory?.()
+                this.refreshAfterPoke()
+            }
+            return recorded
+        } catch (e) {
+            this.addError(this._stringifyError(e))
+            console.error(e)
+            throw e
+        }
+    }
+
+    /**
+     * What a Poke leaves the panels showing: the refresh an Undo ends with, without the current
+     * line, which a Poke never moves because no instruction ran.
+     */
+    private refreshAfterPoke(): void {
+        this.state.canUndo = this.canUndoStep()
+        this.refreshCoreViews()
     }
 
     readMemoryBytes(address: bigint, length: number): Uint8Array {
@@ -1148,8 +1685,21 @@ export abstract class GenericEmulator<T, R extends string>
         return this.state.compilerDiagnostics.filter((d) => d.severity === 'error')
     }
 
+    get buildSources() {
+        return this._buildSources
+    }
+
+    /** The Entry path of the sources currently set, which a single-source host never names itself. */
+    get entry() {
+        return this._sources.entry
+    }
+
     get decorations() {
         return this.state.decorations
+    }
+
+    get buildArtifacts() {
+        return this.state.buildArtifacts
     }
 
     get errors() {
@@ -1172,6 +1722,10 @@ export abstract class GenericEmulator<T, R extends string>
         return this.state.line
     }
 
+    get currentFile() {
+        return this.state.currentFile
+    }
+
     get memory() {
         return this.state.memory
     }
@@ -1182,6 +1736,11 @@ export abstract class GenericEmulator<T, R extends string>
 
     get registers() {
         return this.state.registers
+    }
+
+    /** Every Register file, the CPU one first; see `createRegisterFiles`. */
+    get registerFiles() {
+        return this.state.registerFiles
     }
 
     get startingRegisterNames() {
@@ -1213,7 +1772,11 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     get code() {
-        return this._code
+        try {
+            return sourceText(this._sources)
+        } catch {
+            return ''
+        }
     }
 
     get systemSize() {

@@ -1,6 +1,6 @@
 {
     "name": "Arithmetic, logic and bits",
-    "description": "Multiplication and division on a machine whose operands are words and whose answer comes back packed into one register, then the masks, shifts and rotates, and the four instructions that work on one bit.",
+    "description": "Multiply and divide with the 68000's word-sized forms, then use Boolean masks, shifts, rotates, carry and bit instructions on data registers.",
     "order": 2,
     "topic": "arithmetic"
 }

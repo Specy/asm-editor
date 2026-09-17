@@ -1,14 +1,6 @@
 Eight words sit in memory and the program walks them once, keeping the largest one it has seen so
-far in `t1` and the position it was found at in `t2`. One of the numbers is negative, which is what
-makes the choice of comparison matter.
-
-Sum of an array read every element and needed nothing from the ones before it. Here every pass has
-to compare the element against something the loop is carrying, which is the shape of every "find the
-best one" program there is.
-
-**You need to know:** the "Arrays and strings" lecture and the "Comparing without flags" lecture.
-What is new here is the best so far: a register that starts as the first element and is overwritten
-only when the loop meets something better.
+far in `t1` and the position it was found at in `t2`. One of the numbers is negative, and that turns
+out to decide which comparison you are allowed to use.
 
 ```riscv|playground|memory|allow-open
 .eqv COUNT, 8
@@ -19,41 +11,47 @@ numbers: .word 12, -4, 37, 8, 99, 41, 2, 60
 .text
 main:
     la t0, numbers      # the array
-    lw t1, 0(t0)        # best = numbers[0]
-    li t2, 0            # where = 0
-    li t3, 1            # i = 1
-    li t6, COUNT        # the bound, which a branch needs in a register
+    lw t1, 0(t0)        # best so far = the first element
+    li t2, 0            # and where it was found
+    li t3, 1            # start looking at element 1
+    li t6, COUNT        # the bound, which the branch needs in a register
 loop:
-    slli t4, t3, 2      # i * 4, the size of a word
-    add t4, t0, t4      # &numbers[i]
-    lw t5, 0(t4)        # n = numbers[i]
-    ble t5, t1, not_bigger   # if(n <= best) leave it alone
-    mv t1, t5           # best = n
-    mv t2, t3           # where = i
+    slli t4, t3, 2      # index * 4
+    add t4, t0, t4      # the address of element t3
+    lw t5, 0(t4)
+    ble t5, t1, not_bigger
+    mv t1, t5           # a new best
+    mv t2, t3           # and where it was
 not_bigger:
-    addi t3, t3, 1      # i++
+    addi t3, t3, 1
     blt t3, t6, loop
 ```
 
-The first element is read before the loop, into `t1`, so the loop itself has only seven elements
-left and starts with an answer that is already right for the part of the array it has seen. Starting
-`t1` at 0 instead would be a different program, one that answers 0 for an array of negative numbers.
+The first element is read **before** the loop starts, so the program always has an answer that is
+correct for the part of the array it has looked at so far. Starting `t1` at 0 instead would be a
+different program, and a wrong one: over an array of nothing but negative numbers it would happily
+report 0, which is not in the array.
 
-This loop walks by **index**, because it needs to remember where the best one was and a pointer does
-not say that. `slli t4, t3, 2` is the multiplication by four that C does for you inside
-`numbers[i]`: shifting left by two multiplies by four, and every element size on this machine is a
-power of two, so a shift is always what you want there.
+This loop walks by index rather than by pointer, because it has to report **where** the best element
+was and a bare address does not tell you that. Turning an index into an address takes the two lines
+at the top of the body:
 
-`li t6, COUNT` sits above the loop and not inside it because `blt` compares two registers and
-neither of them may be a number. MIPS writes `blt $t3, COUNT, loop` and lets the assembler put the
-constant in `$at` for you; there is no such register here, so the `li` is yours and it belongs
-outside, where it runs once.
+| `t3` | `slli t4, t3, 2` | `add t4, t0, t4` |
+| ---- | ---------------- | ---------------- |
+| 1    | 4                | `10010004`       |
+| 2    | 8                | `10010008`       |
+| 3    | 12               | `1001000C`       |
 
-`t1` comes out at `00000063`, which is 99, and `t2` at 4, since 99 is the fifth element and the
-first one is number 0. `t5` holds 60, the last element the loop looked at, and `t3` ends at 8, which
-is what stopped it.
+`slli` shifts left, and shifting left by two multiplies by four, which is the size of a word. Every
+useful element size is a power of two, so this shift is how array indexing is done everywhere: it is
+a multiplication the machine can do in one step.
 
-`ble` is the **signed** comparison, and the `-4` in the array is why. Try changing
-`ble t5, t1, not_bigger` to `bleu t5, t1, not_bigger`, which reads the same bits as unsigned
-numbers: `t1` comes out at `FFFFFFFC` and `t2` at 1, because read that way `FFFFFFFC` is 4294967292
-and nothing in the array beats it.
+`li t6, COUNT` sits above the loop rather than inside it. The bound has to be in a register for the
+branch to compare against, and loading it once before the loop is free where loading it every pass
+is not.
+
+`ble` is the **signed** comparison, and the `-4` in the array is why that matters. Swap it for
+`bleu`, which reads the same bits as plain positive counts, and the program reports `FFFFFFFC` as
+the largest element: those are the bits of -4, and read as an unsigned number they come to
+4294967292, which nothing in the array can beat. The bits never changed. Only the instruction
+looking at them did.

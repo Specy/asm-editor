@@ -1,13 +1,6 @@
-Two numbers sit in registers, and the program leaves the larger of them in `$t2` and the distance
-between them in `$t4`. Both answers come out of the same pair of instructions, one that works a
-condition out into a register and a branch that reads it.
-
-The two programs before this one ran every instruction they had, top to bottom. This is the first
-one where some instructions are skipped, and stepping through it is how you watch which ones.
-
-**You need to know:** the "Branch on compare" lecture and the "Comparing without flags" lecture.
-What is new here is that a branch chooses between two pieces of code, so the piece that runs first
-has to jump over the one that follows it.
+This program compares two signed numbers. It leaves their maximum in `$t2` and the unsigned
+distance between them in `$t4`. Step through it once and watch the `pc`: only one of the two paths
+runs.
 
 ```mips|playground|allow-open
 .text
@@ -15,41 +8,43 @@ main:
     li $t0, 37          # a = 37
     li $t1, 64          # b = 64
 
-    slt $t3, $t0, $t1   # is a < b?
-    beqz $t3, a_is_bigger
-    move $t2, $t1       # bigger = b
-    j done
-a_is_bigger:
-    move $t2, $t0       # bigger = a
-done:
+    slt $t3, $t0, $t1   # $t3 = 1 when signed a < signed b
+    beqz $t3, a_is_at_least_b
 
-    sub $t4, $t0, $t1   # distance = a - b
-    bgez $t4, positive  # if(distance >= 0) it is already the answer
-    sub $t4, $zero, $t4 # otherwise flip its sign
-positive:
+    move $t2, $t1       # maximum = b
+    subu $t4, $t1, $t0  # distance = b - a
+    j done
+
+a_is_at_least_b:
+    move $t2, $t0       # maximum = a
+    subu $t4, $t0, $t1  # distance = a - b
+
+done:
+    li $v0, 10
+    syscall
 ```
 
-`slt $t3, $t0, $t1` writes 1 into `$t3` when `$t0` is less than `$t1` and 0 when it is not, which is
-C's `t3 = (a < b)`. There is no flags register to leave the answer in, so it goes into a register
-you named, and `beqz $t3, a_is_bigger` under it branches when that register came out 0. The M68K
-writes the same two lines as `cmp.l d1, d0` and `bge`, with the answer in the condition codes and
-nothing naming where it went.
+`slt` performs a **signed** comparison. It writes 1 to `$t3` when `a < b`, and 0 otherwise.
+`beqz` then tests only whether `$t3` is zero; a zero test has no signed or unsigned interpretation.
+When `$t3` is 0, execution jumps to `a_is_at_least_b`, which also handles equality.
 
-The `j done` is the whole difference between the two halves. An `if` with an `else` has two pieces
-of code and only one of them may run, so the first one ends by jumping over the second; leave the
-`j` out and the program falls through into `a_is_bigger` and overwrites the answer it just wrote. An
-`if` with no `else`, like the second `sub` below it, has nothing to jump over.
+When `b` is larger, the first path copies `b` to `$t2` and calculates `b - a`. Its `j done` skips
+the other path. When `a` is at least `b`, the branch selects the second path and calculates `a - b`.
+This Playground transfers control immediately after a branch or jump; it has no branch delay slots.
+Classic MIPS material may show a delay-slot instruction instead.
 
-`$t2` comes out at `00000040`, which is 64, and `$t4` at `0000001B`, which is 27. `bgez` reads the
-register the `sub` above it wrote, so no second comparison is needed: the subtraction that computed
-the difference has already put it somewhere a branch can look at.
+Both paths use `subu`, so the subtraction does not raise a signed-overflow exception. The result in
+`$t4` is the correct unsigned magnitude for every pair of signed 32-bit inputs. A magnitude greater
+than `2147483647` has its top bit set, so the signed register view displays the same bits as a
+negative number; use the unsigned or hexadecimal view to inspect that magnitude.
 
-`sub $t4, $zero, $t4` is how a sign is flipped, since 0 minus a number is its negative.
-`neg $t4, $t4` is the assembler's name for that same instruction.
+Run the program as written. At `syscall`, `$t2` should be `64` and `$t4` should be `27`
+(`0x0000001b`). To practise both routes, replace the two `li` values with each row below. Predict the
+route and results before running, then check `$t2` and `$t4` in the register panel.
 
-`slt` and the branches are the **signed** family, which is the one you want for numbers that can go
-below zero. Writing `sltu` there would read both registers as unsigned, and a negative `$t0` would
-then be a very large number.
-
-Try changing `li $t0, 37` to `li $t0, 99`. `$t2` comes out at 99 and `$t4` at 35, and the two
-branches that were not taken are now the ones that are.
+| `a` | `b` | Expected route    | `$t2` maximum | `$t4` unsigned distance |
+| --- | --- | ----------------- | ------------- | ----------------------- |
+| 37  | 64  | first path        | 64            | 27                      |
+| 99  | 64  | `a_is_at_least_b` | 99            | 35                      |
+| 64  | 64  | `a_is_at_least_b` | 64            | 0                       |
+| -9  | -2  | first path        | -2            | 7                       |

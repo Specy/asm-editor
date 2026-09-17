@@ -1,0 +1,6 @@
+{
+    "name": "Ports, memory-mapped devices, and kernel access",
+    "description": "How x86 port I/O and memory-mapped devices work, how Linux controls a process's access, and how to map and release anonymous pages safely with mmap.",
+    "order": 1,
+    "topic": "mmio"
+}

@@ -6,11 +6,6 @@ Moving values around kept everything in registers, and there are only seven 8 bi
 program has more of than that goes in memory, and `.dw` is what puts it there before the first
 instruction runs.
 
-**You need to know:** the "org, db, dw and ds" lecture and the "The 64 KB address space" lecture.
-What is new here is the difference between a name that is a number and a name that is an address,
-`TAX` is replaced by 20 inside the instruction while `price` becomes `0x9000` and the instruction
-goes to memory for what is there.
-
 ```z80|playground|memory|no-flags|allow-open
 TAX equ 20
 
@@ -48,10 +43,6 @@ only reserves two bytes and writes nothing, so `total` is `00 00` before the run
 which is `0x0131`, or 305.
 
 `ld hl, (price)` and `ld (total), hl` are the extended mode from the addressing lecture: the address
-is written into the instruction, which is a global variable in C. Only `a`, the pairs and the index
-registers can name a bare address like that, so `ld b, (price)` is not an instruction and the build
-fails on it.
-
-Try changing `price: .dw 250` to `price: .dw 500`. `total` comes out at `2B 02`, which is `0x022B`,
-or 555, and the only thing that changed is the two bytes the assembler writes at `0x9000` before
-your program starts.
+is fixed at the moment the program is assembled and written straight into the instruction. Only `a`,
+the pairs and the index registers can name a bare address like that, so `ld b, (price)` is not an
+instruction and the build fails on it.

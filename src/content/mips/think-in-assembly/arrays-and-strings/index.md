@@ -1,49 +1,59 @@
-An array in memory has no length, no bounds and no element names. What it has is a first address and
-a size per element, and every loop over it is built out of those two numbers. On MIPS the size is
-also what you multiply the index by, because `offset(base)` adds a register to nothing and scales
-nothing.
+An array is a run of equal-sized elements stored next to one another in memory. Its label gives the
+address of the first element, called the **base address**. To reach element `i`, calculate
 
-## The size decides the shift
+```text
+address = base + i * element_size
+```
 
-`a[i]` in C is the base plus `i` times the size of an element. Here that multiplication is a shift
-you write: two places for a word, one for a half, none at all for a byte.
+Assembly does not remember an array's length or scale an index for you. The program must use the
+right element size and keep the index within the array.
+
+## From an index to a byte offset
+
+The product `i * element_size` is a **byte offset** from the base. The offsets for the first four
+elements show how the element width changes the arithmetic:
+
+| element index `i` | word array, 4 bytes each | half array, 2 bytes each | byte array, 1 byte each |
+| ----------------: | -----------------------: | -----------------------: | ----------------------: |
+|                 0 |                        0 |                        0 |                       0 |
+|                 1 |                        4 |                        2 |                       1 |
+|                 2 |                        8 |                        4 |                       2 |
+|                 3 |                       12 |                        6 |                       3 |
+
+For example, if a word array begins at `0x10010000`, element 3 is 12 bytes after the base, at
+`0x1001000C`. The load still uses offset 0 because the calculation has already produced the exact
+element address:
 
 ```mips|playground|memory
 .data
-words:  .word 10, 20, 30, 40
-halves: .half 1, 2, 3, 4
-bytes:  .byte 5, 6, 7, 8
+words: .word 10, 20, 30, 40
 
 .text
 main:
-    li $t0, 2               # i = 2
-    la $t1, words
-    sll $t2, $t0, 2         # i * 4
-    add $t2, $t1, $t2
-    lw $t3, 0($t2)          # words[i]
-    la $t4, halves
-    sll $t5, $t0, 1         # i * 2
-    add $t5, $t4, $t5
-    lh $t6, 0($t5)          # halves[i]
-    la $t7, bytes
-    add $t8, $t7, $t0       # i, with nothing to scale
-    lb $t9, 0($t8)          # bytes[i]
+    li $t0, 3               # index i
+    li $t1, 4               # size of one word in bytes
+    mul $t2, $t0, $t1       # mul destination, left, right: i * 4
+    la $t3, words            # base address
+    add $t3, $t3, $t2       # base + byte offset
+    lw $t4, 0($t3)          # words[3] = 40
+
+    li $v0, 10
+    syscall
 ```
 
-`$t3` comes out at 30, `$t6` at 3 and `$t9` at 7, the third element of each of the three arrays. The
-three `la` results say where the assembler put them: `10010000` for the words, `10010010` for the
-halves, since four words take sixteen bytes, and `10010018` for the bytes.
+Here `mul $t2, $t0, $t1` multiplies the two source registers and puts the product in `$t2`. The same
+base-plus-offset rule works at every width: use `lw` for words, `lh` for halves, and `lbu` for byte
+values. For a byte array, the index is already a byte offset because multiplying by 1 changes
+nothing.
 
-An array of bytes needs no shift, which is why a string is walked with `addi $t0, $t0, 1` and nothing
-else.
+## Strings are zero-terminated byte arrays
 
-## Strings are bytes with a zero at the end
+A string stores one character code per byte and ends with a zero byte. The directive
+`.asciiz "Assembly"` writes the eight character bytes followed by that zero terminator. A character
+literal such as `'A'` asks the assembler for one character's numeric code; in ASCII, `'A'` is 65.
 
-`.asciiz "Assembly"` writes nine bytes: the eight character codes and the terminator the directive
-adds. To the CPU `'A'` is the number 65, or `0x41`, which is what ASCII assigns to that letter, and
-nothing anywhere marks that byte as a letter rather than a number.
-
-Nothing records how long a string is either, so a loop finds out by reading until it reads a zero.
+There is no separate length field. A program finds the length by loading one byte at a time until
+it reaches the terminator:
 
 ```mips|playground|memory
 .data
@@ -51,29 +61,34 @@ text: .asciiz "Assembly"
 
 .text
 main:
-    la $t0, text            # p = text
-    li $t1, 0               # n = 0
-loop:
-    lb $t2, 0($t0)          # c = *p
-    beqz $t2, done          # if(c == 0) stop
-    addi $t0, $t0, 1        # p++
-    addi $t1, $t1, 1        # n++
-    j loop
-done:
+    la $t0, text            # address of the current byte
+    li $t1, 0               # number of characters already counted
+
+length_test:
+    lbu $t2, 0($t0)         # current character code, from 0 through 255
+    beqz $t2, length_done
+    addi $t0, $t0, 1        # advance by one byte
+    addi $t1, $t1, 1
+    j length_test
+
+length_done:
+    li $v0, 10
+    syscall
 ```
 
-`$t1` comes out at 8, the eight characters without the terminator, and `$t0` at `10010008`, the
-address of the zero byte. The memory panel at `10010000` reads `41 73 73 65 6D 62 6C 79 00`, and its
-text button draws those same bytes as `Assembly`.
+Whenever execution reaches `length_test`, `$t0` points to the byte being inspected and `$t1` is the
+number of characters before that byte. Those two facts are the loop's **invariants**. When the zero
+is found, `$t0` points to the terminator and `$t1` holds 8. The terminator marks the end; it is not
+included in the length.
 
-`lb` sign extends, so a byte above 127 comes back negative. Every ASCII character is 127 or under, so
-`lb` is safe for text. Bytes that hold numbers instead of letters want `lbu`, which keeps them in 0
-to 255.
+`lbu` means **load byte unsigned**. It zero-extends the loaded byte to a value from 0 through 255,
+which is the useful range for character codes. `lb` instead sign-extends bytes whose top bit is 1
+into negative values.
 
-## Copying one
+## Copy the byte, then test it
 
-`strcpy` in C copies characters until it has copied the terminator. Copying it is the point: a copy
-without a terminator is not a string.
+The destination needs enough room for every character and the terminator. `.space 16` reserves
+exactly 16 bytes, so the eight characters and zero byte in `"Hi there"` fit.
 
 ```mips|playground|memory
 .data
@@ -82,33 +97,42 @@ dest:   .space 16
 
 .text
 main:
-    la $t0, source          # p = source
-    la $t1, dest            # q = dest
-loop:
-    lb $t2, 0($t0)          # c = *p
-    sb $t2, 0($t1)          # *q = c
-    addi $t0, $t0, 1        # p++
-    addi $t1, $t1, 1        # q++
-    bnez $t2, loop          # until the byte copied was the terminator
+    la $t0, source          # address of the next byte to read
+    la $t1, dest            # address of the next byte to write
+
+copy_loop:
+    lbu $t2, 0($t0)         # 1. load the next byte
+    sb $t2, 0($t1)          # 2. copy it
+    addi $t0, $t0, 1        # 3. advance both pointers
+    addi $t1, $t1, 1
+    bnez $t2, copy_loop     # 4. repeat if the copied byte was not zero
+
+    li $v0, 10
+    syscall
 ```
 
-`source` is nine bytes at `0x10010000`, so `dest` begins at `0x10010009`, and after the run the
-memory panel shows the same nine bytes twice: `48 69 20 74 68 65 72 65 00` and then the same again.
+At the start of each pass, `$t0` points to the next unread source byte and `$t1` points to the next
+unwritten destination byte. Everything before those pointers has already been copied. The loop
+uses the order **load, copy, advance, test**, so the zero byte is copied before the branch ends the
+loop. Afterwards, both pointers are one byte past their strings, and `dest` is a valid
+zero-terminated copy.
 
-The `bnez $t2, loop` at the bottom is the test on the byte that was **just copied**, which is why the
-terminator gets written before the loop ends. Comparing two strings is the same loop with a `bne`
-between the two bytes in it, and a `sb` swapped for a second `lb`.
+## Rows and columns in one line of memory
 
-`dest` is a `.space`, so it is not word aligned and a `sw` into it would end the run. Bytes are fine
-anywhere, which is why this loop does not care.
+Memory is a line of bytes, even when source code arranges values as a grid. In **row-major order**,
+all of row 0 comes first, then all of row 1, and so on. For an array with a fixed number of columns,
+the complete address calculation is
 
-## Two dimensions
+```text
+address = base + (row * columns + column) * element_size
+```
 
-A 2D array is a 1D array read in rows. `grid[row][col]` is the base plus `(row * COLS + col)` times
-the size of an element, and MIPS makes you write both multiplications.
+`.eqv COLS 4` gives the constant 4 the name `COLS`. The assembler replaces that name wherever it is
+used. This example finds row 2, column 3 in a grid of halfwords:
 
 ```mips|playground|memory
 .eqv COLS 4
+.eqv HALF_SIZE 2
 
 .data
 grid:   .half 0, 1, 2, 3
@@ -120,43 +144,64 @@ main:
     li $t0, 2               # row
     li $t1, 3               # column
     li $t2, COLS
-    mul $t3, $t0, $t2       # row * COLS
-    add $t3, $t3, $t1       # + column
-    sll $t3, $t3, 1         # times 2, the size of a half
+    mul $t3, $t0, $t2       # row * columns = 8
+    add $t3, $t3, $t1       # flat element index = 11
+    li $t2, HALF_SIZE
+    mul $t3, $t3, $t2       # byte offset = 22
     la $t4, grid
     add $t4, $t4, $t3
-    lh $t5, 0($t4)          # grid[row][col]
+    lh $t5, 0($t4)          # grid[2][3] = 23
+
+    li $v0, 10
+    syscall
 ```
 
-`$t5` comes out at 23, the last element of the last row, and `$t3` at 22, which is the byte offset
-into the block. The three `.half` lines are one array: the rows are a convenience for whoever reads
-the source, and the twelve halves sit end to end from `0x10010000`, which is what `COLS` in the index
-arithmetic assumes.
+The three `.half` lines form one contiguous array of twelve elements. Their line breaks only make
+the source easier to read. The value of `COLS` is what makes every four elements one logical row.
 
-`mul $t3, $t0, $t2` is a real instruction and it is what a row of any width needs. When the width is
-a power of two, `sll` does it in one cheaper instruction, and the two shifts can be added together:
-a grid of 4 halves is `sll $t3, $t0, 3` for the row and then the column shifted by 1.
+## Checking a character range
 
-Try changing `li $t0, 2` to `li $t0, 0` and `li $t1, 3` to `li $t1, 1`. `$t5` comes out at 1, the
-second element of the first row.
+ASCII places the lowercase letters together from `'a'` through `'z'`. To decide whether a byte is
+lowercase, reject values below the lower bound and above the upper bound:
+
+```mips|playground
+.text
+main:
+    li $t0, 'g'                 # a character literal supplies the code for g
+    blt $t0, 'a', not_lowercase # branch if value < lower bound
+    bgt $t0, 'z', not_lowercase # branch if value > upper bound
+    addi $t0, $t0, -32          # g becomes G
+
+not_lowercase:
+    li $v0, 10
+    syscall
+```
+
+The forms are `blt value, lower_bound, label` and `bgt value, upper_bound, label`. For `'g'`, neither
+branch is taken, so subtracting 32 produces `'G'`. A character such as `'!'` takes the first branch,
+while `'{'` takes the second. Both skip the conversion.
 
 ## Your turn
 
-`text` at `0x10010000` is a string with a zero at the end. Leave its length, not counting the
-terminator, in `$t0`. For `"Assembly"` that is 8.
+Find the length of `text`, excluding its zero terminator, and leave the result in `$t0`. The string
+contains letters, a space, digits, and punctuation; each still occupies one byte. Use `lbu` to walk
+the string. The stop sequence is already present.
 
 ```mips|playground|memory|exercise
 .data
-text: .asciiz "Assembly"
+text: .asciiz "MIPS 32!"
 
 .text
 main:
-    # your code here
+    # count the characters here
+
+    li $v0, 10
+    syscall
 ```
 
 ```testcase
 {
-    "expectedRegisters": { "$t0": 8 }
+    "expectedRegisters": { "$t0": 8, "$v0": 10 }
 }
 ```
 
@@ -165,39 +210,51 @@ main:
 
 ```mips|playground|memory|solution
 .data
-text: .asciiz "Assembly"
+text: .asciiz "MIPS 32!"
 
 .text
 main:
-    la $t1, text        # p = text
-    li $t0, 0           # n = 0
-loop:
-    lb $t2, 0($t1)      # c = *p
-    beqz $t2, done
+    la $t1, text
+    li $t0, 0
+
+length_test:
+    lbu $t2, 0($t1)
+    beqz $t2, length_done
     addi $t1, $t1, 1
     addi $t0, $t0, 1
-    j loop
-done:
+    j length_test
+
+length_done:
+    li $v0, 10
+    syscall
 ```
 
 </details>
 
-The second one turns `text` into upper case **in place**, so the memory at `0x10010000` ends up
-holding `HELLO` and its terminator. A lower case letter is `'a'` to `'z'` and subtracting 32 from its
-code gives the capital.
+Now convert every lowercase ASCII letter in `text` to uppercase **in place**. Leave uppercase
+letters, punctuation, and digits unchanged. For each nonzero byte, use the two-sided `blt`/`bgt`
+range check shown above; subtract 32 and store the byte back only when it lies from `'a'` through
+`'z'`. The stop sequence is already present.
 
 ```mips|playground|memory|exercise
 .data
-text: .asciiz "hello"
+text: .asciiz "aAzZ-09!"
 
 .text
 main:
-    # your code here
+    # walk the string and convert lowercase letters here
+
+    li $v0, 10
+    syscall
 ```
 
 ```testcase
 {
-    "expectedMemory": [{ "type": "string-chunk", "address": "0x10010000", "expected": "HELLO" }]
+    "expectedRegisters": { "$v0": 10 },
+    "expectedMemory": [
+        { "type": "string-chunk", "address": "0x10010000", "expected": "AAZZ-09!" },
+        { "type": "number", "address": "0x10010008", "bytes": 1, "expected": 0 }
+    ]
 }
 ```
 
@@ -206,22 +263,27 @@ main:
 
 ```mips|playground|memory|solution
 .data
-text: .asciiz "hello"
+text: .asciiz "aAzZ-09!"
 
 .text
 main:
     la $t0, text
+
 loop:
-    lb $t1, 0($t0)      # c = *p
+    lbu $t1, 0($t0)
     beqz $t1, done
-    blt $t1, 'a', skip  # leave anything that is not a lower case letter
-    bgt $t1, 'z', skip
-    addi $t1, $t1, -32  # 'a' - 'A' is 32
-    sb $t1, 0($t0)      # *p = c
-skip:
+    blt $t1, 'a', advance
+    bgt $t1, 'z', advance
+    addi $t1, $t1, -32
+    sb $t1, 0($t0)
+
+advance:
     addi $t0, $t0, 1
     j loop
+
 done:
+    li $v0, 10
+    syscall
 ```
 
 </details>

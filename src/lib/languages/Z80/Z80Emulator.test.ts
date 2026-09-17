@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Z80Emulator } from '$lib/languages/Z80/Z80Emulator.svelte'
+import { CPU_REGISTER_FILE_ID } from '$lib/languages/GenericEmulator.svelte'
 
 /**
  * The slice contract against a real Core. `@specy/z80` is plain TypeScript, so it is the one adapter
@@ -17,8 +18,8 @@ const INFINITE_LOOP = ['    org $8000', 'loop:', '    jp loop'].join('\n')
  * instruction budget says nothing about how long the host will be held.
  */
 const DRAWING_LOOP = [
-    'P_FILL  equ 0x11',
-    'P_CMD   equ 0x17',
+    'P_FILL  equ 0x21',
+    'P_CMD   equ 0x27',
     '        org $8000',
     'start:  ld a, 11',
     '        out (P_CMD), a      ; draw off screen',
@@ -40,21 +41,21 @@ const DRAWING_LOOP = [
 const DRAWING_TESTCASE_PROGRAM = [
     '        org $8000',
     '        ld a, 0xFF',
-    '        out (0x10), a       ; white pen',
+    '        out (0x20), a       ; white pen',
     '        ld a, 100',
-    '        out (0x13), a',
-    '        out (0x14), a',
+    '        out (0x23), a',
+    '        out (0x24), a',
     '        ld a, 0',
-    '        out (0x17), a       ; draw the pixel at (100, 100), clear of the text cursor',
-    '        ld c, 0x40',
+    '        out (0x27), a       ; draw the pixel at (100, 100), clear of the text cursor',
+    '        ld c, 0x50',
     '        ld b, 10',
     '        in a, (c)           ; a tenth of a second of program time',
-    '        ld c, 0x42',
+    '        ld c, 0x52',
     '        ld b, 0',
     '        in a, (c)           ; the lowest byte of the elapsed hundredths',
-    '        out (0x01), a       ; printed as an unsigned number',
-    '        in a, (0x00)        ; a character of the testcase input',
-    '        out (0x00), a       ; echoed back',
+    '        out (0x11), a       ; printed as an unsigned number',
+    '        in a, (0x10)        ; a character of the testcase input',
+    '        out (0x10), a       ; echoed back',
     '        halt'
 ].join('\n')
 
@@ -67,16 +68,70 @@ const DRAWING_TESTCASE_PROGRAM = [
 const READ_LINE_PROGRAM = [
     '        org $8000',
     '        ld a, 0xFF',
-    '        out (0x10), a       ; white pen',
+    '        out (0x20), a       ; white pen',
     '        ld a, 50',
-    '        out (0x13), a',
-    '        out (0x14), a',
+    '        out (0x23), a',
+    '        out (0x24), a',
     '        ld a, 0',
-    '        out (0x17), a       ; the pixel at (50, 50)',
-    '        in a, (0x01)        ; a decimal number, typed and echoed at the text cursor',
-    '        out (0x01), a       ; printed back',
+    '        out (0x27), a       ; the pixel at (50, 50)',
+    '        in a, (0x11)        ; a decimal number, typed and echoed at the text cursor',
+    '        out (0x11), a       ; printed back',
     '        halt'
 ].join('\n')
+
+describe('Z80 source set', () => {
+    it('assembles included Files and retains their source identity', async () => {
+        const sources = {
+            entry: 'main.asm',
+            files: {
+                'main.asm': { encoding: 'plain' as const, content: '#include "lib.asm"\n' },
+                'lib.asm': {
+                    encoding: 'plain' as const,
+                    content: '    org $8000\n    ld a, 7\n    halt\n'
+                }
+            }
+        }
+        const emulator = Z80Emulator(sources)
+        await emulator.compile(20, sources)
+        await emulator.run(100)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.registers.find((register) => register.name === 'a')?.value).toBe(7n)
+        expect(emulator.currentFile).toBe('lib.asm')
+        expect(emulator.buildArtifacts).toEqual([
+            {
+                file: 'lib.asm',
+                line: 1,
+                address: 0x8000n,
+                opcode: '3e 07'
+            },
+            {
+                file: 'lib.asm',
+                line: 2,
+                address: 0x8002n,
+                opcode: '76'
+            }
+        ])
+    })
+
+    it('embeds binary Files without transcoding their bytes', async () => {
+        const sources = {
+            entry: 'main.asm',
+            files: {
+                'main.asm': {
+                    encoding: 'plain' as const,
+                    content:
+                        '    org $8000\n    jp start\ndata:\n    #insert "blob.bin"\nstart:\n    ld a, (data)\n    halt\n'
+                },
+                'blob.bin': { encoding: 'base64' as const, content: '/w==' }
+            }
+        }
+        const emulator = Z80Emulator(sources)
+        await emulator.compile(20, sources)
+        await emulator.run(100)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.registers.find((register) => register.name === 'a')?.value).toBe(255n)
+    })
+})
 
 describe('Z80 Screen journal', () => {
     it('journals one record per Core step, echo of a whole typed line included', async () => {
@@ -148,6 +203,143 @@ describe('Z80 reset and testcases', () => {
     })
 })
 
+/**
+ * Pokes against the real Core ([the design record](../../../../docs/design/pokes.md),
+ * [ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md)): a poked value is one step of
+ * the same history the instructions use, named as the panel names it (`af'`, not the machine's
+ * `afPrime`), and undone like any other.
+ */
+describe('Z80 Pokes', () => {
+    const LOADS = [
+        '        org $8000',
+        '        ld a, 1',
+        '        ld hl, 0x1234',
+        '        ld a, 2',
+        '        halt'
+    ].join('\n')
+
+    /** Built with a history and stopped between two instructions, which is when a Poke is possible. */
+    async function stepped(code: string, steps: number) {
+        const emulator = Z80Emulator(code)
+        await emulator.compile(100, code)
+        for (let i = 0; i < steps; i++) await emulator.step()
+        return emulator
+    }
+
+    function registerOf(emulator: ReturnType<typeof Z80Emulator>, name: string): bigint {
+        const register = emulator.registers.find((candidate) => candidate.name === name)
+        if (!register) throw new Error(`No register ${name}`)
+        return register.value
+    }
+
+    it('records a poked register as a step of its own, and undoes it', async () => {
+        const emulator = await stepped(LOADS, 2)
+        expect(registerOf(emulator, 'hl')).toBe(0x1234n)
+        expect(emulator.canPoke).toBe(true)
+
+        expect(
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'hl', value: 0xbeefn }])
+        ).toBe(true)
+        expect(registerOf(emulator, 'hl')).toBe(0xbeefn)
+
+        const [step] = emulator.latestSteps
+        expect(step.kind).toBe('poke')
+        //no instruction ran, so the row has no line to go to
+        expect(step.line).toBe(-1)
+        expect(step.writes).toEqual([{ type: 'register', name: 'hl', old: 0x1234n, new: 0xbeefn }])
+        expect(emulator.canUndo).toBe(true)
+
+        emulator.undo(1)
+        expect(registerOf(emulator, 'hl')).toBe(0x1234n)
+        expect(emulator.latestSteps[0].kind).toBe('instruction')
+    })
+
+    it('names a shadow register the way the panel does', async () => {
+        const emulator = await stepped(LOADS, 2)
+        expect(
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: "af'", value: 0x7fffn }])
+        ).toBe(true)
+        expect(registerOf(emulator, "af'")).toBe(0x7fffn)
+        expect(emulator.latestSteps[0].writes).toEqual([
+            { type: 'register', name: "af'", old: 0n, new: 0x7fffn }
+        ])
+    })
+
+    it("keeps the last executed instruction and the flags out of a Poke's way", async () => {
+        const emulator = await stepped(LOADS, 2)
+        const line = emulator.line
+        const flags = emulator.statusRegisters.map((flag) => ({ ...flag }))
+
+        emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'hl', value: 0x1n }])
+        //a Poke moves neither the current line nor the flags: the instruction that ran last is
+        //still the one before it, and a poked value highlights nothing in the Status flags
+        expect(emulator.line).toBe(line)
+        expect(emulator.statusRegisters).toEqual(flags)
+
+        //and the next instruction is still the one the PC is on
+        await emulator.step()
+        expect(registerOf(emulator, 'a')).toBe(2n)
+    })
+
+    it('records poked memory as one step, however many bytes it spans', async () => {
+        const emulator = await stepped(LOADS, 2)
+        const bytes = new Uint8Array([0xde, 0xad, 0xbe, 0xef])
+
+        expect(emulator.pokeMemory(0x9000n, bytes)).toBe(true)
+        expect([...emulator.readMemoryBytes(0x9000n, 4)]).toEqual([...bytes])
+
+        const [step] = emulator.latestSteps
+        expect(step.kind).toBe('poke')
+        expect(step.writes).toEqual([
+            { type: 'memory', address: 0x9000n, old: [0, 0, 0, 0], new: [...bytes] }
+        ])
+
+        emulator.undo(1)
+        expect([...emulator.readMemoryBytes(0x9000n, 4)]).toEqual([0, 0, 0, 0])
+    })
+
+    it('puts back the value the program found when the instruction after a Poke is undone too', async () => {
+        const emulator = await stepped(LOADS, 2)
+        emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'a', value: 0x55n }])
+        //the third load overwrites the poked value, so undoing both has to walk back through it
+        await emulator.step()
+        expect(registerOf(emulator, 'a')).toBe(2n)
+
+        emulator.undo(1)
+        expect(registerOf(emulator, 'a')).toBe(0x55n)
+        emulator.undo(1)
+        expect(registerOf(emulator, 'a')).toBe(1n)
+    })
+
+    it('leaves the Screen journal where it is when a Poke is undone', async () => {
+        const code = [
+            '        org $8000',
+            '        ld a, 0xFF',
+            '        out (0x20), a       ; white pen',
+            '        ld a, 50',
+            '        out (0x23), a',
+            '        out (0x24), a',
+            '        ld a, 0',
+            '        out (0x27), a       ; the pixel at (50, 50)',
+            '        halt'
+        ].join('\n')
+        const emulator = await stepped(code, 7)
+        const screen = emulator.peripherals.screen
+        expect(colorAt(screen, 50, 50)).toBe(0xffffff)
+        const journaled = screen.history.sequence
+
+        expect(
+            emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'hl', value: 0x99n }])
+        ).toBe(true)
+        expect(screen.history.sequence).toBe(journaled)
+
+        //a Poke drew nothing, so undoing it must not pop the record of the `out` that did
+        emulator.undo(1)
+        expect(screen.history.sequence).toBe(journaled)
+        expect(colorAt(screen, 50, 50)).toBe(0xffffff)
+    })
+})
+
 describe('Z80 emulator slices', () => {
     it('runs a program to its end across slices', async () => {
         //port 1 is the unsigned decimal console port, so three 'x' come out as three 120s
@@ -156,7 +348,7 @@ describe('Z80 emulator slices', () => {
             '    ld b, 3',
             'loop:',
             "    ld a, 'x'",
-            '    out ($01), a',
+            '    out ($11), a',
             '    djnz loop',
             '    halt'
         ].join('\n')
@@ -194,6 +386,7 @@ describe('Z80 emulator slices', () => {
                     instructionBudget: number
                     timeBudgetMs: number
                     breakpoints: number[]
+                    skipBreakpointAtPc: boolean
                     runInstructionLimit: number
                     speedCorrection: number
                 }) => Promise<{ reason: string; instructions: number }>
@@ -202,6 +395,7 @@ describe('Z80 emulator slices', () => {
             instructionBudget: 1_000_000,
             timeBudgetMs: 1,
             breakpoints: [],
+            skipBreakpointAtPc: true,
             runInstructionLimit: 1_000_000,
             speedCorrection: 1
         })

@@ -3,16 +3,14 @@ arrow keys steer it, it grows by one segment every time it reaches the food, and
 head leaves the board or runs into its own body. The score is drawn on the screen while you play and
 printed to the console when you lose.
 
-**Click the Screen panel before you press a key**, the same as in Move a square with the keyboard,
-and press Run again to play another game.
+**Click the Screen panel before you press a key**, and press Run again to play another game.
 
-**You need to know:** everything above it on the ladder. The body is an array walked with a pointer
-and moved with a loop, the drawing and the digits are subroutines, the score is turned into text the
-way Print a number in any base without help does it, and the frame is drawn off screen and shown the
-way A bouncing ball does. What is new is the board kept as **cells**, one byte for the column and
-one for the row packed into a word, which becomes pixels only at the moment something is drawn.
+Nearly everything in here has turned up on its own somewhere earlier: an array walked with a pointer,
+subroutines, a number turned into text, a frame drawn off screen and shown all at once. The idea that
+only becomes visible at this size is that the program does not think in pixels at all. It thinks in
+**cells**, and pixels happen at the last possible moment.
 
-```m68k|playground|screen|console|no-registers|no-flags|allow-open
+```m68k|playground|open-screen|console|no-registers|no-flags|allow-open
 COLS    equ 32              ; the board in cells
 ROWS    equ 24
 CELL    equ 20              ; and one cell in pixels
@@ -286,9 +284,13 @@ score_end:
 { "runFor": 20000 }
 ```
 
+## The board is cells, not pixels
+
 `body` is an array of words, one per segment, with the head at `body[0]`, and a segment is a cell:
 `$050C` is column 5, row 12. Packing the two into one word is what makes a comparison between two
 cells a single `cmp.w`, which the self collision test does once per segment.
+
+## Moving is shifting
 
 The snake moves by shifting: every segment takes the place of the one in front of it, from the tail
 backwards so that nothing is overwritten before it has been read, and then the head is given its new
@@ -301,20 +303,26 @@ they are 1, 0 or -1. The four wall tests are what turn a cell that left the boar
 game, and they have to run before the head is packed back into a byte, since `lsr.w #8, d4` cannot
 tell -1 from 255.
 
+## Steering, and the turn it will not let you make
+
 The arrows do not move the snake, they call `try_direction`, and it refuses a direction that is the
 exact opposite of the one the snake is going: `dx + nx` and `dy + ny` are both zero only when the new
 way is backwards, and turning back means eating your own neck on the next frame.
+
+## Food out of arithmetic
 
 The food goes wherever a sixteen bit **xorshift** generator says. Three shifts and three `eor`
 instructions turn a number into the next one of a sequence that never repeats until it has been
 through all 65535 of them, which is as random as a program with no clock and no dice can be. The
 column is a mask, since 32 is a power of two, and the row is the remainder of a `divu` by 24.
 
+## One frame
+
 A frame is a clear, the food, one square per segment, the score and then task 94, which shows the
 whole thing at once, and task 23 sets the pace at twelve hundredths of a second per cell. The score
 is drawn by the digits loop of Print a number in any base without help, and the same number goes to
 the console through task 17 when the game ends.
 
-Try changing `seed: dc.w $ACE1` to any other value that is not zero. The food falls in a different
-order, because the sequence is fixed by where it starts: run the same program twice and you get the
-same game twice, which is what makes a program with a generator like this one worth debugging.
+The sequence is fixed entirely by where it starts, so two runs of the same program deal the food in
+exactly the same order. That is a nuisance when you want variety and a gift when you are chasing a
+bug, because the game that went wrong can be played again.

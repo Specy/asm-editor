@@ -10,7 +10,7 @@ import { snapshotToolResult } from './snapshot.svelte'
 
 type ToolPayload = Record<string, unknown>
 
-type ToolRunContext = {
+export type ToolRunContext = {
     success: <T extends ToolPayload>(payload: T) => T & { success: true }
     failure: <T extends ToolPayload>(
         errorKind: AgentToolErrorKind,
