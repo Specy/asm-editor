@@ -836,6 +836,31 @@ describe('pause', () => {
         expect(emulator.coreSteps).toBe(250)
     })
 
+    it('lets only the slice a Run starts with skip the breakpoint at the program counter', async () => {
+        //the rule that makes Run continue from a breakpoint instead of stopping on it again, and
+        //nothing more: the slices that follow are mid-program, where every breakpoint has still to
+        //stop the run ([ADR 0023](../../docs/adr/0023-run-continues-past-the-breakpoint-it-is-parked-on.md))
+        const emulator = new FakeEmulator()
+        emulator.toggleBreakpoint(7)
+        emulator.behavior = (_request, index) => ({
+            reason: index === 1 ? 'wait' : 'budget',
+            instructions: 100,
+            wait: index === 1 ? Promise.resolve() : undefined
+        })
+        await emulator.run(400)
+        await emulator.run(100)
+        expect(emulator.requests.map((r) => r.skipBreakpointAtPc)).toEqual([
+            //four slices of the first Run: its own, one that ran out of budget, one the program
+            //waited in, and the one after the wait
+            true,
+            false,
+            false,
+            false,
+            //and the Run after it starts again
+            true
+        ])
+    })
+
     it('keeps breakpoints and the speed estimate across separate runs', async () => {
         const time = controlledPerformanceTime()
         const emulator = new FakeEmulator()

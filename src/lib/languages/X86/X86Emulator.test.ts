@@ -384,6 +384,105 @@ describe('x86 history rows', () => {
     })
 })
 
+describe('x86 breakpoints', () => {
+    /**
+     * Run from a breakpoint has to move. The Core checks its breakpoints before executing the
+     * instruction they name, so a Run resumed where the last one stopped saw the same breakpoint
+     * again, executed nothing and reported the same stop for ever: the only way out was a Step
+     * ([ADR 0023](../../../../docs/adr/0023-run-continues-past-the-breakpoint-it-is-parked-on.md)).
+     */
+    const THREE_MOVES = [
+        'bits 64',
+        'global _start',
+        'section .text',
+        '_start:',
+        '    mov rax, 1',
+        '    mov rbx, 2',
+        '    mov rcx, 3',
+        '    mov rax, 60',
+        '    xor rdi, rdi',
+        '    syscall'
+    ].join('\n')
+
+    function cpuRegister(emulator: { registerFiles: RegisterFile[] }, name: string): bigint {
+        return registerOf(fileOf(emulator, 'cpu'), name).value
+    }
+
+    it('runs from one breakpoint to the next and then to the end', async () => {
+        const sources = programSources(THREE_MOVES)
+        const emulator = await X86Emulator(sources, { automaticChecking: false })
+        try {
+            await emulator.compile(20, sources)
+            expect(emulator.errors).toEqual([])
+            emulator.toggleBreakpoint(5)
+            emulator.toggleBreakpoint(6)
+
+            await emulator.run(100_000)
+            expect(emulator.line).toBe(5)
+            expect(emulator.terminated).toBe(false)
+            expect(cpuRegister(emulator, 'rax')).toBe(1n)
+            expect(cpuRegister(emulator, 'rbx')).toBe(0n)
+
+            //the Run that follows leaves the breakpoint it is parked on and stops at the next one
+            await emulator.run(100_000)
+            expect(emulator.line).toBe(6)
+            expect(emulator.terminated).toBe(false)
+            expect(cpuRegister(emulator, 'rbx')).toBe(2n)
+            expect(cpuRegister(emulator, 'rcx')).toBe(0n)
+
+            await emulator.run(100_000)
+            expect(emulator.terminated).toBe(true)
+        } finally {
+            emulator.dispose()
+        }
+    })
+
+    it('stops on a breakpoint on the instruction after a program input', async () => {
+        //the Core finishes the read while the input is handed over, so the run that follows one
+        //starts on an instruction that has not executed: a breakpoint on it has to stop
+        const sources = programSources(
+            [
+                'bits 64',
+                'global _start',
+                'section .bss',
+                'buffer: resb 16',
+                'section .text',
+                '_start:',
+                '    mov rax, 0',
+                '    mov rdi, 0',
+                '    mov rsi, buffer',
+                '    mov rdx, 16',
+                '    syscall',
+                '    mov rbx, 7',
+                '    mov rax, 60',
+                '    xor rdi, rdi',
+                '    syscall'
+            ].join('\n')
+        )
+        const emulator = await X86Emulator(sources, { automaticChecking: false })
+        try {
+            await emulator.compile(20, sources)
+            expect(emulator.errors).toEqual([])
+            emulator.peripherals.terminal.useScriptedInput(['hello'])
+            //`mov rbx, 7`, the line after the read syscall
+            emulator.toggleBreakpoint(11)
+
+            await emulator.run(100_000)
+            expect(emulator.errors).toEqual([])
+            expect(emulator.line).toBe(11)
+            expect(emulator.terminated).toBe(false)
+            expect(cpuRegister(emulator, 'rbx')).toBe(0n)
+            //the read really did suspend the program and take the scripted answer
+            expect(cpuRegister(emulator, 'rax')).toBe(6n)
+
+            await emulator.run(100_000)
+            expect(emulator.terminated).toBe(true)
+        } finally {
+            emulator.dispose()
+        }
+    })
+})
+
 describe('x86 pokes', () => {
     //a preset made before the first step does not survive it: the machine is built when the program
     //starts, so every Poke here is made on a machine that has already run an instruction

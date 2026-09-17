@@ -468,6 +468,11 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         //is looked at once per trap, which is this loop's own granularity (phase 8)
         const deadline = sliceDeadline(request)
         let instructions = 0
+        //every call below the first resumes the program with the program counter on an instruction
+        //that has not run, so only the first may be told to skip a breakpoint on it: the Core's
+        //`runWithBreakpoints` skips the instruction it starts on, and re-entering after a trap with
+        //that skip on is what made the instruction after every trap unbreakable
+        let startsTheRun = request.skipBreakpointAtPc
         while (!interpreter.hasTerminated()) {
             const remaining = budget - instructions
             if (remaining <= 0) return { reason: 'budget', instructions }
@@ -477,7 +482,10 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             }
             try {
                 if (hasBreakpoints) {
-                    interpreter.runWithBreakpoints(parsedBreakpoints, remaining)
+                    interpreter.runWithBreakpoints(parsedBreakpoints, remaining, {
+                        skipBreakpointAtPc: startsTheRun
+                    })
+                    startsTheRun = false
                     //here we might have reached a breakpoint. It is paused if the status is running
                     if (interpreter.getStatus() === CoreInterpreterStatus.Running) {
                         return { reason: 'breakpoint', instructions }

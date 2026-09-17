@@ -86,6 +86,7 @@ export async function runUnsliced(
             //whole run: `sliceInstructionBudget` returns the instruction budget itself
             timeBudgetMs: Number.MAX_SAFE_INTEGER,
             breakpoints: [],
+            skipBreakpointAtPc: true,
             runInstructionLimit: instructions,
             speedCorrection: 1
         })

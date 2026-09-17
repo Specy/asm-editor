@@ -44,6 +44,11 @@ The generic state "the Emulator is paused mid-execution waiting on the user" (e.
 
 A user-requested suspension of forward execution within a **Debug session**, retaining the program for inspection, Step, instruction Undo, and Resume. Distinct from an **Interrupt**, which the program causes by requesting input, and from Stop, which ends the Debug session.
 
+## Breakpoint
+
+A line of a **File** marked so that a **Debug session** stops there: a Run reaching it stops before the line's instruction executes, with that instruction still to run. The instruction a Run _starts_ on is the exception, and runs whether or not a Breakpoint names it, which is what lets Run continue from the Breakpoint it stopped at; a loop closing on its own Breakpoint still stops on every pass. A line that assembles to no instruction stops nothing, and one that assembles to several is a single Breakpoint, taken where the line is entered. Distinct from a **Pause**, which the user asks for mid-run, and from `simhalt` and the Z80 cliff, which are the program stopping itself. See [ADR 0023](./docs/adr/0023-run-continues-past-the-breakpoint-it-is-parked-on.md).
+_Avoid_: break, stop point, halt point
+
 ## Poke
 
 A change a person or the coding agent makes to one register or memory value of a **Debug session** between two instructions, kept in the same Undo history as the instructions as a step of its own. Distinct from a mutation, which is a write the program made, and from a **Testcase**'s starting values, which are preset before the run and never undone.

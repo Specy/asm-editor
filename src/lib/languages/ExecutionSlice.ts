@@ -28,6 +28,23 @@ export type ExecutionSliceRequest = {
     /** The 0-based editor lines the run must stop on; the adapter maps them to addresses. */
     breakpoints: SourceBreakpoint[]
     /**
+     * Whether a breakpoint on the instruction the program counter is *already* on lets this slice
+     * past it. True for the first slice of a Run and false for every one after it, which is the
+     * whole of the rule that makes Run move: the instruction a Run starts on runs even when a
+     * breakpoint names it, and every breakpoint the run then reaches stops it before the
+     * instruction executes.
+     *
+     * It is about the Core call that starts the slice, not the slice: an adapter that re-enters its
+     * Core inside one slice — to answer an interrupt, or to spend its budget in chunks — passes it
+     * to the first of those calls only. The instruction after an answered interrupt has not run
+     * yet, so a breakpoint on it has to stop the run; skipping it there is what made the
+     * instruction after every M68K trap unbreakable.
+     *
+     * An adapter whose Core checks its breakpoints *after* executing an instruction (MARS, RARS and
+     * the Z80 machine) already behaves this way and ignores it.
+     */
+    skipBreakpointAtPc: boolean
+    /**
      * The whole run's instruction limit, which `instructionBudget` counts down from. Only for what
      * an adapter tells the user: the M68K Core reports an exhausted limit by throwing an error that
      * names the halt limit it was given, and that is a slice's share, not the limit the user set.

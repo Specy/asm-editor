@@ -386,6 +386,7 @@ describe('Z80 emulator slices', () => {
                     instructionBudget: number
                     timeBudgetMs: number
                     breakpoints: number[]
+                    skipBreakpointAtPc: boolean
                     runInstructionLimit: number
                     speedCorrection: number
                 }) => Promise<{ reason: string; instructions: number }>
@@ -394,6 +395,7 @@ describe('Z80 emulator slices', () => {
             instructionBudget: 1_000_000,
             timeBudgetMs: 1,
             breakpoints: [],
+            skipBreakpointAtPc: true,
             runInstructionLimit: 1_000_000,
             speedCorrection: 1
         })

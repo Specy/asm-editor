@@ -905,6 +905,10 @@ export abstract class GenericEmulator<T, R extends string>
     /** The loop itself, so `runSlices` can own the flags a pause needs whichever way the run ends. */
     private async sliceLoop(haltLimit: number, execution: ExecutionGeneration): Promise<void> {
         let remaining = haltLimit
+        //only the slice this Run starts with may run the instruction the program counter is on when
+        //a breakpoint names it, which is what makes Run continue from a breakpoint instead of
+        //stopping on it again for ever (`skipBreakpointAtPc`)
+        let firstSlice = true
         while (remaining > 0) {
             //the slice boundary is the only place a pause can be taken: a slice is the Core running,
             //and nothing here can interrupt it once it has started
@@ -922,9 +926,11 @@ export abstract class GenericEmulator<T, R extends string>
                 instructionBudget: remaining,
                 timeBudgetMs: targetMs,
                 breakpoints: this.state.breakpoints,
+                skipBreakpointAtPc: firstSlice,
                 runInstructionLimit: haltLimit,
                 speedCorrection: this.speedCorrection
             })
+            firstSlice = false
             this.learnSliceSpeed(
                 slice,
                 targetMs,

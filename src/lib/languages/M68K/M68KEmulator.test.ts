@@ -490,6 +490,78 @@ describe('M68K input in graphical use', () => {
     })
 })
 
+describe('M68K breakpoints', () => {
+    /**
+     * Two prompts in a row with a breakpoint on the instruction between them: the Core resumes a
+     * program after every answered trap, and it used to be told to skip a breakpoint on the
+     * instruction it resumed at, which is the instruction right after the trap. A breakpoint there
+     * stopped nothing and the whole Run went by
+     * ([ADR 0023](../../../../docs/adr/0023-run-continues-past-the-breakpoint-it-is-parked-on.md)).
+     */
+    const TWO_PROMPTS = [
+        '    lea first,a1',
+        '    move.b #18,d0',
+        '    trap #15',
+        '    move.l d1,d2',
+        '    lea second,a1',
+        '    move.b #18,d0',
+        '    trap #15',
+        '    add.l d1,d2',
+        '    move.b #9,d0',
+        '    trap #15',
+        "first:  dc.b 'First: ',0",
+        "second: dc.b 'Second: ',0"
+    ].join('\n')
+
+    it('stops on a breakpoint on the instruction after a trap', async () => {
+        const code = ORG + TWO_PROMPTS
+        const emulator = M68KEmulator(code)
+        await emulator.compile(0, code)
+        emulator.peripherals.terminal.useScriptedInput(['5', '7'])
+        //`move.l d1,d2`, the line after the first trap, counting the ORG as line 0
+        emulator.toggleBreakpoint(4)
+
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.line).toBe(4)
+        expect(emulator.terminated).toBe(false)
+        expect(registerOf(emulator, 'D1')).toBe(5n)
+        expect(registerOf(emulator, 'D2')).toBe(0n)
+
+        //and Run continues from the breakpoint it is parked on rather than stopping on it again
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.terminated).toBe(true)
+        expect(registerOf(emulator, 'D2')).toBe(12n)
+    })
+
+    it('stops again on the same breakpoint when the program comes back round to it', async () => {
+        //the skip is for the instruction the Run starts on, not for the address: a loop that closes
+        //on its breakpoint stops every time it reaches it
+        const code =
+            ORG +
+            [
+                '    move.l #3,d0',
+                'loop:',
+                '    sub.l #1,d0',
+                '    bne loop',
+                '    move.b #9,d0',
+                '    trap #15'
+            ].join('\n')
+        const emulator = M68KEmulator(code)
+        await emulator.compile(0, code)
+        emulator.toggleBreakpoint(3)
+
+        for (const remaining of [3n, 2n, 1n]) {
+            await emulator.run(INSTRUCTION_LIMIT)
+            expect(emulator.line).toBe(3)
+            expect(registerOf(emulator, 'D0')).toBe(remaining)
+        }
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.terminated).toBe(true)
+    })
+})
+
 describe('M68K program time tasks', () => {
     it('reads the clock in hundredths of a second with task 8', async () => {
         const code = ORG + trap(8) + trap(9)
@@ -761,6 +833,7 @@ describe('M68K slices', () => {
                 instructionBudget: number
                 timeBudgetMs: number
                 breakpoints: number[]
+                skipBreakpointAtPc: boolean
                 runInstructionLimit: number
                 speedCorrection: number
             }) => Promise<unknown>
@@ -770,6 +843,7 @@ describe('M68K slices', () => {
                 instructionBudget: 5,
                 timeBudgetMs: 50,
                 breakpoints: [],
+                skipBreakpointAtPc: true,
                 runInstructionLimit: 200,
                 speedCorrection: 1
             })
@@ -788,6 +862,7 @@ describe('M68K slices', () => {
                     instructionBudget: number
                     timeBudgetMs: number
                     breakpoints: number[]
+                    skipBreakpointAtPc: boolean
                     runInstructionLimit: number
                     speedCorrection: number
                 }) => Promise<{ reason: string; instructions: number }>
@@ -796,6 +871,7 @@ describe('M68K slices', () => {
             instructionBudget: 1_000_000,
             timeBudgetMs: 1,
             breakpoints: [],
+            skipBreakpointAtPc: true,
             runInstructionLimit: 1_000_000,
             speedCorrection: 1
         })

@@ -465,19 +465,17 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             : request.breakpoints.flatMap((breakpoint) =>
                   x86GeneratedLinesFor(this.buildLineMap, breakpoint.file, breakpoint.line)
               )
-        const status = await this.runWithInput(budget, breakpoints)
+        const status = await this.runWithInput(budget, breakpoints, request.skipBreakpointAtPc)
         if (status === CoreEmulatorStatus.Running) {
-            //still runnable: either the budget ran out or a breakpoint stopped it, and `run` does
-            //not say which. The line the program is about to execute does: a run that stopped on a
-            //breakpoint is parked on it
-            const next = this._getNextInstruction()
-            const onBreakpoint =
-                next !== null &&
-                request.breakpoints.some(
-                    (breakpoint) =>
-                        breakpoint.file === next.file && breakpoint.line === next.lineNumber
-                )
-            return { reason: onBreakpoint ? 'breakpoint' : 'budget', instructions: budget }
+            //still runnable: either the budget ran out or a breakpoint stopped it, and the Core
+            //says which — the two are separate stops with a reason of their own. Deciding it from
+            //the line the program is parked on instead called every slice whose budget happened to
+            //run out on a line that has a breakpoint a breakpoint stop, and ended the Run there
+            const stopped = this.requireCore().stopReason
+            return {
+                reason: stopped?.kind === 'breakpoint' ? 'breakpoint' : 'budget',
+                instructions: budget
+            }
         }
         return { reason: 'terminated', instructions: budget }
     }
@@ -534,19 +532,25 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         this.requireCore().writeMemoryBytes(address, data)
     }
 
+    /**
+     * `skipBreakpointAtPc` belongs to the first call only: the Core finishes the read instruction
+     * while the input is being handed over, so every call after one leaves the program counter on
+     * an instruction that has not run, and a breakpoint on that one has to stop the run.
+     */
     private async runWithInput(
         limit: number | undefined,
-        breakpoints: Array<number | { path: string; line: number }>
+        breakpoints: Array<number | { path: string; line: number }>,
+        skipBreakpointAtPc = false
     ): Promise<CoreEmulatorStatus> {
         const core = this.requireCore()
         const execution = this.executionController.capture()
         let status = await this.executionController.waitFor(execution, () =>
-            runX86Core(core, limit, breakpoints)
+            runX86Core(core, limit, breakpoints, skipBreakpointAtPc)
         )
         while (status === CoreEmulatorStatus.WaitingForInput) {
             await this.provideProgramInput(execution)
             status = await this.executionController.waitFor(execution, () =>
-                runX86Core(core, limit, breakpoints)
+                runX86Core(core, limit, breakpoints, false)
             )
         }
         return status
@@ -807,14 +811,16 @@ function coreInstructionBytes(value: unknown): Uint8Array {
 function runX86Core(
     core: CoreX86Emulator,
     limit: number | undefined,
-    breakpoints: Array<number | { path: string; line: number }>
+    breakpoints: Array<number | { path: string; line: number }>,
+    skipBreakpointAtPc: boolean
 ): Promise<CoreEmulatorStatus> {
     return (
         core.run as (
             limit?: number,
-            breakpoints?: Array<number | { path: string; line: number }>
+            breakpoints?: Array<number | { path: string; line: number }>,
+            options?: { skipBreakpointAtPc?: boolean }
         ) => Promise<CoreEmulatorStatus>
-    )(limit, breakpoints)
+    )(limit, breakpoints, { skipBreakpointAtPc })
 }
 
 function sourceLine(sources: BuildSources, source: { path: string; line: number }): string {
