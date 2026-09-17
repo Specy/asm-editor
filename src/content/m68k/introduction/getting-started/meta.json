@@ -1,6 +1,6 @@
 {
     "name": "Getting started with M68K",
-    "description": "The Motorola 68000 the way this editor runs it, the registers and memory it works with, and how a program is written down. It ends with a first program whose answer you read in the registers panel.",
+    "description": "Meet the Motorola 68000, see what assembly programming reveals about a computer, and preview the journey from machine fundamentals to interactive programs.",
     "order": 0,
     "topic": "introduction"
 }

@@ -1,166 +1,210 @@
-An array in memory has no length, no bounds and no element names. What it has is a first address and
-a size per element, and every loop over it is built out of those two numbers. The M68K gives you two
-ways to write that loop.
+# Arrays, strings and (a0)+
 
-## Walking with (a0)+
+An **array** is a sequence of equal-size elements stored consecutively in memory. To work with one,
+a program needs three facts:
 
-`(a0)+` reads what `a0` points at and then adds the size of the instruction to `a0`, so a loop that
-uses it needs no `add` of its own and no index at all.
+- the **base address**, where the first element begins;
+- the **element size**, in bytes;
+- the **element count**, which says how many elements belong to the array.
+
+Here are five long-sized elements beginning at `$2000`:
+
+| element index | address | value |
+| ------------: | ------- | ----: |
+|             0 | `$2000` |    10 |
+|             1 | `$2004` |    20 |
+|             2 | `$2008` |    30 |
+|             3 | `$200C` |    40 |
+|             4 | `$2010` |    50 |
+
+Each long occupies four bytes, so each address is four greater than the previous one. Memory does
+not store the count beside the elements: the program must keep or otherwise know that count.
+
+## Visit every element with `(a0)+`
+
+Postincrement addressing accesses memory at the address in an address register, then advances that
+register by the size of the memory access. For `a0` through `a6`, a byte access advances by 1, a
+word access by 2, and a long access by 4. The rule is about the value accessed, as selected by
+`.b`, `.w`, or `.l`—not the encoded length of the instruction.
+
+This loop adds the five longs from the table:
 
 ```m68k|playground|memory|no-flags
 count equ 5
 
-    lea numbers, a0     ; a0 points at the first element
-    clr.l d0            ; sum = 0
-    move.w #count-1, d1 ; dbra runs one more time than the counter
-loop:
-    add.l (a0)+, d0     ; sum += *a0, then step a0 on by four
-    dbra d1, loop
+    move.l #numbers, a0 ; address of the first long
+    move.l #0, d0       ; sum = 0
+    move.l #count, d2   ; number of elements to visit
+
+    tst.l d2
+    beq sum_done        ; a count of zero must skip the body
+    move.l d2, d1
+    sub.l #1, d1        ; prepare the dbra counter
+sum_loop:
+    add.l (a0)+, d0     ; read one long, then advance a0 by 4
+    dbra d1, sum_loop
+sum_done:
 
     org $2000
 numbers: dc.l 10, 20, 30, 40, 50
 ```
 
-`d0` comes out at `00000096`, which is 150. Step through the loop and watch `a0` climb by 4 at every
-`add.l`, from `00002000` to `00002014`, twenty bytes on and one past the last element.
+`d0` ends at 150. The body runs five times, and `a0` moves through `$2000`, `$2004`, `$2008`,
+`$200C`, and `$2010`. The last access then advances it to `$2014`, the address immediately after
+the array. This is called a **one-past-end pointer**. It is useful as a stopping position, but it
+does not point to an element of this array and must not be dereferenced as though it did.
 
-The 4 is in the `.l`, nowhere else. Change the array to `dc.w` and the instruction to `add.w` and
-the same loop steps by 2 instead, because the size of the read is what decides the step. This is the
-one place on the machine where the element size is handled for you, and the reason to prefer this
-loop shape wherever it fits.
+The test before the loop matters when an element count may be zero. Without it, the body would
+still run once before `dbra` could decide whether to repeat. For a fixed array whose count is known
+to be nonzero, `move.w #count-1,d1` is enough to prepare the counter directly.
 
-`count equ 5` gives the length a name. The loop counts with `count-1` because `dbra` runs one more
-time than its counter, and the assembler does the subtraction, so adding a sixth number means
-changing the `equ` and nothing else.
+The access size and the declaration must agree. For a word array, use `dc.w` and a word-sized
+memory operation such as `add.w (a0)+,d0`; `a0` then advances by 2. For a byte array, a `.b`
+memory access advances it by 1.
 
-## Indexing with (a0, d1)
+## Reach one element by index
 
-The other way leaves the base address where it is and works out the offset from an index on every
-pass.
+Postincrement is a natural fit when a loop visits every element in order. To reach a chosen element
+without moving the base address, first convert its element index to a byte offset:
+
+```text
+byte offset       = element index * element size
+effective address = base address + byte offset
+```
+
+Keep those two quantities distinct. In this example, `d1` is the element index and `d2` is the
+scaled byte offset:
 
 ```m68k|playground|memory|no-flags
-count equ 5
-
-    lea numbers, a0
-    clr.l d0            ; sum = 0
-    clr.l d1            ; i = 0
-loop:
-    move.l d1, d2
-    lsl.l #2, d2        ; i * 4, the size of a long
-    add.l (a0, d2), d0  ; sum += numbers[i]
-    addq.l #1, d1       ; i++
-    cmp.l #count, d1    ; while(i < count)
-    blt loop
+    move.l #numbers, a0
+    move.l #2, d1           ; element_index = 2
+    move.l d1, d2           ; begin byte_offset with the index
+    lsl.l #2, d2            ; byte_offset = element_index * 4
+    move.l 0(a0,d2.w), d0   ; read at base + byte_offset
 
     org $2000
 numbers: dc.l 10, 20, 30, 40, 50
 ```
 
-`d0` is 150 again, out of four more instructions per pass. The extra work is all scaling: `(a0, d2)`
-adds a register and does nothing else, so `d2` has to hold a number of bytes rather than a number of
-elements, and `lsl.l #2` is how you multiply by 4 without reaching for a `mulu`.
+The index 2 becomes the byte offset 8, so the effective address is `$2000 + 8 = $2008` and `d0`
+receives 30. Neither `a0` nor `d1` changes.
 
-So which one. Use `(a0)+` when you touch every element in order, which is most loops. Use `(a0, d1)`
-when you need the index itself, to report where you found something; when the loop jumps around the
-array instead of walking it, the way a binary search does; or when you read two elements per pass and
-the second one is `4(a0, d1)`.
+On the base 68000, this indexed form uses the low word of `d2` as a signed byte offset. Therefore,
+the offset used by `0(a0,d2.w)` must fit from -32768 through 32767. The example uses the positive
+offset 8. Here `d2` holds the scaled byte offset used in the address. Using the element index from
+`d1` instead would add 2 bytes rather than reach element 2.
 
-## Strings are bytes with a zero at the end
+## Strings are zero-terminated byte arrays
 
-`dc.b 'Hello', 0` writes six bytes: the five character codes and the terminator you wrote yourself.
-Nothing in memory says how long the string is, so a loop finds out by reading until it reads a zero.
+In this course, a **string** is an array of byte-sized character codes followed by a zero byte. The
+zero is the **terminator**. Here the ASCII codes `$48`, `$69`, and `$21` represent `H`, `i`, and
+`!`; the final `0` is written explicitly:
 
-The instruction that does the reading also sets `Z`, so no `cmp` is needed:
+```m68k
+message: dc.b $48, $69, $21, 0
+```
+
+| address       | byte  | meaning        |
+| ------------- | ----- | -------------- |
+| `message`     | `$48` | `H`            |
+| `message + 1` | `$69` | `i`            |
+| `message + 2` | `$21` | `!`            |
+| `message + 3` | `$00` | the terminator |
+
+A sentinel loop does not receive a separate count. It keeps reading until it finds a special value,
+which is zero here. That traversal is safe only when a terminator is guaranteed to occur within
+readable memory. Without that guarantee, the loop can continue beyond the intended bytes.
+
+The length is the number of payload bytes before the terminator:
 
 ```m68k|playground|memory|no-flags
-    lea message, a0     ; a0 walks the string
-    clr.l d0            ; and d0 counts what it passes
-count_loop:
-    tst.b (a0)+         ; is the byte the terminator?
-    beq counted
-    addq.l #1, d0       ; no, so count it
-    bra count_loop
-counted:
+    move.l #message, a0
+    move.l #0, d0       ; length = 0
+length_loop:
+    tst.b (a0)+         ; test one byte, then advance by 1
+    beq length_done
+    add.l #1, d0
+    bra length_loop
+length_done:
 
-    lea message, a0     ; back to the start
-    lea copy, a1        ; and a1 on the room to copy into
+    org $2000
+message: dc.b $48, $69, $21, 0
+```
+
+`d0` ends at 3. The terminator is read so that it can stop the loop, but it is not included in the
+length. After that read, `a0` is `$2004`, one byte past the terminator.
+
+## Copy the terminator too
+
+A string copy must include the terminator. The destination must have capacity for every payload
+byte **plus one more byte** for that terminator. The source below has three payload bytes and a
+terminator, and `copy` reserves exactly four bytes:
+
+```m68k|playground|memory|no-flags
+    move.l #source, a0
+    move.l #copy, a1
 copy_loop:
-    move.b (a0)+, (a1)+ ; one byte across, both pointers step
-    bne copy_loop       ; the move set Z on the terminator, which it copied
+    move.b (a0)+, (a1)+ ; copy one byte; both pointers advance by 1
+    bne copy_loop       ; move set Z when the copied byte was zero
 
     org $2000
-message: dc.b 'Hello', 0
-copy:    ds.b 8
+source: dc.b $43, $41, $54, 0
+copy:   ds.b 4
 ```
 
-`d0` comes out at 5, the five characters not counting the terminator. Look at `$2000` in the memory
-panel afterwards and the same six bytes appear twice over, `48 65 6C 6C 6F 00` and then
-`48 65 6C 6C 6F 00`, which is the string and its copy.
+The final pass copies the zero byte and sets `Z`, so `bne` falls through only after the destination
+has its own terminator. This loop relies on two guarantees: `source` has a zero terminator in
+readable memory, and `copy` has room for all four bytes. The loop itself cannot discover whether
+either region is large enough.
 
-That copy loop is two instructions, and the reason it works is worth spelling out. `move` sets `Z`
-from the byte it moved, so the pass that reaches the terminator copies it **and** sets `Z` in the
-same instruction, and the `bne` then falls out of the loop. Both halves matter: a copy that stops
-before the terminator has produced something that is not a string, because the next thing to read it
-will not know where to stop.
+## Keep words and longs aligned
 
-Comparing two strings has an instruction of its own. `cmpm.b (a0)+, (a1)+` compares the bytes at `a0`
-and `a1` and steps both pointers, without either byte passing through a register.
+Word and long accesses must begin at even addresses. An array of words or longs stays aligned when
+its base address is even because every element has an even size. Byte data placed before it can
+make the next address odd, however. Add an explicit padding byte when needed:
 
-## Two dimensions
-
-A two dimensional array is a one dimensional array that you have agreed to read in rows. The element
-at row `r`, column `c` sits at `(r * COLS + c)` elements from the start, and you write out both of
-those multiplications yourself.
-
-```m68k|playground|memory|no-flags
-COLS equ 4
-
-    lea grid, a0
-    move.l #2, d0       ; row
-    move.l #3, d1       ; column
-    move.l d0, d2
-    mulu #COLS, d2      ; row * COLS
-    add.l d1, d2        ; + column
-    add.l d2, d2        ; times 2, the size of a word
-    move.w (a0, d2), d3 ; grid[row][col]
-
+```m68k
     org $2000
-grid: dc.w 0, 1, 2, 3
-      dc.w 10, 11, 12, 13
-      dc.w 20, 21, 22, 23
+bytes:   dc.b $41, $42, $43
+padding: dc.b 0
+values:  dc.w 10, 20
 ```
 
-`d3` comes out at `00000017`, which is 23, the last element of the last row. `add.l d2, d2` is the
-multiplication by 2: adding a number to itself doubles it, and every element size on this machine is
-a power of two, so doubling and shifting cover all of them without a `mulu`.
+`bytes` occupies `$2000` through `$2002`; the padding occupies `$2003`, so `values` begins at the
+even address `$2004`.
 
-The three `dc.w` lines are one array. The rows exist for whoever reads the source; in memory the
-twelve words sit end to end from `$2000`, and `COLS` in the arithmetic above is the only thing that
-knows where one row stops.
+## Check your understanding
 
-## The address error, again
+### 1. Sum a long array
 
-Words and longs in an array have to land on even addresses. The elements themselves are fine, since
-an array of words starting even stays even, and it is the **byte** data next to them that moves
-everything: a `dc.b` of an odd number of bytes above an array of words puts the whole array on odd
-addresses, and the first `move.w` into it ends the run. Put byte data last, or give it an even
-length.
+`values` contains three long-sized elements. Use `(a0)+` and `dbra` to add all three into `d0`.
+Initialize only the low word of `d1` with `count-1`, so its starting upper word remains visible.
 
-## Your turn
-
-`text` at `$2000` is a string with a zero on the end. Leave its length in `d0`, not counting the
-terminator, which for `'Assembly'` is 8.
+After the loop, `a0` must be the one-past-end address `$200C`, `d0` must contain 60, and `d1` must
+contain `$A5A5FFFF`. The values are longs even though their numbers are small; using `.b` or `.w`
+would read different bytes and advance the pointer by the wrong distance.
 
 ```m68k|playground|memory|exercise
-* your code here
+count equ 3
+
+; your code here
 
     org $2000
-text: dc.b 'Assembly', 0
+values: dc.l 10, 20, 30
 ```
 
 ```testcase
 {
-    "expectedRegisters": { "d0": 8 }
+    "startingRegisters": {
+        "a0": "0xDEADBEEF",
+        "d0": "0xDEADBEEF",
+        "d1": "0xA5A5BEEF"
+    },
+    "expectedRegisters": {
+        "a0": "0x200C",
+        "d0": 60,
+        "d1": "0xA5A5FFFF"
+    }
 }
 ```
 
@@ -168,35 +212,50 @@ text: dc.b 'Assembly', 0
 <summary>Show solution</summary>
 
 ```m68k|playground|memory|solution
-    lea text, a0        ; a0 walks the string
-    clr.l d0            ; and d0 counts
-loop:
-    tst.b (a0)+         ; is the byte the terminator?
-    beq done
-    addq.l #1, d0       ; no, so count it
-    bra loop
-done:
+count equ 3
+
+    move.l #values, a0
+    move.l #0, d0
+    move.w #count-1, d1
+sum_loop:
+    add.l (a0)+, d0
+    dbra d1, sum_loop
 
     org $2000
-text: dc.b 'Assembly', 0
+values: dc.l 10, 20, 30
 ```
 
 </details>
 
-Now copy `source` to `dest`, terminator included, so that what lands in `dest` is a string in its own
-right. `source` is at `$2000` and takes nine bytes, so `dest` begins at `$2009`.
+### 2. Copy a terminated string into exact-size storage
+
+`source` contains the two payload bytes `$4F` and `$4B`, followed by a guaranteed zero terminator.
+Copy the complete string to `dest` with postincrement addressing. `dest` has capacity for exactly
+three bytes: two payload bytes plus the terminator. Do not change the guard byte after it.
 
 ```m68k|playground|memory|exercise
-* your code here
+; your code here
 
     org $2000
-source: dc.b 'Hi there', 0
-dest:   ds.b 16
+source: dc.b $4F, $4B, 0
+dest:   ds.b 3
+guard:  dc.b $A5
 ```
 
 ```testcase
 {
-    "expectedMemory": [{ "type": "string-chunk", "address": "0x2009", "expected": "Hi there" }]
+    "expectedRegisters": {
+        "a0": "0x2003",
+        "a1": "0x2006"
+    },
+    "expectedMemory": [
+        {
+            "type": "number-chunk",
+            "address": "0x2003",
+            "bytes": 1,
+            "expected": [79, 75, 0, 165]
+        }
+    ]
 }
 ```
 
@@ -204,15 +263,16 @@ dest:   ds.b 16
 <summary>Show solution</summary>
 
 ```m68k|playground|memory|solution
-    lea source, a0      ; read from here
-    lea dest, a1        ; write to here
-copy:
-    move.b (a0)+, (a1)+ ; one byte across, both pointers step
-    bne copy            ; until the byte moved was the terminator
+    move.l #source, a0
+    move.l #dest, a1
+copy_loop:
+    move.b (a0)+, (a1)+
+    bne copy_loop
 
     org $2000
-source: dc.b 'Hi there', 0
-dest:   ds.b 16
+source: dc.b $4F, $4B, 0
+dest:   ds.b 3
+guard:  dc.b $A5
 ```
 
 </details>

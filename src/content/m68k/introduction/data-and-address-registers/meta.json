@@ -1,6 +1,6 @@
 {
     "name": "Data and address registers",
-    "description": "The eight data registers and the eight address registers, what each kind is for, and the three rules an address register follows that a data register does not.",
+    "description": "Meet the M68K data and address registers, learn what an address represents, and see why a7 is also called sp.",
     "order": 1,
     "topic": "registers"
 }

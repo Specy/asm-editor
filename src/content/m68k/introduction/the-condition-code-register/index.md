@@ -1,229 +1,217 @@
-`cmp.l #5, d0` subtracts 5 from `d0` and throws the answer away. The instruction after it has to
-decide something on the strength of that, and the answer is gone. What is left is five bits, set
-aside as the subtraction went past, and every decision a program makes is made out of those five
-bits.
+# The condition code register
 
-They live together in the low byte of the status register, which is called the **condition code
-register**, or CCR, and the flags panel above the registers shows them in the M68K's own order:
+Alongside its data and address registers, the M68K keeps five one-bit summaries of a recent result.
+Together they form the **condition code register**, or **CCR**. The simulator displays them in the
+flags panel above the registers, in the order `X N Z V C`.
 
-- **X**, extend. A second copy of the carry. It is there so that arithmetic on numbers wider than 32
-  bits can carry from one register into the next, and this assembler has no instructions that do
-  that, so nothing you write here will ever read it.
-- **N**, negative. The top bit of the result, which is 1 when the result read as a signed number is
-  negative.
-- **Z**, zero. 1 when the result was zero.
-- **V**, overflow. 1 when the answer did not fit in the **signed** range of its size.
-- **C**, carry. 1 when the operation carried or borrowed out of the top bit, which is the
-  **unsigned** answer to the same question.
+A one-bit summary is called a **flag**. A flag is **set** when its value is 1 and **clear** when its
+value is 0.
 
-## Which instructions write the flags
+| flag | name     | what it summarizes for the selected size                           |
+| ---- | -------- | ------------------------------------------------------------------ |
+| `X`  | extend   | carry or borrow that can be passed between pieces of a calculation |
+| `N`  | negative | the highest bit of the result is 1                                 |
+| `Z`  | zero     | the result is zero                                                 |
+| `V`  | overflow | the signed result is outside the selected size's range             |
+| `C`  | carry    | an addition carried out, or a subtraction borrowed                 |
 
-Not every instruction touches them, and that is the part that catches people out. Four things can
-happen to a flag: it is set from the result, it is forced to 0, it is forced to 1, or it is left
-exactly as it was.
+The instruction size matters. For a byte instruction, these summaries describe the 8-bit byte
+result. For a word instruction they describe the 16-bit word result, and for a long instruction
+they describe the 32-bit long result. Preserved upper bits in a data register do not take part in a
+smaller operation's flags.
 
-| instruction                                                      |   X |   N |   Z |   V |   C |
-| ---------------------------------------------------------------- | --: | --: | --: | --: | --: |
-| `add`, `sub`, `addq`, `subq`, `neg`, `asl`, `asr`, `lsl`, `lsr`  |   ✓ |   ✓ |   ✓ |   ✓ |   ✓ |
-| `cmp`, `cmpi`, `cmpa`, `cmpm`                                    |   - |   ✓ |   ✓ |   ✓ |   ✓ |
-| `move`, `moveq`, `and`, `or`, `eor`, `not`, `tst`, `ext`, `swap` |   - |   ✓ |   ✓ |   0 |   0 |
-| `lea`, `pea`, `movea`, `adda`, `suba`, `movem`, `exg`, `link`    |   - |   - |   - |   - |   - |
+## Zero and negative
 
-✓ means set from the result, `0` means forced to zero, `-` means left exactly as it was. The other
-instructions are on the [documentation pages](/documentation/m68k), one line each.
+`Z` is set when the result within the selected size is zero. This can happen even when the full data
+register still contains nonzero upper bits.
 
-Two of those rows change how you write programs. The third one says that **a plain `move` sets the
-flags**, so a `move` slipped in between your comparison and your branch quietly destroys the
-comparison. The last one says that `lea`, `movea` and `adda` do not, so you can work out an address
-in the middle of a comparison and the branch still sees what `cmp` left.
+`N` copies the highest bit within the selected size. For a byte, that is bit 7; for a word, bit 15;
+for a long, bit 31. In two's-complement signed reading, a 1 in that position marks a negative value.
 
-```m68k|playground|pc
-    move.l #$F0, d1     ; N = 0, Z = 0
-    move.l #0, d0       ; Z goes to 1, because 0 is zero
-    lea $2000, a0       ; nothing changes
-    movea.l #$1234, a1  ; nothing changes
-    adda.l #4, a1       ; nothing changes
-    btst #4, d1         ; bit 4 of $F0 is 1, so Z goes back to 0
-```
-
-Step through it with the flags panel open. `Z` goes to 1 on the second line and then sits there
-through three instructions that all write address registers, which is the point: those three lines
-could be anything and the comparison would survive them.
-
-## cmp subtracts and keeps only the flags
-
-`cmp source, destination` computes `destination - source`, throws the answer away, and keeps what it
-did to `N`, `Z`, `V` and `C`.
+Each playground on this page begins with its registers at zero and all five displayed flags clear.
+The following instructions then give both registers explicit values before the byte operations.
 
 ```m68k|playground
-    move.l #5, d0
-    cmp.l #5, d0        ; 5 - 5 = 0
-    move.l #3, d1
-    cmp.l #5, d1        ; 3 - 5 = -2
-    move.l #7, d2
-    cmp.l #5, d2        ; 7 - 5 = 2
+    move.l #$A5A50001, d0
+    sub.b #1, d0
+    move.l #$11223344, d1
+    move.b #$80, d1
 ```
 
-| after this line | `N` | `Z` | `V` | `C` |
-| --------------- | --: | --: | --: | --: |
-| `cmp.l #5, d0`  |   0 |   1 |   0 |   0 |
-| `cmp.l #5, d1`  |   1 |   0 |   0 |   1 |
-| `cmp.l #5, d2`  |   0 |   0 |   0 |   0 |
+| after this instruction  | register value | `X` | `N` | `Z` | `V` | `C` |
+| ----------------------- | -------------- | --: | --: | --: | --: | --: |
+| `move.l #$A5A50001, d0` | `d0=$A5A50001` |   0 |   1 |   0 |   0 |   0 |
+| `sub.b #1, d0`          | `d0=$A5A50000` |   0 |   0 |   1 |   0 |   0 |
+| `move.l #$11223344, d1` | `d1=$11223344` |   0 |   0 |   0 |   0 |   0 |
+| `move.b #$80, d1`       | `d1=$11223380` |   0 |   1 |   0 |   0 |   0 |
 
-The middle row is the interesting one. 3 minus 5 is -2, which is negative, so `N` is 1. Read the same
-subtraction as unsigned and 3 is smaller than 5, so it had to borrow, which is what `C` reports. One
-subtraction, two bits, each answering a different question about it. Every condition below is built
-out of that.
+After the subtraction, the selected byte result is `$00`, so `Z` is set. The upper three bytes of
+`d0` remain `$A5A500`, but they do not affect a byte instruction's flags. The last instruction
+moves the byte `$80`. Its highest bit is 1, so `N` is set even though the full register begins with
+the positive-looking long-sized pattern `$11`.
 
-## The fourteen conditions
+## Carry and overflow
 
-`b<cc>`, `db<cc>` and `s<cc>` all read the flags through the same fourteen conditions. Six of them
-ask about a single flag, four ask the signed question and four the unsigned one.
+`C` and `V` describe the same fixed-width calculation from two different numeric readings:
 
-| written    | means                        | the flags it reads                |
-| ---------- | ---------------------------- | --------------------------------- |
-| `eq`       | equal                        | `Z` is 1                          |
-| `ne`       | not equal                    | `Z` is 0                          |
-| `mi`       | minus                        | `N` is 1                          |
-| `pl`       | plus                         | `N` is 0                          |
-| `vs`       | overflow set                 | `V` is 1                          |
-| `vc`       | overflow clear               | `V` is 0                          |
-| `gt`       | greater than, **signed**     | `Z` is 0 and `N` equals `V`       |
-| `ge`       | greater or equal, **signed** | `N` equals `V`                    |
-| `lt`       | less than, **signed**        | `N` differs from `V`              |
-| `le`       | less or equal, **signed**    | `Z` is 1, or `N` differs from `V` |
-| `hi`       | higher, **unsigned**         | `C` is 0 and `Z` is 0             |
-| `hs`, `cc` | higher or same, unsigned     | `C` is 0                          |
-| `lo`, `cs` | lower, unsigned              | `C` is 1                          |
-| `ls`       | lower or same, unsigned      | `C` is 1 or `Z` is 1              |
+- `C` records an **unsigned** carry out of an addition or borrow from a subtraction.
+- `V` records a result outside the **signed** range for the selected size.
 
-`hs` and `cc` are two spellings of one condition, and so are `lo` and `cs`: `bcc` is the same
-instruction as `bhs`, and you write whichever says what you mean, "carry clear" when you are thinking
-about a carry and "higher or same" when you are comparing two unsigned numbers.
-
-Notice that the unsigned conditions read `C` on its own, while every signed one drags `V` in
-alongside `N`. That is not decoration, and the next section is why.
-
-## When N lies
-
-`N` is the top bit of the result, and the top bit of a signed number is its sign. Usually those are
-the same thing. Once the answer is too big to fit, they are not.
-
-Subtract -1000000000 from 2000000000. The true answer is 3000000000, and the largest number a signed
-long can hold is 2147483647, so it does not fit. Step through this one line at a time with the flags
-panel open.
+An unsigned byte ranges from 0 through 255. A signed byte ranges from -128 through 127. These two
+ranges make the difference visible with small values.
 
 ```m68k|playground
-    move.l #$77359400, d0   ; 2000000000
-    move.l #$C4653600, d1   ; -1000000000
-    cmp.l d1, d0            ; d0 - d1
-    smi d2                  ; was the result negative?
-    svs d3                  ; did it overflow?
-    sgt d4                  ; is d0 the greater of the two, signed?
+    move.l #$000000FF, d0
+    add.b #1, d0
+    move.l #$0000007F, d1
+    add.b #1, d1
+    move.l #3, d2
+    sub.b #5, d2
 ```
 
-After the `cmp`:
+| after this instruction | register value | `X` | `N` | `Z` | `V` | `C` |
+| ---------------------- | -------------- | --: | --: | --: | --: | --: |
+| `move.l #$FF, d0`      | `d0=$000000FF` |   0 |   0 |   0 |   0 |   0 |
+| `add.b #1, d0`         | `d0=$00000000` |   1 |   0 |   1 |   0 |   1 |
+| `move.l #$7F, d1`      | `d1=$0000007F` |   1 |   0 |   0 |   0 |   0 |
+| `add.b #1, d1`         | `d1=$00000080` |   0 |   1 |   0 |   1 |   0 |
+| `move.l #3, d2`        | `d2=$00000003` |   0 |   0 |   0 |   0 |   0 |
+| `sub.b #5, d2`         | `d2=$000000FE` |   1 |   1 |   0 |   0 |   1 |
 
-| flag | value | what it is saying                                      |
-| ---- | ----: | ------------------------------------------------------ |
-| `N`  |     1 | the result's top bit is a 1, so the result is negative |
-| `Z`  |     0 | the result is not zero                                 |
-| `V`  |     1 | the answer did not fit in a signed long                |
-| `C`  |     1 | read as unsigned, the subtraction had to borrow        |
+For `$FF + 1`, the unsigned answer 256 does not fit in a byte. The stored byte wraps to `$00`, so
+`C` and `Z` are set. Signed `$FF` means -1, and -1 + 1 gives the valid signed result 0, so `V` is
+clear.
 
-**`N` is the one that is lying.** A big positive number minus a negative number cannot possibly be
-negative. What actually happened is that the true answer, 3000000000, needs 32 bits with the top one
-set, so the subtraction produced the pattern `B2D05E00`. Read that as unsigned and it is exactly
-3000000000, which is right. Read it as signed and the top bit turns it into -1294967296, which is
-not. The bits are correct and the reading of them is not.
+For `$7F + 1`, the signed answer 128 is outside the signed-byte range. The stored byte is `$80`, so
+`V` and `N` are set. The unsigned answer 128 fits in a byte, so `C` is clear.
 
-**`V` is the flag that says so.** It is set precisely when the sign the result ends up with is not
-the sign the arithmetic should have produced.
+For `3 - 5`, an unsigned subtraction needs a borrow. The byte result wraps to `$FE`, setting `C`.
+The signed answer -2 fits in a byte, so `V` remains clear. Its top bit is 1, so `N` is set.
 
-So the fix is to read the two together. When `V` is 0 the result fits and `N` is telling the truth.
-When `V` is 1 the result wrapped and `N` is inverted, so the true sign is the opposite of what `N`
-says. Both cases are covered by one test: **the answer was negative when `N` and `V` differ**. That
-is the `lt` row of the table, and `ge` and `gt` are the same trick the other way up.
+`X`, the extend flag, follows carry or borrow for the `add` and `sub` forms used here. Arithmetic on
+a value split into several pieces can use that saved bit when working on the next piece. In these
+examples, the flags panel lets you observe `X` alongside `C`.
 
-You can see it work in the last line. `d2` and `d3` both come out at `FF`, `N` and `V` both being
-set, and `sgt` agrees with them and gives `FF` too, because `gt` asked whether `N` equals `V` rather
-than whether `N` is 0. The condition got the right answer out of a flag that had the wrong one in it.
+## Compare with `cmp`
 
-## Picking the wrong family
+`cmp` performs a subtraction for its effect on the flags while preserving both operands. Its form
+is:
 
-The other way to get this wrong is to answer the right question with the wrong reading. `$FFFFFFFF`
-is 4294967295 read as unsigned and -1 read as signed. Compared against 1, one of those is bigger and
-the other is smaller, so `hi` and `gt` disagree about the same two registers.
+```text
+cmp.size source, destination
+```
+
+It calculates `destination - source` at the selected size and sets `N`, `Z`, `V` and `C` as `sub`
+would. It preserves `X` because there is no stored arithmetic result to extend.
 
 ```m68k|playground
-    move.l #$FFFFFFFF, d0   ; 4294967295 unsigned, -1 signed
-    move.l #1, d1
-    cmp.l d1, d0            ; d0 - d1
-    shi d2                  ; is d0 higher than d1, unsigned?
-    sgt d3                  ; is d0 greater than d1, signed?
+    move.l #3, d0
+    cmp.b #5, d0
+    move.l #5, d1
+    cmp.b #5, d1
 ```
 
-This time `N` is 1, `Z` is 0, `V` is 0 and `C` is 0. Nothing overflowed and no flag is lying. `hi`
-wants `C` and `Z` both 0, which they are, so `d2` is `FF`. `gt` wants `N` to equal `V`, which it does
-not, so `d3` is `00`.
+| after this instruction | register values                | `X` | `N` | `Z` | `V` | `C` |
+| ---------------------- | ------------------------------ | --: | --: | --: | --: | --: |
+| `move.l #3, d0`        | `d0=$00000003`, `d1=$00000000` |   0 |   0 |   0 |   0 |   0 |
+| `cmp.b #5, d0`         | `d0=$00000003`, `d1=$00000000` |   0 |   1 |   0 |   0 |   1 |
+| `move.l #5, d1`        | `d0=$00000003`, `d1=$00000005` |   0 |   0 |   0 |   0 |   0 |
+| `cmp.b #5, d1`         | `d0=$00000003`, `d1=$00000005` |   0 |   0 |   1 |   0 |   0 |
 
-One comparison, two right answers, and picking the family that matches what your numbers mean is on
-you. Sizes and addresses are unsigned; counts and differences are usually signed.
+The first comparison calculates `3 - 5`. That byte result would be `$FE`, so `N` is set and the
+unsigned subtraction records a borrow in `C`. The second calculates `5 - 5`, so `Z` is set. The
+register values stay at 3 and 5 throughout their comparisons.
 
-## Your turn
+## Test a value with `tst`
 
-`d0` starts at `$FFFFFFFF` and `d1` at 1, the pair from just above. Without branching anywhere, leave
-`$FF` in `d2` if `d0` is the higher of the two read as **unsigned** numbers, and `$00` in `d3` if
-`d0` is not the greater read as **signed** numbers.
+`tst` summarizes one existing value without changing it:
 
-```m68k|playground|exercise
-* your code here
+```text
+tst.size operand
 ```
 
-```testcase
-{
-    "startingRegisters": { "d0": "0xFFFFFFFF", "d1": 1 },
-    "expectedRegisters": { "d2": "0xFF", "d3": "0x00" }
-}
+It sets `N` and `Z` from the selected byte, word or long, clears `V` and `C`, and preserves `X`.
+
+```m68k|playground
+    move.l #$00000080, d0
+    tst.b d0
+    move.l #$AA550000, d1
+    tst.w d1
 ```
+
+| after this instruction  | register values                | `X` | `N` | `Z` | `V` | `C` |
+| ----------------------- | ------------------------------ | --: | --: | --: | --: | --: |
+| `move.l #$80, d0`       | `d0=$00000080`, `d1=$00000000` |   0 |   0 |   0 |   0 |   0 |
+| `tst.b d0`              | `d0=$00000080`, `d1=$00000000` |   0 |   1 |   0 |   0 |   0 |
+| `move.l #$AA550000, d1` | `d0=$00000080`, `d1=$AA550000` |   0 |   1 |   0 |   0 |   0 |
+| `tst.w d1`              | `d0=$00000080`, `d1=$AA550000` |   0 |   0 |   1 |   0 |   0 |
+
+The byte `$80` has its highest bit set, so the byte test sets `N`. The low word of `d1` is `$0000`,
+so the word test sets `Z`. In both cases, `tst` leaves the register itself unchanged.
+
+## Which familiar instructions update the CCR
+
+A flag describes the most recent instruction that updates it. Different instructions update
+different parts of the CCR.
+
+| instruction from this working set   | effect on `X`         | effect on `N Z V C`                    |
+| ----------------------------------- | --------------------- | -------------------------------------- |
+| `add`, `sub` with a data result     | set from carry/borrow | set from the sized arithmetic result   |
+| `move` to a data register or memory | preserved             | set `N`/`Z` from value; clear `V`/`C`  |
+| `ext`                               | preserved             | set `N`/`Z` from result; clear `V`/`C` |
+| `move` to an address register       | preserved             | preserved                              |
+| `cmp`                               | preserved             | set from a subtraction                 |
+| `tst`                               | preserved             | set `N`/`Z` from value; clear `V`/`C`  |
+
+The `move` spelling used with an address-register destination performs an address-register copy and
+preserves the CCR. For a memory operand such as `4(a0)`, `0(a0,d1.w)`, `(a0)+` or `-(a0)`, the
+effective-address calculation also leaves the CCR alone. The instruction using that address can
+still update the flags according to its own row in the table.
+
+Here the zero byte written to memory sets `Z`. The address setup preserves that set flag. The final
+`move.b` sets `Z` from the zero byte it reads, while the postincrement changes `a0` from `$2000` to
+`$2001` as part of the memory access.
+
+```m68k|playground|memory
+    move.l #1, d0
+    move.b #0, $2000
+    move.l #$2000, a0
+    move.b (a0)+, d0
+```
+
+| after this instruction | relevant values                 | `X` | `N` | `Z` | `V` | `C` |
+| ---------------------- | ------------------------------- | --: | --: | --: | --: | --: |
+| `move.l #1, d0`        | `d0=$00000001`                  |   0 |   0 |   0 |   0 |   0 |
+| `move.b #0, $2000`     | byte at `$2000` is `$00`        |   0 |   0 |   1 |   0 |   0 |
+| `move.l #$2000, a0`    | `a0=$00002000`; flags preserved |   0 |   0 |   1 |   0 |   0 |
+| `move.b (a0)+, d0`     | `d0=$00000000`, `a0=$00002001`  |   0 |   0 |   1 |   0 |   0 |
+
+Stepping one instruction at a time keeps the current row visible in the flags panel.
+
+## Check your understanding
+
+For each independent row, predict the destination afterward and all five flags. The starting CCR is
+given as `X N Z V C`.
+
+| starting value | starting CCR | instruction     |
+| -------------- | ------------ | --------------- |
+| `d0=$12345600` | `1 1 0 1 1`  | `move.b #0, d0` |
+| `d0=$000000FF` | `0 0 0 0 0`  | `add.b #1, d0`  |
+| `d0=$0000007F` | `1 0 0 0 1`  | `add.b #1, d0`  |
+| `d0=$00000003` | `1 0 0 0 0`  | `cmp.b #5, d0`  |
+| `d0=$A5A50080` | `1 0 0 1 1`  | `ext.w d0`      |
+| `d0=$12345680` | `1 0 0 1 1`  | `tst.b d0`      |
 
 <details>
-<summary>Show solution</summary>
+<summary>Show answers</summary>
 
-```m68k|playground|solution
-    cmp.l d1, d0        ; d0 - d1, flags only
-    shi d2              ; unsigned: higher
-    sgt d3              ; signed: greater
-```
-
-</details>
-
-Now one where the answer does not fit. `d0` holds `$77359400`, which is 2000000000, and `d1` holds
-`$C4653600`, which is -1000000000. Compare
-them and record two things: `$FF` in `d2` if the subtraction overflowed, and `$FF` in `d3` if `d0` is
-the greater of the two read as signed numbers.
-
-Both come out `$FF`, and the pair of them together is the whole point of the section above: the
-comparison was still right even though the result was not.
-
-```m68k|playground|exercise
-* your code here
-```
-
-```testcase
-{
-    "startingRegisters": { "d0": "0x77359400", "d1": "0xC4653600" },
-    "expectedRegisters": { "d2": "0xFF", "d3": "0xFF" }
-}
-```
-
-<details>
-<summary>Show solution</summary>
-
-```m68k|playground|solution
-    cmp.l d1, d0        ; d0 - d1, which is too big to fit
-    svs d2              ; V is set
-    sgt d3              ; and gt is right anyway
-```
+| instruction     | destination afterward | ending CCR  | reason                                                             |
+| --------------- | --------------------- | ----------- | ------------------------------------------------------------------ |
+| `move.b #0, d0` | `d0=$12345600`        | `1 0 1 0 0` | the moved byte is zero; `move` preserves `X`                       |
+| `add.b #1, d0`  | `d0=$00000000`        | `1 0 1 0 1` | `$FF + 1` carries out and leaves byte zero                         |
+| `add.b #1, d0`  | `d0=$00000080`        | `0 1 0 1 0` | signed `$7F + 1` overflows; unsigned 128 fits                      |
+| `cmp.b #5, d0`  | `d0=$00000003`        | `1 1 0 0 1` | `3 - 5` is negative and needs an unsigned borrow; `X` is preserved |
+| `ext.w d0`      | `d0=$A5A5FF80`        | `1 1 0 0 0` | the sign-extended word is negative and nonzero; `X` is preserved   |
+| `tst.b d0`      | `d0=$12345680`        | `1 1 0 0 0` | byte `$80` has its highest bit set; `tst` preserves `X`            |
 
 </details>

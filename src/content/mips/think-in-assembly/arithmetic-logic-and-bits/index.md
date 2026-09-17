@@ -48,8 +48,7 @@ first eight digits:
 ```
 
 After the two move instructions, `$t2` holds `0x00000002` and `$t3` holds `0x540BE400`. The pair
-preserves the complete product. For a small product such as 6 times 7, `hi` is zero and `lo` holds
-42.
+preserves the complete product. For a small product such as 6 times 7, `hi` is zero and `lo` holds 42.
 
 `mult` treats its operands as signed values. Its unsigned partner is `multu`. The examples on this
 page use positive values, so both forms would produce the same bits.
@@ -173,12 +172,12 @@ main:
 Masks and shifts work together to extract part of a word. Consider the register value
 `0x12345678`. When naming its bytes by numeric significance, count from the right:
 
-| byte | bits    | value |
-| ---- | ------- | ----- |
-| 3    | 31–24   | `12`  |
-| 2    | 23–16   | `34`  |
-| 1    | 15–8    | `56`  |
-| 0    | 7–0     | `78`  |
+| byte | bits  | value |
+| ---- | ----- | ----- |
+| 3    | 31–24 | `12`  |
+| 2    | 23–16 | `34`  |
+| 1    | 15–8  | `56`  |
+| 0    | 7–0   | `78`  |
 
 This table describes the value inside the register. Byte 0 is the least significant, rightmost
 byte. To extract byte 1, shift it down by eight positions, then keep only the low eight bits with

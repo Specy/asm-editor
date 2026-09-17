@@ -1,10 +1,10 @@
 MIPS uses three common sizes for numbers and bit patterns:
 
-| name | bits | bytes | hexadecimal digits |
-| --- | ---: | ---: | ---: |
-| byte | 8 | 1 | 2 |
-| half (or halfword) | 16 | 2 | 4 |
-| word | 32 | 4 | 8 |
+| name               | bits | bytes | hexadecimal digits |
+| ------------------ | ---: | ----: | -----------------: |
+| byte               |    8 |     1 |                  2 |
+| half (or halfword) |   16 |     2 |                  4 |
+| word               |   32 |     4 |                  8 |
 
 Every MIPS register holds one full word. Memory can also hold individual bytes and halves. The size
 matters because the same pattern can represent a different number when it is read at a different
@@ -106,11 +106,11 @@ Width is part of the interpretation. The table follows the same low eight bits, 
 with leading zeroes at the wider widths. `F0` is negative when treated as one byte, while `00F0`
 and `000000F0` are positive because their highest bit is 0:
 
-| pattern | width | unsigned reading | signed reading |
-| --- | --- | ---: | ---: |
-| `F0` | byte | 240 | -16 |
-| `00F0` | half | 240 | 240 |
-| `000000F0` | word | 240 | 240 |
+| pattern    | width | unsigned reading | signed reading |
+| ---------- | ----- | ---------------: | -------------: |
+| `F0`       | byte  |              240 |            -16 |
+| `00F0`     | half  |              240 |            240 |
+| `000000F0` | word  |              240 |            240 |
 
 Positive patterns whose highest bit is 0 have the same signed and unsigned reading. Patterns whose
 highest bit is 1 fall in the upper half of the unsigned range and the negative half of the signed
@@ -122,10 +122,10 @@ Each size has a fixed number of bit patterns. A byte has 2<sup>8</sup>, or 256, 
 2<sup>16</sup>, or 65,536; and a word has 2<sup>32</sup>, or 4,294,967,296. Signed and unsigned
 readings divide those same patterns differently:
 
-| size | unsigned range | signed range |
-| --- | ---: | ---: |
-| byte | 0 to 255 | -128 to 127 |
-| half | 0 to 65,535 | -32,768 to 32,767 |
+| size |     unsigned range |                    signed range |
+| ---- | -----------------: | ------------------------------: |
+| byte |           0 to 255 |                     -128 to 127 |
+| half |        0 to 65,535 |               -32,768 to 32,767 |
 | word | 0 to 4,294,967,295 | -2,147,483,648 to 2,147,483,647 |
 
 Use this table as a reference; there is no need to memorize every endpoint. The recurring pattern is

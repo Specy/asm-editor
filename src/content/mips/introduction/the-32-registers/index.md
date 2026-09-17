@@ -33,20 +33,20 @@ documentation, or another program uses a different spelling.
 Here is the complete set of 32 registers. Use this table as a lookup; you do **not** need to memorize
 it.
 
-| number      | usual name  | practical meaning                                          |
-| ----------- | ----------- | ---------------------------------------------------------- |
+| number      | usual name  | practical meaning                                           |
+| ----------- | ----------- | ----------------------------------------------------------- |
 | `$0`        | `$zero`     | always reads as 0                                           |
 | `$1`        | `$at`       | reserved for the assembler; leave it alone                  |
-| `$2`–`$3`   | `$v0`–`$v1` | values returned by subroutines                             |
-| `$4`–`$7`   | `$a0`–`$a3` | arguments passed to subroutines                            |
-| `$8`–`$15`  | `$t0`–`$t7` | temporary values                                           |
-| `$16`–`$23` | `$s0`–`$s7` | saved values                                               |
-| `$24`–`$25` | `$t8`–`$t9` | two more temporary values                                  |
-| `$26`–`$27` | `$k0`–`$k1` | reserved for the operating system; leave them alone        |
-| `$28`       | `$gp`       | global pointer; used by a program-wide convention          |
+| `$2`–`$3`   | `$v0`–`$v1` | values returned by subroutines                              |
+| `$4`–`$7`   | `$a0`–`$a3` | arguments passed to subroutines                             |
+| `$8`–`$15`  | `$t0`–`$t7` | temporary values                                            |
+| `$16`–`$23` | `$s0`–`$s7` | saved values                                                |
+| `$24`–`$25` | `$t8`–`$t9` | two more temporary values                                   |
+| `$26`–`$27` | `$k0`–`$k1` | reserved for the operating system; leave them alone         |
+| `$28`       | `$gp`       | global pointer; used by a program-wide convention           |
 | `$29`       | `$sp`       | stack pointer; introduced when the course reaches the stack |
-| `$30`       | `$s8`/`$fp` | saved register or frame pointer, depending on the program  |
-| `$31`       | `$ra`       | return address for a subroutine                            |
+| `$30`       | `$s8`/`$fp` | saved register or frame pointer, depending on the program   |
+| `$31`       | `$ra`       | return address for a subroutine                             |
 
 For the small, self-contained programs in this part of the course, use `$t0` through `$t9` for
 values you choose yourself. They are the simplest safe default. In programs that do not call

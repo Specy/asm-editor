@@ -24,10 +24,10 @@ hexadecimal.
 
 This Playground places the two sections you already know at fixed starting addresses:
 
-| starting address | section | what it contains |
-| --- | --- | --- |
-| `0x00400000` | `.text` | program instructions |
-| `0x10010000` | `.data` | declared data |
+| starting address | section | what it contains     |
+| ---------------- | ------- | -------------------- |
+| `0x00400000`     | `.text` | program instructions |
+| `0x10010000`     | `.data` | declared data        |
 
 The first declaration in `.data` begins at `0x10010000`. Each byte advances the address by one, so
 a four-byte word there occupies addresses `0x10010000` through `0x10010003`. The next free address
@@ -42,8 +42,8 @@ the smallest part of the number. The leftmost pair, `12`, is the **most signific
 MIPS in this Playground uses **little-endian** byte order. It places the least significant byte at
 the lowest address:
 
-| address | byte |
-| --- | --- |
+| address      | byte |
+| ------------ | ---- |
 | `0x10010000` | `78` |
 | `0x10010001` | `56` |
 | `0x10010002` | `34` |

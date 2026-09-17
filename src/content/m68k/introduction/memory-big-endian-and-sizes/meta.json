@@ -1,6 +1,6 @@
 {
     "name": "Memory, big endian and sizes",
-    "description": "The 16 megabytes an M68K program can address, where its code, its data and its stack sit in them, and the order the bytes of a word or a long are written in. It ends on the odd addresses that stop a program.",
+    "description": "How byte-addressed memory holds words and longs, how hexadecimal makes their bytes visible, and how big-endian order and alignment govern access.",
     "order": 2,
     "topic": "memory"
 }

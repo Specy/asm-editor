@@ -1,173 +1,240 @@
-So far every operand has been a register or a number written into the instruction. That is enough
-for arithmetic and nothing else. The moment your data is an array in memory, you need to say things
-like "the long eight bytes past wherever `a0` is pointing", and you need to say them without knowing
-the address while you are writing the program.
+# Addressing modes
 
-The way an operand is written is called its **addressing mode**, and the M68K has ten of them. Three
-name something the CPU already has. Seven name an address, and the instruction goes to memory for
-whatever is there.
+An instruction needs to know where each operand comes from. An **addressing mode** is the rule an
+operand uses to obtain a value or name a place that an instruction can change.
 
-Throughout this page, `numbers` is an array of four longs and `numbers[2]` means its third element.
+Some modes name a value already in the instruction or a register. Other modes access memory. For a
+memory operand, the CPU may have to calculate an address first. The final memory address produced by
+that calculation is called the **effective address**.
 
-## Registers, numbers and one fixed address
+This lesson builds the memory modes one at a time. Every example uses addresses beginning at
+`$2000`, away from the program itself, and writes the example data there before reading it.
 
-`d0` and `a0` are the registers themselves, read or written directly. `#7` is the number 7, carried
-inside the instruction, and it can be anything the assembler can work out while assembling: `#$FF*2`,
-`#'a'`, `#numbers`. `numbers` written without the `#` is the address the assembler gave that label,
-and the instruction goes and reads or writes the memory there.
+## The modes already in use
 
-That `#` is the whole difference between three useful instructions:
+The register and literal operands from earlier lessons are addressing modes too:
 
-- `move.l #numbers, a0` puts the **address** of `numbers` in `a0`.
-- `move.l numbers, d0` puts the **long stored at** `numbers` in `d0`.
-- `lea numbers, a0` puts the address in `a0` as well, and is what you actually write, because `lea`
-  works with every address expression and never reads memory.
-
-## The modes that go through an address register
-
-Build this one with the memory panel open and step through it.
-
-```m68k|playground|memory|no-flags
-    move.l #7, d0           ; immediate
-    move.l d0, d1           ; data register
-    lea numbers, a0         ; the address of numbers, nothing read
-    move.l a0, d2           ; address register
-    move.l numbers, d3      ; absolute
-    move.l (a0), d4         ; indirect
-    move.l 4(a0), d5        ; indirect with displacement
-    move.l #8, d6
-    move.l (a0, d6), d7     ; indexed
-
-    org $2000
-numbers: dc.l 10, 20, 30, 40
-```
-
-The `org $2000` puts the four longs at a known address, so `numbers` is `$2000` however long the code
-above it gets:
-
-| address | value      | which element |
-| ------- | ---------- | ------------- |
-| `$2000` | `0000000A` | `numbers[0]`  |
-| `$2004` | `00000014` | `numbers[1]`  |
-| `$2008` | `0000001E` | `numbers[2]`  |
-| `$200C` | `00000028` | `numbers[3]`  |
-
-`d3` and `d4` both fetch the first element, one through an address the assembler wrote into the
-instruction and one through an address that was sitting in `a0` when the line ran. That second way is
-the one that matters, because `a0` can change and the instruction cannot.
-
-The three that involve `a0` differ in where the offset comes from:
-
-- **`(a0)`** is the address in `a0`, nothing added.
-- **`4(a0)`** adds a **constant**, decided when you write the program and baked into the
-  instruction. That constant is called the **displacement**. Use it for an offset you already know:
-  the second field of a record, `numbers[1]`.
-- **`(a0, d6)`** adds a **register**, so the offset can be worked out while the program runs. Use it
-  when the offset is an index your program computed: `numbers[i]`.
-
-`4(a0, d6)` does both at once: base, plus register, plus constant. The index register can be a data
-or an address register, and `(sp, a0)` is as legal as `(a0, d6)`.
-
-## Indexing an array
-
-There is one thing to watch. `(a0, d1)` adds `d1` to `a0` and does nothing else, so `d1` has to be a
-number of **bytes**, not a number of elements. The elements here are longs, four bytes each, so
-element `i` is at `i * 4`, and shifting left by 2 is how you multiply by 4.
-
-```m68k|playground|memory|no-flags
-    lea numbers, a0
-    move.l #2, d0           ; i = 2
+```m68k|playground|no-flags
+    move.l #7, d0
     move.l d0, d1
-    lsl.l #2, d1            ; i * 4, the size of a long
-    move.l (a0, d1), d2     ; d2 = numbers[i]
-    move.l 4(a0, d1), d3    ; d3 = numbers[i + 1]
-    move.l #99, (a0, d1)    ; numbers[i] = 99
-
-    org $2000
-numbers: dc.l 10, 20, 30, 40
+    move.l #$2000, a0
+    move.l a0, a1
 ```
 
-Forget that shift and everything still assembles and still runs. Delete the `lsl.l #2, d1` and step
-through it: `d1` stays at 2, so the address comes out as `$2002`, two bytes into the first element,
-and the long read from there is the back half of `numbers[0]` joined to the front half of
-`numbers[1]`, which is `000A0000`. Nothing complained. The index was in the wrong units and the
-machine had no way of knowing.
+- `#7` and `#$2000` use **immediate addressing**. The number itself is part of the instruction.
+- `d0` and `d1` use **data-register direct addressing**. The operand is the named data register.
+- `a0` and `a1` use **address-register direct addressing**. The operand is the named address
+  register.
 
-The last line is the same mode used as a destination, which is worth noticing: an addressing mode is
-a way of naming a place, and most places can be read from and written to.
+These four instructions do not read or write data memory. In particular, putting `$2000` in `a0`
+does not access memory at `$2000`; it only copies that number into the register.
 
-## Postincrement and predecrement
+## Absolute memory: `$2000`
 
-Walking an array means adding the element size to a pointer on every pass, which is a whole extra
-instruction inside your loop. Two modes do it for you, stepping the address register by the **size of
-the instruction**: 1 for `.b`, 2 for `.w`, 4 for `.l`.
-
-- **`(a0)+`** reads or writes at `a0`, then adds the size to `a0`.
-- **`-(a0)`** subtracts the size from `a0` first, then reads or writes at the new address.
+An address written without `#` names memory at that address. This is **absolute addressing** because
+the effective address is a fixed number in the instruction.
 
 ```m68k|playground|memory|no-flags
-    lea bytes, a0
-    move.b (a0)+, d0    ; a byte, so a0 steps by 1
-    move.b (a0)+, d1
-    lea words, a1
-    move.w (a1)+, d2    ; a word, so a1 steps by 2
-    lea end, a2
-    move.l -(a2), d3    ; a long, so a2 steps back by 4 first
-
-    org $2000
-bytes:  dc.b 1, 2, 3, 4
-words:  dc.w $1111, $2222
-last:   dc.l $AABBCCDD
-end:
+    move.l #$11223344, $2000
+    move.l $2000, d0
 ```
 
-`a0` ends at `00002002`, two bytes on from where it started, because two byte reads moved it by one
-each. `a1` ends at `00002006`, two on from `$2004`, because one word read moved it by two. And `a2`
-started at `$200C`, which is the address of `end`, stepped **back** to `$2008` and read the long
-there, which is why `-(a0)` is what you walk an array backwards with: it arrives at the last element
-without you having to work out where the last element is.
+The first line writes the long `$11223344` to memory beginning at `$2000`. The second line reads the
+same four bytes into `d0`, so `d0` ends at `$11223344`.
 
-`-(sp)` and `(sp)+` are these same two modes applied to `a7`, which is what makes them a push and a
-pop. That is the stack lecture.
+The `#` makes these two operands mean different things:
 
-## All ten, together
+| operand  | meaning                                    |
+| -------- | ------------------------------------------ |
+| `#$2000` | the number `$2000` itself                  |
+| `$2000`  | the value stored in memory beginning there |
 
-| mode                       | written     | what it names                            |
-| -------------------------- | ----------- | ---------------------------------------- |
-| data register              | `d0`        | the register                             |
-| address register           | `a0`        | the register                             |
-| immediate                  | `#7`        | a number inside the instruction          |
-| absolute                   | `numbers`   | one address, fixed at assembly time      |
-| indirect                   | `(a0)`      | the address in `a0`                      |
-| indirect with displacement | `4(a0)`     | `a0` plus a constant                     |
-| indexed                    | `(a0, d1)`  | `a0` plus a register                     |
-| indexed with displacement  | `4(a0, d1)` | `a0` plus a register plus a constant     |
-| postincrement              | `(a0)+`     | the address in `a0`, then `a0` moves on  |
-| predecrement               | `-(a0)`     | `a0` moves back first, then that address |
+For the memory operand, the effective address is simply `$2000`.
 
-The two operands of an instruction each accept their own set of these, and the sets are not the same.
-`swap` takes a data register. `lea` takes an address and an address register. `eor` insists on a data
-register as its source. `move` takes almost anything on the left and anything but an immediate on the
-right, since you cannot write into a number.
+## Address-register indirect: `(a0)`
 
-Each instruction's documentation page lists what its operands accept, written as `Dn`, `An`, `(An)`,
-`Im`, `ea` and `(An, Xn)`. Anything outside that set is a build error on that line.
+Often a program keeps an address in an address register. Parentheses mean “use the address stored in
+this register.” This is **address-register indirect addressing**.
 
-## Your turn
+```m68k|playground|memory|no-flags
+    move.l #$11223344, $2000
+    move.l #$2000, a0
+    move.l (a0), d0
+```
 
-The four longs sit at `$2000`. Put `numbers[2]` in `d0`, and work the address out at run time with
-the indexed mode instead of writing `$2008` into your program.
+When the last line runs, `a0` contains `$2000`, so the effective address of `(a0)` is `$2000`.
+`d0` receives the long stored there: `$11223344`. The parentheses do not change `a0`.
+
+The same mode can name a destination:
+
+```m68k|playground|memory|no-flags
+    move.l #$2000, a0
+    move.l #$AABBCCDD, (a0)
+```
+
+Here `(a0)` names the four bytes to change, so memory beginning at `$2000` becomes `$AABBCCDD`.
+
+## A fixed displacement: `4(a0)`
+
+A **displacement** is a constant byte offset written before the parentheses. The CPU adds it to the
+address register to get the effective address.
+
+```m68k|playground|memory|no-flags
+    move.l #10, $2000
+    move.l #20, $2004
+    move.l #30, $2008
+
+    move.l #$2000, a0
+    move.l 4(a0), d0
+```
+
+On the last line, the CPU calculates:
+
+```text
+effective address = $2000 + 4 = $2004
+```
+
+It then reads the long at `$2004`, so `d0` becomes 20. The displacement is measured in bytes. It is
+4 here because one long occupies four bytes. A negative displacement works too: if `a0` contained
+`$2008`, then `-4(a0)` would also have the effective address `$2004`.
+
+## A register offset: `0(a0,d1.w)`
+
+Sometimes an offset is only known while the program is running. **Indexed addressing** adds an index
+register as well as a fixed displacement:
+
+```text
+effective address = address register + index register + displacement
+```
+
+This example supplies the byte offset 8 directly in `d1`:
+
+```m68k|playground|memory|no-flags
+    move.l #10, $2000
+    move.l #20, $2004
+    move.l #30, $2008
+    move.l #40, $200C
+
+    move.l #$2000, a0
+    move.l #8, d1
+    move.l 0(a0,d1.w), d0
+```
+
+The `.w` on `d1.w` says that this 68000 addressing mode uses the low word of `d1` as its signed
+index. The leading `0` is the fixed displacement. The effective address is `$2000 + 8 + 0`, so the
+last line reads the long at `$2008` and puts 30 in `d0`.
+
+An index is a byte offset, not an element number. The four longs above begin 0, 4, 8 and 12 bytes
+after `$2000`. That is why the offset for the third long is 8 rather than 2. The read leaves the base
+register `a0` and index register `d1` unchanged; it changes the destination register `d0` to 30.
+
+A nonzero displacement can be combined with the index. With the same register values,
+`4(a0,d1.w)` has the effective address `$200C`.
+
+## Use an address, then move it: `(a0)+`
+
+**Postincrement addressing** accesses memory through an address register and then increases that
+register. For `a0` through `a6`, the amount added is the operand's access size: 1 for a byte, 2 for
+a word and 4 for a long. `a7` is the exception: a byte access changes it by 2. In every case, this
+amount comes from the memory access size, not the number of bytes used to encode the instruction.
+
+```m68k|playground|memory|no-flags
+    move.b #$7A, $2000
+    move.w #$1234, $2002
+
+    move.l #$2000, a0
+    move.l #$AABBCCDD, d0
+    move.b (a0)+, d0
+
+    move.l #$2002, a1
+    move.l #$55667788, d1
+    move.w (a1)+, d1
+```
+
+The byte read happens at `$2000`, then `a0` increases by 1 to `$2001`. A byte write to a data
+register changes only its low byte, so `d0` becomes `$AABBCC7A`.
+
+The word read happens at `$2002`, then `a1` increases by 2 to `$2004`. A word write changes only the
+low word of a data register, so `d1` becomes `$55661234`. The `+` is part of the memory operand; the
+address register changes automatically after that access.
+
+## Move an address first, then use it: `-(a2)`
+
+**Predecrement addressing** does those actions in the opposite order. It first subtracts the same
+amount that postincrement would add, then uses the new address.
+
+```m68k|playground|memory|no-flags
+    move.l #$89ABCDEF, $2004
+    move.l #$2008, a2
+    move.l -(a2), d2
+```
+
+Because this is a long access, the last line first changes `a2` from `$2008` to `$2004`. It then
+reads the long at `$2004`, making `d2` equal to `$89ABCDEF`. Afterward, `a2` still contains `$2004`.
+
+Postincrement and predecrement are useful whenever a later instruction should use the neighbouring
+item in memory. `(a0)+` accesses memory at the current address and then changes `a0`. `-(a0)`
+changes `a0` first and then accesses memory at the new address.
+
+## Recap
+
+| mode                       | example      | how it obtains its value or location                 |
+| -------------------------- | ------------ | ---------------------------------------------------- |
+| immediate                  | `#7`         | the number in the instruction                        |
+| data-register direct       | `d0`         | data register `d0`                                   |
+| address-register direct    | `a0`         | address register `a0`                                |
+| absolute                   | `$2000`      | memory at the fixed address `$2000`                  |
+| address-register indirect  | `(a0)`       | memory at the address in `a0`                        |
+| indirect with displacement | `4(a0)`      | memory at `a0 + 4`                                   |
+| indexed                    | `0(a0,d1.w)` | memory at `a0 +` the signed low word of `d1 + 0`     |
+| postincrement              | `(a0)+`      | memory at `a0`, then increase it by the access size  |
+| predecrement               | `-(a0)`      | decrease `a0` by the access size, then access memory |
+
+Each instruction allows particular modes for each operand. One dependable rule is that an immediate
+operand can be a source but cannot be a destination: an instruction can use a written number, but it
+cannot store a result back inside its own literal.
+
+## Check your understanding
+
+### 1. Read with an index
+
+The exercise starts with this memory:
+
+| address | long stored there |
+| ------- | ----------------: |
+| `$2000` |                10 |
+| `$2004` |                20 |
+| `$2008` |                30 |
+| `$200C` |                40 |
+
+It also starts `a0` at `$2000`, puts the byte offset 8 in `d1`, and gives `d0` the sentinel value
+`$DEADBEEF`. Write one indexed `move.l` that reads the long at `a0 + d1` into `d0`. Leave `a0` and
+`d1` unchanged.
 
 ```m68k|playground|memory|exercise
-* your code here
-
-    org $2000
-numbers: dc.l 10, 20, 30, 40
+; your code here
 ```
 
 ```testcase
 {
-    "expectedRegisters": { "d0": 30 }
+    "startingRegisters": {
+        "a0": "0x2000",
+        "d0": "0xDEADBEEF",
+        "d1": 8
+    },
+    "expectedRegisters": {
+        "a0": "0x2000",
+        "d0": 30,
+        "d1": 8
+    },
+    "startingMemory": [
+        {
+            "type": "number-chunk",
+            "address": "0x2000",
+            "bytes": 4,
+            "expected": [10, 20, 30, 40]
+        }
+    ]
 }
 ```
 
@@ -175,29 +242,54 @@ numbers: dc.l 10, 20, 30, 40
 <summary>Show solution</summary>
 
 ```m68k|playground|memory|solution
-    lea numbers, a0     ; the base
-    move.l #8, d1       ; element 2 of longs is 8 bytes in
-    move.l (a0, d1), d0
-
-    org $2000
-numbers: dc.l 10, 20, 30, 40
+    move.l 0(a0,d1.w), d0
 ```
 
 </details>
 
-This time the **address** of `numbers[3]`, in `a1`, with nothing read out of memory at all. It comes
-to `$200C`.
+### 2. Trace both automatic updates
+
+The exercise starts with byte `$7A` at `$2000` and long `$11223344` at `$2004`. It starts `a0` at
+`$2000` and `a1` at `$2008`.
+
+1. Use byte-sized postincrement through `a0` to read `$7A` into `d0`.
+2. Use long-sized predecrement through `a1` to read `$11223344` into `d1`.
+
+The sentinel in `d0` makes the partial byte write visible. After both instructions, `a0` should be
+`$2001` and `a1` should be `$2004`.
 
 ```m68k|playground|memory|exercise
-* your code here
-
-    org $2000
-numbers: dc.l 10, 20, 30, 40
+; your code here
 ```
 
 ```testcase
 {
-    "expectedRegisters": { "a1": "0x200C" }
+    "startingRegisters": {
+        "a0": "0x2000",
+        "a1": "0x2008",
+        "d0": "0xAABBCCDD",
+        "d1": "0xDEADBEEF"
+    },
+    "expectedRegisters": {
+        "a0": "0x2001",
+        "a1": "0x2004",
+        "d0": "0xAABBCC7A",
+        "d1": "0x11223344"
+    },
+    "startingMemory": [
+        {
+            "type": "number",
+            "address": "0x2000",
+            "bytes": 1,
+            "expected": "0x7A"
+        },
+        {
+            "type": "number",
+            "address": "0x2004",
+            "bytes": 4,
+            "expected": "0x11223344"
+        }
+    ]
 }
 ```
 
@@ -205,11 +297,8 @@ numbers: dc.l 10, 20, 30, 40
 <summary>Show solution</summary>
 
 ```m68k|playground|memory|solution
-    lea numbers, a0     ; the base
-    lea 12(a0), a1      ; three longs further on
-
-    org $2000
-numbers: dc.l 10, 20, 30, 40
+    move.b (a0)+, d0
+    move.l -(a1), d1
 ```
 
 </details>

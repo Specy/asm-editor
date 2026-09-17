@@ -1,11 +1,11 @@
 The operands you have used so far name values in two ways: a register such as `$t0`, or an
 immediate number such as `7`. Loads and stores add a third form that names a location in memory.
 
-| kind | example | meaning |
-| --- | --- | --- |
-| register | `$t0` | use a register |
-| immediate | `7` | use the number written in the instruction |
-| memory | `4($t0)` | use memory at the address in `$t0`, plus 4 bytes |
+| kind      | example  | meaning                                          |
+| --------- | -------- | ------------------------------------------------ |
+| register  | `$t0`    | use a register                                   |
+| immediate | `7`      | use the number written in the instruction        |
+| memory    | `4($t0)` | use memory at the address in `$t0`, plus 4 bytes |
 
 The instruction decides what an operand does. In `addi $t1, $t0, 7`, `$t0` is a register source,
 `7` is an immediate source, and `$t1` is the register destination. A memory operand such as
@@ -49,11 +49,11 @@ the store copies the value already in `$t2` to memory. The store does not replac
 
 The letters `b`, `h`, and `w` match the sizes from the previous lesson: byte, half, and word.
 
-| size | load | store | bytes moved |
-| --- | --- | --- | ---: |
-| byte | `lb` or `lbu` | `sb` | 1 |
-| half | `lh` or `lhu` | `sh` | 2 |
-| word | `lw` | `sw` | 4 |
+| size | load          | store | bytes moved |
+| ---- | ------------- | ----- | ----------: |
+| byte | `lb` or `lbu` | `sb`  |           1 |
+| half | `lh` or `lhu` | `sh`  |           2 |
+| word | `lw`          | `sw`  |           4 |
 
 Word and half accesses must begin at the aligned addresses introduced earlier: a word at a
 multiple of 4 and a half at a multiple of 2. A byte can begin at any address.

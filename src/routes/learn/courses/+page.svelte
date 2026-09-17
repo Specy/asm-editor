@@ -50,9 +50,6 @@
                     <Header type="h2" noMargin>
                         {course.name}
                     </Header>
-                    <p class="text-muted">
-                        {course.description}
-                    </p>
                 </Card>
             </a>
         {/each}
@@ -76,10 +73,10 @@
        kinds apart at a glance. */
     .course.of-a-language > :global(*) {
         border-left: 0.3rem solid var(--course-accent);
-        background-color: color-mix(in srgb, var(--course-accent) 8%, var(--secondary));
+        background-color: color-mix(in srgb, var(--course-accent) 8%, var(--secondary)) !important;
         transition: background-color 0.2s;
     }
     .course.of-a-language:hover > :global(*) {
-        background-color: color-mix(in srgb, var(--course-accent) 18%, var(--secondary));
+        background-color: color-mix(in srgb, var(--course-accent) 18%, var(--secondary)) !important;
     }
 </style>

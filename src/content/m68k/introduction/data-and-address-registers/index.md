@@ -1,166 +1,77 @@
-Sixteen registers, and the CPU refuses half of them for any given job. `swap` will not take an
-address register. `lea` will not take a data register. Get it wrong and the build fails rather than
-the program, so this is a thing worth sorting out early.
+# Data and address registers
 
-The split is not arbitrary. `d0` to `d7` are for numbers and `a0` to `a7` are for addresses, and the
-CPU treats a thing it believes is an address differently from a thing it believes is a number.
+The M68K processor has sixteen registers for everyday work. It divides them into two named groups:
 
-## Data registers hold numbers
+- eight **data registers**, named `d0` through `d7`;
+- eight **address registers**, named `a0` through `a7`.
 
-`d0` to `d7` are where arithmetic happens. Every instruction that computes something wants a data
-register somewhere in it: `add`, `sub`, `muls`, `divu`, `and`, `or`, `eor`, `not`, `neg`, the shifts
-`lsl` and `asr`, the bit instructions `btst` and `bset`, and `swap` and `ext`, which have no other
-operand at all.
+The letter tells you the register's usual job. The number picks one register from that group. For
+example, `d3` is data register 3 and `a3` is address register 3. They are two separate registers.
 
-They also hold anything else you want to keep: a loop counter, a character, a flag of your own, the
-result of a comparison. Nothing marks a data register as holding one kind of thing.
+## Data registers
 
-An instruction on a data register carries a size, and the size says how much of the register it
-touches: `.b` the lowest byte, `.w` the lowest word, `.l` all four bytes. The bytes above the size
-are left exactly as they were, which is why `move.b #$FF, d0` on a register holding `$12345678`
-leaves `$123456FF`.
+Data registers hold values that a program is working with. A value might be a score, a counter, a
+price or the result of a calculation.
 
-## Address registers hold addresses
+A program could use some data registers like this:
 
-`a0` to `a7` are what the instructions that reach memory work through. `lea` (load effective
-address) writes one, and every way of writing "the memory at this register", `(a0)`, `4(a0)`,
-`(a0)+`, `-(a0)`, names one.
+| register | value being kept there |
+| -------- | ---------------------- |
+| `d0`     | the current total      |
+| `d1`     | the number of items    |
+| `d2`     | the latest result      |
 
-```m68k|playground|no-flags
-    move.l #100, d0     ; a number in a data register
-    lea total, a0       ; the address of total in an address register
-    move.l (a0), d1     ; the long sitting at that address
-    add.l d1, d0        ; and add it in
+The meanings in the right-hand column come from the program. The register names themselves are
+fixed: the programmer chooses what each data register will hold and keeps track of that choice.
 
-total: dc.l 25
-```
+## Address registers
 
-`a0` comes out at `00001010`, which is where the assembler put the `25`. Four instructions of four
-bytes each start at `$1000`, so the data begins sixteen bytes later. The `25` was never in the
-instruction: `lea` fetched an address and `move.l (a0), d1` went and got what was at it.
+Memory is made of many locations. Each location has an **address**: a number that identifies that
+location. An address works like a numbered place where the processor can find some stored data.
 
-Then come three rules, all of them consequences of the CPU believing that what is in there is an
-address.
+Suppose memory location 1200 contains the value 25. These are two different numbers with different
+jobs:
 
-**There is no byte size.** `move.b #1, a0` does not assemble, and the assembler says so: "Byte size
-not allowed for address register". Only `.w` and `.l` are accepted, because a quarter of an address
-is not an address.
+| place                         | value |
+| ----------------------------- | ----: |
+| address register `a0`         |  1200 |
+| memory location numbered 1200 |    25 |
 
-**A word written into an address register is copied up into all 32 bits.** The top bit of the word
-you wrote is repeated across the whole upper half, so `$FFFE`, whose top bit is a 1, leaves
-`FFFFFFFE` and not `0000FFFE`. This is called **sign extension**, and "Bytes, words and longs"
-explains the arithmetic behind it. The reason it happens here is that the register always holds a
-whole address, so the CPU has to decide what goes above the word and copying the top bit is the
-choice that keeps the number's value the same.
+Here, `a0` holds the address 1200. That address tells the processor which memory location is of
+interest. The data at that location is 25.
 
-**Writing an address register never touches the flags.** Working out an address is not computing a
-number, so `X`, `N`, `Z`, `V` and `C` keep saying whatever the last arithmetic instruction left them
-saying.
+Address registers are used for location numbers like 1200. A program might use `a0` for the start
+of some text and `a1` for the next memory location it plans to visit. This gives the processor one
+group of registers for finding places in memory and another group for values used in calculations.
 
-```m68k|playground
-    move.l #$12345678, d0   ; all four bytes of a data register
-    move.b #$FF, d0         ; only the lowest byte
-    move.l #$12345678, a0   ; all four bytes of an address register
-    move.w #$FFFE, a1       ; a word, copied up over the whole register
-    move.w #$7FFE, a2       ; and a word whose top bit is a 0
-```
+## `a7` and `sp`
 
-| register |      value | why                                             |
-| -------: | ---------: | ----------------------------------------------- |
-|     `d0` | `123456FF` | the byte write left the three bytes above it    |
-|     `a0` | `12345678` | a long is copied as it is                       |
-|     `a1` | `FFFFFFFE` | the top bit of `$FFFE` is 1, so ones fill above |
-|     `a2` | `00007FFE` | the top bit of `$7FFE` is 0, so zeroes do       |
+The last address register has two names: `a7` and `sp`. Both names refer to the same visible
+register. If its value changes under one name, the value shown under the other name changes too.
 
-Step to the end with the flags panel open. `N` is still 1, left there by the `move.b #$FF, d0` on
-the second line, and the three address register writes after it changed nothing.
+`sp` means **stack pointer**. The processor uses this register for stack bookkeeping, so reserve
+`a7`/`sp` for that job. For ordinary addresses, choose from `a0` through `a6`.
 
-## movea, adda and the rest
+## Check your understanding
 
-That last rule catches people, so it is worth knowing where it comes from. `move.l d0, a0` is not
-actually a `move`. The 68000 has a separate instruction for writing an address register, called
-`movea`, and the assembler quietly picks it for you the moment it sees an address register on the
-right. The same goes for `add.w #4, a0`, which becomes `adda.w #4, a0`, and `cmp.l a1, a0`, which
-becomes `cmpa.l a1, a0`.
+For each job, choose **data register**, **address register**, or **`a7`/`sp`**.
 
-You can write `movea`, `adda`, `suba` and `cmpa` out by hand and it changes nothing. What is worth
-carrying away is that an `add.w #4, a0` in the middle of your program leaves the flags alone while
-the `add.w #4, d0` next to it sets them, and that is because they are not the same instruction at
-all.
+1. Keep a running total.
+2. Keep the number of the memory location where a message begins.
+3. Keep count of how many items have been processed.
+4. Handle stack bookkeeping.
 
-## a7 is the stack pointer
-
-`a7` is an address register like the other seven, and the CPU also uses it as the **stack pointer**:
-`bsr` pushes onto it, `rts` pops off it, and `-(sp)` and `(sp)+` are the two forms that write and
-read the stack. You can write it as `a7` or as `sp`, they are the same register.
-
-```m68k|playground|no-flags
-    move.l a7, d0       ; where the stack pointer starts
-    move.l sp, d1       ; the same register under its other name
-    subq.l #4, sp       ; four bytes of stack taken
-    move.l a7, d2       ; a7 moved too
-```
-
-`d0` and `d1` both come out at `01000000`, one byte past the last address of memory: the stack
-starts at the very top and grows downwards. After the `subq.l #4, sp` both names read `00FFFFFC`,
-because there was only ever one register.
-
-That makes `a7` the one register you should not treat as scratch space. Whatever your subroutines
-left on the stack is found through it, so a stray `move.l #0, a7` loses the lot. The stack gets its
-own lecture, "The stack, -(sp) and movem".
-
-## Which register an instruction takes
-
-Each instruction accepts one kind, or the other, or both. The ones you meet first:
-
-- **Only a data register**: `swap`, `ext`, `muls`, `mulu`, `divs`, `divu` (as the destination), and
-  `eor` as its source.
-- **Only an address register**: `lea` and `movea` as their destination, `pea` and `unlk` as their
-  only operand, `link` as its first.
-- **Either one**: `exg`, which exchanges the full 32 bits of any two registers, and `movem`, which
-  saves and restores a list of both kinds.
-
-```m68k|playground|no-flags
-    move.l #$AABBCCDD, d0
-    swap d0             ; a data register only
-    lea $2000, a0       ; an address register only
-    move.w #6, d1
-    mulu #7, d1         ; a data register only
-    exg d1, a1          ; either kind, always all 32 bits
-```
-
-`swap d0` exchanges the two words of `d0`, so `AABBCCDD` becomes `CCDDAABB`. `lea $2000, a0` puts
-the number `$2000` in `a0` without reading anything from memory. `mulu #7, d1` multiplies the low
-word of `d1` by 7 and writes the product over the whole register. Then `exg d1, a1` swaps those two
-registers, which is the one instruction here that does not care which bank you hand it.
-
-Replace `swap d0` with `swap a0` and press Build. The assembler refuses it, and the message names
-the operand it wanted.
-
-## Your turn
-
-`d0` starts out holding `$0000FFFE`. Put its low word into `a0` and the whole of it into `a1`, in
-two instructions.
-
-The two answers differ, which is the point: `a0` comes out at `$FFFFFFFE` and `a1` at `$0000FFFE`.
-
-```m68k|playground|exercise
-* your code here
-```
-
-```testcase
-{
-    "startingRegisters": { "d0": "0x0000FFFE" },
-    "expectedRegisters": { "a0": "0xFFFFFFFE", "a1": "0x0000FFFE" }
-}
-```
+Then answer this question: if `a2` contains 1200 and memory location 1200 contains 25, which value
+is the address?
 
 <details>
-<summary>Show solution</summary>
+<summary>Show answers</summary>
 
-```m68k|playground|solution
-    move.w d0, a0       ; a word, copied up into all 32 bits
-    move.l d0, a1       ; the whole long, copied as it is
-```
+1. A data register such as `d0`.
+2. An address register such as `a0`.
+3. A data register such as `d1`.
+4. `a7`/`sp`.
+
+The address is 1200. The value 25 is the data stored at that memory location.
 
 </details>

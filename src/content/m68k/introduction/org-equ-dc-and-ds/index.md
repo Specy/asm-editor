@@ -1,155 +1,179 @@
-A program is instructions and the data they work on, and something has to say where each of them
-goes in memory. The assembler does it in the simplest way there is: it starts at an address, walks
-your source from top to bottom, and drops each instruction and each piece of data at the next free
-address. Four directives steer that walk.
+# org, equ, dc and ds
 
-## org: where the next thing goes
+The assembler must choose a memory address for every instruction and every piece of data. It keeps
+a **current assembly address** while it reads the source. Placing an instruction or some data uses
+bytes at that address and advances it by the number of bytes placed there.
 
-`org $2000` sets the address the next line is assembled at. Everything after it follows on from
-there, four bytes per instruction and as many bytes as it needs per piece of data, until the next
-`org`.
+An **assembler directive** tells the assembler how to build the program. A directive does not
+become an instruction for the processor. This page uses four directives:
 
-A new M68K project starts with `ORG $1000`, and `$1000` is also where this editor assembles from when
-you write no `org` at all. The program starts running at your **first instruction**, wherever in
-memory it landed, not at the lowest address, so a data block placed before the code with an earlier
-`org` does not get executed.
+| directive | job                                               |
+| --------- | ------------------------------------------------- |
+| `org`     | choose the address for whatever is assembled next |
+| `dc`      | place known data in memory                        |
+| `ds`      | reserve a chosen amount of memory                 |
+| `equ`     | give a name to a number used while assembling     |
 
-One rule: an `org` can only move **forwards**. `org $1000` after something has already been
-assembled at `$3000` is a build error saying that the address must be greater than the previous one.
+## Labels name addresses
 
-```m68k|playground|memory|no-flags
-    move.l #1, d0       ; this instruction is at $1000
-    move.l #2, d1       ; and this one at $1004
-here:   dc.l $AABBCCDD  ; and this long at $1008, right after the code
+A **label** binds a name to the current assembly address. Write the name followed by a colon:
 
-    org $2000
-there:  dc.l $11223344  ; while this one is at $2000, where the org put it
-```
-
-Build it, then type `1008` in the memory panel's address box: the four bytes `AA BB CC DD` are there,
-because nothing separated the data from the code. Type `2000` and `11 22 33 44` is there instead.
-
-The program stops after `move.l #2, d1`, and it stops for a plain reason: there is no next
-instruction. The bytes of `here` are data and the simulator has no instruction assembled at `$1008`,
-so the run ends. On a real 68000 those bytes would be decoded as an instruction and executed,
-whatever they happened to mean, which is why real programs never fall off the end into their data.
-
-## Labels
-
-A label is a name for the address of whatever comes next, and on this assembler it **ends with a
-colon**: `here:`, `start:`, `numbers:`. A name without a colon in front of an instruction is read as
-an instruction name and fails to assemble. The one exception is `equ`, whose name is written first
-and takes no colon.
-
-A label is nothing but its address, so nothing distinguishes a label on an instruction from a label
-on a `dc`. Both `bra here` and `move.l here, d0` will assemble whichever kind `here` turned out to
-be, and only one of them will do anything sensible. Jump to a label on a `dc` and the machine will
-happily try to run your data.
-
-## dc, ds and dcb: what is in memory
-
-- **`dc`** defines constants. `dc.b`, `dc.w` and `dc.l` write the values you list as bytes, words or
-  longs, in that order, right where the line is. A string in single quotes is written as its
-  characters, one byte each, and a label written as a value becomes its address.
-- **`ds`** defines storage. `ds.b 8` reserves eight bytes, `ds.w 2` two words, `ds.l 6` six longs,
-  and it gives them no value: what is in that room until your program writes it is whatever was
-  there.
-- **`dcb`** defines a constant block: `dcb.b 4, $7E` writes `$7E` four times over. It is `ds` with
-  something in it.
-
-```m68k|playground|memory|no-flags
-    lea greeting, a0
+```m68k
+start:
+    move.l #1, d0
 
     org $2000
-greeting: dc.b 'Hi', 0
-counts:   dc.w 1, 2
-total:    dc.l $DEADBEEF
-room:     ds.w 2
-filler:   dcb.b 4, $7E
-pointer:  dc.l greeting
+values:
+    dc.w 10, 20
 ```
 
-| label      | address | bytes         | what it is                            |
-| ---------- | ------- | ------------- | ------------------------------------- |
-| `greeting` | `$2000` | `48 69 00`    | `H`, `i` and the terminator you wrote |
-| `counts`   | `$2003` | `00 01 00 02` | two words                             |
-| `total`    | `$2007` | `DE AD BE EF` | one long, most significant byte first |
-| `room`     | `$200B` | four bytes    | reserved and not written              |
-| `filler`   | `$200F` | `7E 7E 7E 7E` | four copies of `$7E`                  |
-| `pointer`  | `$2013` | `00 00 20 00` | the address of `greeting`, as a long  |
+Here `start` names the address of an instruction, while `values` names the address where the first
+word is stored. The label itself occupies no memory. Both names are addresses; their meaning comes
+from what the source places at those addresses.
 
-Two rows in that table are worth reading twice. `counts` starts at `$2003`, an **odd** address,
-because `greeting` took three bytes and the assembler pads nothing, so `move.w counts, d0` on this
-layout ends the run with an address error. And `pointer` holds `00002000`, which is not a value at
-all but the address of `greeting`: a long in memory whose contents are somewhere else in memory,
-which is how you store a place rather than a thing.
+An instruction may use a label before its definition appears. During Build, the assembler reads
+the complete source, records each label's address, and resolves those references. For example,
+`move.l #values,a0` works even if `values:` is farther down the file. A forward reference is also
+allowed in data created by `dc`.
 
-## equ: a name for a number
+The expressions on `org`, `ds`, and `equ` lines affect the layout itself, so any names in those
+expressions must already have been defined.
 
-`equ` gives a name to a number, and the assembler replaces the name with the number everywhere it
-appears. It reserves no memory and produces no instruction: after assembling, nothing of the name is
-left in the program.
+## `org`: choose the next address
 
-```m68k|playground|memory|no-flags
-count   equ 6           ; a name for 6, using no memory
-size    equ 4
-    move.l #count, d0       ; the number 6
-    move.l #count*size, d1  ; 24, multiplied while assembling
-    move.l stored, d2       ; the long at stored, read from memory
+`org $2000` sets the current assembly address to `$2000`. The next instruction or data byte is
+placed there, and assembly continues from there until another `org` changes the address.
 
-    org $2000
-stored: dc.l 6
-```
-
-`d0` and `d2` both end up at `00000006` and they got there by completely different routes. `count`
-became a literal `#6` inside the instruction, and by the time the program runs there is no `count`
-anywhere. `stored` became the address `$2000`, and the instruction went out to memory to fetch what
-was sitting there.
-
-Use `equ` for any number that appears in more than one place and means one thing: the length of an
-array, the size of an element, a task number, a screen width. Change it once at the top and every
-use changes with it. The one thing it will not do here is arithmetic on another `equ` with `*`, so
-write sizes as sums (`limit equ 640-40`) or repeat the number.
-
-## The shape of a real program
-
-Put those four together and a program comes out in this shape: constants at the top, code from
-`$1000`, data under its own `org` after it.
+This editor starts at `$1000` when the source has no earlier `org`. Writing each important address
+explicitly makes the layout easy to inspect:
 
 ```m68k|playground|memory|no-flags
-BUFSIZE equ 8
-
     org $1000
 start:
-    lea buffer, a0          ; where the room begins
-    move.l #BUFSIZE, d0     ; how much of it there is
-    move.b #'A', (a0)       ; one byte written into it
+    move.l #value, a0   ; the address named by value
+    move.l value, d0    ; the long stored at that address
 
     org $2000
-message: dc.b 'Hi', 0
-buffer:  ds.b BUFSIZE
+value:
+    dc.l $11223344
 ```
 
-`a0` ends at `00002003`, which is where `buffer` begins, three bytes after `message`. Look at `$2000`
-in the memory panel after running and the four bytes read `48 69 00 41`: the string, its terminator,
-and the `A` the program wrote into the first byte of the room.
+The assembler resolves the two uses of `value` to `$2000`. The `#` keeps that number as an
+immediate value, so `a0` becomes `$00002000`. Without `#`, `value` is a memory operand, so `d0`
+receives `$11223344` from memory.
 
-The `org $2000` is what keeps the data out of the way. Without it `message` would sit right after the
-last instruction, and every instruction you add above would move it, which is fine for the program
-and inconvenient every time you want to look at a fixed address in the memory panel.
+Build places the instructions beginning at `$1000` and the data beginning at `$2000`. Run starts
+at the first assembled instruction and executes the two `move.l` instructions. The `org` and `dc`
+lines guide Build, so they are not execution steps.
 
-## Your turn
+## `dc`: place known data
 
-Build a data block at `$3000` holding the three words 100, 200 and 300, followed by eight bytes of
-empty room, and leave the address of that room in `a0`. Three words take six bytes, so the room
-begins at `$3006`.
+`dc` means **define constant**. Its suffix chooses the size of every listed value:
+
+- `dc.b` places one byte for each value;
+- `dc.w` places one two-byte word for each value;
+- `dc.l` places one four-byte long for each value.
+
+Values are placed in the order written. Words and longs use big-endian byte order, with the most
+significant byte at the lowest address.
+
+A word or long must begin at an even address. A byte declaration can leave the current address
+odd, and the assembler does not insert alignment bytes automatically. When that happens, declare a
+padding byte before the next word or long:
+
+```m68k
+    org $2000
+first:   dc.b $12
+padding: dc.b 0
+pair:    dc.w $3456, $789A
+wide:    dc.l $BCDEF012
+pointer: dc.l first
+```
+
+The resulting layout is completely determined during Build:
+
+| label     | address | bytes in memory | explanation                                    |
+| --------- | ------- | --------------- | ---------------------------------------------- |
+| `first`   | `$2000` | `12`            | one byte                                       |
+| `padding` | `$2001` | `00`            | an explicit byte makes the next address even   |
+| `pair`    | `$2002` | `34 56 78 9A`   | two big-endian words                           |
+| `wide`    | `$2006` | `BC DE F0 12`   | one big-endian long                            |
+| `pointer` | `$200A` | `00 00 20 00`   | the address named by `first`, stored as a long |
+
+The value on a `dc` line can be a label. `dc.l first` stores the label's numeric address,
+`$00002000`, in four bytes.
+
+## `ds`: reserve uninitialised memory
+
+`ds` means **define storage**. It advances the current assembly address without giving the reserved
+bytes known values. The number is a count of the selected size:
+
+| declaration | space reserved    |
+| ----------- | ----------------- |
+| `ds.b 8`    | 8 bytes           |
+| `ds.w 3`    | 3 words = 6 bytes |
+| `ds.l 2`    | 2 longs = 8 bytes |
+
+For example:
+
+```m68k
+    org $2100
+bytes: ds.b 8
+words: ds.w 3
+longs: ds.l 2
+```
+
+`bytes` is `$2100`, `words` is `$2108`, and `longs` is `$210E`. A program must write a reserved
+location before relying on its contents. `ds` does not promise zeroes or any other initial value.
+
+## `equ`: name an assembler-time number
+
+`equ` gives a name to a numeric expression. Its name is written without a colon:
+
+```m68k|playground|memory|no-flags
+rows  equ 4
+cols  equ 5
+cells equ rows*cols
+
+    org $1000
+    move.l #cells, d0
+    move.l stored, d1
+
+    org $2000
+stored:
+    dc.l cells
+```
+
+Define each name before another `equ` expression uses it. In this lesson, an expression can use
+decimal or `$`-prefixed hexadecimal integers, earlier `equ` names, parentheses, and the operators
+`+`, `-`, `*`, and `/`. Write the expression without spaces, as in `rows*cols` or
+`(cols+1)*4`. Multiplication is ordinary assembler-time arithmetic.
+
+The assembler calculates `cells` as 20. It places 20 inside the first `move.l` as an immediate
+value and also writes 20 into the long at `stored`. During Run, `d0` receives the immediate 20,
+while `d1` reads 20 from memory at `$2000`.
+
+An `equ` line emits no bytes, reserves no bytes, and does not advance the current assembly address.
+The name exists for the assembler; the built program contains the resulting number wherever the
+name was used.
+
+## Check your understanding
+
+### 1. Declare known data and reserve space
+
+At `$3000`, declare the three words 100, 200, and 300. Immediately after them, reserve eight
+uninitialised bytes with the label `room`. Put the address named by `room` in `a0`.
+
+The three `dc.w` values give the six bytes from `$3000` through `$3005` defined initial contents.
+`room` begins at `$3006`, and its eight reserved bytes have unspecified contents.
 
 ```m68k|playground|memory|exercise
-* your code here
+; your code here
 ```
 
 ```testcase
 {
+    "startingRegisters": { "a0": "0xDEADBEEF" },
     "expectedRegisters": { "a0": "0x3006" },
     "expectedMemory": [
         { "type": "number-chunk", "address": "0x3000", "bytes": 2, "expected": [100, 200, 300] }
@@ -161,7 +185,7 @@ begins at `$3006`.
 <summary>Show solution</summary>
 
 ```m68k|playground|memory|solution
-    lea room, a0        ; the address of the reserved room
+    move.l #room, a0
 
     org $3000
 values: dc.w 100, 200, 300
@@ -170,16 +194,18 @@ room:   ds.b 8
 
 </details>
 
-Now two names instead of data: `rows` for 4 and `cols` for 5, with their product in `d0`. The
-multiplication should happen while the program is being assembled, not while it runs, so there is no
-`mulu` anywhere in your answer.
+### 2. Calculate a named value during Build
+
+Define `rows` as 4 and `cols` as 5. Define `cells` from the expression `rows*cols`, then put the
+value of `cells` in `d0`.
 
 ```m68k|playground|exercise
-* your code here
+; your code here
 ```
 
 ```testcase
 {
+    "startingRegisters": { "d0": "0xDEADBEEF" },
     "expectedRegisters": { "d0": 20 }
 }
 ```
@@ -188,9 +214,10 @@ multiplication should happen while the program is being assembled, not while it 
 <summary>Show solution</summary>
 
 ```m68k|playground|solution
-rows equ 4
-cols equ 5
-    move.l #rows*cols, d0   ; the 20 is in the instruction
+rows  equ 4
+cols  equ 5
+cells equ rows*cols
+    move.l #cells, d0
 ```
 
 </details>

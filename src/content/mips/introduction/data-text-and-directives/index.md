@@ -36,12 +36,12 @@ main:
 Build it, then open the memory panel at `0x10010000`. The assembler has placed the declarations one
 after another:
 
-| label | address | content placed there |
-| --- | --- | --- |
-| `message` | `0x10010000` | `H`, `i`, and a zero byte |
-| `marker` | `0x10010003` | one byte containing 7 |
-| `values` | `0x10010004` | two four-byte words containing 10 and 20 |
-| `room` | `0x1001000C` | eight reserved bytes |
+| label     | address      | content placed there                     |
+| --------- | ------------ | ---------------------------------------- |
+| `message` | `0x10010000` | `H`, `i`, and a zero byte                |
+| `marker`  | `0x10010003` | one byte containing 7                    |
+| `values`  | `0x10010004` | two four-byte words containing 10 and 20 |
+| `room`    | `0x1001000C` | eight reserved bytes                     |
 
 A name followed by a colon is a **label**. A label names the address of whatever comes immediately
 after it. Here, `message` names the first byte of the text `Hi`, while `values` names the first of
@@ -70,12 +70,12 @@ You will learn what `syscall` does in the module about talking to the outside wo
 
 The directives below are enough for the data in this part of the course:
 
-| directive | what the assembler places in memory |
-| --- | --- |
-| `.word 10, 20` | two four-byte words |
-| `.byte 1, 2, 3` | three individual bytes |
-| `.asciiz "Hi"` | the bytes for `H` and `i`, followed by a zero byte |
-| `.space 8` | eight bytes of reserved room |
+| directive       | what the assembler places in memory                |
+| --------------- | -------------------------------------------------- |
+| `.word 10, 20`  | two four-byte words                                |
+| `.byte 1, 2, 3` | three individual bytes                             |
+| `.asciiz "Hi"`  | the bytes for `H` and `i`, followed by a zero byte |
+| `.space 8`      | eight bytes of reserved room                       |
 
 Each comma-separated value produces another item. For example, `.word 10, 20` places two words and
 therefore uses eight bytes. `.byte 1, 2, 3` uses three bytes.
@@ -83,10 +83,10 @@ therefore uses eight bytes. `.byte 1, 2, 3` uses three bytes.
 The `z` in `.asciiz` is a reminder that the assembler adds a zero byte. You may also encounter
 `.ascii "Hi"`; it places only the two character bytes. In concrete size terms:
 
-| source | bytes reserved |
-| --- | --- |
-| `.ascii "Hi"` | 2 |
-| `.asciiz "Hi"` | 3 |
+| source         | bytes reserved |
+| -------------- | -------------- |
+| `.ascii "Hi"`  | 2              |
+| `.asciiz "Hi"` | 3              |
 
 Use `.asciiz` for course strings unless an exercise explicitly asks for the version without the
 extra zero.
@@ -138,9 +138,9 @@ addresses matter to word operations.
 
 A label and a named number may look similar in source, but they stand for different things:
 
-| source | meaning | example use |
-| --- | --- | --- |
-| `.eqv SIZE 4` | `SIZE` becomes the fixed number 4 | `li $t0, SIZE` |
+| source             | meaning                                  | example use      |
+| ------------------ | ---------------------------------------- | ---------------- |
+| `.eqv SIZE 4`      | `SIZE` becomes the fixed number 4        | `li $t0, SIZE`   |
 | `values: .word 10` | `values` becomes the address of the word | `la $t1, values` |
 
 `.eqv` reserves no memory. It simply lets you give a useful name to a fixed number:
