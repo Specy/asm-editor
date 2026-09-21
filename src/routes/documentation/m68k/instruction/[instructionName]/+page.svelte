@@ -33,9 +33,9 @@
     })
     let code = $derived(ins.interactiveExample?.code ?? '; no interactive instruction available')
 
-    // "Docs - move" matched no query anyone types; "MOVE — M68K instruction reference"
+    // "Docs - move" matched no query anyone types; "MOVE - M68K instruction reference"
     // matches how these are actually searched for.
-    let pageTitle = $derived(`${String(ins.name).toUpperCase()} — M68K instruction reference`)
+    let pageTitle = $derived(`${String(ins.name).toUpperCase()} - M68K instruction reference`)
     // The raw description is markdown, and was reaching search results with its link
     // syntax and newlines intact.
     let metaDescription = $derived(
@@ -135,7 +135,7 @@
             </Row>
 
             <div class="description">
-                <MarkdownRenderer source={ins.description} />
+                <MarkdownRenderer source={ins.description} centered={false} />
             </div>
         </Column>
     </article>
@@ -176,11 +176,7 @@
     .description {
         font-size: 1.1rem;
         line-height: 1.4rem;
-        background-color: var(--secondary);
-        color: var(--secondary-text);
-        padding: 1rem;
         width: 100%;
-        border-radius: 0.6rem;
     }
     :global(.description a) {
         color: var(--accent);

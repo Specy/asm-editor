@@ -82,7 +82,6 @@
                 Test
             </Button>
         {/if}
-        {@render children?.()}
     {:else}
         <Button
             style="max-width: 5.5rem; flex:1; padding: 0.5rem 0.3rem"
@@ -129,6 +128,10 @@
             Step
         </Button>
     {/if}
+    <!-- Outside the build/run split: a caller's extra control, such as the documentation
+         playground's "Try in the editor", belongs on the row whether or not the program
+         has been built. -->
+    {@render children?.()}
     {#if canEditTests}
         <Button
             style="max-width: 7rem; padding: 0.5rem 0.8rem; margin-left: auto;"

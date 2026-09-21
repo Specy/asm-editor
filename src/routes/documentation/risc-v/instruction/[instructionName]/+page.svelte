@@ -28,9 +28,9 @@
         component = imp?.default
     })
 
-    // "Docs - move" matched no query anyone types; "MOVE — M68K instruction reference"
+    // "Docs - move" matched no query anyone types; "MOVE - M68K instruction reference"
     // matches how these are actually searched for.
-    let pageTitle = $derived(`${String(ins.name).toUpperCase()} — RISC-V instruction reference`)
+    let pageTitle = $derived(`${String(ins.name).toUpperCase()} - RISC-V instruction reference`)
     // The raw description is markdown, and was reaching search results with its link
     // syntax and newlines intact.
     let metaDescription = $derived(
@@ -77,17 +77,19 @@
                 </span>
             </Column>
 
+            <article class="description">
+                <MarkdownRenderer source={ins.description} centered={false} />
+            </article>
+
             <Column style="gap: 1rem">
                 <h2>Variants</h2>
                 <MarkdownRenderer
+                    centered={false}
                     source={data.props.instruction
                         .map((v) => `- ${v.description} **${v.example?.trim()}**`)
                         .join('\n')}
                 />
             </Column>
-            <article class="description">
-                <MarkdownRenderer source={ins.description} />
-            </article>
         </Column>
     </div>
     {#if component}
@@ -127,11 +129,7 @@
     .description {
         font-size: 1.1rem;
         line-height: 1.4rem;
-        background-color: var(--secondary);
-        color: var(--secondary-text);
-        padding: 1rem;
         width: 100%;
-        border-radius: 0.6rem;
     }
     :global(.description a) {
         color: var(--accent);

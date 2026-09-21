@@ -15,6 +15,8 @@
     import Sidebar from '$cmp/shared/layout/Sidebar.svelte'
     import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
     import { resolve } from '$app/paths'
+    import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
+    import { ProjectStore } from '$stores/projectsStore.svelte'
 
     interface Props {
         children?: import('svelte').Snippet
@@ -62,60 +64,78 @@
 </Navbar>
 
 <Sidebar bind:menuOpen>
-    <Column gap="1rem" padding="0 1rem">
-        <MenuLink href="/documentation/m68k" title="M68K" onClick={() => (menuOpen = false)} />
-        <MenuLink
-            href="/documentation/m68k/addressing-mode"
-            title="Addressing Modes"
-            onClick={() => (menuOpen = false)}
-        />
-        <MenuLink
-            href="/documentation/m68k/condition-codes"
-            title="Condition Codes"
-            onClick={() => (menuOpen = false)}
-        />
-        <MenuLink
-            href="/documentation/m68k/shift-direction"
-            title="Shifts & directions"
-            onClick={() => (menuOpen = false)}
-        />
-        <MenuLink
-            href="/documentation/m68k/traps"
-            title="Trap tasks"
-            onClick={() => (menuOpen = false)}
-        />
-        <MenuLink
-            href="/documentation/m68k/exceptions"
-            title="Exceptions"
-            onClick={() => (menuOpen = false)}
-        />
-        <MenuLink
-            href="/documentation/m68k/directive"
-            title="Directives"
-            onClick={() => (menuOpen = false)}
-        />
-        <MenuLink
-            href="/documentation/m68k/assembler-features"
-            title="Assembler features"
-            onClick={() => (menuOpen = false)}
-        />
+    <Column gap="1rem" style="overflow-y: auto;">
+        <Column gap="1rem" padding="0 1rem">
+            <MenuLink href="/documentation/m68k" title="M68K" onClick={() => (menuOpen = false)} />
+            <MenuLink
+                href="/documentation/m68k/addressing-mode"
+                title="Addressing Modes"
+                onClick={() => (menuOpen = false)}
+            />
+            <MenuLink
+                href="/documentation/m68k/condition-codes"
+                title="Condition Codes"
+                onClick={() => (menuOpen = false)}
+            />
+            <MenuLink
+                href="/documentation/m68k/shift-direction"
+                title="Shifts & directions"
+                onClick={() => (menuOpen = false)}
+            />
+            <MenuLink
+                href="/documentation/m68k/traps"
+                title="Trap tasks"
+                onClick={() => (menuOpen = false)}
+            />
+            <MenuLink
+                href="/documentation/m68k/exceptions"
+                title="Exceptions"
+                onClick={() => (menuOpen = false)}
+            />
+            <MenuLink
+                href="/documentation/m68k/directive"
+                title="Directives"
+                onClick={() => (menuOpen = false)}
+            />
+            <MenuLink
+                href="/documentation/m68k/assembler-features"
+                title="Assembler features"
+                onClick={() => (menuOpen = false)}
+            />
+        </Column>
+        <TogglableSection
+            open={true}
+            sectionStyle="margin-left: 0; padding-left: 0.5rem;"
+            style="padding: 0 0.5rem;"
+        >
+            {#snippet title()}
+                <h2 style="font-size: 1rem; font-weight: normal; margin-left: -0.1rem">
+                    Instructions
+                </h2>
+            {/snippet}
+            <input bind:value={search} placeholder="Search" class="instruction-search" />
+            <InstructionsMenu
+                instructions={filteredInstructions.map((ins) => ins.name)}
+                hrefBase="/documentation/m68k/instruction"
+                onClick={() => (menuOpen = false)}
+                {currentInstructionName}
+            />
+        </TogglableSection>
     </Column>
-    <TogglableSection
-        open={true}
-        sectionStyle="margin-left: 0; padding-left: 0.5rem;"
-        style="padding: 0 0.5rem;"
-    >
-        {#snippet title()}
-            <h2 style="font-size: 1rem; font-weight: normal; margin-left: -0.1rem">Instructions</h2>
-        {/snippet}
-        <input bind:value={search} placeholder="Search" class="instruction-search" />
-        <InstructionsMenu
-            instructions={filteredInstructions.map((ins) => ins.name)}
-            hrefBase="/documentation/m68k/instruction"
-            onClick={() => (menuOpen = false)}
-            {currentInstructionName}
-        />
-    </TogglableSection>
+
+    <Column style="margin-top: auto;" padding="0.5rem">
+        <ButtonLink
+            style="width: 100%;"
+            href={ProjectStore.projects.length > 0 ? '/projects' : '/projects/create'}
+            title="Open the editor"
+        >
+            {#if ProjectStore.projects.length > 0}
+                Go to your projects
+            {:else}
+                Create your first project
+            {/if}
+        </ButtonLink>
+    </Column>
 
     {#snippet content()}
         <Column flex1 style="padding-top: 4rem;">

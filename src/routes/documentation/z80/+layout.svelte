@@ -17,6 +17,8 @@
     import { z80InstructionEntries } from '$lib/languages/Z80/Z80-documentation'
     import Sidebar from '$cmp/shared/layout/Sidebar.svelte'
     import { resolve } from '$app/paths'
+    import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
+    import { ProjectStore } from '$stores/projectsStore.svelte'
     interface Props {
         children?: import('svelte').Snippet
     }
@@ -71,47 +73,67 @@
     </Navbar>
 
     <Sidebar bind:menuOpen>
-        <Column gap="1rem" padding="0 1rem">
-            <MenuLink href="/documentation/z80" title="Z80" onClick={() => (menuOpen = false)} />
-            <MenuLink
-                href="/documentation/z80/directive"
-                title="Directives"
-                onClick={() => (menuOpen = false)}
-            />
-            <MenuLink
-                href="/documentation/z80/registers"
-                title="Registers & Flags"
-                onClick={() => (menuOpen = false)}
-            />
-            <MenuLink
-                href="/documentation/z80/io"
-                title="Input/Output"
-                onClick={() => (menuOpen = false)}
-            />
-            <MenuLink
-                href="/documentation/z80/all"
-                title="Complete documentation"
-                onClick={() => (menuOpen = false)}
-            />
+        <Column gap="1rem" style="overflow-y: auto;">
+            <Column gap="1rem" padding="0 1rem">
+                <MenuLink
+                    href="/documentation/z80"
+                    title="Z80"
+                    onClick={() => (menuOpen = false)}
+                />
+                <MenuLink
+                    href="/documentation/z80/directive"
+                    title="Directives"
+                    onClick={() => (menuOpen = false)}
+                />
+                <MenuLink
+                    href="/documentation/z80/registers"
+                    title="Registers & Flags"
+                    onClick={() => (menuOpen = false)}
+                />
+                <MenuLink
+                    href="/documentation/z80/io"
+                    title="Input/Output"
+                    onClick={() => (menuOpen = false)}
+                />
+                <MenuLink
+                    href="/documentation/z80/all"
+                    title="Complete documentation"
+                    onClick={() => (menuOpen = false)}
+                />
+            </Column>
+            <TogglableSection
+                open={true}
+                sectionStyle="margin-left: 0; padding-left: 0.5rem;"
+                style="padding: 0 0.5rem;"
+            >
+                {#snippet title()}
+                    <h2 style="font-size: 1rem; font-weight: normal; margin-left: -0.1rem">
+                        Instructions
+                    </h2>
+                {/snippet}
+                <input bind:value={search} placeholder="Search" class="instruction-search" />
+                <InstructionsMenu
+                    hrefBase="/documentation/z80/instruction"
+                    instructions={filteredInstructions}
+                    onClick={() => (menuOpen = false)}
+                    {currentInstructionName}
+                />
+            </TogglableSection>
         </Column>
-        <TogglableSection
-            open={true}
-            sectionStyle="margin-left: 0; padding-left: 0.5rem;"
-            style="padding: 0 0.5rem;"
-        >
-            {#snippet title()}
-                <h2 style="font-size: 1rem; font-weight: normal; margin-left: -0.1rem">
-                    Instructions
-                </h2>
-            {/snippet}
-            <input bind:value={search} placeholder="Search" class="instruction-search" />
-            <InstructionsMenu
-                hrefBase="/documentation/z80/instruction"
-                instructions={filteredInstructions}
-                onClick={() => (menuOpen = false)}
-                {currentInstructionName}
-            />
-        </TogglableSection>
+
+        <Column style="margin-top: auto;" padding="0.5rem">
+            <ButtonLink
+                style="width: 100%;"
+                href={ProjectStore.projects.length > 0 ? '/projects' : '/projects/create'}
+                title="Open the editor"
+            >
+                {#if ProjectStore.projects.length > 0}
+                    Go to your projects
+                {:else}
+                    Create your first project
+                {/if}
+            </ButtonLink>
+        </Column>
 
         {#snippet content()}
             <Column flex1 style="padding-top: 4rem;">
