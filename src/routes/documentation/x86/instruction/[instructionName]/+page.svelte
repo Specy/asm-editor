@@ -35,7 +35,7 @@
         component = imp?.default
     })
 
-    let pageTitle = $derived(`${String(name).toUpperCase()} — x86-64 instruction reference`)
+    let pageTitle = $derived(`${String(name).toUpperCase()} - x86-64 instruction reference`)
     let metaDescription = $derived(
         toMetaDescription(`The ${name} x86-64 instruction. ${description}`)
     )
@@ -78,7 +78,7 @@
             </Column>
 
             <article class="description">
-                <MarkdownRenderer source={description} />
+                <MarkdownRenderer source={description} centered={false} />
             </article>
         </Column>
     </div>
@@ -97,19 +97,12 @@
         {:else}
             <div class="loading">Loading...</div>
         {/if}
-    {:else}
-        <p class="no-example">
-            No example here: this instruction either stops the program, or belongs to a mode this
-            emulator does not run.
-        </p>
     {/if}
 
     <Column gap="1rem">
         <h2>Forms</h2>
         <p class="forms-hint">
-            Every form of <code>{name}</code> the assembler accepts, from NASM's own instruction table.
-            The second column is the processor that introduced the form; a badge marks a form that needs
-            an extension, that is lockable, or that long mode dropped.
+            Every form of <code>{name}</code> the assembler accepts.
         </p>
         <X86InstructionForms {instruction} />
     </Column>
@@ -152,11 +145,7 @@
     .description {
         font-size: 1.1rem;
         line-height: 1.4rem;
-        background-color: var(--secondary);
-        color: var(--secondary-text);
-        padding: 1rem;
         width: 100%;
-        border-radius: 0.6rem;
     }
     :global(.description a) {
         color: var(--accent);

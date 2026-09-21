@@ -7,7 +7,7 @@
     import rehypeExternalLinks from 'rehype-external-links'
     import '@cartamd/plugin-code/default.css'
     import { code } from '@cartamd/plugin-code'
-    import type { Element, Parent, Root, RootContent } from 'hast'
+    import type { Element, ElementContent, Parent, Root, RootContent } from 'hast'
     import { visit } from 'unist-util-visit'
     import type { Testcase } from '$lib/Project.svelte'
     import lzstring from 'lz-string'
@@ -20,9 +20,35 @@
         type PlaygroundFence,
         type PlaygroundSettings
     } from '$lib/content/playgrounds'
+    import { tokenizeAssembly } from '$lib/content/assemblyHighlight'
+    import type { AvailableLanguages } from '$lib/Project.svelte'
     let isDark = $derived(ThemeStore.isColorDark(ThemeStore.theme.background.color))
 
     let theme = $derived(isDark ? ('one-dark-pro' as const) : ('one-light' as const))
+
+    /**
+     * The colours of the code block a prerendered playground carries, taken from the editor's own
+     * theme (`$lib/monaco/editorTheme.ts`) so the block reads as the thing it is about to become.
+     * It follows `isDark` rather than a media query because the theme here is the reader's choice,
+     * not the system's, and it is the same signal that picks the shiki theme above.
+     */
+    let asmPalette = $derived(
+        isDark
+            ? {
+                  comment: '#1f619a',
+                  mnemonic: '#ff9d00',
+                  directive: '#eb939a',
+                  number: '#80ffbb',
+                  string: '#3ad900'
+              }
+            : {
+                  comment: '#506696',
+                  mnemonic: '#473fd8',
+                  directive: '#9f3b3b',
+                  number: '#006d4c',
+                  string: '#0a7b3e'
+              }
+    )
 
     type Settings = PlaygroundSettings
 
@@ -114,56 +140,117 @@
         }
     }
 
-    function playgroundIframe(
-        node: Element,
-        fence: PlaygroundFence,
-        testcases: Testcase[],
-        parent: Parent
-    ): Element {
-        const codeNode = node.children?.find(
-            (child): child is Element => child.type === 'element' && child.tagName === 'code'
-        )
-        const { large, tall } = fence
-        //inside a collapsed block (an Exercise's solution) the block itself is the centered column and
-        //the frame, so the iframe fills it instead of placing itself; a large playground widens the block
+    /**
+     * The box a playground occupies. Shared by the two passes below so the code block the
+     * prerendered page carries and the iframe that replaces it on mount are the same size: the swap
+     * has to move nothing around it. `details` is a collapsed block (an Exercise's solution), which
+     * is itself the centered column and the frame, so a playground inside one fills it instead of
+     * placing itself, and a large one widens the block.
+     */
+    function playgroundBox(fence: PlaygroundFence, parent: Parent) {
         const details =
             parent.type === 'element' && (parent as Element).tagName === 'details'
                 ? (parent as Element)
                 : undefined
-        if (details && large) {
+        if (details && fence.large) {
             const className = details.properties?.className
             details.properties = {
                 ...details.properties,
                 className: [...(Array.isArray(className) ? className : []), 'wide']
             }
         }
-        const placement = details || large ? '' : 'max-width: 70ch; margin: 1.5rem auto;'
-        const height = tall
+        const placement =
+            details || fence.large
+                ? ''
+                : 'max-width: 70ch; margin: 1.5rem var(--md-inline-margin, auto);'
+        const height = fence.tall
             ? 'height: 80dvh;'
             : fence.settings.showScreen
               ? 'height: min(40rem, 85vh);'
               : ''
         return {
-            type: 'element',
-            tagName: 'iframe',
-            properties: {
-                style: `${placement} ${height}`.trim(),
-                className: details ? ['code-playground', 'in-details'] : ['code-playground'],
-                //each embed boots a whole editor, so a lecture with five of them would boot five
-                //before the reader has scrolled to the second; `loading` is in DOMPurify's default
-                //attribute list, so the sanitizer keeps it
-                loading: 'lazy',
-                src: createCodeUrl(textOf(codeNode ?? node).trimEnd(), fence.settings, testcases)
-            },
-            children: []
+            className: details ? ['code-playground', 'in-details'] : ['code-playground'],
+            //a fence that asks for no height of its own leaves it to the stylesheet, which gives the
+            //code block the same one as the iframe's min-height
+            style: `${placement} ${height}`.trim()
         }
     }
 
     /**
-     * Replaces every playground fence with its embed iframe and drops the `testcase` fences, which
-     * are instructions to the embed and to the verification test and are never shown to a reader.
-     * The children of a block are rebuilt rather than patched in place, so a testcase and the blank
-     * line before it leave together.
+     * The `<code>` children of a highlighted block: a span per token, the plain runs left as text,
+     * and the newlines the tokenizer dropped put back between the lines. Shiki cannot do this one -
+     * its highlighter is asynchronous and this is Carta's synchronous pass - so
+     * [a structural tokenizer](../../../lib/content/assemblyHighlight.ts) does, and the colours the
+     * stylesheet gives these classes are the editor's own.
+     */
+    function highlightedCode(code: string, language: AvailableLanguages): ElementContent[] {
+        const children: ElementContent[] = []
+        tokenizeAssembly(code, language).forEach((tokens, index) => {
+            if (index > 0) children.push({ type: 'text', value: '\n' })
+            for (const token of tokens) {
+                if (token.kind === 'plain') {
+                    children.push({ type: 'text', value: token.text })
+                    continue
+                }
+                children.push({
+                    type: 'element',
+                    tagName: 'span',
+                    properties: { className: [`asm-${token.kind}`] },
+                    children: [{ type: 'text', value: token.text }]
+                })
+            }
+        })
+        return children
+    }
+
+    /**
+     * Marks a playground fence as one, in place, leaving it an ordinary code block. This is the
+     * whole of what a prerendered page carries: the iframe is built from these marks on the client,
+     * by the async pass below. A lecture's playgrounds are its worked examples, so a page that
+     * shipped only its prose was hiding the code it was written about from anything that does not
+     * run scripts, and every `/embed?code=...` in the static HTML was another URL for a crawler to
+     * find and discard against the canonical.
+     *
+     * The settings and testcases travel on the element rather than being re-derived later, because
+     * the fence info string is the one thing the async pass cannot recover: the class it leaves
+     * behind names the language alone. DOMPurify keeps `data-*` attributes by default.
+     */
+    function markPlayground(
+        node: Element,
+        fence: PlaygroundFence,
+        info: string,
+        testcases: Testcase[],
+        parent: Parent
+    ): Element {
+        const codeNode = node.children?.find(
+            (child): child is Element => child.type === 'element' && child.tagName === 'code'
+        )
+        if (codeNode) {
+            //`language-m68k|playground|memory` is not a language; the fence's first entry is
+            codeNode.properties = {
+                ...codeNode.properties,
+                className: [`language-${info.split('|')[0].trim().toLowerCase()}`]
+            }
+            //the trailing newline a fence leaves behind would render as an empty last line, and the
+            //embed URL is built from these same children, so both are trimmed once, here
+            codeNode.children = highlightedCode(textOf(codeNode).trimEnd(), fence.settings.language)
+        }
+        node.properties = {
+            ...node.properties,
+            ...playgroundBox(fence, parent),
+            'data-playground': info,
+            ...(testcases.length > 0
+                ? { 'data-testcases': serializer.stringify(testcases) }
+                : undefined)
+        }
+        return node
+    }
+
+    /**
+     * Marks every playground fence and drops the `testcase` fences, which are instructions to the
+     * embed and to the verification test and are never shown to a reader. The children of a block
+     * are rebuilt rather than patched in place, so a testcase and the blank line before it leave
+     * together.
      */
     function transformPlaygrounds(parent: Parent): void {
         const children = parent.children as RootContent[]
@@ -181,7 +268,7 @@
                     //the testcase block and the whitespace before it go with the playground
                     index = following.index
                 }
-                result.push(playgroundIframe(node, fence, testcases, parent))
+                result.push(markPlayground(node, fence, info as string, testcases, parent))
                 continue
             }
             //a testcase fence that attached to nothing is still not something a reader should read
@@ -192,8 +279,60 @@
         parent.children = result
     }
 
-    const rehypePlaygroundTransformer = () => (tree: Root) => {
+    /** The testcases the sync pass left on a marked playground, if it left any. */
+    function markedTestcases(node: Element): Testcase[] {
+        const raw = node.properties?.['data-testcases']
+        if (typeof raw !== 'string') return []
+        try {
+            return serializer.parse<Testcase[]>(raw)
+        } catch (e) {
+            console.error(`Unreadable testcases on a playground: ${(e as Error).message}\n${raw}`)
+            return []
+        }
+    }
+
+    /**
+     * Turns each marked playground into its embed iframe. Client-only: this runs in `carta.render`,
+     * which `Markdown.svelte` calls on mount, and not in the `carta.renderSSR` that produces the
+     * prerendered file. Registered before `code()` in the extension list, so it replaces the block
+     * before shiki is asked to highlight one that is about to be thrown away.
+     */
+    function playgroundIframe(node: Element, fence: PlaygroundFence): Element {
+        const codeNode = node.children?.find(
+            (child): child is Element => child.type === 'element' && child.tagName === 'code'
+        )
+        return {
+            type: 'element',
+            tagName: 'iframe',
+            properties: {
+                style: node.properties?.style,
+                className: node.properties?.className,
+                //each embed boots a whole editor, so a lecture with five of them would boot five
+                //before the reader has scrolled to the second; `loading` is in DOMPurify's default
+                //attribute list, so the sanitizer keeps it
+                loading: 'lazy',
+                src: createCodeUrl(
+                    textOf(codeNode ?? node).trimEnd(),
+                    fence.settings,
+                    markedTestcases(node)
+                )
+            },
+            children: []
+        }
+    }
+
+    const rehypePlaygroundMarker = () => (tree: Root) => {
         transformPlaygrounds(tree)
+    }
+
+    const rehypePlaygroundIframes = () => (tree: Root) => {
+        visit(tree, 'element', (node: Element, index?: number, parent?: Parent) => {
+            const info = node.properties?.['data-playground']
+            if (typeof info !== 'string' || typeof index !== 'number' || !parent) return
+            const fence = parsePlaygroundFence(info)
+            if (!fence) return
+            parent.children.splice(index, 1, playgroundIframe(node, fence))
+        })
     }
 
     const customPlaygroundPlugin: Plugin = {
@@ -202,7 +341,14 @@
                 execution: 'sync',
                 type: 'rehype',
                 transform({ processor }) {
-                    processor.use(rehypePlaygroundTransformer)
+                    processor.use(rehypePlaygroundMarker)
+                }
+            },
+            {
+                execution: 'async',
+                type: 'rehype',
+                transform({ processor }) {
+                    processor.use(rehypePlaygroundIframes)
                 }
             }
         ]
@@ -332,16 +478,42 @@
         spacing?: string
         simpleCode?: boolean
         disableLinks?: boolean
+        /**
+         * Whether the content sits in a column centred in its container, the way a lecture or an
+         * article reads. False left-aligns every block instead, for prose that has to line up with
+         * whatever surrounds it - a documentation page's description beside its operands, say. The
+         * measure is unchanged either way; only the free space moves.
+         */
+        centered?: boolean
     }
 
-    let { source, linksInNewTab, style, spacing, simpleCode, disableLinks }: Props = $props()
+    let {
+        source,
+        linksInNewTab,
+        style,
+        spacing,
+        simpleCode,
+        disableLinks,
+        centered = true
+    }: Props = $props()
 
     const carta = $derived(
         disableLinks ? cartaWithoutLinks : linksInNewTab ? cartaWithExternalLins : cartaNormal
     )
 </script>
 
-<div class="_markdown" class:simple-code={simpleCode} {style} style:--gap={spacing}>
+<div
+    class="_markdown"
+    class:simple-code={simpleCode}
+    {style}
+    style:--gap={spacing}
+    style:--md-inline-margin={centered ? null : '0'}
+    style:--asm-comment={asmPalette.comment}
+    style:--asm-mnemonic={asmPalette.mnemonic}
+    style:--asm-directive={asmPalette.directive}
+    style:--asm-number={asmPalette.number}
+    style:--asm-string={asmPalette.string}
+>
     {#key source + theme + disableLinks}
         <Markdown value={source} {carta} />
     {/key}
@@ -364,7 +536,7 @@
         max-width: fit-content;
         padding: 0.5rem 1rem;
         min-width: min(100%, 72ch);
-        margin: 1rem auto;
+        margin: 1rem var(--md-inline-margin, auto);
         box-shadow: 0 0 2rem 10px rgb(3 4 5 / 15%);
     }
 
@@ -375,7 +547,7 @@
         max-width: fit-content;
         padding: 0.5rem 1rem;
         min-width: min(100%, 72ch);
-        margin: 1rem auto;
+        margin: 1rem var(--md-inline-margin, auto);
         box-shadow: 0 0 2rem 10px rgb(3 4 5 / 15%);
     }
 
@@ -393,7 +565,7 @@
         border-collapse: collapse;
         overflow-x: auto;
         display: block;
-        margin: 0.5rem auto;
+        margin: 0.5rem var(--md-inline-margin, auto);
         font-family: 'Fira Code', monospace;
         border-radius: 0.5rem;
         border: solid 0.1rem var(--tertiary);
@@ -413,7 +585,7 @@
         height: 2px;
         background-color: var(--secondary);
         min-width: min(100%, 65ch);
-        margin: 1rem auto;
+        margin: 1rem var(--md-inline-margin, auto);
     }
 
     :global(._markdown table:last-child) {
@@ -479,7 +651,7 @@
         font-family: 'Noto Serif', Rubik, sans-serif;
         font-weight: 500;
         width: min(100%, 70ch);
-        margin: 0 auto;
+        margin: 0 var(--md-inline-margin, auto);
     }
 
     :global(.markdown-body h1),
@@ -489,7 +661,7 @@
     :global(.markdown-body h5),
     :global(.markdown-body h6) {
         width: min(100%, 46rem);
-        margin: 0 auto;
+        margin: 0 var(--md-inline-margin, auto);
     }
 
     :global(.markdown-body h1:not(:first-child)),
@@ -503,12 +675,64 @@
         border-radius: 0.8rem;
         width: 100%;
         min-height: 21.4rem;
-        margin: 1.5rem auto;
+        margin: 1.5rem var(--md-inline-margin, auto);
         background-color: var(--secondary);
         box-shadow: 0 0 2rem 10px rgba(0, 0, 0, 0.2);
     }
     :global(.code-playground:first-child) {
-        margin: 0 auto;
+        margin: 0 var(--md-inline-margin, auto);
+    }
+
+    /* what a prerendered page carries in place of a playground, until the client swaps the iframe
+       in: the lecture's worked example as readable, crawlable code. Same box as the iframe, so the
+       swap moves nothing - the height matches the min-height above, and a fence that asks for a
+       taller one overrides both inline. The resets undo the `pre:has(code)` rules, which size a
+       code block to its content.
+
+       `font-family: inherit` is what keeps the two the same width, and is not cosmetic: both carry
+       the same inline `max-width: 70ch`, and a `ch` is the width of a `0` in the element's OWN
+       font. A `<pre>` defaults to monospace and an `<iframe>` inherits the lecture's Noto Serif, so
+       leaving the default in place measured the same 70 characters against two different fonts and
+       the block came out visibly narrower than the editor replacing it. The monospace goes on the
+       code inside, where it belongs, and never reaches the box that does the measuring. */
+    :global(pre.code-playground) {
+        box-sizing: border-box;
+        height: 21.4rem;
+        min-width: 0;
+        max-width: none;
+        padding: 1rem;
+        overflow: auto;
+        font-family: inherit;
+    }
+
+    :global(pre.code-playground > code) {
+        font-family: 'Fira Code', monospace;
+        /* the editor that replaces this block sets the same size */
+        font-size: 1rem;
+        line-height: 1.35;
+    }
+
+    /* the editor's own palette, bound above so it follows the reader's theme rather than the
+       system's. A token the tokenizer was unsure of has no span and inherits the block's colour. */
+    :global(pre.code-playground .asm-comment) {
+        color: var(--asm-comment);
+        font-style: italic;
+    }
+    :global(pre.code-playground .asm-mnemonic) {
+        color: var(--asm-mnemonic);
+    }
+    :global(pre.code-playground .asm-directive) {
+        color: var(--asm-directive);
+    }
+    :global(pre.code-playground .asm-number) {
+        color: var(--asm-number);
+    }
+    :global(pre.code-playground .asm-string) {
+        color: var(--asm-string);
+    }
+    /* the editor underlines a label rather than colouring it */
+    :global(pre.code-playground .asm-label) {
+        text-decoration: underline;
     }
 
     /* a collapsed block of a lecture (an Exercise's solution): an expanding item in the same centered
@@ -517,7 +741,7 @@
     :global(._markdown details) {
         box-sizing: border-box;
         width: min(100%, 70ch);
-        margin: 0 auto;
+        margin: 0 var(--md-inline-margin, auto);
         border: solid 0.1rem var(--tertiary);
         border-radius: 0.8rem;
         overflow: hidden;

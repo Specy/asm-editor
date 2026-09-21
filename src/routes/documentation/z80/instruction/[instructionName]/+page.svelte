@@ -43,9 +43,9 @@
             : `${cycles.taken}/${cycles.notTaken}`
     }
 
-    // "Docs - move" matched no query anyone types; "MOVE — M68K instruction reference"
+    // "Docs - move" matched no query anyone types; "MOVE - M68K instruction reference"
     // matches how these are actually searched for.
-    let pageTitle = $derived(`${String(name).toUpperCase()} — Z80 instruction reference`)
+    let pageTitle = $derived(`${String(name).toUpperCase()} - Z80 instruction reference`)
     // The raw description is markdown, and was reaching search results with its link
     // syntax and newlines intact.
     let metaDescription = $derived(toMetaDescription(`The ${name} Z80 instruction. ${description}`))
@@ -91,7 +91,7 @@
             </Column>
 
             <article class="description">
-                <MarkdownRenderer source={description} />
+                <MarkdownRenderer source={description} centered={false} />
             </article>
         </Column>
     </div>
@@ -191,11 +191,7 @@
     .description {
         font-size: 1.1rem;
         line-height: 1.4rem;
-        background-color: var(--secondary);
-        color: var(--secondary-text);
-        padding: 1rem;
         width: 100%;
-        border-radius: 0.6rem;
     }
     :global(.description a) {
         color: var(--accent);

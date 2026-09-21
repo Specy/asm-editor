@@ -4,6 +4,8 @@
     import Header from '$cmp/shared/layout/Header.svelte'
     import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
     import FaExternalLink from '~icons/fa-solid/external-link-alt'
+    import Button from '$cmp/shared/button/Button.svelte'
+    import Icon from '$cmp/shared/layout/Icon.svelte'
     import { createSharePayload } from '$lib/utils'
     import { makeProject } from '$lib/Project.svelte'
     import { goto } from '$app/navigation'
@@ -39,7 +41,7 @@
      */
     function openInEditor() {
         const project = makeProject({
-            name: `${instructionKey.toUpperCase()} — ${language} example`,
+            name: `${instructionKey.toUpperCase()} - ${language} example`,
             description: `Example for the ${language} ${instructionKey} instruction`,
             language,
             code
@@ -69,47 +71,25 @@
                 {showConsole}
                 showScreen={false}
                 forceMemoryRight
-            />
-            <button class="try-in-editor" onclick={openInEditor}>
-                <div style="width: 1.1em; height: 1.1em;">
-                    <FaExternalLink />
-                </div>
-                Try in the editor
-            </button>
+            >
+                <!-- The playground's own control row, next to Build and Run, rather than floating
+                     over the page: the reader reaches for it from the same place as the rest. -->
+                {#snippet controls()}
+                    <Button
+                        cssVar="secondary"
+                        style="gap: 0.5rem; margin-left: auto"
+                        onClick={openInEditor}
+                    >
+                        <Icon>
+                            <FaExternalLink />
+                        </Icon>
+                        Try in the editor
+                    </Button>
+                {/snippet}
+            </InteractiveEditor>
         {/snippet}
         {#snippet loading()}
             <Header>Loading emulator...</Header>
         {/snippet}
     </EmulatorLoader>
 {/key}
-
-<style>
-    /* Anchored where the agent toggle used to sit, so the editor below is unobstructed. */
-    .try-in-editor {
-        position: fixed;
-        top: 3.8rem;
-        right: 0.5rem;
-        padding: 0.65rem 1rem;
-        z-index: 101;
-        font-family: Rubik, sans-serif;
-        border-radius: 1.5rem;
-        border-bottom-right-radius: 0.4rem;
-        font-weight: bold;
-        border: none;
-        gap: 0.5rem;
-        background: var(--accent);
-        color: var(--accent-text);
-        cursor: pointer;
-        display: flex;
-        font-size: 1rem;
-        align-items: center;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-        transition: all 0.3s ease;
-    }
-
-    .try-in-editor:hover,
-    .try-in-editor:focus-visible {
-        background-color: color-mix(in srgb, var(--accent) 80%, var(--background));
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-    }
-</style>
