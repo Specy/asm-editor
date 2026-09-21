@@ -219,11 +219,7 @@ main:
                 </span>
             </div>
         </Card>
-        <MarkdownRenderer
-            source={`\`\`\`${fence}\n${bitmapExample}\n\`\`\``}
-            {disableLinks}
-            simpleCode
-        />
+        <MarkdownRenderer source={`\`\`\`${fence}\n${bitmapExample}\n\`\`\``} {disableLinks} />
         <p class="note">
             Reserve the memory the grid covers, with <code>.space</code> or a label of your own: the
             screen shows whatever those words hold, and a program that writes past what it reserved
@@ -240,11 +236,7 @@ main:
             building it is all it takes. It is a comment, so the same file still assembles in
             {simulator}, where you set the parameters in the tool's window as usual.
         </p>
-        <MarkdownRenderer
-            source={`\`\`\`${fence}\n${directiveExample}\n\`\`\``}
-            {disableLinks}
-            simpleCode
-        />
+        <MarkdownRenderer source={`\`\`\`${fence}\n${directiveExample}\n\`\`\``} {disableLinks} />
         <Card gap="0.6rem" padding="1rem" background="secondary" style="width: 100%;">
             {#each directiveSettings as setting (setting.name)}
                 <div class="row">
@@ -291,17 +283,13 @@ main:
                 <div class="row">
                     <span class="tag wide">{hex(register.address)}</span>
                     <span class="sub-description">
-                        <strong>{register.name}</strong> —
+                        <strong>{register.name}</strong>
                         <MarkdownRenderer source={register.description} {disableLinks} simpleCode />
                     </span>
                 </div>
             {/each}
         </Card>
-        <MarkdownRenderer
-            source={`\`\`\`${fence}\n${keyboardExample}\n\`\`\``}
-            {disableLinks}
-            simpleCode
-        />
+        <MarkdownRenderer source={`\`\`\`${fence}\n${keyboardExample}\n\`\`\``} {disableLinks} />
         <p class="note">
             The receiver never loses a keystroke: what does not fit in the data register waits in a
             queue behind it, and Ready ({MARS_READY_BIT}) stays set until that queue is empty. Bit 1

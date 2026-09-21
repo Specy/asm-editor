@@ -14,7 +14,7 @@
     import Column from '$cmp/shared/layout/Column.svelte'
     import Select from '$cmp/shared/input/Select.svelte'
     import { viewStore } from '$stores/view'
-    import { BASE_CODE } from '$lib/Config'
+    import { BASE_CODE, LANGUAGE_THEMES } from '$lib/Config'
     import Header from '$cmp/shared/layout/Header.svelte'
     import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
     import { createShareLink } from '$lib/utils'
@@ -24,6 +24,7 @@
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import { serializer } from '$lib/json'
     import { languageHasScreen } from '$lib/languages/peripherals/peripheralSet'
+    import ThemeScope from '$cmp/shared/providers/ThemeScope.svelte'
 
     type Settings = {
         showMemory: boolean
@@ -184,146 +185,152 @@
     <meta property="og:description" content="Embed an assembly emulator in your website" />
 </svelte:head>
 
-{#if !inIframe}
-    <DefaultNavbar />
-{/if}
-<Page contentStyle={!inIframe ? 'padding-top: 3.5rem' : ''}>
+<!-- The colours of the language the embed is showing, the way `/documentation/<language>` and a
+     Language course do: an embed is nearly always framed inside one of those pages, and one that
+     kept the app's own colours would be the one purple-less rectangle on a MIPS page. Standalone,
+     it doubles as the preview of what the generated iframe will look like. -->
+<ThemeScope theme={LANGUAGE_THEMES[settings.language]}>
     {#if !inIframe}
-        <Column gap="1rem" padding="0.6rem 1rem">
-            <p>
-                Write some assembly code, below the editor there will be generated an embed URL and
-                embed html code that you can put in your website
-            </p>
-        </Column>
+        <DefaultNavbar />
     {/if}
+    <Page contentStyle={!inIframe ? 'padding-top: 3.5rem' : ''}>
+        {#if !inIframe}
+            <Column gap="1rem" padding="0.6rem 1rem">
+                <p>
+                    Write some assembly code, below the editor there will be generated an embed URL
+                    and embed html code that you can put in your website
+                </p>
+            </Column>
+        {/if}
 
-    <Column style="padding: 0.5rem; flex:1">
-        {#key settings.language}
-            <EmulatorLoader
-                bind:code
-                language={settings.language}
-                settings={{
-                    globalPageElementsPerRow: 4,
-                    globalPageSize: 4 * 8
-                }}
-            >
-                {#snippet children(emulator)}
-                    <InteractiveInstructionEditor
-                        {emulator}
-                        bind:code
-                        bind:testcases
-                        embedded={inIframe}
-                        showConsole={settings.showConsole}
-                        showMemory={settings.showMemory}
-                        showTestcases={settings.showTests}
-                        showPc={settings.showPc}
-                        showRegisters={settings.showRegisters}
-                        showFlags={settings.showFlags}
-                        showScreen={settings.showScreen && languageHasScreen(settings.language)}
-                        openScreen={settings.openScreen}
-                        initialRegisterFile={settings.registerFile}
-                        language={settings.language}
-                        forceMemoryRight={true}
-                    >
-                        {#snippet controls()}
-                            {#if settings.openButton}
-                                <Button
-                                    cssVar="secondary"
-                                    style="gap: 0.5rem; margin-left: auto"
-                                    onClick={() => {
-                                        const project = makeProject({
-                                            code,
-                                            language: settings.language
-                                        })
-                                        try {
-                                            window.open(createShareLink(project), '_blank')
-                                        } catch (error) {
-                                            console.error(error)
-                                            toast.error(
-                                                'This program is too large to open in the editor through a link'
-                                            )
-                                        }
-                                    }}
-                                >
-                                    <Icon>
-                                        <FaExternal />
-                                    </Icon> Open in editor
-                                </Button>
-                            {/if}
-                        {/snippet}
-                    </InteractiveInstructionEditor>
-                {/snippet}
-                {#snippet loading()}
-                    <Header>Loading emulator...</Header>
-                {/snippet}
-            </EmulatorLoader>
-        {/key}
-    </Column>
-
-    {#if !inIframe}
-        <div class="share-container">
-            <div class="share-card" style="padding: 1rem; gap: 0.5rem">
-                <h2 style="text-align: center;">Embed Settings</h2>
-                <div class="share-settings">
-                    <span>Show memory</span>
-                    <input type="checkbox" bind:checked={settings.showMemory} />
-                </div>
-                <div class="share-settings">
-                    <span>Show console</span>
-                    <input type="checkbox" bind:checked={settings.showConsole} />
-                </div>
-                <div class="share-settings">
-                    <span>Show tests</span>
-                    <input type="checkbox" bind:checked={settings.showTests} />
-                </div>
-                <div class="share-settings">
-                    <span>Show PC</span>
-                    <input type="checkbox" bind:checked={settings.showPc} />
-                </div>
-                <div class="share-settings">
-                    <span>Show registers</span>
-                    <input type="checkbox" bind:checked={settings.showRegisters} />
-                </div>
-                <div class="share-settings">
-                    <span>Show flags</span>
-                    <input type="checkbox" bind:checked={settings.showFlags} />
-                </div>
-                <div class="share-settings">
-                    <span>Show screen</span>
-                    <input type="checkbox" bind:checked={settings.showScreen} />
-                </div>
-                <div class="share-settings">
-                    <span>Screen open</span>
-                    <input type="checkbox" bind:checked={settings.openScreen} />
-                </div>
-                <div class="share-settings">
-                    <span>Open in editor button</span>
-                    <input type="checkbox" bind:checked={settings.openButton} />
-                </div>
-                <div class="share-settings" style="justify-content: space-between;">
-                    <span>Language</span>
-                    <Select
-                        onChange={(language) => (code = BASE_CODE[language])}
-                        style="background-color: var(--tertiary); color: var(--secondary-text); text-align: center;"
-                        wrapperStyle="max-width: 5rem;"
-                        options={languageOptions}
-                        bind:value={settings.language}
-                    />
-                </div>
-            </div>
-            <div class="share-card">
-                <h2 style="text-align: center;">URL</h2>
-                <textarea>{generatedCode}</textarea>
-            </div>
-            <div class="share-card">
-                <h2 style="text-align: center;">Embed code</h2>
-                <textarea
-                    >{`<iframe src="${generatedCode}" style="border: none; border-radius: 0.8rem; width: 100%; min-height: 20.8rem;"></iframe>`}</textarea
+        <Column style="padding: 0.5rem; flex:1">
+            {#key settings.language}
+                <EmulatorLoader
+                    bind:code
+                    language={settings.language}
+                    settings={{
+                        globalPageElementsPerRow: 4,
+                        globalPageSize: 4 * 8
+                    }}
                 >
+                    {#snippet children(emulator)}
+                        <InteractiveInstructionEditor
+                            {emulator}
+                            bind:code
+                            bind:testcases
+                            embedded={inIframe}
+                            showConsole={settings.showConsole}
+                            showMemory={settings.showMemory}
+                            showTestcases={settings.showTests}
+                            showPc={settings.showPc}
+                            showRegisters={settings.showRegisters}
+                            showFlags={settings.showFlags}
+                            showScreen={settings.showScreen && languageHasScreen(settings.language)}
+                            openScreen={settings.openScreen}
+                            initialRegisterFile={settings.registerFile}
+                            language={settings.language}
+                            forceMemoryRight={true}
+                        >
+                            {#snippet controls()}
+                                {#if settings.openButton}
+                                    <Button
+                                        cssVar="secondary"
+                                        style="gap: 0.5rem; margin-left: auto"
+                                        onClick={() => {
+                                            const project = makeProject({
+                                                code,
+                                                language: settings.language
+                                            })
+                                            try {
+                                                window.open(createShareLink(project), '_blank')
+                                            } catch (error) {
+                                                console.error(error)
+                                                toast.error(
+                                                    'This program is too large to open in the editor through a link'
+                                                )
+                                            }
+                                        }}
+                                    >
+                                        <Icon>
+                                            <FaExternal />
+                                        </Icon> Open in editor
+                                    </Button>
+                                {/if}
+                            {/snippet}
+                        </InteractiveInstructionEditor>
+                    {/snippet}
+                    {#snippet loading()}
+                        <Header>Loading emulator...</Header>
+                    {/snippet}
+                </EmulatorLoader>
+            {/key}
+        </Column>
+
+        {#if !inIframe}
+            <div class="share-container">
+                <div class="share-card" style="padding: 1rem; gap: 0.5rem">
+                    <h2 style="text-align: center;">Embed Settings</h2>
+                    <div class="share-settings">
+                        <span>Show memory</span>
+                        <input type="checkbox" bind:checked={settings.showMemory} />
+                    </div>
+                    <div class="share-settings">
+                        <span>Show console</span>
+                        <input type="checkbox" bind:checked={settings.showConsole} />
+                    </div>
+                    <div class="share-settings">
+                        <span>Show tests</span>
+                        <input type="checkbox" bind:checked={settings.showTests} />
+                    </div>
+                    <div class="share-settings">
+                        <span>Show PC</span>
+                        <input type="checkbox" bind:checked={settings.showPc} />
+                    </div>
+                    <div class="share-settings">
+                        <span>Show registers</span>
+                        <input type="checkbox" bind:checked={settings.showRegisters} />
+                    </div>
+                    <div class="share-settings">
+                        <span>Show flags</span>
+                        <input type="checkbox" bind:checked={settings.showFlags} />
+                    </div>
+                    <div class="share-settings">
+                        <span>Show screen</span>
+                        <input type="checkbox" bind:checked={settings.showScreen} />
+                    </div>
+                    <div class="share-settings">
+                        <span>Screen open</span>
+                        <input type="checkbox" bind:checked={settings.openScreen} />
+                    </div>
+                    <div class="share-settings">
+                        <span>Open in editor button</span>
+                        <input type="checkbox" bind:checked={settings.openButton} />
+                    </div>
+                    <div class="share-settings" style="justify-content: space-between;">
+                        <span>Language</span>
+                        <Select
+                            onChange={(language) => (code = BASE_CODE[language])}
+                            style="background-color: var(--tertiary); color: var(--secondary-text); text-align: center;"
+                            wrapperStyle="max-width: 5rem;"
+                            options={languageOptions}
+                            bind:value={settings.language}
+                        />
+                    </div>
+                </div>
+                <div class="share-card">
+                    <h2 style="text-align: center;">URL</h2>
+                    <textarea>{generatedCode}</textarea>
+                </div>
+                <div class="share-card">
+                    <h2 style="text-align: center;">Embed code</h2>
+                    <textarea
+                        >{`<iframe src="${generatedCode}" style="border: none; border-radius: 0.8rem; width: 100%; min-height: 20.8rem;"></iframe>`}</textarea
+                    >
+                </div>
             </div>
-        </div>
-    {/if}
-</Page>
+        {/if}
+    </Page>
+</ThemeScope>
 
 <style>
     .share-container {

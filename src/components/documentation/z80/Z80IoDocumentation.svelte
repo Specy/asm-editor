@@ -214,7 +214,6 @@
                         <MarkdownRenderer
                             source={`\`\`\`asm\n${port.example}\n\`\`\``}
                             {disableLinks}
-                            simpleCode
                         />
                         {#if port.exampleInput}
                             <div class="direction">

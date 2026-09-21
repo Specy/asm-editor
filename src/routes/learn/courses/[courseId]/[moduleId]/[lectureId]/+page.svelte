@@ -11,8 +11,6 @@
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import Card from '$cmp/shared/layout/Card.svelte'
     import FloatingAgentSidebar from '$cmp/shared/agent/FloatingAgentSidebar.svelte'
-    import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
-    import FaTimes from '~icons/fa-solid/times'
     import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
     import InteractiveInstructionEditor from '$cmp/shared/InteractiveInstructionEditor.svelte'
     import type { SupportedLanguage } from '$cmp/shared/agent/DefaultCodingAgent.svelte'
@@ -20,6 +18,7 @@
     import type { Emulator } from '$lib/languages/Emulator'
     import { GENERAL_COURSE_SLUG, type TopicSibling } from '$lib/content/getters'
     import { resolve } from '$app/paths'
+    import { lectureAgent } from '../../lectureAgent.svelte'
 
     interface Props {
         data: PageData & { content: string }
@@ -27,11 +26,19 @@
 
     let { data }: Props = $props()
 
-    let agentOpen = $state(false)
     let editorLanguage: SupportedLanguage | null = $state(null)
     let editorCode = $state('')
     let emulatorInstance: Emulator | null = $state(null)
     let editorSection: HTMLElement | null = $state(null)
+
+    //the course navbar shows the Ask AI toggle only while a lecture is on screen
+    $effect(() => {
+        lectureAgent.available = true
+        return () => {
+            lectureAgent.available = false
+            lectureAgent.open = false
+        }
+    })
 
     $effect(() => {
         if (editorLanguage && editorSection) {
@@ -192,9 +199,9 @@
 </Page>
 
 <FloatingAgentSidebar
-    bind:open={agentOpen}
+    bind:open={lectureAgent.open}
     openSize="28rem"
-    verticalOffset="0px"
+    verticalOffset="3.2rem"
     bind:editorLanguage
     bind:editorCode
     {emulatorInstance}
@@ -252,16 +259,6 @@ When the user asks a question about the lecture topic or for a demonstration of 
         }
     ]}
 />
-<button class="agent-toggle" class:agent-open={agentOpen} onclick={() => (agentOpen = !agentOpen)}>
-    {#if agentOpen}
-        <div style="width: 1.2em; height: 1.2em;">
-            <FaTimes />
-        </div>
-        Close
-    {:else}
-        <SparklesIcon style="font-size: 1rem;" /> Ask AI
-    {/if}
-</button>
 
 <style>
     .topic-links {
@@ -287,47 +284,5 @@ When the user asks a question about the lecture topic or for a demonstration of 
         border-radius: 0.6rem;
         padding: 0.4rem;
         border: solid 0.1rem var(--tertiary);
-    }
-
-    .agent-toggle {
-        position: fixed;
-        top: 3.8rem;
-        right: 0.5rem;
-        padding: 0.65rem 1rem;
-        z-index: 101;
-        font-family: Rubik, sans-serif;
-        border-radius: 1.5rem;
-        border-bottom-right-radius: 0.4rem;
-        font-weight: bold;
-        border: none;
-        gap: 0.5rem;
-        min-width: 7rem;
-        background: var(--accent);
-        color: var(--accent-text);
-        cursor: pointer;
-        display: flex;
-        font-size: 1rem;
-        align-items: center;
-        justify-content: space-between;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-        transition: all 0.3s ease;
-    }
-
-    .agent-open {
-        top: 0.3rem;
-        right: min(calc(min(28rem, 100vw) + 0.3rem), calc(50vw - 3.5rem));
-    }
-
-    .agent-toggle:hover {
-        background-color: color-mix(in srgb, var(--accent) 80%, var(--background));
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-    }
-
-    @media (max-width: 1100px) {
-        .agent-open {
-            top: 0.5rem;
-            right: 3.5rem;
-            padding: 0.8rem 1rem;
-        }
     }
 </style>

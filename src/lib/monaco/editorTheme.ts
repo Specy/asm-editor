@@ -1,26 +1,44 @@
-import { ThemeStore } from '$stores/themeStore.svelte'
+import { ScopedTheme, type ThemeKeys, type ThemeProp, ThemeStore } from '$stores/themeStore.svelte'
 import { TinyColor } from '@ctrl/tinycolor'
 import type monaco from 'monaco-editor'
+
+/**
+ * The store's own `getColor`/`getText`/`layer`, over whichever theme is being asked about: those
+ * only ever answer for the app's theme, and the editor is not always wearing it.
+ */
+function readerOf(theme: Record<ThemeKeys, ThemeProp<ThemeKeys>>) {
+    const color = (key: ThemeKeys) => new TinyColor(theme[key].color)
+    const text = (key: ThemeKeys) =>
+        color(key).isDark() ? ThemeStore.meta.textForDark : ThemeStore.meta.textForLight
+    const layer = (key: ThemeKeys, amount: number) => {
+        const of = color(key)
+        return of.isDark() ? of.lighten(amount) : of.darken(amount)
+    }
+    return { color, text, layer }
+}
+
 export function generateTheme(): monaco.editor.IStandaloneThemeData {
-    const base = ThemeStore.getColor('secondary')
-    const isDark = new TinyColor(base).isDark()
+    //The colours of the subtree the editor sits in when a layout has dressed one in a language's
+    //theme — a lecture, a language's docs, an embed — and the app's own otherwise. Monaco paints
+    //from a theme of its own rather than from custom properties, so it is the one part of such a
+    //subtree that has to be told, and an editor left on the app's colours is the loudest thing on
+    //the page disagreeing with the panels around it.
+    const { color, text, layer } = readerOf(ScopedTheme.theme?.theme ?? ThemeStore.theme)
+    const isDark = color('secondary').isDark()
     return {
         base: isDark ? 'vs-dark' : 'vs',
         inherit: true,
         rules: isDark ? darkOverride : whiteOverride,
         colors: {
-            'editor.foreground': ThemeStore.getText('secondary'), //CDCDCD
-            'editor.background': ThemeStore.getColor('secondary').toHexString(),
-            'editor.selectionBackground': ThemeStore.layer('tertiary', 2).toHexString(),
-            'editor.lineHighlightBackground': ThemeStore.layer('secondary', 5).toHexString(),
-            'editorCursor.foreground': ThemeStore.getColor('accent').toHexString(),
-            'editorWhitespace.foreground':
-                new TinyColor(ThemeStore.getText('secondary')).toHexString() + '2A',
-            'editorWidget.background': ThemeStore.getColor('tertiary').toHexString(),
-            'editorSuggestWidget.selectedBackground': ThemeStore.getColor('accent2')
-                .darken(5)
-                .toHexString(),
-            'input.background': ThemeStore.layer('tertiary', 10).toHexString()
+            'editor.foreground': text('secondary'), //CDCDCD
+            'editor.background': color('secondary').toHexString(),
+            'editor.selectionBackground': layer('tertiary', 2).toHexString(),
+            'editor.lineHighlightBackground': layer('secondary', 5).toHexString(),
+            'editorCursor.foreground': color('accent').toHexString(),
+            'editorWhitespace.foreground': new TinyColor(text('secondary')).toHexString() + '2A',
+            'editorWidget.background': color('tertiary').toHexString(),
+            'editorSuggestWidget.selectedBackground': color('accent2').darken(5).toHexString(),
+            'input.background': layer('tertiary', 10).toHexString()
         }
     }
 }

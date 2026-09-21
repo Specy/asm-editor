@@ -20,6 +20,7 @@
     import { resolve } from '$app/paths'
     import { courseTheme } from '$lib/languages/languageColors'
     import ThemeScope from '$cmp/shared/providers/ThemeScope.svelte'
+    import { lectureAgent } from './lectureAgent.svelte'
 
     interface Props {
         children?: import('svelte').Snippet
@@ -65,12 +66,33 @@
                     Star on github
                 </ButtonLink>
             </div>
-            <a class="icon ai" href={resolve('/chat', {})} title="AI Chat">
-                <div class="hidden-very-small">
-                    <SparklesIcon />
-                </div>
-                AI Chat
-            </a>
+            {#if lectureAgent.available}
+                <button
+                    class="icon ai"
+                    onclick={() => (lectureAgent.open = !lectureAgent.open)}
+                    title={lectureAgent.open ? 'Close the AI chat' : 'Ask AI about this lecture'}
+                >
+                    <div class="hidden-very-small">
+                        {#if lectureAgent.open}
+                            <!-- an unplugin icon fills its parent, so it needs the sized box
+                                 `Icon` gives it; `SparklesIcon` carries its own 1em size. -->
+                            <Icon size={1}>
+                                <FaTimes />
+                            </Icon>
+                        {:else}
+                            <SparklesIcon />
+                        {/if}
+                    </div>
+                    {lectureAgent.open ? 'Close' : 'Ask AI'}
+                </button>
+            {:else}
+                <a class="icon ai" href={resolve('/chat', {})} title="AI Chat">
+                    <div class="hidden-very-small">
+                        <SparklesIcon />
+                    </div>
+                    AI Chat
+                </a>
+            {/if}
             <div class="mobile-only">
                 <Icon onClick={() => (menuOpen = !menuOpen)}>
                     {#if menuOpen}
@@ -181,6 +203,14 @@
         border-bottom-right-radius: 0.4rem;
         background-color: color-mix(in srgb, var(--accent) 10%, transparent);
         margin-left: auto;
+    }
+
+    /* A lecture's Ask AI toggle takes the AI Chat link's place and has to read as the same control,
+       so the <button> sheds the defaults the <a> never carried. */
+    button.ai {
+        font: inherit;
+        border: none;
+        cursor: pointer;
     }
 
     .mobile-only {
