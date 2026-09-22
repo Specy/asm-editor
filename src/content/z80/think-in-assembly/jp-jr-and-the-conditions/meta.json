@@ -1,6 +1,6 @@
 {
     "name": "jp, jr and the conditions",
-    "description": "An if statement flattened into a compare and a conditional jump, the two jump instructions and the 128 bytes that separate them, and the four conditions jr is allowed to test.",
+    "description": "Use flags from a comparison or zero test to choose the next instruction with conditional and unconditional jp or jr.",
     "order": 0,
     "topic": "branching"
 }

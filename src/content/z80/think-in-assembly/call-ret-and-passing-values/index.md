@@ -1,24 +1,31 @@
-`call label` pushes the address of the next instruction onto the stack and jumps to the label. `ret`
-pops it back into the program counter. That pair is the whole of calling and returning on the Z80,
-and it uses the stack from the previous lecture with no new machinery at all.
+A **subroutine** is a piece of code that can be used from several places in a program. A **call**
+jumps to the subroutine, and a **return** carries on at the instruction immediately after that
+particular call.
 
-Getting the arguments in and the answer out is where the work is, because the CPU has no opinion
-about it at all. Nothing in the instruction set says where an argument goes. It is an agreement
-between two pieces of code, and you write both of them.
+The Z80 remembers where to carry on by putting a return address on the stack. Passing an argument
+to the subroutine and bringing a result back are separate jobs. The program has to choose where
+those values travel.
 
-## The call, and arguments in registers
+## `call` leaves a return address on the stack
 
-The simplest agreement between a caller and a subroutine is that the argument arrives in a register
-and the answer leaves in one.
+`call label` does two things:
+
+1. it subtracts 2 from `sp` and pushes the address of the instruction after the `call`;
+2. it puts the label's address in `pc`, so execution continues at the subroutine.
+
+`ret` reverses the first part. It pops a two-byte address into `pc` and adds 2 to `sp`. Execution
+therefore resumes after the matching call.
+
+Build this program, open the memory panel at `fff8`, and step through it.
 
 ```z80|playground|memory|no-flags
     .org 0x8000
-    ld a, 10        ; x = 10
-    call triple     ; x = triple(x)
-    ld b, a         ; y = x
-    jp done
+    ld a, 10
+    call triple
+    ld b, a         ; execution resumes here
+    jp done          ; do not fall through into the subroutine
 
-; triple(x): x arrives in a, the answer leaves in a
+; triple(x): x arrives in a; the result leaves in a
 triple:
     ld c, a
     add a, c
@@ -29,228 +36,148 @@ done:
     halt
 ```
 
-`a` and `b` both come out at `1E`, which is 30. Type `fff8` into the memory panel and step through it:
-at the `call`, `sp` drops from `FFFF` to `FFFD` and the two bytes there become `05 80`, which is
-`0x8005`, the address of the `ld b, a` that follows the call.
+The `call` begins at `0x8002` and occupies three bytes, so the following `ld b, a` begins at
+`0x8005`. In this playground, `sp` begins at `0xFFFF`. The call changes it to `0xFFFD` and stores
+the return address `0x8005` there.
 
-| address  |    value     | what it is         |
-| -------- | :----------: | ------------------ |
-| `0xFFFD` | 🟢 `05` `80` | the return address |
-| `0xFFFF` |              |                    |
+As with every 16-bit value stored in Z80 memory, the address is little endian: its low byte `05`
+comes first, followed by its high byte `80`.
 
-`ret` reads those two bytes into `pc` and puts `sp` back to `FFFF`, so the program carries on at
-`0x8005`.
+| Address  | Byte    | Meaning                         |
+| -------- | ------- | ------------------------------- |
+| `0xFFFD` | 🟢 `05` | low byte of the return address  |
+| `0xFFFE` | `80`    | high byte of the return address |
+| `0xFFFF` | unused  |                                 |
 
-The `jp done` above `triple` is there because a subroutine is code like any other and the program
-would otherwise walk straight into it after the `ld b, a`. Falling into a subroutine gives you a `ret`
-with nothing of yours on the stack, which pops whatever is there and jumps to it.
+At `ret`, the Z80 reads those bytes as `0x8005`, puts that address in `pc`, and restores `sp` to
+`0xFFFF`. The next instruction is `ld b, a`, so both `a` and `b` finish at `0x1E`, which is 30.
 
-There is no `call (hl)`. If you want to call a subroutine whose address the program worked out while
-it was running, rather than one you named in the source, you have to push a return address yourself
-and then `jp (hl)`. Most Z80 code avoids the whole question by using a jump table and `jp (hl)`.
+The `jp done` also matters. After `ld b, a`, ordinary execution would otherwise continue into
+`triple` without a call. Its `ret` would then treat unrelated bytes as an address. Arrange the
+surrounding control flow so a subroutine is entered by `call`.
 
-## Conditional calls and returns
+## Decide how values travel
 
-`call` and `ret` both take the same conditions a jump does, so a subroutine can return early without
-a jump over a `ret`, and a call can be made only when a flag says so.
+The CPU gives `call` and `ret` their stack behaviour, but it has no built-in idea of parameters or
+return values. The caller and subroutine need an agreement such as:
+
+- the argument arrives in `a`;
+- the result leaves in `a`;
+- `bc` has the same value after the call as before it.
+
+This agreement is a **calling convention**, or simply the subroutine's **contract**. It is chosen by
+the program and recorded in a comment; the CPU does not enforce it. A small program can choose its
+own rules. Code that calls an existing library has to follow the rules that library states.
+
+Registers are the simplest place to pass a few values. In `triple`, `a` carries both the argument
+and the result. The subroutine also uses `c` as scratch space, so its contract should either say that
+`bc` may change or preserve the old value.
+
+## Preserve registers promised by the contract
+
+`push` and `pop` let a subroutine borrow a register pair and then restore it. This routine uses `b`
+for its calculation but promises to preserve the whole `bc` pair:
 
 ```z80|playground|no-flags
     .org 0x8000
-    ld a, 0
-    or a
-    call z, mark    ; only called when a is zero
-    ld a, 1
-    or a
-    call z, mark    ; and this time it is not
+    ld bc, 0x1111
+    ld a, 5
+    call twice
+    jp done
+
+; twice(x): x arrives in a; the result leaves in a; preserves bc
+twice:
+    push bc
+    ld b, a
+    add a, b
+    pop bc
+    ret
+
+done:
+    halt
+```
+
+The call first puts its return address on the stack. `push bc` puts the saved `bc` above that
+address. `pop bc` must remove the saved value before `ret`, leaving the return address at the top
+again. The program finishes with `a = 0x0A`, `bc = 0x1111`, and `sp = 0xFFFF`.
+
+Every route to `ret` must undo the pushes made by that call. A jump that reaches `ret` while a saved
+pair is still on top would make `ret` use that pair as an address.
+
+## Conditional calls and returns
+
+The conditions already used with branches can also control calls and returns. This example uses
+`z`; `nz`, `c`, and `nc` work in the same positions.
+
+```z80|playground|no-flags
+    .org 0x8000
+    ld bc, 0        ; c is the count
 
     ld a, 0
-    call check      ; a is zero, so check leaves at once
-    ld a, 5
-    call check      ; and this time it does the work
+    or a
+    call z, mark    ; Z is 1, so this call is taken
+
+    ld a, 1
+    or a
+    call z, mark    ; Z is 0, so execution continues below
     jp done
 
 mark:
     inc c
     ret
 
-; check(x): counts in b, and does nothing at all for zero
-check:
+done:
+    halt
+```
+
+`bc` finishes at `0x0001`. When `call z, mark` is not taken, it does not push a return address.
+
+A conditional return tests a condition at the end of a subroutine. For example, this routine
+returns immediately when its argument is zero:
+
+```z80
+; count_nonzero(x): x arrives in a; increments c when x is nonzero
+count_nonzero:
     or a
-    ret z           ; nothing to do when x is zero
-    inc b
+    ret z
+    inc c
     ret
-
-done:
-    halt
 ```
 
-`c` comes out at `01`, so `mark` ran once out of two `call z` instructions, and `b` comes out at `01`
-as well, so `check` did its work once out of two calls.
+When `Z` is 1, `ret z` pops the return address and leaves the subroutine. When `Z` is 0, execution
+continues at `inc c`. If a routine has saved registers, restore them before any return that can be
+taken.
 
-`ret cc` is the more useful of the two, because it turns an early exit into a single byte. A
-subroutine that has nothing to do when its argument is zero starts with `or a` and `ret z`, and that
-is the whole guard.
+## Pass arguments on the stack
 
-## Saving registers
+Registers are convenient, but a caller may need them for other values. Arguments can also be
+pushed. The order of the pushes becomes part of the contract.
 
-A subroutine that uses a register destroys what the caller had in it. Which registers a subroutine
-must give back and which it is free to destroy is the **calling convention**, and here both sides are
-yours, so the convention is whatever you write in the comment above the label. Writing it down is the
-point.
+This caller wants `add_two(22, 20)`. It pushes the second argument first and the first argument
+last, then removes both arguments after the subroutine returns. It also gives `ix` a visible value
+so we can check that the subroutine preserves it.
 
-```z80|playground|no-flags
+```z80|playground|memory|no-flags
     .org 0x8000
-    ld bc, 0x1111
-    ld de, 0x2222
-    ld hl, 0x3333
-    ld a, 5
-    call work
-    call shadow
-    jp done
-
-; work(x): x in a, the answer in a. Leaves bc and de as it found them.
-work:
-    push bc
-    push de
-    ld bc, 0x9999   ; scratch nobody outside will see
-    ld de, 0x8888
-    add a, a
-    pop de          ; in the reverse order of the pushes
-    pop bc
-    ret
-
-; shadow(): the same job through the alternate registers, in two instructions
-shadow:
-    exx             ; the caller's three go away
-    ld bc, 0x9999
-    ld hl, 0x7777
-    exx             ; and come back
-    ret
-
-done:
-    halt
-```
-
-`a` comes out at `0A`, and `bc`, `de` and `hl` come out at `1111`, `2222` and `3333`, the values the
-caller had.
-
-`work` and `shadow` save the same three pairs two different ways. The second one is the shadow set
-from the registers lecture: `exx` gives a subroutine a private `bc`, `de` and `hl` in four clock
-cycles, where three pushes and three pops are sixty-six. The catch is that there is only one shadow
-set, so a subroutine that uses it and then calls something else that also uses it gets its own values
-destroyed. `exx` works for a leaf routine and the stack works everywhere.
-
-## Arguments on the stack
-
-Registers run out. When a subroutine takes more arguments than you want to spend registers on, the
-caller pushes them and the subroutine reads them where they landed.
-
-This is the point where people lose the thread, so it is worth drawing. Watch the stack through the
-three instructions that set the call up, with 🟢 marking where `sp` points and `????` meaning memory
-nobody has written.
-
-Before anything is pushed, `sp` is at the top of memory:
-
-| address  | value |
-| -------- | :---: |
-| `0xFFF9` | ????  |
-| `0xFFFB` | ????  |
-| `0xFFFD` | ????  |
-| `0xFFFF` |  🟢   |
-
-The caller pushes `y` and then `x`, so the **last** argument pushed ends up nearest the top:
-
-| address  |   value   |
-| -------- | :-------: |
-| `0xFFF9` |   ????    |
-| `0xFFFB` | 🟢 `0016` |
-| `0xFFFD` |  `0014`   |
-| `0xFFFF` |           |
-
-Then `call` pushes the return address on top of both of them, and jumps:
-
-| address  |   value   | what it is                   |
-| -------- | :-------: | ---------------------------- |
-| `0xFFF9` | 🟢 `800B` | where to carry on afterwards |
-| `0xFFFB` |  `0016`   | `x`, 22                      |
-| `0xFFFD` |  `0014`   | `y`, 20                      |
-| `0xFFFF` |           |                              |
-
-So from inside the subroutine, `sp` itself is the return address, `sp + 2` is `x` and `sp + 4` is
-`y`. The subroutine did not have to be told where they are; the order of the pushes decided it.
-
-Now the awkward part. You know `x` is at `sp + 2`, and there is **no way to write that**. No
-instruction reads memory at an offset from `sp`, and `(sp+2)` does not assemble. The address has to
-be built in `hl` first, and then read through `(hl)`.
-
-```z80|playground|no-flags
-    .org 0x8000
+    ld ix, 0x3456
     ld hl, 20
-    push hl         ; the second argument
+    push hl         ; y, the second argument
     ld hl, 22
-    push hl         ; the first argument
+    push hl         ; x, the first argument
     call add_two
-    pop bc          ; the caller takes the four bytes back
-    pop bc
+    pop de          ; discard x
+    pop de          ; discard y
     jp done
 
-; add_two(x, y): x at sp+2 and y at sp+4 once we are inside, the answer in hl
+; add_two(x, y): stack arguments; result in hl; preserves ix
 add_two:
-    ld hl, 2
-    add hl, sp      ; hl points at x
-    ld e, (hl)
-    inc hl
-    ld d, (hl)      ; de = x
-    inc hl
-    ld c, (hl)
-    inc hl
-    ld b, (hl)      ; bc = y
-    ld h, b
-    ld l, c         ; hl = y
-    add hl, de      ; hl = x + y
-    ret
-
-done:
-    halt
-```
-
-`ld hl, 2` then `add hl, sp` is the whole idiom, and it is worth memorising: `hl` now holds `sp + 2`,
-which by the table above is the address of `x`. From there `inc hl` between reads walks up through
-the arguments in the order they were pushed.
-
-The two `pop bc` after the call are the caller taking its four bytes back. Somebody has to, or `sp`
-creeps a little further down at every call until it eventually reaches your data and starts writing
-over it. Here the caller does it, which is one of the two possible agreements; the subroutine could
-do it instead, as long as both sides agree which.
-
-## ix as a frame pointer
-
-The catch with `sp + 2` is that `sp` moves. Push anything inside the subroutine and every offset you
-worked out is suddenly two bytes wrong, and you have to keep count in your head of how deep you
-currently are. The fix is to copy `sp` once, at the top, into a register that will then sit still for
-the rest of the subroutine. `ix` is the register for it, because `(ix+dd)` reads memory at a fixed
-offset from it, which is exactly the mode `sp` lacks.
-
-```z80|playground|no-flags
-    .org 0x8000
-    ld hl, 20
-    push hl
-    ld hl, 22
-    push hl
-    call add_two
-    pop de          ; the caller takes the arguments back
-    pop de
-    jp done
-
-; add_two(x, y): x at (ix+4), y at (ix+6), the answer in hl
-add_two:
-    push ix         ; the caller's ix, kept
+    push ix
     ld ix, 0
-    add ix, sp      ; ix = sp, and now it stops moving
-    ld l, (ix+4)    ; x
-    ld h, (ix+5)
-    ld e, (ix+6)    ; y
-    ld d, (ix+7)
+    add ix, sp      ; ix is a fixed pointer to this call's stack frame
+    ld l, (ix+4)    ; low byte of x
+    ld h, (ix+5)    ; high byte of x
+    ld e, (ix+6)    ; low byte of y
+    ld d, (ix+7)    ; high byte of y
     add hl, de
     pop ix
     ret
@@ -259,75 +186,85 @@ done:
     halt
 ```
 
-`hl` comes out at `002A` again. While the subroutine is running, the stack looks like this:
+There is no `ld ix, sp`, so `ld ix, 0` followed by `add ix, sp` copies the current stack address into
+`ix`. The value in `ix` then stays fixed while the subroutine reads its arguments. A register used
+this way is called a **frame pointer**, and the group of values for this call is its **stack frame**.
 
-| address  |   value   | reached as | what it is         |
-| -------- | :-------: | ---------- | ------------------ |
-| `0xFFF7` | 🟢 `0000` | `(ix+0)`   | the caller's `ix`  |
-| `0xFFF9` |  `800B`   | `(ix+2)`   | the return address |
-| `0xFFFB` |  `0016`   | `(ix+4)`   | `x`, which is 22   |
-| `0xFFFD` |  `0014`   | `(ix+6)`   | `y`, which is 20   |
+Immediately after `push ix`, `sp` and `ix` both hold `0xFFF7`. Here is the frame one byte at a time:
 
-That block is a **stack frame**: everything one call needs, in one stretch of stack, at known
-distances from a single fixed point. `ix` holding that point is the **frame pointer**. Local
-variables go below it, at negative displacements, made room for with a `ld hl, -4` and
-`add hl, sp` before `ld sp, hl`.
+| Address  | Reached as | Byte    | Meaning                              |
+| -------- | ---------- | ------- | ------------------------------------ |
+| `0xFFF7` | `(ix+0)`   | 🟢 `56` | low byte of the caller's saved `ix`  |
+| `0xFFF8` | `(ix+1)`   | `34`    | high byte of the caller's saved `ix` |
+| `0xFFF9` | `(ix+2)`   | `0F`    | low byte of return address `0x800F`  |
+| `0xFFFA` | `(ix+3)`   | `80`    | high byte of return address `0x800F` |
+| `0xFFFB` | `(ix+4)`   | `16`    | low byte of `x = 0x0016`             |
+| `0xFFFC` | `(ix+5)`   | `00`    | high byte of `x`                     |
+| `0xFFFD` | `(ix+6)`   | `14`    | low byte of `y = 0x0014`             |
+| `0xFFFE` | `(ix+7)`   | `00`    | high byte of `y`                     |
 
-`ld ix, 0` and `add ix, sp` is two instructions for what one `ld ix, sp` would do, and there is no
-`ld ix, sp`, which is the sort of gap that makes Z80 code long.
+Every item is a two-byte word stored low byte first. The saved `ix` accounts for offsets 0 and 1,
+and the return address accounts for offsets 2 and 3. That is why the first argument begins at
+`ix+4`, not `ix+2`.
 
-## Recursion needs nothing new
+The ending is balanced in two stages. The subroutine's `pop ix` removes what the subroutine pushed,
+then `ret` removes the return address. Back in the caller, two more pops remove the two arguments the
+caller pushed. `hl` finishes at `0x002A`, `ix` is restored to `0x3456`, and `sp` is back at
+`0xFFFF`.
 
-A subroutine that calls itself gets a fresh return address at a fresh place on the stack every time,
-because every `call` pushes at wherever `sp` happens to be. Whatever the subroutine pushes is private
-to that call for the same reason.
+## Calls can be nested
 
-```z80|playground|no-flags
+A subroutine can call another subroutine. Each active call has its own return address because each
+`call` pushes at the current `sp`.
+
+```z80|playground|memory|no-flags
     .org 0x8000
-    ld a, 5
-    call sumto
+    ld a, 10
+    call quadruple
+    ld b, a
     jp done
 
-; sumto(n): n in a, the answer in hl. Adds up 1 to n by calling itself.
-sumto:
-    or a
-    jr nz, more
-    ld hl, 0        ; sumto(0) is 0
+; quadruple(x): x arrives in a; result leaves in a
+quadruple:
+    call twice
+    call twice
     ret
-more:
-    push af         ; n, private to this call
-    dec a
-    call sumto      ; hl = sumto(n - 1)
-    pop af          ; n back
-    ld d, 0
-    ld e, a
-    add hl, de      ; hl = sumto(n - 1) + n
+
+; twice(x): x arrives in a; result leaves in a
+twice:
+    add a, a
     ret
 
 done:
     halt
 ```
 
-`hl` comes out at `000F`, which is 15, the sum of 1 to 5. Six calls are on the stack at the deepest
-point, each with its own return address and its own pushed `af`, and the `pop af` in each one takes
-back the `n` that call pushed.
+The call from the main code pushes `0x8005`. Inside `quadruple`, the first `call twice` pushes
+`0x800C`. At that deepest point there are exactly two active calls and two return addresses:
 
-The `push af` is what makes it work. `a` is one register and every call needs its own copy of `n`, so
-the copy goes on the stack, where every call gets a different address for free.
+| Address  | Byte    | Meaning                                 |
+| -------- | ------- | --------------------------------------- |
+| `0xFFFB` | 🟢 `0C` | low byte of the return to `quadruple`   |
+| `0xFFFC` | `80`    | high byte of that return address        |
+| `0xFFFD` | `05`    | low byte of the return to the main code |
+| `0xFFFE` | `80`    | high byte of that return address        |
 
-## Two subroutines to write
+The first `ret` resumes at the second `call twice`. The next `ret` resumes at `quadruple`'s own
+`ret`, and that final return resumes at `ld b, a`. Both `a` and `b` finish at 40, and the three
+returns have restored `sp` to `0xFFFF`.
 
-Write a subroutine called `square` that squares the number in `a` and leaves the answer in `hl`. The
-test starts `a` at 7, so `hl` comes back at 49, which is `0031`. The Z80 has no multiply, so add `a`
-to a total `a` times, and remember that a zero has to come out at zero rather than going round 256
-times.
+## Write two subroutines
+
+Write `square`. Its argument arrives in `a`, its 16-bit result leaves in `hl`, and it must preserve
+`bc`. The test starts `a` at 7 and `bc` at `0x1234`, so `hl` must finish at 49 (`0x0031`). Use
+repeated 16-bit addition. Keep every path through the subroutine balanced.
 
 ```z80|playground|exercise
     .org 0x8000
     call square
     jp done
 
-; square(x): x arrives in a, the answer leaves in hl
+; square(x): x in a; result in hl; preserves bc
 square:
     ret
 
@@ -337,8 +274,8 @@ done:
 
 ```testcase
 {
-    "startingRegisters": { "a": 7 },
-    "expectedRegisters": { "hl": "0x0031" }
+    "startingRegisters": { "a": 7, "bc": "0x1234", "sp": "0xFFFF" },
+    "expectedRegisters": { "a": 7, "bc": "0x1234", "hl": "0x0031", "sp": "0xFFFF" }
 }
 ```
 
@@ -350,17 +287,20 @@ done:
     call square
     jp done
 
-; square(x): x arrives in a, the answer leaves in hl
+; square(x): x in a; result in hl; preserves bc
 square:
+    push bc
     ld e, a
-    ld d, 0         ; de = x, widened
-    ld hl, 0        ; the total
+    ld d, 0         ; de = unsigned x
+    ld hl, 0
     or a
-    ret z           ; zero times zero, and no loop at all
+    jr z, finished  ; zero additions when x is zero
     ld b, a
-loop:
-    add hl, de      ; total = total + x
-    djnz loop       ; x times
+add_next:
+    add hl, de
+    djnz add_next
+finished:
+    pop bc
     ret
 
 done:
@@ -369,22 +309,24 @@ done:
 
 </details>
 
-The second one hands you the caller. It pushes 20 and then 22, calls `add_two`, and takes the four
-bytes back. Write the body of `add_two`, which must leave 42 in `hl` without moving `sp`.
+For the second subroutine, the caller pushes `y = 8` and `x = 50`. Write `difference` so it leaves
+`x - y`, which is 42, in `hl`. Use `ix` as a frame pointer and preserve the caller's value in `ix`.
+The caller removes its two arguments after the return.
 
 ```z80|playground|exercise
     .org 0x8000
-    ld hl, 20
-    push hl         ; the second argument
-    ld hl, 22
-    push hl         ; the first argument
-    call add_two
-    pop bc          ; the caller gives the room back
-    pop bc
+    ld ix, 0x3456
+    ld hl, 8
+    push hl         ; y
+    ld hl, 50
+    push hl         ; x
+    call difference
+    pop de
+    pop de
     jp done
 
-; add_two(x, y): x at sp+2 and y at sp+4, the answer in hl
-add_two:
+; difference(x, y): stack arguments; result in hl; preserves ix
+difference:
     ret
 
 done:
@@ -393,7 +335,8 @@ done:
 
 ```testcase
 {
-    "expectedRegisters": { "hl": 42 }
+    "startingRegisters": { "sp": "0xFFFF" },
+    "expectedRegisters": { "hl": 42, "ix": "0x3456", "sp": "0xFFFF" }
 }
 ```
 
@@ -402,29 +345,28 @@ done:
 
 ```z80|playground|solution
     .org 0x8000
-    ld hl, 20
+    ld ix, 0x3456
+    ld hl, 8
     push hl
-    ld hl, 22
+    ld hl, 50
     push hl
-    call add_two
-    pop bc
-    pop bc
+    call difference
+    pop de
+    pop de
     jp done
 
-; add_two(x, y): x at sp+2 and y at sp+4, the answer in hl
-add_two:
-    ld hl, 2
-    add hl, sp      ; hl points at x
-    ld e, (hl)
-    inc hl
-    ld d, (hl)      ; de = x
-    inc hl
-    ld c, (hl)
-    inc hl
-    ld b, (hl)      ; bc = y
-    ld h, b
-    ld l, c
-    add hl, de      ; hl = x + y
+; difference(x, y): stack arguments; result in hl; preserves ix
+difference:
+    push ix
+    ld ix, 0
+    add ix, sp
+    ld l, (ix+4)
+    ld h, (ix+5)    ; hl = x
+    ld e, (ix+6)
+    ld d, (ix+7)    ; de = y
+    or a             ; clear carry before sbc
+    sbc hl, de
+    pop ix
     ret
 
 done:

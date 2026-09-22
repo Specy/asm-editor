@@ -1,11 +1,14 @@
-Sooner or later a program of yours divides by zero, or reads a word at an odd address, and the run
-stops with a red message under the editor instead of finishing. This lecture is about what that is,
-why the messages are worded the way they are, and what you write so that it does not happen.
+# Exceptions and the vector table
+
+If a program divides by zero or reads a word at an odd address, this editor stops the run and shows
+an error. This lecture explains why, how a real 68000 would respond, and how to check for a few
+faults before they end a run here.
 
 ## Where the words in those messages come from
 
 Some things an instruction asks for cannot be done. There is no answer to a division by zero, and a
-word cannot be fetched from an odd address. A CPU has to do something when it meets one, and what the
+word or long cannot be read or written at an odd address (instruction fetches must be even-aligned
+too). A CPU has to do something when it meets one, and what the
 68000 does is stop your program and run a piece of code that somebody else wrote for exactly that
 situation. Such a piece of code is a **handler**, and the interruption itself is an **exception**.
 
@@ -20,8 +23,9 @@ without any boot code of its own.
 
 ## None of that happens here
 
-The simulator has no handlers and no table. When one of those causes turns up, the run ends and a
-message appears, and that is the whole story. Three consequences are worth knowing about.
+The simulator does not use a 68000 vector table or run handlers you write. When a fault occurs, the
+run ends and a message appears. Its `trap #15` is a built-in task interface: the simulator handles
+it directly, without looking up a handler in the vector table. Three consequences are worth knowing.
 
 **The bottom of memory is ordinary memory.** Writing addresses into it changes nothing.
 
@@ -33,19 +37,18 @@ message appears, and that is the whole story. Three consequences are worth knowi
 ```
 
 The eight bytes are sitting at `$0000` in the memory panel and the simulator has taken no notice
-whatsoever. On a real 68000 you would have just changed where the machine starts up.
+whatsoever. On a real 68000, those values would be used at the next reset.
 
-**`trap #15` is the only trap that does anything.** All sixteen encodings assemble, but running
-`trap #0` through `trap #14` ends the run with an unknown-trap error, because there is nothing behind
-them to run.
+**Only `trap #15` is supported here.** The other trap numbers have no built-in tasks in this editor.
 
-**The instructions that exist to work with handlers are not here.** `rte`, `stop` and `reset` are
-recognised and refuse to build, each with its own reason. `chk`, `trapv` and `illegal` do run, and
-they end the run with their fault rather than jumping to a handler.
+**You cannot run your own handler here.** Instructions such as `rte`, which would return from a
+handler on a real 68000, are not supported.
 
 ## The messages
 
-These are the faults you will actually meet, and each message names the line it happened on.
+Here is a reference for messages you may see. `chk` checks whether a value is within bounds,
+`trapv` requests an exception when the overflow flag is set, and `illegal` deliberately requests
+an illegal-instruction exception.
 
 | what you did                          | the message                                                         |
 | ------------------------------------- | ------------------------------------------------------------------- |
@@ -79,13 +82,17 @@ too_big:
     move.l #-2, d2
     bra end
 ok:
-    move.l d0, d2
+    move.l #0, d2
+    move.w d0, d2        ; quotient is in the low word
 end:
 ```
 
 `d2` comes out at `FFFFFFFF`, the -1 that means the divisor was zero, and the run ends normally
 rather than stopping on an error. Take the `tst.w d1` and its `beq` out and run it again: same
-divisor, same division, and this time the program dies on the `divu`.
+divisor, same division, and this time the program dies on the `divu`. After a successful `divu`,
+the quotient is in the low word of `d0` and the remainder is in its high word. Clearing `d2` before
+copying the quotient word makes `d2.l` an ordinary nonnegative quotient. For example, 1000 divided
+by 3 leaves quotient 333 and remainder 1; copying all of `d0.l` would copy both.
 
 ## Poll instead of waiting to be told
 
@@ -103,11 +110,11 @@ poll:
     trap #15
     tst.b d1
     bne got_one
-    move.b #23, d0          ; task 23: let a hundredth of a second pass
-    move.l #1, d1
+    move.b #23, d0          ; task 23: wait one second
+    move.l #100, d1         ; 100 hundredths of a second
     trap #15
     dbra d3, poll
-    lea nothing, a1
+    move.l #nothing, a1
     move.b #14, d0
     trap #15
     bra end
@@ -124,17 +131,23 @@ end:
 nothing: dc.b 'nothing was typed', 0
 ```
 
-Press Run and then type a character into the input box quickly: the loop catches it and prints it
-back. Wait instead and the ten passes run out and it prints `nothing was typed`.
+Press Run, click the console input box, and type a character within about ten seconds: the loop
+catches it and prints it back. If you leave the input empty, the ten passes run out and it prints
+`nothing was typed`.
 
-The task 23 in the middle is what keeps the poll from burning the whole instruction budget on doing
-nothing. Take it out and ten passes go by in microseconds, long before your hand reaches the
-keyboard. A game does the same thing once a frame, and that lecture is the one on the screen.
+```testcase
+{ "input": ["k"], "expectedOutput": "k" }
+```
+
+Task 23 gives you time to type and lets the editor respond while the program waits. Without it,
+the ten polls finish almost immediately.
 
 ## Your turn
 
-`d0` holds 1000 and `d1` holds 0. Divide `d0` by `d1` and do not let the run end: leave the quotient
-in `d2` when the division is possible, and `$FFFFFFFF` in `d2` when the divisor is zero.
+`d0` holds 1000 and `d1` holds a divisor. Check for zero before dividing. Leave the quotient as a
+full long in `d2` when division is possible, and `$FFFFFFFF` in `d2` when the divisor is zero.
+Remember that `divu` reads `d1.w` and puts the quotient in `d0.w`, with the remainder in the upper
+word. Clear `d2` before copying the quotient word into it.
 
 ```m68k|playground|exercise
 * your code here
@@ -147,14 +160,29 @@ in `d2` when the division is possible, and `$FFFFFFFF` in `d2` when the divisor 
 }
 ```
 
+Now write the same guarded division for a nonzero divisor. This time 1000 divided by 3 must leave
+333 in all of `d2.l`, without the remainder in its high word.
+
+```m68k|playground|exercise
+* your code here
+```
+
+```testcase
+{
+    "startingRegisters": { "d0": 1000, "d1": 3 },
+    "expectedRegisters": { "d2": 333 }
+}
+```
+
 <details>
-<summary>Show solution</summary>
+<summary>Show solution for both cases</summary>
 
 ```m68k|playground|solution
     tst.w d1            ; divu reads the divisor as a word
     beq bad
     divu d1, d0
-    move.l d0, d2
+    move.l #0, d2
+    move.w d0, d2       ; leave the remainder behind
     bra end
 bad:
     move.l #-1, d2

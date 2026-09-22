@@ -1,23 +1,21 @@
-A subroutine is code you can get to from more than one place, which means it has to come back to a
-different place each time. The M68K does that with the stack. `bsr label` pushes the address of the
-instruction after it and jumps to the label; `rts` pops that address back into the program counter
-and carries on from there.
+# bsr, rts, link and unlk
 
-That pair is the whole of calling and returning. Getting the arguments in, getting the answer out,
-and giving a subroutine variables of its own is the rest of this lecture.
+A **subroutine** is a reusable group of instructions entered by a call and left by a return. A
+call can come from different places, so the subroutine must know which instruction to resume after
+each one. On M68K, `bsr label` (branch to subroutine) puts that **return address** on the stack and
+jumps to `label`. `rts` (return from subroutine) takes the address off the stack and resumes there.
 
-## The call, and arguments in registers
+## Call with an argument in a register
 
-The simplest agreement between a caller and a subroutine is that the argument arrives in a register
-and the answer leaves in one.
+For this example, the caller puts a number in `d0`, and `triple` leaves its answer in `d0`:
 
 ```m68k|playground|pc|no-flags
-    move.l #10, d0      ; x = 10
-    bsr triple          ; x = triple(x)
-    move.l d0, d1       ; y = x
+    move.l #10, d0      ; input = 10
+    bsr triple
+    move.l d0, d1       ; copy the returned 30
     bra end
 
-* triple(x): x arrives in d0, the answer leaves in d0
+; triple(x): input and answer in d0; may overwrite d2
 triple:
     move.l d0, d2
     add.l d2, d0
@@ -27,61 +25,65 @@ triple:
 end:
 ```
 
-Step through it and watch two things at once: `a7` drops by 4 at the `bsr` and climbs back at the
-`rts`, and the program counter jumps to `$1010` and then back to `$1008`. The four bytes that
-appeared on the stack are the `$1008`.
+The playground begins with `sp` (also called `a7`) at `$1000000`. Here `bsr triple` is at
+`$1004`, and the instruction after it, `move.l d0,d1`, is at `$1008`:
 
-The `bra end` above `triple` is there because a subroutine is code like any other, and without it the
-program would walk straight into `triple` after the `move.l d0, d1`. Falling into a subroutine that
-way gives you an `rts` with nothing of yours on the stack, so it pops whatever happens to be there
-and jumps to it.
+| moment | next instruction | `sp` | top of stack |
+| ------ | ---------------- | ---- | ------------ |
+| before `bsr` | `bsr triple` at `$1004` | `$1000000` | no value from this call |
+| after `bsr` | first instruction of `triple` | `$FFFFFC` | return address `$1008` |
+| after `rts` | `move.l d0,d1` at `$1008` | `$1000000` | return address popped |
 
-`jsr` is the other call instruction. `bsr` takes a label; `jsr` takes an address the way `lea` does,
-so `jsr (a0)` calls whatever address `a0` is holding, which is how you call a subroutine you picked
-while the program was running.
+`bsr` pushed a long address, moving `sp` down by four bytes. `rts` used that address and moved `sp`
+back up by four. The caller then copies 30 into `d1`. The `bra end` skips the subroutine's code:
+without it, execution would fall through from the caller into `triple` a second time, reaching
+`rts` without a matching call.
+
+The processor supplies the return-address behavior. The choice of `d0` for the input and answer is
+an agreement between these two pieces of code. So is the choice to let `triple` overwrite `d2`.
+If its caller needs the old `d2` afterward, the caller must save and restore it. Together, such
+agreements form a **calling convention**. This lesson uses local conventions stated beside each
+routine; it does not assume a particular system-wide register rule.
+
+A routine can instead promise to preserve a scratch register. This version doubles `d0` while
+giving the caller its original `d2` back:
 
 ```m68k|playground|no-flags
+    move.l #$12345678, d2
     move.l #5, d0
-    lea double, a0
-    jsr (a0)            ; call the address in a0
+    bsr double_keep_d2
     move.l d0, d1
     bra end
 
-* double(x): saves the registers it works with
-double:
-    movem.l d2/d3, -(sp)    ; the caller's d2 and d3, kept
+; double_keep_d2(x): input and answer in d0; preserves d2
+double_keep_d2:
+    move.l d2, -(sp)
     move.l d0, d2
     add.l d2, d0
-    move.l #$FF, d3         ; scratch nobody outside will see
-    movem.l (sp)+, d2/d3    ; and given back
+    move.l (sp)+, d2
     rts
 
 end:
 ```
 
-`d2` and `d3` come out holding what the caller left in them, not what `double` put there, and the
-`movem.l` pair at the two ends of `double` is the only reason. An agreement of that kind is called a
-**calling convention**: a list of registers a subroutine must leave as it found them, and a list it
-is free to destroy. Both sides here are yours, so the convention is whatever you write in the comment
-above the label, and writing it down is the point of writing it at all.
+At the `rts`, the saved `d2` has already been popped, so the return address is again at `(sp)`.
+The result is `d0 = d1 = 10`, `d2 = $12345678`, and `sp` is back where it began. This routine's
+promise about `d2` is a choice made for this example, not a rule imposed by `bsr`.
 
-## Arguments on the stack
+## Pass long arguments on the stack
 
-Registers run out. When a subroutine takes more arguments than you want to spend registers on, the
-caller pushes them and the subroutine reads them where they landed.
-
-The return address is on top of them, because `bsr` pushed it last. So inside the subroutine, before
-anything else is pushed, `(sp)` is the return address, `4(sp)` is the last argument pushed and
-`8(sp)` the one before it.
+Here is another local agreement: the caller pushes two **long** arguments, the routine reads them
+without removing them, the answer comes back in `d0`, and the caller removes the arguments after
+`rts`. The caller pushes `b` first and `a` second:
 
 ```m68k|playground|memory|no-flags
-    move.l #20, -(sp)   ; the second argument
-    move.l #22, -(sp)   ; the first argument
+    move.l #20, -(sp)   ; b: second argument
+    move.l #22, -(sp)   ; a: first argument
     bsr add_two
-    add.l #8, sp        ; the caller takes the arguments back off
+    add.l #8, sp        ; caller removes two long arguments
     bra end
 
-* add_two(a, b): a at 4(sp), b at 8(sp), the answer in d0
+; add_two(a, b): two long arguments on stack; answer in d0
 add_two:
     move.l 4(sp), d0    ; a
     add.l 8(sp), d0     ; + b
@@ -90,135 +92,97 @@ add_two:
 end:
 ```
 
-At the moment `add_two` starts, the stack holds:
+Starting from the playground's `$1000000` stack pointer, each push changes the top:
 
-|   address |    value    | reached as | what it is         |
-| --------: | :---------: | ---------- | ------------------ |
-| `$FFFFF4` | 🟢 00001008 | `(sp)`     | the return address |
-| `$FFFFF8` |  00000016   | `4(sp)`    | `a`, which is 22   |
-| `$FFFFFC` |  00000014   | `8(sp)`    | `b`, which is 20   |
+| moment | `sp` | value at `(sp)` |
+| ------ | ---- | --------------- |
+| before the pushes | `$1000000` | no argument yet |
+| after pushing `b` | `$FFFFFC` | 20 |
+| after pushing `a` | `$FFFFF8` | 22 |
+| on entry to `add_two` | `$FFFFF4` | return address |
+| after `rts` | `$FFFFF8` | `a`, still on the stack |
+| after caller's `add.l #8,sp` | `$1000000` | both arguments removed |
 
-`add.l #8, sp` after the call is the caller giving those eight bytes back. Somebody has to, or the
-stack pointer creeps downwards a little further at every call until it reaches your data.
+At entry, `(sp)` is the return address, `4(sp)` is the long `a` (22), and `8(sp)` is the long `b`
+(20). These offsets come from this push order and from each argument occupying four bytes. A
+different size or order would give different offsets. `rts` removes only the return address; the
+caller's `add.l #8,sp` is the cleanup rule chosen here.
 
-## link and unlk
+## Keep fixed offsets with `link` and `unlk`
 
-Here is the problem with `4(sp)`.
+Offsets from `sp` change when a routine makes another push. If `add_two` first saved `d2` with
+`move.l d2,-(sp)`, its `a` would move from `4(sp)` to `8(sp)`. A **frame pointer** is a register
+kept at one position during the call, so the routine can use stable offsets even while `sp` moves.
 
-Suppose `add_two` needs `d2` for something and has to save it first, so it starts with
-`move.l d2, -(sp)`. That push moved `sp` down by four, so `a` is no longer at `4(sp)`, it is at
-`8(sp)`, and `b` has moved to `12(sp)`. Every offset in the subroutine has to be rewritten. Add a
-second push later and they all move again. Push in one branch of an `if` and not the other and there
-is no number that is right in both places.
+`link a6,#-8` builds a frame in three steps: it pushes the caller's `a6`, copies the resulting
+`sp` into `a6`, then subtracts eight from `sp` to reserve eight bytes for local values. The
+reserved bytes have no initialized value until the routine writes them. `unlk a6` sets `sp` back
+to the position in `a6` and pops the saved `a6`. The return address is then at `(sp)` for `rts`.
 
-What you want is one landmark that stays where it is for the whole call, and then to measure
-everything from that instead of from `sp`. That is all a frame pointer is, and `link` sets one up:
-
-`link a6, #-8` does three things in one instruction.
-
-1. It pushes `a6`, saving whatever the caller had in it.
-2. It copies `sp` into `a6`. That is the landmark, planted, and nothing after this moves it.
-3. It subtracts 8 from `sp`, which reserves eight bytes of room below the landmark for your own
-   variables.
-
-`unlk a6` undoes all three: it copies `a6` back into `sp`, which throws away the room in one go, and
-then pops the caller's `a6`.
-
-Once the landmark is planted, everything has a fixed name. The arguments are **above** it, at
-`8(a6)`, `12(a6)` and so on. Your own variables are **below** it, at `-4(a6)`, `-8(a6)`, in the room
-the `#-8` reserved. Push as much as you like in between and not one of those numbers changes.
+This example stores two local longs. Recall that `mulu.w source,Dn` multiplies the unsigned low
+words of its operands and replaces the whole 32-bit destination with the product. With `n = 7`,
+`mulu.w d0,d0` produces 49:
 
 ```m68k|playground|memory|no-flags
-    move.l #7, -(sp)    ; the argument
+    move.l #7, -(sp)    ; one long argument
     bsr squares
-    add.l #4, sp
+    add.l #4, sp        ; caller removes that argument
     bra end
 
-* squares(n): n sits at 8(a6) once the frame is up
+; squares(n): long n at 8(a6); answer in d0; also changes d1 and d2
 squares:
-    link a6, #-8        ; a frame with eight bytes of locals
+    link a6, #-8
     move.l 8(a6), d0    ; n
-    move.l d0, -4(a6)   ; local1 = n
-    mulu d0, d0
-    move.l d0, -8(a6)   ; local2 = n * n
-    move.l -4(a6), d1
-    move.l -8(a6), d2
+    move.l d0, -4(a6)   ; first local = n
+    mulu.w d0, d0       ; d0 = n * n
+    move.l d0, -8(a6)   ; second local = n * n
+    move.l -4(a6), d1   ; inspect the first local
+    move.l -8(a6), d2   ; inspect the second local
     unlk a6
     rts
 
 end:
 ```
 
-Step through it and watch the stack in three states. 🟢 marks where `sp` is pointing and 🔷 where
-`a6` is.
+After `link`, the layout is as follows. The addresses assume the playground's initial
+`sp = $1000000`. The two local rows name reserved space, not values supplied by `link`:
 
-**At `squares:`, before the `link`.** The caller pushed the argument, then `bsr` pushed the return
-address on top of it. `a6` is still the caller's and has nothing to do with this.
+| address | offset from `a6` | contents immediately after `link` |
+| ------- | ---------------- | --------------------------------- |
+| `$FFFFEC` | `-8(a6)` | second local: uninitialized |
+| `$FFFFF0` | `-4(a6)` | first local: uninitialized |
+| `$FFFFF4` | `(a6)` | caller's saved `a6` |
+| `$FFFFF8` | `4(a6)` | return address |
+| `$FFFFFC` | `8(a6)` | long argument `n = 7` |
 
-|   address |    value    | what it is         |
-| --------: | :---------: | ------------------ |
-| `$FFFFF8` | 🟢 00001008 | the return address |
-| `$FFFFFC` |  00000007   | `n`, the argument  |
+Here `sp = $FFFFEC` and `a6 = $FFFFF4` immediately after `link`. The routine writes both locals
+before reading them. The positive offset `8(a6)` is the first argument because this call pushed
+one long; more long arguments would follow at `12(a6)`, `16(a6)`, and so on. `a6` stays fixed until
+`unlk`, even if the routine temporarily pushes another value.
 
-**After `link a6, #-8`.** The old `a6` has been pushed, `a6` now points at where it went, and `sp` has
-dropped eight bytes below that to leave room. The two reserved longs still read `FFFFFFFF`, because
-nobody has written them yet.
-
-|   address |    value    | reached as | what it is                 |
-| --------: | :---------: | ---------- | -------------------------- |
-| `$FFFFEC` | 🟢 FFFFFFFF | `-8(a6)`   | `local2`, room only so far |
-| `$FFFFF0` |  FFFFFFFF   | `-4(a6)`   | `local1`, room only so far |
-| `$FFFFF4` | 🔷 00000000 | `(a6)`     | the caller's `a6`, saved   |
-| `$FFFFF8` |  00001008   | `4(a6)`    | the return address         |
-| `$FFFFFC` |  00000007   | `8(a6)`    | `n`, the argument          |
-
-From here to the `unlk`, `a6` does not move again. `sp` is free to.
-
-The body then runs entirely against those names. `move.l 8(a6), d0` fetches `n` and
-`move.l d0, -8(a6)` writes a local, and by that point `sp` could have been pushed anywhere further
-down without a single one of those offsets needing to change.
-
-**After `unlk a6`.** `sp` jumped back up to where `a6` was and then popped it, which puts `sp` exactly
-where it was when the subroutine started: on the return address, ready for `rts`.
-
-|   address |    value    | what it is                  |
-| --------: | :---------: | --------------------------- |
-| `$FFFFF8` | 🟢 00001008 | the return address, next up |
-| `$FFFFFC` |  00000007   | `n`, still the caller's     |
-
-That block from the arguments down to the last local is a **stack frame**, and `a6` holding the
-middle of it is the **frame pointer**. The saved `a6` at `(a6)` is the previous frame's landmark, so
-the frames are a chain, each one pointing at the one that called it. The editor's call stack tab is
-reading that chain.
-
-`unlk a6` before `rts` is not optional. Take it out and `sp` is still eight bytes below the return
-address, so the `rts` pops a local variable and jumps to it.
-
-## Recursion needs nothing new
-
-A subroutine that calls itself gets a fresh frame at a fresh address every time, because every `link`
-subtracts from wherever `sp` has got to. Nothing has to be reserved and nothing has to be named in
-advance: the same `-4(a6)` in the source is a different address on every call.
-
-That is the reason locals go on the stack rather than in a fixed place in memory. A fixed address
-would be shared by every call at once, so the second call would destroy the first call's variables
-before the first call had finished with them.
+The saved value at `(a6)` links to a caller's frame **if that caller also uses `a6` as its frame
+pointer**. This caller has no frame; `link` still saves its original `a6` and `unlk` restores it.
+After `unlk`, `sp = $FFFFF8` points at the return address. `rts` moves it to `$FFFFFC`, and the
+caller's cleanup moves it to `$1000000`. The program finishes with `d0 = 49`, `d1 = 7`, and
+`d2 = 49`.
 
 ## Your turn
 
-Write a subroutine, called with `bsr`, that squares the number in `d0` and leaves the answer in `d0`.
-`d0` starts at 7.
+### 1. Square a register argument
 
-Remember the `bra` over the subroutine, or the program will run into it a second time.
+Write a complete program that calls `square` with `bsr`. `d0` starts at 7; `square` returns 49 in
+`d0`. Put `move.l #1,d3` immediately after the call as a marker that execution returned, then
+branch over the routine. Leave `sp` at `$1000000`. You can use `mulu.w` with the two low words of
+the 7 in `d0`.
 
 ```m68k|playground|exercise
-* your code here
+; your program here
 ```
 
 ```testcase
 {
-    "startingRegisters": { "d0": 7 },
-    "expectedRegisters": { "d0": 49 }
+    "startingRegisters": { "d0": 7, "d3": "0xA5A5A5A5", "a7": "0x1000000" },
+    "expectedRegisters": { "d0": 49, "d3": 1, "a7": "0x1000000" }
 }
 ```
 
@@ -227,12 +191,12 @@ Remember the `bra` over the subroutine, or the program will run into it a second
 
 ```m68k|playground|solution
     bsr square
+    move.l #1, d3       ; reached only after the return
     bra end
 
-* square(x): x arrives in d0, the answer leaves in d0
+; square(x): input and answer in d0
 square:
-    move.l d0, d1
-    mulu d1, d0
+    mulu.w d0, d0
     rts
 
 end:
@@ -240,18 +204,21 @@ end:
 
 </details>
 
-This time the caller is written for you. It pushes 20 and then 22, calls `add_two`, and takes the
-eight bytes back afterwards. Fill in the body of `add_two` so that it leaves 42 in `d0`, and leave
-the stack pointer exactly as you found it.
+### 2. Read stack arguments
+
+The caller pushes long `b = 20` and then long `a = 22`. Fill in `add_two` so it returns 42 in
+`d0`. Leave its two arguments in place for the caller to remove; `rts` must find the return
+address at `(sp)`. The instruction after the call marks the return path in `d3`.
 
 ```m68k|playground|exercise
-    move.l #20, -(sp)   ; the second argument
-    move.l #22, -(sp)   ; the first argument
+    move.l #20, -(sp)   ; b
+    move.l #22, -(sp)   ; a
     bsr add_two
-    add.l #8, sp        ; the caller gives the room back
+    move.l #1, d3       ; reached after rts
+    add.l #8, sp        ; caller removes the two longs
     bra end
 
-* add_two(a, b): a is at 4(sp) and b at 8(sp), the answer leaves in d0
+; add_two(a, b): long a at 4(sp), long b at 8(sp); answer in d0
 add_two:
     rts
 
@@ -260,7 +227,8 @@ end:
 
 ```testcase
 {
-    "expectedRegisters": { "d0": 42 }
+    "startingRegisters": { "d0": "0xDEADBEEF", "d3": "0xA5A5A5A5", "a7": "0x1000000" },
+    "expectedRegisters": { "d0": 42, "d3": 1, "a7": "0x1000000" }
 }
 ```
 
@@ -268,16 +236,17 @@ end:
 <summary>Show solution</summary>
 
 ```m68k|playground|solution
-    move.l #20, -(sp)   ; the second argument
-    move.l #22, -(sp)   ; the first argument
+    move.l #20, -(sp)   ; b
+    move.l #22, -(sp)   ; a
     bsr add_two
-    add.l #8, sp        ; the caller gives the room back
+    move.l #1, d3       ; reached after rts
+    add.l #8, sp        ; caller removes the two longs
     bra end
 
-* add_two(a, b): a is at 4(sp) and b at 8(sp), the answer leaves in d0
+; add_two(a, b): long a at 4(sp), long b at 8(sp); answer in d0
 add_two:
-    move.l 4(sp), d0    ; a
-    add.l 8(sp), d0     ; + b
+    move.l 4(sp), d0
+    add.l 8(sp), d0
     rts
 
 end:

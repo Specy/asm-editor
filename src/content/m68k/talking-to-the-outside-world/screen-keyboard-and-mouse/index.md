@@ -1,18 +1,21 @@
-Nothing in the 16 megabytes is a device. There is no block of memory that is secretly the screen,
-no address that answers with the last key pressed, nowhere a `move` can reach the outside world.
-Every pixel and every keypress comes through `trap #15` instead, one task per operation, in the
-shape you already know: the task number in `d0.b`, the arguments in `d1` and up.
+# The screen, keyboard and mouse through traps
+
+The screen and input devices do not have addresses in this simulator's memory. A program reaches
+them through `trap #15`: put a task number in `d0.b`, put that task's arguments in its specified
+registers, then run `trap #15`. Some tasks return an answer in a register.
 
 ## The screen
 
-The screen is **640 by 480** pixels, which is the size a program starts with and the smallest it can
-be set to. The origin is the **top left**, `x` grows right and `y` grows down, coordinates are pixels
-and drawing outside the screen is quietly ignored.
+The screen starts at **640 by 480** pixels. Its origin is the **top left**: `x` grows right and `y`
+grows down. Individual pixels have `x = 0..639` and `y = 0..479`. Drawing outside the screen is
+clipped without an error. A rectangle's *exclusive* right and bottom boundaries may be `640` and
+`480`, even though those are not pixel positions.
 
 Two colours are kept for you: the **pen**, which draws lines, outlines, pixels and text, and the
-**fill**, which fills the insides of rectangles and ellipses. Each is one task, and the colour is a
-long written `$00BBGGRR`: **blue in the high byte, then green, then red in the lowest**, which is
-backwards from the `#RRGGBB` you write in CSS.
+**fill**, which fills the insides of rectangles and ellipses. A colour is a long written
+`$00BBGGRR`: the highest byte is unused `$00`, followed by the blue byte, the green byte and the
+red byte. Readers who know CSS may notice that this puts the colour bytes in the opposite order
+from CSS's `#RRGGBB`.
 
 | colour | value       |     | colour | value       |
 | ------ | ----------- | --- | ------ | ----------- |
@@ -21,7 +24,25 @@ backwards from the `#RRGGBB` you write in CSS.
 | gray   | `$00808080` |     | blue   | `$00FF0000` |
 | yellow | `$0000FFFF` |     | aqua   | `$00FFFF00` |
 
-Press Run on this one and watch the Screen panel next to it.
+Here are the drawing requests the first program uses. Each reads its arguments when `trap #15`
+runs; setting a colour or pen width changes later drawing, while drawing tasks change the screen.
+
+| task in `d0.b` | inputs | effect |
+| ---: | --- | --- |
+| 80 | `d1.l` = `$00BBGGRR` | set the pen colour |
+| 81 | `d1.l` = `$00BBGGRR` | set the fill colour |
+| 87 | `d1.w` = left x, `d2.w` = top y, `d3.w` = right x, `d4.w` = bottom y | filled rectangle with a pen outline |
+| 88 | the same four boundaries | filled ellipse with a pen outline, inside that box |
+| 93 | `d1.b` = width in pixels | set the width of lines and outlines |
+| 84 | `d1.w` = start x, `d2.w` = start y, `d3.w` = end x, `d4.w` = end y | pen-colour line; its end becomes the drawing point |
+| 95 | `a1` = zero-terminated string address, `d1.w` = x, `d2.w` = y | pen-colour text with its top left at that pixel |
+
+Tasks 87 and 88 exclude their right and bottom boundaries. A box from `(100, 80)` to `(300, 200)`
+can affect columns `100..299` and rows `80..199`. If left equals right, it has zero width and
+draws nothing. A square box makes an ellipse into a circle.
+
+Press Run and watch the Screen panel. You should see a blue rectangle, a yellow ellipse, a thick
+red line and a white label.
 
 ```m68k|playground|open-screen|no-registers|no-flags
 WHITE   equ $00FFFFFF
@@ -69,7 +90,7 @@ YELLOW  equ $0000FFFF
     move.l #WHITE, d1
     move.b #80, d0
     trap #15
-    lea label, a1
+    move.l #label, a1
     move.l #100, d1
     move.l #360, d2
     move.b #95, d0          ; task 95: text at a pixel position
@@ -82,61 +103,27 @@ YELLOW  equ $0000FFFF
 label: dc.b 'Drawn with trap #15', 0
 ```
 
-A rectangle and an ellipse both take the same four numbers, the corners of a box: `d1` and `d2` are
-its left and top, `d3` and `d4` its right and bottom. The ellipse is the one inscribed in that box,
-so a square box draws a circle. Both **exclude their right and bottom edges**, which matters more than it sounds. Set a box's right
-edge equal to its left one and the box has no width at all, so nothing is drawn and nothing
-complains. In the program above, the ellipse runs from 360 to 480; change its `move.l #480, d3`, the
-line four above `move.b #88, d0`, to `move.l #360, d3` and run it again. The circle is simply not
-there, and the only sign of it is the gap where it was.
-
-## The drawing tasks
-
-| task | what it draws                                 | reads                                     |
-| ---: | --------------------------------------------- | ----------------------------------------- |
-|   80 | set the pen colour                            | `d1.l` = `$00BBGGRR`                      |
-|   81 | set the fill colour                           | `d1.l` = `$00BBGGRR`                      |
-|   82 | one pixel in the pen colour                   | `d1.w` = x, `d2.w` = y                    |
-|   83 | read a pixel's colour                         | `d1.w` = x, `d2.w` = y, answers in `d0.l` |
-|   84 | a line, and the drawing point ends at its end | `d1.w`, `d2.w`, `d3.w`, `d4.w`            |
-|   85 | a line from the drawing point to here         | `d1.w` = x, `d2.w` = y                    |
-|   86 | move the drawing point without drawing        | `d1.w` = x, `d2.w` = y                    |
-|   87 | a filled rectangle, outlined with the pen     | `d1.w`, `d2.w`, `d3.w`, `d4.w`            |
-|   88 | a filled ellipse in that rectangle            | `d1.w`, `d2.w`, `d3.w`, `d4.w`            |
-|   89 | flood fill outwards from a pixel              | `d1.w` = x, `d2.w` = y                    |
-|   90 | the outline of a rectangle, nothing inside    | `d1.w`, `d2.w`, `d3.w`, `d4.w`            |
-|   91 | the outline of an ellipse, nothing inside     | `d1.w`, `d2.w`, `d3.w`, `d4.w`            |
-|   92 | the drawing mode                              | `d1.b` = 2, 4, 16 or 17                   |
-|   93 | the pen width in pixels                       | `d1.b`                                    |
-|   94 | show the off screen image                     |                                           |
-|   95 | text at a pixel position, over what is there  | `a1` = string, `d1.w` = x, `d2.w` = y     |
-|   96 | where the drawing point is                    | answers `d1.w` = x, `d2.w` = y            |
-
-Tasks 84, 85, 86 and 96 share one **drawing point**, which is where the next `85` starts from, so a
-polyline is one `86` and then one `85` per corner.
-
-Task 92 takes four modes. **4** draws normally and is what a program starts in. **2** moves the
-drawing point and changes no pixel. **16** and **17** turn double buffering off and on. The other mode
-numbers, the ones that would combine the new pixel with the old one bitwise, are not implemented and
-stop the program with an error naming the mode.
-
-Two more tasks belong to the screen without drawing on it. **Task 11** moves the text cursor, which
-is where printed text lands, in character cells counted from the top left, and `d1.w = $FF00` clears
-the whole screen, text and graphics together. **Task 33** sets or reads the screen size, with the
-width in the high word of `d1.l` and the height in the low word, and `d1.l = 0` asks instead of
-setting.
-
-Text and graphics share one image, so `trap #15`
-task 14 both appends to the transcript above the screen **and** draws the string on the screen at the
-text cursor, and clearing with task 11 wipes the drawing too.
+Try changing the ellipse's right boundary from `480` to `360`. Its box then has zero width, so
+the yellow shape disappears.
 
 ## Double buffering
 
-Drawing a moving picture straight onto the visible screen shows every half finished frame. Mode 17
-sends the drawing to an off screen image instead, and task 94 shows it, so the reader only ever sees
-whole frames.
+Drawing a moving picture straight onto the visible screen can reveal a half-finished frame. Task
+**92** reads a mode from `d1.b`: mode `17` turns on double buffering, sending drawing to an
+off-screen image; mode `16` turns it off. Task **94** takes no arguments and copies that image to
+the visible screen. Its `d0.b` selector is the only register you need to set.
 
-This one runs until you press Stop.
+Each frame must erase the previous ball. Task **11** reads `d1.w = $FF00` to clear graphics and
+text and put the text cursor at the top left. The same task can position the cursor for printed
+text: put the column in the high byte of `d1.w` and the row in its low byte, both counted in
+character cells from the top left. With `d1.w = $00FF`, it instead returns that packed cursor
+position in `d1.w`. Task **23** reads `d1.l` as a delay in hundredths of a second of program time;
+it lets the editor respond to Stop and repaint during the wait.
+
+Run the animation: a yellow 48-pixel circle starts at `(100, 200)` and travels horizontally,
+reversing before its next step would put its box beyond the screen. Each displayed frame is complete.
+The editor gives each Run a finite instruction limit, so it eventually stops by itself; Stop can end
+it sooner.
 
 ```m68k|playground|open-screen|no-registers|no-flags
 SIZE    equ 48
@@ -185,7 +172,7 @@ frame:
     move.w d5, ballx
     bra frame
 flip:
-    neg.w step              ; turn it round at the edge
+    neg.w step              ; reverse before the next step would cross an edge
     bra frame
 
 ballx:  dc.w 100
@@ -196,37 +183,40 @@ step:   dc.w 6
 { "runFor": 200000 }
 ```
 
-Task 23 is what makes it move at the same speed whatever your machine is doing: it lets two
-hundredths of a second of **program time** pass, and the editor stays responsive throughout, so Stop
-still answers and the screen still repaints. Take the delay out and the ball moves as fast as the
-instruction budget allows and then the program stops, which is not the same thing as fast.
+Task 23 sets the frame pace here to two hundredths of a second of program time. The ball moves in
+six-pixel steps: at the left it can turn at `x = 4`, because the following step would cross `0`.
+`step` holds a signed word. `neg.w step` reverses its sign, from `6` to `-6` or back, so the next
+addition moves the ball in the opposite direction.
 
-Try changing `move.b #17, d1` to `move.b #16, d1`, which turns double buffering off. The ball still
-moves and now it flickers, because you are watching the clear and the draw happen.
+Try changing `move.b #17, d1` to `move.b #16, d1`. With buffering off, the clear and redraw may
+become visible as flicker.
 
 ## The keyboard
 
-Two ways to read it. Typed characters come through the text tasks: task 7 says whether one is
-waiting, task 5 takes one, task 2 takes a whole line. **Key state** is different: task 19 asks
-whether up to four named keys are held down **right now**, which is what a game wants.
+For movement, task **19** reads up to four named keys. Put their key codes in `d1.l`, one per
+byte, then put `19` in `d0.b` and call `trap #15`. It returns four bytes in `d1.l`: `$FF` for an
+observed down key and `$00` otherwise, in the same order. The highest answer byte belongs to the
+highest request byte.
 
-Task 19 takes four key codes packed into `d1.l`, one per byte, and answers in `d1.l` with one
-`$FF` or `$00` byte per key, in the same order. So the highest byte of the answer belongs to the
-highest byte of the question.
+The keyboard queues presses and releases that reach the focused Screen panel. Each task 19 read
+applies **at most one** queued change; after applying one, it waits at least 30 milliseconds before
+applying the next. Its answer is therefore the key state the program has observed so far, which may
+lag behind the physical key. A quick press and release of a repeatedly polled key is seen as down
+on one read before its release is applied on a later read. A press that never reaches the Screen
+panel—for example, because it lacks focus—cannot be reported. The program must keep polling the
+same key while it runs.
 
-Most of the key codes you can work out:
-
-- A letter is the ASCII code of its **capital**, so `A` is `$41` and `Z` is `$5A`, whether or not
-  Shift is held.
-- A digit on the top row is its ASCII code, `0` is `$30` and `9` is `$39`.
-- The function keys run from F1 at `$70`.
-- The arrows are left `$25`, up `$26`, right `$27`, down `$28`.
-
-The rest, and there are thirty of them, are on the
-[trap tasks documentation page](/documentation/m68k/traps).
+The arrows used below have codes left `$25`, up `$26`, right `$27`, down `$28`. Packing them in
+that order gives the request `$25262728`; the returned high byte answers for left, and the low
+byte answers for down.
 
 **Click the Screen panel before you press a key**: the screen only gets the keyboard when it has the
 focus, and a ring around it says so while it does.
+
+The next program uses task 95 for its label. It draws directly on the screen at `(8, 8)` each time
+the frame is cleared, without adding another line to the transcript. Run it and hold an arrow key:
+a lime 40-pixel square begins at `(300, 220)` and moves eight pixels per frame, staying inside the
+screen. The editor's finite instruction limit will end the run unless you press Stop first.
 
 ```m68k|playground|open-screen|no-registers|no-flags
 SIZE    equ 40
@@ -245,17 +235,18 @@ frame:
     move.w #$FF00, d1
     trap #15                ; clear, which also puts the text cursor home
 
-    move.b #14, d0
-    lea title, a1
-    trap #15                ; the title, at the text cursor
+    move.l #WHITE, d1
+    move.b #80, d0
+    trap #15
+    move.l #title, a1
+    move.w #8, d1
+    move.w #8, d2
+    move.b #95, d0
+    trap #15                ; the title at (8, 8), on this frame only
 
     move.l #LIME, d1
     move.b #81, d0
     trap #15
-    move.l #WHITE, d1
-    move.b #80, d0
-    trap #15
-
     move.w boxx, d1
     move.w boxy, d2
     move.w d1, d3
@@ -322,23 +313,31 @@ title:  dc.b 'Click the screen, then hold the arrow keys', 0
 { "runFor": 200000 }
 ```
 
-`btst #24, d1` tests bit 24, which is the lowest bit of the highest byte, and a byte of `$FF` has
-that bit set while a byte of `$00` does not. A key held down is reported at least once however
-briefly it was tapped, so a loop that polls every two hundredths of a second never misses one.
+`btst #24, d1` tests the lowest bit of the highest answer byte. That bit is set in `$FF` and clear
+in `$00`. The other `btst` instructions test the corresponding bits in the other three bytes.
 
 ## The mouse
 
-Task 61 reads it, and `d1.b` says which reading you want: **0** for where the pointer is and which
-buttons are down **now**, **1** for the last button release, **2** for the last button press. The
-answer comes back in two registers:
+Task **61** reads the mouse. Put `61` in `d0.b` and choose a view in `d1.b`: **0** for the current
+pointer position and buttons, **1** for the latest button-release snapshot, or **2** for the latest
+button-press snapshot. It returns:
 
-- **`d0.b`** is the buttons and modifiers, one bit each, from bit 6 down: Ctrl, Alt, Shift, Double,
-  Middle, Right, Left. So bit 0 is the left button and bit 4 is Shift.
+- **`d0.b`** is the buttons and modifiers, one bit each: bit 6 Ctrl, 5 Alt, 4 Shift, 3 Double,
+  2 Middle, 1 Right, 0 Left. Double is set only in a press snapshot.
 - **`d1.l`** is the position, **y in the high word and x in the low word**, in screen pixels whatever
   the panel's zoom is.
 
-The last press and the last release stay until the next one, so a program that polls slowly still
-sees every click.
+The two event snapshots stay until the next event of the same kind. If two presses happen before
+you read mode 2, only the latest press remains; the same is true of releases in mode 1. Mode 0 is
+the current state and can miss a complete click between polls. This program uses mode 0 to paint
+while the left button is held, so a very fast click or pointer movement between polls may leave no
+mark at some positions.
+
+Task **14**, already used for printed strings, reads the zero-terminated address in `a1`. On this
+screen it puts text both at the text cursor and in the transcript. The mouse program uses it once
+for its starting title. Run it and drag with the left button: aqua discs follow the pointer. Hold
+Shift while dragging for red; hold the right button to clear the image, including the title. The
+editor's finite instruction limit ends the run eventually, and Stop can end it sooner.
 
 ```m68k|playground|open-screen|no-registers|no-flags
 BRUSH   equ 6
@@ -346,7 +345,7 @@ AQUA    equ $00FFFF00
 RED     equ $000000FF
 
     move.b #14, d0
-    lea title, a1
+    move.l #title, a1
     trap #15
 
 frame:
@@ -396,9 +395,6 @@ wipe:
     move.b #11, d0
     move.w #$FF00, d1
     trap #15
-    move.b #14, d0
-    lea title, a1
-    trap #15
     bra wait
 
 title:  dc.b 'Drag to paint, hold Shift for red, right button clears', 0
@@ -408,21 +404,23 @@ title:  dc.b 'Drag to paint, hold Shift for red, right button clears', 0
 { "runFor": 200000 }
 ```
 
-`lsr.l #8, d2` twice is how the y is brought down sixteen places, since a constant shift count is
-limited to 8. `swap d2` and a mask would do the same in two instructions.
+`lsr.l #8, d2` twice brings y down sixteen places, since a constant shift count is limited to 8.
 
 ## How much you can draw
 
-Every `trap #15` costs the simulator one instruction out of the two million a Playground is given,
-whatever the task does. So a drawing loop is counted in traps: a filled rectangle is one of them, and
-the same rectangle drawn with task 82 is one per pixel. Use the shape tasks, keep the work of a frame
-to a few dozen traps, and let task 23 set the pace.
+Each Playground run has a two-million-instruction limit. Drawing tasks do different amounts of
+work, but each `trap #15` call spends one instruction from that limit. Use a shape task for a shape,
+and task 23 to pace repeated frames.
 
 ## Your turn
 
-Fill a red rectangle over the box from (10, 10) to (100, 100), then read the pixel at (50, 50) back
-off the screen with task 83 and leave its colour in `d0`. Red is `$000000FF`, so a correct answer
-comes back as 255.
+Task **83** reads one pixel: put its x coordinate in `d1.w` and y coordinate in `d2.w`, select
+`83` in `d0.b`, and call `trap #15`. It returns the pixel colour in `d0.l` as `$00BBGGRR`. If
+double buffering is on, it reads the off-screen image being drawn.
+
+Fill a red rectangle over the box from `(10, 10)` to `(100, 100)`, then read the pixel at
+`(50, 50)` and leave its colour in `d0.l`. You should see the red rectangle; the register check
+expects 255 because red is `$000000FF`.
 
 ```m68k|playground|open-screen|exercise
 * your code here
@@ -462,9 +460,10 @@ RED equ $000000FF
 
 </details>
 
-Task 33 answers with the screen's width and height packed into the two halves of one register. Ask
-it, then split the answer: the width on its own in `d1` and the height on its own in `d2`. Nothing
-here has resized the screen, so they come to 640 and 480.
+Now draw a blue rectangle whose bottom-right boundary is `(640, 480)`, starting at `(630, 470)`.
+Set both pen and fill to blue (`$00FF0000`). Read the last pixel, `(639, 479)`, with task 83 and
+leave its colour in `d0.l`. The rectangle should appear in the bottom-right corner, and the colour
+check expects `$00FF0000`. This uses the boundary values without treating `(640, 480)` as a pixel.
 
 ```m68k|playground|open-screen|exercise
 * your code here
@@ -472,7 +471,7 @@ here has resized the screen, so they come to 640 and 480.
 
 ```testcase
 {
-    "expectedRegisters": { "d1": 640, "d2": 480 }
+    "expectedRegisters": { "d0": 16711680 }
 }
 ```
 
@@ -480,13 +479,26 @@ here has resized the screen, so they come to 640 and 480.
 <summary>Show solution</summary>
 
 ```m68k|playground|open-screen|solution
-    move.b #33, d0
-    move.l #0, d1       ; 0 asks instead of setting
-    trap #15            ; d1 = width in the high word, height in the low
-    move.l d1, d2
-    andi.l #$FFFF, d2   ; the height
-    swap d1
-    andi.l #$FFFF, d1   ; the width
+BLUE equ $00FF0000
+
+    move.l #BLUE, d1
+    move.b #80, d0      ; blue pen
+    trap #15
+    move.l #BLUE, d1
+    move.b #81, d0      ; blue fill
+    trap #15
+
+    move.w #630, d1
+    move.w #470, d2
+    move.w #640, d3
+    move.w #480, d4
+    move.b #87, d0
+    trap #15
+
+    move.w #639, d1
+    move.w #479, d2
+    move.b #83, d0
+    trap #15
 ```
 
 </details>

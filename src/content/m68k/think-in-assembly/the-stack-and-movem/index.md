@@ -1,145 +1,109 @@
-Pushing something onto the stack is two steps: move the stack pointer down to make room, then write
-into the room you just made. Popping is the two steps in reverse. You could write all four
-instructions out by hand, and you never have to, because `-(sp)` and `(sp)+` are the predecrement and
-postincrement modes applied to `a7` and they already do exactly that.
+# The stack, -(sp) and movem
+
+The **stack** is a region of memory used for temporary values. The stack pointer, `sp` (another
+name for `a7`), tracks its current position. You add a value at the top, called a **push**, and
+take the top value back, called a **pop**. The last value pushed is the first one popped: **last in,
+first out** (LIFO).
+
+On M68K, the stack grows toward lower addresses. Pushing moves `sp` down to make room and writes
+there. Popping reads at `sp` and moves it up. The predecrement `-(sp)` and postincrement `(sp)+`
+modes do those pointer changes as part of the memory access.
 
 ## Push and pop
 
-`move.l d0, -(sp)` subtracts 4 from `sp` and writes `d0` at the new address, which is a push.
-`move.l (sp)+, d0` reads at `sp` and then adds 4, which is a pop. The 4 is the `.l`, so the stack
-pointer moves by the size of what you put on it.
+`move.l d0, -(sp)` subtracts 4 from `sp`, then stores the four bytes of `d0` at the new address.
+`move.l (sp)+, d2` reads four bytes at `sp` into `d2`, then adds 4 to `sp`. The `.l` selects a
+long-sized memory access, so each pointer change is four bytes.
 
-The stack pointer starts at `$1000000`, one byte past the end of memory, and grows downwards.
+In this playground, memory ends at `$FFFFFF` and `sp` starts at `$1000000`, one byte beyond it. The
+example sets `sp` explicitly to that address so you can trace every change:
 
 ```m68k|playground|memory|no-flags
-    move.l #$11111111, d0
-    move.l #$22222222, d1
-    move.l d0, -(sp)    ; push d0
-    move.l d1, -(sp)    ; push d1
-    move.l (sp)+, d2    ; pop into d2
-    move.l (sp)+, d3    ; pop into d3
+    move.l #$1000000, sp
+    move.l #$11223344, d0
+    move.l #$55667788, d1
+    move.l d0, -(sp)    ; sp = $FFFFFC; store d0 there
+    move.l d1, -(sp)    ; sp = $FFFFF8; store d1 there
+    move.l (sp)+, d2    ; d2 = $55667788; sp = $FFFFFC
+    move.l (sp)+, d3    ; d3 = $11223344; sp = $1000000
 ```
 
-Step through it and watch `a7` in the registers panel. In the tables below, 🟢 marks the address the
-stack pointer is holding, and `FFFFFFFF` is memory nobody has written yet.
+| after this step | `sp`       | long at `$FFFFF8` | long at `$FFFFFC` |
+| --------------- | ---------- | ----------------- | ----------------- |
+| set `sp`        | `$1000000` | unspecified       | unspecified       |
+| push `d0`       | `$FFFFFC`  | unspecified       | `$11223344`       |
+| push `d1`       | `$FFFFF8`  | `$55667788`       | `$11223344`       |
+| pop into `d2`   | `$FFFFFC`  | `$55667788`       | `$11223344`       |
+| pop into `d3`   | `$1000000` | `$55667788`       | `$11223344`       |
 
-Before the first push the stack is empty and `a7` holds `01000000`:
+The first push stores `$11223344` in big-endian order: byte `$11` at `$FFFFFC`, `$22` at
+`$FFFFFD`, `$33` at `$FFFFFE`, and `$44` at `$FFFFFF`. The second push uses the four addresses
+immediately below those. After both pops, `sp` is back where it started. The old bytes remain in
+memory; a pop changes the pointer, not the bytes. A later push may overwrite them.
 
-|    address |  value   |
-| ---------: | :------: |
-|  `$FFFFF8` | FFFFFFFF |
-|  `$FFFFFC` | FFFFFFFF |
-| `$1000000` |    🟢    |
+Each push must have a matching pop of the same size and in the reverse order when you want `sp`
+back at its starting address. A word push, `move.w d0, -(sp)`, moves it down by 2; a matching
+`move.w (sp)+, d0` moves it back up by 2. Use the same access size when retrieving a value so the
+pointer advances past exactly what was stored.
 
-`move.l d0, -(sp)` drops `a7` to `$FFFFFC` and writes there:
+For a byte-sized access through `sp`, real 68000 hardware makes a special exception: `-(sp)` and
+`(sp)+` change `sp` by **2**, keeping it even. This playground currently changes it by **1**.
+Word and long accesses change `sp` by 2 and 4 respectively in both the 68000 and this playground.
 
-|    address |    value    |
-| ---------: | :---------: |
-|  `$FFFFF8` |  FFFFFFFF   |
-|  `$FFFFFC` | 🟢 11111111 |
-| `$1000000` |             |
+## Save several registers with `movem`
 
-`move.l d1, -(sp)` drops it another 4 and writes underneath:
-
-|    address |    value    |
-| ---------: | :---------: |
-|  `$FFFFF8` | 🟢 22222222 |
-|  `$FFFFFC` |  11111111   |
-| `$1000000` |             |
-
-Then the two pops read them back in the other order, so `d2` gets `22222222` and `d3` gets
-`11111111`, and `a7` climbs back to `01000000`. Last in, first out, and the two values are still in
-memory afterwards: popping moves the pointer and erases nothing.
-
-Type `FFFFF8` in the memory panel's address box after running and both longs are still there.
-
-## The size on the push
-
-The stack pointer moves by the size of the instruction, so `move.w d0, -(sp)` takes two bytes and
-`move.b d0, -(sp)` takes one. That last one leaves `sp` on an **odd address**, and the next
-`move.l something, -(sp)` writes a long at an odd address, which ends the run with an address error.
-
-So push longs. When you have a byte to keep, push it as a long with `move.l` and take the low byte
-back out, or push two bytes as a word. A real 68000 goes further and quietly adjusts `a7` by 2 for a
-byte push to keep the stack even; this simulator moves it by 1, so the rule here is simply never to
-push a byte.
-
-## movem saves a list at once
-
-`movem.l d0-d2/a0, -(sp)` pushes four registers in one instruction. The list is written with `-` for
-a range and `/` between items, in any order you like, and `movem.l (sp)+, d0-d2/a0` brings them back.
+`movem` moves a **register list** between registers and memory. A hyphen selects a range, so
+`d0-d2` means `d0`, `d1`, and `d2`; a slash joins parts, so `d0-d1/a0` names three registers.
+`movem.l d0-d1/a0, -(sp)` saves their full long values on the stack. The matching
+`movem.l (sp)+, d0-d1/a0` restores them and brings `sp` back.
 
 ```m68k|playground|memory|no-flags
+    move.l #$1000000, sp
     move.l #$11111111, d0
     move.l #$22222222, d1
-    move.l #$33333333, d2
     move.l #$AAAAAAAA, a0
-    movem.l d0-d2/a0, -(sp)     ; four registers, one instruction
-    move.l #$FF, d0             ; now destroy all four
+    movem.l d0-d1/a0, -(sp)     ; save three longs; sp = $FFFFF4
+    move.l #$FF, d0
     move.l #$FF, d1
-    move.l #$FF, d2
     move.l #$FF, a0
-    movem.l (sp)+, d0-d2/a0     ; and take them back
+    movem.l (sp)+, d0-d1/a0     ; restore them; sp = $1000000
 ```
 
-All four registers end at the values they started with. After the first `movem`, `a7` is at
-`$FFFFF0`, sixteen bytes down, and the stack looks like this:
+The hardware uses a fixed save order; changing the spelling order of the list does not change
+where values go. With predecrement, it saves selected address registers from `a7` down to `a0`,
+then selected data registers from `d7` down to `d0`. Here each long moves `sp` down by 4:
 
-|   address |    value    | register |
-| --------: | :---------: | -------- |
-| `$FFFFF0` | 🟢 11111111 | `d0`     |
-| `$FFFFF4` |  22222222   | `d1`     |
-| `$FFFFF8` |  33333333   | `d2`     |
-| `$FFFFFC` |  AAAAAAAA   | `a0`     |
+| save step | new `sp`  | value stored there | from |
+| --------- | --------- | ------------------ | ---- |
+| first     | `$FFFFFC` | `$AAAAAAAA`        | `a0` |
+| second    | `$FFFFF8` | `$22222222`        | `d1` |
+| third     | `$FFFFF4` | `$11111111`        | `d0` |
 
-The order is the instruction's, not your list's: with `-(sp)` the registers go down from `a7` to
-`a0` and then `d7` to `d0`, so the lowest numbered data register ends up nearest the stack pointer.
-Write `movem.l a0/d2/d1/d0, -(sp)` and you get exactly the same four longs in exactly the same
-places. What matters is that the pop form reverses it, so the two lines are always each other's
-opposite as long as the lists match.
-
-`movem` writes no flags at all, which is why it can sit between a comparison and its branch.
-
-## pea and scratch space
-
-`pea label` pushes an **address** without loading it into a register first, which is `lea` and a push
-in one instruction.
-
-```m68k|playground|memory|no-flags
-    pea target          ; push the address of target
-    move.l (sp), d0     ; read it back without popping
-    move.l (sp)+, a0    ; and now pop it into an address register
-    move.l (a0), d1     ; what is at that address
-
-    org $2000
-target: dc.l $DEADBEEF
-```
-
-`(sp)` with no `+` and no `-` reads the top of the stack and leaves the pointer where it is, which is
-how you look at what you pushed without giving it up: `d0` and `a0` both end holding `00002000`, and
-only one of those two lines moved `a7`.
-
-The other use of the stack is room. `sub.l #16, sp` takes sixteen bytes of scratch space, which you
-then reach as `(sp)`, `4(sp)`, `8(sp)` and `12(sp)`, and `add.l #16, sp` gives it back. Nothing
-allocates it and nothing checks it: the stack is memory, and the stack pointer is the only record of
-which part of it is yours.
-
-Every byte you take has to be given back before the subroutine you are in returns, because the return
-address is sitting under everything you pushed. That is the subject of the next lecture.
+Postincrement restore reads from the lowest address upward: `d0`, then `d1`, then `a0` in this
+example. All three registers regain their original values, and `sp` increases by 12 bytes to
+`$1000000`. Use the same register list and access size on both lines. `movem.w` uses two bytes per
+register; `movem.l` uses four and preserves each complete register value. `movem` leaves the
+condition-code flags unchanged.
 
 ## Your turn
 
-Swap `d0` and `d1`, which start at `$11111111` and `$22222222`. No `exg`, no third register, and
-three instructions: the stack has to hold one of the two values while the other one moves.
+### 1. Swap two registers
+
+`d0` starts at `$11111111`, `d1` at `$22222222`, and `sp` at `$1000000`. Swap the two values in
+three `move.l` instructions, using the stack instead of a third register. Finish with
+`sp` back at `$1000000`. The pushed long will remain in memory at `$FFFFFC`.
 
 ```m68k|playground|exercise
-* your code here
+; your three instructions here
 ```
 
 ```testcase
 {
-    "startingRegisters": { "d0": "0x11111111", "d1": "0x22222222" },
-    "expectedRegisters": { "d0": "0x22222222", "d1": "0x11111111" }
+    "startingRegisters": { "d0": "0x11111111", "d1": "0x22222222", "a7": "0x1000000" },
+    "expectedRegisters": { "d0": "0x22222222", "d1": "0x11111111", "a7": "0x1000000" },
+    "expectedMemory": [
+        { "type": "number-chunk", "address": "0xFFFFFC", "bytes": 4, "expected": [286331153] }
+    ]
 }
 ```
 
@@ -147,31 +111,36 @@ three instructions: the stack has to hold one of the two values while the other 
 <summary>Show solution</summary>
 
 ```m68k|playground|solution
-    move.l d0, -(sp)    ; push the old d0
-    move.l d1, d0       ; d0 = d1
-    move.l (sp)+, d1    ; d1 = the old d0
+    move.l d0, -(sp)
+    move.l d1, d0
+    move.l (sp)+, d1
 ```
 
 </details>
 
-The three `move.l #$FF` lines below are not yours to change; treat them as somebody else's code that
-you have to survive. `d0`, `d1` and `d2` start at 1, 2 and 3 and have to end there. Save them before
-and restore them after, using one instruction each way.
+### 2. Save and restore a register list
+
+`d0`, `d1`, and `d2` start at 1, 2, and 3; `sp` starts at `$1000000`. Add one `movem.l` before
+the three writes and one after them. End with all three original register values and `sp` back at
+`$1000000`. The saved longs should remain in memory at `$FFFFF4` through `$FFFFFF`.
 
 ```m68k|playground|exercise
-* save d0, d1 and d2 here
+; save d0, d1 and d2 here
 
     move.l #$FF, d0
     move.l #$FF, d1
     move.l #$FF, d2
 
-* and bring them back here
+; restore d0, d1 and d2 here
 ```
 
 ```testcase
 {
-    "startingRegisters": { "d0": 1, "d1": 2, "d2": 3 },
-    "expectedRegisters": { "d0": 1, "d1": 2, "d2": 3 }
+    "startingRegisters": { "d0": 1, "d1": 2, "d2": 3, "a7": "0x1000000" },
+    "expectedRegisters": { "d0": 1, "d1": 2, "d2": 3, "a7": "0x1000000" },
+    "expectedMemory": [
+        { "type": "number-chunk", "address": "0xFFFFF4", "bytes": 4, "expected": [1, 2, 3] }
+    ]
 }
 ```
 
@@ -179,13 +148,13 @@ and restore them after, using one instruction each way.
 <summary>Show solution</summary>
 
 ```m68k|playground|solution
-    movem.l d0-d2, -(sp)    ; three registers pushed
+    movem.l d0-d2, -(sp)
 
     move.l #$FF, d0
     move.l #$FF, d1
     move.l #$FF, d2
 
-    movem.l (sp)+, d0-d2    ; and popped back
+    movem.l (sp)+, d0-d2
 ```
 
 </details>

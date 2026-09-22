@@ -1,162 +1,93 @@
-Every instruction has to say what it works on, and there is more than one way to say it. `ld a, 7`
-names a number outright. `ld a, (hl)` names no number at all; it points at a register that holds an
-address, and the value is fetched from there when the instruction runs. Those are two different
-**addressing modes**, and the Z80 has seven of them.
+# Addressing on the Z80
 
-Learning them is not bookkeeping. Which modes exist is what decides whether a piece of code is three
-instructions or ten, and the one mode this machine does not have shapes more of your code than any
-of the seven it does.
+An instruction needs to say where its values come from and, when it writes a value, where it goes. An **addressing mode** is the spelling an instruction uses to tell the CPU that. The spellings you need most often are a number, a register, memory at an address in `hl`, and memory at a fixed address.
 
-## The seven
+For example, these two instructions both put a byte in `a`:
 
-| mode              | written        | where the value comes from                                      |
-| ----------------- | -------------- | --------------------------------------------------------------- |
-| immediate         | `7`, `0x1234`  | the number is part of the instruction itself                    |
-| register          | `a`, `hl`      | it is already in the CPU, and no memory is touched              |
-| register indirect | `(hl)`         | from memory, at whatever address the pair holds when it runs    |
-| extended          | `(0x9000)`     | from memory, at a fixed address written into the instruction    |
-| indexed           | `(ix+2)`       | from memory, at `ix` plus a fixed offset in the instruction     |
-| relative          | `jr loop`      | the jump target is the program counter plus a small signed step |
-| implied           | `and b`, `daa` | the second value is not written down, because it is always `a`  |
+```z80
+    ld a, 7
+    ld a, (hl)
+```
 
-Open the memory panel and step through this one. Every line is labelled with the mode it uses.
+In the first line, `7` is written in the instruction. In the second, the CPU uses the value currently in `hl` as an address, then reads the byte stored at that address. In these load instructions, parentheses mean a memory access.
+
+## A value, a register, or memory
+
+Here are the main forms side by side. You do not need to memorise their names; read the operand and ask where the value is coming from.
+
+| Example | What it means |
+| --- | --- |
+| `ld a, 7` | Put the number 7 in `a`. The number is an **immediate value**. |
+| `ld b, a` | Copy the value already in register `a` to register `b`. |
+| `ld a, (hl)` | Read the byte in memory at the address held in `hl`. |
+| `ld (hl), a` | Write the byte in `a` to memory at the address held in `hl`. |
+| `ld a, (total)` | Read the byte at the fixed address named `total`. |
+| `ld (total), a` | Write `a` to the fixed address named `total`. |
+
+The following program uses each of these ideas. Build it, open the memory panel, and step through it.
 
 ```z80|playground|memory|no-flags
     .org 0x8000
-    ld a, 7             ; immediate:  the 7 is in the instruction
-    ld b, a             ; register:   no memory is touched
-    ld a, (numbers)     ; extended:   the address is in the instruction
-    ld hl, numbers      ; immediate again, 16 bits of it this time
-    ld c, (hl)          ; indirect:   the address is in hl
-    ld ix, numbers
-    ld d, (ix+2)        ; indexed:    ix plus two, read
-    ld (ix+2), a        ; and the same mode, writing
+    ld a, 7             ; the number is part of this instruction
+    ld b, a             ; copy from one register to another
+    ld hl, place        ; hl receives an address
+    ld (hl), a          ; write 7 at that address
+    ld a, 0
+    ld a, (hl)          ; read the byte back through hl
     halt
-numbers: .db 10, 20, 30, 40
+
+place: .db 0
 ```
 
-`a` and `c` both come out at `0A`, one read through the address the assembler knew and one through
-the address in `hl`. `b` is 7 and `d` is `1E`, which is 30. The last instruction wrote 10 over
-`numbers[2]`, so the four bytes at `0x8015` read `0A 14 0A 28` when the program finishes.
+At the end, `a` and `b` both hold 7, and the byte at `place` is 7. `hl` holds the address of `place`; `(hl)` means the byte at that address. The pair itself is not memory and is unchanged by the read or write.
 
-## Immediate, and what fits in one
+## A fixed address and an address in a pair
 
-An immediate is a number written into the instruction, and there are two sizes because the
-destination has two sizes: `ld a, 7` carries one byte, `ld hl, 0x1234` carries two. A label is a 16
-bit immediate, since a label is just the address of whatever comes after it, which is why
-`ld hl, numbers` and `ld hl, 0x8015` assemble to the same three bytes in the program above.
+An address can be written directly in parentheses:
 
-Only `ld` takes a 16 bit immediate. Everything else that takes an immediate takes a byte, so
-`add a, 300` is not an instruction, and the arithmetic on a pair goes through another pair.
+```z80
+    ld a, (0x9000)
+    ld (0x9000), a
+```
 
-## Register indirect, and which pairs can
-
-`(hl)`, `(bc)` and `(de)` all mean "the byte at the address in this pair", and they are not
-interchangeable:
-
-- **`(hl)`** works wherever an 8 bit register works, in both directions. `ld b, (hl)`, `ld (hl), c`,
-  `add a, (hl)`, `inc (hl)`, `bit 3, (hl)`.
-- **`(bc)`** and **`(de)`** work only with `a`, and only as `ld a, (bc)` and `ld (bc), a`.
-
-So a program that walks one array keeps its pointer in `hl`, and one that copies between two keeps
-the source in `hl` and the destination in `de`, doing the write through `a`.
-
-## Extended, and who is allowed
-
-`(0x9000)` is an address fixed at the moment the program is assembled, so an `equ` or a label works
-just as well as a number. The rule to remember is who is allowed to use it:
+These instructions always use address `0x9000`. A label is a name for the address where the assembler placed something, so it is often clearer to use a label instead of writing the number yourself.
 
 ```z80|playground|memory|no-flags
     .org 0x8000
-    ld a, (total)       ; a can read a bare address
-    ld (total), a       ; and write one
-    ld hl, (total)      ; the pairs can too, two bytes at a time
-    ld (0x9000), hl
-    ld sp, (total)      ; sp and the index registers as well
-    halt
-total:  .dw 0x1234
-```
-
-`a` comes out at `34` rather than `12`: `a` is one byte, the word at `total` is two, and the byte it
-gets is the one at the lower address, which little endian makes the low half of the number.
-
-`ld b, (total)` is not an instruction and the build fails with "no variant found for ld". Among the 8
-bit registers only the accumulator can name an address directly, which is one of the reasons your
-values keep passing through `a`.
-
-## Indexed
-
-`(ix+dd)` is `ix` plus a **signed byte written into the instruction**, anywhere from -128 to 127.
-It exists for one job: a small bundle of related bytes, kept together in memory, where you want to
-reach one particular byte of it. Put the address of the bundle in `ix` once, and every field is a
-fixed distance from there.
-
-```z80|playground|memory|no-flags
-X       equ 0
-Y       equ 1
-LIVES   equ 2
-
-    .org 0x8000
-    ld ix, player       ; ix = where the player's three bytes start
-    ld a, (ix+X)        ; a = the player's x
-    add a, (ix+Y)       ; plus the player's y
-    ld (ix+LIVES), 3    ; write 3 into the player's lives
-    ld iy, enemy        ; a second bundle, in the other index register
-    ld b, (iy+X)        ; b = the enemy's x
+    ld a, (total)       ; read the first byte at total
+    ld b, a
+    ld a, 0x56
+    ld (total), a       ; replace that first byte
     halt
 
-player: .db 10, 20, 0
-enemy:  .db 90, 60, 0
+total: .dw 0x1234
 ```
 
-The three `equ` lines at the top are what makes this readable. `(ix+X)` says what it is fetching;
-`(ix+0)` would not. And if the bytes are ever rearranged, only those three lines change.
+`.dw 0x1234` writes two bytes: `34` first, then `12`. This is the little-endian order you have already seen. Therefore the first read puts `34` in `a`, and the final write changes that first byte to `56`. The label `total` names the address of `34`.
 
-The displacement is a **constant**, decided when the program is assembled. You cannot write
-`(ix+e)` to index by a register, and the build fails if you try.
+The difference between `(total)` and `(hl)` is where the address comes from. The assembler puts the address of `total` into the instruction. With `(hl)`, the instruction uses whichever address is in `hl` when the CPU reaches it. That makes `hl` useful when a program needs to work at nearby addresses: `inc hl` changes the address for the next `(hl)` access.
 
-## Relative
+## Other pairs that can point at a byte
 
-`jr` and `djnz` do not carry an address. They carry one signed byte, which the CPU adds to the
-program counter, so they reach from 128 bytes back to 127 bytes forward and no further. The assembler
-works the byte out from the label you wrote and reports an error when the target is out of reach:
-"destination is too far by 73 bytes for relative jump; use jp".
-
-`jp` carries the full 16 bit address instead, and reaches anywhere. That makes `jr` two bytes and `jp`
-three, which is the trade, and the branching lecture goes through when to write which.
-
-## Reading `a[i]` when `i` is in a register
-
-Every mode so far adds either nothing or a fixed number written into the instruction. None of them
-adds a value the program worked out while it was running, and that is exactly what an array index
-is: `i` changes every time round a loop. `(hl+de)` is not an instruction, and neither is `(ix+e)`.
-
-So the addition is written out, and then the result is read through `(hl)`:
+`bc` and `de` can also hold addresses. Their memory forms have a specific job: they transfer a byte to or from `a`.
 
 ```z80|playground|memory|no-flags
     .org 0x8000
-    ld a, 2             ; i = 2
-    ld e, a             ; the low half of the offset
-    ld d, 0             ; and the high half, since a byte index is positive
-    ld hl, numbers      ; hl = the start of the array
-    add hl, de          ; hl = the start plus i
-    ld a, (hl)          ; and read what is there
+    ld bc, source
+    ld de, destination
+    ld a, (bc)          ; read the byte at source
+    ld (de), a          ; write it at destination
     halt
-numbers: .db 10, 20, 30, 40
+
+source:      .db 0x2A
+destination: .db 0
 ```
 
-`a` comes out at `1E`, the third number. Four instructions, and they are the shape every indexed read
-on this machine takes: widen the index into a pair, `add hl, de` to get the address, then read
-through `(hl)`. Worth learning as one move, because you will write it constantly.
+After it runs, `a` and the byte at `destination` are `2A`. Here `(bc)` and `(de)` use the addresses held in those pairs, just as `(hl)` does. For ordinary byte work, `(hl)` is the flexible form you will use most; `(bc)` and `(de)` are useful for this read-through-`a`, write-through-`a` pattern.
 
-Elements bigger than a byte cost more, because the index has to be scaled first. `numbers` as an
-array of 16 bit words would need the index doubled, which is `add hl, hl` on the index before adding
-the base, or `sla e` and `rl d` on the pair.
+## Try it yourself
 
-## Two reads to write
-
-The test starts `ix` at `0x9000`, where four bytes are waiting, 10, 20, 30 and 40. Leave the third of
-them in `a` in a single instruction.
+The runner starts `hl` at `0x9000` and puts the byte `0x3C` at that address. Read that byte into `a`. The parentheses belong around `hl`.
 
 ```z80|playground|exercise|memory
     .org 0x8000
@@ -166,11 +97,11 @@ them in `a` in a single instruction.
 
 ```testcase
 {
-    "startingRegisters": { "ix": "0x9000" },
+    "startingRegisters": { "hl": "0x9000" },
     "startingMemory": [
-        { "type": "number-chunk", "address": "0x9000", "bytes": 1, "expected": [10, 20, 30, 40] }
+        { "type": "number-chunk", "address": "0x9000", "bytes": 1, "expected": ["0x3C"] }
     ],
-    "expectedRegisters": { "a": 30 }
+    "expectedRegisters": { "a": "0x3C" }
 }
 ```
 
@@ -179,28 +110,25 @@ them in `a` in a single instruction.
 
 ```z80|playground|solution|memory
     .org 0x8000
-    ld a, (ix+2)        ; two along from where ix points
+    ld a, (hl)
     halt
 ```
 
 </details>
 
-The second one has the index in a register instead. The test starts `hl` at `0x9000` and `a` at 3,
-with the same four bytes there. Leave `numbers[a]`, which is 40, in `a`.
+This exercise includes a label in the source itself. The byte at `total` starts as `0x19`. Read it into `a` using the label.
 
 ```z80|playground|exercise|memory
     .org 0x8000
     ; your code here
     halt
+
+total: .db 0x19
 ```
 
 ```testcase
 {
-    "startingRegisters": { "hl": "0x9000", "a": 3 },
-    "startingMemory": [
-        { "type": "number-chunk", "address": "0x9000", "bytes": 1, "expected": [10, 20, 30, 40] }
-    ],
-    "expectedRegisters": { "a": 40 }
+    "expectedRegisters": { "a": "0x19" }
 }
 ```
 
@@ -209,11 +137,10 @@ with the same four bytes there. Leave `numbers[a]`, which is 40, in `a`.
 
 ```z80|playground|solution|memory
     .org 0x8000
-    ld e, a             ; widen the index into de
-    ld d, 0
-    add hl, de          ; the start plus the index
-    ld a, (hl)          ; and read it
+    ld a, (total)
     halt
+
+total: .db 0x19
 ```
 
 </details>

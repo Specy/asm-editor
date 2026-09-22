@@ -1,6 +1,6 @@
 {
     "name": "The F register",
-    "description": "The six flags, where they sit in the byte, which instructions write which of them, and the eight conditions that read them. It ends on P/V doing three different jobs and on the signed comparison the Z80 has no condition for.",
+    "description": "Meet the F register through the zero and carry flags. Use cp and or to set them, inspect them in the flags panel, and learn how long a comparison result lasts.",
     "order": 7,
     "topic": "flags"
 }

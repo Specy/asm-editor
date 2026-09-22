@@ -1,171 +1,87 @@
-Some lines in a program are not for the CPU at all. `.org 0x8000` never runs; neither does a line of
-numbers you want sitting in memory before the first instruction. Those lines are **directives**,
-which means they are addressed to the assembler, and they are how you decide what is in memory and
-where.
+# org, db, dw and ds
 
-There is no data section and no code section. The assembler lays bytes down **in the order you
-wrote them**, whether those bytes are instructions or numbers, and the only thing that decides where
-they land is `.org`. Keeping your data out of the path the CPU will walk is your job, not the
-assembler's.
+An assembler turns instructions into bytes in memory. A **directive** tells the assembler where to put bytes or which data bytes to make. The CPU does not execute directives.
 
-## org
+## Place bytes with `.org`
 
-`.org address` says "the next byte goes here". Everything after it is laid out from that address
-upwards until the next `.org`.
+`.org 0x8000` means the next byte goes at address `0x8000`. Each following byte takes the next address. A second `.org` can place data elsewhere. Here the code starts at `0x8000` and the data at `0x9000`.
+
+A **label** names the address of the next byte. In `text: .db "Hi"`, `text` means the address of `H`. `ld de, text` puts that address in `de`. Parentheses mean something different: `ld a, (byte1)` reads the byte *at* the address named `byte1`.
 
 ```z80|playground|memory|no-flags
     .org 0x8000
-    ld a, (byte1)       ; a = the byte at byte1
-    ld hl, (word1)      ; hl = the word at word1
-    ld de, text         ; de = the address of text
+    ld a, (byte1)       ; read one byte
+    ld hl, (word1)      ; read two bytes
+    ld de, text         ; hold the address of text
     halt
 
     .org 0x9000
 byte1:  .db 0x2A
 word1:  .dw 0x1234
-text:   .asciz "Hi!"
+text:   .db "Hi", 0
 list:   .db 1, 2, 3
 ```
 
-Type `9000` into the memory panel's address box and press Run. `a` comes out at `2A`, `hl` at `1234`
-and `de` at `9003`, the address `text` stands for. The bytes at `0x9000` read
-`2A 34 12 48 69 21 00 01 02 03`, which is the four directives in order with nothing between them.
+Run it, then enter `9000` in the memory panel's address box. The bytes there are `2A 34 12 48 69 00 01 02 03`. `a` holds `2A`, `hl` holds `1234`, and `de` holds `9003`, the address of `text`. The zero after `Hi` is a byte we explicitly asked `.db` to write.
 
-The program has two blocks now, one at `0x8000` and one at `0x9000`, and the run still starts at the
-lowest address with code in it. `.org` can move backwards as well as forwards, and a second `.org` at
-a lower address does not change where the program starts.
+## Make bytes with `.db`
 
-Writing the code first and the data at a `.org` of its own is the layout these pages use, because it
-keeps a program readable when the data grows. The other two layouts you will see are data after the
-`halt`, which the earlier lectures used, and data at the top with a `jp` over it, which is what a
-program does when its data has to sit at a known address.
+`.db` writes one byte for each number or character, and one byte for each character in a string:
 
-## db, the byte directive
-
-`.db` writes bytes where the line is. It takes a list, and each item can be a number, a character or
-a string:
-
-```
-values: .db 1, 2, 3          ; three bytes
-mask:   .db 0b10000000       ; one byte, written in binary
-greet:  .db "Hi", 0          ; three bytes: 48 69 00
-letter: .db 'A'              ; one byte, 41
-mixed:  .db "Line", 10, 0    ; a string, a newline and a terminator
+```z80
+values: .db 1, 2, 3       ; three bytes
+letter: .db 'A'           ; one byte: 41 in hexadecimal
+greet:  .db "Hi", 0       ; three bytes: 48 69 00
 ```
 
-`.asciz "Hi"` is `.db "Hi", 0`: it puts the zero terminator on for you, and every string in this
-course ends in one.
+The label `greet` names the address of `48`, the first byte. A label itself adds no byte.
 
-You will see this directive spelled other ways in code written elsewhere, `defb` and `db` among
-them, because Z80 assemblers were written independently of each other for thirty years and each
-picked its own name. This assembler takes most of them. These pages write `.db`.
+## Make two-byte values with `.dw`
 
-## dw, the word directive
+`.dw` writes a 16-bit value in the little-endian order you have seen: low byte first. `.dw 0x1234` writes `34` at the first address and `12` at the next. A two-byte load such as `ld hl, (word1)` joins them back into `0x1234`.
 
-`.dw` writes 16 bit values, low byte first, which is the little endian order from the memory lecture.
-`.dw 0x1234` puts `34 12` in memory, and `ld hl, (word1)` reads them back as `0x1234`.
+You can also write an address: `.dw greet` makes two bytes containing the address named `greet`. For example, if `greet` is at `0x9003`, those bytes are `03 90`.
 
-A label is a 16 bit value, so `.dw label` writes an address, which is how you build a table that
-holds the addresses of other things.
+## Leave room with `.ds`
 
-## ds, the reservation directive
-
-`.ds count` reserves `count` bytes and writes nothing into them, which is a buffer or an uninitialised
-array. `.ds count, value` reserves them and fills every one with `value`.
+`.ds count` advances the next address by `count` bytes without writing values into those bytes. `.ds count, value` both reserves the space and fills it with `value`.
 
 ```z80|playground|memory|no-flags
     .org 0x8000
-    ld hl, buffer
-    ld (hl), 0x11       ; buffer[0] = 0x11
-    inc hl
-    ld (hl), 0x22       ; buffer[1] = 0x22
+    ld hl, buffer       ; hl holds buffer's address
+    ld (hl), 0x11       ; write its first byte
+    inc hl              ; move to the next address
+    ld (hl), 0x22
     halt
 
     .org 0x9000
-buffer: .ds 4           ; four bytes, nothing written into them
-filled: .ds 3, 0xEE     ; three bytes, all 0xEE
-marker: .db 0xFF
+buffer: .ds 4           ; addresses 9000 through 9003
+filled: .ds 3, 0xEE     ; addresses 9004 through 9006
+marker: .db 0xFF        ; address 9007
 ```
 
-Before you run it, `buffer` reads `00 00 00 00` and `filled` reads `EE EE EE`, and `marker` sits
-right after them at `0x9007`. Afterwards the first two bytes of `buffer` hold the values the program
-wrote. `.ds` moved the address along without putting anything in memory, which is why `marker` is
-where it is.
+Before Run, this editor shows `00 00 00 00` at `buffer` because fresh emulator memory starts cleared, not because `.ds 4` wrote zeroes. It shows `EE EE EE` at `filled` because that line *does* write bytes. After Run, the first two bytes of `buffer` are `11 22`. `inc hl` adds one to the address in `hl`; it does not change the byte at the old address.
 
-Reserving room is not the same as writing zeroes into it. `.ds` moves the assembler's idea of where
-it is up to, and what those bytes actually contain when the program starts is whatever was already
-there.
+## Give a number a name with `equ`
 
-## equ, the name for a number
-
-`equ` gives a number a name at assembly time, and the name costs nothing at run time: the assembler
-writes the number into the instruction and there is no memory anywhere holding it.
-
-```z80|playground|no-flags
-ROWS    equ 4
-COLS    equ 5
-CELLS   equ ROWS * COLS      ; arithmetic on names is allowed
-NEWLINE equ 10
-
-    .org 0x8000
-    ld a, CELLS         ; 20, worked out by the assembler
-    ld b, NEWLINE
-    ld hl, CELLS * 2    ; and again, in the instruction
-    halt
-```
-
-`*`, `+` and `-` all
-work on a name that was already defined. `=` and `.equ` are the same directive under other names.
-
-The two things `equ` is for: a number that appears in more than one place, like the size of an array,
-and a number whose meaning would otherwise be invisible, like a field offset or a port number. Both
-of them turn a change in one line into a change everywhere.
+`equ` defines a number for the assembler to substitute. It does not reserve memory. This is useful when a value is repeated or when a name makes its purpose clear.
 
 ```z80|playground|memory|no-flags
-X       equ 0           ; the offsets into a three byte bundle
-Y       equ 1
-LIVES   equ 2
+COUNT equ 3
 
     .org 0x8000
-    ld ix, player
-    ld a, (ix+LIVES)    ; a = the player's lives
-    ld b, (ix+X)        ; b = the player's x
+    ld a, COUNT         ; the assembler uses 3 here
     halt
 
     .org 0x9000
-player: .db 10, 20, 3
+items: .ds COUNT, 0x7F  ; three bytes, each 7F
 ```
 
-`a` comes out at `03` and `b` at `0A`. Adding a fourth field to the bundle is a `SCORE equ 3`, a
-fourth byte on the `.db` line and a `ld c, (ix+SCORE)`, and nothing else in the program has to know
-about it.
+Changing `COUNT` to `4` changes both places. Unlike a label such as `items`, which names an address determined by the layout, `COUNT` names the number you assigned to it.
 
-## Where the program starts
+## Try it yourself
 
-Building a program points the program counter at the **lowest address any code was assembled to**,
-which for everything here is `0x8000`. The `end` directive overrides that: `end label` says start at
-`label` instead, which is how you put a block of data first and still begin at the code.
-
-```z80|playground|no-flags
-    .org 0x8000
-skipped:
-    ld a, 99            ; never runs
-begin:
-    ld b, 7
-    halt
-    end begin           ; start here instead of at the top
-```
-
-`a` comes out at `00` and `b` at `07`. Take the `end begin` line away and `a` comes out at `63`,
-which is 99, because the program then starts at the top like everything else.
-
-Most programs do not need it. `jp start` at the top of the file does the same job in three bytes and
-one obvious line, and that is what the Example programs of this course use.
-
-## Put some data in memory
-
-Lay out three bytes at `0x9000` holding the 16 bit number `0x1234` and then the byte `0x56`, and
-leave that `0x56` in `a`. The data is your `.dw` and `.db`, and the code is one `ld` and the `halt`.
+Put the two-byte value `0x1234` at `0x9000`, followed by the byte `0x56`. Read the byte **after** the two-byte value into `a`. Your code needs one `ld` and `halt`; use `.org`, `.dw`, and `.db` for the data.
 
 ```z80|playground|exercise|memory
     .org 0x8000
@@ -197,8 +113,7 @@ leave that `0x56` in `a`. The data is your `.dw` and `.db`, and the code is one 
 
 </details>
 
-The second has three bytes at `0x9000` holding 10, 20 and 3, which belong together. Give their
-offsets names with `equ`, point `ix` at the first of them and leave the third, the 3, in `a`.
+Now give a three-byte filled area the label `buffer` at `0x9000`. Define `SIZE equ 3`, use it with `.ds` to fill those bytes with `0x2A`, and read the first byte into `a` using the label.
 
 ```z80|playground|exercise|memory
     .org 0x8000
@@ -208,9 +123,9 @@ offsets names with `equ`, point `ix` at the first of them and leave the third, t
 
 ```testcase
 {
-    "expectedRegisters": { "a": 3 },
+    "expectedRegisters": { "a": "0x2A" },
     "expectedMemory": [
-        { "type": "number-chunk", "address": "0x9000", "bytes": 1, "expected": [10, 20, 3] }
+        { "type": "number-chunk", "address": "0x9000", "bytes": 1, "expected": ["0x2A", "0x2A", "0x2A"] }
     ]
 }
 ```
@@ -219,17 +134,14 @@ offsets names with `equ`, point `ix` at the first of them and leave the third, t
 <summary>Show solution</summary>
 
 ```z80|playground|solution|memory
-X       equ 0
-Y       equ 1
-LIVES   equ 2
+SIZE equ 3
 
     .org 0x8000
-    ld ix, player
-    ld a, (ix+LIVES)
+    ld a, (buffer)
     halt
 
     .org 0x9000
-player: .db 10, 20, 3
+buffer: .ds SIZE, 0x2A
 ```
 
 </details>

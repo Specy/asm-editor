@@ -1,6 +1,6 @@
 {
     "name": "The stack, push and pop",
-    "description": "Two instructions, always sixteen bits and always a pair, on a stack that starts at the top of memory and grows down. Drawn step by step, with the flags saved through af and the pairs that push and pop cannot name.",
+    "description": "Use the stack's two-byte items in last-in, first-out order. Trace push and pop byte by byte, save pairs around work, and keep the stack balanced.",
     "order": 4,
     "topic": "the-stack"
 }

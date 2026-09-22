@@ -1,235 +1,149 @@
-Everything the Z80 can compute with fits on one page, and once you have seen the list you have seen
-all of it. Two things you would expect to find are not on it, and the second half of this lecture is
-about writing those two out by hand.
+# 8-bit and 16-bit arithmetic, logic and bits
 
-## Bytes, through the accumulator
+Most Z80 calculations are small changes to bytes: add, subtract, keep a few bits, or test one bit. The carry flag has two useful jobs here. A branch can use it after a comparison, and arithmetic can use it to pass an extra bit from one byte to the next.
 
-`add`, `adc`, `sub`, `sbc`, `and`, `or`, `xor` and `cp` all write `a` and read `a`, and the operand
-you write is the other one. It can be another 8 bit register, an immediate, `(hl)` or `(ix+dd)`.
+## Byte arithmetic in `a`
 
-`inc` and `dec` are the exceptions: they work on any 8 bit register, on `(hl)` and on `(ix+dd)`, and
-they leave the carry flag alone.
+The accumulator, `a`, is the destination for the usual byte arithmetic. The operand can be a byte register, a number written in the instruction, or the byte at `(hl)`.
+
+| Instruction    | Result              |
+| -------------- | ------------------- |
+| `add a, value` | `a = a + value`     |
+| `adc a, value` | `a = a + value + C` |
+| `sub value`    | `a = a - value`     |
+| `sbc a, value` | `a = a - value - C` |
+| `neg`          | `a = 0 - a`         |
+
+`C` means the current carry flag. `adc` and `sbc` use it; the other three arithmetic instructions do not. An answer that does not fit in a byte wraps around, while the flags record facts about it. `neg` changes the sign of the byte pattern in `a`; for example, 7 becomes `F9`, which is -7 when read as a signed byte.
+
+`cp value` has the same operand choices, but it is a comparison rather than an arithmetic result. It reads `a` and `value`, works out `a - value` for the flags, and **preserves `a`**. After `cp value`, `C` is 1 when unsigned `a` is smaller than `value`.
 
 ```z80|playground
     .org 0x8000
-    ld a, 7         ; x = 7
-    add a, 5        ; x = x + 5
-    sub 2           ; x = x - 2
+    ld a, 7
     ld b, 3
-    add a, b        ; x = x + y
-    inc a           ; x++
-    dec b           ; y--, and the carry is untouched
-    neg             ; x = -x
+    add a, 5        ; a = 12
+    sub 2           ; a = 10
+    add a, b        ; a = 13
+    neg             ; a = -13, or F3 in hexadecimal
+    cp b            ; compare with 3; a stays F3
     halt
 ```
 
-`a` comes out at `F2`, which is -14 as a signed byte, and `b` at `02`. Every line but the last two
-went through the accumulator, which is the shape of Z80 code: values are brought into `a`, worked on,
-and put back somewhere.
+`inc` and `dec` are handy for adding or subtracting one. They can name a byte register or `(hl)`. They update most arithmetic flags but leave `C` unchanged, which matters when a carry still has a job to do.
 
-## Pairs, through hl
+## Logic: work on matching bits
 
-Sixteen bit arithmetic is five instructions and no more:
+`and`, `or`, and `xor` also use `a` as their result. Their operand can be a byte register, a number written in the instruction, or the byte at `(hl)`, just as with byte arithmetic. They compare each bit of `a` with the matching bit of their operand; a bit never carries into its neighbour.
 
-| written      | what it does       | flags            |
-| ------------ | ------------------ | ---------------- |
-| `add hl, rr` | `hl = hl + rr`     | `C` and `H` only |
-| `adc hl, rr` | `hl = hl + rr + C` | all of them      |
-| `sbc hl, rr` | `hl = hl - rr - C` | all of them      |
-| `inc rr`     | `rr++`             | none             |
-| `dec rr`     | `rr--`             | none             |
+| First bit | Second bit | AND | OR  | XOR |
+| --------- | ---------- | --- | --- | --- |
+| 0         | 0          | 0   | 0   | 0   |
+| 0         | 1          | 0   | 1   | 1   |
+| 1         | 0          | 0   | 1   | 1   |
+| 1         | 1          | 1   | 1   | 0   |
 
-`rr` is `bc`, `de`, `hl` or `sp`, and `ix` and `iy` have their own `add ix, rr` and `add iy, rr`.
+A **mask** is a byte chosen for its pattern of bits. `and` with a mask keeps the positions where the mask has 1s. `or` forces those positions to 1. `xor` flips those positions. `cpl` flips every one of the eight bits in `a`.
 
-**There is no `sub hl, rr`.** The only 16 bit subtraction is `sbc`, which subtracts the carry as
-well, so it has to be preceded by something that clears the carry. `or a` is the usual one: it leaves
-`a` alone and forces `C` to 0.
+```z80|playground
+    .org 0x8000
+    ld a, 0b10100110
+    and 0b00001111  ; keep the low four bits: a = 00000110
+    ld b, a
+    ld a, 0b10100110
+    or 0b00001000   ; force bit 3 to 1: a = 10101110
+    ld c, a
+    xor 0b00000010  ; flip bit 1: a = 10101100
+    cpl             ; flip all eight bits: a = 01010011
+    halt
+```
 
-`adc` and `sbc` exist so that a number wider than the registers can be added a piece at a time: the
-carry out of the low piece is carried into the high one, exactly the way you add two long numbers on
-paper. The second half of this program is `add hl, de` written out that way, one byte at a time.
+The `0b` prefix writes a number in binary. `b` ends as `06`, `c` as `AE`, and `a` as `53` in the register panel.
+
+`or a` leaves every bit of `a` as it was, sets `Z` according to whether `a` is zero, and clears `C` to 0. That last effect is useful before an `sbc` instruction.
+
+## Test, set, or clear one bit
+
+The Z80 has three single-bit instructions:
+
+| Instruction     | Meaning                                    |
+| --------------- | ------------------------------------------ |
+| `bit n, target` | Test bit `n`; `Z` is 1 when that bit is 0. |
+| `set n, target` | Make bit `n` 1.                            |
+| `res n, target` | Make bit `n` 0.                            |
+
+`n` is a number from 0 through 7 written in the instruction. `target` can be a byte register or `(hl)`. The bit instructions leave `C` unchanged.
+
+```z80|playground
+    .org 0x8000
+    ld a, 0b00001001
+    bit 3, a        ; bit 3 is 1, so Z becomes 0
+    res 3, a        ; a = 00000001
+    set 5, a        ; a = 00100001
+    halt
+```
+
+## Shifts and the carry flag
+
+A shift moves every bit one place. Here, `r` means a byte register such as `a` or `d`, or the byte at `(hl)`.
+
+| Instruction | What it does                                                                |
+| ----------- | --------------------------------------------------------------------------- |
+| `sla r`     | Shift left, put 0 into bit 0, and move the old bit 7 into `C`.              |
+| `srl r`     | Shift right, put 0 into bit 7, and move the old bit 0 into `C`.             |
+| `sra r`     | Shift right, keep the old bit 7, and move the old bit 0 into `C`.           |
+| `rl r`      | Shift left, bring the old `C` into bit 0, and move the old bit 7 into `C`.  |
+| `rr r`      | Shift right, bring the old `C` into bit 7, and move the old bit 0 into `C`. |
+
+For an unsigned byte, `sla` doubles it when the answer fits, and `srl` gives its integer quotient after division by 2. The discarded low bit goes into `C`, so it also tells you whether the number was odd. `sra` keeps a signed value's sign bit, but for a negative odd number it rounds toward negative infinity; do not treat it as ordinary signed division that rounds toward zero.
+
+`rl` and `rr` show the carry flag's second job: it can link two byte operations into one wider shift. Shift the low byte first when moving left, so its outgoing bit reaches the high byte. Shift the high byte first when moving right.
+
+```z80|playground
+    .org 0x8000
+    ld a, 0b10000011
+    srl a           ; a = 01000001, C = 1
+    ld hl, 0x1234
+    sla l           ; low byte first; its old bit 7 goes into C
+    rl h             ; bring that carry into the high byte
+    halt
+```
+
+After the pair shift, `hl` is `2468`: an unsigned 16-bit doubling. When `hl` itself is the pair to double, `add hl, hl` is a shorter way to do the same job.
+
+## Pair arithmetic and wider additions
+
+Pairs hold 16-bit values. For example, `add hl, bc`, `add hl, de`, and `add hl, hl` add a pair to `hl`. `inc` and `dec` also work on pairs. For a 16-bit subtraction, use `sbc hl, bc` or `sbc hl, de`. It subtracts the carry flag as well as the pair, so clear that flag deliberately first:
 
 ```z80|playground
     .org 0x8000
     ld hl, 1000
     ld de, 300
-    or a            ; C = 0, because sbc would subtract it too
-    sbc hl, de      ; hl = hl - de
+    or a            ; a is unchanged; C is now 0
+    sbc hl, de      ; hl = 1000 - 300 = 700, or 02BC
+    halt
+```
 
+`adc hl, bc` and `adc hl, de` add the carry flag to a pair. `C` can be tested by `jr c` after a comparison, or used as an input by `adc` and `sbc` to join pieces of a larger number. To add two values that are wider than one pair, add the low bytes first, then use `adc` for each higher byte:
+
+```z80|playground
+    .org 0x8000
     ld hl, 0x00FF
     ld de, 0x0001
     ld a, l
-    add a, e        ; the low bytes: 0xFF + 0x01 = 0x00 with a carry
+    add a, e        ; low bytes: FF + 01 = 00, with C = 1
     ld l, a
     ld a, h
-    adc a, d        ; the high bytes, plus that carry
+    adc a, d        ; high bytes plus that carry: 00 + 00 + 1
     ld h, a
     halt
 ```
 
-`hl` reaches `02BC`, which is 700, after the `sbc`, and comes out at `0100` at the end. Take the
-`or a` out and the subtraction can come back one too small, depending on what the instruction before
-it left in the carry, which is a bug that only shows up half the time.
+This leaves `hl` at `0100`. The `adc` must immediately follow work that produced the carry; another arithmetic or logic instruction could replace it.
 
-Adding a byte at a time is the only way when the number is 24 or 32 bits wide: three or four pieces,
-one `add` and then `adc` for the rest.
+## Practice: bits and pair subtraction
 
-## Multiplying and dividing by hand
-
-Multiplication and division are the two pieces of school arithmetic the Z80 does not do for you.
-There is no `mul` and no `div`; you write them out, and what you write is the long multiplication
-and long division you were taught at school, done in base 2 instead of base 10. Base 2 makes them
-much easier than they sound, because every digit is either 0 or 1: you are never multiplying by 7,
-only deciding whether to add or not.
-
-Multiplying is shift and add. Look at each bit of the multiplier from the bottom up: if it is 1, add
-the multiplicand to the total, and double the multiplicand every time round.
-
-```z80|playground
-    .org 0x8000
-    ld b, 6         ; x
-    ld c, 7         ; y
-    ld hl, 0        ; the product, which needs 16 bits
-    ld d, 0
-    ld e, c         ; de = y, widened to 16 bits
-    ld a, b         ; a = x, whose bits we look at
-    ld b, 8         ; eight of them
-multiply:
-    srl a           ; the lowest bit of x falls into C
-    jr nc, skip     ; if it was 0, add nothing
-    add hl, de      ; if it was 1, add y
-skip:
-    sla e           ; y = y * 2, sixteen bits of it
-    rl d
-    djnz multiply
-
-    ld a, 25        ; and multiplying by a constant, which is cheaper
-    ld l, a
-    ld h, 0         ; hl = a
-    add hl, hl      ; hl = a * 2
-    ld d, h
-    ld e, l         ; de = a * 2, kept
-    add hl, hl      ; hl = a * 4
-    add hl, hl      ; hl = a * 8
-    add hl, de      ; hl = a * 8 + a * 2
-    halt
-```
-
-`hl` reaches `002A`, which is 42, at the end of the loop. Eight times round whatever the numbers are,
-and the answer is 16 bits wide because two bytes multiplied need two bytes.
-
-The eight instructions after it multiply by a **constant**, which is much cheaper, because you know
-the bits in advance and `add hl, hl` doubles a pair in one instruction. Ten is eight plus two, so
-`hl` comes out at `00FA`, which is 250, and the same trick works for any constant: write it as a sum
-of powers of two.
-
-Dividing is subtract and count, and for small numbers the simple version is short enough to write
-inline:
-
-```z80|playground
-    .org 0x8000
-    ld a, 45        ; the dividend
-    ld c, 7         ; the divisor
-    ld b, 0         ; the quotient
-divide:
-    cp c            ; while(a >= c)
-    jr c, done
-    sub c           ; a = a - c
-    inc b           ; quotient++
-    jr divide
-done:
-    halt
-```
-
-`b` comes out at `06` and `a` at `03`: 45 is 7 times 6 with 3 left over, so the quotient is in `b` and
-the **remainder is what is left in `a`**. This loop goes round once per unit of the quotient, so it is
-fine for dividing by 7 and slow for dividing by 2; dividing by a power of two is a shift.
-
-## Logic, masks and single bits
-
-`and`, `or` and `xor` work one bit position at a time, with no carrying between
-them, and `cpl` is `~`. All four work on `a`.
-
-A **mask** is a number written for the pattern of its bits, and the three operators are the three
-things you do with one: `and` **keeps** the bits the mask has set, `or` **sets** them, `xor` **flips**
-them.
-
-```z80|playground
-    .org 0x8000
-    ld a, 0x12
-    and 0x0F        ; keep the low nibble: 0x02
-    ld b, a
-    ld a, 0x12
-    and 0xF0        ; keep the high nibble
-    srl a
-    srl a
-    srl a
-    srl a           ; and slide it down four places: 0x01
-    ld c, a
-
-    xor a           ; a = 0
-    set 3, a        ; a = 0b00001000
-    ld d, a
-    set 0, a        ; a = 0b00001001
-    res 3, a        ; a = 0b00000001
-    ld e, a
-    bit 0, a        ; bit 0 is 1, so Z goes to 0
-    halt
-```
-
-`b` comes out at `02` and `c` at `01`, the two halves of `0x12` pulled out one at a time. `xor a` in
-the middle is the idiom for **`a = 0`**: it is one byte where `ld a, 0` is two, and it clears the
-carry into the bargain.
-
-The four instructions after it are the ones that work on a single bit:
-
-- **`bit n, r`** tests bit `n` and sets `Z` from it, backwards: `Z` is 1 when the bit is **0**.
-- **`set n, r`** forces the bit to 1.
-- **`res n, r`** forces it to 0.
-
-All three take `n` from 0 to 7, any 8 bit register, `(hl)` or `(ix+dd)`, and none of them touches the
-carry. The bit number is part of the instruction itself, not a value in a register, so `bit 3, a`
-and `bit 5, a` are two different instructions and neither of them costs a mask or a shift.
-
-## Shifts
-
-| written | direction | what comes in at the far end                        |
-| ------- | --------- | --------------------------------------------------- |
-| `sla r` | left      | a 0, and the top bit goes into `C`                  |
-| `srl r` | right     | a 0, and the bottom bit into `C`                    |
-| `sra r` | right     | a copy of the top bit, so the sign survives         |
-| `rl r`  | left      | the old `C`, and the top bit becomes the new `C`    |
-| `rr r`  | right     | the old `C`, and the bottom bit becomes the new `C` |
-| `rlc r` | left      | the bit that fell off the top                       |
-| `rrc r` | right     | the bit that fell off the bottom                    |
-
-Shifting left by one multiplies by 2, shifting right by one divides by 2, and `sra` is the signed
-divide because it drags the sign bit along.
-
-There is no shift on a pair, so shifting 16 bits is two instructions joined by the carry: `sla l`
-puts the top bit of `l` into `C`, and `rl h` brings it in at the bottom of `h`.
-
-```z80|playground
-    .org 0x8000
-    ld hl, 0x1234
-    sla l
-    rl h            ; hl = hl * 2
-    ld de, 0x8000
-    srl d
-    rr e            ; de = de / 2, going the other way round
-    halt
-```
-
-`hl` comes out at `2468` and `de` at `4000`. Going left the low half is shifted first, going right
-the high half is, because the carry has to be produced before the instruction that consumes it.
-
-`add hl, hl` doubles a pair in one instruction and is what you write when it is `hl` you are
-doubling.
-
-## Two sums to write
-
-The test starts `a` at 25. Leave `a` times 10 in `hl`, which is 250, or `00FA`. No loop is needed,
-`add hl, hl` and one saved copy will do it.
+The runner starts `a` at `A6` (`10100110` in binary). Keep only its low four bits, then make bit 3 1. Leave the result, `0E`, in `a`.
 
 ```z80|playground|exercise
     .org 0x8000
@@ -239,8 +153,8 @@ The test starts `a` at 25. Leave `a` times 10 in `hl`, which is 250, or `00FA`. 
 
 ```testcase
 {
-    "startingRegisters": { "a": 25 },
-    "expectedRegisters": { "hl": "0x00FA" }
+    "startingRegisters": { "a": "0xA6" },
+    "expectedRegisters": { "a": "0x0E" }
 }
 ```
 
@@ -249,32 +163,27 @@ The test starts `a` at 25. Leave `a` times 10 in `hl`, which is 250, or `00FA`. 
 
 ```z80|playground|solution
     .org 0x8000
-    ld l, a
-    ld h, 0         ; hl = a
-    add hl, hl      ; a * 2
-    ld d, h
-    ld e, l         ; de = a * 2, kept for later
-    add hl, hl      ; a * 4
-    add hl, hl      ; a * 8
-    add hl, de      ; a * 8 + a * 2 = a * 10
+    and 0x0F
+    set 3, a
     halt
 ```
 
 </details>
 
-The second one starts `a` at 45. Divide it by 7, leaving the quotient in `b` and the remainder in `a`,
-which are 6 and 3. Subtract and count.
+For the second exercise, the runner starts `hl` at 1000 and `de` at 300. The two starter lines put 0 in `a` and then use `cp 1` to make `C` equal 1 without changing `a`. Leave `hl` at 700. Clear the carry before the subtraction while preserving the 0 already in `a`.
 
 ```z80|playground|exercise
     .org 0x8000
+    ld a, 0
+    cp 1            ; C = 1; a is still 0
     ; your code here
     halt
 ```
 
 ```testcase
 {
-    "startingRegisters": { "a": 45 },
-    "expectedRegisters": { "a": 3, "bc": "0x0600" }
+    "startingRegisters": { "hl": 1000, "de": 300 },
+    "expectedRegisters": { "a": 0, "hl": "0x02BC" }
 }
 ```
 
@@ -283,14 +192,10 @@ which are 6 and 3. Subtract and count.
 
 ```z80|playground|solution
     .org 0x8000
-    ld b, 0         ; quotient = 0
-divide:
-    cp 7            ; while(a >= 7)
-    jr c, done
-    sub 7           ; a = a - 7
-    inc b           ; quotient++
-    jr divide
-done:
+    ld a, 0
+    cp 1            ; C = 1; a is still 0
+    or a
+    sbc hl, de
     halt
 ```
 

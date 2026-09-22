@@ -1,83 +1,70 @@
-The stack is a region of memory that you put values onto and take them back off, with one register
-keeping track of where the top currently is. On the Z80 that register is `sp`, it starts at
-`0xFFFF`, and there are exactly two instructions that use it.
+The **stack** is a part of memory used for temporary two-byte values. Its top is tracked by the 16-bit register `sp`, the **stack pointer**. In this editor's playground, a program starts with `sp = 0xFFFF`. That is the initial playground state, not a value every Z80 program can assume.
 
-## push and pop
+The stack grows toward smaller addresses. A stack item in this lesson is always one 16-bit pair, so it occupies two bytes.
 
-- **`push rr`** subtracts 2 from `sp` and writes the pair there, high byte at the higher address.
-- **`pop rr`** reads two bytes from `sp` and adds 2 to it.
+## Put a pair on the stack, then take it back
 
-Both of them move **sixteen bits at a time**, and both name a **pair**: `af`, `bc`, `de`, `hl`, `ix`
-or `iy`. There is no `push a` and no `push sp`, and the build fails on either.
+`push` and `pop` are the instructions that automatically move `sp`:
 
-Build this one, type `fff8` into the memory panel's address box and press **Step** through it.
+| Instruction | What it does                                                     |
+| ----------- | ---------------------------------------------------------------- |
+| `push rr`   | Subtracts 2 from `sp`, then writes pair `rr` at the new address. |
+| `pop rr`    | Reads a pair from the address in `sp`, then adds 2 to `sp`.      |
+
+Here `rr` can be `af`, `bc`, `de`, `hl`, `ix`, or `iy`. There is no `push a`: the stack instructions work with whole pairs.
+
+Build this program, open the memory panel at `fff8`, and use **Step**.
 
 ```z80|playground|memory|no-flags
     .org 0x8000
-    ld hl, 0x1111
-    ld bc, 0x2222
-    ld de, 0x3333
+    ld hl, 0x1234
+    ld bc, 0x5678
+    ld de, 0x9ABC
     push hl
     push bc
     push de
-    pop hl          ; whatever went on last comes off first
+    pop hl
     halt
 ```
 
-`sp` starts at `FFFF` and the stack is empty (🟢 is where `sp` points, `????` is memory nobody has
-written):
+At first, `sp` is `0xFFFF`. The stack is empty; the marker shows the value in `sp`.
 
-| address  | value |
-| -------- | :---: |
-| `0xFFF9` | ????  |
-| `0xFFFB` | ????  |
-| `0xFFFD` | ????  |
-| `0xFFFF` |  🟢   |
+| Address  | Byte    |
+| -------- | ------- |
+| `0xFFF9` | unknown |
+| `0xFFFA` | unknown |
+| `0xFFFB` | unknown |
+| `0xFFFC` | unknown |
+| `0xFFFD` | unknown |
+| `0xFFFE` | unknown |
+| `0xFFFF` | 🟢 `sp` |
 
-`push hl` takes `sp` down to `FFFD` and writes `1111` there:
+`push hl` changes `sp` to `0xFFFD`. It then stores `0x1234` beginning at that address. Memory is little endian, so the low byte `34` is at `0xFFFD` and the high byte `12` is at `0xFFFE`.
 
-| address  |   value   |
-| -------- | :-------: |
-| `0xFFF9` |   ????    |
-| `0xFFFB` |   ????    |
-| `0xFFFD` | 🟢 `1111` |
-| `0xFFFF` |           |
+| Address  | Byte    |
+| -------- | ------- |
+| `0xFFFD` | 🟢 `34` |
+| `0xFFFE` | `12`    |
+| `0xFFFF` | unused  |
 
-`push bc` and `push de` do the same twice more, so after the third one `sp` is at `FFF9`:
+After `push bc` and `push de`, `sp` is `0xFFF9`. Each pair below is shown as its two separate bytes.
 
-| address  |   value   |
-| -------- | :-------: |
-| `0xFFF9` | 🟢 `3333` |
-| `0xFFFB` |  `2222`   |
-| `0xFFFD` |  `1111`   |
-| `0xFFFF` |           |
+| Address  | Byte    | Pair beginning at this address |
+| -------- | ------- | ------------------------------ |
+| `0xFFF9` | 🟢 `BC` | `0x9ABC`                       |
+| `0xFFFA` | `9A`    |                                |
+| `0xFFFB` | `78`    | `0x5678`                       |
+| `0xFFFC` | `56`    |                                |
+| `0xFFFD` | `34`    | `0x1234`                       |
+| `0xFFFE` | `12`    |                                |
 
-`pop hl` reads the two bytes at `sp` into `hl` and puts `sp` back up to `FFFB`, so `hl` comes out at
-`3333`, the value pushed **last**:
+`pop hl` reads the pair beginning at `0xFFF9`, so `hl` becomes `0x9ABC`. Then `sp` becomes `0xFFFB`.
 
-| address  |   value   |
-| -------- | :-------: |
-| `0xFFF9` |  `3333`   |
-| `0xFFFB` | 🟢 `2222` |
-| `0xFFFD` |  `1111`   |
-| `0xFFFF` |           |
+The bytes `BC` and `9A` remain in memory, but they are no longer part of the stack. A later `push` can overwrite them. The pair pushed last is the first pair popped: this order is called **LIFO**, for “last in, first out.”
 
-The `3333` is still in memory. Nothing erases it, and the only thing that changed is that `sp` no
-longer claims it, so the next `push` will write over it. Last in, first out, which means **you pop in
-the reverse order of the pushes**, and a program that pushes `bc` and then `de` gets them back with
-`pop de` and then `pop bc`.
+## LIFO lets pairs cross or copy
 
-Look at the bytes rather than the words and you can see the little endian order: `0xFFFD` holds `11`
-and `0xFFFE` holds `11` as well, and for `0x1234` it would be `34` at the lower address and `12` at
-the higher one. `sp` always points at the low byte.
-
-The top byte of memory, `0xFFFF`, is never written by the stack: the first `push` moves `sp` down
-before it writes, so the highest byte the stack ever touches is `0xFFFE`.
-
-## Two registers swapped, for free
-
-Because `push` and `pop` name any pair, they are also how a value moves from one pair to another
-without going through the 8 bit halves:
+To get a pair back unchanged, pop it in the reverse order from the pushes. Sometimes you deliberately choose another destination. This swaps `bc` and `de`:
 
 ```z80|playground|no-flags
     .org 0x8000
@@ -85,98 +72,70 @@ without going through the 8 bit halves:
     ld de, 0x2222
     push bc
     push de
-    pop bc          ; bc gets what de pushed
-    pop de          ; and de gets what bc pushed
+    pop bc          ; bc receives 0x2222
+    pop de          ; de receives 0x1111
     halt
 ```
 
-`bc` comes out at `2222` and `de` at `1111`, and `sp` is back at `FFFF` because every push was
-matched by a pop. Popping the two in the same order as the pushes is what swapped them; popping them
-in reverse would have put each one back where it came from.
+The first `pop` receives the value from the most recent `push`. There are two pushes and two pops, so `sp` finishes at `0xFFFF`.
 
-`push hl` and `pop de` is a two instruction copy of `hl` into `de`, which is the same length as
-`ld d, h` and `ld e, l` and is what you write when the halves are awkward to name.
+The same rule can copy a pair into another pair:
 
-## Saving the flags
+```z80|playground|no-flags
+    .org 0x8000
+    ld hl, 0xBEEF
+    push hl
+    pop de          ; de becomes 0xBEEF; hl is unchanged
+    halt
+```
 
-`af` is the pair whose low half is the flags register, and pushing it is the only way to keep a
-comparison across work that would destroy it.
+## Preserve `a` and the flags together
+
+`af` is a pair: `a` is its high byte and the flags register is its low byte. Saving `af` keeps both the accumulator and the result of a comparison while other work changes them.
 
 ```z80|playground
     .org 0x8000
     ld a, 5
-    cp 5            ; Z goes to 1
-    push af         ; the accumulator and the flags, both kept
+    cp 5            ; Z becomes 1
+    push af         ; save a and the flags together
     ld a, 200
-    add a, 100      ; which destroys both of them
-    pop af          ; and back they come
+    add a, 100      ; changes a and the flags
+    pop af          ; restore the saved a and flags
     halt
 ```
 
-`a` comes out at `05` and `Z` at 1, exactly as the `cp` left them. Step through it with the flags
-panel open and watch `Z` go to 1, then to 0 at the `add`, then back to 1 at the `pop`.
+After the `pop`, `a` is `05` and `Z` is 1 again. With the flags panel open, step through the instructions and watch the saved comparison result return.
 
-`pop af` writes the flags register directly, so a program can also build a flags byte itself and
-`push bc` / `pop af` it in, which is what a program does when it wants a particular carry.
+## Keep the stack balanced in a nested loop
 
-## Saving a register round a loop
-
-The loops lecture pushed `bc` around a nested `djnz` for exactly this reason. The general shape is:
-push whatever you are about to destroy, do the work, pop it back.
+The useful pattern is simple: push a pair before work that needs to overwrite it, then pop that pair after the work. The pops must be in reverse order. This nested loop needs `b` for both counters and uses `hl` for inner work, while `hl` also keeps the outer count.
 
 ```z80|playground|no-flags
     .org 0x8000
-    ld hl, 0        ; the value that has to survive the inner loop
+    ld hl, 0
     ld b, 3
 outer:
-    push hl         ; both of them saved
-    push bc
-    ld b, 4         ; the inner loop takes b over
+    push hl         ; save hl, the outer count
+    push bc         ; save bc, including the outer loop counter in b
+    ld hl, 0x9000   ; inner work may now use hl
+    ld b, 4
 inner:
+    inc hl
     djnz inner
-    pop bc          ; last in, first out
-    pop hl
+    pop bc          ; restore the outer loop counter
+    pop hl          ; restore the outer count
     inc hl
     djnz outer
     halt
 ```
 
-`hl` comes out at `0003` and `sp` at `FFFF`. The two pops are in the reverse order of the two pushes,
-and getting that backwards is the bug you will write most often on this machine: the program keeps
-running, the values are swapped, and nothing complains.
+`hl` finishes at `0x0003`, and `sp` is back at `0xFFFF`. If the two `pop` instructions were reversed, `bc` would receive the saved `hl` value and `hl` would receive the saved `bc` value. The outer `djnz` would then use the wrong counter.
 
-Every push has to have its pop on **every path** out of the code, an early `jr` included. A push that
-is not popped leaves `sp` two bytes lower than it started, which is harmless once and fatal in a loop,
-since the stack walks down through memory until it reaches your data.
-
-## Moving the stack
-
-`sp` is a register like any other pair, and it can be written: `ld sp, 0x9000` or `ld sp, hl` puts
-the stack somewhere else. There is no reason to do it in a program on this page, since `0xFFFF` is as
-far from your code as it gets, and it is how a real machine gave the stack a known place before
-calling anything.
-
-`ex (sp), hl` swaps `hl` with the two bytes on top of the stack without moving `sp`, which is how you
-reach the top of the stack without disturbing what is under it.
-
-```z80|playground|memory|no-flags
-    .org 0x8000
-    ld sp, 0x9000   ; the stack now grows down from 0x9000
-    ld hl, 0xABCD
-    push hl         ; so this lands at 0x8FFE
-    ld hl, 0x1234
-    ex (sp), hl     ; hl and the top of the stack trade places
-    pop de
-    halt
-```
-
-Type `8ff8` into the memory panel. `hl` comes out at `ABCD`, the value that was on the stack, and
-`de` at `1234`, the value that went onto it. `sp` is back at `9000`.
+Keep one rule in mind: every path through a piece of code must leave the stack at the same depth it entered. For example, a jump that skips a matching `pop` leaves `sp` two bytes lower. Repeating that path in a loop keeps moving the stack into lower memory and overwrites whatever is there.
 
 ## Your turn on the stack
 
-The test starts `bc` at `0x1111` and `de` at `0x2222`. Swap them, using only the stack: four
-instructions and no `ld`.
+The test starts `bc` at `0x1111` and `de` at `0x2222`. Swap them using only the stack: four instructions and no `ld`. Leave the stack balanced.
 
 ```z80|playground|exercise
     .org 0x8000
@@ -187,7 +146,7 @@ instructions and no `ld`.
 ```testcase
 {
     "startingRegisters": { "bc": "0x1111", "de": "0x2222" },
-    "expectedRegisters": { "bc": "0x2222", "de": "0x1111" }
+    "expectedRegisters": { "bc": "0x2222", "de": "0x1111", "sp": "0xFFFF" }
 }
 ```
 
@@ -198,15 +157,14 @@ instructions and no `ld`.
     .org 0x8000
     push bc
     push de
-    pop bc          ; popped in the same order as the pushes, so they cross
+    pop bc
     pop de
     halt
 ```
 
 </details>
 
-The second one starts `hl` at `0xBEEF`. Copy it into `bc` with two instructions and neither of them an
-`ld`.
+The test starts `bc` at `0x0000` and `hl` at `0xBEEF`. Preserve that value while using `hl` as a three-step counter. Leave 3 in `a`, leave `hl` unchanged, and leave the stack balanced. `b` is available for `djnz`.
 
 ```z80|playground|exercise
     .org 0x8000
@@ -216,8 +174,8 @@ The second one starts `hl` at `0xBEEF`. Copy it into `bc` with two instructions 
 
 ```testcase
 {
-    "startingRegisters": { "hl": "0xBEEF" },
-    "expectedRegisters": { "bc": "0xBEEF", "hl": "0xBEEF" }
+    "startingRegisters": { "bc": "0x0000", "hl": "0xBEEF" },
+    "expectedRegisters": { "a": 3, "bc": "0x0000", "hl": "0xBEEF", "sp": "0xFFFF" }
 }
 ```
 
@@ -226,8 +184,14 @@ The second one starts `hl` at `0xBEEF`. Copy it into `bc` with two instructions 
 
 ```z80|playground|solution
     .org 0x8000
-    push hl         ; sixteen bits onto the stack
-    pop bc          ; and off again into another pair
+    push hl
+    ld hl, 0
+    ld b, 3
+count:
+    inc hl
+    djnz count
+    ld a, l
+    pop hl
     halt
 ```
 

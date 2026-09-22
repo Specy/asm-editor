@@ -1,237 +1,31 @@
-[Assembly basics](/learn/courses/assembly-basics) went through registers, memory, branching and the
-stack once, quickly, to give you the ideas. From here on there is one machine, and everything is
-about that machine: the Zilog Z80.
+# Getting started with the Z80
 
-## The machine
+The Z80 is a **CPU**: the part of a computer that follows instructions and does the work those instructions describe. Zilog introduced it in 1976, and it went on to power machines such as the ZX Spectrum, Amstrad CPC, and MSX computers. These machines looked and behaved differently, but programmers working on them all had to understand the same processor.
 
-The **Z80** is an 8 bit CPU that Zilog launched in July 1976, designed by Federico Faggin and
-Masatoshi Shima. It was built to run Intel 8080 code unchanged and then to go further than the 8080,
-which is where its alternate register set, its two index registers and its bit and block instructions
-come from. It is the CPU of the ZX Spectrum, the Amstrad CPC, the MSX machines, the TRS-80 and the
-Sega Master System.
+That is our starting point. Learning one small, well-defined CPU makes it possible to see what happens beneath a program: where a value is kept, how an instruction changes it, and how the next instruction gets its turn. You can begin here with ordinary computer experience; no assembly knowledge is assumed.
 
-Eight bits is the number that shapes everything else here:
+## What assembly is
 
-- **Seven 8 bit registers**, `a`, `b`, `c`, `d`, `e`, `h` and `l`. Each of them holds one byte, so a
-  number over 255 does not fit in any of them.
-- **`a` is the accumulator.** Every 8 bit addition, subtraction and logic instruction writes its
-  answer into `a`, and most of them read one of their two operands from it.
-- **Three 16 bit pairs**, `bc`, `de` and `hl`, each of which is two of those registers glued
-  together: `b` is the high byte of `bc` and `c` is the low one. That is how a 16 bit address fits.
-- **Two index registers**, `ix` and `iy`, 16 bits each, which address memory with a displacement.
-- **A stack pointer `sp` and a program counter `pc`**, 16 bits each.
-- **An alternate set**, written `af'`, `bc'`, `de'` and `hl'`. They are a second copy of the same
-  registers, and two instructions swap the copies in and out.
-- **Memory**, one array of bytes running from `0x0000` to `0xFFFF`. That is 64 KB, and 16 bits is
-  exactly enough to address all of it, which is why the pairs exist.
-- **Six flags** in a register called `f`, which is where the results of comparisons go.
+A CPU follows **machine instructions**, stored as numbers in a computer's memory. **Assembly language** gives those instructions readable names. You write **source code** such as `ld a, 10`; an **assembler** translates it into the numbered instructions the CPU can run.
 
-The registers panel next to every program on this page lists `a` on its own and everything else as a
-16 bit pair, because that is how the Z80 itself treats them. `f` is not in the list, the flags panel
-above it is `f` drawn one bit at a time.
+The Z80 is often called an **8-bit** CPU. A *bit* is a 0 or a 1, and eight bits make a *byte*. Many of the Z80's everyday operations work with one byte at a time. It also has **registers**, tiny places inside the CPU that hold values while it works. Memory holds more values and the program itself. Each place in memory has a number called an **address**, so the CPU can find it. An address identifies a place; the value at that place is its contents.
 
-The Z80 is **little endian**: the low byte of a 16 bit number sits at the lower address, so `0x1234`
-written to memory reads `34 12`.
+Assembly brings these small actions into view. A line might put a number in a register, add two values, or choose where the CPU goes next. Over this course, you will build from those actions to programs that work with memory, make decisions, repeat work, and communicate with the world around them.
 
-## The simulator
+## Meet the editor
 
-There is no real Z80 in your browser, there is an emulator. It runs the instructions a Z80 runs and
-gives you the same 64 KB of memory to put them in, and it does not pretend to be any particular Z80
-machine. It could not: the ZX Spectrum, the Amstrad and a CP/M box shared the CPU and nothing else.
-Each had its own built in routines at its own addresses, so "the way you print a character on a Z80"
-was a different answer on every machine that ever shipped.
+This browser editor **emulates** the Z80: software carries out its instructions and lets you inspect the result. It gives us a place to explore the CPU without needing a vintage computer. A Z80 was used in many different machines, so a program for one machine's screen or keyboard would not automatically work on another's. Here we can begin with what they shared: the CPU.
 
-What all of them did share is the CPU's own mechanism for talking to hardware, **I/O ports**, and
-that is what this editor uses. A program that wants to print a character or read a key hands a byte
-to a numbered port with `in` and `out`. Which port does what is the subject of the "Talking to the
-outside world" module. Until then, programs show what they did in the registers and the memory.
-
-## How a program is written down
-
-A line is a label, an instruction, a directive, a comment, or nothing.
-
-- A **comment** starts at a `;` and runs to the end of the line, wherever the `;` is.
-- A **label** goes at the start of the line: `loop:`. It is a name for the address of whatever comes
-  next, code or data. The colon is optional here, and these pages write it.
-- A **directive** is a line addressed to the assembler instead of the CPU. `.org` says where in
-  memory what follows goes, `.db` and `.dw` write bytes and words there, `.ds` reserves room, `equ`
-  gives a number a name. They get a lecture of their own, "org, db, dw and ds", a few pages from
-  here; until then, what you need is that `.org 0x8000` means "put what follows at address
-  `0x8000`".
-- Everything else is **indented**, one instruction per line. Four spaces is what these pages use.
-- **Case does not matter.** `LD A, B` and `ld a, b` are the same instruction. We write lower case.
-
-A number written straight into an instruction, like the `10` in `ld a, 10`, is called an
-**immediate**: the value is part of the instruction rather than sitting in a register or in memory.
-Nothing marks it. Numbers can be written in several bases, and any of these spellings is the same
-immediate:
-
-| written      | means                         |
-| ------------ | ----------------------------- |
-| `31`         | decimal 31                    |
-| `0x1F`       | hex, the same 31              |
-| `$1F`        | hex again                     |
-| `1Fh`        | hex again, the Zilog spelling |
-| `0b00011111` | binary, still 31              |
-| `0o37`       | octal, still 31               |
-| `'A'`        | the character code, 65        |
-
-`ld a, 0x1F` puts the number `0x1F` in `a`. Put the same thing in parentheses and `ld a, (0x1F)`
-reads the byte _at address_ `0x1F` instead. Two characters make two completely different
-instructions.
-
-Nothing on the instruction says how many bytes are being moved, because the registers you name
-already say it. `ld a, b` moves one byte, since `a` and `b` are one byte each, and `ld hl, bc` moves
-two, since those pairs are two.
-
-## Your first program
-
-This one puts two numbers in registers and adds them. Press **Build**, then **Run**, and read the
-answer in `a` in the registers panel.
+The small program below adds 10 and 32. Try it as an experiment, not a syntax test. **Build** translates the source and reports any errors. **Run** executes it until `halt`. **Step** executes one instruction at a time, so you can watch a value change in the registers panel beside the program.
 
 ```z80|playground|no-flags
     .org 0x8000
-    ld a, 10        ; x = 10
-    ld b, 32        ; y = 32
-    add a, b        ; x = x + y
+    ld a, 10
+    ld b, 32
+    add a, b
     halt
 ```
 
-`ld a, 10` writes the number 10 into `a`, and the line under it does the same with 32 and `b`. `ld`
-is the Z80's move instruction, and it is the only one: there is no `mov`, no `move` and no `store`,
-every copy of a value from anywhere to anywhere is an `ld`, and the destination is the operand on the
-left.
+The first line tells the assembler where to place this program in memory. The next two lines put numbers into registers named `a` and `b`. `add a, b` adds them and leaves 42 in `a`. The final line, `halt`, stops this editor's run. Registers are displayed in **hexadecimal**, a compact way to write numbers: the result appears as `2A`, which means 42 in the familiar decimal system. You can change 10 or 32, build again, and see what happens.
 
-`add a, b` adds the two and leaves the answer in `a`, which comes out at `2A`, hexadecimal for the
-number 42. `b` is untouched, and so is `bc` in the panel, which reads `2000` because `b` is its high
-byte and `c` is still zero.
-
-`.org 0x8000` puts the program at address `0x8000`, halfway up the 64 KB. Leave it out and the
-program is assembled at `0x0000`, which on a real Z80 is where the reset and interrupt entry points
-live, so every program in this course starts with that line.
-
-## Bytes and the pair they make
-
-`h` and `l` are two registers and `hl` is both of them at once, and every instruction that names one
-of the three is talking about the same sixteen bits. Build this one and press **Step** four times,
-watching `hl` in the registers panel.
-
-```z80|playground|no-flags
-    .org 0x8000
-    ld hl, 0x1234   ; both halves at once
-    ld a, h         ; a = the high byte
-    ld d, l         ; d = the low byte
-    ld l, 0xFF      ; only the low half of hl changes
-    halt
-```
-
-| after this line | `a` |   `de` |   `hl` |
-| --------------- | --: | -----: | -----: |
-| `ld hl, 0x1234` |  00 | `0000` | `1234` |
-| `ld a, h`       |  12 | `0000` | `1234` |
-| `ld d, l`       |  12 | `3400` | `1234` |
-| `ld l, 0xFF`    |  12 | `3400` | `12FF` |
-
-`de` reads `3400` because `d` is the high byte of `de` and `e` was never written. The last line
-changed `l` and left `h` alone, so `hl` went from `1234` to `12FF`.
-
-## The flags panel
-
-The flags sit just above the registers, and there are six of them: `S`, `Z`, `H`, `P/V`, `N` and `C`.
-`cp` compares `a` against something by subtracting it, throwing the answer away and keeping only what
-the subtraction did to the flags. `Z` goes to 1 when the two were equal.
-
-```z80|playground
-    .org 0x8000
-    ld a, 5
-    cp 5            ; 5 - 5, which is zero
-    ld b, 7
-    ld a, b         ; a load, which changes no flag at all
-    cp 5            ; 7 - 5, which is not
-    halt
-```
-
-Step through it and watch `Z`: it goes to 1 after the first `cp`, survives the two `ld` instructions
-in the middle, and goes back to 0 after the second `cp`. **A load never touches the flags.** That is
-worth knowing early: you can compare two things, then spend as many `ld` instructions as you like
-fetching whatever you need, and the answer to the comparison is still sitting there waiting. The F
-register gets a lecture of its own later on.
-
-## Four ways a program ends
-
-The Z80 has no instruction that means "this program is over", because a real one was expected to keep
-running until the power went off. This editor stops a program in four situations, and they are worth
-knowing now because every program you write will use one of them.
-
-- **`halt`.** On real hardware it parks the CPU until an interrupt arrives. Nothing here raises one,
-  so the editor reports the program as terminated. This is what these pages use.
-- **Running off the end of the code.** The program counter reaches an address that no line of your
-  source produced, and the run stops there. The two programs above would end the same way with their
-  `halt` deleted.
-- **A top level `ret`.** `ret` pops a return address off the stack and jumps to it, and at the top
-  level there is nothing on the stack, so it pops whatever `0xFFFF` and beyond happen to hold. The
-  editor treats that as the end of the program too.
-- **`ei` and then `halt`.** On a real machine that is the idle loop of a program waiting for a
-  device. Here it is the same as a plain `halt`.
-
-The **Build** button assembles what you wrote and points the emulator at the first instruction,
-**Run** runs it to one of those four endings, and **Step** runs one instruction at a time.
-
-## Two to write yourself
-
-The test starts `hl` at `0x1234`. Leave its high byte in `a` and its low byte in `c`, which makes
-`bc` read `0034` in the panel, since `b` is untouched and stays zero.
-
-```z80|playground|exercise
-    .org 0x8000
-    ; your code here
-    halt
-```
-
-```testcase
-{
-    "startingRegisters": { "hl": "0x1234" },
-    "expectedRegisters": { "a": "0x12", "bc": "0x0034" }
-}
-```
-
-<details>
-<summary>Show solution</summary>
-
-```z80|playground|solution
-    .org 0x8000
-    ld a, h         ; the high byte of hl
-    ld c, l         ; the low byte
-    halt
-```
-
-</details>
-
-The second one starts `a` at 5 and `bc` at `0x0307`, so `b` is 3 and `c` is 7. Leave the sum of the
-three in `a`, which is 15, or `0F` in hexadecimal. Everything the Z80 adds goes through `a`, so this
-is two instructions.
-
-```z80|playground|exercise
-    .org 0x8000
-    ; your code here
-    halt
-```
-
-```testcase
-{
-    "startingRegisters": { "a": 5, "bc": "0x0307" },
-    "expectedRegisters": { "a": "0x0F" }
-}
-```
-
-<details>
-<summary>Show solution</summary>
-
-```z80|playground|solution
-    .org 0x8000
-    add a, b        ; a = a + b
-    add a, c        ; a = a + c
-    halt
-```
-
-</details>
+That small change is the heart of the course: write an instruction, run it, and look closely at what the CPU did. The names, number formats, and memory layout will become familiar as you use them.
