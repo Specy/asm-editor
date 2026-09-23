@@ -1,89 +1,189 @@
-`sum_of_squares(a, b)` takes its two arguments on the stack, calls a second subroutine twice to
-square them, and returns their sum in `a0`. It needs a local variable to hold the first square while
-the second call runs, and that local lives on the stack too, in a frame the subroutine builds for
-itself.
+`sum_of_squares(a, b)` returns `a * a + b * b` in `a0`. This example deliberately passes its two
+inputs on the stack. That is a teaching convention here, not the usual rule: normally the first
+eight RISC-V arguments go in `a0` through `a7`. Stack arguments become necessary when there are
+more inputs than those registers can hold.
 
-Passing everything in registers works right up until a subroutine has to keep something while it
-calls somebody else. There is one `ra`, and a call is free to destroy any temporary register it
-likes, so anything that has to survive a call needs somewhere else to live.
+The stack also has a separate job. `sum_of_squares` calls `square` twice, so it must keep its own
+return address and its first answer somewhere safe while the second call runs. Its frame holds
+those values. `fp` is another name for `s0`; since `s0` is callee-saved, a subroutine using `fp`
+must save and restore the caller's `s0` value.
 
 ```riscv|playground|memory|allow-open
 .text
 .globl main
 
-# square(x): x in a0, the answer in a0, and s1 is given back as it was found
+# square(x): x arrives in a0 and its square leaves in a0.
+# This frame exists only because this version deliberately uses s1.
 square:
     addi sp, sp, -16
-    sw s1, 0(sp)            # the caller's s1, saved
+    sw s1, 0(sp)            # preserve the caller's callee-saved s1
     mv s1, a0
-    mul a0, s1, s1          # x * x
-    lw s1, 0(sp)            # and given back
+    mul a0, s1, s1
+    lw s1, 0(sp)
     addi sp, sp, 16
     ret
 
-# sum_of_squares(a, b): a at 0(fp), b at 4(fp), the answer in a0
+# Teaching convention: a is at 0(fp), b is at 4(fp); result leaves in a0.
 sum_of_squares:
-    addi sp, sp, -16        # a frame: one local, the old fp and ra
-    sw ra, 12(sp)
+    addi sp, sp, -16        # local at 0(sp), saved fp and ra above it
     sw fp, 8(sp)
-    addi fp, sp, 16         # fp points at the arguments, and stays still
-    lw a0, 0(fp)            # a
+    sw ra, 12(sp)           # nested jal instructions will overwrite ra
+    addi fp, sp, 16         # fp (s0) now points to the caller's arguments
+
+    lw a0, 0(fp)
     jal square
-    sw a0, 0(sp)            # local = a * a, kept across the next call
-    lw a0, 4(fp)            # b
+    sw a0, 0(sp)            # retain a * a across the next call
+    lw a0, 4(fp)
     jal square
     lw t0, 0(sp)
-    add a0, a0, t0          # a * a + b * b
-    lw ra, 12(sp)
+    add a0, a0, t0
+
     lw fp, 8(sp)
+    lw ra, 12(sp)
     addi sp, sp, 16
     ret
 
 main:
-    addi sp, sp, -16
+    li s0, 123              # sentinels prove that both saved registers come back unchanged
+    li s1, 456
+    addi sp, sp, -12        # 0x7fffeffc -> 0x7fffeff0, aligned for jal
     li t0, 3
-    sw t0, 0(sp)            # the first argument, a
+    sw t0, 0(sp)            # a
     li t0, 4
-    sw t0, 4(sp)            # the second, b
+    sw t0, 4(sp)            # b
     jal sum_of_squares
-    addi sp, sp, 16         # the caller takes the two arguments back off
-    mv s2, a0               # the answer
+    addi sp, sp, 12         # give back the two arguments and four padding bytes
+    mv s2, a0               # 25; s0 is 123 and s1 is 456 again
 ```
 
-A subroutine's **prologue** is the first few lines: one `addi` that moves `sp` down to claim some
-room, then a `sw` for everything the subroutine has promised to hand back untouched. The
-**epilogue** at the bottom is those same lines run backwards. There is no single instruction that
-builds a frame, and no single instruction that takes one down: you write out what your subroutine
-actually needs, which means a leaf subroutine that needs nothing writes neither.
+The Playground begins with `sp = 0x7fffeffc`, which is 12 modulo 16. `main` subtracts 12, so its
+`jal` sees `sp = 0x7fffeff0`, a multiple of 16. The two 4-byte arguments occupy the first eight
+bytes; the remaining four bytes are padding. `sum_of_squares` and `square` each subtract 16, so
+their frames keep that alignment. Every subtraction has the matching addition before its `ret` or
+before `main` finishes.
 
-While the second `jal square` is running, the stack looks like this, with 🟢 on the stack pointer:
+Here is one exact snapshot: the second call of `square`, after `square` has made its frame and
+computed `4 * 4`, but before it returns. `sp` is `0x7fffefd0`; `fp` is still `0x7fffeff0` in
+`sum_of_squares`.
 
-|      address |    value    | reached as | what it is                               |
-| -----------: | :---------: | ---------- | ---------------------------------------- |
-| `0x7FFFEFDC` | 🟢 00000009 | `0(sp)`    | the local, `a * a`                       |
-| `0x7FFFEFE0` |  00000000   | `4(sp)`    | room the frame asked for and did not use |
-| `0x7FFFEFE4` |  00000000   | `8(sp)`    | the caller's `fp`                        |
-| `0x7FFFEFE8` |  00400070   | `12(sp)`   | the return address into `main`           |
-| `0x7FFFEFEC` |  00000003   | `0(fp)`    | `a`                                      |
-| `0x7FFFEFF0` |  00000004   | `4(fp)`    | `b`                                      |
+| Address | Reached as | Value | Meaning |
+| --- | --- | --- | --- |
+| `0x7fffefd0` | `0(sp)` in `square` | `456` | `square`'s saved caller `s1` |
+| `0x7fffefd4`–`0x7fffefdf` | `4(sp)`–`12(sp)` in `square` | unused | remaining bytes of `square`'s 16-byte frame |
+| `0x7fffefe0` | `0(sp)` in `sum_of_squares` | `9` | local first square, `3 * 3` |
+| `0x7fffefe4` | `4(sp)` in `sum_of_squares` | unused | spare frame word |
+| `0x7fffefe8` | `8(sp)` in `sum_of_squares` | `123` | caller's `fp`/`s0` |
+| `0x7fffefec` | `12(sp)` in `sum_of_squares` | return address into `main` | incoming `ra`, saved before either nested call |
+| `0x7fffeff0` | `0(fp)` | `3` | stack argument `a` |
+| `0x7fffeff4` | `4(fp)` | `4` | stack argument `b` |
+| `0x7fffeff8`–`0x7fffeffb` | caller's `8(sp)`–`11(sp)` | unused | alignment padding in `main`'s 12-byte area |
 
-Type `7FFFEFD0` in the memory panel after running and those words are still lying there, since
-popping moves a pointer and erases nothing.
+`jal` does not push anything: it places the return address in `ra`. The second `jal square`
+changes `ra`, which is why `sum_of_squares` saved the address needed to return to `main`. `square`
+does not call another subroutine, so its incoming `ra` remains in the register and `ret` can use it
+directly. Its frame is only to demonstrate using and preserving `s1`; a shorter `square` could use
+`mul a0, a0, a0` and need no frame at all.
 
-Both frames are sixteen bytes for two or three words, because the ABI asks the stack pointer to move
-in multiples of 16 and `sp` starts at `0x7FFFEFFC`, so every frame keeps the alignment the one before
-it had. The `4(sp)` in the middle of the table is room nothing was put in.
+The prologue claims the words a subroutine needs and saves its callee-saved registers or `ra` when a
+nested call would overwrite it. The epilogue restores them in reverse: restore saved values, put
+`sp` back, then `ret`. Popping a frame only moves `sp`; old words can remain visible in the memory
+panel, but they are no longer yours to use.
 
-The arguments are the two words the caller pushed and nothing sits between them and the frame,
-because `jal` pushed no return address: `sum_of_squares` saved its own. `addi fp, sp, 16` is what
-makes them reachable by a name that does not move, and `fp` is `s0`, a saved register, so the
-caller's copy goes on the stack first.
+## Your turn: finish the frame
 
-`square` keeps to a smaller agreement of its own. It borrows `s1`, which is a saved register, so it
-puts the caller's value back before returning; `t0` in `main` it destroys freely, and that is why
-`main` reads the answer out of `a0` and not out of anything it was holding.
+Complete `sum_of_squares`. Keep the same stack-argument teaching convention: its inputs are 5 and
+12 at `0(fp)` and `4(fp)`. It must return 169 in `a0`, preserve `s0` and `s1`, and leave `sp` at the
+Playground's initial `0x7fffeffc`. `square` may change `a0` and temporary registers, but must give
+`s1` back unchanged. Use a 16-byte frame in `sum_of_squares` for its local, saved `fp`, and saved
+`ra`.
 
-Whoever moves `sp` down has to move it back up by the same amount. Change the `addi sp, sp, 16` at
-the bottom of `main` to `addi sp, sp, 8` and the answer is still 25, so nothing looks wrong: `sp`
-just finishes at `7FFFEFF4` instead of `7FFFEFFC`. Those eight bytes are gone for good. Put that
-mistake inside a loop and the stack runs out.
+```riscv|playground|exercise
+.text
+.globl main
+
+square:
+    addi sp, sp, -16
+    sw s1, 0(sp)
+    mv s1, a0
+    mul a0, s1, s1
+    lw s1, 0(sp)
+    addi sp, sp, 16
+    ret
+
+sum_of_squares:
+    # Build the 16-byte frame, save fp and ra, and set fp.
+    # Call square for each stack argument. Put the first answer in the local.
+    # Restore fp, ra, and sp before ret.
+    ret
+
+main:
+    li s0, 314
+    li s1, 2718
+    addi sp, sp, -12
+    li t0, 5
+    sw t0, 0(sp)
+    li t0, 12
+    sw t0, 4(sp)
+    jal sum_of_squares
+    addi sp, sp, 12
+    mv s2, a0
+```
+
+```testcase
+{
+    "expectedRegisters": {
+        "s0": 314,
+        "s1": 2718,
+        "s2": 169,
+        "sp": "0x7fffeffc"
+    }
+}
+```
+
+<details>
+<summary>Show solution</summary>
+
+```riscv|playground|solution
+.text
+.globl main
+
+square:
+    addi sp, sp, -16
+    sw s1, 0(sp)
+    mv s1, a0
+    mul a0, s1, s1
+    lw s1, 0(sp)
+    addi sp, sp, 16
+    ret
+
+sum_of_squares:
+    addi sp, sp, -16
+    sw fp, 8(sp)
+    sw ra, 12(sp)
+    addi fp, sp, 16
+    lw a0, 0(fp)
+    jal square
+    sw a0, 0(sp)
+    lw a0, 4(fp)
+    jal square
+    lw t0, 0(sp)
+    add a0, a0, t0
+    lw fp, 8(sp)
+    lw ra, 12(sp)
+    addi sp, sp, 16
+    ret
+
+main:
+    li s0, 314
+    li s1, 2718
+    addi sp, sp, -12
+    li t0, 5
+    sw t0, 0(sp)
+    li t0, 12
+    sw t0, 4(sp)
+    jal sum_of_squares
+    addi sp, sp, 12
+    mv s2, a0
+```
+
+</details>

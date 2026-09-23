@@ -1,6 +1,6 @@
 {
     "name": "A bouncing ball",
-    "description": "A ball that bounces off all four edges, erased and redrawn a frame at a time, paced by the wait service instead of by how fast your machine is.",
+    "description": "Animate a ball with rectangle drawing, signed boundary checks, a clock-driven time bar, and a paced frame loop.",
     "order": 21,
     "topic": "bouncing-ball"
 }

@@ -1,6 +1,6 @@
 {
     "name": "Binary search",
-    "description": "Twelve sorted words searched by halving the range four times, with the index left in t4 and -1 when the value is not there.",
+    "description": "Find a value in a sorted array by maintaining an inclusive range and discarding half after each midpoint probe.",
     "order": 15,
     "topic": "binary-search"
 }

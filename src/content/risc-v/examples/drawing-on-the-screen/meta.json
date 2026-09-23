@@ -1,6 +1,6 @@
 {
     "name": "Drawing shapes on the screen",
-    "description": "A house, a sun and a sky drawn onto the bitmap display with sw and nothing else, by two subroutines that work out which word each pixel is.",
+    "description": "Build horizontal runs, rectangles and a disc from pixel stores, then combine the drawing subroutines into a house scene.",
     "order": 20,
     "topic": "drawing-on-the-screen",
     "template": 6

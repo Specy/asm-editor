@@ -1,6 +1,6 @@
 {
-    "name": "Print a number in any base without help",
-    "description": "Repeated division for the digits, a buffer filled backwards from its end, and the same number printed in base 16, 10 and 2.",
+    "name": "Print a nonnegative number in bases 2–36",
+    "description": "Use quotient and remainder to build a number string backward, then print values in hexadecimal, decimal, and binary.",
     "order": 19,
     "topic": "number-to-string"
 }

@@ -1,12 +1,15 @@
-A number picks which of four pieces of code runs. `t2` holds 2, the program reads the third address
-out of a table in memory and jumps to it, and the multiplication is what happens. Changing `t2`
-changes the answer without changing a comparison anywhere.
+An operation number can choose a piece of code through a table of addresses. This program uses
+`t2 = 2`, so it selects entry 2 — the third entry, because indexes start at 0 — and leaves
+`6 * 3`, or 18, in `t6`.
 
-The bigger of two numbers chose between two paths with a `blt`. A chain of those works for three or
-four cases and gets slower with every one you add, since a value at the bottom of the chain is
-compared against everything above it first. A table is looked up once whatever the value is.
+The table is useful when there are several choices. The index still has to be checked before it is
+used as an address. Here the accepted operation numbers are 0 through 3. `bgeu` treats its inputs
+as unsigned, so a negative 32-bit value also counts as out of range: its unsigned form is a very
+large number.
 
 ```riscv|playground|allow-open
+.eqv CASE_COUNT, 4
+
 .data
 table: .word add_op, sub_op, mul_op, div_op
 
@@ -14,13 +17,20 @@ table: .word add_op, sub_op, mul_op, div_op
 main:
     li t0, 6                # a = 6
     li t1, 3                # b = 3
-    li t2, 2                # op = 2, the third entry of the table
+    li t2, 2                # op = 2: entry 2, the third table entry
 
-    la t3, table            # the base of the table
-    slli t4, t2, 2          # op * 4, the size of an address
-    add t4, t3, t4
-    lw t5, 0(t4)            # the address stored there
-    jr t5                   # and go to it
+    li t3, CASE_COUNT
+    bgeu t2, t3, out_of_range
+
+    la t3, table            # base address of the table
+    slli t4, t2, 2          # byte offset = op * 4
+    add t4, t3, t4          # address of table[op]
+    lw t5, 0(t4)            # address stored in table[op]
+    jr t5                   # jump to that address
+
+out_of_range:
+    li t6, -1               # no operation was selected
+    j done
 
 add_op:
     add t6, t0, t1          # a + b
@@ -33,23 +43,123 @@ mul_op:
     j done
 div_op:
     div t6, t0, t1          # a / b
+done:                       # every path finishes here; t6 holds the result
+```
+
+`.word add_op, sub_op, mul_op, div_op` puts four words in memory. Each word is the text-section
+address of the label named after it. The exact numbers depend on where this copy of the program is
+assembled. Open the memory panel at `10010000` to inspect the four addresses your assembly
+produced; the important fact is their order: entry 0 leads to `add_op`, entry 1 to `sub_op`, and
+so on.
+
+After the check, the lookup has three steps. `slli` turns a word index into a byte offset by
+multiplying it by 4. Adding that offset to the table base finds the selected word. `lw` reads the
+address in that word, and `jr t5` continues execution at the address held in `t5`. With `t2 = 2`,
+the offset is 8, so `lw` reads the address of `mul_op`.
+
+The check comes first because an invalid index would point outside the four-word table. Try `t2`
+values 0, 1, and 3 to select the other operations. Then try 4 and -1: both take the
+`out_of_range` path and leave -1 in `t6`, without loading an address from outside the table.
+
+Each operation ends with `j done`. The handlers sit one after another in memory, so without that
+jump, finishing `add_op` would continue into `sub_op` and overwrite the answer. Step through the
+program once and watch `t6`: for the starting values it finishes at 18.
+
+## Try it: add a fifth operation
+
+Complete this version to add a remainder operation selected by `t2 = 4`. Change `CASE_COUNT` to 5,
+add `rem_op` as the fifth address in `table`, and write its handler. It must leave the remainder of
+`t0 / t1` in `t6`, then jump to `done`. Keep the range check.
+
+```riscv|playground|exercise
+.eqv CASE_COUNT, 4          # change to 5
+
+.data
+table: .word add_op, sub_op, mul_op, div_op  # add rem_op
+
+.text
+main:
+    li t0, 6
+    li t1, 3
+    li t2, 4                # select the new operation
+
+    li t3, CASE_COUNT
+    bgeu t2, t3, out_of_range
+    la t3, table
+    slli t4, t2, 2
+    add t4, t3, t4
+    lw t5, 0(t4)
+    jr t5
+
+out_of_range:
+    li t6, -1
+    j done
+add_op:
+    add t6, t0, t1
+    j done
+sub_op:
+    sub t6, t0, t1
+    j done
+mul_op:
+    mul t6, t0, t1
+    j done
+div_op:
+    div t6, t0, t1
+    j done
+# Put rem_op here, before done.
 done:
 ```
 
-`.word add_op, sub_op, mul_op, div_op` writes four words, and each one is the address the assembler
-gave that label. Put the memory panel on `10010000` and they read `00400024`, `0040002C`, `00400034`
-and `0040003C`, which are four addresses inside your own code. A label is nothing but an address, and
-this is what that sentence is for.
+```testcase
+{
+    "expectedRegisters": { "t6": 0 }
+}
+```
 
-The three instructions before the `jr` are the lookup: scale the index by the size of an entry with
-a shift, add it to the base of the table, read the word that is there. What comes back is an
-address, and `jr t5` jumps to it. That is the same instruction a subroutine returns with: `ret` is
-`jalr zero, ra, 0` and `jr t5` is `jalr zero, t5, 0`, a jump whose destination is in a register and
-whose return address is thrown away. Write `jalr t5` instead and these stop being four branches and
-become four calls, because that form keeps the return address in `ra`.
+After it passes, change `t2` to 5 and then -1. Both values should still leave -1 in `t6`.
 
-Each arm ends with `j done` for the same reason the two halves of a choice do: the arms are laid out
-one after another in memory, and nothing stops a program running out of one and into the next.
+<details>
+<summary>Show one solution</summary>
 
-Put 0, 1 or 3 into `t2` instead and a different arm runs. Nothing else in the program changes, and
-there is no comparison anywhere in it that could be changed: the value itself did the choosing.
+```riscv|playground|solution
+.eqv CASE_COUNT, 5
+
+.data
+table: .word add_op, sub_op, mul_op, div_op, rem_op
+
+.text
+main:
+    li t0, 6
+    li t1, 3
+    li t2, 4
+
+    li t3, CASE_COUNT
+    bgeu t2, t3, out_of_range
+    la t3, table
+    slli t4, t2, 2
+    add t4, t3, t4
+    lw t5, 0(t4)
+    jr t5
+
+out_of_range:
+    li t6, -1
+    j done
+add_op:
+    add t6, t0, t1
+    j done
+sub_op:
+    sub t6, t0, t1
+    j done
+mul_op:
+    mul t6, t0, t1
+    j done
+div_op:
+    div t6, t0, t1
+    j done
+rem_op:
+    rem t6, t0, t1
+    j done
+done:
+```
+
+</details>

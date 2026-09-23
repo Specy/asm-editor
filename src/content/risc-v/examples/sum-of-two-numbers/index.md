@@ -1,10 +1,8 @@
-The program asks for two numbers, waits while you type them, and prints their sum. Press Run and the
-console stops at the first prompt: type a number into the box under it, press Enter, and the run
-carries on inside that one `ecall`.
+This program asks for two numbers and prints their sum. Press Run. At the first prompt, type a
+decimal integer in the box below the console and press Enter. The program pauses at that `ecall`
+until then.
 
-A service that reads stops the whole program in the middle of the `ecall` until somebody types
-something. What comes back is already a number in a register: the text you typed has been turned
-into one for you.
+Service 5 turns the text you entered into an integer and places that result in `a0`.
 
 ```riscv|playground|console|allow-open
 .data
@@ -20,14 +18,14 @@ main:
     ecall
     li a7, 5            # service 5: read an integer into a0
     ecall
-    mv t0, a0           # a = what was typed
+    mv t0, a0           # keep the first number
 
     li a7, 4
     la a0, second
     ecall
     li a7, 5
     ecall
-    add t0, t0, a0      # a = a + b
+    add t0, t0, a0      # add the second number
 
     li a7, 4
     la a0, answer
@@ -44,22 +42,99 @@ main:
 { "input": ["17", "25"] }
 ```
 
-`a0` is the first argument of every service and the answer of the ones that answer, so the number
-service 5 read stays there until the next `la a0` or `li a0` overwrites it. `mv t0, a0` straight
-after the read is what keeps it, and the second read is added into `t0` before the printing that
-follows can touch `a0`.
+Service 5 places its result in `a0`. Save the first result before a setup instruction such as
+`la a0, second` replaces it. Here `mv t0, a0` keeps that number in `t0`. After the second read,
+`add t0, t0, a0` puts the sum in `t0`; then `la a0, answer` can load the address for the label, and
+`mv a0, t0` can load the sum for service 1.
 
-Nothing here asks for a prompt and a number in one go, so each read is two requests: print the
-prompt with service 4, then read with service 5.
+For each number, the program prints its prompt with service 4 and then calls service 5 to read the
+number.
 
-The `\n` at the front of `second` and `answer` is a newline inside the string, which is how you get a
-line break without a service of its own. `.asciz "\nSecond number: "` is one string of seventeen
-bytes and the first of them is the line break.
+The `\n` at the front of `second` and `answer` is a newline inside the string, so it starts the next
+output on a new line. The text and newline in `.asciz "\nSecond number: "` occupy 16 bytes.
+`.asciz` adds the zero terminator, so the declaration occupies 17 bytes in total.
 
-Type 17 and 25 and the console reads `The sum is 42`. Service 5 reads a **decimal** number and
-nothing else, and a line that is not one ends the run.
+Type 17 and 25 and the console reads `The sum is 42`. Service 5 reads a **decimal** number. In this
+Playground, input that is not a valid decimal integer ends the run.
 
 Turn that `add` into a `sub` and the console reads `The sum is -8`, because service 1 prints its
-argument as a **signed** number. Now change the `li a7, 1` under it to `li a7, 36`, which prints the
-same argument as an unsigned one, and the console reads `4294967288`. The bits in `t0` were
-`FFFFFFF8` throughout. Two services read them two different ways, and neither of them is wrong.
+argument as a **signed** number. After that change, `t0` contains the bits `FFFFFFF8`. Change the
+`li a7, 1` under it to `li a7, 36`; service 36 prints those same bits as the unsigned value
+`4294967288`.
+
+## Your turn: read two numbers and print their difference
+
+Complete the program so it prints the first number minus the second. After the first read, save the
+value before loading the address of the second prompt into `a0`.
+
+```riscv|playground|console|exercise
+.data
+first:      .asciz "First number: "
+second:     .asciz "\nSecond number: "
+difference: .asciz "\nDifference: "
+
+.text
+.globl main
+main:
+    # print first, read the first number, and save it in t0
+    # print second and read the second number
+    # subtract the second number from t0 and print the result
+    # end the run
+```
+
+```testcase
+{
+    "input": ["23", "8"],
+    "expectedOutput": "First number: \nSecond number: \nDifference: 15"
+}
+```
+
+```testcase
+{
+    "input": ["-4", "6"],
+    "expectedOutput": "First number: \nSecond number: \nDifference: -10"
+}
+```
+
+<details>
+<summary>Show solution</summary>
+
+```riscv|playground|console|solution
+.data
+first:      .asciz "First number: "
+second:     .asciz "\nSecond number: "
+difference: .asciz "\nDifference: "
+
+.text
+.globl main
+main:
+    li a7, 4
+    la a0, first
+    ecall
+    li a7, 5
+    ecall
+    mv t0, a0
+
+    li a7, 4
+    la a0, second
+    ecall
+    li a7, 5
+    ecall
+    sub t0, t0, a0
+
+    li a7, 4
+    la a0, difference
+    ecall
+    li a7, 1
+    mv a0, t0
+    ecall
+
+    li a7, 10
+    ecall
+```
+
+```testcase
+{ "input": ["23", "8"] }
+```
+
+</details>

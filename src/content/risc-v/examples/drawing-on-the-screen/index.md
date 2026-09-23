@@ -1,14 +1,103 @@
-A picture in a handful of shapes: two rectangles for the sky and the ground, a disc for the sun, a
-rectangle for the house, six rows of decreasing width for its roof and one more rectangle for the
-door. Press Run and watch the Screen panel next to the program.
+The bitmap display is a 32 by 32 grid of words. Writing a colour word to one of those words changes
+one cell on the Screen panel. A rectangle is a set of horizontal runs, and a disc is a set of cells
+selected by a distance test.
 
-Printing went through a service. The screen asks nothing of anybody: it is a block of memory, one
-word per pixel, and a shape on it is a loop of `sw` instructions. Nothing in the machine knows what
-a rectangle is, so `fill_rect` and `fill_disc` here are subroutines somebody had to write.
+This page uses two drawing subroutines. Here is their contract before we call either one:
+
+| Routine | Inputs | Shared values | Scratch registers |
+| --- | --- | --- | --- |
+| `fill_rect_32` | `a0=x`, `a1=y`, `a2=width`, `a3=height` | reads `s0` and `s1` | `t0`–`t3` |
+| `fill_disc_32` | `a0=centre x`, `a1=centre y`, `a2=radius` | reads `s0` and `s1` | `t0`–`t6` |
+
+In both rows, `s0` is the display address and `s1` is the current colour. The routines read those
+saved registers but do not change them. Their names end in `_32` because their address calculation
+assumes a display 32 cells wide. Use a radius of zero or greater for `fill_disc_32` (radius zero
+draws nothing because the distance test is strict). Neither helper clips coordinates at the display
+edges, so callers normally keep every shape within columns 0–31
+and rows 0–31. An out-of-range coordinate may wrap into another row or address memory outside the
+display.
+
+`jal fill_rect_32` calls the rectangle routine, and `ret` returns to the instruction after the call.
+The `a` registers carry inputs into a call. The `t` registers are temporary: a caller must expect a
+subroutine to overwrite them. Saved registers such as `s0` and `s1` survive a call.
+
+## From one cell to one horizontal run
+
+For a cell at column `x` and row `y`, the word address is
+
+```text
+display base + (y * 32 + x) * 4
+```
+
+Multiplying by 32 selects a row, adding `x` selects a cell, and multiplying by 4 changes the word
+index into a byte offset. Once we have the first address, each following cell is four bytes farther
+on:
+
+```riscv
+# Inputs: a0=x, a1=y, a2=width
+# Shared: s0=display base, s1=colour
+slli t0, a1, 5             # y * 32
+add  t0, t0, a0            # + x
+slli t0, t0, 2             # byte offset
+add  t0, t0, s0            # address of (x, y)
+mv   t1, a2                 # cells left in this run
+blez t1, run_done           # zero or negative width draws nothing
+run:
+    sw s1, 0(t0)
+    addi t0, t0, 4
+    addi t1, t1, -1
+    bnez t1, run
+run_done:
+```
+
+A rectangle repeats that run for several rows. `fill_rect_32` uses `t0` as the current row and `t1`
+as the row just after the rectangle. At each row it calculates a fresh address in `t2`; then `t3`
+counts the cells still to draw across that row.
+
+For example, `fill_rect_32(1, 2, 3, 2)` means `a0=1`, `a1=2`, `a2=3`, `a3=2`:
+
+| Current row `t0` | First cell address | Stores made | `t3` counts |
+| --- | --- | --- | --- |
+| 2 | `s0 + (2*32 + 1)*4` | `(1,2)`, `(2,2)`, `(3,2)` | 3, 2, 1 |
+| 3 | `s0 + (3*32 + 1)*4` | `(1,3)`, `(2,3)`, `(3,3)` | 3, 2, 1 |
+
+After row 3, `t0` becomes 4. That equals the one-past limit in `t1`, so the outer loop stops.
+
+## Building the picture from calls
+
+With the helper available, drawing the top twenty rows is argument setup followed by a call:
+
+```riscv
+li s1, SKY
+li a0, 0                   # x
+li a1, 0                   # y
+li a2, 32                  # width
+li a3, 20                  # height
+jal fill_rect_32
+```
+
+The roof uses six one-row rectangles. On row number `s2`, its left edge moves right by one, its
+`y` coordinate moves up by one, and its width shrinks by two:
+
+```text
+row 0: x=10, y=15, width=12
+row 1: x=11, y=14, width=10
+row 2: x=12, y=13, width=8
+...
+```
+
+The loop counter and limit live in `s2` and `s3` because each call may overwrite every `t` register.
+
+The sun needs one more idea. `fill_disc_32` scans the square from `cx-r` through `cx+r` and from
+`cy-r` through `cy+r`. For every candidate cell it calculates `dx*dx + dy*dy`. It stores the colour
+only when that value is less than `r*r`; cells outside the disc are skipped. The coordinate loops
+include both edges of the surrounding square, while the distance comparison uses a strict boundary.
+
+Here is the complete picture. Press Run and open the Screen panel.
 
 ```riscv|playground|open-screen|no-registers|allow-open
 # @screen unit=8 width=256 height=256 base=display
-.eqv SIDE, 32               # words across and down
+.eqv SIDE, 32
 .eqv SKY, 0x0070B0E0
 .eqv GRASS, 0x003C9648
 .eqv SUN, 0x00FFD200
@@ -17,23 +106,24 @@ a rectangle is, so `fill_rect` and `fill_disc` here are subroutines somebody had
 .eqv DOOR, 0x00704020
 
 .data
-display: .space 4096        # SIDE * SIDE words, four bytes each
+display: .space 4096        # 32 * 32 words, four bytes each
 
 .text
 .globl main
 
-# fill_rect(x, y, w, h): the grid is in s0 and the colour in s1
-fill_rect:
-    blez a2, rect_done      # nothing to draw when the width or height is 0
+# a0=x, a1=y, a2=width, a3=height
+# Reads s0=display base and s1=colour. Fixed for a 32-cell-wide display.
+fill_rect_32:
+    blez a2, rect_done
     blez a3, rect_done
-    mv t0, a1               # row = y
-    add t1, a1, a3          # one past the last row
+    mv t0, a1               # current row
+    add t1, a1, a3          # one-past the final row
 rect_rows:
-    slli t2, t0, 5          # row * SIDE
+    slli t2, t0, 5          # row * 32
     add t2, t2, a0          # + x
     slli t2, t2, 2          # four bytes per word
-    add t2, t2, s0          # the first pixel of this run
-    mv t3, a2               # how many still to draw across
+    add t2, t2, s0          # first cell in this row
+    mv t3, a2               # cells left across the row
 rect_cols:
     sw s1, 0(t2)
     addi t2, t2, 4
@@ -44,22 +134,23 @@ rect_cols:
 rect_done:
     ret
 
-# fill_disc(cx, cy, r): every cell whose distance from the centre is under r
-fill_disc:
-    mul t6, a2, a2          # r * r
-    sub t0, a1, a2          # y = cy - r
-    add t1, a1, a2          # the last row
+# a0=cx, a1=cy, a2=radius
+# Reads s0=display base and s1=colour. Fixed for a 32-cell-wide display.
+fill_disc_32:
+    mul t6, a2, a2          # radius squared
+    sub t0, a1, a2          # first y: cy - radius
+    add t1, a1, a2          # final y: cy + radius
 disc_rows:
-    sub t2, a0, a2          # x = cx - r
-    add t3, a0, a2
+    sub t2, a0, a2          # first x: cx - radius
+    add t3, a0, a2          # final x: cx + radius
 disc_cols:
     sub t4, t2, a0          # dx
     sub t5, t0, a1          # dy
     mul t4, t4, t4
     mul t5, t5, t5
-    add t4, t4, t5          # dx*dx + dy*dy
-    bge t4, t6, disc_next
-    slli t4, t0, 5          # the same address arithmetic again
+    add t4, t4, t5
+    bge t4, t6, disc_next   # outside the disc: do not store
+    slli t4, t0, 5
     add t4, t4, t2
     slli t4, t4, 2
     add t4, t4, s0
@@ -74,35 +165,35 @@ disc_next:
 main:
     la s0, display
 
-    li s1, SKY              # the sky, the top twenty rows
+    li s1, SKY
     li a0, 0
     li a1, 0
     li a2, SIDE
     li a3, 20
-    jal fill_rect
+    jal fill_rect_32
 
-    li s1, GRASS            # the ground under it
+    li s1, GRASS
     li a0, 0
     li a1, 20
     li a2, SIDE
     li a3, 12
-    jal fill_rect
+    jal fill_rect_32
 
-    li s1, SUN              # a disc of radius 4, up in the corner
+    li s1, SUN
     li a0, 26
     li a1, 6
     li a2, 4
-    jal fill_disc
+    jal fill_disc_32
 
-    li s1, WALL             # the house
+    li s1, WALL
     li a0, 10
     li a1, 16
     li a2, 12
     li a3, 10
-    jal fill_rect
+    jal fill_rect_32
 
-    li s1, ROOF             # six rows up from the wall, each two cells narrower
-    li s2, 0
+    li s1, ROOF
+    li s2, 0                # roof row: 0 through 5
     li s3, 6
 roof:
     li a0, 10
@@ -113,61 +204,52 @@ roof:
     slli t0, s2, 1
     sub a2, a2, t0
     li a3, 1
-    jal fill_rect
+    jal fill_rect_32
     addi s2, s2, 1
     blt s2, s3, roof
 
-    li s1, DOOR             # and a door in the wall
+    li s1, DOOR
     li a0, 14
     li a1, 21
     li a2, 4
     li a3, 5
-    jal fill_rect
+    jal fill_rect_32
 
     li a7, 10
     ecall
 ```
 
-The `# @screen` line is read by every Build, before the first instruction runs. `unit=8` draws one
-word as an 8 by 8 block, `width=256 height=256` is the display area, and `base=display` names a label
-your own program defines, so the grid starts wherever the assembler put it. 256 divided by 8 is 32,
-which is why `SIDE` is 32 and why `.space 4096` is exactly the right amount of room: 32 by 32 words
-of four bytes each.
+The screen directive makes each word an 8 by 8 block in a 256 by 256 display, giving 32 cells per
+side. The `display` label names the first word. Its 4096 bytes are exactly `32 * 32 * 4`. Colours use
+`0x00RRGGBB`; the six constants near the top are a compact palette for the picture.
 
-A colour is the low 24 bits of a word, red in bits 23 to 16, green in 15 to 8 and blue in 7 to 0. So
-`0x0070B0E0` is a pale blue, 112 red, 176 green and 224 blue, written in the same order as the
-`#RRGGBB` of a web page.
+## Exercises
 
-The address of the pixel at column `x` and row `y` is `base + (y * SIDE + x) * 4`: a grid held as one
-long line of words, exactly like the two dimensional array a couple of pages back, with four bytes
-to an element. Both subroutines work it out the same way, `slli` by 5 for the `y * 32`, an `add` for
-the `x`, `slli` by 2 to turn words into bytes, and an `add` for the base.
+1. Draw a three-cell-wide, two-cell-high window whose top-left cell is `(15, 17)`. Insert its call
+   after the roof loop and before the door call so the window appears on top of the wall. Use a new
+   pale-yellow colour, `0x00FFF0A0`. Decide what each of `a0` through `a3` must contain before
+   `jal fill_rect_32`.
 
-`fill_rect` computes that address once per row and then walks along the row with `addi t2, t2, 4`,
-because the pixels of a row sit next to each other in memory. `fill_disc` computes it per pixel,
-because it only writes the ones it keeps. A cell is inside the disc when `dx * dx + dy * dy` is under
-`r * r`, which is Pythagoras with the square root left off both sides.
+2. Complete the missing rectangle inner loop. Assume `a2` is positive. Keep `t2` as the address of
+   the next cell and `t3` as the number of cells left. It must make exactly `a2` stores and finish
+   when `t3` is zero.
 
-`fill_disc` builds the pixel address in `t4`, the same register that held the squared distance one
-line earlier. That is safe, and worth recognising as a habit rather than a trick: the `bge` above it
-is the last instruction that reads the distance, so from that point on `t4` holds a value nobody
-will ever look at again. A register whose value is dead is free to reuse, and in a loop that is
-already using `t0` to `t6` it is the only room there is.
+   ```riscv
+   mv t3, a2               # cells left
+   rect_cols_practice:
+       sw s1, 0(t2)
+       # advance t2 to the next word
+       # subtract one from t3
+       # repeat while t3 is not zero
+   ```
 
-The grid's address is in `s0` and the colour in `s1`, and neither is passed as an argument. There is
-no colour setting anywhere in the hardware, so this program keeps its own, in a register both
-drawing subroutines agree to read. `s0` to `s11` are the registers a subroutine must hand back
-unchanged, which is exactly the promise that makes the arrangement safe: `fill_rect` writes nothing
-but `t` registers, so `s1` survives every call.
+3. Change the roof to five rows with widths `10, 8, 6, 4, 2`. Keep it centred over the same house,
+   keep every roof call one cell high, and do not change `fill_rect_32`. Choose the new starting `x`,
+   starting `y`, width, and loop limit. As a first checkpoint, the lowest row should call
+   `fill_rect_32` with `(x, y, width, height) = (11, 15, 10, 1)`. Run the program to check that every
+   row remains centred.
 
-The whole picture is 6266 instructions out of the two million a Playground gets, and 1251 of those are
-the `sw` instructions themselves: a 32 by 32 grid is 1024 words, and the sky and the ground between
-them cover every one of those before anything else is drawn on top.
-
-The display draws pixels and nothing else, so a caption under the house would have to be built out
-of pixels letter by letter, or printed to the console instead.
-
-Move the sun's centre three cells right, `li a0, 29` instead of 26, and watch what happens to its
-right hand edge: the cells that run off column 31 turn up at the **left** of the next row down.
-Nothing between the coordinates and the `sw` ever checks that a column is still on the screen. The
-grid is one line of memory, and column 32 of any row is simply column 0 of the row after it.
+As an optional extension, change the sun's centre from `x=26` to `x=29`. Some candidate cells then
+pass column 31. Since the address calculation does not clip coordinates, column 32 is stored at the
+same address as column 0 of the next row. The wrapped edge shows that the display is one linear block
+of memory even though the Screen panel presents it as a grid.
