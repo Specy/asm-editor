@@ -38,10 +38,54 @@ up and the program stops. It lands exactly on it rather than overshooting, so co
 equality is safe.
 
 The test being at the **bottom** of the loop is what makes this four instructions a pass instead of
-five. A backwards `bne` does the work of a check at the top and a jump at the end together. It costs
-you one thing: the body always runs once before anything is checked, so a loop written this way over
-an empty array would read an element that is not there.
+five. A loop that checks at the top needs that check plus a separate jump back after the body. Here,
+the backwards `bne` does both jobs. It costs you one thing: the body always runs once before anything
+is checked, so a loop written this way over an empty array would read an element that is not there.
 
-Add a seventh number to the `.word` line and nothing else in the program needs touching, because
-`end` moves along with the array. That is the reason to walk to an end address instead of counting:
-the count lives in one place, the data itself.
+## Your turn: sum a different array
+
+Complete the program so it adds all seven words and leaves the total in `t2`. Use `t0` as the
+pointer and stop when it reaches `end`. Leave `t0` at `end` as well. This array is known to be
+nonempty, so a bottom-tested loop is safe here. Do not replace the calculation with `li t2, 34`.
+
+```riscv|playground|exercise
+.data
+numbers: .word 7, -3, 12, 5, -8, 20, 1
+end:
+
+.text
+main:
+    # set up t0, t1, and t2
+    # load and add each word, advancing t0 until it reaches end
+```
+
+```testcase
+{
+    "expectedRegisters": { "t0": "0x1001001c", "t2": 34 }
+}
+```
+
+<details>
+<summary>Show solution</summary>
+
+```riscv|playground|solution
+.data
+numbers: .word 7, -3, 12, 5, -8, 20, 1
+end:
+
+.text
+main:
+    la t0, numbers
+    la t1, end
+    li t2, 0
+loop:
+    lw t3, 0(t0)
+    add t2, t2, t3
+    addi t0, t0, 4
+    bne t0, t1, loop
+```
+
+</details>
+
+Adding or removing a value on the `.word` line moves `end` with the array, so the loop itself does
+not need a new count. That is the reason to walk to an end address: the boundary follows the data.

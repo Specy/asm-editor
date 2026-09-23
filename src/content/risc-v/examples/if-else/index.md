@@ -37,11 +37,75 @@ run, so the first one has to jump over the second. Delete that line and the prog
 into `a_is_bigger` and overwrites the answer it just worked out, which is a good thing to see once
 on purpose.
 
-The second half never asks a question at all. `sub t4, t0, t1` has already produced the difference,
-and `bgez t4, positive` looks at that same register: if the subtraction came out at zero or above,
-the answer is already right and the next line is skipped. `sub t4, zero, t4` is how a sign gets
-flipped, since 0 minus a number is its negative, and `neg t4, t4` is the shorter name for it.
+The second half does not need a fresh comparison value. `sub t4, t0, t1` has already produced the
+difference, and `bgez t4, positive` looks at that same register: if the subtraction came out at
+zero or above, the answer is already right and the next line is skipped. `bgez` is a convenient
+pseudo-instruction; the assembler expands `bgez t4, positive` to the real two-register branch
+`bge t4, zero, positive`. `sub t4, zero, t4` flips the sign, since 0 minus a number is its negative,
+and `neg t4, t4` is the shorter name for that subtraction.
 
-`blt` and `bgez` are the **signed** branches, the family to use for numbers that can go below zero.
-There is a `bltu` next to `blt` that reads both registers as plain unsigned counts, and it would
-call a negative number very large indeed.
+Both `blt` and the `bge` behind `bgez` use **signed** ordering, which is what a difference that may
+go below zero needs. There is a `bltu` next to `blt` that reads both registers as unsigned counts,
+and it would treat a negative number as a very large positive one.
+
+## Your turn: choose the larger number and find the distance
+
+The test runner supplies two small signed numbers in `t0` and `t1`; their difference always fits in
+a signed 32-bit register. Write the branch-based if/else that leaves the larger number in `t2`.
+Then leave the nonnegative distance between the inputs in `t4`. Do not replace the starting values
+in `t0` or `t1`.
+
+```riscv|playground|exercise
+.text
+main:
+    # choose the larger value for t2
+    # find the nonnegative distance for t4
+```
+
+```testcase
+{
+    "startingRegisters": { "t0": 37, "t1": 64 },
+    "expectedRegisters": { "t2": 64, "t4": 27 }
+}
+```
+
+```testcase
+{
+    "startingRegisters": { "t0": 91, "t1": 12 },
+    "expectedRegisters": { "t2": 91, "t4": 79 }
+}
+```
+
+```testcase
+{
+    "startingRegisters": { "t0": -8, "t1": -8 },
+    "expectedRegisters": { "t2": -8, "t4": 0 }
+}
+```
+
+```testcase
+{
+    "startingRegisters": { "t0": -20, "t1": 7 },
+    "expectedRegisters": { "t2": 7, "t4": 27 }
+}
+```
+
+<details>
+<summary>Show solution</summary>
+
+```riscv|playground|solution
+.text
+main:
+    blt t1, t0, first_is_bigger
+    mv  t2, t1
+    j   have_bigger
+first_is_bigger:
+    mv  t2, t0
+have_bigger:
+    sub t4, t0, t1
+    bge t4, zero, done
+    sub t4, zero, t4
+done:
+```
+
+</details>

@@ -46,5 +46,20 @@ last five spill past the forty bytes `.space` reserved.
 
 Counting down rather than up is why the last line is a `bnez` and not a comparison. A branch here
 looks at two registers, and `zero` is a register that is always available and always reads 0, so
-"has this hit zero yet" is free. Counting up to ten would need the 10 loaded into a fourth register
-for the branch to compare against.
+"has this hit zero yet" is free. In this simple version, counting up to 10 would need the 10 loaded
+into a fourth register for the branch to compare against.
+
+## Try it
+
+Change `COUNT` to 3 and change `.space 40` to `.space 12`, so there is still one word reserved for
+each pass. Before running it, predict the three words at `10010000`, the final values of `t0`, `t1`,
+and `t2`, and whether the branch is taken after the third store.
+
+<details>
+<summary>Show answer</summary>
+
+The three words are `00000001`, `00000002`, and `00000003`. At the end, `t0` is `1001000C`, `t1` is
+4, and `t2` is 0. The branch is not taken after the third store, because the decrement has made
+`t2` zero.
+
+</details>

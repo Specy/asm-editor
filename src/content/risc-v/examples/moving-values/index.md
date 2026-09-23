@@ -1,34 +1,52 @@
-Two numbers go into registers and the program works out the perimeter of the rectangle they describe.
-Nothing is read from memory and nothing branches: every value is in a register from the first
-instruction to the last, and the registers panel next to the program is where you watch it happen.
+This program keeps a rectangle's width and height in registers. It calculates the perimeter with
+`2 × (width + height)`, makes two copies of the result, and finds the difference between the two
+sides. Nothing is read from memory.
 
 ```riscv|playground|allow-open
 .text
 main:
     li t0, 30           # width = 30
     li t1, 12           # height = 12
-    add t2, t0, t1      # add the two sides
-    add t2, t2, t2      # and double that
+    add t2, t0, t1      # width + height = 42
+    add t2, t2, t2      # perimeter = 2 * 42 = 84
 
-    mv t3, t2           # a copy of the answer
-    add t4, t2, zero    # the same copy, written out
-    sub t5, t0, t1      # how much wider than tall it is
+    mv t3, t2           # copy the perimeter
+    add t4, t2, zero    # copy it again
+    sub t5, t0, t1      # width - height = 18
 ```
 
-`li t0, 30` puts the number 30 into `t0`. There is no marker in front of the 30 and none in front of
-`t0` either: an operand that is a number is a number, and a register is written by its name.
+In `li t0, 30`, `t0` is a register name and `30` is the number placed in that register. After the
+first two lines, `t0` holds 30 and `t1` holds 12.
 
-An `add` names three registers, and the first of them is where the answer goes. So `add t2, t0, t1`
-reads `t0` and `t1`, writes `t2`, and leaves 30 and 12 exactly where they were. That is worth
-noticing early, because it means you can use a value over and over without copying it out of the way
-first. `add t2, t2, t2` reads the same register twice and doubles it, which is the cheapest
-multiplication there is.
+An `add` names its destination first, followed by its two sources. `add t2, t0, t1` reads `t0` and
+`t1`, then writes their sum to `t2`. It does not change either source register. The next `add` uses
+`t2` as both sources, so it adds 42 to itself and writes 84 back to `t2`.
 
-`mv t3, t2` copies a register. The line under it is the same thing written out: `zero` always reads
-0, so adding it to a value and storing the result elsewhere is a copy. `mv` is the assembler's
-shorthand for exactly that instruction, and the panel cannot tell the two lines apart.
+`mv t3, t2` copies the value in `t2` to `t3`. The following line makes another copy in `t4`:
+`zero` always supplies the value 0, so adding it does not change the value. `mv` is a
+pseudo-instruction that the assembler expands to `addi t3, t2, 0`; it has the same copying effect.
 
-`sub t5, t0, t1` subtracts in the order written, `t0` minus `t1`. Swap those two names and you get
-`FFFFFFEE` in the panel instead of `00000012`. Both are the same distance, 18, one of them written
-as a negative number: the bits at the top turn on when a result goes below zero, and the lecture on
-words, halves and bytes is where that pattern is taken apart.
+The final `sub` also names its destination first. It calculates `t0 - t1`, or `30 - 12`, and puts
+18 in `t5`. After the last instruction, the registers hold:
+
+| register | value | meaning |
+| -------- | ----: | ------- |
+| `t0` | 30 | width |
+| `t1` | 12 | height |
+| `t2` | 84 | perimeter |
+| `t3` | 84 | copied perimeter |
+| `t4` | 84 | copied perimeter |
+| `t5` | 18 | width minus height |
+
+## Try it
+
+Change the width to 7 and the height to 5. Before running the program, predict the final values of
+`t2`, `t3`, `t4`, and `t5`. Then run it and compare the registers with your prediction.
+
+<details>
+<summary>Show answer</summary>
+
+You should get `t2 = 24`, because `2 × (7 + 5) = 24`. Both copies have the same value, so
+`t3 = 24` and `t4 = 24`. The subtraction gives `t5 = 2`.
+
+</details>
