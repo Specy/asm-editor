@@ -1,80 +1,62 @@
-Every program so far left its answer in a register or in memory, where only you and the panels could
-see it. Printing a line, or reading what you typed, means getting a byte out of the CPU and into
-something else entirely.
+Every program so far has left its result in a register or in memory. To print a character or read
+what somebody typed, the CPU has to exchange a byte with a device.
 
-There is nothing in the Z80's instruction set that means "ask the environment for something", and
-there never was. What it has instead is a second address space.
+## Ports
 
-## The I/O address space
+The Z80 keeps devices in a separate I/O space. An address in memory and a **port** can have the same
+number without overlapping: `ld` reaches memory, while `in` and `out` reach ports.
 
-Alongside the 64 KB of memory the Z80 has **256 I/O ports**, numbered `0x00` to `0xFF`. They are not
-memory. No `ld` reaches them, no address in the 64 KB overlaps with them, and the CPU announces on
-its pins that this access is to a port and not to RAM, so a device knows when it is being spoken to.
-Two instructions reach them and nothing else does.
+These are the two forms we will use first:
 
-- **`out (n), a`** writes `a` to port `n`.
-- **`in a, (n)`** reads port `n` into `a`.
+- **`out (n), a`** sends the byte in `a` to port `n`.
+- **`in a, (n)`** receives a byte from port `n` and puts it in `a`.
 
-There is a second form where the port number comes from a register:
+Here `n` is an 8-bit number written in the instruction, from `0x00` to `0xFF`. The machine decides
+what device, if any, responds to each number.
 
-- **`out (c), r`** writes register `r` to the port whose number is in **`c`**.
-- **`in r, (c)`** reads that port into `r`, and any 8 bit register can be the destination.
+The Z80 actually places a 16-bit value on its address bus during an I/O operation. The port number
+is the low byte. With `out (n), a`, the bus and the byte being sent look like this:
 
-Here is a detail that looks like trivia and is not, because two of this editor's ports depend on it.
+```
+address bus:  high byte = a  |  low byte = n
+data written: a              |  port number = n
+```
 
-When the CPU reads or writes anything, it puts the address on sixteen wires that run out of the chip
-to the rest of the machine. Those wires are the **address bus**. A port number is only eight bits,
-so it goes on the low eight wires, and the other eight are left carrying something.
+With `in a, (n)`, the old value of `a` likewise supplies the high address byte before the device's
+incoming byte replaces it.
 
-What they carry is not nothing. In the `out (n), a` form the high eight wires carry `a`; in the
-`out (c), r` form they carry **`b`**. A device that wants to look can read all sixteen. This editor
-does look, so a port that needs a second parameter takes it in `b`, and one port uses those spare
-eight wires to carry the high half of a 16 bit number.
-
-That arrangement has a name, **port-mapped I/O**: devices live at their own numbers in their own
-space, rather than being wired into unused corners of memory. Which device sits behind which number
-is decided by whoever built the machine, and this editor's map is what the rest of this module is
-about.
-
-## Why ports and not a system call convention
-
-Real Z80 machines did have printing routines, in ROM, and every machine had a different one at a
-different address: the ZX Spectrum's is not the Amstrad's and neither is CP/M's. Inventing one here
-would mean loading a ROM into the 64 KB, which would then collide with wherever your `.org` put your
-program. Ports cost no memory, and `in` and `out` belong to the CPU itself, so the whole convention
-lives outside your address space. That is the reasoning written down in
-[ADR 0002](https://github.com/Specy/asm-editor/blob/main/docs/adr/0002-z80-console-ports.md).
+The high byte is part of the bus address, separate from the byte being transferred as data. On real
+hardware, a device may inspect it. This playground selects a device by the low byte only. Most of
+its ports ignore the high byte; port `0x14` deliberately uses it as an extra value, as shown below.
 
 ## The console ports
 
-Five ports carry the console, and there is **one port per output format**, because an `out` carries
-exactly one byte of payload and the port number is the only other thing the instruction encodes.
+The playground provides five console ports:
 
-| port   | writing prints                                      | reading gives                        |
-| ------ | --------------------------------------------------- | ------------------------------------ |
-| `0x10` | the byte as a character                             | the next character of the input line |
-| `0x11` | the byte as an unsigned number, 0 to 255            | a line parsed as a decimal number    |
-| `0x12` | the byte as a signed number, -128 to 127            | the same as `0x11`                   |
-| `0x13` | the byte as two upper case hexadecimal digits       | a line parsed as hexadecimal         |
-| `0x14` | a 16 bit number, the high byte from the address bus | the same as `0x11`                   |
+| port   | writing prints                                | reading gives                       |
+| ------ | --------------------------------------------- | ----------------------------------- |
+| `0x10` | the byte as a character                       | the next character of an input line |
+| `0x11` | the byte as an unsigned number, 0 to 255      | a line parsed as a decimal number   |
+| `0x12` | the byte as a signed number, -128 to 127      | a line parsed as a decimal number   |
+| `0x13` | the byte as two upper-case hexadecimal digits | a line parsed as hexadecimal        |
+| `0x14` | an unsigned 16-bit number, assembled below    | a line parsed as a decimal number   |
 
-The whole table, with a runnable example for every port, is on the
-[Z80 I/O documentation page](/documentation/z80/io).
+The complete port map is on the [Z80 I/O documentation page](/documentation/z80/io).
 
 ## Printing a string
 
-A string is bytes and the character port takes one byte, so printing is the string loop from the
-"Arrays, strings and ix" lecture with an `out` in the middle.
+The character port accepts one byte at a time, so printing a string uses the string loop you already
+know with an `out` in the middle.
 
 ```z80|playground|console|no-registers|no-flags
     .org 0x8000
     ld hl, message  ; hl = the start of the string
 print:
     ld a, (hl)      ; the byte hl points at
-    or a            ; the terminator?
+    or a            ; is it the zero terminator?
     jr z, done
-    out (0x10), a      ; send it to the console
-    inc hl          ; on to the next byte
+    out (0x10), a   ; print one character
+    inc hl          ; advance to the next byte
     jr print
 done:
     halt
@@ -83,64 +65,67 @@ done:
 message: .asciz "Hello, world!", 10
 ```
 
-The console panel below the editor shows `Hello, world!` and a newline. The `10` at the end of the
-`.asciz` line is that newline written as its character code, and the terminating zero goes after it,
-so the loop prints the 10 and then stops.
-
-There is no "print a string" port, because a port carries one byte. Every string this machine prints
-is printed a character at a time by a loop you wrote.
+The console shows `Hello, world!` and a newline. The `10` is the character code for the newline.
+`.asciz` places the terminating zero after it, so the loop prints the newline and then finishes.
 
 ## Printing numbers
 
-The same byte written to four different ports prints four different things.
+The port chooses how the console displays a byte. The bits do not change; only their presentation
+does.
 
 ```z80|playground|console|no-flags
     .org 0x8000
     ld a, 200
-    out (0x11), a      ; unsigned: 200
+    out (0x11), a   ; unsigned: 200
     ld a, ' '
     out (0x10), a
     ld a, 200
-    out (0x12), a      ; signed: the same bits read as -56
+    out (0x12), a   ; signed: -56
     ld a, ' '
     out (0x10), a
     ld a, 200
-    out (0x13), a      ; hexadecimal: C8
-    ld a, ' '
-    out (0x10), a
-
-    ld hl, 1000     ; a number no byte can hold
-    ld b, h         ; the high byte goes on the address bus
-    ld c, 0x14      ; the port number
-    out (c), l      ; and the low byte is the payload
+    out (0x13), a   ; hexadecimal: C8
     ld a, 10
-    out (0x10), a      ; a newline
+    out (0x10), a   ; newline
     halt
 ```
 
-The console reads `200 -56 C8 1000`. One byte, three ports, three answers, and choosing the port is
-choosing how the bits are read, which is the same choice the numbers lecture made about `C` and
-`P/V`.
+The console shows `200 -56 C8`.
 
-The last four instructions are port `0x14`, and they are where those spare eight wires earn their
-keep. An `out` carries one byte of payload, which is not enough for a number like 1000. So `ld b, h`
-puts the high half of `hl` on the high wires of the address bus, `out (c), l` sends the low half as
-the payload, and the port puts the two together. Three instructions and one `out` print anything up
-to 65535, and it is the only port that reads the high half of the address.
+One byte cannot hold values above 255, so port `0x14` uses two bytes. This needs another form of
+`out`:
 
-## Reading
+- **`out (c), r`** sends the byte in register `r` to the port whose low-byte number is in `c`.
+  At the same time, `b` supplies the high byte of the address bus.
 
-`in a, (0x11)` asks for a whole line, parses it as a decimal number and gives back its low byte. When no
-input is waiting the program **stops inside the `in`** and waits: press Run, type a number in the box
-under the console, press Enter, and the run carries on inside that one instruction.
+For this playground, `c` still selects the port. Port `0x14` treats `b` as the high byte of the
+number and the byte sent as data as its low byte:
 
 ```z80|playground|console|no-flags
     .org 0x8000
-    in a, (0x11)       ; a whole line, read as a number
+    ld hl, 1000
+    ld b, h         ; high byte of the number
+    ld c, 0x14      ; port number
+    out (c), l      ; low byte of the number
+    halt
+```
+
+For this `out`, the address bus contains `b:c`, while the data byte is `l`. Port `0x14` combines
+`b` and `l` and prints `1000`. Other console output ports ignore `b`.
+
+## Reading
+
+`in a, (0x11)` waits for a line of input, parses it as a decimal number and places its low byte in
+`a`. Press Run, type a number in the input box under the console, and press Enter. If no input is
+ready, the instruction pauses until a line arrives.
+
+```z80|playground|console|no-flags
+    .org 0x8000
+    in a, (0x11)    ; first decimal number
     ld b, a
-    in a, (0x11)       ; and a second one
-    add a, b        ; x + y
-    out (0x11), a
+    in a, (0x11)    ; second decimal number
+    add a, b
+    out (0x11), a   ; print the sum as unsigned decimal
     ld a, 10
     out (0x10), a
     halt
@@ -150,26 +135,24 @@ under the console, press Enter, and the run carries on inside that one instructi
 { "input": ["10", "32"] }
 ```
 
-Press Run and type `10`, Enter, `32`, Enter. The console shows `42`.
+Type `10`, Enter, `32`, Enter. The console shows `42`. Invalid decimal input ends the run with an
+error. A value outside one byte is reduced to its low byte.
 
-A line that is not a number stops the program with an error, and a number over 255 comes back as its
-low byte, because `a` is one byte.
-
-The character port reads differently. It hands back the input line **one byte at a time**, and the
-line ends with a newline character, `0x0A`, so a program reads until it sees one:
+The character port returns an input line one byte at a time. The line ends with a newline character,
+`0x0A`, so a program can read until it sees that byte:
 
 ```z80|playground|console|no-flags
     .org 0x8000
-    ld b, 0         ; n = 0
+    ld b, 0         ; character count
 read:
-    in a, (0x10)       ; one character of the typed line
-    cp 10           ; the newline at the end of the line
+    in a, (0x10)    ; next character
+    cp 10           ; newline?
     jr z, done
-    inc b           ; n++
+    inc b
     jr read
 done:
     ld a, b
-    out (0x11), a      ; print how many characters were typed
+    out (0x11), a
     ld a, 10
     out (0x10), a
     halt
@@ -179,38 +162,26 @@ done:
 { "input": ["hi there"] }
 ```
 
-Type `hi there` and press Enter: the console shows `8`, the eight characters before the newline.
+Type `hi there` and press Enter. The console shows `8`, the number of characters before the
+newline.
 
-## What happens at a port with nothing behind it
+## Unconnected ports
 
-Only the numbers this editor maps do anything. Write to any of the other ones and the byte simply
-goes nowhere; read from one and `FF` comes back.
-
-That is not the editor being tidy, it is what a real machine does. A port is a request shouted at
-whatever hardware is listening, and if nothing answers, the wires the answer would have come back on
-are left floating high, which reads as all ones.
+In this playground, writing to an unconnected port has no effect and reading one produces `0xFF`.
 
 ```z80|playground|console|no-flags
     .org 0x8000
-    in a, (0x77)    ; nothing is behind port 0x77
-    out (0x13), a      ; print what came back
+    in a, (0x77)    ; no playground device uses this port
+    out (0x13), a
     halt
 ```
 
-The console reads `FF`. So a program written for a real machine will run here with its unsupported
-I/O quietly doing nothing, instead of stopping with an error.
-
-## Ending a program
-
-The four endings from the first lecture are still the only ones: `halt`, a top level `ret`, `ei` and
-`halt`, or running off the end of the code. There is no "stop the program" port, because stopping is
-not something a device does to you.
+The console shows `FF`.
 
 ## Two to print
 
-Print `The answer is 42` with no newline after it. The string is written for you at `0x9000`, and the
-number is not part of it: print the string a character at a time, then the 42 with the unsigned
-number port.
+Print `The answer is 42` with no newline after it. The string is stored at `0x9000`; print it one
+character at a time, then print 42 through the unsigned-number port.
 
 ```z80|playground|console|exercise
     .org 0x8000
@@ -237,12 +208,12 @@ print:
     ld a, (hl)
     or a
     jr z, number
-    out (0x10), a      ; one character
+    out (0x10), a
     inc hl
     jr print
 number:
     ld a, 42
-    out (0x11), a      ; the number, as an unsigned decimal
+    out (0x11), a
     halt
 
     .org 0x9000
@@ -251,8 +222,7 @@ message: .asciz "The answer is "
 
 </details>
 
-The second one reads a number and prints it back in hexadecimal, with nothing else in the output. The
-test types 255, so the console reads `FF`.
+Now read a decimal number and print the same byte as hexadecimal, with nothing else in the output.
 
 ```z80|playground|console|exercise
     .org 0x8000
@@ -272,8 +242,8 @@ test types 255, so the console reads `FF`.
 
 ```z80|playground|console|solution
     .org 0x8000
-    in a, (0x11)       ; a line, parsed as decimal
-    out (0x13), a      ; the same byte, printed as hexadecimal
+    in a, (0x11)
+    out (0x13), a
     halt
 ```
 

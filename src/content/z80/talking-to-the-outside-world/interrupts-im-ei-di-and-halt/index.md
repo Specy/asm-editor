@@ -1,60 +1,65 @@
-Every program on the previous page **polled**: it went and looked at the keyboard, over and over,
-thousands of times a second, and most of the looks found nothing. That works, and it burns the whole
-CPU doing it.
+On the previous page, the programs kept reading a port to find out whether a key or mouse button was
+waiting. That is **polling**: the program asks the device the same question again and again. It is
+simple, but the CPU spends time checking even when nothing has happened.
 
-The other arrangement is an **interrupt**. The device makes a noise on a wire, the CPU finishes
-whatever instruction it is in the middle of, puts the program counter on the stack and jumps to a
-handler. The program that was running is stopped without being asked and never knows it happened. A
-machine built this way can sit doing nothing at all until a key is pressed.
+An **interrupt** turns the question around. A device sends the CPU an interrupt request when it needs
+attention. The Z80 finishes its current instruction and transfers control according to its interrupt
+mode. The usual routes save the address of the next instruction on the stack and jump to an
+**interrupt handler**. When the handler returns, the interrupted program can continue as though
+nothing happened, provided the handler restored every part of the program's state that it changed.
 
-**Nothing here will ever raise one.** No key, no mouse button, no timer and no port pulls either of
-the Z80's interrupt wires, and that is deliberate: the peripherals in this editor are polled, the
-port map is the whole agreement between your program and the outside world, and a run stays a plain
-sequence of instructions you can step through and undo
-([ADR 0002](https://github.com/Specy/asm-editor/blob/main/docs/adr/0002-z80-console-ports.md)).
+The playground has no source of Z80 interrupts. Its keyboard and mouse must be polled, and neither a
+timer nor a port will call a handler. Interrupt instructions still assemble, so we can examine the
+code a real machine uses and call a handler ourselves when we want to test it.
 
-So this lecture is short. A few of the things on it you will actually use, and the rest is here
-because you will meet it in Z80 code written for real machines and should not have to guess what it
-is doing.
+## Waiting with halt
 
-## halt, which you have been writing since the first lecture
+On a real Z80, `halt` puts the processor into its halted state. It stops executing ordinary
+instructions while it waits for an interrupt. When an interrupt is accepted, the Z80 leaves that
+state, runs the handler and later continues with the instruction after `halt`.
 
-`halt` does not stop a real Z80. It parks the CPU: the chip keeps fetching, doing nothing, until an
-interrupt arrives, and then the handler runs and control returns to the instruction after the
-`halt`. That is the idle loop of a machine waiting for you to type something, and it is what a home
-computer was doing for almost all of the time it was switched on.
+This is useful in an interrupt-driven machine: instead of polling an idle device, the CPU can wait
+until the device asks for attention. It matters whether a maskable interrupt is enabled; an ignored
+request cannot run its handler. The Z80 also has a separate non-maskable interrupt, or **NMI**, for
+events that `di` cannot disable.
 
-With no interrupts to wait for, a `halt` is a program that has finished, and that is exactly how the
-editor treats it: the run stops and the program is reported as terminated. It is the reason every
-program in this course ends with one.
+In this playground no interrupt can arrive. Rather than wait forever, the playground treats `halt`
+as the end of the run. That is why the runnable examples in this course finish with it.
 
-## di and ei
+## Choosing when an interrupt may run
 
-Interrupts can be switched off. `di` turns them off, `ei` turns them back on, and a program does the
-first before touching anything a handler also touches, because a handler arriving halfway through an
-update leaves the update half done.
+The ordinary Z80 interrupt input is **maskable**: a program may temporarily refuse requests from it.
+`di` disables their acceptance, and `ei` enables it again. A program uses a short disabled region
+when a handler must not see some shared value halfway through an update.
 
-`ei` has one detail that catches everybody: it takes effect **after the instruction that follows
-it**, not immediately. So `ei` then `ret` gets the return done before any interrupt can arrive,
-which means a handler's own exit can never be interrupted. That delay is in the hardware, not the
-assembler.
+There is one important timing rule. After `ei`, maskable interrupts are still not accepted until the
+instruction immediately following it has executed. A handler can therefore finish like this:
 
-Here, `di` and `ei` assemble and run and change nothing you can observe, because there is nothing to
-enable.
+```z80
+    ei
+    reti
+```
 
-## A handler has to leave no trace
+The `reti` executes before another maskable interrupt can be accepted. `di` has no corresponding
+delay: it takes effect when it executes. Here, with no incoming requests, `di` and `ei` produce no
+visible event.
 
-This part is worth your attention even with no interrupts in sight, because it is the clearest
-example of a rule that applies to any subroutine called from somewhere unexpected.
+## Entering and leaving a handler
 
-A handler runs between two instructions of a program that knows nothing about it. If the handler
-uses `hl`, the interrupted program comes back to find `hl` holding something it never put there, and
-whatever it was in the middle of is now wrong. So the handler has to give back every register it
-touches.
+When the Z80 accepts a maskable interrupt, it disables further maskable interrupts. In modes 1 and
+2, it also pushes the return address on the stack before going to the handler. Mode 0 executes an
+instruction supplied by the hardware; the commonly supplied `rst` instruction pushes a return
+address too. A handler normally ends with `reti`, which takes that saved address from the stack.
+Like `ret`, it continues at the address it popped; it also tells compatible Z80 peripheral hardware
+that the interrupt service is complete.
 
-The obvious way is to push each pair and pop it again, and on this machine that is slow: four pairs
-in and out is over eighty **clock cycles**, which are the ticks of the CPU's clock that every
-instruction is measured in. This is what the shadow set from the registers lecture is for.
+An interrupt may land between any two instructions. The handler must therefore preserve every
+register and flag that the interrupted code may still rely on. This example's contract is to
+preserve `af`, `bc`, `de` and `hl`, because it uses all four pairs.
+
+`af` is the 16-bit pair made from the accumulator `a` and the flags register `f`. Saving `af` with
+`push af` therefore saves both the accumulator and the condition flags. Pairs must be popped in the
+reverse order because the stack is last in, first out.
 
 ```z80|playground|no-flags
     .org 0x8000
@@ -62,139 +67,145 @@ instruction is measured in. This is what the shadow set from the registers lectu
     ld de, 0x2222
     ld hl, 0x3333
     ld a, 0x44
+    cp 0x44            ; set the zero flag
 
-    call handler    ; standing in for the interrupt nothing here will raise
+    call handler       ; stand in for an interrupt in this playground
     halt
 
-; a handler in the shape a real one takes: it gives back every register it uses
 handler:
-    ex af, af'      ; the accumulator and the flags, put away
-    exx             ; and the three pairs
-    ld hl, 0x9999   ; the handler's own work, on its own registers
+    push af
+    push bc
+    push de
+    push hl
+
+    ld bc, 0xAAAA      ; the handler may now use these registers
+    ld de, 0xBBBB
+    ld hl, 0xCCCC
     ld a, 0x88
-    exx             ; and everything comes back
-    ex af, af'
-    ei
-    reti
+    or a               ; this changes a and clears the zero flag
+
+    pop hl
+    pop de
+    pop bc
+    pop af
+    ret                ; paired with call in this runnable demonstration
 ```
 
-The handler does real work on `hl` and `a` in the middle, and the caller's `bc`, `de`, `hl` and `a`
-still come out as `1111`, `2222`, `3333` and `44`. Look at `af'` and `hl'` in the panel and the
-handler's own values are sitting there, `8800` and `9999`, where they will stay until the next
-`exx`. Two instructions of saving, eight clock cycles, instead of eighty.
+After the call, the four pairs have their original values and the zero flag set by `cp` is still
+set. On hardware, the same save/work/restore body would be entered by the CPU and would end with
+`ei` followed by `reti` instead of the demonstration's `ret`.
 
-`reti` is the return an interrupt handler uses. Here it pops an address off the stack and jumps to
-it, which is to say it behaves exactly like `ret`; on real hardware it also signals Zilog's own
-peripheral chips that their interrupt has been dealt with. `retn`, the one an unmaskable handler
-uses, is the same story.
+The Z80 also has a shadow `af'` pair, just as it has the shadow `bc'`, `de'` and `hl'` pairs from the
+registers lecture. `ex af, af'` swaps `af` with `af'`; `exx` swaps the other three pairs. Real
+handlers often use those fast swaps instead of the stack. The explicit pushes above make the
+preservation contract easier to see: flags travel with `a` in `af`, and every saved pair is restored.
 
-## The r register, and free random numbers
+An NMI handler returns with `retn`. NMI has slightly different enable-state rules; for ordinary
+device handlers, the `ei` and `reti` sequence above is the pattern to recognise.
 
-A real Z80 spends part of every instruction refreshing the memory chips, and it keeps the counter
-for that in a register called `r`, whose low seven bits step on with every instruction fetched. It
-was never meant to be useful to a program. It became the standard cheap source of randomness on this
-machine anyway, because its value depends on how long the program has been running, which is
-something nobody can predict.
+## The three interrupt modes
 
-```z80|playground|no-flags
-    .org 0x8000
-    ld a, r         ; a fetch counter, incrementing as the program runs
-    ld b, a
-    nop
-    nop
-    nop
-    ld a, r         ; and again, a few fetches later
-    ld c, a
-    halt
-```
+The instruction `im 0`, `im 1` or `im 2` selects how a real Z80 finds a handler for a maskable
+interrupt. It does not enable interrupts; that is `ei`'s job.
 
-`b` and `c` come out six apart, which is how many instructions were fetched between the two reads.
-`r` is not in the registers panel, and `ld a, r` is the only way to look at it.
+- In **mode 0**, the interrupting hardware supplies an instruction for the Z80 to execute. Hardware
+  commonly supplies one of the `rst` instructions, which jumps to a small fixed address.
+- In **mode 1**, every maskable interrupt goes to address `0x0038`.
+- In **mode 2**, the hardware supplies a byte and the Z80 combines it with the `i` register to locate
+  a two-byte handler address in a table. `i` provides the high byte of the table location; the device
+  provides the low byte. The Z80 reads the handler address there in little-endian order and jumps to
+  it.
 
-## The parts you will see in other people's code
-
-Three things belong to interrupts and do nothing here, and they are listed so you recognise them
-rather than so you use them.
-
-`im 0`, `im 1` and `im 2` pick what the CPU does when an interrupt arrives. The one you will see
-most is `im 1`, which jumps to the fixed address `0x0038`; `im 2` instead reads a 16 bit address out
-of a table, using the `i` register to say which 256 byte stretch of memory that table is in, so each
-device can have a handler of its own. That is a **vector table**, and dispatching through one is a
-useful trick in its own right, interrupts or not, which is what the exercise below is about.
-
-`i` and `r` are real registers here and hold whatever you put in them. `ld i, a` writes `i` and `ld
-a, i` reads it back, but no interrupt will ever come along to read the table it points at.
-
-The [instruction reference](/documentation/z80/instruction) has the exact behaviour of each of
-these.
+Mode 1 is the simplest when one handler can deal with every device. Mode 2 provides a **vector
+table**, so different supplied bytes can lead to different handlers. Since the playground never
+accepts an interrupt, it never performs any of these three dispatches.
 
 ## One to write
 
-Three handlers sit in memory with a table of their addresses at `0x9000`. The test starts `a` at 2,
-which is the byte a device would have supplied, and wants the handler at that index reached, so `bc`
-comes back at 300.
+Complete the demonstration handler so that it preserves every pair it changes. The caller also
+leaves the zero flag set before the call. If that flag survives, `ix` becomes 1; if the handler
+damages it, `ix` becomes 0.
 
-The index has to be doubled first, because each entry in the table is two bytes and `a` counts
-entries rather than bytes. Then add the table's address, load the 16 bit address stored there, and
-jump to it.
+Save and restore `af`, `bc`, `de` and `hl`. Remember to pop them in the opposite order from the
+pushes.
 
-```z80|playground|memory|exercise
+```z80|playground|exercise
     .org 0x8000
-    ; work out the address and jump to it here
+    ld bc, 0x1111
+    ld de, 0x2222
+    ld hl, 0x3333
+    ld a, 0x44
+    cp 0x44
 
-zero:
-    ld bc, 100
-    jp done
-one:
-    ld bc, 200
-    jp done
-two:
-    ld bc, 300
-    jp done
+    call handler
+    ld ix, 1
+    jr z, done
+    ld ix, 0
 done:
     halt
 
-    .org 0x9000
-vectors: .dw zero, one, two
+handler:
+    ; Save the pairs here.
+
+    ld bc, 0xAAAA
+    ld de, 0xBBBB
+    ld hl, 0xCCCC
+    ld a, 0x88
+    or a
+
+    ; Restore the pairs here.
+    ret
 ```
 
 ```testcase
 {
-    "startingRegisters": { "a": 2 },
-    "expectedRegisters": { "bc": 300 }
+    "startingRegisters": { "sp": "0xFFFF" },
+    "expectedRegisters": {
+        "a": "0x44",
+        "bc": "0x1111",
+        "de": "0x2222",
+        "hl": "0x3333",
+        "ix": 1,
+        "sp": "0xFFFF"
+    }
 }
 ```
 
 <details>
 <summary>Show solution</summary>
 
-```z80|playground|memory|solution
+```z80|playground|solution
     .org 0x8000
-    ld l, a
-    ld h, 0
-    add hl, hl      ; two bytes per entry
-    ld de, vectors
-    add hl, de      ; hl points at the entry
-    ld e, (hl)
-    inc hl
-    ld d, (hl)      ; de = the handler's address
-    ex de, hl
-    jp (hl)
+    ld bc, 0x1111
+    ld de, 0x2222
+    ld hl, 0x3333
+    ld a, 0x44
+    cp 0x44
 
-zero:
-    ld bc, 100
-    jp done
-one:
-    ld bc, 200
-    jp done
-two:
-    ld bc, 300
-    jp done
+    call handler
+    ld ix, 1
+    jr z, done
+    ld ix, 0
 done:
     halt
 
-    .org 0x9000
-vectors: .dw zero, one, two
+handler:
+    push af
+    push bc
+    push de
+    push hl
+
+    ld bc, 0xAAAA
+    ld de, 0xBBBB
+    ld hl, 0xCCCC
+    ld a, 0x88
+    or a
+
+    pop hl
+    pop de
+    pop bc
+    pop af
+    ret
 ```
 
 </details>

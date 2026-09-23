@@ -59,7 +59,7 @@ surrounding control flow so a subroutine is entered by `call`.
 ## Decide how values travel
 
 The CPU gives `call` and `ret` their stack behaviour, but it has no built-in idea of parameters or
-return values. The caller and subroutine need an agreement such as:
+return values. The caller and subroutine need an agreement. Possible contract rules include:
 
 - the argument arrives in `a`;
 - the result leaves in `a`;
