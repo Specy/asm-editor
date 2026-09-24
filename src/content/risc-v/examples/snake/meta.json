@@ -1,6 +1,6 @@
 {
     "name": "The snake game",
-    "description": "The whole ladder in one program: a board of cells packed into words, a body moved by a loop, the keyboard polled every frame, food from a generator of its own, and two words of the screen changing per frame.",
+    "description": "Build a complete snake game from packed board cells, an array-backed body, keyboard input, collision checks, food placement, and small screen updates.",
     "order": 23,
     "topic": "snake"
 }

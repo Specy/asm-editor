@@ -1,10 +1,32 @@
 A square you steer. The `w`, `a`, `s` and `d` keys set which way it is going and it keeps going that
 way on its own, coming back in at the opposite edge when it leaves the grid. **Click the Screen panel
-first**: the screen only gets the keyboard when it has the focus, and a ring around it says so while
-it does.
+first**: the Screen panel receives keyboard input only while it has focus, and a ring around it shows
+when it does.
 
-A picture that changes on its own needs nothing from outside. This one asks the keyboard once per
-frame whether anything has been typed, and what comes back changes every frame after it.
+This animation also checks for keyboard input once per frame. A typed control key changes its
+direction on that frame and every frame after it.
+
+Each frame does five jobs in order:
+
+```text
+erase the old square
+read at most one character and, if it is a control key, change dx and dy
+add dx and dy to the position, wrapping at an edge
+draw the square at its new position
+wait 80 milliseconds
+```
+
+The values that must survive calls to `fill_rect` live in saved registers:
+
+| Register   | Meaning                                               |
+| ---------- | ----------------------------------------------------- |
+| `s2`, `s3` | square's top-left `x`, `y`                            |
+| `s4`, `s5` | horizontal and vertical steps, each `-1`, `0`, or `1` |
+| `s6`       | base address of the keyboard's device registers       |
+| `s7`       | largest valid top-left coordinate                     |
+| `s8`–`s11` | character codes for `a`, `d`, `w`, and `s`            |
+
+As before, `s0` holds the display address and `s1` holds the colour for the next rectangle call.
 
 ```riscv|playground|open-screen|no-registers|allow-open
 # @screen unit=8 width=256 height=256 base=display
@@ -22,8 +44,11 @@ display: .space 4096        # SIDE * SIDE words, four bytes each
 .text
 .globl main
 
-# fill_rect(x, y, w, h): the grid is in s0 and the colour in s1
+# fill_rect(x, y, width, height)
+# Reads s0=display base and s1=colour; changes only t0-t3.
 fill_rect:
+    blez a2, rect_done
+    blez a3, rect_done
     mv t0, a1               # row = y
     add t1, a1, a3          # one past the last row
 rect_rows:
@@ -39,13 +64,15 @@ rect_cols:
     bnez t3, rect_cols
     addi t0, t0, 1
     blt t0, t1, rect_rows
+rect_done:
     ret
 
 main:
+    addi sp, sp, -12        # align the Playground stack before calls
     la s0, display
     li s6, MMIO
-    li s7, LAST             # the edge, and the four keys, in registers
-    li s8, 'a'              # because a branch compares two registers
+    li s7, LAST             # largest top-left x or y
+    li s8, 'a'              # fixed key codes for branch comparisons
     li s9, 'd'
     li s10, 'w'
     li s11, 's'
@@ -73,25 +100,28 @@ frame:
 # --- one key sets the direction, it does not move the square -----------------
     lw t4, 0(s6)            # the receiver control register
     andi t4, t4, 1          # the Ready bit
-    beqz t4, no_key
+    beqz t4, input_done
     lw t5, 4(s6)            # the receiver data, which takes the character
     andi t5, t5, 0xFF
     bne t5, s8, not_a
     li s4, -1
     li s5, 0
+    j input_done
 not_a:
     bne t5, s9, not_d
     li s4, 1
     li s5, 0
+    j input_done
 not_d:
     bne t5, s10, not_w
     li s4, 0
     li s5, -1
+    j input_done
 not_w:
-    bne t5, s11, no_key
+    bne t5, s11, input_done
     li s4, 0
     li s5, 1
-no_key:
+input_done:
 
 # --- and the square moves on its own, coming back in at the far edge ---------
     add s2, s2, s4
@@ -116,7 +146,7 @@ y_done:
     li a3, BOX
     jal fill_rect
 
-    li a7, 32               # a frame of program time
+    li a7, 32               # wait one frame
     li a0, FRAME
     ecall
     j frame
@@ -128,35 +158,57 @@ y_done:
 
 `lw t4, 0(s6)` reads the **receiver control** register and `andi t4, t4, 1` keeps its Ready bit,
 which is 1 when a character is waiting. `lw t5, 4(s6)` reads the **receiver data** register, whose
-low byte is that character, and reading it takes the character out of the queue and makes room for
-the next one. Neither of those is memory: `sw` and `lw` are how you talk to a device on this machine,
-and the address is what says which one.
+low byte is that character. Reading the data takes the character out of the queue. These addresses
+select a device rather than ordinary display memory: the same `lw` instruction performs the read,
+and the address says what is being read.
 
-Polling once a frame is enough, because what is not read stays in the queue. Ready means "the queue
-is not empty", so a key pressed between two polls is still waiting at the next one and nothing is
-lost.
+The program consumes at most one queued character per frame. Ready means "the queue is not empty",
+so a character that arrives between two polls remains waiting for the next poll. That does not mean
+the queue has unlimited capacity: input could be lost if characters arrive faster than the program
+can consume them for long enough.
 
-The four key codes are loaded into `s8` to `s11` once, before the loop, and never touched again. A
-comparison against `'a'` needs the 97 in a register of its own, and the cheap place to load it is
-outside the loop, where it happens once instead of once a frame.
+The four key codes are loaded into `s8` to `s11` once, before the loop, because branch comparisons
+use registers and these values do not change. After a recognized key changes the direction, the
+jump to `input_done` skips the other comparisons. An unrecognized character changes nothing.
 
-The receiver hands over **characters that were typed**, one at a time, and that is all it knows. It
-cannot tell you that a key is being held down now, or that one has just been let go. So a program
-here cannot ask "is `d` down?" every frame; it can only be told "a `d` arrived". That single fact
-decides the shape of this program: the key sets a direction that persists, and the square keeps
-moving until a different key changes it. It is also why the controls are `w`, `a`, `s` and `d`
-rather than the arrow keys, which send nothing a receiver can carry.
+The receiver hands over **characters that were typed**, one at a time. It cannot tell the program
+that a key is being held down now, or that one has just been released. The key therefore sets a
+direction that persists, and each frame applies it. This Playground receiver supplies typed
+character input, so this example uses ordinary character keys: `w`, `a`, `s`, and `d`.
 
-The keys do not move the square, they write `s4` and `s5`, and the code under them moves it. That
-separation is what makes the square keep going after you let go of the key, and it is how anything
-that moves in a game is written: the input decides the velocity, the frame applies it.
+Setting the other step to 0 for every recognized direction keeps movement horizontal or vertical.
+If those assignments were removed, pressing `d` and then `w` would leave both steps nonzero and the
+square would move diagonally. Try the controls manually in the Screen panel.
 
-Setting the other step to 0 next to each direction is what keeps the movement to four directions.
-Take the four `li s5, 0` and `li s4, 0` lines out and pressing `d` and then `w` leaves both steps set,
-and the square goes diagonally.
+## Fitting and wrapping the square
 
-A testcase cannot type into the receiver, so the keys are yours to try by hand.
+The coordinates name the square's top-left cell. A three-cell-wide square at `x = 29` occupies
+columns 29, 30, and 31, so 29 is the last top-left position that fits. The same calculation applies
+vertically. Therefore `LAST` is `SIDE - BOX`, or 29.
 
-The wrapping at the edges is two instructions, and changing which value they write is the difference
-between two behaviours you would describe very differently: `li s2, 0` sends the square back in at
-the far side, `li s2, LAST` stops it dead against the edge.
+After the program adds a step, a coordinate above `LAST` wraps to 0, while a coordinate below 0
+wraps to `LAST`. For example, moving left from `x = 0` produces `x = -1`; `li s2, LAST` then places
+the square at the right edge. This is **wrapping**, not stopping or clamping at the edge.
+
+`fill_rect` is safe when its width or height is zero or negative: its two entrance checks return
+without drawing. Positive rectangles must still fit inside the 32 by 32 grid because the helper
+does not clip them.
+
+At startup, `main` lowers `sp` by 12 bytes so the Playground stack is aligned before the first
+call. It never restores `sp` because this animation loops until you press Stop and does not return
+from `main`.
+
+## Exercises
+
+1. Reverse the initial horizontal motion by changing `li s4, 1` to `li s4, -1`. Starting from
+   `x = 14`, predict the first two drawn x-coordinates before running the program. They should be
+   13 and 12.
+
+2. Make the square 2 by 2. Change `BOX`, then derive and change `LAST`. The new value is 30: a
+   square starting at column or row 30 occupies cells 30 and 31 exactly.
+
+3. Change the movement from wrapping to **clamping**, so the square stops at an edge until another
+   key changes its direction. For right or bottom overflow, write `LAST`; for left or top
+   underflow, write 0. In other words, change the right-overflow assignment from `li s2, 0` to
+   `li s2, LAST`, and the left-underflow assignment from `li s2, LAST` to `li s2, 0`. Make the
+   matching changes for `s3`.

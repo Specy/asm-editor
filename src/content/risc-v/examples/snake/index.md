@@ -1,36 +1,82 @@
-The whole ladder in one program. A snake of green cells crosses a board of 32 by 32, the `w`, `a`, `s`
-and `d` keys steer it, it grows by one segment every time it reaches the food, and it ends when its
-head leaves the board or runs into its own body. The score goes to the console as you play, and the
-board turns dark red when you lose.
+This program brings the earlier screen, keyboard, array, loop, and subroutine examples together in a
+small game. A snake crosses a 32 by 32 board. The `w`, `a`, `s`, and `d` keys steer it, food makes it
+grow, and the game ends when the head reaches a wall or the snake's body.
 
-**Click the Screen panel before you press a key**, the same as in Move a square with the keyboard, and
-press Run again to play another game.
+**Click the Screen panel before you press a key.** The Screen panel receives keyboard input only
+while it has focus. Press Run again to start a new game.
 
-Almost everything in it has appeared on an earlier page: an array walked with a pointer, subroutines
-with agreed registers, a polled keyboard, a frame that redraws only what moved. The one genuinely
-new idea is that the board is kept as **cells** rather than as addresses. A segment of the snake is
-one word holding a column in one byte and a row in another, and it only turns into an address at the
-moment something is drawn.
+## The game state
+
+The program numbers columns and rows from 0 through 31. It packs one cell into a word, with the
+unused upper bits set to zero:
+
+```text
+cell 0x0000050C
+             ^^-- row 12 (0x0C)
+           ^^---- column 5
+```
+
+Thus `body[0] = 0x050C` means that the head occupies column 5, row 12. `draw_cell` performs the
+conversion to a display address:
+
+```text
+display address = display + 4 * (row * 32 + column)
+```
+
+| Memory name | Meaning                                                                         |
+| ----------- | ------------------------------------------------------------------------------- |
+| `body`      | Up to 64 packed cells; `body[0]` is the head and `body[length - 1]` is the tail |
+| `length`    | Number of cells currently used in `body`                                        |
+| `dx`, `dy`  | Horizontal and vertical movement, each `-1`, `0`, or `1`                        |
+| `food`      | Packed cell containing the food                                                 |
+| `score`     | Number of pieces of food eaten                                                  |
+| `seed`      | State used to produce the next deterministic food position                      |
+
+| Register   | Meaning                                                            |
+| ---------- | ------------------------------------------------------------------ |
+| `s0`       | Display base address                                               |
+| `s1`       | Colour for the next drawing call                                   |
+| `s2`       | Keyboard-device base address                                       |
+| `s3`       | Old tail cell saved for the current frame                          |
+| `s4`       | New head cell calculated for the current frame                     |
+| `s5`       | One-frame flag: 1 when growth means the old tail must remain drawn |
+| `s7`       | Largest valid coordinate, 31                                       |
+| `s8`–`s11` | Character codes for `a`, `d`, `w`, and `s`                         |
+
+Mutable game state lives in memory so helpers can load it by name. Saved registers hold
+configuration and current-frame values that are needed across calls.
+
+Each trip through `frame` does these jobs:
+
+1. Read at most one key and accept a safe change of direction.
+2. Save the old tail cell, then shift the body from tail toward head.
+3. Calculate the new head and check the walls and body.
+4. If the head reached food, update the score, grow if there is room, and place new food.
+5. Erase the old tail unless growth kept it, then draw the head and food.
+6. Wait 120 milliseconds.
+
+The helpers have interface comments immediately above their labels. Those comments identify their
+inputs and the registers they change.
 
 ```riscv|playground|open-screen|console|no-registers|allow-open
 # @screen unit=16 width=512 height=512 base=display
 .eqv MMIO, 0xffff0000
-.eqv SIDE, 32               # the board, in cells
-.eqv LAST, 31               # SIDE - 1
-.eqv CELLS, 1024            # SIDE * SIDE
+.eqv SIDE, 32
+.eqv LAST, 31
+.eqv CELLS, 1024
 .eqv MAXLEN, 64
-.eqv FRAME, 120             # milliseconds per cell
+.eqv FRAME, 120
 .eqv BACKGROUND, 0x00101820
 .eqv SNAKE, 0x0040D040
 .eqv FOOD, 0x00FF4000
 .eqv DEAD, 0x00400810
 
 .data
-display: .space 4096        # CELLS words, four bytes each
+display: .space 4096
 body:    .word 0x050C, 0x040C, 0x030C
          .space 244         # room for MAXLEN segments in all
 length:  .word 3
-dx:      .word 1            # the direction, in cells
+dx:      .word 1
 dy:      .word 0
 score:   .word 0
 seed:    .word 0x1F123BB5
@@ -41,18 +87,19 @@ over:    .asciz "Game over. Score: "
 .text
 .globl main
 main:
+    addi sp, sp, -12        # align the Playground stack before calls
     la s0, display
     li s2, MMIO
-    li s5, 0                # nothing has grown yet
-    li s7, LAST             # the edge, and the four keys, in registers
-    li s8, 'a'              # because a branch compares two registers
+    li s5, 0
+    li s7, LAST
+    li s8, 'a'
     li s9, 'd'
     li s10, 'w'
     li s11, 's'
 
-    li s1, BACKGROUND       # the board, painted once
+    li s1, BACKGROUND
     jal fill_grid
-    li s1, SNAKE            # and the snake it starts with
+    li s1, SNAKE
     la t2, body
     lw t3, length
 start_body:
@@ -66,11 +113,10 @@ start_body:
     jal draw_cell
 
 frame:
-# --- one character, and it only ever sets the direction ----------------------
-    lw t0, 0(s2)            # the receiver control register
-    andi t0, t0, 1          # the Ready bit
+    lw t0, 0(s2)            # receiver control register
+    andi t0, t0, 1          # Ready bit
     beqz t0, no_key
-    lw t1, 4(s2)            # the receiver data, which takes the character
+    lw t1, 4(s2)            # reading receiver data takes the character
     andi t1, t1, 0xFF
     bne t1, s8, not_a
     li a0, -1
@@ -93,15 +139,14 @@ not_w:
     jal try_direction
 no_key:
 
-# --- every segment takes the place of the one in front of it -----------------
     lw t0, length
     slli t0, t0, 2
     la t1, body
     add t1, t1, t0
-    addi t1, t1, -4         # &body[length - 1], the tail
-    lw s3, 0(t1)            # the cell the tail is leaving
+    addi t1, t1, -4         # &body[length - 1]
+    lw s3, 0(t1)            # old tail cell
     lw t2, length
-    addi t2, t2, -1         # length - 1 copies to make
+    addi t2, t2, -1
     beqz t2, moved
 shift:
     lw t3, -4(t1)           # body[i] = body[i - 1]
@@ -111,23 +156,22 @@ shift:
     bnez t2, shift
 moved:
 
-# --- the new head, one cell on from the old one ------------------------------
-    lw t0, body             # the head, x in the high byte and y in the low
-    srli t1, t0, 8          # x
-    andi t2, t0, 0xFF       # y
+    lw t0, body             # old head: x in high byte, y in low byte
+    srli t1, t0, 8
+    andi t2, t0, 0xFF
     lw t3, dx
     add t1, t1, t3
     lw t3, dy
     add t2, t2, t3
-    bltz t1, game_over      # off the left
+    bltz t1, game_over
     bgt t1, s7, game_over
     bltz t2, game_over
     bgt t2, s7, game_over
     slli t1, t1, 8
-    or s4, t1, t2           # the new head, packed again
-    sw s4, body, t0
+    or s4, t1, t2
+    la t0, body
+    sw s4, 0(t0)
 
-# --- did it run into itself --------------------------------------------------
     la t1, body
     addi t1, t1, 4
     lw t2, length
@@ -141,30 +185,30 @@ bite:
     bnez t2, bite
 no_bite:
 
-# --- did it reach the food ---------------------------------------------------
     lw t3, food
     bne t3, s4, no_meal
     lw t4, score
     addi t4, t4, 1
-    sw t4, score, t0
+    la t0, score
+    sw t4, 0(t0)
     lw t4, length
     li t5, MAXLEN
     bge t4, t5, no_room
     slli t5, t4, 2
     la t6, body
     add t6, t6, t5
-    sw s3, 0(t6)            # the tail that was leaving stays on instead
+    sw s3, 0(t6)
     addi t4, t4, 1
-    sw t4, length, t0
-    li s5, 1                # so nothing is erased this frame
+    la t0, length
+    sw t4, 0(t0)
+    li s5, 1                # skip the tail erase once
 no_room:
     jal place_food
     jal print_score
 no_meal:
 
-# --- two words change on the screen, and no more ----------------------------
     beqz s5, erase_tail
-    li s5, 0                # it grew, so the tail stays where it is
+    li s5, 0
     j tail_done
 erase_tail:
     li s1, BACKGROUND
@@ -178,7 +222,7 @@ tail_done:
     lw a0, food
     jal draw_cell
 
-    li a7, 32               # a frame of program time
+    li a7, 32
     li a0, FRAME
     ecall
     j frame
@@ -198,7 +242,8 @@ game_over:
     li a7, 10
     ecall
 
-# fill_grid(): every word of the grid becomes the colour in s1
+# fill_grid(): paint every grid word with s1.
+# Reads s0 and s1; changes only t0 and t1.
 fill_grid:
     mv t0, s0
     li t1, CELLS
@@ -209,62 +254,76 @@ fill_next:
     bnez t1, fill_next
     ret
 
-# draw_cell(c): the packed cell in a0, painted in the colour in s1.
-# It destroys t0 and t1 and nothing else.
+# draw_cell(c): paint packed cell a0 with colour s1.
+# Reads s0 and s1; changes only t0 and t1.
 draw_cell:
-    srli t0, a0, 8          # x
-    andi t1, a0, 0xFF       # y
-    slli t1, t1, 5          # y * SIDE
-    add t0, t0, t1          # + x
-    slli t0, t0, 2          # four bytes per word
+    srli t0, a0, 8
+    andi t1, a0, 0xFF
+    slli t1, t1, 5
+    add t0, t0, t1
+    slli t0, t0, 2
     add t0, t0, s0
     sw s1, 0(t0)
     ret
 
-# try_direction(nx, ny): take the new direction unless it turns the snake back
-# on itself, which would be an instant bite. It destroys t6 and nothing else.
+# try_direction(nx, ny): use a0,a1 unless that direction is directly backward.
+# Changes only t6.
 try_direction:
     lw t6, dx
     add t6, t6, a0
     bnez t6, take_it
     lw t6, dy
     add t6, t6, a1
-    beqz t6, no_turn        # both zero means the new way is the opposite one
+    beqz t6, no_turn
 take_it:
-    sw a0, dx, t6
-    sw a1, dy, t6
+    la t6, dx
+    sw a0, 0(t6)
+    la t6, dy
+    sw a1, 0(t6)
 no_turn:
     ret
 
-# place_food(): a cell out of the generator below. It calls, so it saves ra,
-# and next_random destroys only a0 and t6, which is why t0 and t1 survive it.
+# place_food(): choose a deterministic free cell and store it in food.
+# Calls next_random; changes a0 and t0-t6.
 place_food:
     addi sp, sp, -16
     sw ra, 0(sp)
+food_retry:
     jal next_random
-    andi t0, a0, LAST       # a column, 0 to 31
+    andi t0, a0, LAST
     slli t0, t0, 8
     jal next_random
-    andi t1, a0, LAST       # a row, 0 to 31
+    andi t1, a0, LAST
     or t0, t0, t1
-    sw t0, food, t2
+    la t2, body
+    lw t3, length
+food_scan:
+    lw t4, 0(t2)
+    beq t4, t0, food_retry
+    addi t2, t2, 4
+    addi t3, t3, -1
+    bnez t3, food_scan
+    la t2, food
+    sw t0, 0(t2)
     lw ra, 0(sp)
     addi sp, sp, 16
     ret
 
-# next_random(): the next number of a 32 bit xorshift, in a0
+# next_random(): update seed and return the next deterministic value in a0.
+# Changes only a0 and t6.
 next_random:
     lw a0, seed
     slli t6, a0, 13
-    xor a0, a0, t6          # x = x ^ (x << 13)
+    xor a0, a0, t6
     srli t6, a0, 17
-    xor a0, a0, t6          # x = x ^ (x >> 17)
+    xor a0, a0, t6
     slli t6, a0, 5
-    xor a0, a0, t6          # x = x ^ (x << 5)
-    sw a0, seed, t6
+    xor a0, a0, t6
+    la t6, seed
+    sw a0, 0(t6)
     ret
 
-# print_score(): the label and the number, on the console
+# print_score(): print the label, score, and newline; changes a0 and a7.
 print_score:
     li a7, 4
     la a0, label
@@ -282,60 +341,92 @@ print_score:
 { "runFor": 100000 }
 ```
 
-`body` is an array of words, one per segment, with the head at `body[0]`, and a segment is a cell:
-`0x050C` is column 5, row 12. Packing the two into one word is what makes a comparison between two
-cells a single `beq`, which the self collision test does once per segment and the food test does once
-per frame.
+## Trace two frames
 
-The snake moves by shifting: every segment takes the place of the one in front of it, from the tail
-backwards so that nothing is overwritten before it has been read, and then the head is given its new
-cell. The tail therefore disappears from where it was without any code saying so, which is why the
-cell it was in is read into `s3` **before** the shift runs.
+Suppose the body is `[0x050C, 0x040C, 0x030C]` and the snake is moving right.
 
-Growing is that same word put back. When the head reaches the food, the cell the tail was leaving is
-written one place past the end of the body and `length` goes up by one, so the segment that was about
-to vanish stays where it is. `s5` then says the tail did not move this frame, and the drawing skips
-the erase.
+1. `s3` saves `0x030C`, the old tail.
+2. The backward shift produces `[0x050C, 0x050C, 0x040C]`. Copying backward preserves each value
+   until the segment behind it has read it.
+3. The old head at column 5, row 12 moves to column 6, row 12, so `s4` becomes `0x060C`.
+4. Storing that cell at `body[0]` produces `[0x060C, 0x050C, 0x040C]`.
+5. No food was eaten, so `s5` is 0. The drawing code paints `0x030C` with the background and
+   `0x060C` with the snake colour.
 
-The head's new cell is the old one plus the direction, and `dx` and `dy` are counted in cells, so they
-are 1, 0 or -1. The four wall tests run on `t1` and `t2` while they are still separate numbers,
-because a column of -1 packed back into a byte is 255 and no test after the `slli` could tell the two
-apart.
+The shift changes the array; it does not erase a pixel. The later call to `draw_cell` explicitly
+paints the old tail cell with the background.
 
-The keys do not move the snake, they call `try_direction`, and it refuses a direction that is the
-exact opposite of the one the snake is going: `dx + nx` and `dy + ny` are both zero only when the new
-way is backwards, and turning back means eating your own neck on the next frame.
+For an eating frame, imagine `[0x130C, 0x120C, 0x110C]` moving right toward food at `0x140C`.
+After the shift and new-head store, the array is `[0x140C, 0x130C, 0x120C]`. The program appends the
+saved tail `0x110C`, increases `length`, and sets `s5` to 1. That one-frame flag skips erasing
+`0x110C`, so the visible snake grows to four cells.
 
-The food goes wherever a 32 bit **xorshift** generator says. Three shifts and three `xor` instructions
-turn a number into the next one of a sequence, which is as random as a program with no clock and no
-dice can be. Both coordinates are `andi` with 31, since 32 is a power of two and the low five bits of
-any number are already a column.
+## Choosing a direction
 
-A frame reaches the screen with three `sw` instructions, and only two of them usually change
-anything: the cell the tail left, the cell the head arrived in, and the food, repainted whether it
-moved or not. The display is the picture, so the cheapest correct frame is the one that writes the
-fewest words. This one is 105 instructions. Clearing the board and redrawing the whole snake would
-be over four thousand, since `fill_grid` alone is 1024 passes of four instructions.
+`try_direction` receives its requested direction in the normal argument registers: `a0 = nx` and
+`a1 = ny`. If the snake is moving right, its current direction is `(1, 0)`. A request to move
+left is `(-1, 0)`, so both component sums are zero:
 
-Everything kept between frames lives in memory rather than in a register, and a store to a label
-needs three operands: `sw t4, score, t0` puts the score away and uses `t0` to build the address in.
-A store has room for one register and one offset, so if you want it to reach a label you have to
-lend it a register to work in, and it has to be one you are willing to lose.
+```text
+dx + nx = 1 + -1 = 0
+dy + ny = 0 +  0 = 0
+```
 
-The score goes to the console because the display draws pixels and nothing else. Every `ecall` in
-the program is either printing, the wait that paces a frame, or the exit at the end.
+That request is refused. A request for up, `(0, -1)`, leaves nonzero sums and is accepted. The two
+sums are both zero only when the requested direction is the exact opposite.
 
-`fill_grid` and `draw_cell` both read the colour out of `s1` and the base of the grid out of `s0`, and
-`draw_cell` promises to destroy `t0` and `t1` and nothing else, which is what lets the loop that draws
-the starting body keep its pointer in `t2` and the caller keep the head in `s4`. Those comments above
-the labels are the whole of the agreement, and this program has four of them.
+`draw_cell` uses `a0` for its ordinary argument, while also reading `s0` and `s1`. Those saved
+registers are program-local parts of this helper's contract. They do not replace the general
+calling-convention rule that ordinary subroutine arguments go in `a` registers.
 
-With nobody typing, the snake runs straight to the right, eats the food on the way, and hits the wall
-26 frames later, and the red board and the console line are done by 11224 instructions. That is the
-game the verification run plays. The `runFor` of 100000 is the budget the Playground gets before it
-stops; a game you are playing ends when you make it end.
+## Food, growth, and the supplied generator
 
-Change the seed in the data section and every piece of food after the first one falls somewhere
-else. The sequence is decided entirely by where it starts, so the same program run twice plays the
-same game twice. That is not a flaw to be worked around: it is what makes a program built on a
-generator possible to debug at all.
+`next_random` is a supplied **xorshift** helper. Given `seed`, it applies the fixed shift counts
+13, 17, and 5, stores the next seed, and returns that value in `a0`. Its contract is enough to use
+it; the mathematical choice of constants is outside this example. The sequence is deterministic,
+so the same starting seed produces the same values on every run.
+
+`place_food` calls the helper twice. Masking a result with 31 retains five bits, giving a value
+from 0 through 31 for one coordinate. After packing the candidate cell, the helper scans `body`.
+An occupied candidate is discarded and another pair is tried, so food never appears under the
+snake.
+
+The body array has room for 64 segments. At that cap, eating still increases the score and places
+new food, while `length` stays 64. This keeps the fixed-size array safe and allows play to continue.
+
+The stores to named state use the familiar address form:
+
+```riscv
+la t0, score
+sw t4, 0(t0)
+```
+
+The assembler also accepts a shorter label form such as `sw t4, score, t0`, where the last
+temporary register helps form the address. This program spells out `la` and `sw` so the memory
+operation remains visible.
+
+## Drawing and calls
+
+Most frames change two visible cells: the old tail becomes background and the new head becomes
+green. The food is drawn again to cover the frame in which a meal placed it somewhere new. On a
+growth frame, `s5` skips the tail erase once. Updating these few cells avoids clearing and
+redrawing the whole board every 120 milliseconds.
+
+The score uses console `ecall`s because the bitmap display contains pixels. The other `ecall`s
+wait for the next frame and exit after a collision.
+
+At startup, `main` subtracts 12 from the Playground's initial stack pointer to align it before the
+first call. `place_food` then uses a 16-byte frame, saves `ra` because it calls `next_random`,
+and restores both `ra` and `sp` before returning.
+
+## Exercises
+
+1. Make the initial snake move left. Reverse the starting body cells so the head is `0x030C`, then
+   change `dx` to `-1`. Predict the first new head cell: `0x020C`.
+2. Move the fixed starting food to grid cell column 10, row 8. These are cell coordinates, not
+   display-pixel coordinates. Pack them as `0x0A08`, update `food`, and find the cell in the Screen
+   panel.
+3. Write `same_cell`: it receives packed cells in `a0` and `a1`, and returns 1 in `a0` when
+   they match or 0 otherwise. Use `beq` to choose between `li a0, 0` and `li a0, 1`, then `ret`.
+   Test it in a separate tiny program: load equal values into `a0` and `a1`, use `jal same_cell`,
+   and inspect `a0`; then repeat with unequal values.
