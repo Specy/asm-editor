@@ -22,8 +22,8 @@ supplies one more fact about how that value was made.
 
 The editor shows these six named bits of `f`:
 
-| Bit in `f` | 7 | 6 | 4 | 2 | 1 | 0 |
-| ---------- | - | - | - | - | - | - |
+| Bit in `f` | 7   | 6   | 4   | 2     | 1   | 0   |
+| ---------- | --- | --- | --- | ----- | --- | --- |
 | Flag       | `S` | `Z` | `H` | `P/V` | `N` | `C` |
 
 The two flags to learn first are:
@@ -60,11 +60,11 @@ borrow, so `C` is 1.
 This gives `cp` a useful unsigned meaning:
 
 | After `cp value` | What it says about unsigned `a` and `value` |
-| ---------------- | -------------------------------------------- |
-| `Z` is 1 | they are equal |
-| `Z` is 0 | they are different |
-| `C` is 1 | `a` is smaller |
-| `C` is 0 | `a` is at least as large |
+| ---------------- | ------------------------------------------- |
+| `Z` is 1         | they are equal                              |
+| `Z` is 0         | they are different                          |
+| `C` is 1         | `a` is smaller                              |
+| `C` is 0         | `a` is at least as large                    |
 
 The flags hold these facts so that another instruction can use them to make a decision. Use the
 flags panel to see the answer directly.

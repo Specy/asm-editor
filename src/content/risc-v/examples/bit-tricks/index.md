@@ -1,13 +1,13 @@
 One 32-bit value can be inspected in several useful ways by treating its register as a pattern of
 bits. This program starts with `t0 = 182` and produces five results:
 
-| question | result register | value for 182 |
-| --- | --- | --- |
-| Is the value odd? (`1` for odd, `0` for even) | `t1` | 0 |
-| What are the low 32 bits after shifting left by three? | `t2` | 1456 |
-| What are the bottom four bits, as a number? | `t3` | 6 |
-| How many of the 32 bits are 1? | `t4` | 5 |
-| How many zeroes come before the highest 1? | `s1` | 24 |
+| question                                               | result register | value for 182 |
+| ------------------------------------------------------ | --------------- | ------------- |
+| Is the value odd? (`1` for odd, `0` for even)          | `t1`            | 0             |
+| What are the low 32 bits after shifting left by three? | `t2`            | 1456          |
+| What are the bottom four bits, as a number?            | `t3`            | 6             |
+| How many of the 32 bits are 1?                         | `t4`            | 5             |
+| How many zeroes come before the highest 1?             | `s1`            | 24            |
 
 ```riscv|playground|allow-open
 .text
@@ -64,15 +64,15 @@ The first eight passes of the set-bit loop look like this. The lowest bit is add
 the copy in `t5` shifts right:
 
 | pass | `t5` at the top | lowest bit | `t4` after adding |
-| --- | --- | --- | --- |
-| 1 | `...10110110` | 0 | 0 |
-| 2 | `...1011011` | 1 | 1 |
-| 3 | `...101101` | 1 | 2 |
-| 4 | `...10110` | 0 | 2 |
-| 5 | `...1011` | 1 | 3 |
-| 6 | `...101` | 1 | 4 |
-| 7 | `...10` | 0 | 4 |
-| 8 | `...1` | 1 | 5 |
+| ---- | --------------- | ---------- | ----------------- |
+| 1    | `...10110110`   | 0          | 0                 |
+| 2    | `...1011011`    | 1          | 1                 |
+| 3    | `...101101`     | 1          | 2                 |
+| 4    | `...10110`      | 0          | 2                 |
+| 5    | `...1011`       | 1          | 3                 |
+| 6    | `...101`        | 1          | 4                 |
+| 7    | `...10`         | 0          | 4                 |
+| 8    | `...1`          | 1          | 5                 |
 
 After pass 8, `t5` is zero. The loop still runs until `t6` has counted down from 32 to 0, so it
 always inspects all 32 positions; the remaining 24 passes add zero. `srli` brings zeroes in at the

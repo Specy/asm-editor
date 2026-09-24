@@ -10,22 +10,22 @@ increases to the right and `y` increases downwards.
 Drawing takes two steps. First write the settings for a shape. Then write a command number to port
 `0x27`; the command uses the settings currently held by the Screen.
 
-| port | setting |
-| ---: | --- |
-| `0x20` | pen colour for lines and outlines |
-| `0x21` | fill colour for shapes and clear |
-| `0x22` | pen width in pixels |
-| `0x23`, `0x24` | first point: X and Y |
-| `0x25`, `0x26` | second point: X2 and Y2 |
-| `0x27` | command: writing here performs the drawing |
+|           port | setting                                     |
+| -------------: | ------------------------------------------- |
+|         `0x20` | pen colour for lines and outlines           |
+|         `0x21` | fill colour for shapes and clear            |
+|         `0x22` | pen width in pixels                         |
+| `0x23`, `0x24` | first point: X and Y                        |
+| `0x25`, `0x26` | second point: X2 and Y2                     |
+|         `0x27` | command: writing here performs the drawing  |
 | `0x29`, `0x2A` | text cursor column and row, in 8 by 8 cells |
 
-| command | operation |
-| ---: | --- |
-| 1 | line from (X, Y) to (X2, Y2) |
-| 4 | filled, outlined rectangle from (X, Y) to (X2, Y2) |
-| 6 | filled, outlined ellipse inside that rectangle |
-| 9 | clear the whole Screen with the fill colour |
+| command | operation                                          |
+| ------: | -------------------------------------------------- |
+|       1 | line from (X, Y) to (X2, Y2)                       |
+|       4 | filled, outlined rectangle from (X, Y) to (X2, Y2) |
+|       6 | filled, outlined ellipse inside that rectangle     |
+|       9 | clear the whole Screen with the fill colour        |
 
 The right and bottom coordinates of a rectangle are **excluded**. A rectangle from `(20, 20)` to
 `(101, 81)` covers columns 20 through 100 and rows 20 through 80. Lines include both end points.
@@ -39,8 +39,7 @@ bits:  7 6 5 | 4 3 2 | 1 0
        red   | green | blue
 ```
 
-Red and green are each from 0 to 7; blue is from 0 to 3. For orange, choose red 7, green 4 and blue
-0. Red 7 fills the top three bits, giving `11100000` (`0xE0`). Green 4 gives `00010000`
+Red and green are each from 0 to 7; blue is from 0 to 3. For orange, choose red 7, green 4 and blue 0. Red 7 fills the top three bits, giving `11100000` (`0xE0`). Green 4 gives `00010000`
 (`0x10`) in the green field, and blue contributes zero. The byte is therefore
 `0xE0 + 0x10 = 0xF0`.
 
@@ -246,12 +245,12 @@ For example, this asks about the left arrow and puts 1 or 0 in `a`:
 
 The read does not replace `b` or `c`. The keyboard ports are:
 
-| port | reading gives |
-| ---: | --- |
+|   port | reading gives                                                      |
+| -----: | ------------------------------------------------------------------ |
 | `0x30` | 1 if a typed character waits on character port `0x10`, otherwise 0 |
-| `0x31` | 1 while the key selected by `b` is held, otherwise 0 |
-| `0x32` | code of the last key pressed, or 0 before any press |
-| `0x33` | code of the last key released, or 0 before any release |
+| `0x31` | 1 while the key selected by `b` is held, otherwise 0               |
+| `0x32` | code of the last key pressed, or 0 before any press                |
+| `0x33` | code of the last key released, or 0 before any release             |
 
 Letters use the ASCII code of their capital. Arrow codes are left `0x25`, up `0x26`, right `0x27`
 and down `0x28`. Click the Screen before pressing a key; its focus ring shows where input goes.
@@ -400,8 +399,7 @@ last-press view, bit 4 is Shift, bit 5 Alt and bit 6 Ctrl.
 
 A snapshot persists until another event of the same kind replaces it. It preserves the most recent
 press after the button goes up, but it is not a queue: two presses before a poll leave only the
-second snapshot. The event count increases for pointer movement and button changes, and wraps after
-255. A changed count proves that activity happened; intervening events cannot be reconstructed.
+second snapshot. The event count increases for pointer movement and button changes, and wraps after 255. A changed count proves that activity happened; intervening events cannot be reconstructed.
 
 The mouse example uses one additional drawing operation: command 0 draws one pixel at the current
 `(X, Y)` in the pen colour.
@@ -468,11 +466,11 @@ clears. `bit 0, e` and `bit 1, e` test independent facts in the buttons byte.
 
 Drawing ports also let a program inspect the image and its text cursor:
 
-| port | reading gives |
-| ---: | --- |
+|   port | reading gives                             |
+| -----: | ----------------------------------------- |
 | `0x28` | colour of the pixel at the current (X, Y) |
-| `0x29` | current text cursor column |
-| `0x2A` | current text cursor row |
+| `0x29` | current text cursor column                |
+| `0x2A` | current text cursor row                   |
 
 Set X and Y through ports `0x23` and `0x24` before reading `0x28`. With double buffering on, the
 pixel comes from the off-screen image being drawn. The cursor ports use 8 by 8 character cells, and

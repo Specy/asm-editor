@@ -37,15 +37,15 @@ inner loop its separate job: count the seven adjacent pairs in this pass. `t1` a
 bytes each time, so the pairs overlap. The right word in one comparison becomes the left word in
 the next.
 
-| `t2` before comparison | pair offsets from `numbers` | values loaded into `t3`, `t4` | swap? | array after the comparison |
-| ---: | :---: | :---: | :---: | --- |
-| 7 | 0, 4 | 42, 8 | yes | 8, 42, 15, 4, 23, 16, 99, 1 |
-| 6 | 4, 8 | 42, 15 | yes | 8, 15, 42, 4, 23, 16, 99, 1 |
-| 5 | 8, 12 | 42, 4 | yes | 8, 15, 4, 42, 23, 16, 99, 1 |
-| 4 | 12, 16 | 42, 23 | yes | 8, 15, 4, 23, 42, 16, 99, 1 |
-| 3 | 16, 20 | 42, 16 | yes | 8, 15, 4, 23, 16, 42, 99, 1 |
-| 2 | 20, 24 | 42, 99 | no | 8, 15, 4, 23, 16, 42, 99, 1 |
-| 1 | 24, 28 | 99, 1 | yes | 8, 15, 4, 23, 16, 42, 1, 99 |
+| `t2` before comparison | pair offsets from `numbers` | values loaded into `t3`, `t4` | swap? | array after the comparison  |
+| ---------------------: | :-------------------------: | :---------------------------: | :---: | --------------------------- |
+|                      7 |            0, 4             |             42, 8             |  yes  | 8, 42, 15, 4, 23, 16, 99, 1 |
+|                      6 |            4, 8             |            42, 15             |  yes  | 8, 15, 42, 4, 23, 16, 99, 1 |
+|                      5 |            8, 12            |             42, 4             |  yes  | 8, 15, 4, 42, 23, 16, 99, 1 |
+|                      4 |           12, 16            |            42, 23             |  yes  | 8, 15, 4, 23, 42, 16, 99, 1 |
+|                      3 |           16, 20            |            42, 16             |  yes  | 8, 15, 4, 23, 16, 42, 99, 1 |
+|                      2 |           20, 24            |            42, 99             |  no   | 8, 15, 4, 23, 16, 42, 99, 1 |
+|                      1 |           24, 28            |             99, 1             |  yes  | 8, 15, 4, 23, 16, 42, 1, 99 |
 
 The final comparison puts 99 in the last word. That word is now settled, so the next pass needs
 only six comparisons. Then the remaining passes need 5, 4, 3, 2, and 1. Altogether the program

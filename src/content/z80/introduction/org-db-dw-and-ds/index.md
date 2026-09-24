@@ -6,7 +6,7 @@ An assembler turns instructions into bytes in memory. A **directive** tells the 
 
 `.org 0x8000` means the next byte goes at address `0x8000`. Each following byte takes the next address. A second `.org` can place data elsewhere. Here the code starts at `0x8000` and the data at `0x9000`.
 
-A **label** names the address of the next byte. In `text: .db "Hi"`, `text` means the address of `H`. `ld de, text` puts that address in `de`. Parentheses mean something different: `ld a, (byte1)` reads the byte *at* the address named `byte1`.
+A **label** names the address of the next byte. In `text: .db "Hi"`, `text` means the address of `H`. `ld de, text` puts that address in `de`. Parentheses mean something different: `ld a, (byte1)` reads the byte _at_ the address named `byte1`.
 
 ```z80|playground|memory|no-flags
     .org 0x8000
@@ -60,7 +60,7 @@ filled: .ds 3, 0xEE     ; addresses 9004 through 9006
 marker: .db 0xFF        ; address 9007
 ```
 
-Before Run, this editor shows `00 00 00 00` at `buffer` because fresh emulator memory starts cleared, not because `.ds 4` wrote zeroes. It shows `EE EE EE` at `filled` because that line *does* write bytes. After Run, the first two bytes of `buffer` are `11 22`. `inc hl` adds one to the address in `hl`; it does not change the byte at the old address.
+Before Run, this editor shows `00 00 00 00` at `buffer` because fresh emulator memory starts cleared, not because `.ds 4` wrote zeroes. It shows `EE EE EE` at `filled` because that line _does_ write bytes. After Run, the first two bytes of `buffer` are `11 22`. `inc hl` adds one to the address in `hl`; it does not change the byte at the old address.
 
 ## Give a number a name with `equ`
 

@@ -72,15 +72,15 @@ are part of why the Z80 can have more instruction forms than one byte can name.
 The instruction set is easier to approach as families. You already know examples from the first two
 rows. Use the table as a map: it groups instructions by the kind of work they do.
 
-| Family | Main purpose | Examples you know |
-| --- | --- | --- |
-| load and exchange | put values in registers or memory; swap register sets | `ld`, `exx` |
-| arithmetic | add, subtract, or change a value by one | `add`, `sub`, `inc`, `dec` |
-| logic and bits | work with individual bits in a byte | — |
-| control flow | choose which instruction runs next or repeat work | — |
-| block operations | work through a sequence of memory bytes | `ldir` below |
-| stack and subroutines | keep return information and reusable pieces of code | — |
-| input, output, and CPU control | communicate with hardware or control the CPU | `halt` |
+| Family                         | Main purpose                                          | Examples you know          |
+| ------------------------------ | ----------------------------------------------------- | -------------------------- |
+| load and exchange              | put values in registers or memory; swap register sets | `ld`, `exx`                |
+| arithmetic                     | add, subtract, or change a value by one               | `add`, `sub`, `inc`, `dec` |
+| logic and bits                 | work with individual bits in a byte                   | —                          |
+| control flow                   | choose which instruction runs next or repeat work     | —                          |
+| block operations               | work through a sequence of memory bytes               | `ldir` below               |
+| stack and subroutines          | keep return information and reusable pieces of code   | —                          |
+| input, output, and CPU control | communicate with hardware or control the CPU          | `halt`                     |
 
 Many rows contain several related forms. The important habit is to read an instruction's operands,
 then check the reference when you need an exact form or encoding.

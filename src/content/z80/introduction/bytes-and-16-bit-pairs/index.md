@@ -4,15 +4,15 @@ A byte register such as `a` holds eight bits: 256 possible patterns. Read as an 
 
 ## One byte, two readings
 
-The same byte can also represent a **signed** number, from -128 to 127. The Z80 uses *two's complement* for this reading. In this reading, a byte whose leftmost bit is 0 is nonnegative, and one whose leftmost bit is 1 is negative. Here are a few bytes in both readings:
+The same byte can also represent a **signed** number, from -128 to 127. The Z80 uses _two's complement_ for this reading. In this reading, a byte whose leftmost bit is 0 is nonnegative, and one whose leftmost bit is 1 is negative. Here are a few bytes in both readings:
 
 | Byte in hex | Unsigned | Signed |
-| --- | ---: | ---: |
-| `00` | 0 | 0 |
-| `7F` | 127 | 127 |
-| `80` | 128 | -128 |
-| `FB` | 251 | -5 |
-| `FF` | 255 | -1 |
+| ----------- | -------: | -----: |
+| `00`        |        0 |      0 |
+| `7F`        |      127 |    127 |
+| `80`        |      128 |   -128 |
+| `FB`        |      251 |     -5 |
+| `FF`        |      255 |     -1 |
 
 The register stores only the bits; it has no signed or unsigned label. You choose the reading that fits the value's job. For example, `FB` can be a count of 251, or a change of -5. An addition always combines the stored bits. `FB` plus `01` gives `FC`, which reads as 251 + 1 = 252 unsigned or -5 + 1 = -4 signed.
 

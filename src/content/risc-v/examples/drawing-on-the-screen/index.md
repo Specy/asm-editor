@@ -4,10 +4,10 @@ selected by a distance test.
 
 This page uses two drawing subroutines. Here is their contract before we call either one:
 
-| Routine | Inputs | Shared values | Scratch registers |
-| --- | --- | --- | --- |
-| `fill_rect_32` | `a0=x`, `a1=y`, `a2=width`, `a3=height` | reads `s0` and `s1` | `t0`–`t3` |
-| `fill_disc_32` | `a0=centre x`, `a1=centre y`, `a2=radius` | reads `s0` and `s1` | `t0`–`t6` |
+| Routine        | Inputs                                    | Shared values       | Scratch registers |
+| -------------- | ----------------------------------------- | ------------------- | ----------------- |
+| `fill_rect_32` | `a0=x`, `a1=y`, `a2=width`, `a3=height`   | reads `s0` and `s1` | `t0`–`t3`         |
+| `fill_disc_32` | `a0=centre x`, `a1=centre y`, `a2=radius` | reads `s0` and `s1` | `t0`–`t6`         |
 
 In both rows, `s0` is the display address and `s1` is the current colour. The routines read those
 saved registers but do not change them. Their names end in `_32` because their address calculation
@@ -56,10 +56,10 @@ counts the cells still to draw across that row.
 
 For example, `fill_rect_32(1, 2, 3, 2)` means `a0=1`, `a1=2`, `a2=3`, `a3=2`:
 
-| Current row `t0` | First cell address | Stores made | `t3` counts |
-| --- | --- | --- | --- |
-| 2 | `s0 + (2*32 + 1)*4` | `(1,2)`, `(2,2)`, `(3,2)` | 3, 2, 1 |
-| 3 | `s0 + (3*32 + 1)*4` | `(1,3)`, `(2,3)`, `(3,3)` | 3, 2, 1 |
+| Current row `t0` | First cell address  | Stores made               | `t3` counts |
+| ---------------- | ------------------- | ------------------------- | ----------- |
+| 2                | `s0 + (2*32 + 1)*4` | `(1,2)`, `(2,2)`, `(3,2)` | 3, 2, 1     |
+| 3                | `s0 + (3*32 + 1)*4` | `(1,3)`, `(2,3)`, `(3,3)` | 3, 2, 1     |
 
 After row 3, `t0` becomes 4. That equals the one-past limit in `t1`, so the outer loop stops.
 
@@ -234,14 +234,14 @@ side. The `display` label names the first word. Its 4096 bytes are exactly `32 *
    the next cell and `t3` as the number of cells left. It must make exactly `a2` stores and finish
    when `t3` is zero.
 
-   ```riscv
-   mv t3, a2               # cells left
-   rect_cols_practice:
-       sw s1, 0(t2)
-       # advance t2 to the next word
-       # subtract one from t3
-       # repeat while t3 is not zero
-   ```
+    ```riscv
+    mv t3, a2               # cells left
+    rect_cols_practice:
+        sw s1, 0(t2)
+        # advance t2 to the next word
+        # subtract one from t3
+        # repeat while t3 is not zero
+    ```
 
 3. Change the roof to five rows with widths `10, 8, 6, 4, 2`. Keep it centred over the same house,
    keep every roof call one cell high, and do not change `fill_rect_32`. Choose the new starting `x`,

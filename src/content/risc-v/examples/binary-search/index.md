@@ -10,23 +10,23 @@ correct is:
 
 Ascending order justifies both ways of shrinking that range:
 
-| comparison at `mid` | what ascending order tells us | new possible range |
-| --- | --- | --- |
-| `numbers[mid] < target` | every element through `mid` is also too small | `low = mid + 1` |
-| `numbers[mid] > target` | every element from `mid` onward is also too large | `high = mid - 1` |
+| comparison at `mid`     | what ascending order tells us                     | new possible range |
+| ----------------------- | ------------------------------------------------- | ------------------ |
+| `numbers[mid] < target` | every element through `mid` is also too small     | `low = mid + 1`    |
+| `numbers[mid] > target` | every element from `mid` onward is also too large | `high = mid - 1`   |
 
 Here are the register roles. `t6` is scratch space: it holds the byte offset, then the address, and
 finally the value loaded from that address.
 
-| register | role |
-| --- | --- |
-| `t0` | base address of `numbers` |
-| `t1` | target value |
-| `t2` | `low`, the first possible index |
-| `t3` | `high`, the last possible index |
-| `t4` | answer, initially -1 |
-| `t5` | `mid`, the index being inspected |
-| `t6` | scratch space for accessing `numbers[mid]` |
+| register | role                                       |
+| -------- | ------------------------------------------ |
+| `t0`     | base address of `numbers`                  |
+| `t1`     | target value                               |
+| `t2`     | `low`, the first possible index            |
+| `t3`     | `high`, the last possible index            |
+| `t4`     | answer, initially -1                       |
+| `t5`     | `mid`, the index being inspected           |
+| `t6`     | scratch space for accessing `numbers[mid]` |
 
 ```riscv|playground|memory|allow-open
 .eqv COUNT, 12
@@ -72,12 +72,12 @@ address in `t6` because the program no longer needs that address.
 
 Here is the range closing on the answer. Each row corresponds to one trip through the loop body:
 
-| probe | `low` | `high` | `mid` | `numbers[mid]` | branch result |
-| --- | --- | --- | --- | --- | --- |
-| 1 | 0 | 11 | 5 | 23 | `23 < 91`, so `low = 6` |
-| 2 | 6 | 11 | 8 | 72 | `72 < 91`, so `low = 9` |
-| 3 | 9 | 11 | 10 | 100 | `100 > 91`, so `high = 9` |
-| 4 | 9 | 9 | 9 | 91 | equal, so `t4 = 9` |
+| probe | `low` | `high` | `mid` | `numbers[mid]` | branch result             |
+| ----- | ----- | ------ | ----- | -------------- | ------------------------- |
+| 1     | 0     | 11     | 5     | 23             | `23 < 91`, so `low = 6`   |
+| 2     | 6     | 11     | 8     | 72             | `72 < 91`, so `low = 9`   |
+| 3     | 9     | 11     | 10    | 100            | `100 > 91`, so `high = 9` |
+| 4     | 9     | 9      | 9     | 91             | equal, so `t4 = 9`        |
 
 This search reads four elements. A left-to-right search for this particular target would read ten,
 because 91 is at index 9. More generally, binary search needs at most 10 midpoint probes for 1,000

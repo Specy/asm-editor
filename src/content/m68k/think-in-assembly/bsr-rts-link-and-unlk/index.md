@@ -28,11 +28,11 @@ end:
 The playground begins with `sp` (also called `a7`) at `$1000000`. Here `bsr triple` is at
 `$1004`, and the instruction after it, `move.l d0,d1`, is at `$1008`:
 
-| moment | next instruction | `sp` | top of stack |
-| ------ | ---------------- | ---- | ------------ |
-| before `bsr` | `bsr triple` at `$1004` | `$1000000` | no value from this call |
-| after `bsr` | first instruction of `triple` | `$FFFFFC` | return address `$1008` |
-| after `rts` | `move.l d0,d1` at `$1008` | `$1000000` | return address popped |
+| moment       | next instruction              | `sp`       | top of stack            |
+| ------------ | ----------------------------- | ---------- | ----------------------- |
+| before `bsr` | `bsr triple` at `$1004`       | `$1000000` | no value from this call |
+| after `bsr`  | first instruction of `triple` | `$FFFFFC`  | return address `$1008`  |
+| after `rts`  | `move.l d0,d1` at `$1008`     | `$1000000` | return address popped   |
 
 `bsr` pushed a long address, moving `sp` down by four bytes. `rts` used that address and moved `sp`
 back up by four. The caller then copies 30 into `d1`. The `bra end` skips the subroutine's code:
@@ -94,14 +94,14 @@ end:
 
 Starting from the playground's `$1000000` stack pointer, each push changes the top:
 
-| moment | `sp` | value at `(sp)` |
-| ------ | ---- | --------------- |
-| before the pushes | `$1000000` | no argument yet |
-| after pushing `b` | `$FFFFFC` | 20 |
-| after pushing `a` | `$FFFFF8` | 22 |
-| on entry to `add_two` | `$FFFFF4` | return address |
-| after `rts` | `$FFFFF8` | `a`, still on the stack |
-| after caller's `add.l #8,sp` | `$1000000` | both arguments removed |
+| moment                       | `sp`       | value at `(sp)`         |
+| ---------------------------- | ---------- | ----------------------- |
+| before the pushes            | `$1000000` | no argument yet         |
+| after pushing `b`            | `$FFFFFC`  | 20                      |
+| after pushing `a`            | `$FFFFF8`  | 22                      |
+| on entry to `add_two`        | `$FFFFF4`  | return address          |
+| after `rts`                  | `$FFFFF8`  | `a`, still on the stack |
+| after caller's `add.l #8,sp` | `$1000000` | both arguments removed  |
 
 At entry, `(sp)` is the return address, `4(sp)` is the long `a` (22), and `8(sp)` is the long `b`
 (20). These offsets come from this push order and from each argument occupying four bytes. A
@@ -147,13 +147,13 @@ end:
 After `link`, the layout is as follows. The addresses assume the playground's initial
 `sp = $1000000`. The two local rows name reserved space, not values supplied by `link`:
 
-| address | offset from `a6` | contents immediately after `link` |
-| ------- | ---------------- | --------------------------------- |
-| `$FFFFEC` | `-8(a6)` | second local: uninitialized |
-| `$FFFFF0` | `-4(a6)` | first local: uninitialized |
-| `$FFFFF4` | `(a6)` | caller's saved `a6` |
-| `$FFFFF8` | `4(a6)` | return address |
-| `$FFFFFC` | `8(a6)` | long argument `n = 7` |
+| address   | offset from `a6` | contents immediately after `link` |
+| --------- | ---------------- | --------------------------------- |
+| `$FFFFEC` | `-8(a6)`         | second local: uninitialized       |
+| `$FFFFF0` | `-4(a6)`         | first local: uninitialized        |
+| `$FFFFF4` | `(a6)`           | caller's saved `a6`               |
+| `$FFFFF8` | `4(a6)`          | return address                    |
+| `$FFFFFC` | `8(a6)`          | long argument `n = 7`             |
 
 Here `sp = $FFFFEC` and `a6 = $FFFFF4` immediately after `link`. The routine writes both locals
 before reading them. The positive offset `8(a6)` is the first argument because this call pushed

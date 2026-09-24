@@ -15,14 +15,14 @@ In the first line, `7` is written in the instruction. In the second, the CPU use
 
 Here are the main forms side by side. You do not need to memorise their names; read the operand and ask where the value is coming from.
 
-| Example | What it means |
-| --- | --- |
-| `ld a, 7` | Put the number 7 in `a`. The number is an **immediate value**. |
-| `ld b, a` | Copy the value already in register `a` to register `b`. |
-| `ld a, (hl)` | Read the byte in memory at the address held in `hl`. |
-| `ld (hl), a` | Write the byte in `a` to memory at the address held in `hl`. |
-| `ld a, (total)` | Read the byte at the fixed address named `total`. |
-| `ld (total), a` | Write `a` to the fixed address named `total`. |
+| Example         | What it means                                                  |
+| --------------- | -------------------------------------------------------------- |
+| `ld a, 7`       | Put the number 7 in `a`. The number is an **immediate value**. |
+| `ld b, a`       | Copy the value already in register `a` to register `b`.        |
+| `ld a, (hl)`    | Read the byte in memory at the address held in `hl`.           |
+| `ld (hl), a`    | Write the byte in `a` to memory at the address held in `hl`.   |
+| `ld a, (total)` | Read the byte at the fixed address named `total`.              |
+| `ld (total), a` | Write `a` to the fixed address named `total`.                  |
 
 The following program uses each of these ideas. Build it, open the memory panel, and step through it.
 

@@ -34,7 +34,7 @@ The pair is another view of the same registers, not an extra place to store a va
     halt
 ```
 
-`inc` adds one and `dec` subtracts one. Written with a pair, they change the *whole* two-byte value. Try changing `ld c, 0x56` to `ld c, 0xFF`, then step through `inc bc`: the low byte rolls over to `00` and the high byte goes up by one.
+`inc` adds one and `dec` subtracts one. Written with a pair, they change the _whole_ two-byte value. Try changing `ld c, 0x56` to `ld c, 0xFF`, then step through `inc bc`: the low byte rolls over to `00` and the high byte goes up by one.
 
 A pair can hold a larger number than a single byte. It can also hold a memory address, since the Z80 uses two-byte addresses. `hl` is especially useful for visiting a byte in memory.
 
@@ -62,11 +62,11 @@ With **Step**, watch `hl` and the memory view as well as `a`. `inc hl` changes t
 There is a hidden second copy of each of the three pairs: `bc'`, `de'` and `hl'`. The apostrophe means “the other copy.” You cannot write `ld bc', 5` to use one directly. Instead, `exx` swaps all three visible pairs with their hidden copies at once.
 
 | After this instruction | Visible `bc` | Other `bc'` |
-| --- | --- | --- |
-| `ld bc, 0x1111` | `1111` | `0000` |
-| first `exx` | `0000` | `1111` |
-| `ld bc, 0x2222` | `2222` | `1111` |
-| second `exx` | `1111` | `2222` |
+| ---------------------- | ------------ | ----------- |
+| `ld bc, 0x1111`        | `1111`       | `0000`      |
+| first `exx`            | `0000`       | `1111`      |
+| `ld bc, 0x2222`        | `2222`       | `1111`      |
+| second `exx`           | `1111`       | `2222`      |
 
 The table assumes both copies started at zero, as they do in this example. The same swap happens to `de` and `hl`. Nothing is copied or lost: the two sets simply trade places.
 

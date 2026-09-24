@@ -51,8 +51,7 @@ An empty string still has its terminator. With `text: .asciz ""`, the first byte
 zero. `t0` and `t1` both hold that address when the branch is taken, so `t0 - t1` is 0.
 
 Change `text: .asciz` to `text: .ascii` and the first string has no terminating zero. The loop then
-continues into the bytes of `after` and stops at its terminator, so this particular layout produces
-30. In general, reading past an unterminated string can continue into unrelated memory; it is not a
+continues into the bytes of `after` and stops at its terminator, so this particular layout produces 30. In general, reading past an unterminated string can continue into unrelated memory; it is not a
 safe way to find a length.
 
 ## Your turn: write the scan

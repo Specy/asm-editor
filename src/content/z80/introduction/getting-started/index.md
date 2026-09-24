@@ -8,7 +8,7 @@ That is our starting point. Learning one small, well-defined CPU makes it possib
 
 A CPU follows **machine instructions**, stored as numbers in a computer's memory. **Assembly language** gives those instructions readable names. You write **source code** such as `ld a, 10`; an **assembler** translates it into the numbered instructions the CPU can run.
 
-The Z80 is often called an **8-bit** CPU. A *bit* is a 0 or a 1, and eight bits make a *byte*. Many of the Z80's everyday operations work with one byte at a time. It also has **registers**, tiny places inside the CPU that hold values while it works. Memory holds more values and the program itself. Each place in memory has a number called an **address**, so the CPU can find it. An address identifies a place; the value at that place is its contents.
+The Z80 is often called an **8-bit** CPU. A _bit_ is a 0 or a 1, and eight bits make a _byte_. Many of the Z80's everyday operations work with one byte at a time. It also has **registers**, tiny places inside the CPU that hold values while it works. Memory holds more values and the program itself. Each place in memory has a number called an **address**, so the CPU can find it. An address identifies a place; the value at that place is its contents.
 
 Assembly brings these small actions into view. A line might put a number in a register, add two values, or choose where the CPU goes next. Over this course, you will build from those actions to programs that work with memory, make decisions, repeat work, and communicate with the world around them.
 

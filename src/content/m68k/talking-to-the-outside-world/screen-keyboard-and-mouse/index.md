@@ -8,7 +8,7 @@ registers, then run `trap #15`. Some tasks return an answer in a register.
 
 The screen starts at **640 by 480** pixels. Its origin is the **top left**: `x` grows right and `y`
 grows down. Individual pixels have `x = 0..639` and `y = 0..479`. Drawing outside the screen is
-clipped without an error. A rectangle's *exclusive* right and bottom boundaries may be `640` and
+clipped without an error. A rectangle's _exclusive_ right and bottom boundaries may be `640` and
 `480`, even though those are not pixel positions.
 
 Two colours are kept for you: the **pen**, which draws lines, outlines, pixels and text, and the
@@ -27,15 +27,15 @@ from CSS's `#RRGGBB`.
 Here are the drawing requests the first program uses. Each reads its arguments when `trap #15`
 runs; setting a colour or pen width changes later drawing, while drawing tasks change the screen.
 
-| task in `d0.b` | inputs | effect |
-| ---: | --- | --- |
-| 80 | `d1.l` = `$00BBGGRR` | set the pen colour |
-| 81 | `d1.l` = `$00BBGGRR` | set the fill colour |
-| 87 | `d1.w` = left x, `d2.w` = top y, `d3.w` = right x, `d4.w` = bottom y | filled rectangle with a pen outline |
-| 88 | the same four boundaries | filled ellipse with a pen outline, inside that box |
-| 93 | `d1.b` = width in pixels | set the width of lines and outlines |
-| 84 | `d1.w` = start x, `d2.w` = start y, `d3.w` = end x, `d4.w` = end y | pen-colour line; its end becomes the drawing point |
-| 95 | `a1` = zero-terminated string address, `d1.w` = x, `d2.w` = y | pen-colour text with its top left at that pixel |
+| task in `d0.b` | inputs                                                               | effect                                             |
+| -------------: | -------------------------------------------------------------------- | -------------------------------------------------- |
+|             80 | `d1.l` = `$00BBGGRR`                                                 | set the pen colour                                 |
+|             81 | `d1.l` = `$00BBGGRR`                                                 | set the fill colour                                |
+|             87 | `d1.w` = left x, `d2.w` = top y, `d3.w` = right x, `d4.w` = bottom y | filled rectangle with a pen outline                |
+|             88 | the same four boundaries                                             | filled ellipse with a pen outline, inside that box |
+|             93 | `d1.b` = width in pixels                                             | set the width of lines and outlines                |
+|             84 | `d1.w` = start x, `d2.w` = start y, `d3.w` = end x, `d4.w` = end y   | pen-colour line; its end becomes the drawing point |
+|             95 | `a1` = zero-terminated string address, `d1.w` = x, `d2.w` = y        | pen-colour text with its top left at that pixel    |
 
 Tasks 87 and 88 exclude their right and bottom boundaries. A box from `(100, 80)` to `(300, 200)`
 can affect columns `100..299` and rows `80..199`. If left equals right, it has zero width and

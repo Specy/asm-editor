@@ -29,14 +29,14 @@ pseudo-instruction that the assembler expands to `addi t3, t2, 0`; it has the sa
 The final `sub` also names its destination first. It calculates `t0 - t1`, or `30 - 12`, and puts
 18 in `t5`. After the last instruction, the registers hold:
 
-| register | value | meaning |
-| -------- | ----: | ------- |
-| `t0` | 30 | width |
-| `t1` | 12 | height |
-| `t2` | 84 | perimeter |
-| `t3` | 84 | copied perimeter |
-| `t4` | 84 | copied perimeter |
-| `t5` | 18 | width minus height |
+| register | value | meaning            |
+| -------- | ----: | ------------------ |
+| `t0`     |    30 | width              |
+| `t1`     |    12 | height             |
+| `t2`     |    84 | perimeter          |
+| `t3`     |    84 | copied perimeter   |
+| `t4`     |    84 | copied perimeter   |
+| `t5`     |    18 | width minus height |
 
 ## Try it
 

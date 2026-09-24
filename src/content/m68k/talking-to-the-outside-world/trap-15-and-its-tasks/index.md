@@ -76,14 +76,14 @@ Task 17 is a handy combination: it prints a zero-terminated string from `a1`, th
 signed decimal number in `d1.l`, with no newline added. It performs the same output as task 14
 followed by task 3.
 
-| task | action | argument or answer |
-| ---: | ------ | ------------------ |
-| 3 | print a signed decimal number | reads `d1.l` |
-| 4 | read a decimal number | answers in `d1.l` |
-| 9 | end the program | none |
-| 13 | print a zero-terminated string and a newline | reads address in `a1` |
-| 14 | print a zero-terminated string | reads address in `a1` |
-| 17 | print a string, then a signed decimal number | reads address in `a1` and number in `d1.l` |
+| task | action                                       | argument or answer                         |
+| ---: | -------------------------------------------- | ------------------------------------------ |
+|    3 | print a signed decimal number                | reads `d1.l`                               |
+|    4 | read a decimal number                        | answers in `d1.l`                          |
+|    9 | end the program                              | none                                       |
+|   13 | print a zero-terminated string and a newline | reads address in `a1`                      |
+|   14 | print a zero-terminated string               | reads address in `a1`                      |
+|   17 | print a string, then a signed decimal number | reads address in `a1` and number in `d1.l` |
 
 ## Your turn
 

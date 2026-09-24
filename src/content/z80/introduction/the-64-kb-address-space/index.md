@@ -35,8 +35,8 @@ A pair holds two bytes. `ld (0x9000), hl` stores both bytes of `hl` in memory, s
 
 After Run, `de` holds `1234`. Look at the two memory addresses separately:
 
-| Address | Byte |
-| --- | --- |
+| Address  | Byte |
+| -------- | ---- |
 | `0x9000` | `34` |
 | `0x9001` | `12` |
 

@@ -66,17 +66,17 @@ Here is one exact snapshot: the second call of `square`, after `square` has made
 computed `4 * 4`, but before it returns. `sp` is `0x7fffefd0`; `fp` is still `0x7fffeff0` in
 `sum_of_squares`.
 
-| Address | Reached as | Value | Meaning |
-| --- | --- | --- | --- |
-| `0x7fffefd0` | `0(sp)` in `square` | `456` | `square`'s saved caller `s1` |
-| `0x7fffefd4`–`0x7fffefdf` | `4(sp)`–`12(sp)` in `square` | unused | remaining bytes of `square`'s 16-byte frame |
-| `0x7fffefe0` | `0(sp)` in `sum_of_squares` | `9` | local first square, `3 * 3` |
-| `0x7fffefe4` | `4(sp)` in `sum_of_squares` | unused | spare frame word |
-| `0x7fffefe8` | `8(sp)` in `sum_of_squares` | `123` | caller's `fp`/`s0` |
-| `0x7fffefec` | `12(sp)` in `sum_of_squares` | return address into `main` | incoming `ra`, saved before either nested call |
-| `0x7fffeff0` | `0(fp)` | `3` | stack argument `a` |
-| `0x7fffeff4` | `4(fp)` | `4` | stack argument `b` |
-| `0x7fffeff8`–`0x7fffeffb` | caller's `8(sp)`–`11(sp)` | unused | alignment padding in `main`'s 12-byte area |
+| Address                   | Reached as                   | Value                      | Meaning                                        |
+| ------------------------- | ---------------------------- | -------------------------- | ---------------------------------------------- |
+| `0x7fffefd0`              | `0(sp)` in `square`          | `456`                      | `square`'s saved caller `s1`                   |
+| `0x7fffefd4`–`0x7fffefdf` | `4(sp)`–`12(sp)` in `square` | unused                     | remaining bytes of `square`'s 16-byte frame    |
+| `0x7fffefe0`              | `0(sp)` in `sum_of_squares`  | `9`                        | local first square, `3 * 3`                    |
+| `0x7fffefe4`              | `4(sp)` in `sum_of_squares`  | unused                     | spare frame word                               |
+| `0x7fffefe8`              | `8(sp)` in `sum_of_squares`  | `123`                      | caller's `fp`/`s0`                             |
+| `0x7fffefec`              | `12(sp)` in `sum_of_squares` | return address into `main` | incoming `ra`, saved before either nested call |
+| `0x7fffeff0`              | `0(fp)`                      | `3`                        | stack argument `a`                             |
+| `0x7fffeff4`              | `4(fp)`                      | `4`                        | stack argument `b`                             |
+| `0x7fffeff8`–`0x7fffeffb` | caller's `8(sp)`–`11(sp)`    | unused                     | alignment padding in `main`'s 12-byte area     |
 
 `jal` does not push anything: it places the return address in `ra`. The second `jal square`
 changes `ra`, which is why `sum_of_squares` saved the address needed to return to `main`. `square`

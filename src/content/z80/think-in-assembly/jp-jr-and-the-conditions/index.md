@@ -56,12 +56,12 @@ conditional jump straight after the test when possible.
 Both `jp` and `jr` can be unconditional, as in `jr done`, or conditional, as in `jr c, smaller`.
 This lesson uses these four conditions:
 
-| Condition | Jumps when | After `cp value`, this means |
-| --------- | ---------- | ---------------------------- |
-| `z` | `Z` is 1 | `a` equals `value` |
-| `nz` | `Z` is 0 | `a` does not equal `value` |
-| `c` | `C` is 1 | unsigned `a` is smaller than `value` |
-| `nc` | `C` is 0 | unsigned `a` is at least as large as `value` |
+| Condition | Jumps when | After `cp value`, this means                 |
+| --------- | ---------- | -------------------------------------------- |
+| `z`       | `Z` is 1   | `a` equals `value`                           |
+| `nz`      | `Z` is 0   | `a` does not equal `value`                   |
+| `c`       | `C` is 1   | unsigned `a` is smaller than `value`         |
+| `nc`      | `C` is 0   | unsigned `a` is at least as large as `value` |
 
 For an unsigned three-way comparison, test equality first, then the smaller case. If neither jump
 is taken, `a` is larger:
@@ -100,10 +100,10 @@ Here `a` is zero, so `Z` is 1 and `jr nz, nonzero` is not taken. The next instru
 Both instructions take a label. The assembler finds the address named by that label and writes the
 right value into the instruction. The difference is how far the jump can reach.
 
-| Instruction | Target | Range |
-| ----------- | ------ | ----- |
-| `jp label` | an address | anywhere in the Z80's 64 KB address space |
-| `jr label` | a signed distance | 128 bytes backward to 127 bytes forward |
+| Instruction | Target            | Range                                     |
+| ----------- | ----------------- | ----------------------------------------- |
+| `jp label`  | an address        | anywhere in the Z80's 64 KB address space |
+| `jr label`  | a signed distance | 128 bytes backward to 127 bytes forward   |
 
 For `jr`, the distance is measured from the address immediately after the `jr` instruction. You do
 not calculate that distance yourself: write the label and let the assembler do it. Use `jr` when
