@@ -69,11 +69,11 @@ square:
 Follow `$sp` through the call. The addresses below use the Playground's initial `$sp` of
 `0x7FFFEFFC`; the offsets explain the same layout for any starting address.
 
-| Moment | `$sp` | `$fp` | Where are the stack arguments? |
-| --- | --- | --- | --- |
-| Before `main` reserves slots | `0x7FFFEFFC` | not yet used | no slots reserved |
-| At `jal sum_of_squares` | `0x7FFFEFF4` | not yet used | `0($sp)` and `4($sp)` |
-| After the 12-byte frame is made | `0x7FFFEFE8` | `0x7FFFEFF4` | `0($fp)` and `4($fp)` |
+| Moment                          | `$sp`        | `$fp`        | Where are the stack arguments? |
+| ------------------------------- | ------------ | ------------ | ------------------------------ |
+| Before `main` reserves slots    | `0x7FFFEFFC` | not yet used | no slots reserved              |
+| At `jal sum_of_squares`         | `0x7FFFEFF4` | not yet used | `0($sp)` and `4($sp)`          |
+| After the 12-byte frame is made | `0x7FFFEFE8` | `0x7FFFEFF4` | `0($fp)` and `4($fp)`          |
 
 The frame takes three words. `0($sp)` is a local for the first square; `4($sp)` holds the old
 `$fp`, and `8($sp)` holds the return address into `main`. The saved `$ra` matters because each
@@ -84,13 +84,13 @@ the two stack arguments stable offsets while the routine uses its own frame.
 Step until just after `sw $v0, 0($sp)` and predict which word holds 9. Then look at the frame in the
 Memory panel, starting at `7FFFEFE8`:
 
-| Address | Access in `sum_of_squares` | Contents at that point |
-| --- | --- | --- |
-| `0x7FFFEFE8` | `0($sp)` | local: 9, the first square |
-| `0x7FFFEFEC` | `4($sp)` | saved old `$fp` |
-| `0x7FFFEFF0` | `8($sp)` | saved return address into `main` |
-| `0x7FFFEFF4` | `0($fp)` | fifth argument: 3 |
-| `0x7FFFEFF8` | `4($fp)` | sixth argument: 4 |
+| Address      | Access in `sum_of_squares` | Contents at that point           |
+| ------------ | -------------------------- | -------------------------------- |
+| `0x7FFFEFE8` | `0($sp)`                   | local: 9, the first square       |
+| `0x7FFFEFEC` | `4($sp)`                   | saved old `$fp`                  |
+| `0x7FFFEFF0` | `8($sp)`                   | saved return address into `main` |
+| `0x7FFFEFF4` | `0($fp)`                   | fifth argument: 3                |
+| `0x7FFFEFF8` | `4($fp)`                   | sixth argument: 4                |
 
 While `square` runs, it briefly reserves one more word below this frame to save `$s0`. It restores
 `$s0` and `$sp` before returning. That is the callee-saved promise for `$s0`; the hardware does not

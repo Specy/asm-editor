@@ -7,11 +7,11 @@ it cannot count the values for itself. It copies `COUNT` into `$t4` because a br
 registers. An empty array has no largest element, so this example chooses **maximum 0, index -1**
 as its empty-array result.
 
-| Register | Role |
-| --- | --- |
-| `$t0` | Base address of `numbers` |
-| `$t1` / `$t2` | Saved maximum / its index |
-| `$t3` / `$t4` | Next index / element count |
+| Register              | Role                                               |
+| --------------------- | -------------------------------------------------- |
+| `$t0`                 | Base address of `numbers`                          |
+| `$t1` / `$t2`         | Saved maximum / its index                          |
+| `$t3` / `$t4`         | Next index / element count                         |
 | `$t5` / `$t6` / `$t7` | Current address / current word / comparison result |
 
 ```mips|playground|memory|tests|allow-open
@@ -108,9 +108,9 @@ Keep `COUNT` equal to the number of values after `.word`. Every case should end 
   `$t3 == $t4 == 1`.
 - **Empty:** set `COUNT` to 0 and replace the data declarations with:
 
-  ```mips
-  .data
-  numbers:
-  ```
+    ```mips
+    .data
+    numbers:
+    ```
 
-  The chosen empty-array result is maximum `0`, index `-1`, with `$t3 == $t4 == 0`.
+    The chosen empty-array result is maximum `0`, index `-1`, with `$t3 == $t4 == 0`.

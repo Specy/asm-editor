@@ -41,10 +41,10 @@ occupy adjacent addresses, so adding 1 moves exactly one byte forward.
 
 Here is the loop's stopping rule:
 
-| Byte at `$t0` | What happens |
-| --- | --- |
-| A letter or space | Advance `$t0` by 1, then check again. |
-| Zero terminator | Stop with `$t0` still pointing at the zero. |
+| Byte at `$t0`     | What happens                                |
+| ----------------- | ------------------------------------------- |
+| A letter or space | Advance `$t0` by 1, then check again.       |
+| Zero terminator   | Stop with `$t0` still pointing at the zero. |
 
 `.asciiz "Assembly is fun"` stores fifteen content bytes followed by one zero byte:
 

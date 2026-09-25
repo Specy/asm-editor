@@ -74,17 +74,17 @@ main:
 ```
 
 Every `jal` overwrites the one `$ra` register. When `factorial` calls itself, it must keep the
-address for returning to *its* caller, so it stores `$ra` before the inner `jal` and restores it
+address for returning to _its_ caller, so it stores `$ra` before the inner `jal` and restores it
 before `jr $ra`. `fib` does the same for each of its two inner calls. The exit syscall in `main`
 stops execution after both answers have been saved.
 
-The frames contain these four-byte words. Offsets are measured from `$sp` *after* each routine
+The frames contain these four-byte words. Offsets are measured from `$sp` _after_ each routine
 reserves its space:
 
-| Routine | `0($sp)` | `4($sp)` | `8($sp)` |
-| --- | --- | --- | --- |
-| `factorial` | saved `n` | saved `$ra` | outside its frame |
-| `fib` | first result | saved `n` | saved `$ra` |
+| Routine     | `0($sp)`     | `4($sp)`    | `8($sp)`          |
+| ----------- | ------------ | ----------- | ----------------- |
+| `factorial` | saved `n`    | saved `$ra` | outside its frame |
+| `fib`       | first result | saved `n`   | saved `$ra`       |
 
 The saved `n` matters because `$a0` is caller-saved. For example, a `factorial(3)` call stores 3
 at `0($sp)`, changes `$a0` to 2, and calls `factorial(2)`. The inner calls may leave `$a0` changed;
@@ -95,7 +95,7 @@ saved word because each made a new frame at a lower address.
 `fib` needs one more word. After its first `jal fib`, `$v0` holds `fib(n - 1)`. A second `jal fib`
 will replace `$v0` with `fib(n - 2)`. `$t0` is caller-saved too, so moving the first result there
 before the second call would not preserve it. `sw $v0, 0($sp)` keeps that result in this call's
-frame. Only *after* the second call does `lw $t0, 0($sp)` load it for the final addition.
+frame. Only _after_ the second call does `lw $t0, 0($sp)` load it for the final addition.
 
 Step through `factorial(3)` by changing the first argument in `main` to 3. Let **S** be the value
 of `$sp` just before `main` calls it. At the branch in each active call, predict the saved `n` at

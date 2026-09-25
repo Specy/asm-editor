@@ -49,8 +49,7 @@ Neither instruction changes `hi` or `lo`.
 **remainder** in `hi`. Since 1000 = 60 × 16 + 40, `mflo $t6` copies 16 whole minutes and
 `mfhi $t7` copies the 40 seconds left over.
 
-Before looking at the table, predict what will happen if the seconds value is **367** instead of
-1000. How many whole minutes and leftover seconds will `mflo` and `mfhi` copy?
+Before looking at the table, predict what will happen if the seconds value is **367** instead of 1000. How many whole minutes and leftover seconds will `mflo` and `mfhi` copy?
 
 | After               | `hi` | `lo` | Ordinary destination |
 | ------------------- | ---: | ---: | -------------------- |
