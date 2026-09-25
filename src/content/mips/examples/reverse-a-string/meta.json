@@ -1,6 +1,6 @@
 {
     "name": "Reverse a string in place",
-    "description": "The right pointer first scans to the zero terminator, then two pointers swap bytes inward without touching that terminator.",
+    "description": "Scan to the zero terminator, then swap bytes from the ends toward the middle to reverse the string in place.",
     "order": 7,
     "topic": "reverse-a-string"
 }

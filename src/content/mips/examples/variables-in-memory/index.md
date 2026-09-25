@@ -1,6 +1,6 @@
-This program starts with two values in memory, adds them and a constant, then stores the result in a
-third memory slot. It is a small example of the path most data follows: memory to registers, work in
-registers, then registers back to memory.
+This program uses three adjacent four-byte slots in memory: `price` and `shipping` start with
+values, and `total` holds the result. It loads the two inputs into registers, adds them and a named
+constant, then stores the sum back in memory.
 
 ```mips|playground|memory|allow-open
 .eqv TAX 20
@@ -23,45 +23,41 @@ main:
     syscall
 ```
 
-The lines beginning with a dot are assembler directives, not instructions executed by the CPU.
-They describe the program image and its layout, which the Playground loads before execution starts.
-`.eqv TAX 20` gives the assembler a name for the number `20`; it does not allocate memory. Each
-`.word` allocates four bytes and supplies their initial value. `.space 4` reserves four bytes for
-`total`, but the directive does not specify what those bytes contain.
+Follow the values through the program. `la` puts the address of `price` in `$t0`. The two `lw`
+instructions load 250 into `$t1` and 35 into `$t2`; `add` and `addi` leave 305 in `$t1`. Finally,
+`sw` stores that value at `total`. The arithmetic happens in registers, while the inputs and result
+live in memory.
 
-In the Playground's default layout, these three adjacent words form a 12-byte block beginning at
-`0x10010000`. Those fixed addresses are a property of that default layout, not of MIPS itself. Type
-`10010000` in the memory panel's address box and compare the block before and after running:
+The three data labels mark consecutive four-byte slots. From the address in `$t0`, `0($t0)` reaches
+`price`, `4($t0)` reaches `shipping`, and `8($t0)` reaches `total`. These offsets count bytes. Here
+`price` and `shipping` are initialized with `.word`; `total` is four bytes reserved with `.space 4`.
+The Playground loader happens to show newly reserved bytes as zero; `.space` itself only reserves
+them. `.eqv TAX 20` gives the assembler a name for the number 20 and uses no memory. These lines
+beginning with a dot tell the assembler how to prepare the program before it runs.
 
-| label      | address      | before        | after         |
-| ---------- | ------------ | ------------- | ------------- |
-| `price`    | `0x10010000` | `FA 00 00 00` | unchanged     |
-| `shipping` | `0x10010004` | `23 00 00 00` | unchanged     |
-| `total`    | `0x10010008` | `00 00 00 00` | `31 01 00 00` |
+In the Playground's default layout, `price` begins at `0x10010000`. Type `10010000` in the memory
+panel's address box and compare the three slots before and after running:
 
-The zero bytes shown for `total` before the run are what this Playground's loader supplies for the
-reserved space. `.space` itself promises only the space. After the run, `total` is 305: `250 + 35 +
-20`. The stored word is `0x00000131`, and the panel displays `31 01 00 00` because MIPS is little
-endian: the least significant byte goes at the lowest address. The **W** button groups the bytes into
-words and displays the value in the usual order.
+| Label      | Address      | Playground before run | After run     |
+| ---------- | ------------ | --------------------- | ------------- |
+| `price`    | `0x10010000` | `FA 00 00 00`         | unchanged     |
+| `shipping` | `0x10010004` | `23 00 00 00`         | unchanged     |
+| `total`    | `0x10010008` | `00 00 00 00`         | `31 01 00 00` |
 
-`la` puts the address of `price` in `$t0` once. The three memory operands then use byte offsets from
-that address: `0($t0)`, `4($t0)`, and `8($t0)`. Two `lw` operations move the inputs from memory into
-registers, and one `sw` moves the result back to memory. Arithmetic instructions such as `add` work
-only with register values.
+The final value, 305, is `0x00000131` in hexadecimal. In the Playground's little-endian memory,
+its least significant byte goes at the lowest address, so the byte view shows `31 01 00 00`.
+Select **W** to group those bytes into a word and see the value in the usual order.
 
-`la` is a pseudo-instruction: convenient source-level shorthand that the assembler replaces with
-machine instructions. How it expands can vary with the operand and address, so source lines and
-emitted instructions are not always a one-to-one match.
-
-Try one change that makes the layout matter. Add `discount: .word 15` between `shipping` and
-`total`, then add these two instructions after the second `lw`:
+Now try a change that makes the offsets matter. Select **Open in editor** on the program above. Add
+`discount: .word 15` between `shipping` and `total`. Then insert these instructions immediately
+after `lw $t2, 4($t0)`:
 
 ```mips
     lw $t3, 8($t0)      # load discount
-    sub $t1, $t1, $t3   # subtract it from the running total
+    sub $t1, $t1, $t3   # subtract discount from price
 ```
 
-Because the new word moves `total` four bytes farther, change the final store to `sw $t1, 12($t0)`.
-Before running, predict both results. After running, `$t1` should be 290, and `total` should contain
-`22 01 00 00` in the byte view (`0x00000122`).
+The new slot takes offset 8 and moves `total` to offset 12, so change the final store to
+`sw $t1, 12($t0)`. Before running, predict the modified program's final `$t1` and the four bytes
+at `total`. Then run it and check the register and memory panels. `$t1` should hold 290, and
+`total` should show `22 01 00 00` in the byte view (`0x00000122`).

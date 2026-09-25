@@ -1,6 +1,6 @@
 {
     "name": "Fill an array with a guarded counting loop",
-    "description": "Use separate pointer, value, and remaining-count registers to fill a word buffer for any nonnegative count that fits the allocated space, including zero.",
+    "description": "Fill a word buffer by tracking its next address, next value, and remaining count, with a guard for zero writes.",
     "order": 3,
     "topic": "counting-loop",
     "template": 2

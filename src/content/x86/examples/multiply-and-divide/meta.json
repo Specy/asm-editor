@@ -1,6 +1,6 @@
 {
     "name": "Multiply and divide, with the remainder",
-    "description": "mul and div against imul and idiv, the quotient and the remainder from one instruction, and the line before a division that decides whether it works at all.",
+    "description": "Compare unsigned and signed division, inspect a full multiplication product, and practise preparing rdx:rax.",
     "order": 8,
     "topic": "multiply-and-divide"
 }

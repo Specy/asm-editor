@@ -1,9 +1,10 @@
-These two conversions go in opposite directions. The first turns 365 days into hours by
-multiplying, and the second turns 1000 seconds into 16 whole minutes with 40 seconds left by
-dividing.
+MIPS has two special result registers, `hi` and `lo`. They are separate from ordinary registers such
+as `$t0`: multiply and divide write them automatically, and `mfhi` and `mflo` copy their contents
+into ordinary registers. Think of the path as `mult` or `div` → `hi` and `lo` → `mfhi` and `mflo` →
+`$t` registers.
 
-The two-operand forms of `mult` and `div` have implicit destinations: they write the special
-registers `hi` and `lo`, rather than either register named in the instruction.
+This program turns 365 days into hours, then turns 1000 seconds into whole minutes and seconds
+left over. Select **Build**, then **Step** through each calculation and watch the registers change.
 
 ```mips|playground|tests|allow-open
 .text
@@ -39,12 +40,17 @@ main:
 }
 ```
 
-`mult $t0, $t1` treats both operands as signed 32 bit integers and forms a 64 bit product. Its
-upper word goes to `hi` and its lower word goes to `lo`; `mfhi` and `mflo` copy those words into
-ordinary registers. `div $t4, $t5` is signed too. It puts the quotient in `lo` and the remainder in
-`hi`, so one division produces both parts of the conversion.
+`mult $t0, $t1` multiplies the two 32-bit values. Its complete product can take 64 bits, so the
+upper 32 bits go into `hi` and the lower 32 bits go into `lo`. Here 365 × 24 is 8760, which fits
+in the lower half. `mflo $t2` copies 8760 into `$t2`, while `mfhi $t3` copies 0 into `$t3`.
+Neither instruction changes `hi` or `lo`.
 
-The special registers change after each operation:
+`div $t4, $t5` divides 1000 by 60. It puts the whole-number **quotient** in `lo` and the
+**remainder** in `hi`. Since 1000 = 60 × 16 + 40, `mflo $t6` copies 16 whole minutes and
+`mfhi $t7` copies the 40 seconds left over.
+
+Before looking at the table, predict what will happen if the seconds value is **367** instead of
+1000. How many whole minutes and leftover seconds will `mflo` and `mfhi` copy?
 
 | After               | `hi` | `lo` | Ordinary destination |
 | ------------------- | ---: | ---: | -------------------- |
@@ -52,31 +58,37 @@ The special registers change after each operation:
 | `mul $t8, $t0, $t1` |    0 | 8760 | `$t8 = 8760`         |
 | `div $t4, $t5`      |   40 |   16 | none                 |
 
-Read `hi` and `lo` before the next multiply or divide replaces them. This program deliberately
-does its three-operand `mul` before the final `div`, so the registers panel finishes with the useful
-quotient and remainder, `lo = 16` and `hi = 40`.
+The middle row uses a different instruction. The two-operand `mult $t0, $t1` writes the product to
+`hi:lo`; you use `mflo` or `mfhi` to copy it out. The three-operand `mul $t8, $t0, $t1` puts the
+low 32 bits directly in `$t8`. In this Playground, `mul` also writes the product to `hi:lo`, as
+the table shows. Its direct result here is 8760, the same value copied into `$t2` earlier.
 
-In this Playground, `mul $t8, $t0, $t1` is a real signed three-operand instruction. It writes the
-low 32 bits to `$t8` and, as the table shows, also updates `hi` and `lo` with the 64 bit product. It
-does not report when the destination lost upper bits. For an unsigned product, or a product known
-to be nonnegative, a nonzero `hi` proves that keeping only the low word truncated the answer.
-Signed products need the full sign-extension check: `hi` must be 0 when the low word is nonnegative
-and -1 when it is negative. For example, `-2 * 3` fits in one signed word even though its 64 bit
-product has `hi = -1`.
+Every multiply or divide in this program replaces `hi` and `lo`. That is why the program copies
+the first product into `$t2` and `$t3` before `mul`, and copies the division results into `$t6`
+and `$t7` before doing anything else with those special registers.
 
-The `u` suffix changes interpretation, not the register layout. `multu` and `divu` treat the same
-32 bits as unsigned; `mult` and `div` treat them as signed. Predict this before trying it: with -7
-in one register and 3 in another, signed `div` produces quotient -2 and remainder -1, while `divu`
-reads the first bit pattern as 4294967289 and produces quotient 1431655763 and remainder 0.
+Now select **Open in editor** on the program and change only `li $t4, 1000` to `li $t4, 367`.
+Select **Build**, then **Run**, and check your prediction: `$t6` is **6** and `$t7` is **7**, because
+367 = 60 × 6 + 7. The embedded **Test** checks the original 1000-second program, so use **Run**
+for this changed value. Restore 1000 if you want to use **Test** again.
 
-There are two division edge cases to guard. In this Playground, two-operand `div` and `divu` with
-a zero divisor leave `hi` and `lo` unchanged. A following `mflo` or `mfhi` therefore reads the
-previous operation's result. The three-operand `div $t2, $t0, $t1` and
-`rem $t2, $t0, $t1` pseudo-instructions add a runtime zero check and execute `break` when that
-check fails. Also, signed `0x80000000 / -1` produces `lo = 0x80000000` and `hi = 0` here; that
-overflow result is not portable across MIPS implementations, so portable code checks that pair of
-operands first.
+If a divisor might be zero, check it with a branch before `div`: division by zero has no quotient
+or remainder to copy.
 
-Change the day count from 365 to 65901 and predict `$t2` and `$t8` before selecting **Run**. Both
-become 1581624, and `hi` is still 0 immediately after either multiplication because the product
-fits. The final division still replaces `hi` and `lo` with 40 and 16.
+<details>
+<summary>Explore further: signed, unsigned, and products that need two words</summary>
+
+`mult` and `div` treat their inputs as **signed** 32-bit values. `multu` and `divu` use the same
+registers and result layout, but treat those input bits as **unsigned**. Positive values in this
+example give the same answers either way. With -7 and 3, signed `div` gives quotient -2 and
+remainder -1. `divu` instead treats -7's bits as 4294967289, giving quotient 1431655763 and
+remainder 0.
+
+`mul` keeps only the low word in its ordinary destination. A nonzero `hi` proves that a
+nonnegative or unsigned product needed more than that word. For signed products, a negative
+result that fits can have `hi = -1`: the upper half is filled with copies of the sign bit. For
+example, -2 × 3 is -6 and fits in one signed word even though the full product has `hi = -1`.
+To check whether a signed product fits, `hi` must be 0 when the low word's sign bit is 0, or -1
+when that bit is 1.
+
+</details>

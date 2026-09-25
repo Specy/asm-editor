@@ -1,6 +1,6 @@
 {
     "name": "Fill an array with the numbers from 1 to 10",
-    "description": "A counter, a comparison and a jump, with the counter doubling as the index into ten qwords of .bss and the scale of 8 doing the address arithmetic.",
+    "description": "Fill ten qwords with a counting loop, inspect their bytes, and practice matching each store to its slot.",
     "order": 3,
     "topic": "counting-loop",
     "template": 2

@@ -2,8 +2,9 @@ A string reversed where it sits, with no second copy of it anywhere. Two address
 ends of the string, swap the bytes they point at, and walk towards each other until they meet in the
 middle.
 
-Every byte is written exactly once, so the work is half the length of the string, and the loop needs
-no count: it stops when the two addresses have run into each other.
+Each swap writes two character bytes. The loop makes half as many swaps as there are characters,
+rounded down, and never writes the zero terminator. It needs no count: it stops when the two
+addresses meet or cross. This example starts with a nonempty string.
 
 ```x86|playground|memory|allow-open
 default rel
@@ -42,15 +43,85 @@ byte the `db` line produced, and the `- 1` takes the terminator back off, leavin
 reverse. Drop the `- 1` and the zero gets swapped to the front, where it turns the string into an
 empty one.
 
-`jae` compares two **addresses**, which is why it is the unsigned condition: addresses are never
-negative, and the signed `jge` would give a different answer on any address with its top bit set. The
-comparison is at the top of the loop, which handles both ways the two can finish. An odd length string
-ends with both addresses on the same middle byte, and `jae` is true. An even length one ends with them
-crossed over, one past each other, and `jae` is true then too. A single character string never enters
-the loop at all.
+`jae` uses an unsigned comparison of the two addresses. The comparison is at the top of the loop,
+before either byte is read. With an odd number of characters, the addresses meet on the middle
+character, which stays where it is. With an even number, they cross after the last swap. `jae`
+stops the loop in both cases. For a single character, the addresses start together, so there is
+no swap.
 
-Four `mov` instructions do the swap, where `xchg al, [rsi]` would do it in half the lines. That is
-deliberate. `xchg` with a memory operand carries an implicit **`lock` prefix**, which tells the
-processor to hold the memory bus for the whole instruction so that nothing else in the machine can
-touch that address in the middle of it. That guarantee is exactly what you want when two threads share
-a counter, and it costs far more than four plain moves when, as here, nobody else is looking.
+## Your turn
+
+Reverse `"rocket"` in place. The starting addresses are set up for you: `rsi` points to `r`,
+and `rdi` points to `t`, the last character before the zero. Write the loop that compares the
+addresses, swaps their bytes through `al` and `bl`, moves both addresses inward, and repeats.
+Use **Test** to check that memory at `0x402000` reads `74 65 6B 63 6F 72 00`:
+`tekcor` followed by the original zero terminator. You can also inspect those bytes in the
+memory panel after running.
+
+```x86|playground|memory|exercise
+default rel
+global _start
+
+section .data
+text:   db "rocket", 0
+LEN     equ $ - text - 1
+
+section .text
+_start:
+    lea rsi, [text]
+    lea rdi, [text + LEN - 1]
+.swap:
+    ; Stop when rsi has met or passed rdi.
+    ; Swap the two character bytes, then move the addresses inward.
+
+.done:
+    mov rax, 60
+    xor rdi, rdi
+    syscall
+```
+
+```testcase
+{
+    "expectedMemory": [
+        {
+            "type": "number-chunk",
+            "address": "0x402000",
+            "bytes": 1,
+            "expected": [116, 101, 107, 99, 111, 114, 0]
+        }
+    ]
+}
+```
+
+<details>
+<summary>Show solution</summary>
+
+```x86|playground|memory|solution
+default rel
+global _start
+
+section .data
+text:   db "rocket", 0
+LEN     equ $ - text - 1
+
+section .text
+_start:
+    lea rsi, [text]
+    lea rdi, [text + LEN - 1]
+.swap:
+    cmp rsi, rdi
+    jae .done
+    mov al, [rsi]
+    mov bl, [rdi]
+    mov [rsi], bl
+    mov [rdi], al
+    inc rsi
+    dec rdi
+    jmp .swap
+.done:
+    mov rax, 60
+    xor rdi, rdi
+    syscall
+```
+
+</details>

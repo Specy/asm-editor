@@ -1,6 +1,6 @@
 {
     "name": "Sum of an array",
-    "description": "Six numbers added up by a pointer that steps through them until it reaches the label after the last one, so the loop needs no counter.",
+    "description": "Add qwords by moving a pointer from the first element to an end label, then extend the array and check the sum.",
     "order": 4,
     "topic": "sum-of-an-array"
 }

@@ -1,8 +1,10 @@
-Six numbers are written into memory by the assembler. The program walks from the first number to
-the address just after the array, adding each word to a running total in `$t2`.
+The assembler writes six numbers next to one another in memory. Rather than give each word a
+separate label, this program keeps the address of the next word in `$t0` and adds each value to a
+running total in `$t2`.
 
-An array does not fit in the registers and its elements have no names of their own, so the program
-keeps the address of the next element in `$t0` and advances that pointer after every load.
+`numbers` names the first word. The six `.word` values take 24 bytes, so the assembler places `end`
+at its current location immediately after the sixth word. The label takes no space of its own.
+`la $t1, end` therefore gives the program the address where it should stop.
 
 ```mips|playground|memory|tests|allow-open
 .data
@@ -17,7 +19,7 @@ main:
 loop:
     beq $t0, $t1, done  # check before loading, so an empty array is valid
     lw $t3, 0($t0)      # load the element under the pointer
-    addu $t2, $t2, $t3  # add its 32-bit bit pattern to the total
+    addu $t2, $t2, $t3  # add this word to the total
     addiu $t0, $t0, 4   # advance to the next word
     j loop
 done:
@@ -37,27 +39,17 @@ done:
 }
 ```
 
-The familiar `la` and `li` are assembler pseudo-instructions, while the loop control uses the real
-MIPS instructions `beq` and `j`.
+At `loop`, `$t0` points to the next word and `$t1` marks the stopping address. `beq` checks those
+addresses _before_ `lw` reads memory. If they differ, `lw` reads the word at `$t0`, `addu` adds it
+to `$t2`, and `addiu` advances `$t0` by four bytes to the next word. `lw` itself does not move the
+pointer. The jump repeats the check. `addu` and `addiu` do their arithmetic without stopping on
+signed overflow; the six values here give the ordinary sum 108.
 
-Each element is an aligned four-byte word. The six words therefore occupy 24 bytes, and
-`addiu $t0, $t0, 4` advances the pointer by exactly one element. A load uses the address written as
-`offset(base)` but does not change that address, so the pointer step needs its own instruction.
-
-`end:` names the address where the next item would begin: the one-past-the-array address. A label
-only gives a name to an address; it occupies no bytes. With the playground's default layout, and
-with `numbers` as the first item in the data section, `$t0` starts at `0x10010000` and `$t1` is
-`0x10010018`. The comparison at the top is true before any `lw` when the two labels have the same
-address, so the same loop is also safe for an empty array.
-
-`addu` and `addiu` use 32-bit arithmetic without a signed-overflow trap. Here the total is the sum
-of the words' bit patterns modulo $2^{32}$: if it grows past `0xffffffff`, it wraps around. The
-pointer advance has the same nontrapping arithmetic behavior.
-
-Run the program and check that `$t2` is `108` (`0x0000006c`), `$t0` and `$t1` are both
-`0x10010018`, `$t3` still holds `42`, and `$v0` is `10` when syscall 10 ends execution. Together,
-those values show that the total includes the last element, the pointer stops exactly one past the
-array, and the program reaches its exit.
+Run the program. The important stopping check is that `$t0` equals `$t1`: the pointer reached
+`end` without trying to load from it. `$t2` should hold 108 and `$t3` should still hold the last
+word, 42. The register panel shows hexadecimal without a `0x` prefix, so those values appear as
+`0000006C` and `0000002A`. In this Playground layout, `numbers` begins at `0x10010000`; after six
+four-byte words, both pointers show `10010018`. `$v0` shows `0000000A` for the exit syscall.
 
 For a second check, make the array empty by changing the data declarations to these two adjacent
 labels:
@@ -71,7 +63,6 @@ Also add `li $t3, 0x12345678` immediately after `li $t2, 0`, then run again. The
 go directly to `done`: `$t2` stays `0`, `$t0` equals `$t1`, and `$t3` keeps the sentinel value
 `0x12345678` because no `lw` ran.
 
-Finally, restore the six values and add a seventh number to the `.word` line, say `100`. The total
-becomes `208` without changing an instruction because `end` moves with the array. A counter-based
-version can work too, but its element count would normally need to be updated when the data changes;
-the end label lets the assembler update the boundary for you.
+Finally, restore the six values, remove the sentinel line, and add `, 100` after `42` on the
+`.word` line. The total becomes 208 without changing an instruction: the assembler moves `end` to
+the address after the new last word.

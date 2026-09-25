@@ -1,6 +1,6 @@
 {
-    "name": "Print a number in any base without help",
-    "description": "A number turned into digits by repeated division, written backwards into the end of a buffer, and printed in decimal, hex and binary by one subroutine.",
+    "name": "Print an unsigned number in bases 2 through 36",
+    "description": "Convert an unsigned number to character bytes with repeated division, then print it in decimal, hex, binary, or another base through 36.",
     "order": 18,
     "topic": "number-to-string"
 }

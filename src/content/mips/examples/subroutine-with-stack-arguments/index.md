@@ -1,87 +1,115 @@
-`sum_of_squares(a, b)` takes its two arguments on the stack, calls a second subroutine twice to
-square them, and returns their sum in `$v0`. It needs a local variable to hold the first square
-while the second call runs, and that local lives on the stack too, in a frame the subroutine builds
-for itself.
+The first four arguments to a subroutine go in `$a0`–`$a3` in this course. What happens when there
+are more? This program passes a fifth and sixth argument on the stack. `sum_of_squares` ignores the
+first four and returns the sum of the squares of the last two: 3² + 4² = 25.
 
-Passing everything in `$a0` and `$a1` and keeping nothing works right up until a subroutine has to
-hold something across a call of its own, because there is only one `$ra` and a call is free to
-destroy any temporary it likes.
+The routine also calls `square` twice. Its first result must survive the second call, and its
+incoming `$ra` must survive both calls. It keeps those values in a stack frame. The `$a`, `$t`, and
+`$v` registers are caller-saved, so a caller cannot leave a needed value in one of them across a
+call without saving it.
 
-```mips|playground|memory|allow-open
+```mips|playground|memory|tests|allow-open
 .text
 .globl main
 
-# square(x): x in $a0, the answer in $v0, and $s0 is given back as it was found
-square:
-    addi $sp, $sp, -4
-    sw $s0, 0($sp)          # the caller's $s0, saved
-    move $s0, $a0
-    mul $v0, $s0, $s0       # x * x
-    lw $s0, 0($sp)          # and given back
-    addi $sp, $sp, 4
-    jr $ra
+main:
+    li $a0, 0                 # first four arguments are unused here
+    li $a1, 0
+    li $a2, 0
+    li $a3, 0
+    addi $sp, $sp, -8         # room for arguments five and six
+    li $t0, 3
+    sw $t0, 0($sp)            # fifth argument
+    li $t0, 4
+    sw $t0, 4($sp)            # sixth argument
+    jal sum_of_squares
+    addi $sp, $sp, 8          # caller releases its argument slots
+    move $s1, $v0             # keep the answer before using $v0 for exit
+    li $v0, 10
+    syscall
 
-# sum_of_squares(a, b): a at 0($fp), b at 4($fp), the answer in $v0
+# sum_of_squares(a, b, c, d, e, f): returns e*e + f*f in $v0
 sum_of_squares:
-    addi $sp, $sp, -12      # a frame: one local, the old $fp and $ra
+    addi $sp, $sp, -12        # local, saved $fp, saved $ra
     sw $ra, 8($sp)
     sw $fp, 4($sp)
-    addi $fp, $sp, 12       # $fp points at the arguments, and stays still
-    lw $a0, 0($fp)          # a
+    addi $fp, $sp, 12         # points to the caller's fifth argument
+    lw $a0, 0($fp)            # e
     jal square
-    sw $v0, 0($sp)          # local = a * a, kept across the next call
-    lw $a0, 4($fp)          # b
+    sw $v0, 0($sp)            # keep e*e across the next call
+    lw $a0, 4($fp)            # f
     jal square
     lw $t0, 0($sp)
-    add $v0, $v0, $t0       # a * a + b * b
+    add $v0, $v0, $t0         # e*e + f*f
     lw $ra, 8($sp)
     lw $fp, 4($sp)
     addi $sp, $sp, 12
     jr $ra
 
-main:
-    addi $sp, $sp, -8
-    li $t0, 3
-    sw $t0, 0($sp)          # the first argument, a
-    li $t0, 4
-    sw $t0, 4($sp)          # the second, b
-    jal sum_of_squares
-    addi $sp, $sp, 8        # the caller takes the two arguments back off
-    move $s1, $v0           # the answer
+# square(x): x in $a0; result in $v0; restores the $s0 it borrows
+square:
+    addi $sp, $sp, -4
+    sw $s0, 0($sp)
+    move $s0, $a0
+    mul $v0, $s0, $s0
+    lw $s0, 0($sp)
+    addi $sp, $sp, 4
+    jr $ra
 ```
 
-A frame is built and taken down by hand, out of instructions you already know. The prologue is one
-`addi` that moves `$sp` down far enough for everything the subroutine needs, and then one `sw` for
-each thing it promised to give back. The epilogue is the same lines in reverse: the loads, then the
-`addi` the other way. Nothing is hidden and nothing is automatic, so a frame that does not balance
-is a frame you wrote wrong.
+```testcase
+{
+    "expectedRegisters": {
+        "$s1": 25,
+        "$sp": "0x7FFFEFFC",
+        "$v0": 10
+    }
+}
+```
 
-While the second `jal square` is running, the stack looks like this, with 🟢 on the stack pointer:
+Follow `$sp` through the call. The addresses below use the Playground's initial `$sp` of
+`0x7FFFEFFC`; the offsets explain the same layout for any starting address.
 
-|      address |    value    | reached as | what it is                     |
-| -----------: | :---------: | ---------- | ------------------------------ |
-| `0x7FFFEFE8` | 🟢 00000009 | `0($sp)`   | the local, `a * a`             |
-| `0x7FFFEFEC` |  00000000   | `4($sp)`   | the caller's `$fp`             |
-| `0x7FFFEFF0` |  00400070   | `8($sp)`   | the return address into `main` |
-| `0x7FFFEFF4` |  00000003   | `0($fp)`   | `a`                            |
-| `0x7FFFEFF8` |  00000004   | `4($fp)`   | `b`                            |
+| Moment | `$sp` | `$fp` | Where are the stack arguments? |
+| --- | --- | --- | --- |
+| Before `main` reserves slots | `0x7FFFEFFC` | not yet used | no slots reserved |
+| At `jal sum_of_squares` | `0x7FFFEFF4` | not yet used | `0($sp)` and `4($sp)` |
+| After the 12-byte frame is made | `0x7FFFEFE8` | `0x7FFFEFF4` | `0($fp)` and `4($fp)` |
 
-Type `7FFFEFE0` in the memory panel after running and those five words are still lying there, since
-popping moves a pointer and erases nothing.
+The frame takes three words. `0($sp)` is a local for the first square; `4($sp)` holds the old
+`$fp`, and `8($sp)` holds the return address into `main`. The saved `$ra` matters because each
+inner `jal square` replaces `$ra`. `$fp` is a saved register too: this routine changes it, so it
+must restore the caller's value before returning. Setting `$fp` to the entry value of `$sp` gives
+the two stack arguments stable offsets while the routine uses its own frame.
 
-The arguments are the two words the caller pushed and nothing sits between them and the frame,
-because `jal` pushed no return address: `sum_of_squares` saved its own. `addi $fp, $sp, 12` is what
-makes them reachable by a name that does not move, and `$fp` is a saved register, so the caller's
-copy goes on the stack first.
+Step until just after `sw $v0, 0($sp)` and predict which word holds 9. Then look at the frame in the
+Memory panel, starting at `7FFFEFE8`:
 
-`square` keeps to a smaller agreement of its own. It borrows `$s0`, which is a saved register, so it
-puts the caller's value back before returning; `$t0` in `main` it destroys freely, and that is why
-`main` reads the answer out of `$v0` and not out of anything it was holding.
+| Address | Access in `sum_of_squares` | Contents at that point |
+| --- | --- | --- |
+| `0x7FFFEFE8` | `0($sp)` | local: 9, the first square |
+| `0x7FFFEFEC` | `4($sp)` | saved old `$fp` |
+| `0x7FFFEFF0` | `8($sp)` | saved return address into `main` |
+| `0x7FFFEFF4` | `0($fp)` | fifth argument: 3 |
+| `0x7FFFEFF8` | `4($fp)` | sixth argument: 4 |
 
-`$v0` and `$s1` both hold 25, which is 9 plus 16.
+While `square` runs, it briefly reserves one more word below this frame to save `$s0`. It restores
+`$s0` and `$sp` before returning. That is the callee-saved promise for `$s0`; the hardware does not
+do it for us. After the second call, `sum_of_squares` loads its local 9 and adds it to 16 from
+`square`.
 
-Now change `addi $sp, $sp, 8` in `main` to `addi $sp, $sp, 4` and run it. The answer is still 25,
-which is the dangerous part: nothing looks wrong. But `$sp` ends at `7FFFEFF8` instead of
-`7FFFEFFC`, four bytes lower than it started, and those four bytes are gone for good. Put that same
-mistake inside a loop and the stack pointer walks steadily downwards until it reaches something it
-should not.
+The prologue allocates space for every slot, then saves the incoming values the routine must
+restore. The local needs a slot, but it has no old value to save. The epilogue loads `$ra` and
+`$fp` before releasing the 12 bytes. Back in `main`, the caller releases its own 8 bytes, so
+`$sp` returns to `0x7FFFEFFC`. At the exit syscall, `$s1` holds 25 and `$v0` holds the exit
+service number, 10. Old stack contents may still be visible in memory after their slots are
+released; moving `$sp` does not erase them.
+
+Try changing the two stack arguments to 5 and 2. Before running, predict the two argument words,
+the local after the first call, and the final `$s1`. The answer should be 29. Select **Build**, then
+**Run** for the changed values; the embedded **Test** checks the original 3 and 4.
+
+Finally, restore 3 and 4, then change only `addi $sp, $sp, 8` in `main` to
+`addi $sp, $sp, 4`. Select **Build**, then **Run**. The arithmetic still gives 25, but `$sp`
+finishes at `0x7FFFEFF8`: the caller has left one word reserved. In repeated calls, such a
+mismatch moves `$sp` farther from its starting address each time. Restore the 8-byte cleanup when
+you are done.

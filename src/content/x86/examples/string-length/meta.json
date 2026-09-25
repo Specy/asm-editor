@@ -1,6 +1,6 @@
 {
     "name": "Length of a string",
-    "description": "A string walked to its terminator twice: once with an ordinary loop, and once with repne scasb and the two lines of arithmetic that turn its count into a length.",
+    "description": "Find a string's length with an ordinary loop and a bounded repne scasb scan, then practice handling a missing terminator.",
     "order": 6,
     "topic": "string-length"
 }

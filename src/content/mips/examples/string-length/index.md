@@ -11,7 +11,7 @@ main:
     la $t0, text         # current byte: start at text
     move $t1, $t0        # remember the starting address
 scan:
-    lbu $t2, 0($t0)      # load the current byte as 0..255
+    lbu $t2, 0($t0)      # load the current byte
     beqz $t2, at_end     # stop when that byte is zero
     addiu $t0, $t0, 1    # advance by one byte
     j scan
@@ -34,38 +34,49 @@ at_end:
 }
 ```
 
-The code uses familiar pseudoinstructions. `la $t0, text` loads the **address** of `text`, not its
-first byte. `move` copies that address into `$t1`, and `beqz` branches when its register contains
-zero.
+`la $t0, text` puts the address of the first byte in `$t0`, and `move` saves that address in `$t1`.
+At `scan`, `lbu` reads one byte from the address in `$t0`. If the byte is zero, `beqz` goes to
+`at_end`. Otherwise, `addiu` moves `$t0` to the next byte and `j scan` checks again. String bytes
+occupy adjacent addresses, so adding 1 moves exactly one byte forward.
 
-`lbu` then reads one byte and extends it to a register value in the range 0 through 255. `lb` would
-also detect the zero terminator correctly, but it sign-extends bytes from 128 through 255 into
-negative register values. `lbu` preserves the unsigned byte value if the program later uses it.
+Here is the loop's stopping rule:
 
-In the default Playground layout, `text` begins at `0x10010000`. The directive
+| Byte at `$t0` | What happens |
+| --- | --- |
+| A letter or space | Advance `$t0` by 1, then check again. |
+| Zero terminator | Stop with `$t0` still pointing at the zero. |
+
 `.asciiz "Assembly is fun"` stores fifteen content bytes followed by one zero byte:
 
 `41 73 73 65 6d 62 6c 79 20 69 73 20 66 75 6e 00`
 
-When the loop reaches the zero, `$t0` holds its address, `0x1001000f`, while `$t1` still holds
-`0x10010000`. The two pointers are positions inside the same known object, so
-`subu $t3, $t0, $t1` gives their byte distance without signed-overflow trapping: 15. The terminator
-is not included because `$t0` points to it rather than one byte beyond it.
+The pointer advances fifteen times before it finds the zero. `$t1` still holds the starting address,
+so `subu $t3, $t0, $t1` gives the number of one-byte advances: **15**. The zero does not count,
+because the branch stops the loop before another advance.
 
-This result is a byte length, not a count of Unicode characters a person sees. ASCII text uses one
-byte per character, so both counts happen to be 15 here. UTF-8 can use several bytes for one
-character. For a compact check, replace the `text` declaration with
-`text: .byte 0xc3, 0xa9, 0x00`. Those are the two UTF-8 bytes for `é` followed by the terminator, so
-the program reports 2 bytes.
+Now make the loop your own in the Playground. Change the declaration to
+`text: .asciiz "Hi MIPS"`. Before running, predict the byte length. Then erase the four instructions
+after `scan:` and the `subu` instruction after `at_end:`, leaving the labels and exit instructions
+in place. Write those five instructions again. Keep `$t0` as the current address, `$t1` as the saved
+start, and `$t3` as the answer. Load one byte, branch when it is zero, advance one byte otherwise,
+and repeat. At `at_end`, subtract the addresses. Use
+**Run** to check your edit: `$t3` should show `00000007` (7 bytes) in the default hexadecimal
+register display.
 
-Try the empty string too: replace the declaration with `text: .asciiz ""`. Predict the registers
-before running. The first loaded byte is already zero, so the loop makes no advance and `$t3` is 0;
-in the default Playground layout, `$t0` and `$t1` both remain `0x10010000`, and `$v0` is 10 after
-the exit syscall.
+Optional memory inspection: keep your working loop and change only the `text` declaration back to
+`text: .asciiz "Assembly is fun"`. In the default
+Playground layout, `text` begins at `0x10010000`. The terminator sits at `0x1001000f`, so `$t0`
+ends there while `$t1` remains at `0x10010000`. The register display shows these addresses as
+`1001000F` and `10010000`, without a `0x` prefix.
 
-One final experiment shows why the terminator is required. Restore the original text, then change
-only `text: .asciiz` to `text: .ascii`. This is invalid as a zero-terminated string because `.ascii`
-adds no zero byte. In this particular layout, the scan reports 27 only because the `after`
-declaration is adjacent in memory, so it reads through both declarations and stops at `after`'s
-terminator. With different neighboring data, the scan could read unrelated memory or fault before
-it finds a zero.
+For an empty-string check, replace the declaration with `text: .asciiz ""` and use **Run**. The
+first loaded byte is already zero, so `$t0` never advances and `$t3` is 0.
+
+For a controlled demonstration of the terminator, restore the original string and change only
+`text: .asciiz` to `text: .ascii`. Predict the result, then use **Run**. `.ascii` leaves out the
+zero, so this loop continues into the adjacent `after` declaration. It counts the 15 bytes of
+`text` and the 12 bytes of `after`, stopping at `after`'s zero: `$t3` is 27. Restore `.asciiz`
+afterwards. A string meant for this loop needs its own zero terminator.
+
+This program measures stored bytes. Other text encodings can use more than one byte for a visible
+character.

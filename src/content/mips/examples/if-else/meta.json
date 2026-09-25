@@ -1,6 +1,6 @@
 {
     "name": "Maximum and unsigned distance",
-    "description": "A signed comparison selects the maximum and computes the unsigned distance without signed-overflow exceptions.",
+    "description": "Trace two routes through a signed maximum and unsigned distance, then write a branch that selects the maximum.",
     "order": 2,
     "topic": "if-else"
 }

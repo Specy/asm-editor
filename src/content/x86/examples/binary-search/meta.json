@@ -1,6 +1,6 @@
 {
     "name": "Binary search",
-    "description": "A sorted array searched by halving the range every pass, with the middle found by a shift and the two lines that stop the loop looping for ever.",
+    "description": "Search a sorted qword array by halving a half-open range; find an index or report that the value is absent.",
     "order": 15,
     "topic": "binary-search"
 }

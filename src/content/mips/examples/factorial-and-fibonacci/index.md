@@ -1,11 +1,13 @@
-Two subroutines that call themselves. `factorial(8)` comes back as 40320 in `$s0`, and `fib(10)`
-comes back as 55 in `$s1`, and neither of them has a loop anywhere: the repetition is the calls.
+These two subroutines call themselves. `factorial(8)` returns 40320 in `$s0`, and `fib(10)`
+returns 55 in `$s1`. Both take a nonnegative integer in `$a0` and return a result in `$v0`.
+For factorial, `0!` and `1!` are both 1. For Fibonacci, `fib(0)` is 0 and `fib(1)` is 1.
+Negative inputs are outside these routines' contract. The results must also fit in 32 bits;
+we will try an input that exceeds that limit below.
 
-Recursion needs no mechanism that is not already here. A prologue subtracts from wherever `$sp`
-happens to be, so every call gets a frame of its own at a fresh address, and `0($sp)` always means
-this call's own room.
+Each call reserves its own stack frame. When `factorial` calls itself, `$sp` moves down again,
+so `0($sp)` reaches a different saved `n` in each active call.
 
-```mips|playground|memory|allow-open
+```mips|playground|memory|tests|allow-open
 .text
 .globl main
 
@@ -13,11 +15,11 @@ this call's own room.
 factorial:
     addi $sp, $sp, -8
     sw $ra, 4($sp)          # this call's return address
-    sw $a0, 0($sp)          # and its own n
-    blt $a0, 2, fact_one    # if(n < 2) return 1
+    sw $a0, 0($sp)          # this call's n
+    blt $a0, 2, fact_one    # 0! and 1! are 1
     addi $a0, $a0, -1
     jal factorial           # factorial(n - 1)
-    lw $a0, 0($sp)          # our n back, since the call destroyed $a0
+    lw $a0, 0($sp)          # recover this call's n
     mul $v0, $v0, $a0       # n * factorial(n - 1)
     j fact_done
 fact_one:
@@ -27,7 +29,7 @@ fact_done:
     addi $sp, $sp, 8
     jr $ra
 
-# fib(n): n in $a0, one word of local room at 0($sp), the answer in $v0
+# fib(n): n in $a0, the answer in $v0
 fib:
     addi $sp, $sp, -12
     sw $ra, 8($sp)
@@ -35,7 +37,7 @@ fib:
     blt $a0, 2, fib_small   # fib(0) is 0 and fib(1) is 1
     addi $a0, $a0, -1
     jal fib                 # fib(n - 1)
-    sw $v0, 0($sp)          # kept across the second call
+    sw $v0, 0($sp)          # keep the first result through the next call
     lw $a0, 4($sp)
     addi $a0, $a0, -2
     jal fib                 # fib(n - 2)
@@ -56,31 +58,59 @@ main:
     li $a0, 10
     jal fib
     move $s1, $v0           # fib(10)
+    li $v0, 10              # exit after saving both answers
+    syscall
 ```
 
-`sw $ra, 4($sp)` is the line that makes recursion work at all. There is one `$ra` on this machine,
-and `jal factorial` inside `factorial` writes the address of the instruction after it there, on top
-of the address the call needed to go back to. So a subroutine that calls anything, itself included,
-saves `$ra` on the way in and loads it back on the way out.
+```testcase
+{
+    "expectedRegisters": {
+        "$s0": 40320,
+        "$s1": 55,
+        "$sp": "0x7FFFEFFC",
+        "$v0": 10
+    }
+}
+```
 
-`lw $a0, 0($sp)` after the inner call is the second half of the same idea for the argument. `$a0` is
-a caller-saved register and the recursive call destroyed it, so this call reads its own `n` back out
-of its own frame, at an address seven other calls are not using. A variable at a fixed address would
-be shared by every call and overwritten by the second one.
+Every `jal` overwrites the one `$ra` register. When `factorial` calls itself, it must keep the
+address for returning to *its* caller, so it stores `$ra` before the inner `jal` and restores it
+before `jr $ra`. `fib` does the same for each of its two inner calls. The exit syscall in `main`
+stops execution after both answers have been saved.
 
-`factorial` takes eight bytes of stack per call, four for `$ra` and four for `n`, and not a byte
-more. That is as small as a recursive frame gets here, because `jal` pushes nothing and the argument
-arrives in a register: the only things on the stack are the two this subroutine decided to put
-there. Step into the calls and watch `$sp` drop by eight each time, down to `7FFFEFBC` at the
-deepest point, where `n` is 1 and the recursion turns round. `fib` takes twelve, because of the
-word of local room it asked for.
+The frames contain these four-byte words. Offsets are measured from `$sp` *after* each routine
+reserves its space:
 
-`fib` is the expensive one: `fib(n)` calls itself twice, so the number of calls roughly doubles for
-every 1 you add to `n`, and it takes 2300 instructions for a number you could get with a loop and
-two registers. Recursion is written to be read, not to be quick.
+| Routine | `0($sp)` | `4($sp)` | `8($sp)` |
+| --- | --- | --- | --- |
+| `factorial` | saved `n` | saved `$ra` | outside its frame |
+| `fib` | first result | saved `n` | saved `$ra` |
 
-Change `li $a0, 8` to `li $a0, 10` and the answer is 3628800, which is right. Push it to 13 and it
-is not: `$s0` reads `7328CC00`, while 13 factorial is 6227020800. Nothing went wrong in the
-recursion. `mul` writes the low 32 bits of the product, 6227020800 needs 33 of them, so the top bit
-fell off the end and the program reported the rest with complete confidence. That is what an
-overflow looks like when nobody is checking for one.
+The saved `n` matters because `$a0` is caller-saved. For example, a `factorial(3)` call stores 3
+at `0($sp)`, changes `$a0` to 2, and calls `factorial(2)`. The inner calls may leave `$a0` changed;
+they do not promise to return it as 3. After the call returns with `factorial(2) = 2` in `$v0`,
+`lw $a0, 0($sp)` gets the outer call's 3 back, and `mul` produces 6. Each active call has its own
+saved word because each made a new frame at a lower address.
+
+`fib` needs one more word. After its first `jal fib`, `$v0` holds `fib(n - 1)`. A second `jal fib`
+will replace `$v0` with `fib(n - 2)`. `$t0` is caller-saved too, so moving the first result there
+before the second call would not preserve it. `sw $v0, 0($sp)` keeps that result in this call's
+frame. Only *after* the second call does `lw $t0, 0($sp)` load it for the final addition.
+
+Step through `factorial(3)` by changing the first argument in `main` to 3. Let **S** be the value
+of `$sp` just before `main` calls it. At the branch in each active call, predict the saved `n` at
+`0($sp)` and the position of `$sp`: the calls for 3, 2, and 1 use **S − 8**, **S − 16**, and
+**S − 24**. Their saved `n` values are 3, 2, and 1. As the calls return, each restores its own
+`$ra` and releases eight bytes. `$s0` ends at 6 and `$sp` returns to **S**. Use **Step** and the
+Memory panel to check the three frames; use **Run** for the longer original inputs. The embedded
+**Test** checks the original 8 and 10.
+
+For another small change, turn `factorial` into a recursive sum from 1 through `n`. Keep its
+frame and recursive call, but make the base case return 0 when `n` is 0, and add the saved `n` to
+the returned value. The same nonnegative-input rule applies. With 3 in `$a0`, the calls should
+return 0, then 1, then 3, then 6. Restore the original code when you finish.
+
+Finally, try 10 and then 13 as the factorial input. `10!` is 3628800. `13!` is 6227020800,
+which is too large for the 32-bit result of `mul`. `$s0` instead shows `0x7328CC00` in
+hexadecimal, the low 32 bits of that product (1932053504 in decimal). The recursion still
+follows the same calls; the multiplication loses the upper bits.

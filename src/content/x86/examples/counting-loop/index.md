@@ -1,53 +1,124 @@
-Ten slots of memory, filled with the numbers 1 to 10. The thing to watch here is not the loop, which
-you have seen, but what it leaves behind in the memory panel: eighty bytes that a program elsewhere
-would call an array of ten numbers, and that memory itself has no opinion about at all.
+This loop fills ten neighboring memory slots with the numbers 1 through 10. Each slot is a qword,
+or eight bytes. Watch how the index chooses both the value to store and the slot to receive it.
 
 ```x86|playground|memory|allow-open
 default rel
 global _start
 
 section .bss
-numbers: resq 10            ; ten 64 bit slots, not yet written
+numbers: resq 10            ; ten eight-byte slots
 
 section .text
 _start:
-    xor rcx, rcx            ; the index, counting 0 to 9
+    xor rcx, rcx            ; index = 0
 .fill:
     mov rax, rcx
-    inc rax                 ; the value to store, 1 to 10
+    inc rax                 ; value = index + 1
     mov [numbers + rcx*8], rax
-    inc rcx
+    inc rcx                 ; next index
     cmp rcx, 10
-    jb .fill                ; keep going while the index is below 10
+    jb .fill                ; repeat while unsigned rcx < 10
 
     mov rax, 60             ; syscall 60: exit
     xor rdi, rdi
     syscall
 ```
 
-Type `402000` into the memory panel. Eighty bytes: `01` then seven zeroes, `02` then seven zeroes, on
-to `0A`. Seven eighths of what the program wrote is zero, because a qword is eight bytes wide whether
-or not the number in it needs them.
+On the first pass, `rcx = 0`, so the program writes 1 at `numbers`. On the second, `rcx = 1`, so
+it writes 2 eight bytes later. After the tenth store, `rcx` becomes 10; `cmp` and `jb` then let
+execution leave the loop. The index never names a slot past 9.
 
-That is what `resq 10` asked for. `resq` reserves units and not bytes, so the 10 means ten qwords and
-the program gets eighty bytes. Writing `resb 10` by mistake gives you ten bytes, the loop writes past
-the end of them on its second pass, and nothing warns you, because there is nothing there to warn:
-`numbers` is an address and the loop is arithmetic on it.
-
-The `8` in `[numbers + rcx*8]` is the same number for the same reason, and it has to match. Change
-the array to `resd 10`, the store to `mov [numbers + rcx*4], eax` and the scale to 4, and the loop
-fills ten dwords correctly. Change only two of the three and it writes the right values into the
-wrong places.
-
-A loop that put the **same** value in every slot would not need to be a loop at all:
+Run the program, then enter `402000` in the memory panel's **address box**. In this playground,
+with only this `.bss` array, `numbers` begins at `0x402000`. The first two qwords should appear as:
 
 ```
-    lea rdi, [numbers]
-    mov rax, 7
-    mov rcx, 10
-    cld
-    rep stosq
+address       eight bytes, from low address to high address
+0x402000      01 00 00 00 00 00 00 00
+0x402008      02 00 00 00 00 00 00 00
 ```
 
-Five instructions no matter how long the array is. That cannot help here, because every slot gets a
-different number, but it is the shape to reach for when they do not.
+Continue through ten qwords, ending with `0A 00 00 00 00 00 00 00` at `0x402048`. You may need
+to move through more than one panel page to see all eighty bytes. The `rax` store writes **all
+eight bytes** of each qword. For these small numbers, little-endian order puts the value in the
+first byte and seven zero bytes after it. The fixed address helps inspect this particular
+playground; the assembly uses the `numbers` label to locate the array.
+
+Three sizes must agree: `resq 10` reserves ten eight-byte slots (80 bytes), `rax` makes each
+store eight bytes wide, and `rcx*8` moves the address by one slot for each increase in the index.
+For ten dwords instead, use `resd 10`, store from `eax`, and scale the index by 4. That array
+would occupy 40 bytes.
+
+If you changed only `resq 10` to `resb 10`, the second eight-byte store would already extend
+beyond the ten reserved bytes. The memory panel does not know the array's intended length, so do
+not expect a warning or any particular result from writing beyond it.
+
+## Your turn
+
+Fill the same ten qword slots with **10 down to 1**. Keep `rcx` as the index from 0 to 9; make
+`rax` equal to `10 - rcx` before each store. After running, check that the first qword begins
+`0A 00 00 00 00 00 00 00`, the second begins `09`, and the tenth begins `01`. The array still
+occupies 80 bytes. Use **Test** to check all ten values.
+
+```x86|playground|memory|exercise
+default rel
+global _start
+
+section .bss
+numbers: resq 10
+
+section .text
+_start:
+    xor rcx, rcx
+.fill:
+    ; Set rax to 10 - rcx, then store it in slot rcx.
+
+    inc rcx
+    cmp rcx, 10
+    jb .fill
+
+    mov rax, 60
+    xor rdi, rdi
+    syscall
+```
+
+```testcase
+{
+    "expectedMemory": [
+        {
+            "type": "number-chunk",
+            "address": "0x402000",
+            "bytes": 8,
+            "expected": [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
+        }
+    ]
+}
+```
+
+<details>
+<summary>Show solution</summary>
+
+```x86|playground|memory|solution
+default rel
+global _start
+
+section .bss
+numbers: resq 10
+
+section .text
+_start:
+    xor rcx, rcx
+.fill:
+    mov rax, 10
+    sub rax, rcx
+    mov [numbers + rcx*8], rax
+
+    inc rcx
+    cmp rcx, 10
+    jb .fill
+
+    mov rax, 60
+    xor rdi, rdi
+    syscall
+```
+
+</details>

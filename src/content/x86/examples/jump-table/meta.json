@@ -1,6 +1,6 @@
 {
     "name": "A jump table",
-    "description": "A switch done with no comparisons: the addresses of the branches written into memory as data, and a jmp that reads one of them.",
+    "description": "Choose among code labels with a bounds-checked table of addresses and an indexed indirect jump.",
     "order": 14,
     "topic": "jump-table"
 }

@@ -1,6 +1,8 @@
-`sum` here could have been a `jmp` with another `jmp` at the end of it, and it would work exactly once.
-What makes it a subroutine is that it can be called from anywhere and get back to wherever that was,
-and the whole of that ability lives in eight bytes on the stack.
+# A subroutine with its arguments in registers
+
+Suppose a program needs to add two numbers and then continue with the answer. Here `_start` gives
+20 and 22 to `sum`. The subroutine adds them and returns 42. The caller saves that answer in
+`r12`, where you can inspect it after the exit setup changes `rax`.
 
 ```x86|playground|allow-open
 default rel
@@ -11,40 +13,120 @@ section .text
 ; The System V convention puts the first two arguments in rdi and rsi
 ; and expects the return value in rax.
 sum:
-    mov rax, rdi
-    add rax, rsi
-    ret                     ; jumps back to the line after the call
+    mov rax, rdi            ; start the answer with a
+    add rax, rsi            ; add b
+    ret
 
 _start:
-    mov rdi, 20             ; the first argument
-    mov rsi, 22             ; the second
-    call sum                ; rax comes back as 42
-    mov r12, rax
+    mov rdi, 20             ; first integer argument
+    mov rsi, 22             ; second integer argument
+    call sum
+    mov r12, rax            ; execution resumes here; r12 = 42
 
     mov rax, 60             ; syscall 60: exit
     xor rdi, rdi
     syscall
 ```
 
-Step through it with `rsp` and `rip` both in view, and watch the three instructions that matter.
+The System V convention gives the first two integer arguments to `rdi` and `rsi` and returns one
+integer in `rax`. `sum` follows that agreement. The `call` and `ret` instructions handle a separate
+problem: getting back to the instruction after this particular call.
 
-`call sum` does two things in one: it drops `rsp` by 8 and writes the address of the **next** line,
-`mov r12, rax`, into the slot it just made, and then it puts the address of `sum` into `rip`. Open the
-**Stack** tab and the address is there, an ordinary eight byte number in ordinary memory.
+## Follow the return address
 
-`ret` reads that number back out, puts it into `rip` and lets `rsp` climb by 8. Nothing about the slot
-marked it as a return address, and `ret` does no checking whatever. Push one extra thing inside `sum`
-and forget to pop it, and `ret` takes that value instead and jumps to it, with results that will look
-like anything except a missing `pop`.
+Step through the program with `rip`, `rsp`, and the **Stack** tab visible. `rip` tells you which
+instruction will execute next. Let `S` stand for the value of `rsp` just before `call sum`;
+your run will show a concrete address instead.
 
-`sum` writes `rax` and reads `rdi` and `rsi`, and the convention marks all three as caller saved,
-which is why it saves nothing on the way in. A subroutine that wanted `rbx` or `r12` to `r15` for
-scratch space would have to push them first and pop them before the `ret`.
+| When you stop          | `rip` points to         | `rsp`   | What to inspect                                           |
+| ---------------------- | ----------------------- | ------- | --------------------------------------------------------- |
+| Before `call sum`      | `call sum`              | `S`     | The caller is about to leave `_start`.                    |
+| After executing `call` | `mov rax, rdi` at `sum` | `S - 8` | The qword at `[rsp]` holds the address of `mov r12, rax`. |
+| Just before `ret`      | `ret` at `sum`          | `S - 8` | The same address is still at `[rsp]`; `rax` now holds 42. |
+| After executing `ret`  | `mov r12, rax`          | `S`     | The caller has resumed immediately after its `call`.      |
 
-`sum` is written above `_start` here, which the assembler is entirely indifferent to. What would
-matter is writing it **below**: a `_start` that ran off the end of its own code would walk straight
-into `sum` and execute it as though it had been called, without any return address underneath.
+The address is eight bytes because this 64-bit `call` stores a 64-bit return address: one qword.
+It first subtracts 8 from `rsp`, writes the address of the instruction following the `call` at
+the new `[rsp]`, and sets `rip` to `sum`. `ret` reads that qword into `rip` and adds 8 to `rsp`.
+The old bytes may still be visible in memory afterward, but that stack slot is no longer in use.
 
-Change `mov rsi, 22` to `mov rsi, -22` and `rax` comes back as `FFFFFFFFFFFFFFFE`. `add` is one
-instruction for signed and unsigned numbers alike, and the bits it produced are -2 or a number near
-`2^64` depending on nothing but which way you read them.
+This is why a subroutine must leave `rsp` pointing at its return address when it reaches `ret`.
+If `sum` pushed another value without popping it, `ret` would read that value as an address and
+try to continue there.
+
+`sum` changes only `rax`, which is a caller-saved register. If a subroutine uses a callee-saved
+register such as `rbx` or `r12`, it must restore the caller's value before returning. The
+caller can use `r12` here to keep the result after `sum` returns.
+
+## Your turn
+
+Write `difference(a, b)` so it reads `a` from `rdi`, reads `b` from `rsi`, and returns `a - b`
+in `rax`. In `_start`, call it with 50 and 8, then save the result in `r12`. Call the same
+subroutine again with 100 and 37, and save that result in `r13`. Write the argument setup and
+both calls yourself.
+
+Before running, predict both answers. Then press **Test**: it expects `r12 = 42` and `r13 = 63`.
+You can also step through both calls. Each `call` puts a different return address at `[rsp]`:
+the first leads to `mov r12, rax`, and the second leads to `mov r13, rax`. After each `ret`,
+`rsp` is back where it was before that call.
+
+```x86|playground|exercise
+default rel
+global _start
+
+section .text
+; difference(a, b) -> a - b
+difference:
+    ; Write the two instructions that put a - b in rax.
+    ret
+
+_start:
+    ; Call difference(50, 8), then save its answer in r12.
+
+    ; Call difference(100, 37), then save its answer in r13.
+
+    mov rax, 60
+    xor rdi, rdi
+    syscall
+```
+
+```testcase
+{
+    "expectedRegisters": {
+        "r12": 42,
+        "r13": 63
+    }
+}
+```
+
+<details>
+<summary>Show solution</summary>
+
+```x86|playground|solution
+default rel
+global _start
+
+section .text
+; difference(a, b) -> a - b
+difference:
+    mov rax, rdi
+    sub rax, rsi
+    ret
+
+_start:
+    mov rdi, 50
+    mov rsi, 8
+    call difference
+    mov r12, rax
+
+    mov rdi, 100
+    mov rsi, 37
+    call difference
+    mov r13, rax
+
+    mov rax, 60
+    xor rdi, rdi
+    syscall
+```
+
+</details>

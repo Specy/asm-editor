@@ -1,6 +1,6 @@
 {
     "name": "Sum of an array",
-    "description": "Walk an array with one-past-the-end pointers, safely handle an empty array, and accumulate a modulo-2^32 total in $t2.",
+    "description": "Walk a word array to its end label, add its values in $t2, and safely handle an empty array.",
     "order": 4,
     "topic": "sum-of-an-array"
 }

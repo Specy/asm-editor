@@ -1,6 +1,6 @@
 {
     "name": "Print a string",
-    "description": "The first program that talks to anybody: a call number in rax, a descriptor, an address and a length, and the one instruction that hands the request over.",
+    "description": "Print fixed text in the console with Linux write, including the bytes that make each line break.",
     "order": 17,
     "topic": "hello-world",
     "template": 4

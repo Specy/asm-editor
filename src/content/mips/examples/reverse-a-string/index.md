@@ -1,9 +1,6 @@
-This program reverses a zero-terminated string in the same memory that already holds it. The work
-has two phases:
-
-1. Scan forward to find the zero terminator.
-2. Put one pointer on each end of the text and swap bytes while the left pointer is below the right
-   pointer.
+This program reverses a zero-terminated string in place. `$t0` stays at the first byte while
+`$t1` scans forward to find the zero terminator. Then `$t1` moves back to the last letter, and
+the two pointers swap bytes as they move toward each other.
 
 ```mips|playground|memory|tests|allow-open
 .data
@@ -11,8 +8,8 @@ text: .asciiz "Assembly"
 
 .text
 main:
-    la $t0, text             # left: first character
-    addu $t1, $t0, $zero    # right: scan from the same address
+    la $t0, text             # left pointer: first byte
+    addu $t1, $t0, $zero    # scan pointer: start at the same byte
 
 find_end:
     lbu $t2, 0($t1)
@@ -21,13 +18,13 @@ find_end:
     j find_end
 
 found_end:
-    beq $t1, $t0, done      # an empty string has no last character
-    addiu $t1, $t1, -1      # move from the terminator to the last character
+    beq $t1, $t0, done      # empty string: no last letter to move back to
+    addiu $t1, $t1, -1      # right pointer: last letter, before the zero
 
 swap_loop:
-    sltu $t4, $t0, $t1      # t4 = 1 exactly while left < right
+    sltu $t4, $t0, $t1      # 1 while the left address is below the right
     beq $t4, $zero, done
-    lbu $t2, 0($t0)         # save both original bytes
+    lbu $t2, 0($t0)         # save both bytes before either store
     lbu $t3, 0($t1)
     sb $t3, 0($t0)
     sb $t2, 0($t1)
@@ -58,40 +55,30 @@ done:
 }
 ```
 
-The scan leaves `$t1` pointing **at** the terminator. If that address is also the start address in
-`$t0`, the string is empty, so the program goes directly to `done`. Otherwise, subtracting one puts
-`$t1` on the last character. The terminator itself is never used as an end pointer and is never
-overwritten.
+`la` puts the address of `text` in `$t0`. `addu` copies that address into `$t1` by adding zero, so
+the scan starts at the same byte. At `find_end`, `lbu` reads one byte and `beq` checks whether it is
+zero. For each nonzero byte, `$t1` advances by one and scans again. The scan stops with `$t1`
+pointing **at** the terminator.
 
-`lbu` reads one byte and zero-extends it to a 32-bit register. That makes the loaded value an
-unsigned number from 0 to 255, so the terminator is exactly zero regardless of the other bytes in
-the string. `addu` copies the starting address by adding zero, and `addiu` changes each pointer by
-the signed immediate `1` or `-1` without an arithmetic-overflow trap.
+For an empty string, that zero is the first byte, so `$t1` still equals `$t0`. The `beq` at
+`found_end` goes straight to `done`. Subtracting one in this case would put `$t1` **before** the
+string. For a nonempty string, subtracting one puts `$t1` on its last letter. It now serves as the
+right pointer; `$t0` is still on the first letter.
 
-The swap loop first uses `sltu` to compare the pointers as unsigned 32-bit address patterns. This
-matters for addresses whose top bit is set: interpreting the same pattern as a signed integer would
-call it negative. When left is no longer below right, `$t4` becomes zero and the program finishes.
-For an odd-length string, that condition leaves the middle byte where it is.
+At `swap_loop`, `sltu` checks whether the left address is below the right address. If so, the two
+`lbu` instructions save the original bytes in `$t2` and `$t3`. The two `sb` instructions write
+them at the opposite ends. Both loads come first so a store cannot erase a byte the program still
+needs to read. Then `$t0` moves right by one byte, `$t1` moves left by one, and the loop checks
+their addresses again.
 
-Both bytes are loaded before either store. If the program stored the left byte first, it would
-overwrite the right byte before saving it. After the two loads, the two `sb` instructions can write
-the saved values in the opposite positions safely.
+When the pointers meet or pass each other, the comparison gives zero and the loop stops. If the
+string has an odd number of letters, its middle letter stays where it is. The zero terminator also
+stays in place because the right pointer starts on the byte before it.
 
-This Playground executes a branch or jump and then continues at its destination immediately; it
-has no branch delay slots, so no `nop` instructions are needed. `la` is the familiar assembler
-shortcut that places the address of `text` in `$t0`.
+Select **Build** and **Run**, then look at `text` in the memory panel. The original `Assembly`
+becomes `ylbmessA`, followed by the same `00` terminator.
 
-The memory panel starts at the data segment's default address, `0x10010000`. After running the
-program, the nine bytes there are `79 6C 62 6D 65 73 73 41 00`: `ylbmessA` followed by the unchanged
-zero terminator. The attached test also checks those exact bytes, the exit service in `$v0`, and the
-final pointer positions.
-
-Before changing the string in the Playground, predict which bytes move and then check the memory
-panel:
-
-| Input   | Text after the run | What the pointers do                        | Zero terminator |
-| ------- | ------------------ | ------------------------------------------- | --------------- |
-| empty   | empty              | stop before moving right back               | preserved       |
-| `A`     | `A`                | meet on the only character; perform no swap | preserved       |
-| `race`  | `ecar`             | perform two swaps                           | preserved       |
-| `Level` | `leveL`            | perform two swaps; leave `v` in the middle  | preserved       |
+Now change only the `.asciiz` text and try `""`, `"A"`, `"race"`, and `"Level"` in turn. Before each
+run, predict the resulting text and which pairs of letters will swap. Select **Build**, then **Run**,
+and check the bytes in the memory panel, including the final `00`. For the empty string, check that
+the program stops without swapping; for `"Level"`, watch what happens to the middle `v`.

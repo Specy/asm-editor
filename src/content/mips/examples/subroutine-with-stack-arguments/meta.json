@@ -1,6 +1,6 @@
 {
     "name": "Stack arguments and a stack frame",
-    "description": "Two arguments pushed by the caller, a local that survives a call inside a frame $fp points at, and a subroutine that gives back the register it borrowed.",
+    "description": "Fifth and sixth arguments on the stack, a local and saved return address in a frame, and a subroutine that restores the register it borrows.",
     "order": 11,
     "topic": "subroutine-with-stack-arguments"
 }

@@ -1,6 +1,6 @@
 {
     "name": "Multiply and divide with hi and lo",
-    "description": "Convert days to hours and seconds to minutes while learning signed and unsigned multiplication, division, quotients, remainders, and the hi and lo registers.",
+    "description": "Convert days to hours and seconds to minutes using MIPS multiplication and division, then copy results from hi and lo.",
     "order": 8,
     "topic": "multiply-and-divide"
 }

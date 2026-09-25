@@ -1,6 +1,6 @@
-Every program in this ladder so far has left its answer in a register or in memory, where only you can
-see it. This one puts its answer in the console, which means it has to go outside the program
-altogether, and going outside the program takes exactly one instruction.
+So far, you have read each example's result in a register or in memory. This program puts text in
+the console panel. It sets up two `write` requests, one for each line, and uses `syscall` to send
+each request.
 
 ```x86|playground|console|no-registers|allow-open
 default rel
@@ -31,19 +31,118 @@ _start:
     syscall
 ```
 
-`syscall` takes no operands at all, which is why each of the three blocks here is a run of `mov` lines
-and then one bare instruction. Every part of the request is in a register before it runs: what is being
-asked for, where to send it, what to send, and how much.
+Run the program. The console shows:
 
-`write` sends **exactly** the bytes you point it at and nothing else. It does not look for a
-terminator, it does not stop at one if it finds one, and it adds nothing to the end. So the line break
-after `Hello, world!` is the `, 10` you can see in the `db` line, and the length is whatever
-`$ - greeting` came out as. Take the `, 10` out of the first string and the console reads
+```text
+Hello, world!
+The answer is 42
+```
+
+`syscall` takes no written operands. Before each `write`, `rax` holds call number 1, `rdi` holds
+standard output descriptor 1, `rsi` points to the first byte, and `rdx` holds the requested byte
+count. The second request uses the same setup with `answer` and `ALEN`.
+
+`write` requests **up to** `rdx` bytes; its result in `rax` says how many were actually written and
+can be smaller. For these short messages in the playground, the requested bytes appear in the
+console. `write` uses the byte count rather than searching for an ending byte, and it adds no line
+break. The `10` after each message is its newline byte. `GLEN equ $ - greeting` counts the bytes
+from `greeting` to the current position, including that newline. Remove `, 10` from the first
+message and its length loses one byte too: the console then shows
 `Hello, world!The answer is 42` on one line.
 
-Nothing here prints a number, either. `The answer is 42` is a string that has the characters `4` and
-`2` in it already, and a register holding the value 42 has nothing in common with those two bytes.
-Turning one into the other is a program of its own, and it is the next Example.
+The second message already contains the characters `4` and `2`. This program sends those stored
+characters; it does not convert a numeric value held in a register into text.
 
-`mov rax, 60` and `syscall` is the request to exit, and it is the only thing that stops the program.
-Take the last three lines out and execution carries straight on into whatever bytes follow them.
+The final block requests `exit` with status 0, ending the program after the two lines.
+
+## Your turn
+
+Add a third line, `I can print too!`, after the first two. Put its bytes and newline in `.rodata`,
+give it a length with `equ`, and make one more `write` request before `exit`. The console should
+show all three lines in this order:
+
+```text
+Hello, world!
+The answer is 42
+I can print too!
+```
+
+```x86|playground|console|no-registers|exercise
+default rel
+global _start
+
+section .rodata
+greeting:   db "Hello, world!", 10
+GLEN        equ $ - greeting
+answer:     db "The answer is 42", 10
+ALEN        equ $ - answer
+; Add the third message and its length here.
+
+section .text
+_start:
+    mov rax, 1
+    mov rdi, 1
+    lea rsi, [greeting]
+    mov rdx, GLEN
+    syscall
+
+    mov rax, 1
+    mov rdi, 1
+    lea rsi, [answer]
+    mov rdx, ALEN
+    syscall
+
+    ; Write the third message here.
+
+    mov rax, 60
+    xor rdi, rdi
+    syscall
+```
+
+```testcase
+{
+    "expectedOutput": "Hello, world!\nThe answer is 42\nI can print too!\n"
+}
+```
+
+<details>
+<summary>Show solution</summary>
+
+```x86|playground|console|no-registers|solution
+default rel
+global _start
+
+section .rodata
+greeting:   db "Hello, world!", 10
+GLEN        equ $ - greeting
+answer:     db "The answer is 42", 10
+ALEN        equ $ - answer
+third:      db "I can print too!", 10
+TLEN        equ $ - third
+
+section .text
+_start:
+    mov rax, 1
+    mov rdi, 1
+    lea rsi, [greeting]
+    mov rdx, GLEN
+    syscall
+
+    mov rax, 1
+    mov rdi, 1
+    lea rsi, [answer]
+    mov rdx, ALEN
+    syscall
+
+    mov rax, 1
+    mov rdi, 1
+    lea rsi, [third]
+    mov rdx, TLEN
+    syscall
+
+    mov rax, 60
+    xor rdi, rdi
+    syscall
+```
+
+</details>
