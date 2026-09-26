@@ -1,64 +1,80 @@
-Eight bytes sit in memory and the program walks them once, keeping the largest one it has seen so
-far in `c` and the position it was found at in `d`. One of the numbers is negative, which is what
-makes the choice of comparison matter.
+Eight signed bytes sit in memory. This program finds the largest one and its position in the array.
+It keeps the best value so far in `c` and its index in `d`.
 
-Sum of an array read every element and needed nothing from the ones before it. Here every pass has
-to compare the element against something the loop is carrying, which is the shape of every "find the
-best one" program there is.
+Open the program in the editor, choose **Build**, then use **Step** to watch the S and P/V flags
+after each `cp (hl)`. You can also choose **Run** to see the final answer. The registers panel shows
+hexadecimal values.
 
-```z80|playground|memory|no-flags|allow-open
+```z80|playground|memory|allow-open
 count equ 8
 
     .org 0x8000
-    ld hl, numbers  ; hl = the start of the array
-    ld a, (hl)      ; best = numbers[0]
-    ld c, a
-    inc hl
-    ld d, 0         ; where = 0
-    ld e, 0         ; i = 0
+    ld hl, numbers  ; hl = address of the first element
+    ld a, (hl)
+    ld c, a         ; best = numbers[0]
+    inc hl          ; next element to check
+    ld d, 0         ; index of best
+    ld e, 0         ; current index
     ld b, count-1   ; seven elements left
 loop:
-    inc e           ; i++
-    ld a, c         ; best
-    cp (hl)         ; best minus the byte hl points at
-    jp pe, flipped  ; the subtraction overflowed, so S is inverted
-    jp m, take      ; it did not, so S tells the truth
+    inc e           ; move to the current element's index
+    ld a, c         ; compare best with the byte at hl
+    cp (hl)         ; set flags as if subtracting current from best
+    jp pe, flipped  ; overflow: read S the other way around
+    jp m, take      ; no overflow, negative: current is larger
     jr next
 flipped:
-    jp p, take      ; inverted: plus means less
+    jp p, take      ; overflow, positive: current is larger
     jr next
 take:
     ld a, (hl)
-    ld c, a         ; that byte is the new best
-    ld d, e         ; where = i
+    ld c, a         ; save the new best
+    ld d, e         ; save its index
 next:
-    inc hl          ; on to the next byte
+    inc hl          ; address of the next element
     djnz loop
     halt
 
     .org 0x9000
-numbers: .db 12, -4, 37, 8, 99, 41, 2, 60
+numbers: .db -100, 37, -4, 8, 99, -50, 2, 60
 ```
 
-The first element is read before the loop, into `c` and with an `inc hl` stepping past it, so the
-loop itself has only seven elements left and starts with an answer that is already right for the
-part of the array it has seen. Starting `c` at 0 instead would be a different program, one that
-answers 0 for an array of negative numbers.
+The first element goes into `c` before the loop. That gives the program a real value from the array
+to compare against, even if every element is negative. Starting the best at zero would leave zero
+as the answer for an all-negative array, although zero might not occur in it. `hl` then moves past
+the first byte, so `b` starts at `count-1`: seven comparisons remain.
 
-The five instructions in the middle are one comparison. `cp (hl)` subtracts the byte `hl` points at
-from the best so far and sets the flags from the result, and **the best is smaller, as signed bytes,
-exactly when `S` and `P/V` differ**: `P/V` says the
-subtraction overflowed, and when it did the sign of the answer is the opposite of the truth. So
-`jp pe` picks which of the two readings of `S` to use, and `jp m` and `jp p` are those two readings.
-Neither `pe` nor `m` nor `p` has a `jr` form, which is why all three are a `jp`.
+`cp (hl)` compares by calculating `best - current` for the flags; it leaves `a` and `c` unchanged.
+For signed bytes, a negative result normally means the current element is larger. But an 8-bit
+subtraction can wrap past the signed range of -128 through 127. Then the S flag describes the sign
+of the wrapped byte, and P/V is set to report the overflow. These three comparisons show why both
+flags matter:
 
-`c` comes out at `63`, which is 99, and `d` at `04`, since 99 is the fifth element and the first one
-is number 0. The panel shows them as `bc` at `0063` and `de` at `0407`, `e` being the index the walk
-finished on.
+| Best in `c` | Current at `(hl)` | Subtraction and wrapped byte | S   | P/V | Route                      |
+| ----------- | ----------------- | ---------------------------- | --- | --- | -------------------------- |
+| -100        | 37                | -137 wraps to `77` (+119)    | 0   | 1   | `pe` then `p`: take 37     |
+| 37          | -4                | 41 is `29` (+41)             | 0   | 0   | neither jump: keep 37      |
+| 99          | -50               | 149 wraps to `95` (-107)     | 1   | 1   | `pe`, then no `p`: keep 99 |
 
-If five jumps to do one comparison looks like too much, replace all of them and the `flipped` label
-with the single line `jr nc, next`, the unsigned comparison, and run it. The program reports 252 as
-the largest. Read as an unsigned byte the `-4` in the array is `FC`, which is 252, so nothing beats
-it and the smallest number in the array is confidently returned as the biggest. One instruction
-against five is what the signed comparison costs, and it is why 8 bit programs keep their numbers
-unsigned wherever they can.
+In the first row, -100 really is less than 37, despite the positive-looking wrapped result. In the
+last row, 99 really is greater than -50, despite the negative-looking result. `jp pe` takes the
+overflow route when P/V is set. With no overflow, `jp m` takes the new value when S is set. With
+overflow, `jp p` takes it when S is clear. Thus a new value wins exactly when S and P/V differ.
+The Z80 has no `jr pe`, `jr m`, or `jr p`, so those branches use `jp`.
+
+The final best is 99, which appears as `63` in `c`. It is element 4 when counting from index 0,
+so `d` is `04`. After the loop checks element 4, `e` continues through 5, 6, and 7, while `d`
+stays at 4. The panel ends with `bc = 0063` and `de = 0407`.
+
+Try treating the same bytes as _unsigned_: replace the five jumps in the comparison and the
+`flipped:` label with just `jr nc, next`. Build and run, then predict `c` and `d` before looking at
+the panel. `nc` means the comparison needed no borrow, so the current byte replaces the best only
+when it is larger as an unsigned value.
+
+<details>
+<summary>Check your answer</summary>
+
+`-4` is stored as `FC`, or 252 when read as unsigned. It is larger than every other byte here, so
+the unsigned version ends with `c = FC` and `d = 02`.
+
+</details>

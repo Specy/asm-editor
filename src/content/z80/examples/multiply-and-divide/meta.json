@@ -1,6 +1,6 @@
 {
     "name": "Multiply and divide, with the remainder",
-    "description": "The two instructions the Z80 does not have, written out: days into hours by shifting and adding, and seconds into minutes and seconds by shifting and subtracting.",
+    "description": "Multiply by testing and adding bits, then divide one bit at a time to find both the quotient and remainder.",
     "order": 8,
     "topic": "multiply-and-divide"
 }

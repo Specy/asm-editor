@@ -1,35 +1,31 @@
-Two numbers go into registers, the program works out the perimeter of the rectangle they describe,
-and the answer stays in `a`. Nothing is read from memory and nothing branches: every value is in a
-register from the first instruction to the last, which is what the registers panel next to the
-program shows you.
-
-This is the first program of the ladder, and the ones after it are built out of the same three
-moves: a number into a register, a register into another register, and an `add`.
+A rectangle is 30 units wide and 12 units high. This program adds the width and height, then
+doubles that sum to get the perimeter. It keeps the numbers in registers so you can watch each
+change in the registers panel.
 
 ```z80|playground|no-flags|allow-open
     .org 0x8000
     ld a, 30        ; width = 30
     ld b, 12        ; height = 12
-    add a, b        ; perimeter = width + height
-    add a, a        ; perimeter = perimeter + perimeter
+    add a, b        ; a = width + height (half the perimeter)
+    add a, a        ; a = 2 * (width + height)
 
-    ld hl, 0xFF00   ; hl already holds something
-    ld l, a         ; only the low half of hl is written
+    ld hl, 0xFF00   ; start with h = FF and l = 00
+    ld l, a         ; copy the perimeter into l
     halt
 ```
 
-`ld a, 30` writes the number 30 into `a`, and `ld b, 12` does the same with 12 and `b`. Put the 30
-in parentheses and `ld a, (30)` reads the byte _at address_ 30 instead, which is a different
-instruction and a different program.
+Build the program, then use **Step** to watch `a`, `b`, and `hl`. The first two `ld` instructions
+put 30 in `a` and 12 in `b`. `add a, b` puts their sum, 42, in `a`; `b` stays 12. Next,
+`add a, a` adds `a` to itself, leaving the perimeter, 84, in `a`.
 
-The two adds are one C line, `perimeter = 2 * (width + height)`, written one operation at a time.
-Every 8 bit addition on this machine writes its answer into `a` and reads one of its two operands
-from there, so `add a, b` is the only shape an addition has, and `add a, a` adds the accumulator to
-itself, which is how you double a number without a multiplication.
+The panel shows register values in hexadecimal: after the first add, `a` shows `2A` (42 in
+decimal); after the second, it shows `54` (84 in decimal). You can also press **Run** after
+building to go straight to the final values.
 
-`a` comes out at `54`, which is 84, and `hl` at `FF54`. The `54` is the perimeter and the `FF` is
-what the high half of `hl` was already holding: `l` and `h` are one byte each, and naming one of
-them is what decided how much of the pair changed.
+The last two `ld` instructions show what happens when you write one half of a register pair.
+`ld hl, 0xFF00` puts `FF` in the high byte `h` and `00` in the low byte `l`. Then `ld l, a`
+copies `54` into `l` without changing `h`, so the panel ends with `hl` showing `FF54`.
 
-Nothing on an `ld` says how many bytes it moves, because the registers you name say it: `ld l, a`
-moves one byte and `ld hl, 0xFF00` moves two.
+Try changing the width to 20 and the height to 10. Before you build and run again, work out
+what `a` and `hl` should show at the end. The perimeter is 60, so expect `3C` in `a` and
+`FF3C` in `hl`.

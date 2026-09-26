@@ -1,9 +1,9 @@
-The string at `0x9000` is turned back to front where it lies, with no second buffer to copy it into.
-Two pointers start at the two ends and walk towards each other, swapping the bytes they point at.
+This program reverses the zero-terminated string at `0x9000` in the same memory it already
+occupies. `hl` starts at the left end, `de` is set to the right end, and each pass swaps their two
+bytes before the pointers move inwards.
 
-Length of a string walked to the terminator to measure something. This one walks to the terminator
-to find the far end and then does its work on the way back, so there are two pointers moving at
-once, and the length it measured on the way is what says when to stop.
+Open the program in the editor, choose **Build**, then **Run**. In the memory panel, enter `9000`.
+After execution, the eight bytes are `79 6C 62 6D 65 73 73 41`, which spell `ylbmessA`.
 
 ```z80|playground|memory|no-flags|allow-open
     .org 0x8000
@@ -19,11 +19,11 @@ at_end:
     ld e, l
     dec de          ; right = the last character
     ld bc, text
-    or a            ; C = 0 before the only 16 bit subtraction there is
+    or a            ; C = 0 before subtraction
     sbc hl, bc      ; hl = the length
     ld a, l
-    srl a           ; half of it, which is how many swaps there are
-    jr z, done      ; a string of one character has none
+    srl a           ; half of it = number of swaps
+    jr z, done
     ld b, a
     ld hl, text     ; left = text, again
 swap:
@@ -42,20 +42,35 @@ done:
 text:   .asciz "Assembly"
 ```
 
-The obvious way to write this loop is "keep going while `left` is below `right`", and that needs a
-comparison of two 16 bit pairs. There is no such comparison: `cp` works against `a`, which is eight
-bits, and the only 16 bit subtraction, `sbc hl, de`, writes its answer over `hl`, which here is one
-of the two pointers you are trying to keep. So the loop counts instead. The length is measured once, `srl a` halves it, and `djnz` runs exactly that many
-swaps.
+The first loop is the usual scan for a zero byte. `.asciz` places that zero after the last
+character. When `find_end` finishes, `hl` holds the terminator's address, `9008`; copying it to
+`de` and decreasing `de` makes `de` point at the last character, `y`, at `9007`.
 
-Halving with a shift is where the odd lengths are taken care of: `srl a` throws the bottom bit away,
-so a string of five characters gives two swaps and its middle character is never touched, which is
-what you want.
+The program also uses that terminator address to find the length. `hl` currently holds the
+terminator address, so subtracting `text` gives the number of characters: `9008 - 9000 = 0008`.
+`sbc hl, bc` calculates `hl - bc - C`, so its carry input must be zero. The `or a` immediately
+before it clears C while leaving the useful address in `hl` untouched. The result is eight in
+`hl`; `ld a, l` takes its low byte, and `srl a` halves it to four swaps.
 
-The swap needs both bytes in registers before either is written, which is why `c` holds one of them
-while `a` carries the other. `ld a, (de)` and `ld (de), a` are the only two instructions that reach
-memory through `de`, and neither of them will name any register but `a`, so the byte from the right
-hand end goes into `a` first and then into `c` to get out of the way.
+This version is for strings shorter than 256 characters: it takes the length from `l`. Four swaps
+are enough because each one fixes a pair of positions, one at each end. For an odd length, the
+shift drops the leftover one: five characters need two swaps, leaving the middle character alone.
 
-Run it with the memory panel on `9000` and the eight bytes read `79 6C 62 6D 65 73 73 41`. Press the
-text button in the panel's corner and they read `ylbmessA`.
+At the start of `swap`, both old bytes are read before either memory location is written. `a` first
+holds the right byte and `c` saves it; `a` then receives the left byte. The two stores put those
+saved values at the opposite ends. `inc hl` and `dec de` move the pointers towards the next pair,
+and `djnz` repeats for the count in `b`.
+
+An empty string is safe here. `dec de` does make `de` point before the terminator, but the computed
+length is zero, so `srl a` leaves zero and `jr z, done` stops before `swap` reads through `de`.
+
+Try changing the data line to `text: .asciz "Hello"`. Before building and running, predict the
+text shown at `9000` afterwards.
+
+<details>
+<summary>Check your answer</summary>
+
+It is `olleH`. The length is five, so the shifted count is two: the first and last characters swap,
+then the second and second-last swap. The middle `l` stays where it is.
+
+</details>

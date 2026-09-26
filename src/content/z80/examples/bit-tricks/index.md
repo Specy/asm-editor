@@ -1,16 +1,14 @@
-Four questions about one number, none of them answered with arithmetic. Is 182 odd, what is it times
-eight, what are its bottom four bits, and how many of its eight bits are ones. The answers land in
-`d`, `hl`, `e` and `c`.
+One byte can answer four questions. Is 183 odd, what is it times eight, what are its bottom four
+bits, and how many of its eight bits are ones? The answers land in `d`, `hl`, `e`, and `c`.
 
-The instructions of the Example before this one treat a register as a number. These four treat the
-same register as eight bits side by side, which is the other way to read one and often the cheaper
-way.
+Open in the editor, choose **Build**, then use **Run** for the final values or **Step** to follow
+the flags and registers as they change. The registers panel displays hexadecimal.
 
-```z80|playground|no-flags|allow-open
-N   equ 182
+```z80|playground|allow-open
+N   equ 183
 
     .org 0x8000
-    ld a, N         ; n = 182, which is 0b10110110
+    ld a, N         ; n = 183, which is 0b10110111
 
     ld d, 0
     bit 0, a        ; is the lowest bit set?
@@ -19,7 +17,7 @@ N   equ 182
 even:
 
     ld l, a
-    ld h, 0         ; hl = n, widened, since n * 8 does not fit in a byte
+    ld h, 0         ; widen unsigned a into hl
     add hl, hl
     add hl, hl
     add hl, hl      ; n * 8, three doublings
@@ -39,25 +37,32 @@ no_bit:
     halt
 ```
 
-`bit 0, a` asks whether the lowest bit is set, without building a mask and without changing `a`, and
-it sets `Z` from
-the bit it found **backwards**: `Z` goes to 1 when the bit was 0, which is the opposite of what you
-expect the first time. So `jr z` means "the bit was clear", and `d` comes out at `00` here because
-182 is even.
+`bit 0, a` asks whether the lowest bit is set without changing `a`. It sets `Z` backwards from
+the question: `Z` is 1 when that bit is 0. Thus `jr z, even` takes the even route, while the
+default value has its lowest bit set and leaves `d = 01`.
 
-Multiplying by eight is three doublings, since every place a bit moves left doubles what it is
-worth, and 182 times 8 is 1456, which no byte holds. So the number is widened into `hl` first, two
-instructions with `ld h, 0` because the byte is unsigned, and then `add hl, hl` doubles the whole
-pair in one instruction. `hl` comes out at `05B0`, which is 1456. There is no shift that takes a
-pair, so `add hl, hl` is what a program writes when it is `hl` being doubled.
+The two instructions `ld l, a` and `ld h, 0` widen unsigned `a` into `hl`. This is needed because
+183 times 8 is 1464, too large for a byte. Each `add hl, hl` doubles the whole 16-bit pair, so
+three of them leave `hl = 05B8`. The Z80's single-register shift instructions such as `srl` do
+not take `hl`; `add hl, hl` is the short way to double this pair.
 
-`and 0x0F` keeps the four bits the mask has set and clears everything else, so `e` is 6, the `6` of
-`0xB6`. That is how any field is taken out of a packed value: mask what you want, then shift it down
-to the bottom if it was not there already.
+`and 0x0F` keeps only the bits where the mask has ones. For example, `0xB6 & 0x0F = 0x06`.
+With this program's `0xB7`, the same mask leaves `07`, so `e = 07`. A mask can isolate any packed
+field; a field above the low bits also needs shifting down afterward.
 
-The loop runs eight times, once per bit, adding the lowest bit to the count and then shifting the
-number down, with the "is the lowest bit set" done
-by the shift itself. `srl a` moves every bit one place down and the bit that falls off the bottom
-lands in `C`, so `jr nc` skips the `inc` when it was a zero. `c` comes out at `05`, which is the
-number of ones in `10110110`, and `a` is empty by the time the loop ends, since eight shifts push
-every bit out of it.
+The loop counts one bit on each pass. On its first pass, `a` is `B7`; `srl a` changes it to `5B`
+and puts the bit that fell off, `1`, in the C flag. `jr nc` therefore does not jump and `inc c`
+makes the count `01`. On a pass where the outgoing bit is 0, C is clear, `jr nc` jumps, and the
+count stays as it is. After eight shifts every bit has fallen out of `a`, and `c = 06` because
+`10110111` has six ones.
+
+Change `N equ 183` to `N equ 180`. Before you build and run, predict `d`, `hl`, `e`, and `c` in
+hexadecimal.
+
+<details>
+<summary>Check your answer</summary>
+
+`d = 00` because 180 is even. `hl = 05A0` because `0xB4 × 8 = 0x05A0`; `e = 04` from the low
+four bits; and `c = 04` because `B4` has four set bits.
+
+</details>

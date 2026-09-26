@@ -1,74 +1,83 @@
-Two unit conversions, one in each direction. The first turns 365 days into 8760 hours and the second
-turns 1000 seconds into 16 minutes and 40 seconds, which answers both questions at once because a
-division produces the remainder on its way to the quotient.
-
-**There is no multiply instruction and no divide instruction anywhere in the Z80's set.** Both of
-these conversions are loops you write yourself, and this is the rung of the ladder where that costs
-you the most.
+The Z80 has no instruction that multiplies or divides two numbers. This program uses shifts and
+loops to turn 365 days into 8760 hours, then 1000 seconds into 16 minutes with 40 seconds left
+over. Open it in the editor, choose **Build**, then **Run** to see both answers in the registers
+panel. The panel shows hexadecimal values; numbers such as `365` in the program are decimal.
 
 ```z80|playground|no-flags|allow-open
     .org 0x8000
 ; hours = days * 24, by shift and add
-    ld de, 365      ; days, sixteen bits of it
-    ld a, 24        ; the multiplier, whose bits we look at
-    ld hl, 0        ; the product
-    ld b, 8         ; eight bits to look at
+    ld de, 365      ; the number to multiply
+    ld a, 24        ; look at its bits from right to left
+    ld hl, 0        ; the growing product
+    ld b, 8         ; one pass for each bit of a
 multiply:
-    srl a           ; the lowest bit of the multiplier falls into C
-    jr nc, no_add
-    add hl, de      ; if it was 1, add the multiplicand
+    srl a           ; lowest bit of a goes into the C flag
+    jr nc, no_add   ; skip the addition if that bit was 0
+    add hl, de      ; add de to the product if it was 1
 no_add:
-    sla e           ; the multiplicand doubles every time round
+    sla e           ; double the 16-bit value in de
     rl d
     djnz multiply
-    ex de, hl       ; the hours, out of the way of the division
+    ex de, hl       ; keep the product in de
 
-; minutes = seconds / 60, and the remainder is the seconds left over
-    ld hl, 1000     ; the dividend
+; minutes = seconds / 60; a will hold the seconds left over
+    ld hl, 1000     ; the number to divide
     ld c, 60        ; the divisor
-    xor a           ; the remainder starts empty
-    ld b, 16        ; sixteen bits of dividend
+    xor a           ; remainder = 0
+    ld b, 16        ; one pass for each bit of hl
 divide:
-    add hl, hl      ; the top bit of what is left of the dividend
-    rla             ; comes in at the bottom of the remainder
-    cp c            ; does the divisor go into it?
-    jr c, no_sub
-    sub c           ; take it away
-    inc l           ; and record a 1 in the quotient
+    add hl, hl      ; shift the next dividend bit into the C flag
+    rla             ; bring that bit into the remainder in a
+    cp c            ; is the remainder at least the divisor?
+    jr c, no_sub    ; if it is smaller, the next quotient bit is 0
+    sub c           ; otherwise subtract the divisor
+    inc l           ; set the new quotient bit to 1
 no_sub:
     djnz divide
     halt
 ```
 
-The multiplication looks at the multiplier one bit at a time from the bottom up. `srl a` drops the
-lowest bit of 24 into `C`, `jr nc` skips the addition when that bit was a 0, and `sla e` with `rl d`
-under it doubles the multiplicand so that the next bit up is worth twice as much. Eight passes,
-whatever the numbers, and the product is kept in `hl` because 365 times 24 needs a great deal more
-than the eight bits `a` has.
+For multiplication, `24` is `00011000` in binary. `srl a` sends its lowest bit into the **C
+flag** (the carry flag). `jr nc` means “jump if C is zero.” The first three bits are zero, so
+there is no addition on those passes. On the fourth pass, `de` has doubled three times from 365
+to 2920, and the multiplier bit is one, so `add hl, de` adds 2920. The fifth pass adds 5840. That gives
+8760. `sla e` shifts the low byte of `de` first and places its outgoing bit in the C flag;
+`rl d` brings that bit into the high byte. Together they double the 16-bit value. After eight
+passes, `ex de, hl` moves the product to `de` so the division can use `hl`.
 
-`sla e` and `rl d` are the 16 bit shift from the arithmetic lecture: `sla e` puts the top bit of `e`
-into `C` and `rl d` brings it in at the bottom of `d`, so the two of them are one shift of the pair.
-The low half goes first, because the carry has to be produced before the instruction that consumes
-it.
+Division works like written long division: take the next bit from the dividend, attach it to
+the remainder, and ask whether the divisor fits. If it does, subtract it and write a 1 in the
+quotient; otherwise write a 0. Here `hl` starts with the dividend, `a` holds the remainder, and
+register `c` holds the divisor. Register `c` and the **C flag** are different things: `cp c`
+compares `a` with register `c`, then sets the C flag if `a` is smaller.
 
-The division is the same idea run backwards. `hl` holds what is left of the dividend and `a` holds
-the remainder being built, and every pass shifts the whole 24 bit thing one place left: `add hl, hl`
-moves the top bit of `hl` into `C` and `rla` brings it into the bottom of `a`. Then `cp c` asks
-whether the divisor fits in what the remainder has become, and when it does, `sub c` takes it away
-and `inc l` writes a 1 into the quotient. The quotient is written into the bottom of `hl` as the
-dividend leaves the top of it, which is why one register does both jobs and why `inc l` is enough:
-the bit it sets was shifted in as a 0 a moment earlier.
+Think of the working value as `a : hl`: `a` holds the remainder on the left, and `hl` holds
+the unread dividend bits followed by the quotient bits already written. Each `add hl, hl`
+shifts `hl` left. Its top bit leaves `hl` through the C flag, and the new
+bottom bit of `hl` is zero. `rla` takes that outgoing bit from C into the bottom of `a`, while
+shifting the old remainder left. If `a` is at least the divisor, `sub c` removes one divisor
+and `inc l` changes the new bottom bit of `hl` from 0 to 1. If it is smaller, the bottom bit
+stays 0. The old dividend bits leave at the top while quotient bits accumulate at the bottom.
 
-`hl` comes out at `0010`, which is 16 minutes, and `a` at `28`, which is the 40 seconds left over.
-Both answers are simply sitting in the two registers the loop was already using, so the remainder
-costs nothing extra.
+To see this with small numbers, change the division inputs to `ld hl, 13` and `ld c, 3`, then
+use **Step**. The loop still runs 16 times. The first 12 passes move leading zero bits out of
+the way, leaving `hl = D000` and `a = 00`. The final four passes are:
 
-The whole program is 134 instructions for two sums. A multiplication by a **constant** is much
-cheaper, because you know the bits in advance: 24 is 16 plus 8, so four
-`add hl, hl`, a copy kept when the number has been doubled three times, and one `add hl, de` at the
-end would do it with no loop at all.
+| Pass | Bit taken from `hl` | `hl` after shift | `a` after `rla` | Compare with 3 | `hl` after quotient bit | `a` after pass |
+| ---- | ------------------- | ---------------- | --------------- | -------------- | ----------------------- | -------------- |
+| 13   | 1                   | `A000`           | `01`            | smaller: write 0 | `A000`                 | `01`           |
+| 14   | 1                   | `4000`           | `03`            | equal: subtract, write 1 | `4001`        | `00`           |
+| 15   | 0                   | `8002`           | `00`            | smaller: write 0 | `8002`                 | `00`           |
+| 16   | 1                   | `0004`           | `01`            | smaller: write 0 | `0004`                 | `01`           |
 
-The `ld b, 8` is not decoration. Set it to 4 and the loop looks at only the bottom four bits of 24,
-which are `1000`, so it multiplies by 8 instead and `de` comes out at `0B68`, or 2920. There is no
-error and no warning: the bits above the fourth were simply never looked at, and one byte needs
-eight passes because it has eight bits.
+So `13 ÷ 3` leaves quotient 4 in `hl` and remainder 1 in `a`. Restore `1000` and `60`:
+after 16 passes, `hl = 0010` (16 minutes) and `a = 28` (40 seconds). The multiplication
+product remains in `de = 2238` (8760 hours). These register values are hexadecimal.
+
+The remainder stays below 60 after each division pass: whenever it reaches 60, the program
+subtracts 60. Before the next comparison, shifting in one bit can make it at most 119, which
+fits in `a`'s eight bits. This is why the byte-sized remainder works for this example.
+
+Try changing only `ld b, 8` in the multiplication to `ld b, 4`. Predict `de` after **Run**.
+The loop then looks at only the lowest four bits of 24, which are `1000`: it multiplies 365
+by 8 and leaves `de = 0B68` (2920). The bits above the fourth were never read.

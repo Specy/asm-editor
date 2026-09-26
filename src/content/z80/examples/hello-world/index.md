@@ -1,10 +1,14 @@
-The first program of the ladder that anybody outside the editor could see the result of. It prints a
-line, then prints a second line with a number at the end of it, and stops. The answer is in the
-console panel under the program instead of in a register.
+This program prints two lines in the console panel below the editor:
 
-Everything up to here left its result in the registers or in memory. Printing is different: the
-answer has to leave the CPU entirely and reach a device, and on this machine the way out is an I/O
-port.
+```text
+Hello, world!
+The answer is 42
+```
+
+Open it in the editor, choose **Build**, then **Run** to see the output. Earlier examples left
+their results in registers or memory. Here, the CPU sends bytes to console ports. A reminder:
+`out (port), a` sends the byte in register `a` to the named port. Port `0x10` displays that byte
+as a character; port `0x11` displays it as an unsigned decimal number.
 
 ```z80|playground|console|no-registers|no-flags|allow-open
 P_CHAR  equ 0x10        ; writing a byte here prints it as a character
@@ -12,19 +16,19 @@ P_NUM   equ 0x11        ; and here as an unsigned decimal number
 
     .org 0x8000
     ld hl, greeting
-    call print          ; the string, one character per out
+    call print          ; print the greeting one character at a time
     ld a, 10
     out (P_CHAR), a     ; and a new line
 
     ld hl, question
     call print
     ld a, 42
-    out (P_NUM), a      ; the number, printed as 42 and not as '*'
+    out (P_NUM), a      ; print the number as 42
     ld a, 10
     out (P_CHAR), a
     halt
 
-; print(p): the zero terminated string at hl, one character at a time
+; print the zero-terminated string pointed to by hl
 print:
     ld a, (hl)
     or a
@@ -38,18 +42,15 @@ greeting: .asciz "Hello, world!"
 question: .asciz "The answer is "
 ```
 
-**There is no port that prints a string**, because an `out` carries exactly one byte. So `print` is
-the string walk from Length of a string with an `out` where the work goes, and every string this
-machine prints is printed a character at a time by a loop you wrote.
+`print` starts with `hl` pointing to the first byte of a zero-terminated string. `ld a, (hl)` reads
+that byte; `or a` sets the Z flag if it is zero. When it is zero, `ret z` returns to the instruction
+after `call print`. Otherwise, `out (P_CHAR), a` sends the character to the console, `inc hl` moves
+to the next byte, and `jr print` repeats the read, test, output, and advance. Each `out` sends one
+byte, so the loop prints the string one character at a time. `.asciz` adds the zero byte that ends
+each string.
 
-`ret z` ends the loop and the subroutine in one instruction: `or a` sets `Z` from the byte that was
-read, and the terminator is the only byte that sets it.
+Sending 42 to port `0x10` would print `*`, the character with code 42. Sending the same byte to
+port `0x11` prints `42`: that port converts the number into decimal digits for the console.
 
-Sending 42 to port `0x10` would print `*`, which is the character whose code is 42. Sending it to
-port `0x11` prints `42`, two characters, because that port reads the byte as an unsigned number and
-does the work of turning it into digits. One byte, two ports, two answers, and choosing the port is
-choosing how the bits are read.
-
-The newline is a byte you write yourself, `ld a, 10` and an `out` to the character port, since no
-port adds one for you. It can also go inside the string: `.db "Hello", 10, 0` is one string of seven
-bytes whose sixth is the line break, and `.asciz` is the same directive with the zero added for you.
+After each line, `ld a, 10` and `out (P_CHAR), a` print a newline. You can put that byte in a
+string instead: `.db "Hello", 10, 0` stores five letters, the newline, and the terminating zero.

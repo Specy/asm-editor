@@ -1,10 +1,11 @@
-Twelve words laid out as three rows of four. The program adds up a whole column, which means
-stepping through memory a row at a time, and then reads one element by its row and column. The
-column total ends in `iy` and the element in `de`.
+This grid has three rows of four words. The program first adds column 1 across all three rows,
+leaving 222 (`00DE`) in `iy`. It then reads row 2, column 1 into `de`: that word is 200 (`00C8`).
+Rows and columns are numbered from zero, so row 2 is the last row and column 1 is the second column.
 
-Every array up to here was one line of memory. A grid is the same line, read as rows: memory has no
-idea it is two dimensional, so the row and the column have to be turned into a single distance from
-the start before anything can be read.
+Open the program in the editor and choose **Build**. Use **Step** to watch `ix` point to `9002`,
+`900A`, and `9012` as the column loop reads 2, 20, and 200. Then choose **Run** to reach `halt`.
+The register panel shows `iy = 00DE` and `de = 00C8`; enter `9000` in the memory panel to see the
+grid's bytes.
 
 ```z80|playground|memory|no-flags|allow-open
 ROWS    equ 3
@@ -12,7 +13,7 @@ COLS    equ 4
 STRIDE  equ COLS * 2        ; one row of the array, in bytes
 
     .org 0x8000
-    ld c, 1                 ; col = 1, the column both halves work on
+    ld c, 1                 ; zero-based column 1, used by both parts
 
 ; --- the whole of that column added up, in iy ---
     ld a, c
@@ -34,7 +35,7 @@ column:
     pop iy                  ; the total, kept out of the way
 
 ; --- one element by its row and column, in de ---
-    ld a, 2                 ; row = 2
+    ld a, 2                 ; zero-based row 2
     ld l, a
     ld h, 0
     add hl, hl
@@ -56,27 +57,25 @@ grid:   .dw 1, 2, 3, 4
         .dw 100, 200, 300, 400
 ```
 
-The three `.dw` lines are one array of twelve words at `0x9000`, and the rows exist only in how they
-are written down. Walking a column is `ix` parked on the top of it and moved on by `STRIDE`, eight
-bytes, at every pass: one row further down is one whole row of elements further along in memory. The
-assembler works `COLS * 2` out while assembling, so nothing multiplies at run time, and `iy` comes
-out at `00DE`, which is 222, from 2, 20 and 200.
+The three `.dw` lines place twelve consecutive words at `9000`. Each line makes a row easy to see
+in the source, but memory holds one sequence of bytes. Each word takes two bytes, so four words make
+`STRIDE = 8` bytes per row. Column 1 begins two bytes into each row. The first part sets `ix` to
+`9002`, reads a word, and advances it eight bytes for the next row. After the third read, `ix` moves
+once more to `901A`; the loop is finished, so that address is never read.
 
-`add ix, de` is the only way to move an index register by an amount the program computed, because
-the displacement in `(ix+0)` is a constant written into the instruction. That is why `ld de, STRIDE`
-sits inside the loop: `de` is used to read the element two lines above it, so the stride has to be
-put back before the addition.
+Inside the loop, `de` first holds the word read through `ix`. `add hl, de` adds it to the running
+total. The program then loads `STRIDE` into `de` to move `ix` down one row. The `+0` and `+1` in
+`(ix+0)` and `(ix+1)` are fixed byte offsets within one word; `add ix, de` makes the larger move
+between rows. When all three words have been added, `push hl` and `pop iy` save the total in `iy`.
+That frees `hl` for the separate row-and-column lookup.
 
-`row * COLS + col` is the element's number in that one line, and doubling it turns a number of
-elements into a number of bytes, which is what the address arithmetic actually needs. `COLS` is 4
-here, so `row * COLS` is two `add hl, hl`, and the doubling for the element size is a third. A
-number of columns that is **not** a power of two would need the shift and add routine from Multiply
-and divide, which is what makes a power of two the size every 8 bit program picks for a grid.
+For that lookup, `row * COLS + col` gives the word's position in the sequence: `2 * 4 + 1 = 9`.
+Doubling that position gives its byte offset, 18 (`0012`), so `grid + 18` is `9012`. Because
+`COLS` is 4, the code doubles `hl` twice to multiply the row by four, then doubles it once more
+after adding the column to account for two bytes per word. Other column counts need address
+arithmetic suited to their width; for example, a width of three can use `row * 2 + row`.
 
-`de` comes out at `00C8`, 200, the second element of the last row. Reading it takes two
-instructions, `ld e, (hl)` and then `ld d, (hl)` after an `inc hl`, because a word is two bytes and
-every load here moves one.
-
-Walking a **row** would be the same loop with `inc hl` twice and no `add` at all, since the elements
-of a row sit next to each other. A column is the direction the array is not laid out in, and it
-costs one addition per pass to say so.
+The word at `9012` is `.dw 200`, stored as `C8` at `9012` and `00` at `9013`. `ld e, (hl)` reads
+the low byte, `inc hl` moves to the next byte, and `ld d, (hl)` reads the high byte. Together they
+make `de = 00C8`. This second part reuses `de`; its final value is the selected word, while `iy`
+still holds the column total.

@@ -1,6 +1,6 @@
 {
     "name": "Sum of an array",
-    "description": "Six numbers sitting in memory, added up with a pointer that steps through them, and the total left in a.",
+    "description": "Six bytes in memory, added with a pointer that steps through the array and leaves the total in a.",
     "order": 4,
     "topic": "sum-of-an-array"
 }

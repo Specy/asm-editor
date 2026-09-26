@@ -1,10 +1,9 @@
-Two numbers are written into memory by the assembler and a third one is written into an instruction.
-The program reads the two out of memory, adds the third, and writes the total back into memory,
-which is where you read the answer.
+This program keeps a price and a shipping cost in memory, adds a tax, and stores the total back in
+memory. The answer is 305, which needs two bytes rather than one.
 
-Moving values around kept everything in registers, and there are only seven 8 bit ones. Anything a
-program has more of than that goes in memory, and `.dw` is what puts it there before the first
-instruction runs.
+`TAX equ 20` is an assembler constant. Before it builds the program, the assembler replaces each
+use of `TAX` with the number 20. It reserves no memory and has no address; its name simply makes
+the number's purpose clear.
 
 ```z80|playground|memory|no-flags|allow-open
 TAX equ 20
@@ -24,25 +23,31 @@ shipping:   .dw 35
 total:      .ds 2
 ```
 
-The three numbers are **words** and not bytes, because 250 plus 35 plus 20 is 305 and no 8 bit
-register holds a number over 255. So the values are laid down with `.dw`, they are read into pairs,
-and the addition is `add hl, de`, which is the only way a Z80 adds sixteen bits at a time.
+A **word** is a two-byte value. Here `price`, `shipping`, and `total` are words, so `.dw` puts the
+first two into memory and the register pairs `hl` and `de` hold them while `add hl, de` adds them.
+`ld de, (shipping)` reads the word stored at the address named `shipping`. Later, `ld de, TAX`
+loads the number 20 directly into `de`.
 
-The `.org 0x9000` puts the data at a fixed address, so the memory panel shows the same three words
-wherever the code above them ends. Type `9000` in its address box:
+Open the program in the editor, choose **Build**, then **Run**. In the memory panel, enter `9000`
+as the address. The registers panel uses hexadecimal, so the final `hl` value is `0131` (305).
 
-| label      | address  | bytes before | bytes after |
-| ---------- | -------- | ------------ | ----------- |
-| `price`    | `0x9000` | `FA 00`      | unchanged   |
-| `shipping` | `0x9002` | `23 00`      | unchanged   |
-| `total`    | `0x9004` | `00 00`      | `31 01`     |
+| label      | address  | bytes before Run | bytes after Run |
+| ---------- | -------- | ---------------- | --------------- |
+| `price`    | `0x9000` | `FA 00`          | `FA 00`         |
+| `shipping` | `0x9002` | `23 00`          | `23 00`         |
+| `total`    | `0x9004` | `00 00`          | `31 01`         |
 
-Those bytes are the little endian order: `250` is `0x00FA` and its low byte `FA` sits at the lower
-address, which is why the panel reads `FA 00` and `hl` reads `00FA`. `.dw` writes a value, `.ds 2`
-only reserves two bytes and writes nothing, so `total` is `00 00` before the run and `31 01` after,
-which is `0x0131`, or 305.
+The editor starts unused memory cleared, so `total` appears as `00 00` before the run. `.ds 2`
+reserves those two bytes; it does not write the zeroes. After the run, `total` contains `0x0131`.
+Words are little endian: the low byte comes first in memory, so 250 (`0x00FA`) appears as `FA 00`,
+and 305 appears as `31 01`.
 
-`ld hl, (price)` and `ld (total), hl` are the extended mode from the addressing lecture: the address
-is fixed at the moment the program is assembled and written straight into the instruction. Only `a`,
-the pairs and the index registers can name a bare address like that, so `ld b, (price)` is not an
-instruction and the build fails on it.
+Try changing `shipping: .dw 35` to `shipping: .dw 40`. Before you build and run, predict the six
+bytes beginning at `9000`.
+
+<details>
+<summary>Check your answer</summary>
+
+The total is then 310 (`0x0136`), so expect `FA 00 28 00 36 01`.
+
+</details>

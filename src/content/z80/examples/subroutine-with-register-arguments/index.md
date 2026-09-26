@@ -1,62 +1,71 @@
-The greatest common divisor of two numbers, worked out by Euclid's method: take the smaller of the
-pair away from the larger, and go round until the two are equal. The program calls it as a
-subroutine, with the two arguments in `a` and `b` and the answer coming back in `a`.
+What is the greatest common divisor of 84 and 36? Keep subtracting the smaller number from the
+larger one. When the two numbers become equal, that number is their greatest common divisor. This
+program puts the starting numbers in `a` and `b`, calls `gcd`, and gets the answer back in `a`.
+Use **positive, nonzero** byte values (1 through 255) for both inputs: subtracting zero would
+leave the other number unchanged, so the loop would never finish.
 
-This is the first program on the ladder that calls anything. Everything before it was one block of
-code running once, and this one has a piece of code with a name that the rest of the program hands
-work to.
+Open the program in the editor and choose **Build**. Use **Step** to follow the call and the
+subtractions, or **Run** to see the result. The register and memory panels show hexadecimal values;
+the numbers `84` and `36` in the program are decimal.
 
 ```z80|playground|no-flags|allow-open
     .org 0x8000
-    ld a, 84        ; x = 84
-    ld b, 36        ; y = 36
-    call gcd        ; x = gcd(x, y)
-    ld c, a         ; the answer, kept somewhere it will not be reused
-    jp done
+    ld a, 84        ; first argument
+    ld b, 36        ; second argument
+    call gcd        ; result comes back in a
+    ld c, a         ; keep a copy of the result
+    jp done         ; skip over the subroutine
 
-; gcd(x, y): x arrives in a and y in b, the answer leaves in a.
-; It works in c, so the caller must not leave anything there.
+; gcd: positive inputs in a and b; result in a; changes b and c
 gcd:
-    cp b            ; x - y
-    ret z           ; while(x != y)
-    jr nc, bigger   ; x below y, so swap them: a holds the larger
-    ld c, a
+    cp b            ; compare a with b without changing a
+    ret z           ; equal: a is the answer
+    jr nc, bigger   ; a > b: go straight to the subtraction
+    ld c, a         ; a < b: swap the two numbers
     ld a, b
     ld b, c
 bigger:
-    sub b           ; x = x - y
-    jr gcd
+    sub b           ; subtract the smaller number from the larger
+    jr gcd          ; compare again
 
 done:
     halt
 ```
 
-The whole agreement between the two halves is the comment above the label: arguments in `a` and `b`,
-answer in `a`, and `c` destroyed. Nothing in the machine enforces any of that, and a **calling
-convention** is exactly this comment written once for a whole program instead of once per
-subroutine.
+The comment above `gcd` is its **calling convention**: the caller supplies two values in `a` and
+`b`, and reads the result from `a`. The routine also changes `b` and uses `c` while swapping, so
+the caller cannot expect their old values to survive. The `ld c, a` after the call deliberately
+uses `c` only _after_ `gcd` has finished.
 
-`ret z` is the conditional return, and it is the loop's exit: `cp b` sets `Z` when the two numbers
-are equal, and one byte of instruction turns that into "we are done, go back to the caller". Without
-it you would need a jump over a plain `ret`, two instructions where this is one.
+`cp b` compares `a` with `b` by setting flags as if it had calculated `a - b`; it leaves `a`
+alone. If they are equal, `Z` is set and `ret z` returns. Otherwise, `jr nc, bigger` jumps when
+`a` is greater than `b`: the C flag is clear because the subtraction needs no borrow. If `a` is
+smaller, C is set, so execution falls through to the three instructions that swap `a` and `b`.
+Either way, `sub b` then reduces the larger number.
 
-The `jp done` above `gcd` is not optional. A subroutine is ordinary code sitting at an ordinary
-address, so without that jump the program would walk into `gcd` after the `ld c, a` and reach a
-`ret` with nothing of its own on the stack.
+You can follow the changing pair in the registers panel. The table uses decimal numbers; the panel
+shows the same bytes in hexadecimal.
 
-Step through the call with the memory panel on `fff8` and `sp` drops from `FFFF` to `FFFD` at the
-`call`, with `07 80` appearing there, which is `0x8007`, the address of the `ld c, a` that follows
-the call. `ret` reads those two bytes back into the program counter and puts `sp` back to `FFFF`.
-`a`, `b` and `c` all come out at `0C`, which is 12: 84 and 36 are both 12 times something and
-nothing larger divides them both.
+| Before `cp b` | What happens next                 |
+| ------------- | --------------------------------- |
+| `84, 36`      | subtract 36 → `48, 36`            |
+| `48, 36`      | subtract 36 → `12, 36`            |
+| `12, 36`      | swap, then subtract 12 → `24, 12` |
+| `24, 12`      | subtract 12 → `12, 12`            |
+| `12, 12`      | `ret z` returns 12 in `a`         |
 
-Euclid's method is usually written with a remainder: replace the larger number with what is left
-when you divide it by the smaller. This machine has no division, and it does not need one here. The
-remainder of a division is whatever is left after subtracting the divisor as many times as it goes,
-so subtracting once per pass and looping is the same algorithm with the division spread out over the
-outer loop. It costs one pass per subtraction, and the whole program is 31 instructions for these
-two numbers.
+To see where `ret z` goes, open the memory panel at `fff8` and use **Step** on the `call`. In this
+playground, `sp` starts at `FFFF`. The call changes it to `FFFD` and writes `07 80` at addresses
+`FFFD` and `FFFE`. Those bytes are the return address `0x8007`, with its low byte first: the
+address of `ld c, a` immediately after the call. When `ret z` is taken, it reads that address into
+`pc` and restores `sp` to `FFFF`. Execution resumes at `ld c, a`; after **Run**, both `a` and
+`c` show `0C`, the hexadecimal value of 12.
 
-The cost of doing it by subtraction shows up as soon as the two numbers are far apart. Feed it 250
-and 3 and the answer, 1, takes 436 instructions to find, because 3 has to come off 250 eighty-three
-times before the pair is anywhere near equal.
+The `jp done` keeps normal execution from entering `gcd` after the caller has copied the answer.
+Entering it that way would reach a `ret` without a matching `call`, so `ret` would take unrelated
+bytes from the stack as its next address.
+
+Try changing the inputs to `21` and `14`. Before you run it, trace the pairs until they match.
+What value will `a` hold when `ret z` runs? Check it in the registers panel: `a = 07`, or 7 in
+decimal. This subtraction method can take many passes when the numbers are far apart, because each
+pass removes the smaller number only once.

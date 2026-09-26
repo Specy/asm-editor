@@ -1,10 +1,12 @@
-Twelve bytes in order, and the program finds which one holds 91 by halving the range it is looking
-in until nothing is left. It leaves the index in `e`, or `FF` when the value is not in the array.
-Two elements are read out of the twelve, where walking the array would read ten.
+A binary search looks for an unsigned byte in an ascending array. Instead of checking every byte,
+it probes the middle of the part that could still contain the target. This program searches the
+twelve bytes below for `91`. It leaves the matching index in `e`; if no byte matches, it leaves
+`FF` in `e`.
 
-Bubble sort left an array in order. This is what being in order is worth: every comparison throws
-away half of what is left, so an array of a thousand elements takes about ten reads and one of a
-million takes about twenty.
+Open the program in the editor, choose **Build**, then use **Step** for the first two probes or
+choose **Run** to finish it. The register panel shows hexadecimal values. With the supplied target,
+`e` ends as `09`; `d` still holds `5B`, so `de` is `5B09`. Open the memory panel at `9000` to see
+the array.
 
 ```z80|playground|memory|no-flags|allow-open
 count equ 12
@@ -49,32 +51,49 @@ search_done:
 numbers: .db 2, 5, 8, 12, 16, 23, 38, 56, 72, 91, 100, 127
 ```
 
-`srl a` is the halving: shifting a number one place right divides it by two and throws the remainder
-away, which is the rounding down that `(low + high) / 2` wants. It is the unsigned shift, which is
-right here because an index is never negative.
+The live range is **half-open**: `[low, high)`. `low` is included and `high` is one past the last
+possible index, so the initial range is `[0, 12)`. That makes the three outcomes after a probe
+direct:
 
-`high` is **one past** the range it is looking in, so it starts at `count` and the loop runs while
-`low < high`. The obvious alternative, keeping the last valid index and stopping when it goes below
-zero, does not survive here: `low` and `high` are bytes, and a byte that drops below zero comes back
-as 255, which an unsigned comparison reads as the largest number there is. The loop would never end.
-Written this way nothing in the program ever subtracts past zero.
+| Comparison of `numbers[mid]` with the target | Next range          |
+| -------------------------------------------- | ------------------- |
+| Too small                                    | `low = mid + 1`     |
+| Too large                                    | `high = mid`        |
+| Equal                                        | return `mid` in `e` |
 
-The four instructions after `ld hl, numbers` are how a byte gets added to a pair, because there is
-no `add hl, a`: the low half is added in `a`, and the carry out of that addition is what `inc h`
-puts into the high half. It is two instructions when the array cannot cross a 256 byte boundary and
-four when it might, and this one keeps the `jr nc` because you cannot see from the source where the
-assembler put the array.
+`cp d` subtracts the target from the probed byte without keeping the result. C is set when that
+byte is smaller, so `jr c, go_right` takes the first case. A larger byte falls through to
+`high = mid`. The loop stops when `low` catches `high`: `[9, 9)`, for example, contains no index.
 
-`push af` and `pop af` are there because `a` has two jobs in one pass. It carries the middle index
-into the address arithmetic and then has to hold the element that was read, so the index goes on the
-stack for the two instructions in between and comes back in whichever branch is taken. Every path
-through the loop pops exactly once, which is what keeps `sp` where it started.
+For the supplied search for `91`, the two probes are:
 
-The two probes are 38 and then 91. Each one either matches, or moves `low` past the middle, or
-brings `high` down to it, and the loop ends when `low` catches `high` up. `e` comes out at `09`,
-which is the index of 91, so `de` reads `5B09`: the target in `d` and the answer in `e`.
+| `low` | `high` | `mid` | Probed byte | Result |
+| ---: | ---: | ---: | --- |
+| 0 | 12 | 6 | 38 | too small; `low = 7` |
+| 7 | 12 | 9 | 91 | match; `e = 09` |
 
-Search for 90, which is not in the array, and `de` comes out at `5AFF`. The `FF` is what
-`ld e, 0xFF` put there before the loop started and never overwrote. A search has to be able to
-report "not here", and it cannot do that by returning 0, because 0 is a perfectly good index; so the
-answer for "not found" is a value no index can be.
+Change `ld d, 91` to `ld d, 90`, build, and run again. The complete no-match path is short:
+
+| `low` | `high` | `mid` | Probed byte | Result |
+| ---: | ---: | ---: | --- |
+| 0 | 12 | 6 | 38 | too small; `low = 7` |
+| 7 | 12 | 9 | 91 | too large; `high = 9` |
+| 7 | 9 | 8 | 72 | too small; `low = 9` |
+
+Now `low` and `high` are both 9, so the loop ends without reaching `hit`. `e` was initialized to
+`FF` and was never changed, making `de` `5AFF`. `FF` is safe as the not-found marker here because
+the valid indices are only `00` through `0B`.
+
+`srl a` divides the sum by two, rounding down, to make the middle index. This exact program uses a
+one-byte count and indices, and it forms `low + high` in the one-byte register `a`; keep `count` at
+128 or less so that sum cannot overflow. The twelve-byte demo is well inside that limit. Its inputs
+must be ascending unsigned bytes, and `d` is an unsigned byte target. `de` is simply two adjacent
+registers here: target in `d`, result in `e`.
+
+The address calculation starts with `hl = numbers` and adds the index to its low byte. If that
+addition carries, `inc h` completes the pointer addition. In this listing `numbers` is visibly at
+`9000`, but the carry-handling code also stays correct if the array is moved near the end of a page.
+
+Finally, `a` needs to hold both the middle index and the byte read from memory. `push af` saves the
+index before the read, and each branch uses `pop af` exactly once before either updating a bound or
+returning the result. That balance keeps the stack where it started.

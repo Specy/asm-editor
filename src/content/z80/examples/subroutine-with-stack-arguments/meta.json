@@ -1,6 +1,6 @@
 {
     "name": "Stack arguments and a stack frame",
-    "description": "Two arguments pushed by the caller, a local that survives a call inside a frame ix is parked on, and a subroutine that gives back the pair it borrowed.",
+    "description": "Pass two arguments on the stack, use ix to reach them, and keep a local value across another call.",
     "order": 11,
     "topic": "subroutine-with-stack-arguments"
 }

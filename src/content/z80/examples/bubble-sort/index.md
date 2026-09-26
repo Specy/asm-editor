@@ -1,10 +1,11 @@
-Eight bytes in memory, sorted from smallest to largest where they lie. The inner loop compares each
-pair of neighbours and swaps them when they are the wrong way round, and the outer loop keeps
-sending it back, so the largest number reaches the end on the first pass and the rest follow.
+This program sorts eight bytes in memory into ascending order, in place: it changes the array
+itself rather than making a second array. The inner loop compares neighbouring bytes and swaps a
+pair that is out of order. One full pass moves the largest remaining byte to the right end. Later
+passes need fewer comparisons because those rightmost bytes are already in place.
 
-Every loop up to here read an array once. This one reads it seven times, and the two counters have
-to be kept apart, which on this machine means keeping them in different registers for a reason the
-hardware imposes.
+Before running it, look only at the first pair, `42, 8`. Will the first inner-loop comparison swap
+them? If so, what will the first two bytes at `9000` be immediately afterwards? Then choose
+**Build** and use **Step** until execution reaches `in_order` for the first time.
 
 ```z80|playground|memory|no-flags|allow-open
 count equ 8
@@ -34,26 +35,42 @@ in_order:
 numbers: .db 42, 8, 15, 4, 23, 16, 99, 1
 ```
 
-**`djnz` counts in `b` and nothing else**, so the outer counter cannot be a `djnz` at all: it lives
-in `c` and is written out as `dec c` and `jr nz`, three bytes in the loop instead of two. The other
-way round it, from the loops lecture, is to `push bc` before the inner loop and `pop bc` after it,
-and which is cheaper depends on how often the outer loop goes round.
+There are two counters. `c` starts at 7 and records how many passes, and therefore how many
+comparisons in the next pass, remain. At `outer`, `ld b, c` makes `b` the inner-loop count.
+`djnz inner` decrements `b` and jumps back while `b` is not zero, so it consumes `b` completely.
+Afterward, `dec c` and `jr nz, outer` start the next, shorter pass. Here `c` is a register; the
+**C flag** mentioned by the comparison is a separate thing.
 
-The pointer moves inside the comparison. `ld a, (hl)` reads the left byte, `inc hl` steps onto the
-right one, and `cp (hl)` compares them, so when the pass reaches `in_order` the pointer is already
-on the next pair. The swap has to step back to write the left byte and step forward again, which is
-what the `dec hl` and `inc hl` around it are for.
+The pointer moves inside each comparison. `ld a, (hl)` reads the left byte, then `inc hl` moves
+`hl` onto the right byte. Thus `cp (hl)` compares the left byte in `a` with the right byte in
+memory. When execution reaches `in_order`, `hl` is already at the right byte, ready for that byte
+to be the left byte of the next comparison.
 
-`cp (hl)` sets `C` when the left byte is the smaller, so `jr c` leaves the pair alone. Two equal
-bytes have `C` at 0 and are therefore swapped, and the swap writes them back exactly as they were,
-which is why one condition is enough where a strict test would need two.
+For example, with `hl = 9000` and the pair `42, 8`, the swap takes these steps:
 
-Both the `ld hl, numbers` and the `ld b, c` belong inside the outer loop. `hl` has walked to the end
-of the array by the time a pass finishes, so it goes back to the start; and `b` is `00` by then,
-which as a `djnz` counter would run the inner loop 256 times. Copying `c` into it is also what makes
-each pass shorter than the one before, since the last element is already in its place after the
-first pass, the last two after the second, and so on.
+| Point in the code | `hl` | Bytes at `9000 9001` |
+| --- | --- | --- |
+| Before `ld a, (hl)` | `9000` | `2A 08` |
+| After `inc hl` | `9001` | `2A 08` |
+| After `ld (hl), a` | `9001` | `2A 2A` |
+| After `dec hl`; `ld (hl), d`; `inc hl` | `9001` | `08 2A` |
 
-Run it with the memory panel on `9000` and the eight bytes read `01 04 08 0F 10 17 2A 63`, which is
-1, 4, 8, 15, 16, 23, 42 and 99. It took 245 instructions to sort eight numbers, and it would take
-about four times as many to sort sixteen, because both loops grow with the array.
+`cp (hl)` sets the C flag when the unsigned left byte is strictly smaller than the right byte.
+Then `jr c, in_order` skips the swap because the pair is already ascending. Equal bytes do not set
+C, so this program swaps them, but it writes the same two values back and leaves the array
+unchanged.
+
+Both `ld hl, numbers` and `ld b, c` belong inside the outer loop. By the end of a pass, `hl` has
+walked to the last byte compared, so the next pass must start at `numbers` again. Also, `djnz` has
+left `b` as `00`; reloading it from the still-useful `c` gives the next pass its correct length.
+
+Choose **Run**, then open the memory panel at `9000`. The eight bytes should read
+`01 04 08 0F 10 17 2A 63`: 1, 4, 8, 15, 16, 23, 42, and 99.
+
+<details>
+<summary>Check the first-pair prediction</summary>
+
+`42` is greater than `8`, so C is clear and the jump does not skip the swap. The first two bytes
+become `08 2A`.
+
+</details>

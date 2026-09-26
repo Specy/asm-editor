@@ -1,9 +1,9 @@
-Two numbers sit in registers, and the program leaves the larger of them in `d` and the distance
-between them in `e`. Both answers come out of the same pair of instructions, a `cp` that subtracts
-and keeps the flags and a `jr` that reads them.
+Two unsigned numbers are in `b` and `c`. This program leaves the larger one in `d` and the
+distance between them in `e`. A subtraction that needs to borrow tells the program which route to
+take.
 
-The two programs before this one ran every instruction they had, top to bottom. This is the first
-one where some instructions are skipped, and stepping through it is how you watch which ones.
+Open the program in the editor, choose **Build**, then use **Step**. Watch whether each `jr nc`
+jumps, which value reaches `d`, and whether `neg` runs.
 
 ```z80|playground|no-flags|allow-open
     .org 0x8000
@@ -11,39 +11,50 @@ one where some instructions are skipped, and stepping through it is how you watc
     ld c, 64        ; y = 64
 
     ld a, b
-    cp c                ; x - y
-    jr nc, x_is_bigger  ; x is the bigger one: skip ahead
-    ld d, c             ; bigger = y
+    cp c
+    jr nc, x_is_at_least_y
+    ld d, c         ; x was smaller, so y is the larger value
     jr done
-x_is_bigger:
-    ld d, b             ; bigger = x
+x_is_at_least_y:
+    ld d, b         ; x was larger, or the two values were equal
 done:
 
     ld a, b
-    sub c           ; distance = x - y
-    jr nc, positive ; if it did not borrow it is the answer already
-    neg             ; otherwise flip its sign
-positive:
+    sub c
+    jr nc, positive_distance
+    neg
+positive_distance:
     ld e, a
     halt
 ```
 
-`cp c` computes `a - c` and throws the answer away, so it needs `x` in `a` first: the accumulator is
-the only register `cp` compares against, which is why the `ld a, b` above it is there and why it
-comes back a second time before the subtraction.
+`cp c` subtracts `c` from `a` to set the flags, then keeps the value already in `a`. Put `b` into
+`a` first, so the comparison is `x - y`. A **borrow** is needed when the first unsigned byte is
+smaller than the second. In that case the C flag is set. `jr nc` means “jump if there was no
+borrow,” so it jumps to `x_is_at_least_y` when `x` is at least `y`.
 
-`C` is set when the subtraction had to borrow, which is exactly when `a` was the smaller of the two,
-so `jr nc` under the `cp` means "if `x` is greater than or equal to `y`". That is the **unsigned**
-comparison: it reads both bytes as numbers from 0 to 255. There is no single condition for the
-signed comparison, the one that reads `0xFF` as -1 rather than 255; that takes the `S` against `P/V`
-test from the F register lecture. Here the two numbers are a width and a height and neither can go
-below zero, so `jr nc` is the whole test.
+With the values shown, `b` is `25` and `c` is `40` in the registers panel. `cp c` needs a borrow,
+so the first `jr nc` falls through to `ld d, c`; `d` becomes `40`. The following `jr done` skips
+the labelled `x` route. Without that jump, `ld d, b` would run next and replace the answer.
 
-The `jr done` is the difference between the two halves. An `if` with an `else` has two pieces of
-code and only one of them may run, so the first one ends by jumping over the second; leave the `jr`
-out and the program falls through into `x_is_bigger` and overwrites the answer it just wrote. An
-`if` with no `else`, like the `neg` below it, has nothing to jump over.
+The distance calculation performs a real subtraction with `sub c`. It also starts with `a = 25`.
+Subtracting `40` gives `E5`, the one-byte wrapped form of 37 minus 64, and sets C because it
+borrowed. The second `jr nc` falls through to `neg`. `neg` calculates `0 - a`, changing `E5` to
+`1B`, which is 27. Finally `ld e, a` copies that distance into `e`. The panel therefore ends with
+`d = 40`, `e = 1B`, and `de = 401B`.
 
-`d` comes out at `40`, which is 64, and `e` at `1B`, which is 27, so the panel shows `de` as `401B`.
-The `sub c` sets `C` itself, so no second comparison is needed before the `jr nc`: an instruction
-that computed something has already said whether it borrowed.
+When `x` is greater than or equal to `y`, each subtraction has no borrow. The first jump goes to
+the labelled `x` route, and the second jump goes straight to `positive_distance`, leaving `neg`
+skipped. Equal values use that same route and leave a distance of zero.
+
+Try these changes one at a time. Predict the final `d` and `e`, then build and run to check.
+
+- Set `b` to 70 and `c` to 20. Both `jr nc` instructions jump, and `neg` is skipped.
+- Set both `b` and `c` to 42. Both `jr nc` instructions jump, and `neg` is skipped.
+
+<details>
+<summary>Check your answers</summary>
+
+With 70 and 20, `d = 46` and `e = 32`. With 42 in both registers, `d = 2A` and `e = 00`.
+
+</details>

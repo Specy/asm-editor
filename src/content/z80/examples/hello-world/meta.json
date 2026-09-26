@@ -1,6 +1,6 @@
 {
     "name": "Print a string",
-    "description": "The first program that talks to anybody: a loop that writes one character per out, a number sent to a port of its own, and the newline written by hand.",
+    "description": "Print a zero-terminated string one character at a time, then print a number through the decimal console port.",
     "order": 17,
     "topic": "hello-world",
     "template": 4
