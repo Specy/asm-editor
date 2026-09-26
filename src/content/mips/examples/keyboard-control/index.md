@@ -1,10 +1,17 @@
-A square you steer. The `w`, `a`, `s` and `d` keys set which way it is going and it keeps going that
-way on its own, coming back in at the opposite edge when it leaves the grid. **Click the Screen
-panel first**: the screen only gets the keyboard when it has the focus, and a ring around it says so
-while it does.
+Select **Open in editor**, then **Build** and **Run**. Click the **Screen** before pressing keys;
+click it again if you return to the editor. Type lowercase `w`, `a`, `s` or `d` to steer the square.
+It keeps moving in the last direction you chose and reappears at the opposite edge when it crosses
+the grid. Press **Stop** when you are done.
 
-What is on the screen in this one depends on what you type. Once per frame the program asks the
-keyboard whether anything has arrived, and the answer decides what every frame after it looks like.
+The Screen has a 32 by 32 grid of coloured cells. The square covers 3 by 3 cells, and its upper-left
+corner starts at `(14, 14)`. `fill_rect` takes `x` in `$a0`, `y` in `$a1`, width in `$a2`, and
+height in `$a3`. It uses the colour in `$s0` and the address of `display` in `$s1`. The program calls
+it first to paint the background, then to erase and redraw the moving square.
+
+The keyboard receiver is a device-address block beginning at `0xffff0000`. Its control register is
+at that address, and its data register is four bytes later, at `0xffff0004`. Loads from these
+addresses ask the device for input. Stores to `display` paint Screen cells; loads from `display`
+read their current colour words.
 
 ```mips|playground|open-screen|no-registers|allow-open
 # @screen unit=8 width=256 height=256 base=display
@@ -22,7 +29,8 @@ display: .space 4096        # SIDE * SIDE words, four bytes each
 .text
 .globl main
 
-# fill_rect(x, y, w, h): the colour is in $s0 and the grid in $s1
+# fill_rect(x, y, w, h): $a0-$a3 hold the rectangle;
+# $s0 holds the colour and $s1 holds the grid base
 fill_rect:
     move $t0, $a1           # row = y
     add $t1, $a1, $a3       # one past the last row
@@ -68,7 +76,7 @@ frame:
     lw $t4, 0($s7)          # the receiver control register
     andi $t4, $t4, 1        # the Ready bit
     beqz $t4, no_key
-    lw $t5, 4($s7)          # the receiver data, which takes the character
+    lw $t5, 4($s7)          # read the waiting character
     andi $t5, $t5, 0xFF
     bne $t5, 'a', not_a
     li $s4, -1
@@ -120,43 +128,35 @@ y_done:
 { "runFor": 100000 }
 ```
 
-`lw $t4, 0($s7)` reads the **receiver control** register and `andi $t4, $t4, 1` keeps its Ready bit,
-which is 1 when a character is waiting. `lw $t5, 4($s7)` reads the **receiver data** register, whose
-low byte is that character, and reading it takes the character out of the queue and makes room for
-the next one. Neither of those is memory: `sw` and `lw` are how you talk to a device on this
-machine, and the address is what says which one.
+Each pass through `frame` erases the old square, polls the keyboard, moves its upper-left corner,
+wraps that corner if it crosses an edge, draws the square at its new position, and waits before the
+next pass. The background is painted only once. `$s2` and `$s3` hold the corner's `x` and `y`;
+`$s4` and `$s5` hold the horizontal and vertical steps. The initial steps `(1, 0)` move it right.
 
-Polling once a frame is enough, because what is not read stays in the queue. Ready means "the queue
-is not empty", so a key pressed between two polls is still waiting at the next one and nothing is
-lost.
+`$s7` holds `0xffff0000`. The load at `0($s7)` reads receiver control; `andi` keeps Ready bit 0.
+When that bit is 1, a character is waiting, so the load at `4($s7)` reads receiver data. The
+character is in its low byte, and reading the data consumes it. If a character is waiting, it
+remains available until the program reads it. If Ready is 0, the program skips the character checks
+and keeps the previous steps.
 
-What the receiver gives you is worth being precise about, because it shapes the whole program. It
-hands over **characters that were typed**, one at a time, in the order they arrived. That is all.
-There is no key code, no notion of a key going down or coming up, and no way to ask which keys are
-being held at this instant.
+Each `bne` compares the received character with one of the lowercase direction letters. The
+assembler accepts a character literal such as `'d'` as shorthand for its numeric value. Pressing
+`d` sets `($s4, $s5)` to `(1, 0)`: one cell right per frame and no vertical movement. Pressing `w`
+sets it to `(0, -1)`. Setting the unused step to zero prevents diagonal movement when you change
+direction. Uppercase `W` does not match lowercase `'w'` in this program.
 
-Two things follow. The square has to keep moving after you let go, because nothing will ever tell
-the program that you did, so the direction has to be remembered rather than read. And the keys are
-`w`, `a`, `s` and `d` rather than the arrows, because the arrow keys are not characters and send the
-receiver nothing at all.
+The receiver supplies typed characters rather than a continuous report of held keys. A key changes
+the stored direction; releasing it does not change the steps, so the square keeps moving. This
+program checks for the four letter characters and does not use arrow-key input. The fixed testcase
+runs the program without typing into the receiver; use the Screen to check the steering yourself.
 
-The keys do not move the square, they write `$s4` and `$s5`, and the code under them moves it. That
-separation is what makes the square keep going after you let go of the key, and it is how anything
-that moves in a game is written: the input decides the velocity, the frame applies it.
+`LAST` is 29 because a 3-cell square whose left edge is at column 29 occupies columns 29–31. If a
+rightward step makes `x` greater than 29, the code sets `x` to 0. A step past the left edge sets
+`x` to 29. The same checks wrap `y` at the top and bottom.
 
-Setting the other step to 0 next to each direction is what keeps the movement to four directions.
-Take the four `li $s5, 0` and `li $s4, 0` lines out and pressing `d` and then `w` leaves both steps
-set, and the square goes diagonally.
-
-`bne $t5, 'a', not_a` compares a register against a character literal, which the assembler turns
-into two instructions: the number 97 into `$at`, and a real `bne` between the two registers. Four of
-those in a row is a chain of `else if`, and a jump table like the one in A jump table is what a
-program with twenty keys would use instead.
-
-One frame is about 165 instructions, so the `runFor` of 100000 is around six hundred of them. A
-testcase cannot type into the receiver, so the keys are yours to try by hand.
-
-Change the `li $s2, 0` under `ble $s2, LAST, x_low` to `li $s2, LAST` and the square stops dead
-against the right edge instead of reappearing at the left. Wrapping and clamping are the same two
-instructions with a different number in one of them, and which one a game wants is a design decision
-rather than a technical one.
+Try this first: while it moves right, press `w`, then `d`. Predict the steps after each key. They
+should be `(0, -1)` and then `(1, 0)`, so the square turns up and then right without moving
+diagonally. To change the edge behavior, replace the `li $s2, 0` immediately after
+`ble $s2, LAST, x_low` with `li $s2, LAST`. Build and Run again, then press `d`. At the right edge
+the square now stays in the last valid column instead of appearing on the left; the other three
+edges still wrap.

@@ -1,9 +1,28 @@
-A playable flappy bird. The bird falls all the time, one tap of the space bar gives it one flap
-upwards, and the pipes scroll in from the right with their gaps in a different place every game. It
-ends the moment the bird touches a pipe or the ground, the ground turns dark red to say so, and
-another tap starts the next one.
+A small Flappy Bird game on a 64 × 64 cell Screen. Tap Space, lowercase `w`, or Enter to flap. The
+bird falls between taps, pipes move left, and passing one adds a point in the Console. A collision
+turns the ground dark red; another tap resets the game.
 
-**Click the Screen panel before you press a key**, the same as in Move a square with the keyboard.
+Select **Open in editor**, then **Build** and **Run**. Click the **Screen** before typing; click it
+again after returning to the editor. The fixed `testcase` below supplies no keys, so it checks the
+waiting screen, not flaps or collisions. Screen cells are words in `display`.
+
+Here is a map for the longer program. Read `frame` through `draw` first, then `new_pipes`,
+`move_pipes`, and `hit_test`; leave the drawing helpers until you want to see how the picture is
+painted.
+
+- `$s4` is `READY` (waiting) → `PLAYING` (moving) → `DEAD` (falling and waiting for a reset).
+  A flap in `DEAD` jumps to `new_game`, returning to `READY`; the next flap starts play.
+- `$s2` is bird height and `$s3` is vertical speed, both in sixteenths of a row. A smaller row
+  number is higher on the Screen.
+- `pipes` holds three 12-byte records: left edge `x` at offset 0, gap middle at offset 4, and a
+  counted flag at offset 8. The initial left edges are 62, 86, and 110.
+- Rows are 0–63; ground begins at row 56. A bird at top row `top` occupies
+  `[top, top + BIRDH)`, and a pipe at `x` occupies `[x, x + PIPEW)`. With gap middle `m`, the open
+  rows are `[m - HALFGAP, m + HALFGAP)`. The right endpoint is excluded in each interval.
+- Each frame drains the waiting keys, handles the current state, draws the bird, waits `FRAME`
+  milliseconds, and repeats. While playing, it updates speed and height, moves pipes, checks
+  collisions, then draws. A reset from `DEAD` starts again at `new_game` instead of finishing
+  that old frame.
 
 ```mips|playground|open-screen|console|no-registers|allow-open
 # @screen unit=4 width=256 height=256 base=display
@@ -89,7 +108,7 @@ keys_read:
     beqz $t8, draw
     li $v0, 30              # service 30: milliseconds since the run started
     syscall
-    sw $a0, seed            # so the course depends on when the player began
+    sw $a0, seed            # starting time changes the gap sequence
     jal new_pipes
     jal paint_grid
     li $s4, PLAYING
@@ -232,7 +251,7 @@ mp_counted:
 hit_test:
     srl $t0, $s2, 4         # the bird's top row
     addi $t1, $t0, BIRDH    # and one past its bottom one
-    blt $t1, GROUNDY, ht_sky
+    ble $t1, GROUNDY, ht_sky # bottom edge at row 56 is still above ground
     li $v0, 1
     jr $ra
 ht_sky:
@@ -259,9 +278,12 @@ ht_hit:
     jr $ra
 
 # random_gap(): the middle of the next gap, in $v0, from a 32 bit xorshift.
-# It destroys $v0 and $t9 and nothing else.
+# It changes $v0, $t9, and HI/LO.
 random_gap:
     lw $v0, seed
+    bnez $v0, rg_step       # zero would remain zero after every shift and xor
+    li $v0, 0x1F123BB5
+rg_step:
     sll $t9, $v0, 13
     xor $v0, $v0, $t9       # x = x ^ (x << 13)
     srl $t9, $v0, 17
@@ -280,8 +302,8 @@ random_gap:
 # Drawing
 #-----------------------------------------------------------------------------
 # fill_span(col, from, to, colour): rows from to to-1 of one column, in one
-# colour, and never a row outside the window in $t8 and $t9. It destroys $t0
-# and $t1 and nothing else.
+# colour, and never a row outside the window in $t8 and $t9. It also changes
+# $a1 and $a2 when clipping, plus $t0 and $t1.
 fill_span:
     bge $a1, $t8, fs_top
     move $a1, $t8
@@ -398,9 +420,8 @@ pd_next:
     addi $sp, $sp, 4
     jr $ra
 
-# draw_bird(): the six columns the bird flies down, each painted in one pass:
-# the world above it, the bird, the world below it. Every word is written once
-# with the colour it ends the frame in, so the bird is never half erased.
+# draw_bird(): in each bird column, paint the world above, the body, then the
+# world below. The eye and beak then replace a few body cells.
 draw_bird:
     addi $sp, $sp, -8
     sw $ra, 4($sp)
@@ -452,60 +473,66 @@ db_next:
 { "runFor": 200000 }
 ```
 
-A game is always in one of three states, and `$s4` says which: `READY` while the bird hangs still
-waiting for the first flap, `PLAYING`, and `DEAD` while it drops to the ground. The frame loop reads
-the input once, branches on the state, and every branch ends at `draw`, so one frame is one pass and
-the three states differ only in what they do to the bird and the pipes in between.
+### Follow one frame
 
-The read at the top takes **every** character waiting, not one. The receiver's Ready bit stays set
-while the queue has anything in it, so `read_key` loops until it is clear and `$t8` remembers whether
-any of them was a flap. A player who taps three times while one frame is being drawn gets three
-characters and one flap, and a player who holds the key down gets the auto repeat the terminal sends,
-which is a flap a few times a second.
+`read_key` checks the keyboard receiver's Ready bit. Reading its data register consumes one
+character, so the loop keeps reading until the queue is empty. Space, lowercase `w`, and Enter
+(newline 10) set `$t8` to 1. Several flap characters collected during one frame still make one
+flap. In `READY`, that flap initializes the pipes and sets speed to `FLAPV`; movement begins on the
+next `PLAYING` frame. In `DEAD`, a flap jumps to `new_game`, which waits for another flap.
 
-`$s2` is the bird's height and it counts **sixteenths of a row**. Gravity adds `GRAV`, which is 3, to
-`$s3` every frame, and a flap sets `$s3` to -26: in whole rows those would be 0 and -1, and the bird
-would drop at one speed or not accelerate at all. `srl $t7, $s2, 4` is what turns the sixteenths back
-into the row the bird is drawn at, and the low four bits that get shifted away are the fractional part
-the next frame keeps.
+During `PLAYING`, a flap sets speed `$s3` to `-26`. Gravity then adds 3, the speed is limited to
+`MAXFALL`, and that speed is added to height `$s2`. Starting at `STARTY = 320` (row 20), the first
+playing frame after a flap makes speed `-26 + 3 = -23` and height `320 - 23 = 297`. The drawn top
+row is `297 >> 4 = 18`. With no flap on the next frame, speed becomes `-20`, height becomes `277`,
+and the drawn top row is 17. The lower four bits of height remain stored, so small changes can
+accumulate even when the drawn row stays the same. Reaching the top clamps height and speed to 0.
 
-Three pipes make an endless course. `move_pipes` slides each one one column to the left, and a pipe
-whose left edge has gone past `-PIPEW`, which is one pipe width off the left of the grid, jumps
-`CYCLE` to the right and asks `random_gap` for a new gap. `CYCLE` is `SPACING * 3`, so the pipe lands
-exactly where a fourth pipe would have been and the spacing never drifts. The third word of a pipe's
-record is whether it has been counted, and it goes up the score, and prints a line, when the pipe's
-right edge passes `BIRDX`.
+`move_pipes` moves each left edge one column left. Once an edge moves past `-PIPEW` (`-8`), it adds
+`CYCLE` (`72`), chooses a new gap, and clears that record's counted flag. Since there are three
+pipes spaced 24 columns apart, `CYCLE = 3 × SPACING` keeps their spacing. When a pipe's right edge
+is strictly left of `BIRDX` (12), its flag changes to 1 and the Console prints the new score.
 
-The picture itself is never stored. `world_column` is given a column and works out from the pipe
-records what colour every row of it should be: the pipe down from the top, the gap, the pipe down to
-the ground, then the grass and the sand. That is what makes a frame cheap, because only two columns
-per pipe can have changed, the one the pipe has just come into and the one it has just left, and
-`move_pipes` repaints exactly those two.
+`hit_test` compares edges using the half-open intervals in the map. For example, with gap middle
+20 and `HALFGAP = 9`, open rows are `[11, 29)`, meaning rows 11 through 28. A bird with top row
+24 occupies `[24, 29)` and fits vertically; top row 25 occupies `[25, 30)` and touches the lower
+pipe if their columns overlap. Ground begins at row 56, so a bird occupying `[51, 56)` is still
+clear, while `[52, 57)` touches it. A collision changes `$s4` to `DEAD`, paints the ground red,
+and prints the final and best scores. The dead bird then falls to its resting height.
 
-The bird's six columns are repainted in full every frame, and the order they are painted in is the
-whole reason the bird does not flicker. `fill_span` clips every span to a **window**, the two rows in
-`$t8` and `$t9`, so `draw_bird` can ask for the world above the bird, then the bird, then the world
-below it, and every word of the column is written once with the colour it ends the frame in. Erasing
-the band first and drawing the bird into it afterwards would write half of those words twice, and the
-display is the picture, so a reader whose browser repainted in between would see the gap.
+### Read the drawing helpers
 
-`fill_span` promises to destroy `$t0` and `$t1` and nothing else, and `random_gap` promises `$v0` and
-`$t9`, which is what lets `move_pipes` keep a pipe's new left edge in `$t7` across a call to the
-generator. `$s0` is the one saved register the loops have left, so the three subroutines that need a
-pointer of their own save it on the stack next to `$ra` and put it back, which is the calling
-convention doing the job it is there for.
+`world_column` computes sky, pipe, gap, grass, and sand from a column number and the three pipe
+records. `fill_span` paints rows in `[from, to)` within the clipping window `$t8` to `$t9`. When
+it clips a span it changes `$a1` or `$a2`; it also uses `$t0` and `$t1`. For each moving pipe,
+`move_pipes` repaints the column it entered and the column it left. `paint_grid` paints the full
+Screen at the start of a game.
 
-The score goes to the console because the screen has no writing on it: there is no way to put text
-at a position on the grid, only coloured cells. That is also why the end of a game is the ground
-turning `DEADGROUND` rather than the words GAME OVER, and why a game written on this screen says
-what it means with colour.
+`draw_bird` repaints its six columns in three bands: world above, yellow body, world below. It
+then puts the eye and beak over some body cells, so those cells receive another write. Painting
+these bands avoids a separate erase pass for the bird. Screen updates can still be visible while
+they happen; the code does not promise flicker-free display.
 
-`random_gap` is a 32 bit **xorshift**. Three shifts and three `xor` instructions turn a number into
-the next one of a sequence, its high bits are the ones worth using, and the remainder of a `divu` by
-`GAPSPAN` puts the middle of a gap somewhere in the band `GAPMIN` starts. The seed comes from service
-30 on the frame the first flap happens, so the course depends on when you started playing instead of
-on a number written into the program.
+The screen contains coloured cells, not text. Scores therefore go to the Console, while red
+ground marks a collision on the Screen. `new_pipes`, `move_pipes`, `paint_grid`, and `draw_bird`
+save `$ra` because they call other routines; the loops that use `$s0` save and restore it too.
+`random_gap` changes `$v0` and `$t9`, as well as the division's HI and LO registers. That leaves
+the pipe's left edge in `$t7` available across the call.
 
-Change `.eqv HALFGAP 9` to `6` and play again. A gap is measured outwards from its middle, and both
-the drawing and the hit test measure it the same way, so that single number is the entire difficulty
-setting of the game.
+`random_gap` advances a stored number with shifts and `xor`, then divides by `GAPSPAN` to obtain
+a remainder from 0 through 25. Adding `GAPMIN` gives a middle row from 13 through 38. Service 30
+supplies a starting time on the first flap, which changes this repeatable sequence according to
+when play starts. If that time is zero, the generator uses its nonzero fallback seed; zero would
+stay zero through every xorshift step.
+
+### Try it
+
+Change `.eqv HALFGAP 9` to `6`. Before running, predict the open rows for a pipe whose middle is
+20: `[20 - 6, 20 + 6) = [14, 26)`, or rows 14 through 25. Build and Run to see narrower gaps.
+Both drawing and collision checking use the same constant, so a bird at top row 22 occupies
+`[22, 27)` and no longer fits in that example gap.
+
+Restore `HALFGAP` to 9, then change `.eqv FLAPV -26` to `-16`. Predict the first playing frame
+after a starting flap: speed becomes `-16 + 3 = -13`, height becomes `320 - 13 = 307`, and the
+drawn top row is `307 >> 4 = 19`. Build and Run, tap once, and watch for a gentler rise. The
+starting flap still draws the waiting bird at row 20 before that playing frame.

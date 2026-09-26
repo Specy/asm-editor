@@ -1,6 +1,6 @@
 {
     "name": "Print a string",
-    "description": "The first program that talks to anybody: a service number in $v0, an argument in $a0, and the one instruction that hands the request over.",
+    "description": "Print text and a number in the Playground console using MIPS syscall services.",
     "order": 17,
     "topic": "hello-world",
     "template": 4

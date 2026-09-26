@@ -1,10 +1,12 @@
-Twelve words in order, and the program finds which one holds 91 by halving the range it is looking
-in until nothing is left. It leaves the index in `$t4`, or -1 when the value is not in the array.
-Four elements are read out of the twelve, where walking the array would read ten.
+This program searches twelve sorted words for 91 and leaves its zero-based index in `$t4`.
+If the value is absent, `$t4` stays at -1. A left-to-right search would check ten words to find
+91, the tenth value in the array. This search checks four by repeatedly discarding half of the
+remaining range.
 
-Searching a sorted array is where the sorting pays for itself: every comparison throws away half of
-what is left, so an array of a thousand elements takes about ten reads and one of a million takes
-about twenty.
+The range runs from `low` in `$t2` through `high` in `$t3`, including both ends. On each pass,
+the program reads the middle word. If that word is smaller than the target, only the words to its
+right can match; if it is larger, only the words to its left can match. The array must be sorted in
+ascending order for either decision to work.
 
 ```mips|playground|memory|allow-open
 .eqv COUNT 12
@@ -14,50 +16,65 @@ numbers: .word 2, 5, 8, 12, 16, 23, 38, 56, 72, 91, 100, 127
 
 .text
 main:
-    la $t0, numbers         # the array
-    li $t1, 91              # the value we are looking for
-    li $t2, 0               # low = 0
+    la $t0, numbers         # base address of the array
+    li $t1, 91              # target
+    li $t2, 0               # low = first index
     li $t3, COUNT
-    addi $t3, $t3, -1       # high = COUNT - 1
-    li $t4, -1              # found = -1, meaning not there
+    addi $t3, $t3, -1       # high = last index
+    li $t4, -1              # result if the target is absent
+
 search:
-    bgt $t2, $t3, search_done   # the range is empty, so stop
+    bgt $t2, $t3, search_done  # low > high: no candidates remain
     add $t5, $t2, $t3
-    srl $t5, $t5, 1         # mid = (low + high) / 2
-    sll $t6, $t5, 2         # mid * 4, the size of a word
-    add $t6, $t0, $t6
-    lw $t7, 0($t6)          # the element in the middle
+    srl $t5, $t5, 1         # mid = (low + high) / 2, rounded down
+    sll $t6, $t5, 2         # byte offset = mid * 4
+    add $t6, $t0, $t6       # address of numbers[mid]
+    lw $t7, 0($t6)          # middle value
     beq $t7, $t1, found
-    bgt $t7, $t1, too_big
-    addi $t2, $t5, 1        # low = mid + 1
+    bgt $t7, $t1, middle_too_big
+    addi $t2, $t5, 1        # middle value is too small: keep the right half
     j search
-too_big:
-    addi $t3, $t5, -1       # high = mid - 1
+
+middle_too_big:
+    addi $t3, $t5, -1       # middle value is too big: keep the left half
     j search
+
 found:
-    move $t4, $t5           # remember where it was
+    move $t4, $t5           # save the matching index
+
 search_done:
+    li $v0, 10
+    syscall
 ```
 
-`srl $t5, $t5, 1` is the halving: shifting a number one place right divides it by two and throws the
-remainder away, which is the rounding down that `(low + high) / 2` wants. `srl` is the shift that
-brings zeroes in at the top, which is right here because an index is never negative; `sra` is the
-one for a number that can be.
+The first check stops the loop only when `low > high`. If `low == high`, one candidate remains,
+so the program must load it before deciding whether the search succeeded. The `+ 1` and `- 1`
+updates exclude the middle word after it has failed to match. Because equality is checked first,
+falling through past `bgt $t7, $t1, middle_too_big` means the middle value is smaller than the
+target.
 
-`sll $t6, $t5, 2` turns the index into a byte offset, because the elements are words. An index and
-an address are different things here and the program has to convert between them on every pass,
-which is the price of `offset(base)` adding one register to one constant and scaling nothing.
+`srl $t5, $t5, 1` halves the sum of the two indices, discarding any remainder. The indices here
+are nonnegative, so filling the top bit with zero is appropriate. `sll $t6, $t5, 2` then
+multiplies the middle index by four, the size of a word. MIPS does not scale an array index for us:
+the program makes a byte offset, adds it to the base address, and loads from that address.
 
-`addi $t2, $t5, 1` reads `mid`, adds one, and writes `low`, all in one instruction. Three operands
-are what make that possible: the source and the destination are named separately, so there is no
-copy first.
+Follow the four reads for 91. Each row shows the range just before the middle word is loaded:
 
-The four probes are 23, 72, 100 and finally 91. Each one either matches, or moves `low` above the
-middle, or moves `high` below it, and the loop ends when `low` walks past `high`. `$t4` finishes at
-9, the index where 91 lives, and `$t2`, `$t3` and `$t5` all end at 9 as well, which is the range
-having closed down onto a single element.
+| `low` | `high` | `mid` | Middle word | Next step |
+| ----: | -----: | ----: | ----------: | --------- |
+| 0     | 11     | 5     | 23          | Set `low` to 6 |
+| 6     | 11     | 8     | 72          | Set `low` to 9 |
+| 9     | 11     | 10    | 100         | Set `high` to 9 |
+| 9     | 9      | 9     | 91          | Save index 9 |
 
-Search for 90, which is not in the array, by changing `li $t1, 91` to `li $t1, 90`. `$t4` stays at
-`FFFFFFFF`, the -1 put there before the loop started, because a search that finds nothing has to be
-able to say so, and 0 will not do: 0 is a perfectly good index. Choosing an answer that cannot be
-mistaken for a real one is part of writing the subroutine.
+Select **Build** and **Run**. `$t4` should show `00000009` in the register panel. Index 9 is the
+tenth position because indices begin at zero.
+
+Now change the target to 90. Before running, write down `low`, `high`, `mid`, and the loaded word
+on each pass. Why does the next range become empty? Select **Build**, then **Run**, and check that `$t4` shows
+`FFFFFFFF`, the 32-bit representation of -1. Zero would not work as an absent-value result
+because index 0 belongs to the array.
+
+Finally, try targets 2 and 127. Predict their indices and which middle words the search reads,
+then select **Build** and **Run** for each version. Both ends of the array should be reachable: `$t4` becomes 0 for 2 and 11
+for 127. Keep `COUNT` equal to the number of `.word` values when changing the array.

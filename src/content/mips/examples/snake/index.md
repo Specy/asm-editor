@@ -1,10 +1,10 @@
-The whole ladder in one program. A snake of green cells crosses a board of 32 by 32, the `w`, `a`,
-`s` and `d` keys steer it, it grows by one segment every time it reaches the food, and it ends when
-its head leaves the board or runs into its own body. The score goes to the console as you play, and
-the board turns dark red when you lose.
+A green snake moves across a 32 by 32 board. Reach the orange food to score and grow; hitting a wall
+or your own body ends the game. After 64 segments, food still raises the score, but the snake cannot
+grow any longer. The board turns dark red on game over.
 
-**Click the Screen panel before you press a key**, the same as in Move a square with the keyboard,
-and press Run again to play another game.
+Select **Open in editor**, then **Build** and **Run**. Click the **Screen** before typing lowercase
+`w`, `a`, `s` or `d` to steer. Click it again if you return to the editor. Press **Run** again for a
+new game. Each cell is one word in `display`; the `# @screen` line connects those words to the Screen.
 
 ```mips|playground|open-screen|console|no-registers|allow-open
 # @screen unit=16 width=512 height=512 base=display
@@ -150,7 +150,7 @@ no_room:
     jal print_score
 no_meal:
 
-# --- two words change on the screen, and no more ----------------------------
+# --- erase the old tail unless it grew; draw the head and food --------------
     beqz $s5, erase_tail
     li $s5, 0               # it grew, so the tail stays where it is
     j tail_done
@@ -224,17 +224,26 @@ take_it:
 no_turn:
     jr $ra
 
-# place_food(): a cell out of the generator below. It calls, so it saves $ra,
-# and next_random destroys only $v0 and $t9, which is why $t0 survives it.
+# place_food(): retry until the candidate is outside the occupied body.
+# It calls next_random, so it saves $ra. next_random changes only $v0 and $t9.
 place_food:
     addi $sp, $sp, -4
     sw $ra, 0($sp)
+food_candidate:
     jal next_random
     andi $t0, $v0, LAST     # a column, 0 to 31
     sll $t0, $t0, 8
     jal next_random
     andi $t1, $v0, LAST     # a row, 0 to 31
     or $t0, $t0, $t1
+    la $t1, body
+    lw $t2, length
+food_check:
+    lw $t3, 0($t1)
+    beq $t0, $t3, food_candidate
+    addi $t1, $t1, 4
+    addi $t2, $t2, -1
+    bnez $t2, food_check
     sw $t0, food
     lw $ra, 0($sp)
     addi $sp, $sp, 4
@@ -243,6 +252,9 @@ place_food:
 # next_random(): the next number of a 32 bit xorshift, in $v0
 next_random:
     lw $v0, seed
+    bnez $v0, random_step    # zero would stay zero through every xor and shift
+    li $v0, 0x1F123BB5      # recover if the seed was changed to zero
+random_step:
     sll $t9, $v0, 13
     xor $v0, $v0, $t9       # x = x ^ (x << 13)
     srl $t9, $v0, 17
@@ -270,62 +282,79 @@ print_score:
 { "runFor": 100000 }
 ```
 
-`body` is an array of words, one per segment, with the head at `body[0]`, and a segment is a cell:
-`0x050C` is column 5, row 12. Packing the two into one word is what makes a comparison between two
-cells a single `beq`, which the self collision test does once per segment and the food test does
-once per frame.
+Follow one frame from `frame` down to the wait and jump back. It reads at most one key, shifts the
+body, computes a new head, checks for a crash or food, and updates the Screen. The routines below
+`game_over` do the drawing, direction check, food placement and score printing.
 
-The snake moves by shifting: every segment takes the place of the one in front of it, from the tail
-backwards so that nothing is overwritten before it has been read, and then the head is given its new
-cell. The tail therefore disappears from where it was without any code saying so, which is why the
-cell it was in is read into `$s3` **before** the shift runs.
+### Cells and movement
 
-Growing is that same word put back. When the head reaches the food, the cell the tail was leaving is
-written one place past the end of the body and `length` goes up by one, so the segment that was
-about to vanish stays where it is. `$s5` then says the tail did not move this frame, and the drawing
-skips the erase.
+`body` is an array of words, one cell per segment. `body[0]` is the head, and `length` says how many
+entries are occupied. Bits 8–15 hold column `x`; bits 0–7 hold row `y`. For example, `0x050C`
+decodes to column `0x05` (5), row `0x0C` (12). The next two initial entries, `0x040C` and
+`0x030C`, put the body immediately to its left. One packed word is enough to compare two cells with
+`beq`.
 
-The head's new cell is the old one plus the direction, and `dx` and `dy` are counted in cells, so
-they are 1, 0 or -1. The four wall tests run on `$t5` and `$t6` while they are still separate
-numbers, because a column of -1 packed back into a byte is 255 and no test after the `sll` could
-tell the two apart.
+The shift loop starts at `body[length - 1]` and copies each preceding entry toward the tail. If
+the three entries are `[H, A, T]`, shifting produces `[H, H, A]`; writing the next head `N` at
+index 0 produces `[N, H, A]`. Copying backwards preserves each source until it has been read. Before
+the shift, the code saves the old tail `T` in `$s3`. It has disappeared from the occupied **body
+array**, but its old cell is still coloured on the **Screen** until `erase_tail` paints it with the
+background colour.
 
-The keys do not move the snake, they call `try_direction`, and it refuses a direction that is the
-exact opposite of the one the snake is going: `dx + nx` and `dy + ny` are both zero only when the
-new way is backwards, and turning back means eating your own neck on the next frame.
+If `N` reaches food and `length` is below `MAXLEN`, the program appends saved `T`, giving
+`[N, H, A, T]`, and increments `length`. `$s5` tells the drawing code to skip erasing that tail
+cell. At `MAXLEN`, a meal still increases `score` and moves the food, but the body stays the same
+length and the old tail is erased.
 
-The food goes wherever a 32 bit **xorshift** generator says. Three shifts and three `xor`
-instructions turn a number into the next one of a sequence, which is as random as a program with no
-clock and no dice can be. Both coordinates are `andi` with 31, since 32 is a power of two and the
-low five bits of any number are already a column.
+The old tail is absent from the shifted body when the `bite` loop checks for a collision. That lets
+the head enter the cell the tail just vacated on a normal move. The loop compares the new head with
+each remaining body entry; a match ends the game. The head's column and row are calculated
+separately from the old head plus `dx` and `dy`. A direction such as `(1, 0)` moves one cell right
+per frame. Wall checks happen before packing: a column of `-1` would otherwise become a large
+positive bit pattern and lose its useful meaning as an out-of-bounds coordinate.
 
-Three `sw` instructions reach the screen in a frame and only two of them change anything: the cell
-the tail left, the cell the head arrived in, and the food, which is repainted whether it moved or
-not. A snake of any length costs the same three, because the middle of it did not move.
+`draw_cell` turns a packed cell into a word address: `display + (y * 32 + x) * 4`. For the starting
+head at `(5, 12)`, the offset is `(12 * 32 + 5) * 4 = 1556` bytes. Each word stores a colour. The
+program paints all 1024 background cells once, then draws the starting snake and food. An ordinary
+frame stores the background at the old tail, green at the new head, and orange at the food (the
+last store usually repaints an unchanged cell). A growing frame skips the tail store, so it makes
+two Screen stores. At maximum length, a meal makes all three stores again.
 
-That is the whole reason the game is playable. These words in memory are the picture, so the
-cheapest correct frame is the one writing the fewest of them, and a frame here is about 120
-instructions. Clearing the board and redrawing every segment would be four thousand, and the
-Playground's budget would be gone in a few seconds of play.
+### Keys and food
 
-The score goes to the console, because the screen has no writing on it. There is no way to put text
-at a position on the grid, so a number on screen would have to be drawn out of coloured cells. Apart
-from the wait that paces a frame, every `syscall` in this program is either printing the score or
-the exit at the end.
+`$s7` holds the keyboard receiver address `0xffff0000`. Each frame loads receiver control and
+checks Ready bit 0. If Ready is 1, the load at `4($s7)` reads and **consumes** one waiting character.
+That character can change the stored direction; the snake moves once per frame even when no key is
+pressed. The keys set `(dx, dy)` to left `(-1, 0)`, right `(1, 0)`, up `(0, -1)` or down `(0, 1)`.
+`try_direction` rejects a reverse turn: while moving right `(1, 0)`, pressing `a` requests
+`(-1, 0)`. The sums `1 + (-1)` and `0 + 0` are both zero, so the old direction stays in place.
 
-`fill_grid` and `draw_cell` both read the colour out of `$s0` and the base of the grid out of
-`$s1`, and `draw_cell` promises to destroy `$t0` and `$t1` and nothing else. That promise is what
-lets the loop drawing the starting body keep its pointer in `$s2` across every call, and lets the
-caller keep the head in `$s4`. The promise lives in a comment above the label and nowhere else, and
-this program makes four of them.
+The first food is hand-written at `0x140C`, or `(20, 12)`. After a meal, `next_random` changes the
+stored `seed` with shifts and `xor` operations. A zero seed would produce only zeros, so the routine
+replaces it with the nonzero starting seed before taking the next step. This is a repeatable
+sequence of numbers, not a fresh physical source of randomness. `place_food` calls it once to
+choose a column and again to choose a row. After each call, `andi` with 31 keeps the coordinate in
+the range 0–31. The routine then checks the packed candidate
+against every occupied `body` entry. If it finds a match, it generates another pair. Since the
+snake has at most 64 segments on a 1024-cell board, there are always free cells available.
 
-With nobody typing, the snake runs straight to the right, eats the food on the way, and hits the
-wall 26 frames later, and the red board and the console line are done by about 11500 instructions.
-That is the game the verification run plays. The `runFor` of 100000 is the budget the Playground
-gets before it stops; a game you are playing ends when you make it end.
+The score prints to the Console after each meal and at game over. The bitmap Screen draws coloured
+cells; it has no built-in service to place text, so displaying digits there would require drawing
+their shapes from cells. `fill_grid` and `draw_cell` use the colour in `$s0` and the grid base in
+`$s1`. `draw_cell` changes only `$t0` and `$t1`, allowing the starting-body loop to keep its pointer
+in `$s2` across calls. `place_food` saves `$ra` on the stack because it calls `next_random` and must
+still return to its own caller afterward.
 
-The seed at the top of the data section decides everything the generator will ever produce. Change
-`seed: .word 0x1F123BB5` to `0x2545F491` and the second piece of food falls at column 26 of row 11
-instead of column 7 of row 8, while the first one, written into the data section by hand, does not
-move at all. The same seed gives the same game twice over, which is the only reason a program built
-on a generator like this can be debugged.
+### Try it
+
+Change the initial `food: .word 0x140C` to `food: .word 0x080C`. Decode the new word first:
+`x = 8`, `y = 12`. Build and Run. The orange cell should appear three columns to the right of
+the starting head, and, with no keys pressed, the score should print `Score: 1` soon after the
+snake reaches it. The next food is placed by `place_food`. Return to `0x140C` if you want the
+original starting board.
+
+For a second experiment, change only `seed: .word 0x1F123BB5`, then run the same starting board
+twice. The first food remains at its hand-written location; after eating it, both runs with the
+same seed place the next food in the same cell. Changing the seed changes the generated sequence.
+You can steer the snake while it runs; the fixed `testcase` has no typed input, so it only exercises
+the default rightward path.

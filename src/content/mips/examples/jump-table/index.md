@@ -1,12 +1,19 @@
-A number picks which of four pieces of code runs. `$t2` holds 2, the program reads the third address
-out of a table in memory and jumps to it, and the multiplication is what happens. Changing `$t2`
-changes the answer without changing a comparison anywhere.
+A **jump table** lets a number choose where a program continues. Here `$t2` holds an operation
+number, and the table holds the addresses of four pieces of code. With `$t2 = 2`, the program
+jumps to `mul_op` and leaves `18` in `$t6`.
 
-A chain of comparisons works for three or four cases and gets slower with every case you add, since
-a value at the bottom of the chain is compared against everything above it first. A table is looked
-up once whatever the value is.
+| `$t2` | Table entry | Result for 6 and 3 |
+| ----: | ----------- | -----------------: |
+| 0     | `add_op`    | 9                  |
+| 1     | `sub_op`    | 3                  |
+| 2     | `mul_op`    | 18                 |
+| 3     | `div_op`    | 2                  |
 
-```mips|playground|allow-open
+This version assumes `$t2` is between 0 and 3. If an operation number can come from outside the
+program, check that it is in range before using it as a table index. An out-of-range load could
+give `jr` an address that does not point to the intended code.
+
+```mips|playground|memory|allow-open
 .data
 table: .word add_op, sub_op, mul_op, div_op
 
@@ -14,52 +21,48 @@ table: .word add_op, sub_op, mul_op, div_op
 main:
     li $t0, 6               # a = 6
     li $t1, 3               # b = 3
-    li $t2, 2               # op = 2, the third entry of the table
+    li $t2, 2               # operation number
 
-    la $t3, table           # the base of the table
-    sll $t4, $t2, 2         # op * 4, the size of an address
-    add $t4, $t3, $t4
-    lw $t5, 0($t4)          # the address stored there
-    jr $t5                  # and go to it
+    la $t3, table           # address of the first table entry
+    sll $t4, $t2, 2         # index * 4 bytes per word
+    add $t4, $t3, $t4       # address of the chosen entry
+    lw $t5, 0($t4)          # load the code address stored there
+    jr $t5                  # jump to that address
 
 add_op:
-    add $t6, $t0, $t1       # a + b
+    add $t6, $t0, $t1
     j done
 sub_op:
-    sub $t6, $t0, $t1       # a - b
+    sub $t6, $t0, $t1
     j done
 mul_op:
-    mul $t6, $t0, $t1       # a * b
+    mul $t6, $t0, $t1
     j done
 div_op:
-    div $t6, $t0, $t1       # a / b
+    div $t6, $t0, $t1
+
 done:
+    li $v0, 10              # end the program
+    syscall
 ```
 
-`.word add_op, sub_op, mul_op, div_op` writes four words, and each one is the address the assembler
-gave that label. Put the memory panel on `10010000` and they read `00400024`, `0040002C`, `00400034`
-and `0040003C`, which are four addresses inside your own code. A label is nothing but an address,
-and this is what that sentence is for.
+`.word` stores one four-byte address for each code label in the table, even though the table is in
+the data area and the labelled instructions are in the code area. The assembler turns each label
+name into its code address. You do not need to know those numeric addresses to use them.
 
-The three instructions before the `jr` are an ordinary array lookup: shift the index to turn it
-into a byte offset, add the base, and load the word there. It is the same arithmetic as reading any
-other array; the only difference is what is in the array. What comes out is an address, and `jr`
-jumps to it.
+Follow the chosen index: `2` becomes the byte offset `8` when `sll` multiplies it by four.
+Adding that offset to `table` reaches its third word, which contains the address of `mul_op`.
+`lw` puts that address in `$t5`, and `jr $t5` jumps there. This is the same base-plus-offset
+lookup used for an array of numbers; the loaded word happens to be an address. `jr` jumps to the
+address in its register. The familiar `jr $ra` uses that same instruction to return from a
+subroutine.
 
-`jr` is the very same instruction that returns from a subroutine, because `jr $ra` is also a jump to
-an address held in a register. Use `jalr $t5` instead and each arm becomes a **call**, since `jalr`
-writes `$ra` on the way through, and each arm would then need a `jr $ra` to come back.
+After `mul_op` calculates `6 * 3`, `j done` skips the other operations. The add and subtract
+paths jump to `done` for the same reason. `div_op` is last, so it reaches `done` by continuing to
+the next instruction. The exit syscall stops the program with the answer still in `$t6`.
 
-`$t5` ends holding `00400034`, the address of `mul_op`, which the program worked out from the number
-2 and never had written down anywhere. Each arm ends with `j done` for the same reason the two
-halves of an `if` do: they are laid out one after another and nothing stops the program running into
-the next one.
-
-`div $t6, $t0, $t1` with three operands is the pseudo-instruction, so it is four real instructions:
-a `bne` and a `break` that check the divisor, then the real `div` and an `mflo`. The other three
-arms are one instruction each.
-
-Change `li $t2, 2` to `0`, `1` or `3` and the answer becomes 9, 3 or 2. What does not change is the
-number of instructions on the way there, and there is no comparison anywhere in the program to
-adjust: a table is looked up once whichever entry you wanted, which is the whole reason to build
-one.
+Select **Build** and **Run**, then look at `$t6` in the register panel. It should show `18`
+(`00000012` in hexadecimal). Change `li $t2, 2` to each other valid index—0, 1, and 3—and
+predict `$t6` before selecting **Build**, then **Run** each time. Which table word does each index
+load? The lookup follows the same steps for every valid index; only the loaded address and the
+chosen operation change.

@@ -1,6 +1,6 @@
 {
     "name": "Read two numbers and print their sum",
-    "description": "Two prompts that wait for you to type, the numbers coming back in $v0, and their sum printed on a line of its own.",
+    "description": "Read two decimal integers, save the first result from $v0, and print their sum.",
     "order": 18,
     "topic": "sum-of-two-numbers",
     "template": 5

@@ -1,6 +1,6 @@
 {
     "name": "A bouncing ball",
-    "description": "A ball that bounces off all four edges, erased and redrawn a frame at a time, paced by the wait service instead of by how fast your machine is.",
+    "description": "Move a ball within a 32 by 32 display, bounce it at the play-area bounds, and pace each frame with a timed wait.",
     "order": 21,
     "topic": "bouncing-ball"
 }

@@ -1,7 +1,7 @@
 These two subroutines call themselves. `factorial(8)` returns 40320 in `$s0`, and `fib(10)`
 returns 55 in `$s1`. Both take a nonnegative integer in `$a0` and return a result in `$v0`.
 For factorial, `0!` and `1!` are both 1. For Fibonacci, `fib(0)` is 0 and `fib(1)` is 1.
-Negative inputs are outside these routines' contract. The results must also fit in 32 bits;
+Negative inputs are outside these routines' contract. For a correct result, it must fit in 32 bits;
 we will try an input that exceeds that limit below.
 
 Each call reserves its own stack frame. When `factorial` calls itself, `$sp` moves down again,
@@ -101,14 +101,15 @@ Step through `factorial(3)` by changing the first argument in `main` to 3. Let *
 of `$sp` just before `main` calls it. At the branch in each active call, predict the saved `n` at
 `0($sp)` and the position of `$sp`: the calls for 3, 2, and 1 use **S − 8**, **S − 16**, and
 **S − 24**. Their saved `n` values are 3, 2, and 1. As the calls return, each restores its own
-`$ra` and releases eight bytes. `$s0` ends at 6 and `$sp` returns to **S**. Use **Step** and the
-Memory panel to check the three frames; use **Run** for the longer original inputs. The embedded
-**Test** checks the original 8 and 10.
+`$ra` and releases eight bytes. `$s0` ends at 6 and `$sp` returns to **S**. Select **Build**, then
+use **Step** and the Memory panel to check the three frames. After restoring the original inputs,
+select **Build**, then **Run**. The embedded **Test** checks the original 8 and 10.
 
 For another small change, turn `factorial` into a recursive sum from 1 through `n`. Keep its
 frame and recursive call, but make the base case return 0 when `n` is 0, and add the saved `n` to
 the returned value. The same nonnegative-input rule applies. With 3 in `$a0`, the calls should
-return 0, then 1, then 3, then 6. Restore the original code when you finish.
+return 0, then 1, then 3, then 6. Select **Build**, then **Run** to check the result. Restore the
+original code when you finish.
 
 Finally, try 10 and then 13 as the factorial input. `10!` is 3628800. `13!` is 6227020800,
 which is too large for the 32-bit result of `mul`. `$s0` instead shows `0x7328CC00` in
