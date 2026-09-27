@@ -39,16 +39,17 @@ Start with the first two pairs. The comparison `slt $t5, $t4, $t3` asks whether 
 smaller than the left word. If it is, the two `sw` instructions write them back in the opposite
 order. The pointer then moves four bytes to the next pair:
 
-| Comparison   | Array after the comparison       |
-| ------------ | -------------------------------- |
-| Start        | `42, 8, 15, 4, 23, 16, 99, 1`   |
-| `42` and `8` | `8, 42, 15, 4, 23, 16, 99, 1`   |
-| `42` and `15` | `8, 15, 42, 4, 23, 16, 99, 1`  |
+| Comparison    | Array after the comparison    |
+| ------------- | ----------------------------- |
+| Start         | `42, 8, 15, 4, 23, 16, 99, 1` |
+| `42` and `8`  | `8, 42, 15, 4, 23, 16, 99, 1` |
+| `42` and `15` | `8, 15, 42, 4, 23, 16, 99, 1` |
 
 The larger word of each pair travels to the right. As the comparisons continue, 42 meets 4, 23,
 and 16. Then 99 replaces it as the word travelling right, and the final comparison puts 99 after
+
 1. After the first pass the array reads `8, 15, 4, 23, 16, 42, 1, 99`. The last word is now in
-its final position, even though the words before it are not yet sorted.
+   its final position, even though the words before it are not yet sorted.
 
 `$t1` holds the address of the left word in the current pair. `0($t1)` loads or stores that word;
 `4($t1)` reaches the next one because a word occupies four bytes. The pointer moves only after the
@@ -68,8 +69,7 @@ to view words. The eight values should read `1, 4, 8, 15, 16, 23, 42, 99` in ord
 Now check the passes yourself:
 
 1. On paper, start with `42, 8, 15, 4`. Compare each neighbouring pair from left to right,
-   swapping when needed. What order do the four words have after one pass? The last word should be
-   42. To check, select **Open in editor**, change the data to those four values and `COUNT` to 4,
+   swapping when needed. What order do the four words have after one pass? The last word should be 42. To check, select **Open in editor**, change the data to those four values and `COUNT` to 4,
    then **Build** and **Step** instruction by instruction until execution reaches `inner` three
    times.
 2. Restore the eight values and `COUNT 8`. Swap the two source registers in `slt`, then predict

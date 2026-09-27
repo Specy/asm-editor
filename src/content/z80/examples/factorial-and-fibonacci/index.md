@@ -85,13 +85,13 @@ second call changes `hl`. That is the job of `push hl` and `pop de`.
 Follow `fib(3)` through the recursive part. The values in this trace are decimal; the register
 panel shows their hexadecimal equivalents.
 
-| In the waiting `fib(3)` call | `a`, `hl`, and saved values |
-| --------------------------- | -------------------------- |
-| `push af`; `dec a`; `call fib` | Save original `n = 3`; call `fib(2)`. |
-| `fib(2)` returns | It called `fib(1)` and `fib(0)`, added 1 + 0, and returned `hl = 1`. |
-| `pop af`; `push hl` | Restore original `a = 3`; save the first answer, 1, on the stack. |
-| `sub 2`; `call fib` | Subtract from the restored 3, so this call is `fib(1)`. It returns `hl = 1`. |
-| `pop de`; `add hl, de` | Take the saved first answer into `de = 1`; add it to `hl = 1`. Return `hl = 2`. |
+| In the waiting `fib(3)` call   | `a`, `hl`, and saved values                                                     |
+| ------------------------------ | ------------------------------------------------------------------------------- |
+| `push af`; `dec a`; `call fib` | Save original `n = 3`; call `fib(2)`.                                           |
+| `fib(2)` returns               | It called `fib(1)` and `fib(0)`, added 1 + 0, and returned `hl = 1`.            |
+| `pop af`; `push hl`            | Restore original `a = 3`; save the first answer, 1, on the stack.               |
+| `sub 2`; `call fib`            | Subtract from the restored 3, so this call is `fib(1)`. It returns `hl = 1`.    |
+| `pop de`; `add hl, de`         | Take the saved first answer into `de = 1`; add it to `hl = 1`. Return `hl = 2`. |
 
 The second call gets its own return address below the saved first answer. When it returns, `sp`
 points at that answer again, ready for `pop de`. In the full program, `ix` keeps `factorial(8)`

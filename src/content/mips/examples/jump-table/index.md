@@ -4,10 +4,10 @@ jumps to `mul_op` and leaves `18` in `$t6`.
 
 | `$t2` | Table entry | Result for 6 and 3 |
 | ----: | ----------- | -----------------: |
-| 0     | `add_op`    | 9                  |
-| 1     | `sub_op`    | 3                  |
-| 2     | `mul_op`    | 18                 |
-| 3     | `div_op`    | 2                  |
+|     0 | `add_op`    |                  9 |
+|     1 | `sub_op`    |                  3 |
+|     2 | `mul_op`    |                 18 |
+|     3 | `div_op`    |                  2 |
 
 This version assumes `$t2` is between 0 and 3. If an operation number can come from outside the
 program, check that it is in range before using it as a table index. An out-of-range load could

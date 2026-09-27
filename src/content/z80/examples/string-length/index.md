@@ -43,6 +43,6 @@ subtracts just the starting address. No second `or a` is needed.
 
 Try changing `text: .asciz "Assembly is fun"` to `text: .db "Assembly is fun"`, then build and
 run again. `.db` writes those characters without the ending zero. `more` begins immediately after
-them, so the loop reads its `!` and stops at *its* zero byte. The result becomes `hl = 0010`, or 16,
+them, so the loop reads its `!` and stops at _its_ zero byte. The result becomes `hl = 0010`, or 16,
 one too many. Restore `.asciz` afterwards: the scan needs a zero byte to know where this string
 ends.

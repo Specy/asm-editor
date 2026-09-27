@@ -75,7 +75,7 @@ and `80`, so the chosen address is `801B`, the start of `mul_op`.
 
 The low byte waits in `a` while `inc hl` moves to the high byte. The code reads the high byte
 into `h` before putting the saved low byte into `l`. If it changed `l` first, `hl` would no
-longer point at the high byte. At `jp (hl)`, the jump goes to the address *in* `hl`; this
+longer point at the high byte. At `jp (hl)`, the jump goes to the address _in_ `hl`; this
 instruction does not read another address from memory or push a return address.
 
 Choose **Run**. Multiplication leaves `a = 12` and `c = 12` in the hexadecimal registers
@@ -96,12 +96,12 @@ prediction with the registers panel. Open the answers after trying all four valu
 <details>
 <summary>Check your answers</summary>
 
-| `op` | Arm | `hl` at `jp (hl)` | Result in `c` (hex) |
-| --- | --- | --- | --- |
-| 0 | add | `8013` | `09` |
-| 1 | subtract | `8017` | `03` |
-| 2 | multiply | `801B` | `12` |
-| 3 | divide | `8022` | `02` |
+| `op` | Arm      | `hl` at `jp (hl)` | Result in `c` (hex) |
+| ---- | -------- | ----------------- | ------------------- |
+| 0    | add      | `8013`            | `09`                |
+| 1    | subtract | `8017`            | `03`                |
+| 2    | multiply | `801B`            | `12`                |
+| 3    | divide   | `8022`            | `02`                |
 
 </details>
 

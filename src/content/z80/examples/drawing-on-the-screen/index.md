@@ -1,11 +1,12 @@
-A picture in six shapes: the sky, the ground, an ellipse for the sun, a rectangle with an outline
-for the house, three lines and a flood fill for its roof and one more rectangle for the door, with
-a line of text over the top. Press Run and watch the Screen panel next to the program.
+This program draws a house beneath the sun and prints a label above it. Open it in the editor,
+choose **Build**, then **Run**, and watch the Screen panel. The picture has six parts—the sky,
+ground, sun, house, roof and door—but takes eleven drawing commands to make.
 
-Print a string asked the environment for a line of text by writing one byte to a port. The Screen is
-more ports, right next to the console ones, and drawing is always the same two steps: write the
-colours and the coordinates to their ports, then write **one command** to the command port, which
-runs one operation on whatever is currently set.
+Like the console in Print a string, the Screen responds to bytes written to ports. Each drawing
+operation has two steps: set its colours and coordinates, then write **one command** to `P_CMD`.
+`C_RESIZE` sets the Screen's size from X and Y; `C_MOVE_TO` moves the drawing position;
+`C_LINE_TO` draws from there to a new point; and `C_FLOOD` spreads colour from a starting point.
+The other commands here clear the Screen or draw a rectangle or ellipse.
 
 ```z80|playground|open-screen|no-registers|no-flags|allow-open
 P_CHAR  equ 0x10        ; the console character port draws at the text cursor
@@ -36,15 +37,15 @@ ROOF    equ 0x64
 DOOR    equ 0x44
 WHITE   equ 0xFF
 
-CMD     equ 0           ; the seven fields of one shape
+CMD     equ 0           ; offsets within each seven-byte command row
 FILL    equ 1
 PEN     equ 2
 SX      equ 3
 SY      equ 4
 SX2     equ 5
 SY2     equ 6
-SHAPE   equ 7
-COUNT   equ (shapes_end - shapes) / SHAPE
+SHAPE_SIZE equ 7        ; bytes in one table row
+COUNT   equ (shapes_end - shapes) / SHAPE_SIZE
 
     .org 0x8000
     ld a, 3
@@ -67,8 +68,8 @@ draw:
     out (P_Y2), a
     ld a, (ix+CMD)
     out (P_CMD), a      ; and the command port draws it
-    ld de, SHAPE
-    add ix, de          ; on to the next shape
+    ld de, SHAPE_SIZE
+    add ix, de          ; on to the next table row
     djnz draw
 
     ld a, WHITE
@@ -108,7 +109,7 @@ label:  .asciz "A HOUSE IN ELEVEN COMMANDS"
 ```
 
 Every coordinate is one byte, so the Screen is at most 256 by 256 pixels, and no coordinate can hold
-the number 256 itself. The first shape resizes it to **240 by 192**, which is a size whose right and
+the number 256 itself. The first command resizes it to **240 by 192**, which is a size whose right and
 bottom edges a byte can name, and after that a rectangle can reach every pixel there is. A rectangle
 **excludes its right and bottom edges**, so a rectangle from row 0 to row 192 paints rows 0 to 191
 and the ground really does reach the last row of the Screen.
@@ -118,27 +119,28 @@ A colour is one byte in a **3-3-2** layout: three bits of red in bits 7 to 5, th
 reds, six of the seven greens and all three of the blues, and comes out a pale blue. Two bits of
 blue is what was left over, which is why the greys on this machine are not exactly neutral.
 
-The seven fields of a shape are the seven ports a drawing operation reads, in the order the loop
-writes them, and `equ` gives each one its offset from the start of the row. `(ix+FILL)` reads the
-fill colour out of the row `ix` currently points at, and `add ix, de` with `SHAPE` in `de` steps
-`ix` on to the next row. Adding an eighth field to every shape means changing `SHAPE` and one line
-in the loop, and nothing else. `COUNT` is worked out by the assembler from the two labels around the
-table, so adding a row to the picture is adding a row.
+Each table row holds one command and six values. `CMD` through `SY2` name the offsets of those
+seven bytes, and `SHAPE_SIZE` is the number of bytes in a whole row. `(ix+FILL)` reads the fill
+colour from the row `ix` points at. After the command runs, `add ix, de` moves `ix` forward by
+`SHAPE_SIZE` bytes to the next row. The assembler works out `COUNT` from the labels around the
+table, so another row also adds another turn through the loop.
 
-The sky, the ground, the sun and the door have the same colour in both their fields, so those shapes
-have no rim. The house sets them apart, `WALL` inside and `WHITE` outside, and the three pixel pen
+If you use **Step**, watch the Screen after the first three writes to `P_CMD`: it changes size,
+turns sky blue, then gains the ground. Each operation takes effect when the command is written,
+after its colours and coordinates have been set.
+
+The ground, sun and door have the same colour in their fill and pen fields, so they have no
+contrasting rim. The house uses `WALL` inside and `WHITE` outside, and the three pixel pen
 set before the loop is what makes that outline thick.
 
-The roof is three lines and no shape at all. Command 3 moves the **drawing position** without
-drawing anything, and each command 2 after it draws from wherever that position is to the new place
-and leaves it there, so a polyline costs one command per corner. Command 1 is the other line
-command, the one that takes both ends at once.
+The roof is made from three lines. `C_MOVE_TO` moves the **drawing position** to the left eave
+without drawing. Each `C_LINE_TO` then draws from that position to its new point and leaves the
+position there. The three commands trace the two slopes and the base of the roof.
 
-Command 8 is what colours it in, because there is no triangle command: it starts at the pixel in X
-and Y and spreads the **fill colour** in every direction, over every pixel of the colour it started
-on, until it meets anything else. The three lines are the fence it stops at, and `115, 65` is just a
-point inside them, any other would do the same. It is the one row of the roof whose fill field
-matters, which is why it says `ROOF` where the lines above it say `WALL`.
+`C_FLOOD` colours the inside. It starts at the pixel in X and Y and spreads the **fill colour** over
+connected pixels of the colour it started on, stopping at the three lines. The point `115, 65` lies
+inside that outline. The flood row's fill field matters, which is why it says `ROOF` where the line
+rows say `WALL`.
 
 The label goes through the console character port, the same port Print a string used, because **the
 Screen has no text command of its own**. Text lands at the text cursor, which is counted in 8 by 8
@@ -147,8 +149,11 @@ boundary: there is no way to put text at an arbitrary pixel. The characters are 
 colour on the background colour, and the background is whatever
 the last clear filled the Screen with, which is why white on the sky looks right.
 
-The fill is the fragile part of the picture, and it is worth breaking on purpose. The `115` in the
-`C_LINE_TO` row of the roof is the apex; move it to `70` and the roof leans left, which is fine,
-because the fill point at `115, 65` is still inside it. Keep pushing the apex and eventually that
-point falls outside the three lines, and then command 8 finds no fence at all and the roof colour
-floods the whole sky. A flood fill trusts you to give it a point that is genuinely enclosed.
+Try adding a window. Copy the door's `C_RECT` row to the end of the table, before `shapes_end`.
+Choose two corners inside the house wall and set its fill and pen colours. Build and Run again;
+`COUNT` will include the new row without changing the loop.
+
+You can also test the roof fill. The `115` in the first `C_LINE_TO` row is the apex's X coordinate.
+Move it left and run the program again. If the fill point at `115, 65` ends up outside the roof,
+`C_FLOOD` has no enclosing lines to stop it and the roof colour spreads across the sky. A flood fill
+needs a point inside a closed outline.

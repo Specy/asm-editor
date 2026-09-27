@@ -3,10 +3,10 @@ we treat every four words as a row. The row and column numbers tell us which wor
 sequence to load.
 
 | Row | Column 0 | Column 1 | Column 2 | Column 3 |
-| ---: | ---: | ---: | ---: | ---: |
-| 0 | 1 | 2 | 3 | 4 |
-| 1 | 10 | 20 | 30 | 40 |
-| 2 | 100 | 200 | 300 | 400 |
+| --: | -------: | -------: | -------: | -------: |
+|   0 |        1 |        2 |        3 |        4 |
+|   1 |       10 |       20 |       30 |       40 |
+|   2 |      100 |      200 |      300 |      400 |
 
 For `grid[2][1]`, two complete rows come first: `2 * 4 = 8` words. One more word reaches column
 1, so its index in the continuous sequence is **9**. Each word occupies four bytes; index 9 is
@@ -69,10 +69,10 @@ Each move to the next row crosses `COLS` words, or `COLS * 4` bytes. The `sll` p
 stride**, 16 bytes here, in `$t3`; the loop adds it to `$t6` after every load.
 
 | Row read | Offset from `grid` | Word added | Total after load |
-| ---: | ---: | ---: | ---: |
-| 0 | 4 bytes | 2 | 2 |
-| 1 | 20 bytes | 20 | 22 |
-| 2 | 36 bytes | 200 | 222 |
+| -------: | -----------------: | ---------: | ---------------: |
+|        0 |            4 bytes |          2 |                2 |
+|        1 |           20 bytes |         20 |               22 |
+|        2 |           36 bytes |        200 |              222 |
 
 After the third load, `$t8` reaches zero and the branch stops the loop. `$t7` holds **222**. The
 final pointer is one stride beyond the last word read; the program does not load from it.

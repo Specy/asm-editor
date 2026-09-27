@@ -1,5 +1,4 @@
-This program reserves ten consecutive bytes in memory, then fills them with the numbers 1 through
-10. A consecutive run of bytes used to hold related values is called an **array**. Each individual
+This program reserves ten consecutive bytes in memory, then fills them with the numbers 1 through 10. A consecutive run of bytes used to hold related values is called an **array**. Each individual
 byte in it is an **element**. Here every element is one byte, so the finished array is easy to see:
 open the program in the editor, choose **Build**, then **Run**. In the memory panel, enter `9000`.
 The ten bytes beginning there are `01 02 03 04 05 06 07 08 09 0A`.

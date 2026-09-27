@@ -1,21 +1,49 @@
-A playable flappy bird. The bird falls all the time, one tap of the space bar gives it one flap
-upwards, and the pipes scroll in from the right with their gaps in a different place every game. It
-ends the moment the bird touches a pipe or the ground, and another tap starts the next one.
+A playable flappy bird. The bird waits for your first tap, then gravity pulls it down and each new
+press gives it one flap upwards. Pipes scroll in from the right, with gap positions chosen from a
+clock-seeded sequence. The game ends when the bird touches a pipe or the ground; another tap starts
+the next one.
 
 **Click the Screen panel before you press a key**, the same as in Move a square with the keyboard.
 You can also click on the drawing itself, since the mouse counts as a flap too.
 
-The program is about 800 lines, which is longer than anything else in this course, so the rest of
-this page walks through it a piece at a time. Each piece is shown on its own where it is explained,
-and the whole thing sits at the bottom, ready to build and play.
+The program is about 800 lines, so read one trip through it first. The smaller excerpts below follow
+that trip; the complete program at the bottom is ready to build and play.
+
+## A route through one frame
+
+Start at `.org 0x8000`: the program sets up the Screen, then `newgame` calls `reset` and writes the
+starting message. `reset` puts the bird at its starting height and marks the game `S_READY`. From
+there, `frame` repeats this route:
+
+```text
+frame: readflap → choose ready, playing or dead → draw → present → wait → frame
+                         │
+                         └─ playing: gravity → movepipes → hittest
+```
+
+On the first press, the ready branch seeds the gap generator, starts the pipes and sets `S_PLAYING`.
+On later playing frames, `gravity` updates the bird, `movepipes` advances the pipes and score, and
+`hittest` decides whether to enter `S_DEAD`. Every branch reaches `draw`, which paints the new frame
+and shows it with `C_PRESENT`. Follow those labels in that order before studying the helper routines.
+
+The pipe routines share three records beginning at `pipes`. Each record is four bytes:
+
+| Offset | Meaning | Example value |
+| --- | --- | --- |
+| `+0` | Left edge in world coordinates | `72` |
+| `+1` | Gap centre in screen y coordinates | `96` |
+| `+2` | Counted flag: `1` means this pipe has already scored | `0` |
+| `+3` | Active flag: `1` means draw and test this pipe | `1` |
+
+`newpipes`, `movepipes`, `hittest` and `drawpipe` all read these same four bytes. When a routine
+finishes one record, it advances `hl` by four to reach the next. The example values above describe
+one possible active pipe, not the starting contents of memory.
 
 ## The numbers at the top
 
-Nothing here is code. Every number the program uses more than once, or whose meaning would otherwise
-be invisible, is given a name with `equ`, and that is what makes a game of this size possible to
-change at all. `HALFGAP equ 32` is the difficulty: a gap is measured from its middle in both
-directions, by the drawing and by the hit test alike, so turning that one number down to 24 makes
-every gap in the game narrower and nothing else has to know.
+The `equ` lines give names to the sizes, speeds, ports and colours used throughout the game.
+`HALFGAP equ 32` controls the gap width: both drawing and collision measure 32 pixels from the
+centre in each direction. Change it to 24 and both routines use the narrower gap.
 
 Two of these groups repay a closer look. The `S_` values are the three states a game can be in, and
 they are `equ`s rather than labels because the assembler ignores case, so a constant called
@@ -80,7 +108,7 @@ LIPH    equ 6
 LIPOUT  equ 3
 HALFGAP equ 32
 GAPMIN  equ 48          ; the highest the middle of a gap goes
-GAPSPAN equ 88          ; and how far below that it can be
+GAPSPAN equ 88          ; scales gap centres to 48 through 135
 COUNTX  equ 48          ; BIRDX + MARGIN - PIPEW: a pipe left of this is passed
 
 GRAV    equ 4           ; sixteenths of a pixel, per frame, per frame
@@ -148,13 +176,13 @@ The frame loop reads the input once, branches on `state`, and every branch ends 
 frame is one pass through here, and the three states differ only in what they do to the bird and the
 pipes on the way past.
 
-The comment above `frame` is a warning to your future self: the answer from `readflap` lives in `c`
-for the whole of the frame, so nothing called from here may use `c` for anything of its own.
+The answer from `readflap` is copied into `c` while the state branch decides what to do. Each branch
+reads it before calling routines that may use `c` themselves. `draw` and the wait at the end of the
+frame are free to reuse that register.
 
 ```z80
 ; --- one frame ---------------------------------------------------------------
-; c carries "a flap began this frame" from the input read to the state machine,
-; so nothing called from here is allowed to touch it.
+; c carries "a flap began this frame" until the chosen state branch reads it.
 frame:
     call readflap
     ld c, a
@@ -251,8 +279,13 @@ draw:
 
 Port `0x31` and port `0x42` both report what is held down _right now_. A key held for twenty frames
 reads as pressed on all twenty of them, which would be twenty flaps from one tap. `held` is the byte
-that turns that into one: a press counts only when the frame before it had nothing down. The answer
-travels out in `c`.
+that turns that into one: a press counts only when the frame before it had nothing down. `readflap`
+returns its answer in `a`; `frame` copies it to `c` for the state branch.
+
+Try tracing three calls to `readflap`: one when nothing is down, one when Space first goes down, and
+one while Space stays down. For each call, write down the returned `a` and the new value of `held`.
+Check your trace against the branches at `pressed` and `stillheld`, then hold Space in the running
+game: it should give one flap until you release and press again.
 
 ```z80
 ; Input
@@ -303,23 +336,31 @@ stillheld:
 Three pipes make an endless course. `CYCLE` is `SPACING * 3`, so a pipe that has scrolled off the
 left jumps exactly as far right as a fourth pipe would have been, and the spacing never drifts.
 
-A world 240 wide has nowhere to park three pipes 80 apart off the right of a 208 wide screen, so a
-game starts with two of them **out of play**. The fourth byte of a pipe's record says whether it is
-there at all, and `newpipes` gives it only to the one that starts past the right edge. The drawing
-and the hit test skip the other two until they have come round, which is what leaves the first few
-seconds of a game with nothing in it but sky. Those two start marked as counted as well, so neither
-can take a point on its way past the bird while it is invisible.
+The screen is 208 pixels wide, and the three pipe positions are 80 world units apart in a 240-unit
+cycle. At the start their world x values are 244, 164 and 84. Subtract `MARGIN` (32) to get their
+screen x positions: 212, 132 and 52. The last two positions appear to be on screen, but their
+active flags are `0`, so drawing and collision skip them. Only the pipe at 244 begins active. Each
+inactive pipe becomes active when it wraps around from the left to the right. Both start marked as
+counted so they cannot award points while invisible.
 
-`randgap` has to multiply, and there is no multiply instruction, so `mul8` is the shift and add from
-the arithmetic lecture: look at the low bit of the multiplier, add the multiplicand if it is set,
-double the multiplicand, eight times round. `srl a` is what feeds it, because `rra` would rotate the
-carry that `add hl, de` has just left into the number.
+`seedclock` reads two bytes of elapsed time on the first flap. A zero seed is replaced because the
+generator would otherwise stay at zero. `nextrandom` then changes the 16-bit seed with three XOR
+and shift steps: `x ^ (x << 7)`, then `x ^ (x >> 9)`, then `x ^ (x << 8)`, keeping only 16 bits.
+The same seed gives the same sequence; a different start time can give different gaps. The short
+right shift changes only the low byte, and the final left shift changes only the high byte, which is
+why those steps do not need loops in the code.
 
-The random numbers come from a sixteen bit xorshift, and two of its three shifts cost almost
-nothing: the low half of `x << 8` is all zero, so that step only changes the high byte, and the high
-half of `x >> 9` is all zero for the same reason. Only the `x << 7` needs a loop. The seed is read
-off the clock on the frame of the first flap, so the course depends on when you started playing
-rather than on a number written into the program.
+`randgap` returns a gap centre in `a`. It takes the high byte of `nextrandom` as a number from 0 to
+255, multiplies it by `GAPSPAN` (88), takes the high byte of that 16-bit product, and adds `GAPMIN`
+(48). Taking the high byte is the same as dividing the product by 256 and dropping the fraction:
+`floor(random_byte * 88 / 256)`. That scales the result to **0 through 87**, so the returned centre
+is **48 through 135**. For example, a random byte of 200 gives `floor(200 * 88 / 256) = 68`, hence
+a centre of 116.
+
+The Z80 has no multiply instruction, so `mul8` builds that product by shift and add. On each of
+eight rounds, `srl a` takes the next low bit of the random byte; if it was 1, `add hl, de` adds the
+current multiple of 88. Then `de` doubles for the next bit. `srl` also clears the top bit as it
+shifts; a rotate would bring a carry from the addition back into the remaining random bits.
 
 ```z80
 ; The world
@@ -399,7 +440,7 @@ randgap:
     ld a, h             ; the high byte, which is the half worth using
     ld de, GAPSPAN
     call mul8           ; hl = a * GAPSPAN
-    ld a, h             ; whose high byte is nought to GAPSPAN
+    ld a, h             ; high byte of the product: 0 to GAPSPAN-1
     add a, GAPMIN
     ret
 
@@ -459,6 +500,15 @@ fraction the next frame keeps.
 The scrolling is byte arithmetic doing the wrapping by itself. A pipe walks from 208 down to 0, and
 then 1 minus `SPEED` is 255, plus `CYCLE` is 239, which is exactly where the pipe belongs. No
 comparison is needed to notice it went off the edge.
+
+For a collision trace, suppose an active pipe has world x `72` and gap centre `96`. Subtracting
+`MARGIN` puts its left edge at screen x `40`, so it occupies x `40` through `63`. The bird occupies
+x `40` through `55`, and `hittest` checks this pipe because its world x is between `COUNTX+1` (`49`)
+and `BIRDR-1` (`87`). With `HALFGAP` at 32, drawing leaves y `64` through `127` open. The collision
+check is slightly stricter at the top: the bird's top must be **greater than 64**, while its bottom
+edge, one pixel past the bird, may equal 128. A bird with top 80 and bottom edge 92 fits; with top
+60 it hits the pipe above the gap. At top 64, `hittest` also reports a collision, even though that
+row looks open.
 
 ```z80
 ; One frame of falling: the speed grows by GRAV and the bird moves by it.
@@ -607,9 +657,10 @@ btnext:
 
 ## Drawing
 
-Every shape goes through `rect` or `ellipse`, which take their two corners in `de` and `hl` and
-leave the colours to `bothcolours`. Painting happens back to front: sky, then ground, then pipes,
-then the bird, and finally command 13 to show the lot.
+Every shape goes through `rect` or `ellipse`, which take their two corners in `de` and `hl`; callers
+set the pen and fill with `bothcolours`. Painting happens back to front: sky, then pipes, then ground,
+then the bird, and finally command 13 to show the lot. Drawing the ground after the pipes covers
+their lower ends at the ground line.
 
 What byte coordinates cannot express is a pipe that is half off the left edge, because its x would
 have to be negative. `drawpipe` settles that before it draws anything. `sub MARGIN` gives the screen
@@ -943,6 +994,14 @@ scoremsg: .asciz "SCORE "
 overmsg:  .asciz "GAME OVER, SCORE "
 ```
 
+## Try changing the gap
+
+In the complete program below, change only `HALFGAP equ 32` to `HALFGAP equ 24`. Before building,
+work out the new top and bottom of a gap whose centre is 96, then find where `drawpipe` and
+`hittest` each use `HALFGAP`. Build and run the changed game: compare the visible opening with your
+calculation and check whether passing through it feels harder. Restore 32 when you want the
+original game back.
+
 ## The whole program
 
 Build this one and play it.
@@ -1005,7 +1064,7 @@ LIPH    equ 6
 LIPOUT  equ 3
 HALFGAP equ 32
 GAPMIN  equ 48          ; the highest the middle of a gap goes
-GAPSPAN equ 88          ; and how far below that it can be
+GAPSPAN equ 88          ; scales gap centres to 48 through 135
 COUNTX  equ 48          ; BIRDX + MARGIN - PIPEW: a pipe left of this is passed
 
 GRAV    equ 4           ; sixteenths of a pixel, per frame, per frame
@@ -1053,8 +1112,7 @@ newgame:
     call hud
 
 ; --- one frame ---------------------------------------------------------------
-; c carries "a flap began this frame" from the input read to the state machine,
-; so nothing called from here is allowed to touch it.
+; c carries "a flap began this frame" until the chosen state branch reads it.
 frame:
     call readflap
     ld c, a
@@ -1265,7 +1323,7 @@ randgap:
     ld a, h             ; the high byte, which is the half worth using
     ld de, GAPSPAN
     call mul8           ; hl = a * GAPSPAN
-    ld a, h             ; whose high byte is nought to GAPSPAN
+    ld a, h             ; high byte of the product: 0 to GAPSPAN-1
     add a, GAPMIN
     ret
 

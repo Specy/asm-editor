@@ -40,8 +40,7 @@ no_sub:
 For multiplication, `24` is `00011000` in binary. `srl a` sends its lowest bit into the **C
 flag** (the carry flag). `jr nc` means “jump if C is zero.” The first three bits are zero, so
 there is no addition on those passes. On the fourth pass, `de` has doubled three times from 365
-to 2920, and the multiplier bit is one, so `add hl, de` adds 2920. The fifth pass adds 5840. That gives
-8760. `sla e` shifts the low byte of `de` first and places its outgoing bit in the C flag;
+to 2920, and the multiplier bit is one, so `add hl, de` adds 2920. The fifth pass adds 5840. That gives 8760. `sla e` shifts the low byte of `de` first and places its outgoing bit in the C flag;
 `rl d` brings that bit into the high byte. Together they double the 16-bit value. After eight
 passes, `ex de, hl` moves the product to `de` so the division can use `hl`.
 
@@ -63,12 +62,12 @@ To see this with small numbers, change the division inputs to `ld hl, 13` and `l
 use **Step**. The loop still runs 16 times. The first 12 passes move leading zero bits out of
 the way, leaving `hl = D000` and `a = 00`. The final four passes are:
 
-| Pass | Bit taken from `hl` | `hl` after shift | `a` after `rla` | Compare with 3 | `hl` after quotient bit | `a` after pass |
-| ---- | ------------------- | ---------------- | --------------- | -------------- | ----------------------- | -------------- |
-| 13   | 1                   | `A000`           | `01`            | smaller: write 0 | `A000`                 | `01`           |
-| 14   | 1                   | `4000`           | `03`            | equal: subtract, write 1 | `4001`        | `00`           |
-| 15   | 0                   | `8002`           | `00`            | smaller: write 0 | `8002`                 | `00`           |
-| 16   | 1                   | `0004`           | `01`            | smaller: write 0 | `0004`                 | `01`           |
+| Pass | Bit taken from `hl` | `hl` after shift | `a` after `rla` | Compare with 3           | `hl` after quotient bit | `a` after pass |
+| ---- | ------------------- | ---------------- | --------------- | ------------------------ | ----------------------- | -------------- |
+| 13   | 1                   | `A000`           | `01`            | smaller: write 0         | `A000`                  | `01`           |
+| 14   | 1                   | `4000`           | `03`            | equal: subtract, write 1 | `4001`                  | `00`           |
+| 15   | 0                   | `8002`           | `00`            | smaller: write 0         | `8002`                  | `00`           |
+| 16   | 1                   | `0004`           | `01`            | smaller: write 0         | `0004`                  | `01`           |
 
 So `13 ÷ 3` leaves quotient 4 in `hl` and remainder 1 in `a`. Restore `1000` and `60`:
 after 16 passes, `hl = 0010` (16 minutes) and `a = 28` (40 seconds). The multiplication

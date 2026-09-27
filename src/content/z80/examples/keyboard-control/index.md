@@ -1,9 +1,12 @@
-A square you steer. The arrow keys set which way it is going and it keeps going that way on its own,
-coming back in at the opposite edge when it leaves the play area. **Click the Screen panel first**:
-the Screen only gets the keyboard when it has the focus, and a ring around it says so while it does.
+A square you steer. The arrow keys set its direction, and it keeps moving after you release them.
+When it leaves the play area, it reappears at the opposite edge. Choose **Build**, then **Run**,
+click the Screen panel so it has the keyboard focus, and press the arrows. A focus ring appears around
+the Screen. Press **Stop** when you are done; the program keeps running until you stop it.
 
-A bouncing ball drew a picture that changed on its own. This one asks the keyboard, once per frame,
-what is being held down right now, and the answer changes what the next frame will look like.
+As in A bouncing ball, the program draws and presents one picture per frame. After each frame it
+checks which arrows are held. For port `0x31`, put the port number in `c` and an arrow's key code in
+`b`, then use `in a, (c)`: `a` becomes 1 while that key is held, or 0 otherwise. The code checks
+left, right, up and down in turn, using their key codes `0x25` through `0x28`.
 
 ```z80|playground|open-screen|no-registers|no-flags|allow-open
 P_CHAR  equ 0x10
@@ -181,29 +184,32 @@ title:  .asciz "CLICK THE SCREEN, THEN STEER"
 { "runFor": 60000 }
 ```
 
-The four polls all use the same `c`, since the port never changes, and only `b` is reloaded between
-them. `in a, (c)` is the form that has to be used here, because the key code travels on the high
-half of the address bus, which is `b`, and the short `in a, (n)` form puts `a` there instead. The
-arrow keys are `0x25` for left, `0x26` for up, `0x27` for right and `0x28` for down.
+The four reads keep `c = P_KEY` and change `b` to select the next arrow. After each read, `or a`
+sets the zero flag if the key is not held, so `jr z` skips that arrow's direction change. The
+`in a, (c)` form matters here: `b` supplies the high byte of the I/O address, which this port uses
+as the key code. With `in a, (n)`, the old value of `a` supplies that byte instead.
 
-The keys do not move the square, they write `dx` and `dy` in memory, and the code under them moves
-it. That separation is what makes the square keep going after you let go, and it is how anything
-that moves in a game is written: the input decides the velocity, the frame applies it. The two lines
-that clear the other step, `xor a` and the `ld` under it, are what keep the movement to four
-directions; take those four pairs out and holding right and then up leaves both steps set, and the
-square goes diagonally.
+The key handlers store the horizontal and vertical steps in `dx` and `dy`; the movement code adds
+those stored steps to `boxx` and `boxy` every frame. Releasing a key leaves the steps alone, so the
+square keeps moving. Each handler also clears the other step with `xor a` and `ld`, keeping movement
+to one of the four directions.
 
-`jp p, off_right` is the one place a **signed** byte is read. `dx` is 6 or -6, and -6 is `FA`, whose
-top bit is 1, so `or a` followed by `jp p` asks which way the square was going when it left the play
-area, and that is what says which edge to bring it back in at. There is no `jr` form of `p`, so it
-is a `jp` whatever the distance.
+`RIGHT` is 216, the last X position where a 24-pixel square fits. After adding `dx`, `cp RIGHT + 1`
+keeps any proposed X below 217. A step left from X = 0 produces the byte `FA` (250): the negative
+result wraps around to a large unsigned byte, so that same comparison catches the left edge as
+well as the right. Once an edge is crossed, the code reads `dx` to choose where the square should
+reappear. The stored `-STEP` is `FA` in hexadecimal, with its top bit set. `or a` sets the sign flag
+from that bit without changing `a`; `jp p, off_right` jumps when the sign flag is clear, meaning
+the step was positive. The Z80 has no `jr p` form, so this condition uses `jp`.
 
-The `y` test needs two comparisons where the `x` test needs one, because the play area starts at 16
-and not at the top of the Screen. The two text rows above it hold the title, which is printed once
-before double buffering is turned on and then never touched again. Command 11 makes the off-screen
-image start as a copy of what is on screen, and every frame clears only the rectangle below the
-title, so those two rows survive for as long as the program runs.
+The play area starts at Y = `TOP = 16`, below two reserved 8-pixel text rows. The title occupies
+the first of those rows; the second stays blank. An upward step below 16 can still be a small byte,
+so Y needs one
+comparison with `TOP` and another with `BOTTOM + 1` to catch both edges. The title is printed
+before command 11 turns on double buffering. That command starts the off-screen image as a copy of
+the visible one, and each frame clears only the rectangle from Y = 16 down. The title stays in
+place while the square is redrawn.
 
-Polling every frame is enough for keys held down. What port `0x31` does not tell you is that a key
-was pressed **again**, which is why a game that wants one action per press keeps the last answer and
-compares, or reads port `0x32`, the code of the last key pressed.
+Try allowing diagonal movement. How would you change the key handlers so a horizontal arrow
+changes only `dx`, and a vertical arrow changes only `dy`? After editing, Build and Run, click the
+Screen, then hold right and up together. Watch how the square behaves at both edges.

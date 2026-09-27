@@ -48,12 +48,12 @@ to be the left byte of the next comparison.
 
 For example, with `hl = 9000` and the pair `42, 8`, the swap takes these steps:
 
-| Point in the code | `hl` | Bytes at `9000 9001` |
-| --- | --- | --- |
-| Before `ld a, (hl)` | `9000` | `2A 08` |
-| After `inc hl` | `9001` | `2A 08` |
-| After `ld (hl), a` | `9001` | `2A 2A` |
-| After `dec hl`; `ld (hl), d`; `inc hl` | `9001` | `08 2A` |
+| Point in the code                      | `hl`   | Bytes at `9000 9001` |
+| -------------------------------------- | ------ | -------------------- |
+| Before `ld a, (hl)`                    | `9000` | `2A 08`              |
+| After `inc hl`                         | `9001` | `2A 08`              |
+| After `ld (hl), a`                     | `9001` | `2A 2A`              |
+| After `dec hl`; `ld (hl), d`; `inc hl` | `9001` | `08 2A`              |
 
 `cp (hl)` sets the C flag when the unsigned left byte is strictly smaller than the right byte.
 Then `jr c, in_order` skips the swap because the pair is already ascending. Equal bytes do not set

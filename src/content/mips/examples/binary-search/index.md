@@ -60,12 +60,12 @@ the program makes a byte offset, adds it to the base address, and loads from tha
 
 Follow the four reads for 91. Each row shows the range just before the middle word is loaded:
 
-| `low` | `high` | `mid` | Middle word | Next step |
-| ----: | -----: | ----: | ----------: | --------- |
-| 0     | 11     | 5     | 23          | Set `low` to 6 |
-| 6     | 11     | 8     | 72          | Set `low` to 9 |
-| 9     | 11     | 10    | 100         | Set `high` to 9 |
-| 9     | 9      | 9     | 91          | Save index 9 |
+| `low` | `high` | `mid` | Middle word | Next step       |
+| ----: | -----: | ----: | ----------: | --------------- |
+|     0 |     11 |     5 |          23 | Set `low` to 6  |
+|     6 |     11 |     8 |          72 | Set `low` to 9  |
+|     9 |     11 |    10 |         100 | Set `high` to 9 |
+|     9 |      9 |     9 |          91 | Save index 9    |
 
 Select **Build** and **Run**. `$t4` should show `00000009` in the register panel. Index 9 is the
 tenth position because indices begin at zero.

@@ -1,4 +1,4 @@
-The whole ladder in one program. A snake of green squares crosses a board of 15 by 11 cells, the
+A complete game in one program. A snake of green squares crosses a board of 15 by 11 cells, the
 arrow keys steer it, it grows by one segment every time it reaches the food, and it ends when its
 head leaves the board or runs into its own body. The score sits above the board while you play and
 the last one goes into the transcript when you lose.
@@ -13,8 +13,8 @@ the bottom, ready to build and play.
 
 The board is 15 columns by 11 rows, and a position on it is **one byte**: the column in the high
 four bits and the row in the low four, so `0x35` is column 3, row 5. Four bits hold a number up to
-15, which is what caps the board, and the Screen settles the rest: fifteen columns of 16 pixels is
-the 240 the Screen is resized to, and eleven rows of 16 fill what is left under the two text rows.
+15, which is enough for this board. Fifteen columns of 16 pixels make the Screen 240 pixels wide;
+eleven rows of 16 pixels sit below two text rows of 8 pixels each.
 
 Packing it this way is what makes the game cheap to write. Comparing two positions is a single `cp`.
 A position that took a whole pair would need an `or a` and an `sbc hl, de` every time the snake
@@ -101,7 +101,8 @@ frame:
 ## The arrows, and the turn you are not allowed to make
 
 The arrows do not move the snake. They call `try_direction`, which writes `dx` and `dy`, and the
-move happens later in the frame from whatever those two say.
+move happens later in the frame from whatever those two say. The pair means a step in cells:
+left is (-1, 0), up is (0, -1), right is (1, 0), and down is (0, 1).
 
 `try_direction` refuses one thing: a direction that is the exact opposite of the way the snake is
 already going. `dx + nx` and `dy + ny` are both zero only when the new direction is backwards, and
@@ -218,18 +219,8 @@ moved:
 ## Hitting yourself, and finding the food
 
 The self collision is the single `cp` the packing bought: walk the body from the second segment on
-and compare each one against the head.
-
-The food goes wherever a sixteen bit **xorshift** says. Three shifts and three `xor` instructions
-turn one number into the next of a sequence that visits all 65535 non-zero values before it repeats,
-which is as close to random as a program with no dice can get. Two of the three shifts cost almost
-nothing here: `x ^ (x << 8)` only changes the high byte, because the low half of `x << 8` is all
-zero, and `x ^ (x >> 9)` only changes the low byte for the same reason. Only the `x << 7` needs a
-loop.
-
-The column is masked down to four bits and the one value over the edge of the board is folded back
-onto the first column, and the row is folded the same way, which is why the first five rows come up
-about twice as often as the other six.
+and compare each one against the head. If the head reaches the food, increase the score, copy the
+last segment into a new slot if there is room, and choose another food cell.
 
 ```z80
 ; --- did it run into itself --------------------------------------------------
@@ -277,11 +268,19 @@ The board is wiped with a rectangle that starts at `TOP` rather than with comman
 clear the whole image including the score. Then one red square for the food, one green square per
 segment, and command 13 to show the lot.
 
-The score goes out through the console character and number ports, the same ones Print a string
-used, so it appears on the Screen and in the transcript at once. The Screen has no text command of
-its own, so those two rows above the board are the only place text can go. `draw_score` runs at the
-start and once per point, which leaves the transcript with one line per score instead of one per
-frame.
+The score goes out through the character and number ports, the same ones Print a string used, so it
+appears on the Screen and in the transcript at once. The cursor ports put it in the two 8-pixel text
+rows above the board. `draw_score` runs at the start and once per point, which leaves the transcript
+with one line per score instead of one per frame.
+
+`place_food` uses two values from a **pseudorandom** sequence: one supplies a column and the next
+supplies a row. `next_random` updates a 16-bit value with shifts and `xor`, then saves it for the
+next call. The initial `seed` is fixed, so each new game follows the same sequence.
+
+Each coordinate starts as a four-bit number from 0 to 15. A column of 15 folds to 0; rows 11 to
+15 fold to 0 to 4. That gives column 0 two possible inputs and each of rows 0 to 4 two possible
+inputs, so those cells are favoured. The routine also does not inspect `body`: food can appear under
+the snake and be hidden by a green segment until that segment moves away.
 
 ```z80
 no_meal:
@@ -391,7 +390,7 @@ draw_score:
     out (P_CHAR), a
     ret
 
-; place_food(): a cell nobody chose, out of a sixteen bit generator
+; place_food(): choose a board cell from the pseudorandom sequence
 place_food:
     call next_random
     ld a, l
@@ -469,6 +468,11 @@ body:   .db 0x35, 0x25, 0x15
 label:  .asciz "SCORE: "
 over:   .asciz "GAME OVER, SCORE: "
 ```
+
+Try two small changes after you have played:
+
+1. Start with `body` as `0x35, 0x25, 0x15`, moving right. On paper, write the three bytes after one frame with no turn and no food eaten. Trace the backward copy before you work out the new head.
+2. Change `PACE` from 12 to 6 and run the game again. How does the time between moves change? Try another value that makes it comfortable to steer.
 
 ## The whole program
 
@@ -765,7 +769,7 @@ draw_score:
     out (P_CHAR), a
     ret
 
-; place_food(): a cell nobody chose, out of a sixteen bit generator
+; place_food(): choose a board cell from the pseudorandom sequence
 place_food:
     call next_random
     ld a, l

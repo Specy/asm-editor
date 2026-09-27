@@ -1,10 +1,19 @@
-A ball crosses the screen and turns round at every edge, and a bar along the top grows with the time
-the program has been running. It never stops on its own: press Run, watch it, and press Stop when
-you have had enough.
+A ball moves across the Screen and turns at each edge. A bar along the top grows as time passes,
+then starts again when its one-byte time value wraps to zero. Choose **Build**, then **Run** to
+watch the animation in the Screen panel. Press **Stop** when you are done; the program keeps running
+until you stop it.
 
-Drawing shapes on the screen drew one picture and stopped. This one draws a new picture forty or
-fifty times a second, which brings two problems with it: the reader must never see a half drawn
-frame, and the ball must move at the same speed whatever the machine underneath is doing.
+Drawing shapes on the screen made one picture. This program repeats four steps for each new
+picture, or **frame**:
+
+1. Clear the off-screen image.
+2. Draw the ball and the time bar on it.
+3. Present the finished image all at once.
+4. Wait for the next display frame before moving the ball and starting again.
+
+Command 11 turns on **double buffering**, so drawing goes to an off-screen image. Command 13
+presents that image. The viewer sees complete pictures instead of the clear and the partly drawn
+ball.
 
 ```z80|playground|open-screen|no-registers|no-flags|allow-open
 P_PEN   equ 0x20
@@ -56,7 +65,7 @@ frame:
     ld a, C_ELLIPSE
     out (P_CMD), a      ; the ellipse that fits in that box, which is a circle
 
-    ld b, 0             ; byte 0 of the time, the lowest eight bits
+    ld b, 0             ; select the lowest byte of the time value
     ld c, P_TIME
     in a, (c)           ; hundredths of a second since the run started
     ld e, a             ; the bar's right hand end
@@ -81,7 +90,7 @@ frame:
     ld a, (ballx)
     add a, (hl)         ; x = x + dx
     cp LIMITX
-    jr c, keepx         ; still inside
+    jr c, keepx         ; proposed x is below LIMITX
     ld a, (hl)
     neg
     ld (hl), a          ; dx = -dx, turning it round at the edge
@@ -113,31 +122,39 @@ stepy:  .db 2
 { "runFor": 60000 }
 ```
 
-The frame is four steps and they are always in this order: clear the image, draw everything on it,
-show it with command 13, and wait for the next frame. Command 9 is the clear, and it wipes text and
-graphics together, because they are one image. Without command 11 at the top the same four steps
-would draw straight onto what you are looking at, and you would watch the screen go blue and the
-ball appear, forty times a second, which is what flicker is.
+Command 9 clears the off-screen image to `SKY`. It clears text and graphics together because they
+share one image. The ball's X and Y coordinates are its upper-left corner. Both dimensions of its
+bounding box use `SIZE`, so command 6 draws a circular ellipse. The rectangle command adds the
+bar, and command 13 presents the completed frame.
 
-`in a, (P_FRAME)` is the pacing. Reading port `0x51` suspends the program until the display's next
-frame and gives back 0, so one read per pass is what makes the ball move at the same speed on a fast
-machine and a slow one. It suspends the program without freezing the editor, so Stop still answers
-and the Screen still repaints, and inside a testcase it returns at once so a test of an animation
-does not take a minute.
+`in a, (P_FRAME)` paces the loop. Reading port `0x51` waits for the next display frame and returns
+0. One read per pass prevents a fast machine from racing through the animation. The editor stays
+responsive while the program waits, so Stop still works. In a testcase the read returns at once,
+letting an animation test finish without waiting for real time.
 
-Port `0x52` is the same clock read a different way: it gives one byte of the hundredths of a second
-since the run started, and **`b` chooses which byte**, so `ld b, 0` asks for the lowest eight bits.
-That byte is the width of the bar, and it wraps back round to zero all by itself, because a byte
-counts to 255 and the Screen is 256 pixels wide. No arithmetic is needed to keep the bar on screen:
-the size of the register does it.
+Port `0x52` gives the elapsed time in hundredths of a second. This read uses the Z80's `in a, (c)`
+form: `c` holds the port number `0x52`, while `b`, the high byte of the port address, selects which
+byte of the clock to read. `ld b, 0` selects the lowest byte. The code uses that byte as the bar's
+right edge, starting at X = 0. Its value rises from 0 to 255, then wraps to 0 and the bar begins
+growing again. No separate reset is needed.
 
-The ball's position and step are four bytes in memory, because the drawing already uses `a` for
-every `out`, `b` and `c` for the time port and `e` to carry the bar's width across it.
-`ld hl, stepx` and `add a, (hl)` is the step being read where it lies, and the three instructions
-under the `jr c` negate it in place, which turns the ball round without either edge knowing which
-way it was going.
+The ball's X and Y positions and their steps are four bytes in memory. Each pass proposes a new
+position by adding its step. `stepx` begins at `3`; after `neg`, it holds 253 (`0xFD`), the
+two's-complement byte pattern for `-3`.
+`ld hl, stepx` lets `add a, (hl)` read that step directly from memory. The Y code does the same with
+`stepy`.
 
-`cp LIMITX` catches both edges with one unsigned comparison. A step that would take `x` past 232
-fails it the obvious way, and a step that would take `x` below zero wraps the byte round past 250,
-which fails it as well. `LIMITX equ 256 - SIZE` is worked out by the assembler out of the Screen
-width and the ball, so neither number appears anywhere else.
+`LIMITX` is `256 - SIZE`, or 232. After `cp LIMITX`, `jr c, keepx` runs when the proposed X is
+**unsigned less than 232**: the comparison needed a borrow, so the carry flag is set. If X is 231
+and the step is `+3`, the proposal is 234. It is too far right, so the branch is skipped. The code
+negates the step and keeps the old X for this frame.
+
+The same test catches the left edge. If X is 1 and the step is `-3`, the byte addition is
+`1 + 253 = 254`: the proposed position has wrapped around from below zero. As an unsigned byte,
+254 is also above the limit, so the code
+negates the step back to `+3` and leaves X at 1. The Y test works in the same way with `LIMITY`,
+which is `192 - SIZE`, or 168. Keeping each proposed coordinate below its limit also lets the
+second corner, position plus `SIZE`, fit in one byte.
+
+Try changing `stepx: .db 3` to `.db 5`, then Build and Run again. The ball should travel farther
+across the Screen on each frame, while the bar still follows elapsed time.
