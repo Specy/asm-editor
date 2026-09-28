@@ -1,47 +1,64 @@
-Four questions about one number, none of them answered with arithmetic. Is 182 odd, what is it times
-eight, what are its bottom four bits, and how many of its 32 bits are ones. The answers land in `d1`
-to `d4`.
+This program asks four questions about 182: Is it odd? What is it times eight? What are its lowest
+four bits? How many of its 32 bits are ones? It leaves the answers in `d1` through `d4`.
 
-Arithmetic treats a register as a number. All four of these treat the same register as 32 bits side
-by side, which is the other way to read one, and usually the cheaper way.
+The same value, `$B6` or `%10110110`, supplies every answer. A bit test answers the first question,
+a left shift multiplies it, a mask extracts four bits, and a loop counts the ones.
 
-```m68k|playground|no-flags|allow-open
-    move.l #182, d0     ; n = 182, which is %10110110
+```m68k|playground|allow-open
+    move.l #182, d0     ; n = 182, or %10110110
 
-    btst #0, d0         ; is the lowest bit set?
-    sne d1              ; d1 = $FF when n is odd, $00 when it is even
+    clr.l d1            ; give the whole result register a known value
+    btst #0, d0         ; test the lowest bit; Z=1 if it is zero
+    sne d1              ; low byte = $FF if odd, $00 if even
 
     move.l d0, d2
-    lsl.l #3, d2        ; n * 8, three places left is eight times
+    lsl.l #3, d2        ; shift left three places: n * 8
 
     move.l d0, d3
-    andi.l #$0F, d3     ; the low nibble on its own
+    andi.l #$0F, d3     ; keep only the lowest four bits
 
-    clr.l d4            ; bits = 0
-    move.l d0, d5       ; a copy to take apart
-    move.w #31, d6      ; 32 bits, so 31
+    clr.l d4            ; count of one bits starts at zero
+    move.l d0, d5       ; shift a copy, keeping d0 intact
+    move.w #31, d6      ; 32 passes with dbra
 count:
-    lsr.l #1, d5        ; the lowest bit falls into C
-    bcc no_bit
-    addq.l #1, d4       ; bits++
+    lsr.l #1, d5        ; the bit leaving the low end goes into C
+    bcc no_bit          ; skip the addition if that bit was zero
+    addq.l #1, d4
 no_bit:
     dbra d6, count
 ```
 
-`btst #0, d0` asks about the lowest bit without building a mask to do it, and it sets `Z` from the
-bit it found: `Z` goes to 1 when the bit **was 0**, which is backwards from what you expect the first
-time. `sne d1`
-reads it the other way round again and leaves `$FF` when the bit was a 1, so `d1` is `00000000` here
-because 182 is even.
+`btst #0, d0` tests bit 0, the lowest bit, without changing `d0`. It sets `Z=1` when that bit is
+zero. `sne` means “set if not equal,” or `Z=0`, so it writes `$FF` for an odd number and `$00` for
+an even one. It writes only the low byte of `d1`; `clr.l d1` makes the other three bytes zero.
 
-Shifting left by three multiplies by eight, since every place a bit moves left doubles what it is
-worth. `d2` comes out at `000005B0`, which is 1456. A shift by a constant takes a count from 1 to 8
-and no more; past that you put the count in a register, `lsl.l d1, d2`.
+Each left shift doubles the value while no set bit falls off the high end. Three shifts make
+`182 × 8 = 1456`. The `andi.l #$0F, d3` mask keeps bits 0 through 3 and clears the rest. Those
+four bits are `%0110`, or 6.
 
-`andi.l #$0F, d3` keeps the four bits the mask has set and clears everything else, so `d3` is 6, the
-`6` of `$B6`. That is how any field is taken out of a packed value: mask what you want, then shift it
-down to the bottom if it was not there already.
+The loop checks every bit of the 32-bit copy in `d5`. After each `lsr.l`, `C` holds the bit that
+fell off the low end; `bcc` branches when `C=0`. Five bits of 182 are ones, so the addition runs
+five times. `dbra` starts with 31 in the low word of `d6`, giving 32 passes as it counts down
+through zero. On its last pass, that low word becomes `$FFFF` and the loop ends.
 
-The loop runs 32 times, once per bit, and never tests a bit directly. `lsr.l #1, d5` moves every bit
-one place down and the bit that falls off the bottom lands in `C`, so `bcc` skips the `addq` when
-that bit was a zero. The shifting and the testing are the same instruction.
+Select **Build**, then **Run**. At the end, the register panel displays hexadecimal values without
+a `$` prefix: `d1=00000000` (even), `d2=000005B0` (1456), `d3=00000006` (lowest four bits), and
+`d4=00000005` (five one bits). The final low word of `d6` is `FFFF`.
+
+To follow the flags, select **Build** again and use **Step**. Check `Z` immediately after `btst`;
+then check `C` immediately after a `lsr.l` in the loop. Later instructions change the flags, so
+inspect each flag before stepping past the instruction that set it.
+
+## Try it
+
+Change the starting value to 183. Predict `d1` through `d4`, then select **Build** and **Run** to
+check them. Which answers change when only bit 0 changes from zero to one?
+
+<details>
+<summary>Show answer</summary>
+
+All four change: `d1=000000FF` (odd), `d2=000005B8` (1464), `d3=00000007`, and
+`d4=00000006`. The new bit 0 makes the number odd and adds one to the bit count; it also changes
+the low nibble and the product.
+
+</details>

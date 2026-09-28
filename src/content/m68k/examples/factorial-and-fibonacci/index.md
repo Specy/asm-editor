@@ -1,9 +1,9 @@
-Two subroutines that call themselves. `factorial(8)` comes back as 40320 in `d6`, and `fib(10)` comes
-back as 55 in `d7`, and neither of them has a loop anywhere: the repetition is the calls.
+`factorial(8)` calls `factorial(7)`, which calls `factorial(6)`, and so on until it reaches 1.
+On the way back, each call multiplies the answer by its own `n`. `fib(10)` also calls itself,
+but each call above 1 needs two answers: `fib(n - 1)` and `fib(n - 2)`.
 
-Recursion needs no instruction you have not already seen. `link` subtracts from wherever `sp`
-happens to be at the time, so every call gets a frame of its own at a fresh address, and `8(a6)`
-always means the argument of the call you are inside right now.
+Both routines take a nonnegative long argument on the stack and return a long in `d0`. Each
+invocation gets its own stack frame, so it can still find its argument after a deeper call returns.
 
 ```m68k|playground|memory|no-flags|allow-open
     move.l #8, -(sp)        ; n = 8
@@ -59,22 +59,52 @@ fib_done:
 end:
 ```
 
-The `move.l 8(a6), d1` after the inner call is the line that shows what a frame is for. `n` was in
-`d0` before the call and the call destroyed it, so the subroutine reads it again out of the frame
-that belongs to this call, at an address seven other calls are not using. A local variable at a
-fixed address would be shared by every call and overwritten by the second one.
+## Run both calls
 
-`factorial` takes twelve bytes of stack per call: four for the argument the caller pushes, four for
-the return address `bsr` pushes and four for the `a6` that `link` pushes. Step into the calls and
-`a7` drops by twelve at each one, down to `00FFFFA0` at the deepest, where `n` is 1 and the recursion
-turns round. `fib` takes sixteen, because of the long of local room it asked for.
+Select **Build**, then **Run**. The registers panel shows `d6 = 00009D80` (40320) and
+`d7 = 00000037` (55). It also shows `a7`, the stack pointer, back at `01000000`.
+The caller removes each argument after its subroutine returns, while `unlk` restores that
+invocation's frame before `rts` returns to the caller.
 
-`fib` is the expensive one. `fib(n)` calls itself twice, so the number of calls roughly doubles for
-every 1 you add to `n`, and the whole program comes to 2137 instructions for a number a loop and two
-registers would have reached in a few dozen.
+## Follow a factorial call
 
-`factorial` has a ceiling, and it is worth going and finding. Change `move.l #8, -(sp)` to
-`move.l #9, -(sp)` and `d6` comes out at `00058980`, which is 362880 and correct. Change it to
-`move.l #10, -(sp)` and `d6` comes out at `00055F00`, which is 352000 and simply wrong. `mulu`
-multiplies two **words**, and 362880 has already outgrown one, so the tenth multiplication threw
-away the top of its input. Nothing was reported.
+Select **Build** again, then use **Step**. The playground begins with `a7 = 01000000`.
+Step through the first `link a6, #0`: the caller's argument, the return address from `bsr`,
+and the saved `a6` occupy three longs. At this point `a7` and `a6` are `00FFFFF4`, and
+`8(a6)` contains 8. Each recursive invocation uses another 12 bytes for those same three
+longs. At the `link` for `n = 1`, `a7` reaches `00FFFFA0`.
+
+Step back out until you reach `move.l 8(a6), d1` in the call where `n = 2`. Its inner call
+returned 1 in `d0`. Reading `8(a6)` retrieves this invocation's 2, so `mulu` makes `d0 = 2`.
+The same pattern continues for 3 through 8. Each invocation has its own argument and saved
+`a6`; `unlk` restores the caller's `a6` as the calls return.
+
+## Follow the two Fibonacci calls
+
+In `fib`, `link a6, #-4` also reserves one local long at `-4(a6)`. Step through a call with
+`n = 2`. The first inner call returns `fib(1) = 1`, which is stored at `-4(a6)`. The next
+inner call returns `fib(0) = 0` in `d0`. The final `add.l` reads the saved 1 and returns
+`fib(2) = 1`. The local belongs to this invocation, so deeper calls can use their own
+`-4(a6)` without changing it. Including the argument, return address, saved `a6`, and local,
+each active `fib` invocation uses 16 bytes of stack.
+
+These two recursive calls repeat some work: for example, `fib(10)` reaches `fib(8)` both
+through `fib(9)` and through its direct `fib(n - 2)` call.
+
+## Try a different factorial
+
+Change the first push to `move.l #9, -(sp)`. Before running, predict `d6` and whether `a7`
+will finish at its starting value. Select **Build**, then **Run** to check.
+
+<details>
+<summary>Show answer</summary>
+
+`d6` is `00058980` (362880), and `a7` is `01000000`.
+
+</details>
+
+Nine is the largest input for which this routine gives the mathematical factorial. `mulu`
+multiplies only the low 16-bit word of each operand, then writes the 32-bit product to `d0`.
+For `9!`, the input from `8!` is 40320, which still fits in a word. For `10!`, the input from
+`9!` is 362880 (`00058980`): its low word is only `8980` (35200). The last multiplication
+therefore computes `10 × 35200 = 352000`, leaving `d6 = 00055F00` instead of `10!`.

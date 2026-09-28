@@ -1,14 +1,20 @@
-The whole ladder in one program. A snake of green squares crosses a board of 32 by 24 cells, the
-arrow keys steer it, it grows by one segment every time it reaches the food, and it ends when its
-head leaves the board or runs into its own body. The score is drawn on the screen while you play and
-printed to the console when you lose.
+Build and play Snake on a board of 32 columns by 24 rows. Choose **Build**, then **Run**. Click
+inside the **Screen** so it has keyboard focus, then use the arrow keys to steer. The snake keeps
+moving after you release a key. Reaching food adds one point and grows the snake; hitting a wall or
+its own body ends the game. **Game over** appears on the Screen and the final score appears in the
+console. Choose **Run** again to restart, or **Stop** when you are done.
 
-**Click the Screen panel before you press a key**, and press Run again to play another game.
+The listing is long because it includes input, movement, drawing and a score. Read it first as one
+pass through `frame`:
 
-Nearly everything in here has turned up on its own somewhere earlier: an array walked with a pointer,
-subroutines, a number turned into text, a frame drawn off screen and shown all at once. The idea that
-only becomes visible at this size is that the program does not think in pixels at all. It thinks in
-**cells**, and pixels happen at the last possible moment.
+| Part | What happens each frame |
+| --- | --- |
+| Input | Poll the arrows; keep the last accepted direction. |
+| Movement | Shift the body, move the head one cell, then check for a wall, body or food. |
+| Picture | Clear the hidden image, draw food, snake and score, show it, then wait. |
+
+Positions are **board cells** until `draw_cell` converts them to pixels. Each cell is 20 pixels
+wide, so the 32 by 24 board fills the 640 by 480 Screen.
 
 ```m68k|playground|open-screen|console|no-registers|no-flags|allow-open
 COLS    equ 32              ; the board in cells
@@ -141,7 +147,7 @@ draw_body:
     trap #15                ; the frame becomes visible here, all at once
     move.b #23, d0
     move.l #12, d1
-    trap #15                ; twelve hundredths of a second of program time
+    trap #15                ; wait twelve hundredths of a second per frame
     bra frame
 
 game_over:
@@ -233,7 +239,7 @@ score_digit:
     trap #15
     rts
 
-* place_food(): a cell nobody chose, out of a sixteen bit generator
+* place_food(): select a board cell from a sixteen bit generator
 place_food:
     bsr next_random
     andi.w #COLS-1, d0      ; a column, 0 to 31
@@ -284,45 +290,77 @@ score_end:
 { "runFor": 20000 }
 ```
 
-## The board is cells, not pixels
+## One word per cell
 
-`body` is an array of words, one per segment, with the head at `body[0]`, and a segment is a cell:
-`$050C` is column 5, row 12. Packing the two into one word is what makes a comparison between two
-cells a single `cmp.w`, which the self collision test does once per segment.
+`body` holds one word per segment. The first word, `body[0]`, is the head; `length` says how many
+words are in use. In each word the high byte is the column and the low byte is the row:
 
-## Moving is shifting
+| Word | Column | Row |
+| --- | ---: | ---: |
+| `$050C` | `$05` = 5 | `$0C` = 12 |
+| `$040C` | `$04` = 4 | `$0C` = 12 |
 
-The snake moves by shifting: every segment takes the place of the one in front of it, from the tail
-backwards so that nothing is overwritten before it has been read, and then the head is given its new
-cell. The tail therefore disappears from where it was without any code saying so. Growing is one
-extra word: the new last segment is put on top of the old one, so for one frame two segments sit in
-the same cell and the shift pulls them apart on the next.
+The starting head is therefore at column 5, row 12, with two segments behind it. Packing a cell
+this way lets `cmp.w` check whether the head and a body segment occupy the same place.
 
-The head's new cell is the old one plus the direction, and `dx` and `dy` are counted in cells, so
-they are 1, 0 or -1. The four wall tests are what turn a cell that left the board into the end of the
-game, and they have to run before the head is packed back into a byte, since `lsr.w #8, d4` cannot
-tell -1 from 255.
+## Follow one move
 
-## Steering, and the turn it will not let you make
+The initial `length` is 3, `dx` is 1 and `dy` is 0. Before the first move, the body words are
+`[$050C, $040C, $030C]`. The shift loop starts at the tail: it copies `body[1]` to `body[2]`,
+then `body[0]` to `body[1]`. `dbra` makes those two copies. Finally the code adds the direction
+to the old head and writes `$060C` into `body[0]`. The new body is
+`[$060C, $050C, $040C]`. Copying backward preserves each old cell until it is needed; the old
+tail at `$030C` disappears.
 
-The arrows do not move the snake, they call `try_direction`, and it refuses a direction that is the
-exact opposite of the one the snake is going: `dx + nx` and `dy + ny` are both zero only when the new
-way is backwards, and turning back means eating your own neck on the next frame.
+The code unpacks the old head into X and Y before adding `dx` and `dy`. It tests the new coordinates
+against columns 0–31 and rows 0–23 before packing them again. A negative coordinate must be caught
+here: squeezing -1 into an eight-bit coordinate would lose the fact that it crossed an edge.
+After writing the new head, the collision loop starts at `body+2`, which is `body[1]`. It compares
+the head with each body segment and skips `body[0]` because that is the head itself.
 
-## Food out of arithmetic
+If the new head reaches food, `score` increases. When there is room below `MAXLEN`, the code copies
+the current last segment into one new word and increases `length`. The last two segments overlap
+for this frame; the next backward shift separates them as the snake moves.
 
-The food goes wherever a sixteen bit **xorshift** generator says. Three shifts and three `eor`
-instructions turn a number into the next one of a sequence that never repeats until it has been
-through all 65535 of them, which is as random as a program with no clock and no dice can be. The
-column is a mask, since 32 is a power of two, and the row is the remainder of a `divu` by 24.
+## Arrow keys and food
 
-## One frame
+Task 19 receives the packed key codes `$25262728`: left, up, right and down, one byte each. Its
+answer uses the same byte order, with `$FF` for a held key and `$00` otherwise. The four `btst`
+instructions inspect bits 24, 16, 8 and 0 of that answer. For instance, a held left arrow sets bit
+24. A direction remains in `dx` and `dy` until an accepted arrow changes it.
 
-A frame is a clear, the food, one square per segment, the score and then task 94, which shows the
-whole thing at once, and task 23 sets the pace at twelve hundredths of a second per cell. The score
-is drawn by the digits loop of Print a number in any base without help, and the same number goes to
-the console through task 17 when the game ends.
+`try_direction` rejects a turn straight back. While the snake moves right, its direction is
+`(dx, dy) = (1, 0)`. A left press proposes `(-1, 0)`. Both sums, `1 + (-1)` and `0 + 0`, are
+zero, so the routine leaves the direction alone. An up press proposes `(0, -1)`, whose sums are
+not both zero, and turns the snake upward.
 
-The sequence is fixed entirely by where it starts, so two runs of the same program deal the food in
-exactly the same order. That is a nuisance when you want variety and a gift when you are chasing a
-bug, because the game that went wrong can be played again.
+`place_food` uses the saved `seed` to generate two new values. It masks one value to get a column
+from 0 to 31. It divides the other by 24: after `divu`, the remainder is in the high word, so
+`swap` brings it down to obtain a row from 0 to 23. The routine does **not** check the body; a
+new food cell can land on a segment. The fixed starting seed makes the sequence repeat on each run.
+
+## Draw the frame
+
+The board position becomes pixels only in `draw_cell`: column 5 becomes X = `5 × 20 = 100`, and
+row 12 becomes Y = `12 × 20 = 240`. Task 87 fills a square at those coordinates. Each frame clears
+the hidden image, draws the food and all `length` body cells, then draws the score. Task 94 shows
+that complete image at once. Task 23 waits at least 12 hundredths of a second (0.12 seconds) before
+the next frame; drawing and instructions also take time. `draw_score` builds the decimal digits
+backward in `score_buffer`. At game over, task 17 writes the final score to the console.
+
+## Try a different food colour
+
+Screen colours use `$00BBGGRR`: blue is the highest colour byte, and red is the lowest. Change
+`FOOD` from `$000040FF` to `$00FF0000` (blue `$FF`, green `$00`, red `$00`). Before choosing
+**Build** and **Run** again, predict what will change on the Screen and what will happen to the
+score when the head reaches food. Click the Screen to steer, then choose **Stop** when you are done.
+Restore the original value afterward.
+
+<details>
+<summary>Show what to expect</summary>
+
+The food squares become blue. The snake stays green, and reaching food still increases the
+score by one: `FOOD` is passed to the drawing tasks as a colour, while the food's board cell is
+stored separately in `food`.
+
+</details>

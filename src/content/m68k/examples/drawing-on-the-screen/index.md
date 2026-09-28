@@ -1,10 +1,10 @@
-A picture in seven shapes: two rectangles for the sky and the ground, an ellipse for the sun, a
-rectangle with an outline for the house, three lines and a flood fill for its roof, one more
-rectangle for the door and a line of text under it. Press Run and watch the Screen panel next to the
-program.
+This program draws a house under a sun. Choose **Build**, then **Run**, and look at the Screen
+panel: you should see blue sky, green ground, a round sun, a house with a white outline, a red roof,
+a door and a label below it. The program draws these parts in that order, so later parts appear over
+earlier ones.
 
-Every shape is one `trap #15`, with its numbers in `d1` to `d4`. Nothing is written to an address:
-there is no block of memory that is the picture.
+Each drawing request puts a task number in `d0.b` and its arguments in registers, then calls
+`trap #15`. The Screen holds the picture; the program does not store its pixels in M68K memory.
 
 ```m68k|playground|open-screen|no-registers|no-flags|allow-open
 SKY     equ $00E0B070       ; a colour is $00BBGGRR: blue, green, then red
@@ -21,7 +21,7 @@ WHITE   equ $00FFFFFF
     move.l #0, d2           ; top
     move.l #640, d3         ; right
     move.l #320, d4         ; bottom
-    move.b #87, d0          ; task 87: a filled rectangle, the sky
+    move.b #87, d0          ; task 87: a filled rectangle
     trap #15
 
     move.l #GRASS, d1
@@ -39,7 +39,7 @@ WHITE   equ $00FFFFFF
     move.l #40, d2
     move.l #600, d3
     move.l #140, d4
-    move.b #88, d0          ; task 88: a filled ellipse in a square box, the sun
+    move.b #88, d0          ; task 88: a filled ellipse in this square box
     trap #15
 
     move.l #WALL, d1
@@ -78,7 +78,7 @@ WHITE   equ $00FFFFFF
     trap #15
     move.l #320, d1
     move.l #170, d2
-    move.b #89, d0          ; task 89: a flood fill out from a point inside
+    move.b #89, d0          ; task 89: fill from a point inside the roof
     trap #15
 
     move.l #DOOR, d1
@@ -102,7 +102,7 @@ WHITE   equ $00FFFFFF
     move.b #9, d0
     trap #15
 
-* both_colours(c): the fill and the pen both become the colour in d1
+* both_colours: set both fill and pen to the colour in d1.l
 both_colours:
     move.b #81, d0
     trap #15
@@ -111,38 +111,63 @@ both_colours:
     rts
 
     org $3000
-label: dc.b 'Seven shapes and a line of text', 0
+label: dc.b 'A house under the sun', 0
 ```
 
-A colour is a long written `$00BBGGRR`, blue in the high byte and red in the lowest, which is
-backwards from the `#RRGGBB` of CSS. `SKY equ $00E0B070` is therefore
-`rgb(112, 176, 224)`, a pale blue.
+## Colours and corners
 
-A rectangle and an ellipse take the same four numbers, the corners of a box: `d1` and `d2` are its
-left and top, `d3` and `d4` its right and bottom, and the ellipse is the one that fits inside that
-box, so a square box draws a circle. Both of them fill with the fill colour and outline with the
-pen, which is why `both_colours` exists: when the two are the same the shape has no rim, and the
-sky, the grass, the roof and the door are drawn that way. The house sets them apart, `WALL` inside
-and white outside, with a pen three pixels wide.
+The Screen keeps two colours. Task 81 sets the **fill** for the inside of a shape; task 80 sets the
+**pen** for its outline, lines and text. Each takes a colour in `d1.l`. The `both_colours`
+subroutine gives both the same colour. For example, `move.l #SKY, d1` followed by
+`bsr both_colours` makes the sky rectangle blue throughout. The house instead sets `WALL` as its
+fill and `WHITE` as its pen; task 93 makes that outline three pixels wide.
 
-The roof is three lines and no shape at all. Task 86 moves the **drawing point** without drawing
-anything, and each task 85 after it draws from wherever that point is to the new place and leaves it
-there, so a polyline is one 86 and one 85 per corner. Task 84 is the other line task, the one that
-takes both ends at once.
+A colour is `$00BBGGRR`: blue, green and red are the last three bytes, in that order.
+`$00E0B070` gives the sky red 112, green 176 and blue 224. After `both_colours` returns, the
+program **replaces `d1` with the shape's left coordinate**. This is deliberate: tasks 80 and 81
+read `d1.l` as a colour, but task 87 reads `d1.w` as an X coordinate. The next task determines
+what a register means.
 
-Task 89 is what colours it in, because there is no triangle task: it starts at the pixel in `d1` and
-`d2` and spreads the **fill colour** in every direction, over every pixel of the colour it started
-on, until it meets anything else. The three lines are the fence it stops at, and `320, 170` is just
-a point inside them, any other would do the same. Move the fence and the fill follows it; leave a
-gap in it and the whole sky turns red.
+For tasks 87 (rectangle) and 88 (ellipse), `d1,d2` give the left and top of a box; `d3,d4` give
+its right and bottom. The right and bottom boundaries are excluded, so `(0, 0)` to `(640, 320)`
+covers the sky through row 319. The sun's box is 100 by 100 pixels, so its ellipse is a circle.
+Tasks 80, 81 and 93 only need `d1`; the line and flood-fill tasks below need `d1,d2`.
 
-Task 95 draws a string at a pixel position in the pen colour, over whatever is already there. That is
-different from task 14, which prints at the text cursor and into the transcript above the screen;
-task 95 only draws.
+## Closing the roof
 
-Every `trap #15` costs one instruction out of the two million a Playground gets, whatever the task
-does, so a picture is counted in shapes: this one is 26 traps and a filled rectangle is one of them,
-while the same rectangle drawn a pixel at a time with task 82 would be 43200.
+Task 86 moves the drawing point to the left eave at `(180, 200)` without making a mark. Each task
+85 draws a line from that point to the new `(d1,d2)` position and leaves the drawing point there.
+The three lines go up to the peak, down to the right eave, then back to the left eave. That last
+line is the roof's bottom edge.
 
-Every filled shape has an outline-only twin one task number away, so the house's `move.b #87, d0`
-becomes `move.b #90, d0` and the walls turn into a frame with the sky behind them.
+Task 89 starts at `(320, 170)`, inside the triangle. It replaces the connected sky-coloured pixels
+there with the current fill colour, `ROOF`. The drawn lines stop it spreading outside the triangle.
+The house reaches from X 200 to 440, while the eaves reach X 180 and 460. The house's top edge
+therefore cannot close the roof by itself: the line between the eaves matters. The door and label
+are drawn later, after the roof is complete.
+
+Task 95 draws the zero-terminated string at `(210, 420)` in the current pen colour. Its `a1`
+argument points to `label`; `d1,d2` are pixel coordinates. Here the pen is reset to white just
+before the text task, so the label appears white beneath the house.
+
+## Try changing the picture
+
+Make one change at a time, then choose **Build** and **Run** again:
+
+1. Change `SUN equ $0000D2FF` to `SUN equ $0000FFFF`. Predict which part changes colour.
+2. Restore `SUN`, then change the house's `move.b #87, d0` to `move.b #90, d0`. Predict what
+   appears inside its outline. Task 90 draws only the rectangle's pen-coloured outline.
+3. Restore task 87, then move the door 40 pixels right by changing its left X from `290` to `330`
+   and its right X from `350` to `390`. Predict whether it still fits inside the house.
+
+<details>
+<summary>Show what to expect</summary>
+
+1. The sun becomes yellow; its circle stays in the same place. `$0000FFFF` has full red and
+   green, with no blue.
+2. The house has a white frame. Sky shows through above the ground line, and grass shows through
+   below it. The door remains in front because the program draws it after the house.
+3. The door moves right without changing width. Its new right edge is 390, inside the house's
+   right edge at 440.
+
+</details>

@@ -1,10 +1,6 @@
-A number picks which of four pieces of code runs. `d2` holds 2, the program reads the third address
-out of a table in memory and jumps to it, and the multiplication is what happens. Changing `d2`
-changes the answer without changing a comparison anywhere.
-
-A chain of comparisons works for three or four cases and gets slower with every one you add, because
-a value that matches the last test has been compared against every test above it first. A table costs
-one lookup no matter how many cases there are.
+A jump table chooses a piece of code using an index. Here `d2` holds the operation number:
+0 means addition, 1 subtraction, 2 multiplication, and 3 division. Those are the only valid
+indices for this four-entry table. The program starts with 2, so it should calculate `6 × 3`.
 
 ```m68k|playground|no-flags|allow-open
     move.l #6, d0           ; a = 6
@@ -39,20 +35,40 @@ done:
 table: dc.l add_op, sub_op, mul_op, div_op
 ```
 
-`dc.l add_op, sub_op, mul_op, div_op` writes four longs, and each one is the address the assembler
-gave that label. Put the memory panel on `2000` and they read `00001020`, `0000102C`, `00001038` and
-`00001044`, which are the four addresses inside your own code. A label is nothing but an address, and
-this is what that sentence is for.
+`org $2000` places the table at address `$2000`, separate from the instructions. `dc.l` puts
+four long values there. Each label in that line is assembled into the address of its handler's
+first instruction. Since a long occupies four bytes, the entries start at `$2000`, `$2004`,
+`$2008`, and `$200C`.
 
-The three instructions before the `jmp` are the table lookup: multiply the index by the size of an
-element with a shift, add it to the base with the indexed mode, and read the long there. What comes
-out is an address, so it goes into an address register. `jmp (a1)` then leaves without pushing
-anything, so there is nothing to come back to; use `jsr (a1)` instead and each entry becomes a
-subroutine call that returns.
+With `d2 = 2`, the lookup goes like this:
 
-`a1` ends at `00001038`, which is the address of `mul_op`, a value that appears nowhere in the
-source. Each piece of code ends with `bra done` for the same reason the two halves of an `if` do:
-they are laid out one after another and nothing stops the program running into the next one.
+```text
+d2 = 2  →  d3 = 2 × 4 = 8
+table + 8 = $2008  →  address of mul_op  →  a1  →  jmp (a1)
+```
 
-Change the index at the top and the answer changes with it, and there is not a single comparison
-anywhere in the program to adjust.
+`lea table, a0` puts `$2000` in `a0`. `move.l (a0, d3), a1` reads the long at `$2008` and
+puts that stored address in `a1`. `jmp (a1)` transfers execution to `mul_op`. The assembler
+chooses the handler's numeric address, so you do not have to type that number into the source.
+The `bra done` after multiplication skips the handlers that follow it; otherwise execution
+would continue into `div_op`. The division handler falls directly through to `done`.
+
+Select **Build**, then **Run**. `d4` finishes at `00000012` in the registers panel: hexadecimal
+`12` is decimal 18. Select **Build** again to reset the program, then use **Step**. Watch `d3`
+become 8 after `lsl.l`, and set the memory panel to `2000`. Its third long, at `$2008`, is the
+address that `move.l (a0, d3), a1` loads into `a1`. After `jmp (a1)`, the next instruction is
+the one labelled `mul_op`.
+
+## Try the other operations
+
+Change only the `#2` in `move.l #2, d2` to `#0`, `#1`, or `#3`. For each choice, predict the
+value of `d4`, then select **Build** and **Run** to check. Keep the index within 0–3: any
+other value indexes outside the four entries and cannot select a valid handler from this table.
+
+<details>
+<summary>Show answer</summary>
+
+With index 0, `add_op` gives 9 (`00000009`). Index 1 selects `sub_op` and gives 3
+(`00000003`). Index 3 selects `div_op` and gives 2 (`00000002`).
+
+</details>

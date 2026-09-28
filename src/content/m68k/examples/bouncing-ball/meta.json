@@ -1,6 +1,6 @@
 {
     "name": "A bouncing ball",
-    "description": "A ball that bounces off all four edges, drawn off screen and shown a whole frame at a time, paced by the delay task instead of by how fast your machine is.",
+    "description": "A ball that reverses at the Screen edges, with complete frames, a short delay, and a bar showing elapsed program time.",
     "order": 21,
     "topic": "bouncing-ball"
 }

@@ -1,9 +1,11 @@
-A square you steer. The arrow keys set which way it is going and it keeps going that way on its own,
-coming back in at the opposite edge when it leaves the screen. **Click the Screen panel first**: the
-screen only gets the keyboard when it has the focus, and a ring around it says so while it does.
+This square starts moving to the right. An arrow key changes its direction, and it keeps moving
+after you release the key. When its next step would take it past an edge, it reappears at the
+opposite edge.
 
-Once a frame, the program asks the keyboard what is being held down at this instant, and the answer
-decides what the next frame looks like.
+Choose **Build**, then **Run**. Click inside the **Screen** once, then hold an arrow key to steer.
+The ring around the Screen shows that it has keyboard focus. One click is enough while that ring
+remains; if you click elsewhere, click the Screen again before steering. Choose **Stop** when you
+are done. The program keeps looping until you stop it or the editor's run limit is reached.
 
 ```m68k|playground|open-screen|no-registers|no-flags|allow-open
 CELL    equ 40
@@ -49,7 +51,7 @@ frame:
     move.l #3, d1
     trap #15                ; three hundredths of a second
 
-* --- the arrows set the direction, they do not move the square ---------------
+* --- read the arrows and set the direction ----------------------------------
     move.b #19, d0
     move.l #$25262728, d1   ; left $25, up $26, right $27, down $28
     trap #15
@@ -74,7 +76,7 @@ no_up:
     clr.w dx
 no_down:
 
-* --- and the square moves on its own, coming back in at the far edge ---------
+* --- move the square and wrap at an edge ------------------------------------
     move.w boxx, d5
     add.w dx, d5
     cmp.w #RIGHT, d5
@@ -111,23 +113,56 @@ title:  dc.b 'Click the screen, then steer with the arrow keys', 0
 { "runFor": 100000 }
 ```
 
-`move.l #$25262728, d1` is four key codes in one long, `$25` for the left arrow, `$26` up, `$27`
-right and `$28` down, and the answer comes back in `d1` with one byte per key in the same places:
-`$FF` where the key is held and `$00` where it is not. `btst #24, d1` tests the lowest bit of the
-highest byte, which is the byte that belongs to `$25`, and a `$FF` has that bit set. The four bit
-numbers to test are 24, 16, 8 and 0, one per byte, in the order you packed the codes.
+## Four keys in one read
 
-The keys do not move the square, they write `dx` and `dy` in memory, and the code under them moves
-it. That separation is what makes the square keep going after you let go, and it is how anything that
-moves in a game is written: the input decides the velocity, the frame applies it.
+Task 19 checks up to four keys at once. Before `trap #15`, `d1.l` contains `$25262728`: four
+one-byte key codes packed into a long. From highest byte to lowest, they mean left (`$25`), up
+(`$26`), right (`$27`) and down (`$28`). Task 19 replaces `d1.l` with four answer bytes in that
+same order. A held key gets `$FF`; a key not held gets `$00`. For example, if only
+left is down, the answer is `$FF000000`.
 
-`clr.w dy` next to `move.w #-STEP, dx` is what keeps the movement to four directions. Take the four
-`clr.w` lines out and holding right and then up leaves both steps set, and the square goes
-diagonally.
+`btst #24, d1` checks a bit in the highest answer byte, the one for left. `$FF` has that bit set
+and `$00` does not. The other tests use bits 16, 8 and 0 for up, right and down. The program checks
+the keys in a different order—left, right, up, down—so the last held key it checks wins if several
+are down together. For example, holding left and down sets the direction to down. You can use the
+bit positions as a guide; there is no need to memorize them.
 
-Polling every frame is enough for keys held down: task 19 reports a key that was pressed and let go
-between two polls, so a tap is not missed. What it does not tell you is that a key was pressed
-**again**, which is why a game that wants one action per press keeps the last answer and compares.
+Each poll returns the state the program has *observed so far*. The focused Screen queues key
+presses and releases, and task 19 applies at most one queued change per read, at least 30
+milliseconds apart. A quick tap that reaches the Screen can therefore appear as down on one read
+and up on a later read, even if both events arrived between reads. Keep polling while the program
+runs. Keys pressed while the Screen lacks focus do not enter its queue.
 
-Wrapping at the edges and stopping at them are the same two instructions with a different value
-written: `clr.w d5` sends the square back to zero, and `move.w #RIGHT, d5` would pin it where it is.
+## Direction kept between frames
+
+`dx` and `dy` are the square's horizontal and vertical steps, measured in pixels per frame. They
+start at `8` and `0`, so the square initially moves right. Pressing left writes `-8` to `dx` and
+clears `dy`; pressing up writes `-8` to `dy` and clears `dx`. The other arrows do the corresponding
+work. Clearing the other step keeps each new direction horizontal or vertical.
+
+On every frame, the program adds `dx` to `boxx` and `dy` to `boxy`. A poll with no arrow down
+leaves those steps in memory, so releasing an arrow does not stop the square. A later arrow changes
+the stored steps. The square is drawn at its saved position before the program polls and computes
+the next position, so you see a direction change in the following picture.
+
+The Screen is 640 by 480 pixels, and the square is 40 by 40. Its top-left corner can reach X =
+`640 - 40 = 600` and Y = `480 - 40 = 440` while the whole square remains visible. `RIGHT` and
+`BOTTOM` hold those limits. When the proposed X exceeds 600, the code saves X = 0; when it falls
+below 0, it saves X = 600. The Y code similarly uses 0 and 440. For example, from X = 596 with
+`dx = 8`, the proposed X is 604, so the next saved X is 0. The four pixels past 600 are discarded.
+
+## Try a smaller step
+
+Change `STEP` from `8` to `4`. Before choosing **Build** and **Run** again, predict how far the
+square moves between frames, whether it still keeps moving after you release an arrow, and what
+happens when it crosses an edge. Click the Screen to steer, then choose **Stop** when you have seen
+enough. Restore `8` afterward.
+
+<details>
+<summary>Show what to expect</summary>
+
+Each frame changes one coordinate by 4 pixels instead of 8. Releasing a key still leaves `dx` and
+`dy` unchanged. The edge limits remain 600 and 440 because the square and Screen sizes have not
+changed; a proposed position beyond a limit still wraps to the opposite edge.
+
+</details>

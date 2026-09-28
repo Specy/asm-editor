@@ -1,26 +1,26 @@
-Eight words sit in memory and the program walks them once, keeping the largest one it has seen so far
-in `d0` and the position it was found at in `d3`. One of the numbers is negative, which is what makes
-the choice of condition matter.
+Eight words sit in memory. This program reads each one and keeps the largest value seen so far in
+`d0`. It keeps that value's **zero-based index** in `d3`: the first element has index 0, the second
+has index 1, and so on. One value is negative, so the choice of signed comparison matters.
 
-Adding up an array needs nothing carried between passes. Finding the largest does: every pass has to
-compare its element against the best one so far, which is the shape of every "find the best" program
-there is.
+The previous sum example carried a running total from one pass to the next. Here the loop carries
+both the best value and its index. Each new word either replaces that pair or leaves it alone.
 
-```m68k|playground|memory|no-flags|allow-open
+```m68k|playground|memory|allow-open
 count equ 8
 
     lea numbers, a0     ; a0 points at the first element
+    clr.l d0            ; clear the upper word before loading a word
     move.w (a0)+, d0    ; best = numbers[0]
-    clr.w d3            ; where = 0
-    clr.w d4            ; i = 0
-    move.w #count-2, d1 ; seven elements left, and dbra counts one more
+    clr.l d3            ; index of the best value = 0
+    clr.l d4            ; index of the element being checked = 0
+    move.l #count-2, d1 ; 6 gives seven passes with dbra
 loop:
-    addq.w #1, d4       ; i++
-    move.w (a0)+, d2    ; n = *a0++
-    cmp.w d0, d2        ; n - best
-    ble not_bigger      ; if(n <= best) keep the one we have
-    move.w d2, d0       ; best = n
-    move.w d4, d3       ; where = i
+    addq.w #1, d4       ; move to the next index
+    move.w (a0)+, d2    ; read the next word, then advance a0
+    cmp.w d0, d2        ; compare this word with the best: d2 - d0
+    ble not_bigger      ; signed: keep the best if this word <= it
+    move.w d2, d0       ; new best value
+    move.w d4, d3       ; new best index
 not_bigger:
     dbra d1, loop
 
@@ -28,16 +28,47 @@ not_bigger:
 numbers: dc.w 12, -4, 37, 8, 99, 41, 2, 60
 ```
 
-The first element is read before the loop, into `d0` and with `(a0)+` stepping past it, so the loop
-itself has only seven elements left and starts with an answer that is already right for the part of
-the array it has seen. Starting `d0` at 0 instead would be a different program, one that answers 0
-for an array of negative numbers.
+`org $2000` places the eight words at `$2000` through `$200F`, two bytes per word. The first
+`move.w (a0)+, d0` reads 12 and moves `a0` to `$2002`. This gives the program a best value before
+the loop starts. Starting the best at 0 would give the wrong answer if every element were negative.
 
-`d0` comes out at `00000063`, which is 99, and `d3` at `00000004`: 99 is the fifth element and the
-first one is number 0.
+Seven elements remain. The loop starts its `dbra` counter at `count-2`, or 6, so its seven passes
+check the words at indices 1 through 7. `d4` advances to each index before that word is read.
+`cmp.w d0, d2` prepares the flags from `d2 - d0` without changing either value. If the new word is
+less than or equal to the best, `ble` skips both assignments. An equal value therefore keeps the
+earlier index.
 
-`ble` is the **signed** condition, and the `-4` in the array is why it has to be. Change
-`ble not_bigger` to `bls not_bigger`, the unsigned one, and run it again: `d0` comes out at
-`0000FFFC` and `d3` at 1. Read as an unsigned word, `FFFC` is 65532, so the program decides that -4
-is the largest number in the array and nothing else gets a look in. Both versions assemble, both run
-to the end, and one of them is wrong.
+`move.w` writes only the low 16 bits of a data register. Clearing all of `d0` first makes its full
+register display predictable when the positive word 12 is loaded; the later word moves replace only
+that low word. `d3` and `d4` are also cleared as full registers before their word-sized updates, and
+the long move initializes all of `d1`.
+
+## Run it and follow the best value
+
+Select **Build**, then **Run**. In the registers panel, `d0` is `00000063` (hexadecimal `$63` is
+decimal 99) and `d3` is `00000004`: 99 is the fifth element, at index 4. `a0` is `00002010`, just
+past the last word, and `d1` is `0000FFFF`. The loop does not read from `$2010`.
+
+Select **Build** again to reset the program, then select **Step** once per instruction. After the
+first read, `d0` is `0000000C` (12) and `a0` is `00002002`. On the first loop pass, `d4` becomes 1,
+`d2` receives the word `FFFC` (-4), and `a0` advances to `00002004`. The signed `ble` is taken, so
+`d0` stays 12 and `d3` stays 0. The first `dbra` changes `d1` from 6 to 5 and returns to `loop`.
+
+Keep stepping until the word 99 is read from `$2008`. At that point `d4` is 4 and `a0` is
+`0000200A`. Its comparison is greater, so the two moves put `00000063` in `d0` and `00000004` in
+`d3`. The remaining words do not change that pair.
+
+## Try an unsigned comparison
+
+Change `ble not_bigger` to `bls not_bigger`, the unsigned “lower or same” condition. Before selecting
+**Build** and **Run**, predict which value and index will remain in `d0` and `d3`. Think about the
+bit pattern `FFFC`: as an unsigned word, is it smaller or larger than 12?
+
+<details>
+<summary>Show answer</summary>
+
+`d0` ends at `0000FFFC` and `d3` at `00000001`. Read as an unsigned word, `FFFC` is 65532. The
+unsigned comparison treats it as larger than every other word in this array, so the value at index
+1 remains the best. The original signed `ble` treats the same bits as -4.
+
+</details>

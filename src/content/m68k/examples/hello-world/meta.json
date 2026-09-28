@@ -1,6 +1,6 @@
 {
     "name": "Print a string",
-    "description": "The first program that talks to anybody: two lines through trap #15, one of them with a number on the end, and a task 9 to stop.",
+    "description": "Print two lines with trap #15: a greeting, then a string followed by a signed number.",
     "order": 17,
     "topic": "hello-world",
     "template": 4

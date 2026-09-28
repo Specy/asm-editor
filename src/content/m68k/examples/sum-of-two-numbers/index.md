@@ -1,28 +1,24 @@
-The program asks for two numbers, waits while you type them, and prints their sum. Press Run and the
-console stops at the first prompt: type a number into the box under it, press Enter, and the run
-carries on inside that one `trap #15`.
-
-Printing only talks. Reading listens, which means the program stops dead in the middle of an
-instruction until somebody answers, and what comes back is a number already in a register rather
-than text you have to make sense of yourself.
+This program asks for two numbers and prints their sum. Each prompt uses task 18 of `trap #15`:
+the task prints the zero-terminated string at `a1`, waits for you to enter a number, and returns that
+number in `d1.l`.
 
 ```m68k|playground|console|no-flags|allow-open
     lea first, a1
-    move.b #18, d0      ; task 18: print the prompt, then read a number
+    move.b #18, d0      ; print the first prompt and read a number
     trap #15
-    move.l d1, d2       ; a = what was typed
+    move.l d1, d2       ; save the first number in d2
 
     lea second, a1
-    move.b #18, d0
+    move.b #18, d0      ; print the second prompt and read a number
     trap #15
-    add.l d1, d2        ; a = a + b
+    add.l d1, d2        ; add the second number to the saved first number
 
     lea answer, a1
     move.l d2, d1       ; task 17 prints the number in d1
-    move.b #17, d0      ; task 17: the string, then the number
+    move.b #17, d0      ; print the answer string and the sum
     trap #15
 
-    move.b #9, d0
+    move.b #9, d0       ; end the program
     trap #15
 
     org $2000
@@ -35,19 +31,30 @@ answer: dc.b 10, 'The sum is ', 0
 { "input": ["17", "25"] }
 ```
 
-Task 18 is two tasks in one request: it prints the string at `a1` the way task 14 does and then reads
-a line and parses it as a decimal number, the way task 4 does. The answer is in `d1`, which is also
-the register task 17 prints from, so the first thing the program does after each read is get the
-number out of `d1` before the next task overwrites it.
+Select **Build**, then **Run**. At `First number: `, type `17` in the input box under the console
+and press Enter. The program continues to `Second number: ` and waits again. Type `25` and press
+Enter; it prints `The sum is 42`.
 
-The `10` at the front of `second` and `answer` is a newline written as its ASCII code, which is how
-you put one inside a string that a task prints. `dc.b 10, 'Second number: ', 0` is one string of
-seventeen bytes and the first of them is the line break.
+The first task 18 returns `17` in `d1.l`. `move.l d1, d2` keeps a copy because the next task 18
+puts its answer, `25`, in `d1.l`. Then `add.l d1, d2` adds that second answer directly to the
+saved first number: `d2.l` becomes `42`. Task 17 needs its number in `d1.l`, so `move.l d2, d1`
+puts the sum there for printing.
 
-Task 4 reads a **decimal** number and nothing else. Type anything that is not one and the run ends
-with `Expected a number, got "NaN"` under the editor, so a program that has to survive whatever
-people type reads the line with task 2 and picks it apart itself.
+The `10` before `Second number: ` and `The sum is ` is the ASCII code for a newline. Each string
+starts on a new line when its task prints it. The final `0` marks the end of each string.
 
-Change `add.l d1, d2` to `sub.l d1, d2` and type 17 and 25 again. The console reads `The sum is -8`.
-The same bits, `FFFFFFF8`, would have printed as 4294967288 through task 15, which reads them as
-unsigned. The register did not change; the task that printed it did.
+Use small whole numbers for this example. The arithmetic uses 32-bit registers, so a sum that
+does not fit in 32 bits will wrap around instead of showing the mathematical result.
+
+## Predict the result
+
+Build and run again with `8` as the first input and `-3` as the second. What will `d2.l` hold
+after `add.l`, and what will the program print?
+
+<details>
+<summary>Show answer</summary>
+
+`d2.l` holds `5`, and the program prints `The sum is 5`. The first input is saved in `d2.l`;
+adding the second input from `d1.l` gives `8 + (-3) = 5`.
+
+</details>
