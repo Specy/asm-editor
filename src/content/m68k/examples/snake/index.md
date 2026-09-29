@@ -7,11 +7,11 @@ console. Choose **Run** again to restart, or **Stop** when you are done.
 The listing is long because it includes input, movement, drawing and a score. Read it first as one
 pass through `frame`:
 
-| Part | What happens each frame |
-| --- | --- |
-| Input | Poll the arrows; keep the last accepted direction. |
+| Part     | What happens each frame                                                      |
+| -------- | ---------------------------------------------------------------------------- |
+| Input    | Poll the arrows; keep the last accepted direction.                           |
 | Movement | Shift the body, move the head one cell, then check for a wall, body or food. |
-| Picture | Clear the hidden image, draw food, snake and score, show it, then wait. |
+| Picture  | Clear the hidden image, draw food, snake and score, show it, then wait.      |
 
 Positions are **board cells** until `draw_cell` converts them to pixels. Each cell is 20 pixels
 wide, so the 32 by 24 board fills the 640 by 480 Screen.
@@ -295,8 +295,8 @@ score_end:
 `body` holds one word per segment. The first word, `body[0]`, is the head; `length` says how many
 words are in use. In each word the high byte is the column and the low byte is the row:
 
-| Word | Column | Row |
-| --- | ---: | ---: |
+| Word    |    Column |        Row |
+| ------- | --------: | ---------: |
 | `$050C` | `$05` = 5 | `$0C` = 12 |
 | `$040C` | `$04` = 4 | `$0C` = 12 |
 
@@ -326,8 +326,7 @@ for this frame; the next backward shift separates them as the snake moves.
 
 Task 19 receives the packed key codes `$25262728`: left, up, right and down, one byte each. Its
 answer uses the same byte order, with `$FF` for a held key and `$00` otherwise. The four `btst`
-instructions inspect bits 24, 16, 8 and 0 of that answer. For instance, a held left arrow sets bit
-24. A direction remains in `dx` and `dy` until an accepted arrow changes it.
+instructions inspect bits 24, 16, 8 and 0 of that answer. For instance, a held left arrow sets bit 24. A direction remains in `dx` and `dy` until an accepted arrow changes it.
 
 `try_direction` rejects a turn straight back. While the snake moves right, its direction is
 `(dx, dy) = (1, 0)`. A left press proposes `(-1, 0)`. Both sums, `1 + (-1)` and `0 + 0`, are

@@ -64,8 +64,8 @@ zero produces `F`, `E`, `E`, then `B`.
 the two answers back into `d2` as two 16-bit words. Immediately after the first division, the
 register reads:
 
-| high word: remainder | low word: quotient | full `d2` |
-| -------------------- | ------------------ | --------- |
+| high word: remainder | low word: quotient | full `d2`  |
+| -------------------- | ------------------ | ---------- |
 | `000F` (15)          | `0BEE` (3054)      | `000F0BEE` |
 
 `move.l d2, d3` copies that result. `swap d3` brings the remainder into its low word, and

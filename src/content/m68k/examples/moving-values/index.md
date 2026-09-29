@@ -19,12 +19,12 @@ The calculation is `30 + 12 = 42`, then `42 + 42 = 84`.
 In the playground, select **Build**, then **Run**. When the program has finished, look at the
 registers panel:
 
-| register | value to check | why |
-| -------- | -------------- | --- |
-| `d0` | `0000001E` | 30, the width |
-| `d1` | `0000000C` | 12, the height |
-| `d2` | `00000054` | 84, the perimeter |
-| `d3` | `FFFFFF54` | its low byte was replaced with `54` |
+| register | value to check | why                                 |
+| -------- | -------------- | ----------------------------------- |
+| `d0`     | `0000001E`     | 30, the width                       |
+| `d1`     | `0000000C`     | 12, the height                      |
+| `d2`     | `00000054`     | 84, the perimeter                   |
+| `d3`     | `FFFFFF54`     | its low byte was replaced with `54` |
 
 The panel displays registers in hexadecimal, without `0x`. Decimal 84 is hexadecimal `$54`.
 

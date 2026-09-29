@@ -108,7 +108,7 @@ time, so the code does not promise an exact number of frames per second.
 ## Turn before crossing an edge
 
 `ballx` and `bally` hold the top-left corner of the ball's 40 by 40 box. The code copies each
-coordinate to `d5` and adds its step to try the *next* position. A 640-pixel-wide Screen lets the
+coordinate to `d5` and adds its step to try the _next_ position. A 640-pixel-wide Screen lets the
 box's left edge range from 0 to `640 - 40 = 600`; its top edge can range from 0 to
 `480 - 40 = 440`.
 
@@ -131,7 +131,7 @@ The width goes into `d3` for task 87. Its rectangle corners are `d1 = 0` (left),
 bar is eight pixels high and its visible width is exactly the remainder. If task 8 returned 645,
 the remainder after dividing by 640 would be 5, and the rectangle would run from X 0 through X 4.
 
-The bar follows elapsed time; the ball moves a fixed number of pixels *per frame*. If frames take
+The bar follows elapsed time; the ball moves a fixed number of pixels _per frame_. If frames take
 longer, the ball covers fewer pixels in the same amount of time, while the bar still reflects the
 clock reading.
 

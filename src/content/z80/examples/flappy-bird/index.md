@@ -28,12 +28,12 @@ and shows it with `C_PRESENT`. Follow those labels in that order before studying
 
 The pipe routines share three records beginning at `pipes`. Each record is four bytes:
 
-| Offset | Meaning | Example value |
-| --- | --- | --- |
-| `+0` | Left edge in world coordinates | `72` |
-| `+1` | Gap centre in screen y coordinates | `96` |
-| `+2` | Counted flag: `1` means this pipe has already scored | `0` |
-| `+3` | Active flag: `1` means draw and test this pipe | `1` |
+| Offset | Meaning                                              | Example value |
+| ------ | ---------------------------------------------------- | ------------- |
+| `+0`   | Left edge in world coordinates                       | `72`          |
+| `+1`   | Gap centre in screen y coordinates                   | `96`          |
+| `+2`   | Counted flag: `1` means this pipe has already scored | `0`           |
+| `+3`   | Active flag: `1` means draw and test this pipe       | `1`           |
 
 `newpipes`, `movepipes`, `hittest` and `drawpipe` all read these same four bytes. When a routine
 finishes one record, it advances `hl` by four to reach the next. The example values above describe

@@ -46,8 +46,7 @@ element.
 For a range that remains, `d4` becomes its middle index. `lsr.l #1, d4` divides the sum of
 `low` and `high` by two, rounding down. The indices here are never negative. Each array element
 is a word of two bytes, so `add.l d5, d5` converts the middle index into a byte offset. For
-example, when `mid` is 9, `d5` becomes 18 and `(a0, d5)` reads `numbers + 18`: the tenth word,
-91. The first word has index 0 and offset 0.
+example, when `mid` is 9, `d5` becomes 18 and `(a0, d5)` reads `numbers + 18`: the tenth word, 91. The first word has index 0 and offset 0.
 
 The second comparison, `cmp.w d0, d6`, calculates `numbers[mid] - target` using words. `beq`
 finds an equal value. If the signed `bgt` branches to `too_big`, the middle value is larger than
@@ -60,7 +59,7 @@ Select **Build** again to reset the program, then use **Step** to watch each mid
 first probe reads 23 at index 5, so `low` becomes 6. The next reads 72 at index 8, so `low`
 becomes 9. The third reads 100 at index 10, so `high` becomes 9. The fourth reads 91 at index
 9 and sets `d3` to 9. This search reads four array elements; scanning from the start would read
-ten to reach index 9. Halving gives roughly logarithmic growth in *array reads*: around ten
+ten to reach index 9. Halving gives roughly logarithmic growth in _array reads_: around ten
 reads can search a thousand sorted elements, and around twenty can search a million. The loop
 also does arithmetic and comparisons between reads.
 

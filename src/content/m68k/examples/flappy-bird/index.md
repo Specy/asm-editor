@@ -9,12 +9,12 @@ when you are done.
 The listing is long because it draws the scene as well as running the game. Use this map before
 reading it:
 
-| Follow this part | What it does |
-| --- | --- |
-| `frame` → `readflap` | Find out whether a new tap began. |
-| `READY`, `playing`, `dead` | Start a round, advance it, or let the bird land. |
-| `movepipes` → `hittest` | Move the obstacles, award points and check collisions during play. |
-| `draw` | Draw the scene, show it with task 94, then pause with task 23. |
+| Follow this part           | What it does                                                       |
+| -------------------------- | ------------------------------------------------------------------ |
+| `frame` → `readflap`       | Find out whether a new tap began.                                  |
+| `READY`, `playing`, `dead` | Start a round, advance it, or let the bird land.                   |
+| `movepipes` → `hittest`    | Move the obstacles, award points and check collisions during play. |
+| `draw`                     | Draw the scene, show it with task 94, then pause with task 23.     |
 
 Start with `frame`, `readflap`, `movepipes` and `hittest`. You can skim the shape and colour helpers
 under `Drawing` on a first pass.
@@ -898,16 +898,16 @@ tap again for each lift.
 `birdy` stores the vertical position in sixteenths of a pixel, and `birdv` stores the amount added
 to it each frame. Smaller screen Y values are higher up. A flap sets `birdv` to `FLAPV = -80`, an
 upward speed of 5 pixels per frame. During each `PLAYING` frame, gravity adds `GRAV = 5` to that
-speed *before* the speed is added to `birdy`.
+speed _before_ the speed is added to `birdy`.
 
 The starting position is `STARTY16 = 196 × 16 = 3136`. The first flap in `READY` sets the speed
 but leaves the position at 3136. If no further flap occurs, the next three frames are:
 
 | `PLAYING` frame | `birdv` after gravity | `birdy` after movement | Drawn Y (`birdy >> 4`) |
-| --- | ---: | ---: | ---: |
-| 1 | -75 | 3061 | 191 |
-| 2 | -70 | 2991 | 186 |
-| 3 | -65 | 2926 | 182 |
+| --------------- | --------------------: | ---------------------: | ---------------------: |
+| 1               |                   -75 |                   3061 |                    191 |
+| 2               |                   -70 |                   2991 |                    186 |
+| 3               |                   -65 |                   2926 |                    182 |
 
 The fraction stays in `birdy` even though `drawbird` uses `asr.l #4` to get a whole pixel. That
 lets the speed change by 5 sixteenths each frame. Once gravity makes `birdv` positive, the bird
@@ -917,11 +917,11 @@ descends; `MAXFALL` limits that downward speed.
 
 `pipes` contains three records, each six bytes long. `a0` points to one record at a time:
 
-| Offset from `a0` | Word | Meaning |
-| --- | --- | --- |
-| `0` | X | Left edge of the pipe. |
-| `2` | Gap centre | Vertical centre of its opening. |
-| `4` | Counted | 0 until its right edge passes the bird and scores a point. |
+| Offset from `a0` | Word       | Meaning                                                    |
+| ---------------- | ---------- | ---------------------------------------------------------- |
+| `0`              | X          | Left edge of the pipe.                                     |
+| `2`              | Gap centre | Vertical centre of its opening.                            |
+| `4`              | Counted    | 0 until its right edge passes the bird and scores a point. |
 
 `newpipes` starts their X positions at 620, 860 and 1100: `SPACING = 240` pixels apart. Each
 `PLAYING` frame, `movepipes` subtracts `SPEED = 4` from every X. Once a pipe has gone one width
@@ -949,7 +949,7 @@ waits at least `DELAY = 3` hundredths of a second before the next frame. Drawing
 take time too, so this does not set an exact frame rate on every machine.
 
 Try one small change: set `DELAY` to 6. Before running it, predict how the game will feel. Will
-the bird and pipes move a different number of pixels *per frame*?
+the bird and pipes move a different number of pixels _per frame_?
 
 <details>
 <summary>Show what to expect</summary>

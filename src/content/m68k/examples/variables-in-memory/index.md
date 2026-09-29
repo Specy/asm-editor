@@ -33,8 +33,8 @@ It gives that space no initial value; the final `move.l` supplies the value when
 Select **Build**, then **Run**. In the memory panel, enter `2000` in the address box. Read four
 bytes at each address as one long:
 
-| label      | address | value after Run |
-| ---------- | ------- | --------------- |
+| label      | address | value after Run  |
+| ---------- | ------- | ---------------- |
 | `price`    | `$2000` | `000000FA` (250) |
 | `shipping` | `$2004` | `00000023` (35)  |
 | `total`    | `$2008` | `00000131` (305) |

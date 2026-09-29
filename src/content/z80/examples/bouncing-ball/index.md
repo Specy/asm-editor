@@ -127,8 +127,7 @@ share one image. The ball's X and Y coordinates are its upper-left corner. Both 
 bounding box use `SIZE`, so command 6 draws a circular ellipse. The rectangle command adds the
 bar, and command 13 presents the completed frame.
 
-`in a, (P_FRAME)` paces the loop. Reading port `0x51` waits for the next display frame and returns
-0. One read per pass prevents a fast machine from racing through the animation. The editor stays
+`in a, (P_FRAME)` paces the loop. Reading port `0x51` waits for the next display frame and returns 0. One read per pass prevents a fast machine from racing through the animation. The editor stays
 responsive while the program waits, so Stop still works. In a testcase the read returns at once,
 letting an animation test finish without waiting for real time.
 

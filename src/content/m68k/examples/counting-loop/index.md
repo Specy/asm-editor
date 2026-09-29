@@ -32,11 +32,11 @@ an odd address, which this M68K does not allow.
 Select **Build**, then **Run**. In the memory panel, enter `2000` in the address box. Each pair of
 adjacent bytes forms one word, with its first byte at the address shown below:
 
-| word | starting address | bytes after Run | value |
-| ---- | ---------------- | --------------- | ----- |
-| first | `$2000` | `00 01` | `0001` (1) |
-| second | `$2002` | `00 02` | `0002` (2) |
-| tenth | `$2012` | `00 0A` | `000A` (10) |
+| word   | starting address | bytes after Run | value       |
+| ------ | ---------------- | --------------- | ----------- |
+| first  | `$2000`          | `00 01`         | `0001` (1)  |
+| second | `$2002`          | `00 02`         | `0002` (2)  |
+| tenth  | `$2012`          | `00 0A`         | `000A` (10) |
 
 The other words follow the same pattern at `$2004`, `$2006`, and so on. The last word ends at
 `$2013`, inside the 20 bytes reserved from `$2000` through `$2013`.
