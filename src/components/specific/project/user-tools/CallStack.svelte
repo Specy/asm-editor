@@ -8,12 +8,17 @@
         stack: StackFrame[]
         onGoToLabel: (label: StackFrame) => void
         onGoToInstruction: (address: bigint) => void
+        /**
+         * In a section rather than hanging under a floating window's bar: as wide as the section,
+         * with its height left to it, and rounded alike on every corner.
+         */
+        docked?: boolean
     }
 
-    let { stack, onGoToInstruction, onGoToLabel }: Props = $props()
+    let { stack, onGoToInstruction, onGoToLabel, docked = false }: Props = $props()
 </script>
 
-<div class="call-stack-wrapper">
+<div class="call-stack-wrapper" class:docked>
     <div class="call-stack">
         {#if stack.length === 0}
             <div class="row" style="justify-content: center; padding: 0.4rem">Call stack empty</div>
@@ -69,6 +74,11 @@
         box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
         border-top-left-radius: 0;
         border-top-right-radius: 0;
+    }
+    .call-stack-wrapper.docked {
+        max-width: none;
+        max-height: none;
+        border-radius: 0.2rem;
     }
     .return-address {
         background: var(--secondary);

@@ -36,6 +36,8 @@
         hiddenRegistersNames?: readonly string[]
         position?: 'top' | 'bottom'
         gridStyle?: string
+        /** `start` lines the value up against the name, for a lone row like the PC's. */
+        align?: 'spread' | 'start'
         /**
          * The panel's own judgement, for a file whose rows ask for more than the register column
          * has: the column is pinned to the CPU file's width, so a file with longer names than the
@@ -64,6 +66,7 @@
         hiddenRegistersNames = [],
         position = 'top',
         gridStyle = '',
+        align = 'spread',
         compact = false,
         onRegisterClick,
         pokeable = false,
@@ -326,6 +329,7 @@
 <div
     class="registers"
     class:compact={isCompact}
+    class:start={align === 'start'}
     class:wide
     style="{gridStyle}; --wide-columns: {wideColumns};"
 >
@@ -414,6 +418,13 @@
         @media screen and (max-width: 1000px) {
             width: unset;
         }
+    }
+
+    //a lone row, the PC's above the panel: its value starts where the name ends instead of sitting
+    //in the middle of a column sized for a whole file
+    .start .register-hex {
+        justify-content: flex-start;
+        padding-left: 0.6rem;
     }
 
     //a float reading and a 128 bit hex value are both far wider than the 32 bit groups the panel was

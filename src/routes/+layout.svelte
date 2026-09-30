@@ -64,7 +64,6 @@
                     /^\/learn\/courses$/,
                     /^\\$/,
                     /^\/$/,
-                    /^\/themes$/,
                     /^\/donate$/,
                     /^\/changelog$/,
                     /^\/documentation$/

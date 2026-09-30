@@ -50,6 +50,13 @@
 
     //a window the caller can take away has no collapsed state: its bar goes with its body
     const collapsed = $derived(onClose ? false : hidden)
+    //the body is built the first time the window opens and only folded away after that, so
+    //opening it again shows what is there instead of building it anew
+    let opened = false
+    const mounted = $derived.by(() => {
+        if (!collapsed) opened = true
+        return opened
+    })
 
     let dragStartX = 0
     let dragStartY = 0
@@ -128,7 +135,7 @@
         {/if}
     {/snippet}
     <div class="draggable-container-content" class:hidden={collapsed}>
-        {#if !collapsed}
+        {#if mounted}
             {@render children?.()}
         {/if}
     </div>

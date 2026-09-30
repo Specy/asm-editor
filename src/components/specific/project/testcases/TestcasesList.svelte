@@ -1,0 +1,177 @@
+<script lang="ts">
+    /**
+     * The Testcases of a Project and the results of the last test run: failed results first, then
+     * the Testcases themselves, then (when editable) the form for a new one. The Workbench shows it
+     * as its Testcases panel; `TestcasesEditor` wraps it in a floating window for the Interactive
+     * editor.
+     */
+    import TestcaseRenderer from './Testcase.svelte'
+    import Header from '$cmp/shared/layout/Header.svelte'
+    import type { Testcase, TestcaseResult } from '$lib/Project.svelte'
+    import Column from '$cmp/shared/layout/Column.svelte'
+    import Button from '$cmp/shared/button/Button.svelte'
+    import Row from '$cmp/shared/layout/Row.svelte'
+    import FaPlus from '~icons/fa-solid/plus'
+    import Icon from '$cmp/shared/layout/Icon.svelte'
+    import FaTimes from '~icons/fa-solid/times'
+    import { toast } from '$stores/toastStore'
+    import TestcaseResultRenderer from '$cmp/specific/project/testcases/TestcaseResultRenderer.svelte'
+    import ExpandableContainer from '$cmp/shared/layout/ExpandableContainer.svelte'
+    import type { RegisterSize } from '$lib/languages/commonLanguageFeatures.svelte'
+    import type { AvailableLanguages } from '$lib/Project.svelte'
+
+    interface Props {
+        testcases: Testcase[]
+        testcasesResult: TestcaseResult[]
+        registerNames: string[]
+        startingRegisterNames: string[]
+        hiddenRegistersNames?: string[]
+        editable?: boolean
+        systemSize: RegisterSize
+        /** The Target, which names the widths the register panels below group by. */
+        language: AvailableLanguages
+        style?: string
+    }
+
+    let {
+        testcases = $bindable(),
+        testcasesResult,
+        registerNames,
+        startingRegisterNames,
+        hiddenRegistersNames,
+        editable = true,
+        systemSize,
+        language,
+        style = ''
+    }: Props = $props()
+
+    function makeNewTestcase() {
+        return {
+            expectedMemory: [],
+            expectedOutput: '',
+            input: [],
+            expectedRegisters: {},
+            startingMemory: [],
+            startingRegisters: {}
+        } satisfies Testcase
+    }
+
+    let newTestcase = $state(makeNewTestcase())
+    let testcaseKey = $state(0)
+
+    function addTestcase() {
+        testcases = [...testcases, newTestcase]
+        newTestcase = makeNewTestcase()
+        toast.logPill('Testcase added', 3000)
+        testcaseKey++
+    }
+</script>
+
+<Column style="overflow-y: auto; {style}">
+    {#if testcasesResult.length > 0}
+        <Column
+            padding="1rem"
+            gap="1rem"
+            style="border: none; border-bottom: solid 0.2rem var(--secondary)"
+        >
+            {@const passedTestcases = testcasesResult.filter((t) => t.passed)}
+            {@const failedTestcases = testcasesResult.filter((t) => !t.passed)}
+            {@const totalTestcases = testcasesResult.length}
+            <Header noMargin type="h2">
+                {failedTestcases.length === 0 ? '✅' : '❌'}
+                {passedTestcases.length} / {totalTestcases} testcases passed
+            </Header>
+            {#each failedTestcases.keys() as i (i)}
+                <TestcaseResultRenderer
+                    {systemSize}
+                    {language}
+                    bind:testcaseResult={failedTestcases[i]}
+                    {registerNames}
+                    {hiddenRegistersNames}
+                />
+            {/each}
+        </Column>
+    {/if}
+    <Column padding="1rem" gap="1rem">
+        <ExpandableContainer expanded={!editable}>
+            {#snippet title()}
+                <Header noMargin>Testcases</Header>
+            {/snippet}
+            <Column gap="1rem">
+                {#if testcases.length === 0}
+                    <p style="padding: 1rem">
+                        No testcases yet. Add new ones to test the correctness of your code.
+                    </p>
+                {:else}
+                    {#each testcases as testcase, i (i)}
+                        <div class="testcase-wrapper">
+                            <TestcaseRenderer
+                                {systemSize}
+                                {language}
+                                style="padding-top: 0.3rem"
+                                bind:testcase={testcases[i]}
+                                editable={false}
+                                {registerNames}
+                                {startingRegisterNames}
+                                {hiddenRegistersNames}
+                            >
+                                {#if editable}
+                                    <Row justify="end">
+                                        <Button
+                                            onClick={() =>
+                                                (testcases = testcases.filter(
+                                                    (t) => t !== testcase
+                                                ))}
+                                            hasIcon
+                                            cssVar="red"
+                                            style="padding: 0.5rem 0.6rem; gap: 0.4rem"
+                                        >
+                                            <Icon>
+                                                <FaTimes />
+                                            </Icon>
+                                            Remove Testcase
+                                        </Button>
+                                    </Row>
+                                {/if}
+                            </TestcaseRenderer>
+                        </div>
+                    {/each}
+                {/if}
+            </Column>
+        </ExpandableContainer>
+        {#if editable}
+            <Header noMargin>New Testcase</Header>
+            {#key testcaseKey}
+                <TestcaseRenderer
+                    {systemSize}
+                    {language}
+                    {registerNames}
+                    {startingRegisterNames}
+                    {hiddenRegistersNames}
+                    style="border: solid 0.1rem var(--accent)"
+                    editable
+                    bind:testcase={newTestcase}
+                >
+                    <Row justify="end">
+                        <Button
+                            onClick={addTestcase}
+                            hasIcon
+                            style="padding: 0.5rem 0.6rem; gap: 0.4rem"
+                        >
+                            <Icon>
+                                <FaPlus />
+                            </Icon>
+                            Add Testcase
+                        </Button>
+                    </Row>
+                </TestcaseRenderer>
+            {/key}
+        {/if}
+    </Column>
+</Column>
+
+<style>
+    .testcase-wrapper:not(:last-child) {
+        border-bottom: solid 0.2rem var(--secondary);
+    }
+</style>

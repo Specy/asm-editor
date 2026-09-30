@@ -1,33 +1,48 @@
 <script lang="ts">
-    import FloatingContainer from '$cmp/shared/layout/FloatingContainer.svelte'
+    /**
+     * A language's documentation, searchable: the Workbench's Documentation panel. With
+     * `showSearch` off a caller draws the search field itself and binds `searchValue`.
+     */
     import Input from '$cmp/shared/input/Input.svelte'
-    import M68KDocumentation from '$cmp/documentation/m68k/M68KDocumentation.svelte'
     import type { AvailableLanguages } from '$lib/Project.svelte'
+    import M68KDocumentation from '$cmp/documentation/m68k/M68KDocumentation.svelte'
     import MipsDocumentation from '$cmp/documentation/mips/MIPSDocumentation.svelte'
     import RISCVDocumentation from '$cmp/documentation/riscv/RISCVDocumentation.svelte'
     import X86Documentation from '$cmp/documentation/x86/X86Documentation.svelte'
     import Z80Documentation from '$cmp/documentation/z80/Z80Documentation.svelte'
+
     interface Props {
-        visible: boolean
         language: AvailableLanguages
         disableLinks?: boolean
+        /** Whether the documentation is on screen, which is when a search scrolls to its match. */
+        visible?: boolean
+        searchValue?: string
+        showSearch?: boolean
+        /** Fill the container and scroll inside it, rather than taking 80% of the screen. */
+        fill?: boolean
     }
 
-    let { visible = $bindable(), language, disableLinks = false }: Props = $props()
-    let searchValue = $state('')
+    let {
+        language,
+        disableLinks = false,
+        visible = $bindable(true),
+        searchValue = $bindable(''),
+        showSearch = true,
+        fill = false
+    }: Props = $props()
 </script>
 
-<FloatingContainer bind:visible title="{language} Documentation" style="width: 45rem">
-    {#snippet header()}
+<div class="language-documentation" class:fill>
+    {#if showSearch}
         <div class="search-bar">
             <Input
                 bind:value={searchValue}
-                placeholder="Search"
+                placeholder="Search the documentation"
                 style="padding: 0rem; background-color: var(--tertiary); color: var(--tertiary-text);"
             />
         </div>
-    {/snippet}
-    <div class="scroll">
+    {/if}
+    <div class="scroll" class:fill>
         {#if language === 'M68K'}
             <M68KDocumentation
                 bind:searchValue
@@ -74,14 +89,29 @@
             />
         {/if}
     </div>
-</FloatingContainer>
+</div>
 
 <style>
+    .language-documentation {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+    .fill {
+        flex: 1;
+        height: 100%;
+    }
     .search-bar {
-        max-width: 15rem;
+        flex: none;
+        padding: 0.5rem;
     }
     .scroll {
         height: calc(var(--screen-height) * 0.8);
         overflow-y: auto;
+    }
+    .scroll.fill {
+        flex: 1;
+        height: auto;
+        min-height: 0;
     }
 </style>

@@ -72,6 +72,8 @@ One rule for every part of a Project (code, Settings, Testcases, Display configu
 
 One floating panel behind the cog, with a Preferences section and, when a Project is open, a Project section. Playgrounds show only the Preferences section.
 
+Update on 2026-09-30: the [Workbench redesign](./workbench.md) moves Settings into the Workbench's side panel, with sections for the Project, the Display configuration, Preferences, layout, shortcuts and the theme. No Playground ever got a settings panel; the Interactive editor has none.
+
 ### Serialization and migration
 
 - **IndexedDB:** Dexie version 2 with an upgrade that rewrites every stored project once: `code` becomes `files["main.<ext>"]` with the `plain` encoding, `entry` is set, `settings` starts empty (existing projects start from the defaults; their old global values are not carried over, which the changelog should say), everything else is kept. The normalizer used for imports and share links also runs on read as a cheap defence.

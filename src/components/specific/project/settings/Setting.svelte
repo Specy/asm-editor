@@ -1,6 +1,7 @@
 <script lang="ts">
     import type { PreferenceValue } from '$stores/preferencesStore.svelte'
     import Switch from '$cmp/shared/input/Switch.svelte'
+    import SegmentedControl from '$cmp/specific/project/cpu/SegmentedControl.svelte'
     import { createEventDispatcher } from 'svelte'
 
     interface Props {
@@ -26,6 +27,22 @@
                 onChange={(checked) => {
                     dispatcher('changeValue', checked)
                 }}
+            />
+        {/if}
+        {#if entry.type === 'choice' && entry.options}
+            <SegmentedControl
+                options={entry.options.map((option) => ({
+                    id: String(option.value),
+                    label: option.label
+                }))}
+                selected={String(value)}
+                onSelect={(id) => {
+                    const option = entry.options?.find(
+                        (candidate) => String(candidate.value) === id
+                    )
+                    if (option) dispatcher('changeValue', option.value)
+                }}
+                style="min-width: 9rem"
             />
         {/if}
         {#if entry.type === 'number'}

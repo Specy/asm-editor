@@ -1,62 +1,40 @@
 <script lang="ts">
-    import { afterNavigate } from '$app/navigation'
+    /**
+     * Choosing and editing the app's theme: the presets, each with a strip of its colours, "Create
+     * new theme" (a copy of the current colours), and one row per colour of an editable theme.
+     * Everything repaints as it changes, the Workbench beside it included. It was the `/themes` page
+     * before it became the Theme section of the Workbench's Settings.
+     */
     import Button from '$cmp/shared/button/Button.svelte'
     import ColorThemeRow from '$cmp/specific/ColorThemeRow.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
-    import Page from '$cmp/shared/layout/Page.svelte'
-    import Title from '$cmp/shared/layout/Header.svelte'
     import { ThemeStore } from '$stores/themeStore.svelte'
-    import FaAngleLeft from '~icons/fa-solid/angle-left'
     import { scale } from 'svelte/transition'
     import Column from '$cmp/shared/layout/Column.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
     import FaPlus from '~icons/fa-solid/plus'
     import { Prompt } from '$stores/promptStore.svelte'
     import FaTrashAlt from '~icons/fa-solid/trash-alt'
-    import { resolve } from '$app/paths'
-    import type { ResolvedPathname } from '$app/types'
 
     let theme = ThemeStore.themeList
-    let previousPage: ResolvedPathname = $state(resolve('/projects', {}))
-
-    afterNavigate(({ from }) => {
-        previousPage = (from?.url.pathname as ResolvedPathname) ?? previousPage
-    })
 </script>
 
-<svelte:head>
-    <title>Theme</title>
-    <meta name="description" content="Change the theme of the app" />
-    <meta property="og:description" content="Change the theme of the app" />
-    <meta property="og:title" content="Theme" />
-</svelte:head>
-
-<Page cropped contentStyle="max-width: 40rem; padding: 1rem; gap: 1rem">
-    <div class="header">
-        <a href={previousPage} class="go-back" title="Go to previous page">
-            <Button hasIcon cssVar="primary" style="padding: 0.4rem" title="Go to previous page">
-                <Icon size={2}>
-                    <FaAngleLeft />
-                </Icon>
-            </Button>
-        </a>
-        <Title noMargin>Theme</Title>
-    </div>
-    <h2>Theme Presets</h2>
+<div class="theme-editor">
+    <h2 class="presets-title">Theme presets</h2>
     <Row wrap gap="1rem">
-        {#each ThemeStore.themes as t}
+        {#each ThemeStore.themes as t (t.id)}
             <button
                 class="theme-selector"
                 onclick={() => ThemeStore.select(t.id)}
                 style={`
-                cursor: pointer;
-                background-color: ${t.theme.background.color}; 
-                color: ${ThemeStore.textOfColor(t.theme.background.color)};
-                font-weight: bold;
-                border: solid 0.2rem ${
-                    t.id === ThemeStore.meta.id ? t.theme.accent.color : t.theme.secondary.color
-                };
-                `}
+            cursor: pointer;
+            background-color: ${t.theme.background.color}; 
+            color: ${ThemeStore.textOfColor(t.theme.background.color)};
+            font-weight: bold;
+            border: solid 0.2rem ${
+                t.id === ThemeStore.meta.id ? t.theme.accent.color : t.theme.secondary.color
+            };
+            `}
             >
                 <Row style="height: 2rem; width: 100%">
                     {#each Object.values(t.theme) as themeProp (themeProp.prop)}
@@ -115,17 +93,17 @@
         {#if !ThemeStore.meta.editable}
             <div
                 style="
-                background-color: rgba(var(--RGB-secondary), 0.7);
-                backdrop-filter: blur(0.2rem);
-                position: absolute;
-                display: flex;
-                margin: -1rem;
-                border-radius: 1rem;
-                justify-content: center;
-                align-items: center;
-                font-size: 1.5rem;
-                inset: 0;
-                "
+            background-color: rgba(var(--RGB-secondary), 0.7);
+            backdrop-filter: blur(0.2rem);
+            position: absolute;
+            display: flex;
+            margin: -1rem;
+            border-radius: 1rem;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.5rem;
+            inset: 0;
+            "
             >
                 Create a new theme to edit it
             </div>
@@ -138,39 +116,25 @@
             {/if}
         {/each}
     </Column>
-</Page>
+</div>
 
 <style lang="scss">
-    .header {
-        display: flex;
-        margin-top: 4rem;
-        margin-bottom: 1rem;
-        align-items: center;
-    }
-    .colors {
+    .theme-editor {
         display: flex;
         flex-direction: column;
         gap: 1rem;
-        margin-bottom: 3rem;
+    }
+    .presets-title {
+        margin: 0;
+        font-size: 1.1rem;
     }
     .theme-selector {
         display: flex;
         flex-direction: column;
         border-radius: 0.5rem;
         min-width: min(100%, 10rem);
+        flex: 1;
 
         overflow: hidden;
-    }
-    @media screen and (min-width: 650px) {
-        .go-back {
-            position: absolute;
-            top: 1rem;
-            left: 1rem;
-        }
-    }
-    @media screen and (max-width: 650px) {
-        .header {
-            margin-top: 1rem;
-        }
     }
 </style>

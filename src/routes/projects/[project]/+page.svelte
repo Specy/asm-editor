@@ -7,9 +7,12 @@
         type StoredProject
     } from '$lib/Project.svelte'
     import { ProjectStore, SHARE_ID } from '$stores/projectsStore.svelte'
-    import { onMount, untrack } from 'svelte'
+    import { onMount } from 'svelte'
     import { toast } from '$stores/toastStore'
-    import ProjectEditor from './Project.svelte'
+    import Workbench from '$cmp/specific/workbench/Workbench.svelte'
+    import ThemeScope from '$cmp/shared/providers/ThemeScope.svelte'
+    import FaDonate from '~icons/fa-solid/heart'
+    import { preferencesStore } from '$stores/preferencesStore.svelte'
     import { Monaco } from '$lib/monaco/Monaco'
     import { Prompt } from '$stores/promptStore.svelte'
     import { goto } from '$app/navigation'
@@ -17,32 +20,27 @@
     import Page from '$cmp/shared/layout/Page.svelte'
     import lzstring from 'lz-string'
     import ButtonLink from '$cmp/shared/button/ButtonLink.svelte'
-    import { DEFAULT_THEME, ThemeStore } from '$stores/themeStore.svelte'
     import { LANGUAGE_THEMES } from '$lib/Config'
-    import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
     import { blobDownloader, createShareLink, ShareTooLargeError } from '$lib/utils'
     import { serializer } from '$lib/json'
     import { createExamSessionLink, parseLegacyProjectExamPayload } from '$lib/exam'
-    import { resolveProjectSettings } from '$lib/projectSettings'
     import { projectArchiveName, projectToArchive } from '$lib/projectArchive'
 
     let project = $state(makeProject())
     let status: 'loading' | 'loaded' | 'error' = $state('loading')
-    let oldTheme = ThemeStore.getChosenTheme()
     let linkedMigrationNoticeShown = false
-
-    $effect(() => {
-        const theme = LANGUAGE_THEMES[project.language]
-        untrack(() => {
-            if (ThemeStore.meta.id !== DEFAULT_THEME.id) return //prefer the user's theme
-            ThemeStore.select(theme, true)
-        })
-    })
-    onMount(() => {
-        return () => {
-            ThemeStore.select(oldTheme, true)
-        }
-    })
+    /** A change the Workbench reported since the last successful save. */
+    let dirty = $state(false)
+    let lastSaveFailed = $state(false)
+    /**
+     * Whether the Project has changes nothing will save on its own, which is when the Workbench
+     * shows Save ([the design record](../../../../docs/design/workbench.md), Save): a shared Project
+     * is nobody's until saved, and under autosave only a failed save leaves changes behind.
+     */
+    const unsaved = $derived(
+        project.id === SHARE_ID ||
+            (dirty && (!preferencesStore.values.autoSave.value || lastSaveFailed))
+    )
 
     async function loadProject() {
         const id = $page.params.project
@@ -274,59 +272,62 @@
     </div>
 {/snippet}
 <Page>
-    {#key project.id}
-        <EmulatorLoader
-            bind:code={project.code}
-            source={{ files: project.files, entry: project.entry }}
-            language={project.language}
-            settings={{
-                automaticChecking: false,
-                display: project.display,
-                screenHistoryBudgetMb: resolveProjectSettings(project.language, project.settings)
-                    .screenHistoryBudgetMb,
-                fileSystemHistoryBudgetMb: resolveProjectSettings(
-                    project.language,
-                    project.settings
-                ).fileSystemHistoryBudgetMb,
-                peripherals: { fileSystem: project.fileSystem }
-            }}
-        >
-            {#snippet children(emulator)}
-                <ProjectEditor
-                    {emulator}
-                    name={project.name}
-                    language={project.language}
-                    bind:code={project.code}
-                    bind:files={project.files}
-                    bind:entry={project.entry}
-                    fileSystem={project.fileSystem}
-                    bind:testcases={project.testcases}
-                    bind:display={project.display}
-                    bind:settings={project.settings}
-                    on:wantsToLeave={() => {
-                        changePage('/projects')
-                    }}
-                    on:save={async ({ detail }) => {
-                        if (!(await save(project, detail.silent))) return
-                        console.log('Saved')
-                        if (!detail.silent) toast.logPill('Project saved')
-                    }}
-                    on:share={() => {
-                        share(project)
-                    }}
-                />
-            {/snippet}
-            {#snippet loading()}
-                {@render loadingScreen(false)}
-            {/snippet}
-        </EmulatorLoader>
-        {#if status === 'loading' || status === 'error'}
-            {@render loadingScreen(status === 'error')}
-        {/if}
-    {/key}
+    <div class="workbench-page">
+        <ThemeScope theme={LANGUAGE_THEMES[project.language]}>
+            {#if status === 'loaded'}
+                {#key project.id}
+                    <Workbench
+                        {project}
+                        {unsaved}
+                        onBack={() => changePage('/projects')}
+                        onSave={async ({ silent }) => {
+                            const saved = await save(project, silent)
+                            lastSaveFailed = !saved
+                            if (!saved) return
+                            dirty = false
+                            if (!silent) toast.logPill('Project saved')
+                        }}
+                        onChange={() => (dirty = true)}
+                        onShare={() => share(project)}
+                        hostLinks={[
+                            {
+                                id: 'donate',
+                                title: 'Donate',
+                                icon: FaDonate,
+                                onClick: () => changePage('/donate')
+                            }
+                        ]}
+                    >
+                        {#snippet loading()}
+                            {@render loadingScreen(false)}
+                        {/snippet}
+                    </Workbench>
+                {/key}
+            {/if}
+        </ThemeScope>
+    </div>
+    {#if status === 'loading' || status === 'error'}
+        {@render loadingScreen(status === 'error')}
+    {/if}
 </Page>
 
 <style lang="scss">
+    /* the Workbench fills its container, and here the container is the whole screen */
+    .workbench-page {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: var(--screen-height);
+        min-height: 0;
+        overflow: hidden;
+
+        /* a flex item keeps its content's height unless told otherwise, and the Workbench's
+           content is taller than the screen whenever the debug column is open */
+        :global(.theme-scope) {
+            min-height: 0;
+        }
+    }
+
     .overlay {
         position: fixed;
         top: 0;

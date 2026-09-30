@@ -230,6 +230,8 @@ Include the filesystem sidebar now. Its initial layout is an absolutely position
 
 Choosing the displayed File remains separate from choosing the Entry path. The previously accepted missing-file and unreadable-text rules still apply when showing current Project Files. The sidebar's file-management controls and inspection of live program output alongside snapshot source are accepted below.
 
+Update on 2026-09-30: the [Workbench redesign](./workbench.md) is the deferred layout. The Explorer becomes a side panel beside the icon rail, and the displayed File becomes the active one of a row of file tabs, which says `Live file` while a Debug session shows a File's current contents rather than the Build's. The requirement for a custom file sidebar, separate from the layout `Sidebar`, still holds.
+
 ## Accepted: initial sidebar file-management controls
 
 Accepted by the owner on 2026-09-08, with the explicit requirement to build a new custom file sidebar rather than reuse the layout Sidebar. Current Project storage contains multiple Files; the existing project editor still binds only the Entry file's text and does not provide a file tree or individual-file management controls.

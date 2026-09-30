@@ -150,6 +150,26 @@ The fixed versions of the **Files** and **Entry path** used by one Build, identi
 
 The lifetime of a built program retained for execution, inspection, and instruction Undo, from a successful Build until Stop or disposal. Program exit does not itself end the session or return host editing access to the **Files**.
 
+## Workbench
+
+The full-screen editor in which a person writes, builds, debugs and tests a program, laid out like an IDE and hosted by a page that owns everything around it: the project page and the exam session. Distinct from the **Interactive editor**; the two are separate on purpose.
+_Avoid_: project editor, IDE, full editor, fullscreen editor
+
+## Interactive editor
+
+The editor embedded inside another page's content, showing only the panels its host asks for: every **Playground**, the documentation's instruction pages, the exam builder, the lecture agent and the chat page. Distinct from the **Workbench**.
+_Avoid_: embed editor, small editor, playground editor, inline editor (for the component)
+
+## Debug tools
+
+The three views of a **Debug session** that follow execution step by step: the Stack pointer (the memory around the stack pointer), the History (the steps instruction Undo can take back, **Pokes** included) and the Call stack. In the **Workbench** they are floating windows or sections of the debug column, as a **Preference** chooses. Registers, memory and the **Screen** are not debug tools.
+_Avoid_: inspectors, trackers, user tools, floating panels
+
+## Log
+
+The **Workbench**'s record of what it did for the person: each Build with its result, each test run with the outcome of every **Testcase**, and each program exit with its running time. Distinct from the **Terminal**, which holds what the program itself wrote, and from the **Diagnostics**, which are listed on their own.
+_Avoid_: output, build output, console
+
 ## Settings
 
 Per-Project configuration that changes what the **Emulator** or the program does: the undo history size and the separate **Screen** and **FileSystem** undo budgets. They belong to one **Project**, are edited through the editor's GUI and are never a file the program can see. A Project records only the Settings decided for it; anything undecided follows the app's default for its language. The MARS bitmap display is not a Setting, see **Display configuration**.

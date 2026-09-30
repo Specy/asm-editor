@@ -7,6 +7,24 @@ type Version = {
 }
 export const versions: Version[] = [
     {
+        version: '11.0.0',
+        title: 'New editor layout',
+        date: new Date('2026-09-30'),
+        changes: [
+            'Redesigned the project editor to look like an IDE: a bar of icons opens the files, testcases, documentation, AI assistant and settings beside the code, open files are tabs, and the terminal, a log of builds and tests, and the problems sit under the code',
+            'Building opens a debugger column with the registers, memory and screen; the stack pointer, history and call stack can float as windows or sit in that column',
+            'Every panel can be resized, and the editor remembers sizes and folded sections',
+            'Documentation and testcases can be maximized over the editor to read them',
+            'Settings now also hold the MARS and RARS display, the keyboard shortcuts and the themes; the separate themes page is gone',
+            'Added a setting to show panels as cards or as edge to edge lines',
+            'Phones and tablets have their own layout, with the build and run buttons always in reach',
+            'Exam sessions use the new editor, with the exercise in a panel beside the code'
+        ],
+        notes: [
+            'The "Show memory tab" and "Show screen" preferences were removed: memory and the screen are always part of the debugger'
+        ]
+    },
+    {
         version: '10.0.0',
         title: 'Graphics and simulators overhaul',
         date: new Date('2026-09-20'),

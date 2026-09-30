@@ -1,4 +1,10 @@
 <script lang="ts">
+    /**
+     * The Project's Files as a tree, with the controls that manage them: create, upload, rename or
+     * move, delete, download, and choose the Entry path: the Workbench's Explorer panel. Mutations
+     * are disabled while `locked`, i.e. during a Debug session, and browsing and downloading stay
+     * available.
+     */
     import FileImporter from '$cmp/shared/fileImporter/FileImporter.svelte'
     import type { FileSystem } from '$lib/languages/peripherals/FileSystem'
     import { fileBytes, type ProjectFiles } from '$lib/projectFiles'
@@ -7,7 +13,6 @@
     import { toast } from '$stores/toastStore'
     import { untrack } from 'svelte'
     import { SvelteSet } from 'svelte/reactivity'
-    import { fly } from 'svelte/transition'
     import FaAngleRight from '~icons/fa-solid/angle-right'
     import FaDownload from '~icons/fa-solid/download'
     import FaFile from '~icons/fa-solid/file'
@@ -18,8 +23,6 @@
     import FaPlus from '~icons/fa-solid/plus'
     import FaTrash from '~icons/fa-solid/trash'
     import FaUpload from '~icons/fa-solid/upload'
-    import FaTimes from '~icons/fa-solid/times'
-    import IcRoundViewSidebar from '~icons/ic/round-view-sidebar'
 
     type TreeNode = {
         path: string
@@ -40,7 +43,6 @@
         analysisStatus?: Readonly<
             Record<string, 'assembled' | 'not-reachable' | 'binary' | 'unknown'>
         >
-        open?: boolean
         onSelect: (path: string) => void
         onEntryChange: (path: string) => void
         onRenamed?: (from: string, to: string) => void
@@ -56,7 +58,6 @@
         locked = false,
         diagnosticCounts = {},
         analysisStatus = {},
-        open = $bindable(false),
         onSelect,
         onEntryChange,
         onRenamed,
@@ -68,9 +69,9 @@
     const rows = $derived(makeTreeRows(files, collapsedDirectories))
     const directories = $derived(directoryPaths(files))
 
+    //the File being shown is always visible in the tree, whoever opened it
     $effect(() => {
         const path = selectedPath
-        if (!open) return
         untrack(() => expandParents(path))
     })
 
@@ -190,8 +191,10 @@
         try {
             const previousPath = targetPath
             fileSystem.remove(previousPath)
-            onDeleted?.(previousPath)
-            if (previousPath === selectedPath) {
+            //a host that follows deletions picks what to show next itself (the Workbench closes the
+            //File's tab); otherwise the first File left, or the Entry path, takes its place
+            if (onDeleted) onDeleted(previousPath)
+            else if (previousPath === selectedPath) {
                 onSelect(Object.keys(fileSystem.files)[0] ?? entry)
             }
         } catch (error) {
@@ -224,249 +227,152 @@
     }
 </script>
 
-{#if !open}
-    <button
-        class="files-toggle"
-        title="Open Explorer"
-        aria-label="Open Explorer"
-        aria-expanded="false"
-        onclick={() => (open = true)}
-    >
-        <IcRoundViewSidebar />
-    </button>
-{/if}
-
-{#if open}
-    <div class="file-sidebar-viewport">
-        <aside
-            class="file-sidebar"
-            aria-label="Project Explorer"
-            in:fly={{ x: 320, opacity: 0, duration: 320 }}
-            out:fly={{ x: 320, opacity: 0, duration: 260 }}
+<section class="explorer-section">
+    <div class="section-heading">
+        <button
+            class="section-toggle"
+            aria-expanded={projectExpanded}
+            onclick={() => (projectExpanded = !projectExpanded)}
         >
-            <header class="explorer-heading">
-                <span>EXPLORER</span>
-                <button
-                    class="icon-action close"
-                    title="Close Explorer"
-                    onclick={() => (open = false)}
-                >
-                    <FaTimes />
+            <span class="disclosure" class:expanded={projectExpanded}>
+                <FaAngleRight />
+            </span>
+            <strong title={name}>{name.trim() || 'Project'}</strong>
+        </button>
+        <div class="section-actions">
+            <button
+                class="icon-action"
+                disabled={locked}
+                title="New text file"
+                onclick={createFile}
+            >
+                <FaPlus />
+            </button>
+            <FileImporter
+                as="buffer"
+                on:import={(event) => {
+                    if (event.detail.data instanceof ArrayBuffer) {
+                        void uploadFile(event.detail.file, event.detail.data)
+                    }
+                }}
+            >
+                <button class="icon-action" disabled={locked} title="Upload file">
+                    <FaUpload />
                 </button>
-            </header>
+            </FileImporter>
+            <button
+                class="icon-action"
+                disabled={directories.length === 0}
+                title="Collapse folders"
+                onclick={collapseAll}
+            >
+                <FaMinus />
+            </button>
+        </div>
+    </div>
 
-            <section class="explorer-section">
-                <div class="section-heading">
+    {#if projectExpanded}
+        {#if !files[entry]}
+            <div class="entry-warning" title={entry}>Entry missing: {entry}</div>
+        {/if}
+        <div class="file-tree">
+            {#if rows.length === 0}
+                <div class="empty">This Project has no files.</div>
+            {/if}
+            {#each rows as row (row.directory ? `directory:${row.path}` : `file:${row.path}`)}
+                {#if row.directory}
                     <button
-                        class="section-toggle"
-                        aria-expanded={projectExpanded}
-                        onclick={() => (projectExpanded = !projectExpanded)}
+                        class="tree-row directory"
+                        style:padding-left={`${0.35 + row.depth * 0.85}rem`}
+                        title={row.path}
+                        aria-expanded={row.expanded}
+                        onclick={() => toggleDirectory(row.path)}
                     >
-                        <span class="disclosure" class:expanded={projectExpanded}>
+                        <span class="disclosure" class:expanded={row.expanded}>
                             <FaAngleRight />
                         </span>
-                        <strong title={name}>{name.trim() || 'Project'}</strong>
+                        <span class="file-icon folder"><FaFolder /></span>
+                        <span class="ellipsis">{row.name}</span>
                     </button>
-                    <div class="section-actions">
+                {:else}
+                    <div
+                        class="tree-row file"
+                        class:selected={row.path === selectedPath}
+                        class:entry={row.path === entry}
+                        class:binary={files[row.path]?.encoding === 'base64'}
+                        title={row.path}
+                    >
                         <button
-                            class="icon-action"
-                            disabled={locked}
-                            title="New text file"
-                            onclick={createFile}
+                            class="file-select"
+                            style:padding-left={`${0.35 + row.depth * 0.85}rem`}
+                            onclick={() => onSelect(row.path)}
                         >
-                            <FaPlus />
-                        </button>
-                        <FileImporter
-                            as="buffer"
-                            on:import={(event) => {
-                                if (event.detail.data instanceof ArrayBuffer) {
-                                    void uploadFile(event.detail.file, event.detail.data)
-                                }
-                            }}
-                        >
-                            <button class="icon-action" disabled={locked} title="Upload file">
-                                <FaUpload />
-                            </button>
-                        </FileImporter>
-                        <button
-                            class="icon-action"
-                            disabled={directories.length === 0}
-                            title="Collapse folders"
-                            onclick={collapseAll}
-                        >
-                            <FaMinus />
-                        </button>
-                    </div>
-                </div>
-
-                {#if projectExpanded}
-                    {#if !files[entry]}
-                        <div class="entry-warning" title={entry}>Entry missing: {entry}</div>
-                    {/if}
-                    <div class="file-tree">
-                        {#if rows.length === 0}
-                            <div class="empty">This Project has no files.</div>
-                        {/if}
-                        {#each rows as row (row.directory ? `directory:${row.path}` : `file:${row.path}`)}
-                            {#if row.directory}
-                                <button
-                                    class="tree-row directory"
-                                    style:padding-left={`${0.35 + row.depth * 0.85}rem`}
-                                    title={row.path}
-                                    aria-expanded={row.expanded}
-                                    onclick={() => toggleDirectory(row.path)}
+                            <span class="disclosure-spacer"></span>
+                            <span class="file-icon"><FaFile /></span>
+                            <span class="ellipsis">{row.name}</span>
+                            {#if diagnosticCounts[row.path]?.errors}
+                                <span
+                                    class="diagnostic-count error"
+                                    title={`${diagnosticCounts[row.path].errors} error${diagnosticCounts[row.path].errors === 1 ? '' : 's'}`}
+                                    >{diagnosticCounts[row.path].errors}</span
                                 >
-                                    <span class="disclosure" class:expanded={row.expanded}>
-                                        <FaAngleRight />
-                                    </span>
-                                    <span class="file-icon folder"><FaFolder /></span>
-                                    <span class="ellipsis">{row.name}</span>
-                                </button>
-                            {:else}
-                                <div
-                                    class="tree-row file"
-                                    class:selected={row.path === selectedPath}
-                                    class:entry={row.path === entry}
-                                    class:binary={files[row.path]?.encoding === 'base64'}
-                                    title={row.path}
-                                >
-                                    <button
-                                        class="file-select"
-                                        style:padding-left={`${0.35 + row.depth * 0.85}rem`}
-                                        onclick={() => onSelect(row.path)}
-                                    >
-                                        <span class="disclosure-spacer"></span>
-                                        <span class="file-icon"><FaFile /></span>
-                                        <span class="ellipsis">{row.name}</span>
-                                        {#if diagnosticCounts[row.path]?.errors}
-                                            <span
-                                                class="diagnostic-count error"
-                                                title={`${diagnosticCounts[row.path].errors} error${diagnosticCounts[row.path].errors === 1 ? '' : 's'}`}
-                                                >{diagnosticCounts[row.path].errors}</span
-                                            >
-                                        {/if}
-                                        {#if diagnosticCounts[row.path]?.warnings}
-                                            <span
-                                                class="diagnostic-count warning"
-                                                title={`${diagnosticCounts[row.path].warnings} warning${diagnosticCounts[row.path].warnings === 1 ? '' : 's'}`}
-                                                >{diagnosticCounts[row.path].warnings}</span
-                                            >
-                                        {/if}
-                                        {#if analysisStatus[row.path] === 'not-reachable'}
-                                            <span
-                                                class="analysis-status"
-                                                title="Not assembled from the current Entry">—</span
-                                            >
-                                        {/if}
-                                        {#if row.path === entry}
-                                            <span class="entry-mark" title="Project entry file"
-                                                >ENTRY</span
-                                            >
-                                        {/if}
-                                    </button>
-                                    <div class="row-actions">
-                                        {#if row.path !== entry}
-                                            <button
-                                                disabled={locked}
-                                                title="Set as entry file"
-                                                onclick={() => onEntryChange(row.path)}
-                                            >
-                                                <FaFlag />
-                                            </button>
-                                        {/if}
-                                        <button
-                                            title="Download exact bytes"
-                                            onclick={() => downloadFile(row.path)}
-                                        >
-                                            <FaDownload />
-                                        </button>
-                                        <button
-                                            disabled={locked}
-                                            title="Rename or move"
-                                            onclick={() => renameFile(row.path)}
-                                        >
-                                            <FaPen />
-                                        </button>
-                                        <button
-                                            disabled={locked}
-                                            title="Delete"
-                                            onclick={() => deleteFile(row.path)}
-                                        >
-                                            <FaTrash />
-                                        </button>
-                                    </div>
-                                </div>
                             {/if}
-                        {/each}
+                            {#if diagnosticCounts[row.path]?.warnings}
+                                <span
+                                    class="diagnostic-count warning"
+                                    title={`${diagnosticCounts[row.path].warnings} warning${diagnosticCounts[row.path].warnings === 1 ? '' : 's'}`}
+                                    >{diagnosticCounts[row.path].warnings}</span
+                                >
+                            {/if}
+                            {#if analysisStatus[row.path] === 'not-reachable'}
+                                <span
+                                    class="analysis-status"
+                                    title="Not assembled from the current Entry">—</span
+                                >
+                            {/if}
+                            {#if row.path === entry}
+                                <span class="entry-mark" title="Project entry file">ENTRY</span>
+                            {/if}
+                        </button>
+                        <div class="row-actions">
+                            {#if row.path !== entry}
+                                <button
+                                    disabled={locked}
+                                    title="Set as entry file"
+                                    onclick={() => onEntryChange(row.path)}
+                                >
+                                    <FaFlag />
+                                </button>
+                            {/if}
+                            <button
+                                title="Download exact bytes"
+                                onclick={() => downloadFile(row.path)}
+                            >
+                                <FaDownload />
+                            </button>
+                            <button
+                                disabled={locked}
+                                title="Rename or move"
+                                onclick={() => renameFile(row.path)}
+                            >
+                                <FaPen />
+                            </button>
+                            <button
+                                disabled={locked}
+                                title="Delete"
+                                onclick={() => deleteFile(row.path)}
+                            >
+                                <FaTrash />
+                            </button>
+                        </div>
                     </div>
                 {/if}
-            </section>
-        </aside>
-    </div>
-{/if}
+            {/each}
+        </div>
+    {/if}
+</section>
 
 <style lang="scss">
-    .files-toggle {
-        position: absolute;
-        z-index: 4;
-        top: 0.55rem;
-        right: 0.55rem;
-        display: grid;
-        place-items: center;
-        width: 2.05rem;
-        height: 2.05rem;
-        padding: 0.48rem;
-        border: 1px solid color-mix(in srgb, var(--tertiary) 80%, transparent);
-        border-radius: 0.2rem;
-        color: var(--secondary-text);
-        background: color-mix(in srgb, var(--primary) 80%, transparent);
-        box-shadow: 0 2px 10px rgb(0 0 0 / 0.28);
-        cursor: pointer;
-
-        &:hover {
-            background: var(--tertiary);
-        }
-    }
-
-    .file-sidebar-viewport {
-        position: absolute;
-        z-index: 5;
-        inset: 0.2rem;
-        overflow: clip;
-        border-radius: 0.45rem;
-        pointer-events: none;
-    }
-
-    .file-sidebar {
-        position: absolute;
-        inset: 0 0 0 auto;
-        display: flex;
-        flex-direction: column;
-        width: min(14rem, calc(100% - 0.75rem));
-        height: 100%;
-        min-height: 0;
-        color: var(--secondary-text);
-        overflow: hidden;
-        background: color-mix(in srgb, var(--primary) 80%, transparent);
-        border: 1px solid var(--tertiary);
-        border-radius: 0.45rem;
-        box-shadow: -5px 0 18px rgb(0 0 0 / 0.3);
-        backdrop-filter: blur(0.45rem);
-        pointer-events: auto;
-    }
-
-    .explorer-heading {
-        display: flex;
-        flex: none;
-        align-items: center;
-        justify-content: space-between;
-        height: 2.35rem;
-        padding: 0 0.45rem 0 1.15rem;
-        border-bottom: 1px solid color-mix(in srgb, var(--tertiary) 65%, transparent);
-        font-size: 0.68rem;
-        letter-spacing: 0.08em;
-    }
-
     .icon-action,
     .row-actions button {
         display: grid;
@@ -662,7 +568,7 @@
         height: 0.85rem;
         color: color-mix(in srgb, var(--accent) 65%, var(--secondary-text));
 
-        svg {
+        :global(svg) {
             width: 0.78rem;
             height: 0.78rem;
         }

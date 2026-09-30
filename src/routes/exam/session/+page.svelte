@@ -12,8 +12,7 @@
     import Card from '$cmp/shared/layout/Card.svelte'
     import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
     import Editor from '$cmp/specific/project/Editor.svelte'
-    import ProjectEditor from '../../projects/[project]/Project.svelte'
-    import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
+    import ExamAssemblySection from '$cmp/specific/exam/ExamAssemblySection.svelte'
     import {
         createExamSessionLink,
         decodeExamPayload,
@@ -41,9 +40,9 @@
     import FaArrowLeft from '~icons/fa-solid/arrow-left'
     import FaArrowRight from '~icons/fa-solid/arrow-right'
     import Icon from '$cmp/shared/layout/Icon.svelte'
-    import FloatingLanguageDocumentation from '$cmp/specific/project/FloatingLanguageDocumentation.svelte'
-    import FaBook from '~icons/fa-solid/book'
     import ExamReviewAgentSidebar from '$cmp/specific/exam/ExamReviewAgentSidebar.svelte'
+    import ExamReviewAgent from '$cmp/specific/exam/ExamReviewAgent.svelte'
+    import type { Emulator } from '$lib/languages/Emulator'
     import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
     import { preloadAllEmulators } from '$lib/languages/Emulator'
 
@@ -66,7 +65,8 @@
     let examDisabled = $state(false)
     let unlockPasswordInput = $state('')
     let submissionUrl = $state('')
-    let documentationVisible = $state(false)
+    /** The panel open in an assembly section's Workbench; the header's AI button opens the review agent there. */
+    let assemblyPanel = $state<string | null>(null)
     let teacherAgentOpen = $state(false)
     let snapshotStorageKey = ''
     let snapshotSourceHash = ''
@@ -95,6 +95,8 @@
     )
     const activeSectionIndex = $derived(getSectionIndex(activeSectionId))
     const isReviewMode = $derived(!!exam?.submission)
+    //an assembly section's Workbench fills the screen under the header, so the column is bounded
+    const assemblyActive = $derived(activeSection?.type === ExamSectionType.AssemblyCoding)
     const hasInstructions = $derived(!!exam?.instructions.trim() && !isReviewMode)
     const isOnInstructions = $derived(hasInstructions && activeSectionId === '')
     const canGoToPreviousSection = $derived(
@@ -670,6 +672,20 @@
     <meta name="description" content="Take and review multi-section exams" />
 </svelte:head>
 
+{#snippet reviewAgent(emulator: Emulator)}
+    {#if exam && activeSection}
+        <ExamReviewAgent
+            {exam}
+            {sections}
+            submission={examSubmission}
+            activeSectionId={activeSection.id}
+            visibleAnswer={activeVisibleAnswer}
+            emulatorInstance={emulator}
+            style="border-radius: 0; border: none; box-shadow: none; flex: 1; min-height: 0;"
+        />
+    {/if}
+{/snippet}
+
 <Page>
     {#if status === 'loading'}
         <div class="overlay">
@@ -751,7 +767,9 @@
             </div>
         {/if}
 
-        <Column style="flex:1">
+        <Column
+            style="flex:1; {assemblyActive ? 'height: var(--screen-height); min-height: 0;' : ''}"
+        >
             <Card padding="0.6rem" background="secondary">
                 <div class="session-header">
                     <div class="header-left">
@@ -772,7 +790,14 @@
                             <Button
                                 cssVar="accent"
                                 hasIcon
-                                onClick={() => (teacherAgentOpen = !teacherAgentOpen)}
+                                onClick={() => {
+                                    //an assembly section shows the agent as a panel of its Workbench
+                                    if (activeSection?.type === ExamSectionType.AssemblyCoding) {
+                                        assemblyPanel = assemblyPanel === 'review' ? null : 'review'
+                                    } else {
+                                        teacherAgentOpen = !teacherAgentOpen
+                                    }
+                                }}
                                 title="Ask AI to review this result"
                                 style="padding:0.4rem; width:2.4rem; height:2.4rem; margin-right: 0.4rem; border-radius: 1.5rem; border-bottom-right-radius: 0.4rem;"
                             >
@@ -780,25 +805,6 @@
                                     <SparklesIcon />
                                 </Icon>
                             </Button>
-                        {/if}
-                        {#if activeSection?.type === ExamSectionType.AssemblyCoding}
-                            {@const assemblySection = activeSection as AssemblyCodingSection}
-                            <Button
-                                cssVar="accent2"
-                                hasIcon
-                                onClick={() => (documentationVisible = !documentationVisible)}
-                                title="Documentation"
-                                style="padding:0.4rem; width:2.4rem; height:2.4rem; margin-right: 2rem;"
-                            >
-                                <Icon>
-                                    <FaBook />
-                                </Icon>
-                            </Button>
-                            <FloatingLanguageDocumentation
-                                bind:visible={documentationVisible}
-                                language={assemblySection.language}
-                                disableLinks
-                            />
                         {/if}
                         {#if exerciseProgressLabel}
                             <span style="font-size: 1.2rem; min-width: 3.2ch">
@@ -853,46 +859,24 @@
                     </Row>
                 </Card>
             {:else if activeSection}
-                <Column style="flex:1">
+                <Column style="flex:1; min-height: 0;">
                     {#if activeSection.type === ExamSectionType.AssemblyCoding}
                         {@const assemblySection = activeSection as AssemblyCodingSection}
                         {#key `${assemblySection.id}-${assemblySection.language}`}
-                            <EmulatorLoader
+                            <ExamAssemblySection
+                                section={assemblySection}
                                 bind:code={assemblyAnswers[assemblySection.id]}
-                                language={assemblySection.language}
+                                bind:activePanel={assemblyPanel}
+                                readonly={examDisabled}
+                                review={isReviewMode ? reviewAgent : undefined}
                             >
-                                {#snippet children(emulator)}
-                                    <ProjectEditor
-                                        readonly={examDisabled}
-                                        {emulator}
-                                        name={assemblySection.title || 'Assembly section'}
-                                        language={assemblySection.language}
-                                        bind:code={assemblyAnswers[assemblySection.id]}
-                                        testcases={assemblySection.testcases}
-                                        embedded={true}
-                                        canEditTestcases={false}
-                                    >
-                                        <MarkdownRenderer
-                                            source={assemblySection.prompt}
-                                            disableLinks
-                                        />
-                                    </ProjectEditor>
-                                    {#if isReviewMode}
-                                        <ExamReviewAgentSidebar
-                                            bind:open={teacherAgentOpen}
-                                            exam={loadedExam}
-                                            {sections}
-                                            submission={examSubmission}
-                                            activeSectionId={activeSection.id}
-                                            visibleAnswer={activeVisibleAnswer}
-                                            emulatorInstance={emulator}
-                                        />
-                                    {/if}
+                                {#snippet prompt()}
+                                    <MarkdownRenderer
+                                        source={assemblySection.prompt}
+                                        disableLinks
+                                    />
                                 {/snippet}
-                                {#snippet loading()}
-                                    <Header>Loading emulator...</Header>
-                                {/snippet}
-                            </EmulatorLoader>
+                            </ExamAssemblySection>
                         {/key}
                     {:else}
                         <div class="non-assembly-layout">

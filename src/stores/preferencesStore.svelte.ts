@@ -8,21 +8,38 @@ import type { AvailableLanguages } from '$lib/Project.svelte'
  * ([ADR 0014](../../docs/adr/0014-settings-split-by-effect.md)).
  */
 
+/** Where a Preference is listed in the Workbench's Settings panel. */
+export type PreferenceSection = 'preferences' | 'layout'
+
+export type PreferenceOption<T> = {
+    value: T
+    label: string
+}
+
 export type PreferenceValue<T> = {
     name: string
-    type: 'boolean' | 'number' | 'string'
+    type: 'boolean' | 'number' | 'string' | 'choice'
     value: T
     onlyFor?: AvailableLanguages
+    section: PreferenceSection
+    /** The values a `choice` can take, in the order the panel lists them. */
+    options?: PreferenceOption<T>[]
 }
+
+/** Panels as separate rounded cards, or edge to edge with dividers. */
+export type PanelStyle = 'cards' | 'lines'
+/** The Debug tools as draggable windows, or as sections of the debug column. */
+export type DebugToolsPlacement = 'floating' | 'sections'
+
 export type PreferenceValues = {
     useDecimalAsDefault: PreferenceValue<boolean>
     autoScrollStackTab: PreferenceValue<boolean>
     autoSave: PreferenceValue<boolean>
-    showMemory: PreferenceValue<boolean>
-    showScreen: PreferenceValue<boolean>
     showDrawingBuffer: PreferenceValue<boolean>
     maxVisibleHistoryModifications: PreferenceValue<number>
     showPseudoInstructions: PreferenceValue<boolean>
+    panelStyle: PreferenceValue<PanelStyle>
+    debugTools: PreferenceValue<DebugToolsPlacement>
 }
 export type PreferenceKey = keyof PreferenceValues
 
@@ -34,8 +51,18 @@ function createValue<T>(name: string, value: T, onlyFor?: AvailableLanguages) {
         name,
         value,
         type: typeof value,
-        onlyFor
+        onlyFor,
+        section: 'preferences'
     } as PreferenceValue<T>
+}
+
+function createChoice<T extends string>(
+    name: string,
+    value: T,
+    options: PreferenceOption<T>[],
+    section: PreferenceSection
+): PreferenceValue<T> {
+    return { name, value, type: 'choice', options, section }
 }
 
 /** A fresh set of defaults, never shared, because the store mutates the one it holds. */
@@ -45,13 +72,31 @@ export function defaultPreferences(): PreferenceValues {
         autoScrollStackTab: createValue('Auto scroll the stack memory tab', true),
         autoSave: createValue('Auto save', true),
         showPseudoInstructions: createValue('Show pseudo instructions', true, 'MIPS'),
-        showMemory: createValue('Show memory tab', true),
-        showScreen: createValue('Show screen', true),
         showDrawingBuffer: createValue(
             'Show the drawing buffer of a double buffered screen',
             false
         ),
-        maxVisibleHistoryModifications: createValue('Maximum visible history steps', 10)
+        maxVisibleHistoryModifications: createValue('Maximum visible history steps', 10),
+        //the two variants the redesign brief explored, kept as the person's choice
+        //([the design record](../../docs/design/workbench.md), Layout Preferences)
+        panelStyle: createChoice<PanelStyle>(
+            'Panel style',
+            'cards',
+            [
+                { value: 'cards', label: 'Cards' },
+                { value: 'lines', label: 'Lines' }
+            ],
+            'layout'
+        ),
+        debugTools: createChoice<DebugToolsPlacement>(
+            'Stack pointer, History and Call stack',
+            'floating',
+            [
+                { value: 'floating', label: 'Floating' },
+                { value: 'sections', label: 'Sections' }
+            ],
+            'layout'
+        )
     }
 }
 
@@ -79,8 +124,14 @@ export function readStoredPreferences(
             typeof entry === 'object' && entry !== null
                 ? (entry as Record<string, unknown>).value
                 : entry
-        if (typeof value === defaults[key].type) {
-            ;(defaults[key] as PreferenceValue<unknown>).value = value
+        const preference = defaults[key] as PreferenceValue<unknown>
+        if (preference.type === 'choice') {
+            //a choice keeps only a value it still offers, so a renamed option falls back to the default
+            if (preference.options?.some((option) => option.value === value)) {
+                preference.value = value
+            }
+        } else if (typeof value === preference.type) {
+            preference.value = value
         }
     }
     return defaults

@@ -1,16 +1,22 @@
 <script lang="ts">
+    /**
+     * The shortcuts and their keys, each rebindable: pick one, press the keys, confirm. The keys are
+     * recorded from a focused input, which is what keeps the Workbench's own shortcut handler (it
+     * ignores keys typed into inputs) from also running the key being bound.
+     */
     import { shortcutsStore } from '$stores/shortcutsStore'
     import Button from '$cmp/shared/button/Button.svelte'
-    import FloatingContainer from '$cmp/shared/layout/FloatingContainer.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import FaCheck from '~icons/fa-solid/check'
     import FaUndo from '~icons/fa-solid/undo'
     import { onMount } from 'svelte'
     interface Props {
+        /** Whether the list is on screen; hiding it drops a key being recorded. */
         visible?: boolean
+        style?: string
     }
 
-    let { visible = $bindable(false) }: Props = $props()
+    let { visible = true, style = '' }: Props = $props()
     let currentShortcut = $state('')
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- This imperative accumulator must not self-invalidate and clear the input.
     let currentKeys = new Map<string, true>()
@@ -47,63 +53,59 @@
     })
 </script>
 
-<FloatingContainer {visible} title="Shortcuts" style="width: 45rem">
-    <div class="shortcuts column">
-        <input bind:this={inputRef} class="input-preview" />
-        {#each Array.from($shortcutsStore.entries()).sort((a, b) => a[1].id - b[1].id) as entry (entry[1].id)}
-            <div class="row input-row">
-                <div>
-                    {entry[1].description}
-                </div>
-                <div class="row" style="gap:0.3rem">
+<div class="shortcuts column" {style}>
+    <input bind:this={inputRef} class="input-preview" />
+    {#each Array.from($shortcutsStore.entries()).sort((a, b) => a[1].id - b[1].id) as entry (entry[1].id)}
+        <div class="row input-row">
+            <div>
+                {entry[1].description}
+            </div>
+            <div class="row" style="gap:0.3rem">
+                <Button
+                    active={entry[1].id === selectedId}
+                    cssVar="secondary"
+                    onClick={() => {
+                        selectedId = entry[1].id
+                    }}
+                >
+                    {entry[1].id !== selectedId ? entry[0] : currentShortcut}
+                </Button>
+                {#if entry[1].id === selectedId}
                     <Button
-                        active={entry[1].id === selectedId}
-                        cssVar="secondary"
+                        hasIcon
+                        style="min-height: 2.2rem"
                         onClick={() => {
-                            selectedId = entry[1].id
+                            shortcutsStore.updateKey(entry[0], currentShortcut)
+                            selectedId = -1
                         }}
                     >
-                        {entry[1].id !== selectedId ? entry[0] : currentShortcut}
+                        <Icon size={1}>
+                            <FaCheck />
+                        </Icon>
                     </Button>
-                    {#if entry[1].id === selectedId}
-                        <Button
-                            hasIcon
-                            style="min-height: 2.2rem"
-                            onClick={() => {
-                                shortcutsStore.updateKey(entry[0], currentShortcut)
-                                selectedId = -1
-                            }}
-                        >
-                            <Icon size={1}>
-                                <FaCheck />
-                            </Icon>
-                        </Button>
-                    {:else}
-                        <Button
-                            hasIcon
-                            style="min-height: 2.2rem"
-                            cssVar={entry[0] !== entry[1].defaultValue ? 'accent' : 'secondary'}
-                            disabled={entry[0] === entry[1].defaultValue}
-                            onClick={() =>
-                                shortcutsStore.updateKey(entry[0], entry[1].defaultValue)}
-                        >
-                            <Icon size={1}>
-                                <FaUndo />
-                            </Icon>
-                        </Button>
-                    {/if}
-                </div>
+                {:else}
+                    <Button
+                        hasIcon
+                        style="min-height: 2.2rem"
+                        cssVar={entry[0] !== entry[1].defaultValue ? 'accent' : 'secondary'}
+                        disabled={entry[0] === entry[1].defaultValue}
+                        onClick={() => shortcutsStore.updateKey(entry[0], entry[1].defaultValue)}
+                    >
+                        <Icon size={1}>
+                            <FaUndo />
+                        </Icon>
+                    </Button>
+                {/if}
             </div>
-        {/each}
-    </div>
-</FloatingContainer>
+        </div>
+    {/each}
+</div>
 
 <style lang="scss">
     .shortcuts {
         display: flex;
         padding: 0.8rem;
         flex-direction: column;
-        height: calc(var(--screen-height) * 0.8);
         padding-top: 0;
         gap: 0.4rem;
         overflow-y: auto;
