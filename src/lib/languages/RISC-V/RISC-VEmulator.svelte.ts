@@ -221,7 +221,7 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         //actually grows into. Running scrollStackTab() here would snap the tab onto the page
         //containing SP (0x7ffffffc is not page aligned) and show unwritten memory above the stack.
         const stackTab = this.state.memory.tabs.find((e) => e.name === 'Stack')
-        if (stackTab) {
+        if (stackTab && !stackTab.userPlaced) {
             stackTab.address = this._getSp() - BigInt(stackTab.pageSize)
         }
     }

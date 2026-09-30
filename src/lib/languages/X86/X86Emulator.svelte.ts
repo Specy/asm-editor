@@ -601,10 +601,12 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     }
 
     private updateMemoryAddresses(): void {
-        const pageSize = BigInt(this.state.memory.global.pageSize)
-        this.state.memory.global.address = alignDown(this._getSp(), pageSize)
+        const global = this.state.memory.global
+        if (!global.userPlaced) {
+            global.address = alignDown(this._getSp(), BigInt(global.pageSize))
+        }
         const stackTab = this.state.memory.tabs.find((tab) => tab.name === 'Stack')
-        if (stackTab) {
+        if (stackTab && !stackTab.userPlaced) {
             const stackPageSize = BigInt(stackTab.pageSize)
             stackTab.address = alignDown(this._getSp(), stackPageSize)
         }

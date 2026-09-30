@@ -66,6 +66,12 @@ export type MemoryTab = {
     pageSize: number
     endianess: 'big' | 'little'
     data: DiffedMemory
+    /**
+     * Whether the user moved this view to an address of their own. Such a view keeps its address
+     * across Stop and Build, where an untouched one is placed again by the language (the Stack
+     * tab onto SP, for example).
+     */
+    userPlaced: boolean
 }
 
 export type DiffedMemory = {
@@ -485,9 +491,24 @@ export function createMemoryTab(
         rowSize,
         pageSize,
         endianess,
+        userPlaced: false,
         data: {
             current: new Uint8Array(pageSize).fill(initialValue),
             prevState: new Uint8Array(pageSize).fill(initialValue)
+        }
+    }
+}
+
+/**
+ * The same view with its contents back to the initial value. It keeps its id, so the window
+ * showing it is not remounted (and collapsed) by a Stop, and it keeps its address.
+ */
+export function resetMemoryTab(tab: MemoryTab, initialValue: number): MemoryTab {
+    return {
+        ...tab,
+        data: {
+            current: new Uint8Array(tab.pageSize).fill(initialValue),
+            prevState: new Uint8Array(tab.pageSize).fill(initialValue)
         }
     }
 }

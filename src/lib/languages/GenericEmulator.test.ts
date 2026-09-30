@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import {
     ANIMATING_PANEL_REFRESH_MS,
     CPU_REGISTER_FILE_ID,
@@ -32,6 +32,7 @@ import { Screen } from '$lib/languages/peripherals/screen/Screen'
 import { RECORD_OVERHEAD_BYTES } from '$lib/languages/peripherals/screen/ScreenHistory'
 import { ScreenInstructionHistory } from '$lib/languages/peripherals/screen/ScreenInstructionHistory'
 import type { Testcase } from '$lib/Project.svelte'
+import { preferencesStore } from '$stores/preferencesStore.svelte'
 
 /**
  * The scheduler, the injection, the reset path and the Undo rule of phase 3, exercised through a
@@ -1130,6 +1131,31 @@ describe('reset', () => {
         expect(clock.now()).toBeGreaterThan(0)
         emulator.clear()
         expect(clock.now()).toBeLessThan(2)
+    })
+
+    it('keeps the memory views and the addresses the user chose', async () => {
+        //left on, the Stack tab follows SP whatever the user chose, which is what it is for
+        const autoScroll = preferencesStore.values.autoScrollStackTab
+        const previous = autoScroll.value
+        autoScroll.value = false
+        onTestFinished(() => {
+            autoScroll.value = previous
+        })
+        const emulator = new FakeEmulator()
+        emulator._readMemoryBytes = (_address, length) => new Uint8Array(Number(length)).fill(7)
+        const [stack] = emulator.memory.tabs
+        const globalId = emulator.memory.global.id
+        emulator.setGlobalMemoryAddress(0x400n)
+        emulator.setTabMemoryAddress(0x800n, stack.id)
+
+        emulator.clear()
+        expect(emulator.memory.global.id).toBe(globalId)
+        expect(emulator.memory.tabs[0].id).toBe(stack.id)
+        expect(emulator.memory.global.data.current[0]).toBe(0)
+
+        await emulator.compile(0, undefined)
+        expect(emulator.memory.global.address).toBe(0x400n)
+        expect(emulator.memory.tabs[0].address).toBe(0x800n)
     })
 })
 

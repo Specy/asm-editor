@@ -179,7 +179,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         //above the stack instead. It would also run an extra updateMemory(), collapsing the
         //post-compile memory diff highlighting.
         const stackTab = this.state.memory.tabs.find((e) => e.name === 'Stack')
-        if (stackTab) {
+        if (stackTab && !stackTab.userPlaced) {
             stackTab.address = this._getSp() - BigInt(stackTab.pageSize)
         }
     }

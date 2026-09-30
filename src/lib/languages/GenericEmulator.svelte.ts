@@ -8,6 +8,7 @@ import {
     type BaseEmulatorState,
     type BuildArtifact,
     createMemoryTab,
+    resetMemoryTab,
     type EmulatorSettings,
     InterpreterStatus,
     makeGenericDiagnostic,
@@ -289,7 +290,7 @@ export abstract class GenericEmulator<T, R extends string>
      */
     protected positionStackTabOnCompile() {
         const stackTab = this.state.memory.tabs.find((e) => e.name === 'Stack')
-        if (stackTab) {
+        if (stackTab && !stackTab.userPlaced) {
             stackTab.address = this._getSp() - BigInt(stackTab.pageSize)
         }
         this.scrollStackTab()
@@ -725,26 +726,16 @@ export abstract class GenericEmulator<T, R extends string>
             latestSteps: [],
             callStack: [],
             //diagnostics describe the source, not the run — they survive a stop/clear and are
-            //replaced by the next compile or semantic check
+            //replaced by the next compile or semantic check.
+            //The memory views keep their identity and address: only what they show goes blank
             memory: {
-                global: createMemoryTab(
-                    this._emulatorOptions.globalPageSize,
-                    'Global',
-                    this._emulatorOptions.baseAddress,
-                    this._emulatorOptions.globalPageElementsPerRow,
-                    this._emulatorOptions.initialMemoryValue,
-                    this._endianness
+                global: resetMemoryTab(
+                    this.state.memory.global,
+                    this._emulatorOptions.initialMemoryValue
                 ),
-                tabs: [
-                    createMemoryTab(
-                        8 * 4,
-                        'Stack',
-                        this._emulatorOptions.stackAddress,
-                        4,
-                        this._emulatorOptions.initialMemoryValue,
-                        this._endianness
-                    )
-                ]
+                tabs: this.state.memory.tabs.map((tab) =>
+                    resetMemoryTab(tab, this._emulatorOptions.initialMemoryValue)
+                )
             }
         }
         this.setRegisters(new Array(this._registerNames.length).fill(0))
@@ -1154,6 +1145,7 @@ export abstract class GenericEmulator<T, R extends string>
                       this._emulatorOptions.initialMemoryValue
                   )
             this.state.memory.global.address = address
+            this.state.memory.global.userPlaced = true
             this.state.memory.global.data.current = bytes
             // Reset prevState as we don't know what the previous state was.
             this.state.memory.global.data.prevState = this.state.memory.global.data.current
@@ -1171,6 +1163,7 @@ export abstract class GenericEmulator<T, R extends string>
                 ? this._readMemoryBytes(address, BigInt(tab.pageSize))
                 : new Uint8Array(tab.pageSize).fill(this._emulatorOptions.initialMemoryValue)
             tab.address = address
+            tab.userPlaced = true
             tab.data.current = bytes
             tab.data.prevState = tab.data.current
         } catch (e) {

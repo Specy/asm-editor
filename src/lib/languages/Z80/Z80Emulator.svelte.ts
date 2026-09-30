@@ -176,7 +176,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         //last one of the address space. The default (one page below SP) would show 0xFFDF-0xFFFE
         //and cut the first pushed word in half.
         const stackTab = this.state.memory.tabs.find((tab) => tab.name === 'Stack')
-        if (stackTab) {
+        if (stackTab && !stackTab.userPlaced) {
             stackTab.address = BigInt(Z80_STACK_TOP + 1 - stackTab.pageSize)
         }
     }
