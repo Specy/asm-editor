@@ -65,12 +65,13 @@
     <TopBar variant={phone ? 'phone' : 'tablet'} />
     <div class="frame">
         {#if !phone}
-            <div class="rail-slot"><IconRail /></div>
+            <!-- an open panel joins the rail, one card with it as on a desktop -->
+            <div class="rail-slot" class:joined={panelShown}><IconRail /></div>
         {/if}
         <div class="scroll">
             <EditorArea tabs={false} style="height: var(--compact-editor-height); flex: none;" />
             <div class="controls-bar">
-                <ExecutionControls variant="touch" />
+                <ExecutionControls />
             </div>
             <BottomPanel
                 open={bottomOpen}
@@ -171,11 +172,11 @@
                 : `width: min(${workbenchLayout.panelWidth(ui.activePanel ?? '')}px, calc(100% - var(--wb-rail-width) - 2rem))`}
         >
             {#if phone}
-                <IconRail withBack />
+                <IconRail withBack framed={false} />
             {/if}
             {#if ui.opened.size > 0}
                 <div class="drawer-panel" class:hidden={!ui.activePanel}>
-                    <SidePanel allowMaximize={!phone} />
+                    <SidePanel allowMaximize={!phone} framed={false} />
                 </div>
             {/if}
         </div>
@@ -206,6 +207,12 @@
     .rail-slot {
         display: flex;
         flex: none;
+
+        /* the open panel carries on from the rail's right edge, whose rule divides the two */
+        &.joined :global(.icon-rail) {
+            border-top-right-radius: 0;
+            border-bottom-right-radius: 0;
+        }
     }
 
     .scroll {
@@ -220,17 +227,14 @@
         overscroll-behavior: contain;
     }
 
+    /* the execution controls, stuck in reach as the column scrolls: no card of their own, only the
+       buttons, whose gaps let the clicks through to what scrolls under them */
     .controls-bar {
         position: sticky;
-        top: calc(var(--wb-gap) * -1);
+        top: var(--wb-gap);
         z-index: 4;
-        display: flex;
         flex: none;
-        padding: 0.4rem;
-        background-color: var(--secondary);
-        border-radius: var(--wb-radius);
-        border: var(--wb-card-edge);
-        box-shadow: 0 0.2rem 0.6rem rgb(0 0 0 / 0.2);
+        pointer-events: none;
     }
 
     .fold {
@@ -311,6 +315,8 @@
         cursor: default;
     }
 
+    /* the panel, one card with the rail: beside a tablet's rail it carries on from the rail's
+       right edge; in a phone's drawer it holds the rail too, the panel ruled off from it */
     .drawer {
         position: absolute;
         z-index: 12;
@@ -318,6 +324,11 @@
         bottom: 0;
         left: var(--wb-rail-width);
         display: none;
+        overflow: hidden;
+        background-color: var(--wb-surface);
+        border: var(--wb-card-edge);
+        border-left: none;
+        border-radius: 0 var(--wb-radius) var(--wb-radius) 0;
         box-shadow: 0.5rem 0 2rem rgb(0 0 0 / 0.4);
 
         &.shown {
@@ -325,9 +336,17 @@
         }
 
         &.with-rail {
-            left: 0;
+            top: var(--wb-gap);
+            bottom: var(--wb-gap);
+            left: var(--wb-gap);
             width: 86%;
             max-width: 26rem;
+            border: var(--wb-card-edge);
+            border-radius: var(--wb-radius);
+
+            .drawer-panel {
+                border-left: var(--wb-card-edge);
+            }
         }
 
         &.maximized {

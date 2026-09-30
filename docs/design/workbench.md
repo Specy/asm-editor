@@ -237,3 +237,7 @@ The owner's reviews after the fifth, the same day, asked for:
 - **Memory:** its bottom corners are 0.2rem in Cards.
 - **Editor:** in the Workbench, Monaco's corners are square and its scroll shadow is hidden. The Interactive editor keeps both.
 - **Bottom panel tabs:** each part of the strip draws its own rule, so no stretch of it is drawn twice.
+- **Compact layouts:**
+    - The controls are the desktop's: normal-sized, in the same order, with no card of their own. They still stick in reach as the column scrolls.
+    - A narrow bar tightens the buttons first, and drops their labels only when even tight they do not fit.
+    - A phone's drawer is one card of the rail and the panel, the panel ruled off from the rail; beside a tablet's rail, an open panel carries on from it as one card. This supersedes the 44px touch controls of the phone and tablet layouts.

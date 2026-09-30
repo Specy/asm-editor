@@ -4,9 +4,9 @@
      * Workbench has no mode switch, the Build becoming Stop in its place is what says a Debug
      * session is on ([the design record](../../../../docs/design/workbench.md)). Run turns into
      * Pause while the program runs. The Testcases run on the same Emulator, so Test during a Debug
-     * session ends it first. `floating` is the bar laid over the bottom of the editor, whose clicks
-     * between the two ends reach the code under it; `touch` is the compact layouts' bar, every
-     * button at least 44px tall.
+     * session ends it first. It is a bar with nothing of its own to draw, laid over the bottom of
+     * the editor on a desktop and stuck under it in the compact layouts, whose clicks between the
+     * two ends reach what is under it.
      */
     import Button from '$cmp/shared/button/Button.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
@@ -20,20 +20,10 @@
     import FaFlask from '~icons/fa-solid/flask'
     import { useWorkbench } from './workbenchContext'
 
-    interface Props {
-        variant: 'floating' | 'touch'
-    }
-
-    let { variant }: Props = $props()
-
     const { session } = useWorkbench()
     const emulator = session.emulator
     const hasTests = $derived(session.project.testcases.length > 0)
-    const style = $derived(
-        variant === 'touch'
-            ? 'min-height: 2.75rem; padding: 0.5rem 0.9rem; flex: 1; max-width: 8rem;'
-            : 'height: var(--wb-control-height, 2.1rem); padding: 0 0.8rem;'
-    )
+    const style = 'height: var(--wb-control-height, 2.1rem); padding: 0 0.8rem;'
 
     function test() {
         if (session.debugSession) session.stop()
@@ -41,7 +31,11 @@
     }
 </script>
 
-<div class="execution-controls {variant}">
+<div
+    class="execution-controls"
+    class:debugging={session.debugSession}
+    class:with-test={session.debugSession && hasTests}
+>
     <div class="group">
         {#if !session.debugSession}
             <Button
@@ -150,10 +144,9 @@
         color: color-mix(in srgb, var(--btn-text) 45%, var(--secondary));
     }
 
-    /* the two ends of a bar over the code: the empty middle lets the clicks through to it, and the
-       buttons are lifted off the code by a shadow. An editor too narrow for the labels, beside an
-       open panel and the debug column, keeps the icons, each still named by its tooltip */
-    .floating {
+    /* the two ends of a bar over what it sits on: the empty middle lets the clicks through, and
+       the buttons are lifted off by a shadow */
+    .execution-controls {
         justify-content: space-between;
         pointer-events: none;
         container-type: inline-size;
@@ -164,25 +157,32 @@
         }
     }
 
-    @container (max-width: 32rem) {
-        .floating .label {
-            display: none;
-        }
-
-        .floating :global(button) {
+    /* A narrow bar, beside an open panel and the debug column or on a phone, tightens the buttons
+       first and drops their labels only when even tight they would not fit, each button still named
+       by its tooltip. The widths are what each set of buttons takes with tight labels: Build and
+       Test, the four of a Debug session, and those four and Test */
+    @container (max-width: 30rem) {
+        .execution-controls :global(button) {
             min-width: 0 !important;
-            padding: 0 0.7rem !important;
+            padding: 0 0.6rem !important;
         }
     }
 
-    /* one row of equal buttons, Test with the others */
-    .touch {
-        width: 100%;
-        justify-content: center;
-        gap: 0.5rem;
+    @container (max-width: 26rem) {
+        .with-test .label {
+            display: none;
+        }
+    }
 
-        .group {
-            display: contents;
+    @container (max-width: 21rem) {
+        .debugging .label {
+            display: none;
+        }
+    }
+
+    @container (max-width: 11rem) {
+        .label {
+            display: none;
         }
     }
 </style>

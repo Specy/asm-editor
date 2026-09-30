@@ -102,7 +102,7 @@
         {/if}
         {#if controls}
             <div class="floating-controls">
-                <ExecutionControls variant="floating" />
+                <ExecutionControls />
             </div>
         {/if}
     </div>

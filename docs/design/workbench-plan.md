@@ -368,4 +368,7 @@ The work is committed on `feat/workbench` as one commit. The brief and mockup th
 - **Floating Debug tools:**
     - `DebugToolsFloating`'s default `top` is 9 in Cards and 5 in Lines, and a window stored at the old 13 follows it.
     - `WorkbenchDesktop` builds the tools at the first Build and hides them while there is no Debug session.
+- **Compact layouts:**
+    - `ExecutionControls` lost its `touch` variant and `variant` prop. One bar serves both layouts, and container queries tighten its buttons under 30rem and hide their labels under 26rem, 21rem and 11rem, for the sets of five, four and two buttons.
+    - `WorkbenchCompact`'s controls bar has no card. Its drawer is the card, with `IconRail` and `SidePanel` unframed, and a tablet's rail squares its right corners while a panel is open.
 - **Tabs and rail:** `FileTabs` rules the strip with each part's own bottom border, with a `.tabs-rest` filler after the tabs. `BottomPanel` does the same for every child of its strip, instead of laying the tabs over the strip's border. `IconRail` sizes every `svg` to its box.
