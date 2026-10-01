@@ -44,7 +44,7 @@
     const effective = $derived(resolveProjectSettings(language, project.settings))
     const sections: Partial<Record<SettingsSectionId, HTMLElement>> = $state({})
 
-    function decide(id: ProjectSettingId, value: number) {
+    function decide(id: ProjectSettingId, value: number | boolean) {
         if (readonly) return
         session.applySettings({ ...project.settings, [id]: value })
     }
@@ -111,6 +111,7 @@
                     baseLabel={session.displayBaseLabel}
                     disabled={readonly || !session.displayEditable}
                     heading={false}
+                    panel
                     onChange={(next) => session.applyDisplay(next)}
                 />
                 {#if session.fileSystemLocked}

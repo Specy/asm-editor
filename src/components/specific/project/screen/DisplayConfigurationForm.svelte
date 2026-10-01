@@ -24,6 +24,8 @@
         disabled?: boolean
         /** Show the "Bitmap display" heading, which a section with its own title leaves out. */
         heading?: boolean
+        /** In the Settings panel: rows with its other Settings' text and padding, not a popover's. */
+        panel?: boolean
     }
 
     let {
@@ -32,7 +34,8 @@
         origin = 'user',
         baseLabel,
         disabled = false,
-        heading = true
+        heading = true,
+        panel = false
     }: Props = $props()
 
     const fromDirective = $derived(origin === 'directive')
@@ -60,7 +63,7 @@
     }
 </script>
 
-<div class="display-form">
+<div class="display-form" class:panel>
     {#if heading}
         <h3>Bitmap display</h3>
     {/if}
@@ -182,5 +185,19 @@
         font-size: 0.75rem;
         color: var(--hint);
         line-height: 1.4;
+    }
+
+    /* the Settings panel's rows: the text and the padding of its other Settings */
+    .panel {
+        gap: 0.2rem;
+
+        label {
+            padding: 0.2rem 0.4rem;
+            font-size: 0.9rem;
+        }
+
+        .hint {
+            padding: 0 0.4rem;
+        }
     }
 </style>

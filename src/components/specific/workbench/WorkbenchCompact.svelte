@@ -71,7 +71,7 @@
         <div class="scroll">
             <EditorArea tabs={false} style="height: var(--compact-editor-height); flex: none;" />
             <div class="controls-bar">
-                <ExecutionControls />
+                <ExecutionControls fill={phone} />
             </div>
             <BottomPanel
                 open={bottomOpen}
@@ -234,6 +234,7 @@
         top: var(--wb-gap);
         z-index: 4;
         flex: none;
+        padding: 0.35rem 0;
         pointer-events: none;
     }
 
@@ -335,12 +336,12 @@
             display: flex;
         }
 
+        /* across the whole phone but the gap, for the panel to hold as much as it can */
         &.with-rail {
             top: var(--wb-gap);
             bottom: var(--wb-gap);
             left: var(--wb-gap);
-            width: 86%;
-            max-width: 26rem;
+            right: var(--wb-gap);
             border: var(--wb-card-edge);
             border-radius: var(--wb-radius);
 

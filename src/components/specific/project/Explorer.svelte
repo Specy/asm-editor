@@ -3,7 +3,8 @@
      * The Project's Files as a tree, with the controls that manage them: create, upload, rename or
      * move, delete, download, and choose the Entry path: the Workbench's Explorer panel. Mutations
      * are disabled while `locked`, i.e. during a Debug session, and browsing and downloading stay
-     * available.
+     * available. The root row carries the Project's name, "Project" when it has none; it folds the
+     * tree away only when `collapsible`, and renames the Project when the host takes `onRename`.
      */
     import FileImporter from '$cmp/shared/fileImporter/FileImporter.svelte'
     import type { FileSystem } from '$lib/languages/peripherals/FileSystem'
@@ -34,6 +35,10 @@
 
     interface Props {
         name?: string
+        /** Whether the root row folds the tree away; otherwise it is a row by itself. */
+        collapsible?: boolean
+        /** Given, the root row renames the Project, the name it shows. */
+        onRename?: (name: string) => void
         files: ProjectFiles
         entry: string
         fileSystem: FileSystem
@@ -51,6 +56,8 @@
 
     let {
         name = 'Project',
+        collapsible = false,
+        onRename,
         files,
         entry,
         fileSystem,
@@ -170,6 +177,14 @@
         }
     }
 
+    const label = $derived(name.trim() || 'Project')
+
+    async function renameProject() {
+        const next = await Prompt.askText('Name of the Project', true, name)
+        if (!next?.trim() || next.trim() === name) return
+        onRename?.(next.trim())
+    }
+
     async function renameFile(targetPath = selectedPath) {
         if (!files[targetPath]) return
         const path = await Prompt.askText(`Rename or move ${targetPath} to:`, true, targetPath)
@@ -229,17 +244,26 @@
 
 <section class="explorer-section">
     <div class="section-heading">
-        <button
-            class="section-toggle"
-            aria-expanded={projectExpanded}
-            onclick={() => (projectExpanded = !projectExpanded)}
-        >
-            <span class="disclosure" class:expanded={projectExpanded}>
-                <FaAngleRight />
-            </span>
-            <strong title={name}>{name.trim() || 'Project'}</strong>
-        </button>
+        {#if collapsible}
+            <button
+                class="section-toggle"
+                aria-expanded={projectExpanded}
+                onclick={() => (projectExpanded = !projectExpanded)}
+            >
+                <span class="disclosure" class:expanded={projectExpanded}>
+                    <FaAngleRight />
+                </span>
+                <strong title={name}>{label}</strong>
+            </button>
+        {:else}
+            <div class="section-title"><strong title={name}>{label}</strong></div>
+        {/if}
         <div class="section-actions">
+            {#if onRename}
+                <button class="icon-action" title="Rename the Project" onclick={renameProject}>
+                    <FaPen />
+                </button>
+            {/if}
             <button
                 class="icon-action"
                 disabled={locked}
@@ -271,7 +295,7 @@
         </div>
     </div>
 
-    {#if projectExpanded}
+    {#if !collapsible || projectExpanded}
         {#if !files[entry]}
             <div class="entry-warning" title={entry}>Entry missing: {entry}</div>
         {/if}
@@ -452,14 +476,24 @@
         font-size: 0.7rem;
         text-align: left;
         cursor: pointer;
+    }
 
-        strong {
-            min-width: 0;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            text-transform: uppercase;
-            white-space: nowrap;
-        }
+    /* the root row by itself, its name where the folding row has its chevron and name */
+    .section-title {
+        display: flex;
+        flex: 1;
+        align-items: center;
+        min-width: 0;
+        padding: 0 0.3rem 0 0.8rem;
+        font-size: 0.7rem;
+    }
+
+    .section-heading strong {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        text-transform: uppercase;
+        white-space: nowrap;
     }
 
     .section-actions {

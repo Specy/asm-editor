@@ -6,7 +6,7 @@
      * Pause while the program runs. The Testcases run on the same Emulator, so Test during a Debug
      * session ends it first. It is a bar with nothing of its own to draw, laid over the bottom of
      * the editor on a desktop and stuck under it in the compact layouts, whose clicks between the
-     * two ends reach what is under it.
+     * two ends reach what is under it. On a phone, `fill`, the buttons share the bar's width.
      */
     import Button from '$cmp/shared/button/Button.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
@@ -19,6 +19,12 @@
     import FaUndo from '~icons/fa-solid/undo'
     import FaFlask from '~icons/fa-solid/flask'
     import { useWorkbench } from './workbenchContext'
+
+    interface Props {
+        fill?: boolean
+    }
+
+    let { fill = false }: Props = $props()
 
     const { session } = useWorkbench()
     const emulator = session.emulator
@@ -33,6 +39,7 @@
 
 <div
     class="execution-controls"
+    class:fill
     class:debugging={session.debugSession}
     class:with-test={session.debugSession && hasTests}
 >
@@ -154,6 +161,17 @@
         :global(button) {
             pointer-events: auto;
             box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.35);
+        }
+    }
+
+    /* every button an equal share of the bar, Test with the others */
+    .fill {
+        .group {
+            display: contents;
+        }
+
+        :global(button) {
+            flex: 1 1 0;
         }
     }
 

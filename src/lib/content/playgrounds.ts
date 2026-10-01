@@ -164,9 +164,13 @@ export function parseTestcaseFence(raw: string): PlaygroundTestcase {
     if (runFor !== undefined && (!Number.isFinite(runFor) || runFor <= 0)) {
         throw new Error(`"runFor" must be a positive number of instructions, got ${value.runFor}`)
     }
+    if (value.name !== undefined && typeof value.name !== 'string') {
+        throw new Error('"name" must be a string')
+    }
     return {
         runFor,
         testcase: {
+            ...(typeof value.name === 'string' ? { name: value.name } : {}),
             input: parseInput(value.input),
             expectedOutput: parseExpectedOutput(value.expectedOutput),
             startingRegisters: parseRegisters(value.startingRegisters, 'startingRegisters'),

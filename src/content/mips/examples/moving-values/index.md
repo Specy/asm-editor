@@ -49,10 +49,10 @@ in the exercise editor, then select **Test** to check the final values of `$t0`,
 `$t3`.
 
 After your program passes, you can try another pair. Select **Open in editor** on the exercise,
-then **Testcases**. In **New Testcase**, add the new `$t0` and `$t1` values under **Starting
-registers values**. Under **Expected registers values**, add the values you expect for `$t0`,
-`$t1`, `$t2`, `$t3`, and `$v0` (10 for the exit service). Use **Add** for each register, select
-**Add Testcase**, then select **Test** again.
+then **Testcases**, then **+ New testcase**. Add a row with **+ Add register** for each of `$t0`,
+`$t1`, `$t2`, `$t3` and `$v0`, picking the register in the row's first column. Type the new `$t0`
+and `$t1` values under **Start** and the values you expect under **Expected**, in decimal or in hex
+such as `0x16` (10 for `$v0`, the exit service). Then select **Run all**.
 
 ```mips|playground|exercise|allow-open
 .text

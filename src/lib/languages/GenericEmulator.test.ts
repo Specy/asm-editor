@@ -1190,6 +1190,72 @@ describe('testcase run configuration', () => {
     })
 })
 
+describe('testcase checks', () => {
+    async function builtEmulator(): Promise<FakeEmulator> {
+        const emulator = new FakeEmulator({ automaticChecking: false })
+        await emulator.compile(0, undefined)
+        return emulator
+    }
+
+    function mismatches(errors: Awaited<ReturnType<FakeEmulator['validateTestcase']>>) {
+        return errors.filter((error) => error.type !== 'wrong-output')
+    }
+
+    it('compares a register as its bits, however the Core and the Testcase sign it', async () => {
+        const emulator = await builtEmulator()
+        //MARS reads its registers back as signed ints
+        emulator.registerValue = -1n
+        for (const expected of [-1n, 0xffffffffn]) {
+            const errors = await emulator.validateTestcase({
+                ...emptyTestcase,
+                expectedRegisters: { R0: expected }
+            })
+            expect(mismatches(errors)).toEqual([])
+        }
+        const errors = await emulator.validateTestcase({
+            ...emptyTestcase,
+            expectedRegisters: { R0: -2n }
+        })
+        expect(mismatches(errors)).toEqual([
+            { type: 'wrong-register', register: 'R0', expected: 0xfffffffen, got: 0xffffffffn }
+        ])
+    })
+
+    it('compares a memory number as its bits and names the expectation that failed', async () => {
+        const emulator = await builtEmulator()
+        emulator.memoryBytes.set(0x10n, 0xff)
+        const errors = await emulator.validateTestcase({
+            ...emptyTestcase,
+            expectedMemory: [
+                { type: 'number', address: 0x10n, bytes: 1, expected: -1n },
+                { type: 'number', address: 0x11n, bytes: 1, expected: 5n }
+            ]
+        })
+        expect(mismatches(errors)).toEqual([
+            {
+                type: 'wrong-memory-number',
+                index: 1,
+                address: 0x11n,
+                bytes: 1,
+                expected: 5n,
+                got: 0n
+            }
+        ])
+    })
+
+    it('reads as many bytes for a string as its UTF-8 takes', async () => {
+        const emulator = await builtEmulator()
+        new TextEncoder()
+            .encode('héllo')
+            .forEach((byte, offset) => emulator.memoryBytes.set(0x20n + BigInt(offset), byte))
+        const errors = await emulator.validateTestcase({
+            ...emptyTestcase,
+            expectedMemory: [{ type: 'string-chunk', address: 0x20n, expected: 'héllo' }]
+        })
+        expect(mismatches(errors)).toEqual([])
+    })
+})
+
 describe('pokes', () => {
     /** A built fake Core with nothing logged yet, which is where every Poke below starts. */
     async function pokeableEmulator(): Promise<FakeEmulator> {

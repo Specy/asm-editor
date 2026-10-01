@@ -51,7 +51,6 @@ import type { MouseSnapshot } from '$lib/languages/peripherals/Mouse'
 import { echoToScreen } from '$lib/languages/peripherals/screen/textEcho'
 import { ScreenInstructionHistory } from '$lib/languages/peripherals/screen/ScreenInstructionHistory'
 import type { Testcase } from '$lib/Project.svelte'
-import { preferencesStore } from '$stores/preferencesStore.svelte'
 import type { BuildInput, BuildSources } from '$lib/projectFiles'
 import { m68kAssemblyFiles } from './m68kAssemblyFiles'
 import { s68kDiagnosticToDiagnostic } from './m68kDiagnostics'
@@ -299,16 +298,14 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             .getFlagsAsArray()
             .map((flag) => (flag ? 1 : 0))
             .reverse()
-        if (preferencesStore.values.maxVisibleHistoryModifications.value > 0) {
-            const last = interpreter.getUndoHistory(1)[0]
-            if (last) {
-                const old = ccrToFlagsArray(last.old_ccr.bits).reverse()
-                return M68K_FLAG_NAMES.map((name, i) => ({
-                    name,
-                    value: flags[i],
-                    prev: Number(old[i])
-                }))
-            }
+        const last = interpreter.getUndoHistory(1)[0]
+        if (last) {
+            const old = ccrToFlagsArray(last.old_ccr.bits).reverse()
+            return M68K_FLAG_NAMES.map((name, i) => ({
+                name,
+                value: flags[i],
+                prev: Number(old[i])
+            }))
         }
         return M68K_FLAG_NAMES.map((name, i) => ({ name, value: flags[i], prev: flags[i] }))
     }

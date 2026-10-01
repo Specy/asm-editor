@@ -282,7 +282,9 @@
         --splitter-line: var(--wb-line);
     }
 
+    /* a little shorter than a desktop's bar, leaving the room to the code */
     .compact {
+        --wb-top-height: 2.4rem;
         overflow: visible;
         height: auto;
     }

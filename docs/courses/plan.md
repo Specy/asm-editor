@@ -318,7 +318,8 @@ in any base JavaScript's `BigInt` reads (`0x`, `0o`, `0b`, decimal, with a leadi
 a stray one; malformed JSON logs an error and renders the Playground without testcases, and fails the
 test. The parser shared by the renderer and the test is `src/lib/content/playgrounds.ts`. Until item
 I below is fixed, Exercises check registers, output, `string-chunk` or `number-chunk` memory, never
-a `number` memory entry.
+a `number` memory entry. Since 2026-10-01 a `name` string names the Testcase in the Testcases panel
+and the Log.
 
 Lecture `meta.json` gains `"topic": "<key>"`. Course `meta.json` is unchanged apart from the values.
 

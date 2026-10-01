@@ -1,4 +1,5 @@
 import type { TestcaseResult, TestcaseValidationError } from '$lib/Project.svelte'
+import { testcaseLabel } from '$lib/testcases'
 import { formatTime } from '$lib/utils'
 
 /**
@@ -86,14 +87,16 @@ export function describeTestcaseError(error: TestcaseValidationError): string {
 export function testRunEntry(results: readonly TestcaseResult[], durationMs: number): LogDraft {
     const passed = results.filter((result) => result.passed).length
     const details = results.map((result, index) => {
-        if (result.passed) return { tone: 'success' as const, text: `Testcase ${index + 1} passed` }
+        //named as the Testcases panel names it
+        const label = testcaseLabel(result.testcase, index)
+        if (result.passed) return { tone: 'success' as const, text: `${label} passed` }
         const [first] = result.errors
         const more = result.errors.length > 1 ? ` (and ${result.errors.length - 1} more)` : ''
         return {
             tone: 'error' as const,
             text: first
-                ? `Testcase ${index + 1} failed: ${describeTestcaseError(first)}${more}`
-                : `Testcase ${index + 1} failed`
+                ? `${label} failed: ${describeTestcaseError(first)}${more}`
+                : `${label} failed`
         }
     })
     return {

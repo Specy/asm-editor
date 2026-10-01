@@ -42,19 +42,24 @@
 </button>
 
 <style lang="scss">
+    /* a 1px edge, so that a switch that is off still reads as one against what it sits on */
     .switch {
         --switch-width: 2.8rem;
         --switch-height: 1.5rem;
         --switch-padding: 0.2rem;
+        --switch-border: 1px;
         position: relative;
         flex: none;
         width: var(--switch-width);
         height: var(--switch-height);
         padding: var(--switch-padding);
+        border: var(--switch-border) solid var(--tertiary);
         border-radius: var(--switch-height);
         background-color: var(--secondary);
         cursor: pointer;
-        transition: background-color 0.2s ease;
+        transition:
+            background-color 0.2s ease,
+            border-color 0.2s ease;
         &:focus-visible {
             outline: 2px solid var(--accent);
             outline-offset: 2px;
@@ -64,10 +69,12 @@
             cursor: not-allowed;
         }
     }
+    /* exactly the room inside the padding and the edge, so it sits centred, and its travel when on,
+       the width less the height, is the same as without the edge */
     .knob {
         display: block;
-        width: calc(var(--switch-height) - 2 * var(--switch-padding));
-        height: calc(var(--switch-height) - 2 * var(--switch-padding));
+        width: calc(var(--switch-height) - 2 * var(--switch-padding) - 2 * var(--switch-border));
+        height: calc(var(--switch-height) - 2 * var(--switch-padding) - 2 * var(--switch-border));
         border-radius: 50%;
         background-color: var(--secondary-text);
         transform: translateX(0);
@@ -77,6 +84,7 @@
     }
     .on {
         background-color: var(--accent);
+        border-color: var(--accent);
         .knob {
             background-color: var(--accent-text);
             transform: translateX(calc(var(--switch-width) - var(--switch-height)));

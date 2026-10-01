@@ -1,0 +1,78 @@
+// What the parts of the Testcases panel share: the framed tables of registers and memory, the
+// fields typed into and the rows that add to a table. Mixins rather than classes, so that a
+// component only takes the rules it uses. The colours are the custom properties `TestcasesList`
+// sets on its root.
+
+@mixin mono {
+    font-family: FiraCode, monospace;
+}
+
+@mixin frame {
+    border: 1px solid var(--tc-line);
+    border-radius: 0.4rem;
+    overflow: hidden;
+    background-color: var(--tc-table);
+}
+
+@mixin head {
+    background-color: var(--tc-head);
+    color: var(--hint);
+    font-size: 0.75rem;
+    font-weight: 400;
+    text-align: left;
+}
+
+@mixin field {
+    width: 100%;
+    padding: 0.45rem 0.7rem;
+    border-radius: 0.4rem;
+    border: 1px solid var(--tc-line);
+    background-color: var(--tc-field);
+    color: var(--secondary-text);
+    font-size: 0.9rem;
+    transition: border-color 0.15s;
+
+    &::placeholder {
+        color: var(--hint);
+        opacity: 0.7;
+    }
+
+    &:focus {
+        border-color: color-mix(in srgb, var(--accent) 70%, transparent);
+    }
+}
+
+@mixin add-row {
+    display: block;
+    width: 100%;
+    padding: 0.5rem 0.7rem;
+    text-align: left;
+    font-family: Rubik, sans-serif;
+    font-size: 0.82rem;
+    color: var(--hint);
+    background-color: transparent;
+    cursor: pointer;
+    transition:
+        color 0.15s,
+        background-color 0.15s;
+
+    &:hover {
+        color: var(--secondary-text);
+        background-color: var(--tc-hover);
+    }
+}
+
+// a button that reads as text until it is pointed at
+@mixin text-button {
+    padding: 0.2rem 0;
+    font-family: Rubik, sans-serif;
+    font-size: 0.82rem;
+    color: var(--hint);
+    background-color: transparent;
+    cursor: pointer;
+    transition: color 0.15s;
+
+    &:hover {
+        color: var(--secondary-text);
+    }
+}

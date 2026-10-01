@@ -175,6 +175,8 @@ export type MemoryValue =
       }
 
 export type Testcase = {
+    /** What the Testcases panel calls it; without one it is named by its place in the list. */
+    name?: string
     input: string[]
     expectedOutput: string
     startingRegisters: Record<string, bigint>
@@ -192,6 +194,8 @@ export type TestcaseValidationError =
       }
     | {
           type: 'wrong-memory-number'
+          /** The position of the failed expectation in the Testcase's `expectedMemory`. */
+          index: number
           address: bigint
           bytes: number
           expected: bigint
@@ -199,12 +203,14 @@ export type TestcaseValidationError =
       }
     | {
           type: 'wrong-memory-string'
+          index: number
           address: bigint
           expected: string
           got: string
       }
     | {
           type: 'wrong-memory-chunk'
+          index: number
           address: bigint
           expected: number[]
           got: number[]
@@ -516,9 +522,13 @@ function removeUntil(char: string, value: string) {
 }
 
 export function cleanTestcases(testcases: Testcase[]) {
-    return testcases.map((testcase) => {
+    return testcases.map((original) => {
+        //a name that is not text is dropped rather than shown, and no key is added to a Testcase
+        //saved without one, so loading it does not count as a change
+        const { name, ...testcase } = original
         return {
             ...testcase,
+            ...(typeof name === 'string' ? { name } : {}),
             expectedMemory: testcase.expectedMemory.map((memory) => {
                 if (memory.type === 'number-chunk') {
                     return {

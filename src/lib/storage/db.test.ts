@@ -86,11 +86,11 @@ describe('the version 2 upgrade', () => {
             id: 'plain12',
             files: { 'main.m68k': { encoding: 'plain', content: 'nop' } },
             entry: 'main.m68k',
-            settings: { maxHistorySize: 7 }
+            settings: { fileSystemHistoryBudgetMb: 7 }
         } as never)
         const projects = await db.getProjects()
         expect(projects.map((project) => project.id)).toEqual(['plain12'])
-        expect(projects[0]?.settings).toEqual({ maxHistorySize: 7 })
+        expect(projects[0]?.settings).toEqual({ fileSystemHistoryBudgetMb: 7 })
         expect(await db.projects.count()).toBe(2)
         db.close()
     })

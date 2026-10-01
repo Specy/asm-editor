@@ -158,9 +158,9 @@ describe('normalizeProjectData', () => {
 
     it('keeps only the Settings decisions it can use', () => {
         const project = normalizeProjectData({
-            settings: { maxHistorySize: 30, nonsense: true, screenHistoryBudgetMb: -4 }
+            settings: { fileSystemHistoryBudgetMb: 30, nonsense: true, screenHistoryBudgetMb: -4 }
         })
-        expect(project.settings).toEqual({ maxHistorySize: 30 })
+        expect(project.settings).toEqual({ fileSystemHistoryBudgetMb: 30 })
     })
 })
 
@@ -202,9 +202,9 @@ describe('makeProject', () => {
 
     it('keeps its files when set is given a current shape', () => {
         const project = makeProject({ language: 'Z80', code: 'halt' })
-        project.set({ settings: { maxHistorySize: 3 } })
+        project.set({ settings: { undoEnabled: false } })
         expect(project.code).toBe('halt')
-        expect(project.settings).toEqual({ maxHistorySize: 3 })
+        expect(project.settings).toEqual({ undoEnabled: false })
     })
 
     it('allows the configured entry path to name a missing File', () => {
@@ -231,7 +231,7 @@ describe('the exported file', () => {
             description: 'with a decision and a testcase',
             language: 'MIPS',
             code: 'li $v0, 10\nsyscall',
-            settings: { maxHistorySize: 12 },
+            settings: { fileSystemHistoryBudgetMb: 12 },
             testcases: [testcaseWith({ expectedRegisters: { v0: 10n } })]
         })
         const text = project.toExternal()
@@ -243,7 +243,7 @@ describe('the exported file', () => {
         expect(imported.language).toBe('MIPS')
         expect(imported.code).toBe('li $v0, 10\nsyscall')
         expect(imported.entry).toBe('main.mips')
-        expect(imported.settings).toEqual({ maxHistorySize: 12 })
+        expect(imported.settings).toEqual({ fileSystemHistoryBudgetMb: 12 })
         expect(imported.testcases[0]?.expectedRegisters.v0).toBe(10n)
     })
 
@@ -300,7 +300,7 @@ describe('projectContentEquals', () => {
         const a = makeProject({ language: 'Z80', code: 'halt', id: 'a', updatedAt: 1 }).toObject()
         const b = makeProject({ language: 'Z80', code: 'halt', id: 'b', updatedAt: 2 }).toObject()
         expect(projectContentEquals(a, b)).toBe(true)
-        expect(projectContentEquals(a, { ...b, settings: { maxHistorySize: 1 } })).toBe(false)
+        expect(projectContentEquals(a, { ...b, settings: { undoEnabled: false } })).toBe(false)
         expect(projectContentEquals(a, { ...b, description: 'changed' })).toBe(false)
     })
 })

@@ -80,8 +80,8 @@
 
     .rail-width {
         flex: none;
+        align-self: stretch;
         width: var(--wb-rail-width);
-        height: 2rem;
     }
 
     .icon-button {

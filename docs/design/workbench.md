@@ -241,3 +241,30 @@ The owner's reviews after the fifth, the same day, asked for:
     - The controls are the desktop's: normal-sized, in the same order, with no card of their own. They still stick in reach as the column scrolls.
     - A narrow bar tightens the buttons first, and drops their labels only when even tight they do not fit.
     - A phone's drawer is one card of the rail and the panel, the panel ruled off from the rail; beside a tablet's rail, an open panel carries on from it as one card. This supersedes the 44px touch controls of the phone and tablet layouts.
+
+## Testcases panel, 2026-10-01
+
+The owner supplied two mockups of the Testcases panel, one after a test run and one writing a memory value, and asked for them with three changes: the input stays one box per input request, the expected output gets a row of its own, and Start and Expect get an icon each. Numbers are still typed in hex or decimal. This supersedes the Testcases titles of the fourth review: the panel has no headings left.
+
+- **Edited in place.** Each Testcase is a row with a dot, its name and its outcome, unfolding into Name, Registers, Memory, Input and Expected output. The "New Testcase" form and its Add buttons are gone: **+ New testcase** adds an empty one, open with the cursor in its name, and each has **Delete testcase** and **Duplicate** at its foot. A read-only list shows the same rows with nothing to edit.
+- **A name.** A Testcase has an optional `name`, shown on its row and in the Log and accepted by a lecture's `testcase` fence. Without one it is "Testcase N", by its place.
+- **Results belong to what was run.** The last run's result shows on the Testcase it was run on: the dot and count on the row, the register's Actual, a memory row's "got …", the output's verdict with the actual output and where it first differs. A Testcase edited since, its name aside, reads "not run" until the next run. Results are matched by content rather than position, which also survives deleting and reordering.
+- **Run all** sits in the panel's header beside "N/M passing", as in the mockup, and like Test it ends a Debug session first. The Interactive editor's Testcases window has the same header. A test run no longer closes the side panel at narrow desktop widths: building each Testcase on the Emulator is not a Build of the person's, and the panel is where Run all's results are read.
+- **Registers** are one table of Start, Expected and Actual. A row can exist before it has a value, its register is picked in its first column, and a register the Core cannot set before the run (MIPS's `pc`, `hi` and `lo`) has its Start disabled.
+- **Memory** is one table, the Start rows then the Expect rows. A row opens in place into the second mockup's form (Start or Expect; Number, Chunks or String; address, size, value), and a new value's form opens under the table. A string takes `\n`-style escapes.
+- **Start and Expect** are marked by a play mark and a target wherever they appear: the register headers, the memory rows and the form's switch.
+- **Numbers** are typed as `$1F` or `0x1F`, `%101` or `0b101`, or decimal, with a sign. Hex digits without a prefix are refused, since `10` reads differently in the two bases, and so is a value too wide for its register or memory width. They are shown in the Target's hex, `$` for the 68000 and `0x` for the others, and the form echoes a value in the other base.
+- **Checks compare bits.** An expected register or memory number is compared at its width, so `-1` and `$FFFFFFFF` are one expectation however a Core reads a register back (MARS reads them signed). A string expectation reads as many bytes as its UTF-8 takes.
+
+### Revision after the owner's review, 2026-10-01
+
+- **Titles:** Name, Registers, Memory, Input, Expected output and Actual output are titles as the Settings panel's forms have them, a step above the text, rather than the mockup's small capitals. This brings back the Testcases titles of the fourth review, which the first version had dropped.
+- **Registers:** the register column is titled Name, and Actual is a column only once the Testcase has run.
+- **Clear** sits beside Run all and forgets the last run's results, so every Testcase reads as not run again.
+- **Start** is marked by a flag, which supersedes the play mark: a play mark is Run's.
+- **The memory form** has Number, Chunks and String at the right end of its first line.
+- **Choices are one control everywhere:** the form's switches, the choices in Settings and the strips of the Register file panel's header are `SegmentedControl`, now drawn after genshin-music's `MultipleOptionSlider`: a pill whose highlight slides to the picked option and resizes to it. The Register file panel's tabs keep their look.
+- **Folding** a Testcase slides its body open and shut, as a section of the debug column or Settings does.
+- **Deleting** a Testcase asks first, through the app's own prompt.
+- **Wording:** the empty list says "You have not added any testcases yet.", and an empty expected output "The program prints nothing". **+ New testcase** is centred and outlined in its own colour.
+- **Execution controls:** the floating controls sit 0.35rem from the editor's sides and bottom with 1.4rem of fade above, over its scrollbar. This supersedes "clear of its scrollbar" in the later reviews of 2026-09-30.

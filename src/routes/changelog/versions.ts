@@ -15,6 +15,7 @@ export const versions: Version[] = [
             'Building opens a debugger column with the registers, memory and screen; the stack pointer, history and call stack can float as windows or sit in that column',
             'Every panel can be resized, and the editor remembers sizes and folded sections',
             'Documentation and testcases can be maximized over the editor to read them',
+            'Testcases are edited in place: each has a name, its registers and memory are tables typed in hex or decimal, and the last run shows what each value really was, beside a Run all button',
             'Settings now also hold the MARS and RARS display, the keyboard shortcuts and the themes; the separate themes page is gone',
             'Added a setting to show panels as cards or as edge to edge lines',
             'Phones and tablets have their own layout, with the build and run buttons always in reach',

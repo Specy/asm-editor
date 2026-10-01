@@ -9,7 +9,11 @@ import {
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import { TESTCASE_INSTRUCTION_LIMIT } from '$lib/Config'
 import { getM68kErrorMessage } from '$lib/languages/M68K/M68kUtils'
-import { type ProjectSettingsDecisions, resolveProjectSettings } from '$lib/projectSettings'
+import {
+    type ProjectSettingsDecisions,
+    resolveProjectSettings,
+    undoHistorySize
+} from '$lib/projectSettings'
 import { rewriteScreenDirective } from '$lib/languages/mars/screenDirective'
 import {
     DEFAULT_PROJECT_DISPLAY,
@@ -114,8 +118,12 @@ export class WorkbenchSession {
 
     running = $state(false)
     building = $state(false)
-    /** A test run is in flight: the Emulator runs every Testcase, and none is a program exit. */
-    private testing = false
+    /**
+     * A test run is in flight: the Emulator builds and runs every Testcase, and none of those is a
+     * program exit or a Build of the person's own. Not reactive: the effects that ask read it at the
+     * moment they run.
+     */
+    testing = false
     testcasesResult = $state<TestcaseResult[]>([])
     editor = $state.raw<monaco.editor.IStandaloneCodeEditor | undefined>(undefined)
 
@@ -510,6 +518,14 @@ export class WorkbenchSession {
         this.host.onSave?.({ silent: false })
     }
 
+    /** Gives the Project a new name, which the Explorer shows at the root of its Files. */
+    rename(name: string) {
+        const next = name.trim()
+        if (!next || next === this.project.name || this.host.readonly) return
+        this.project.name = next
+        this.changed()
+    }
+
     // ---- Settings, Display configuration -------------------------------------------------------
 
     /** A decision or a reset from the panel; it takes effect at the next Build. */
@@ -754,7 +770,7 @@ export class WorkbenchSession {
         try {
             this.running = false
             this.building = true
-            await this.emulator.compile(this.effectiveSettings.maxHistorySize, this.sourceInput)
+            await this.emulator.compile(undoHistorySize(this.effectiveSettings), this.sourceInput)
         } catch (e) {
             console.error(e)
             toast.error('Error compiling code. ' + getM68kErrorMessage(e))
@@ -868,7 +884,7 @@ export class WorkbenchSession {
                 this.sourceInput,
                 $state.snapshot(this.project.testcases),
                 TESTCASE_INSTRUCTION_LIMIT,
-                this.effectiveSettings.maxHistorySize
+                undoHistorySize(this.effectiveSettings)
             )
             this.appendLog(testRunEntry(this.testcasesResult, performance.now() - started))
             this.bottomTab = 'log'

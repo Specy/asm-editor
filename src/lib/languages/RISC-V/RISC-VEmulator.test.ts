@@ -688,6 +688,97 @@ loop:   li      a7, 32
 })
 
 /**
+ * Where a program ends. The exit ecall is an instruction like any other, so the current line marker
+ * stays on it, as it stays on the last instruction of a program that runs off its end. And it ends
+ * the program wherever it sits: most programs keep their functions below `main`, so the program
+ * counter an exit leaves is usually on a statement.
+ */
+describe('RISC-V exit', () => {
+    function valueOf(emulator: Emulator, name: string): number {
+        const register = emulator.registers.find((candidate) => candidate.name === name)
+        if (!register) throw new Error(`No register named ${name}`)
+        return Number(register.value)
+    }
+
+    const CALLS_BELOW = `        .text
+main:
+        li      a0, 1
+        jal     double
+        li      a7, 10
+        ecall
+double:
+        add     a0, a0, a0
+        ret
+`
+    /** The 0-based line of the `ecall` in `CALLS_BELOW`. */
+    const CALLS_BELOW_EXIT = 5
+
+    it('stays on the exit ecall at the bottom of a program, not on the line above it', async () => {
+        const emulator = await run(
+            `        .text
+main:
+        li      a7, 1
+        li      a0, 42
+        ecall
+` + EXIT
+        )
+        expect(emulator.errors).toEqual([])
+        expect(emulator.terminated).toBe(true)
+        //the `ecall` of EXIT, below its `li a7, 10`
+        expect(emulator.line).toBe(6)
+    })
+
+    it('ends a run at an exit with a function below it', async () => {
+        const emulator = await build(CALLS_BELOW)
+        expect(await emulator.run(INSTRUCTION_LIMIT)).toBe(InterpreterStatus.Terminated)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.terminated).toBe(true)
+        expect(emulator.line).toBe(CALLS_BELOW_EXIT)
+        //neither a Run nor a Step carries on into `double`
+        await emulator.run(INSTRUCTION_LIMIT)
+        await emulator.step()
+        expect(valueOf(emulator, 'a0')).toBe(2)
+        expect(emulator.line).toBe(CALLS_BELOW_EXIT)
+    })
+
+    it('ends stepping at the exit', async () => {
+        const emulator = await build(CALLS_BELOW)
+        let steps = 0
+        while (!emulator.terminated && steps < 20) {
+            await emulator.step()
+            steps++
+        }
+        //li, jal, add, ret, li, ecall
+        expect(steps).toBe(6)
+        expect(emulator.line).toBe(CALLS_BELOW_EXIT)
+    })
+
+    it('undoes the exit on its own and runs it again', async () => {
+        const emulator = await run(CALLS_BELOW)
+        expect(emulator.undo(1)).toBe(1)
+        expect(emulator.terminated).toBe(false)
+        //the ecall is next again, and the `li` before it is still done
+        expect(emulator.line).toBe(CALLS_BELOW_EXIT)
+        expect(valueOf(emulator, 'a7')).toBe(10)
+        await emulator.step()
+        expect(emulator.terminated).toBe(true)
+        expect(emulator.line).toBe(CALLS_BELOW_EXIT)
+    })
+
+    it('ends a Testcase at the exit', async () => {
+        const emulator = await build(CALLS_BELOW)
+        const [result] = await emulator.test(
+            CALLS_BELOW,
+            [{ ...SCREEN_TESTCASE, expectedRegisters: { a0: 2n } }],
+            INSTRUCTION_LIMIT,
+            200
+        )
+        expect(result?.passed).toBe(true)
+        expect(emulator.line).toBe(CALLS_BELOW_EXIT)
+    })
+})
+
+/**
  * What the Core's undo entry for the `cycle` and `instret` counters is allowed to assume.
  *
  * The simulator advances both once per instruction and records one entry covering both, and that

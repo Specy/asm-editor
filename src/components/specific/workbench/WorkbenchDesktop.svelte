@@ -38,11 +38,13 @@
         return debugged
     })
 
-    //A Build at a narrow desktop width closes the side panel to make room for the debug column
+    //A Build at a narrow desktop width closes the side panel to make room for the debug column.
+    //A test run builds each Testcase on the same Emulator, which is no Build of the person's: it
+    //leaves the panel open, since Run all is pressed in the Testcases panel to see its results there
     let wasDebugging = untrack(() => session.debugSession)
     $effect(() => {
         const debugging = session.debugSession
-        if (debugging && !wasDebugging) {
+        if (debugging && !wasDebugging && !session.testing) {
             untrack(() => {
                 if (!ui.activePanel) return
                 const debugColumn = layout.debugWidth ?? 720

@@ -1,4 +1,5 @@
 import { describe, it } from 'vitest'
+import { UNDO_HISTORY_SIZE } from '$lib/projectSettings'
 import {
     ANIMATION_EXAMPLES,
     buildProgram,
@@ -16,18 +17,18 @@ import {
  * and the Screen Undo journal they fill ([ADR 0005](../../../../docs/adr/0005-restore-screen-state-on-undo.md)).
  *
  * The journal number is what sets the shipped history budget: Undo walks the Core's instruction
- * history one Screen record per step, the shipped Core history is 100 steps, so the budget has to
- * hold the newest 100 records of the heaviest program — a clear and a present at 640 by 480 are a
+ * history one Screen record per step, the Core history a Project's undo gives is `UNDO_STEPS`, so the
+ * budget has to hold that many newest records of the heaviest program — a clear and a present at 640 by 480 are a
  * megabyte each.
  *
  * A run is bounded by an instruction limit rather than by Stop, because Stop resets the Screen and
  * its journal; the limit is found by doubling until the program has drawn enough frames.
  */
 
-/** Frames to pace and to fill the journal with: enough that the newest 100 records are all frames. */
-const WANTED_FRAMES = 120
-/** The Undo depth the shipped `maxHistorySize` gives the Core, and so the window to measure. */
-const UNDO_STEPS = 100
+/** The Undo depth a Project with its undo on gives the Core, and so the window to measure. */
+const UNDO_STEPS = UNDO_HISTORY_SIZE
+/** Frames to pace and to fill the journal with: enough that the newest records are all frames. */
+const WANTED_FRAMES = UNDO_STEPS + 20
 /**
  * A budget nothing evicts within the frames measured, so the journal is read before it is truncated.
  * It is not unlimited on purpose: the M68K example journals a megabyte a frame.

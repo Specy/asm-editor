@@ -4,7 +4,7 @@
      * store): the Settings panel's sections, the Screen and the Debug tools in the debug column, and
      * the rows of the compact layouts.
      */
-    import type { Snippet } from 'svelte'
+    import { untrack, type Snippet } from 'svelte'
     import FaAngleRight from '~icons/fa-solid/angle-right'
     import { workbenchLayout } from '$stores/workbenchLayoutStore.svelte'
 
@@ -52,6 +52,19 @@
         if (!collapsed) opened = true
         return opened
     })
+
+    //whether the body is unfolded, which slides it open and shut. A body built by this opening is
+    //laid out folded once first, so that it has somewhere to slide open from
+    let fold: HTMLDivElement | undefined = $state()
+    let shown = $state(untrack(() => !collapsed))
+    $effect(() => {
+        if (collapsed) {
+            shown = false
+            return
+        }
+        if (fold && !untrack(() => shown)) fold.getBoundingClientRect()
+        shown = true
+    })
 </script>
 
 <section
@@ -79,8 +92,12 @@
         {/if}
     </div>
     {#if mounted}
-        <div class="section-body" class:hidden={collapsed} style={bodyStyle}>
-            {@render children()}
+        <div class="body-fold" class:shown bind:this={fold}>
+            <div class="body-clip">
+                <div class="section-body" style={bodyStyle}>
+                    {@render children()}
+                </div>
+            </div>
         </div>
     {/if}
 </section>
@@ -177,6 +194,42 @@
         color: var(--hint);
     }
 
+    /* the body folds through its grid row, from 0fr to 1fr, which slides it open and shut; folded
+       it is hidden once the slide is over, so nothing in it can take the focus */
+    .body-fold {
+        display: grid;
+        grid-template-rows: 0fr;
+        min-height: 0;
+        visibility: hidden;
+        transition:
+            grid-template-rows 0.2s ease,
+            visibility 0s 0.2s;
+
+        &.shown {
+            grid-template-rows: 1fr;
+            visibility: visible;
+            transition:
+                grid-template-rows 0.2s ease,
+                visibility 0s;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            transition: none;
+
+            &.shown {
+                transition: none;
+            }
+        }
+    }
+
+    /* the row's one item, clipped so that it can be shorter than what it holds */
+    .body-clip {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        overflow: hidden;
+    }
+
     .section-body {
         display: flex;
         flex-direction: column;
@@ -184,11 +237,11 @@
         min-width: 0;
     }
 
-    .fill .section-body {
+    .fill .body-fold {
         flex: 1;
     }
 
-    .section-body.hidden {
-        display: none;
+    .fill .section-body {
+        flex: 1;
     }
 </style>

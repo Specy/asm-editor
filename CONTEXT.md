@@ -193,6 +193,31 @@ A Project handed to a student under a track, a password and a time limit, with a
 
 A declarative check run against a program: starting registers/memory/input and expected registers/memory/output, with memory expectations interpreted in the Emulator's endianness. Each Testcase runs independently with a scripted **Input Source**, a virtual **Time Source**, and its own writable **FileSystem** initialized from the same starting Files as the other cases in that test run.
 
+## Documentation
+
+The reference for one language: its instructions, directives, registers and the services its environment offers (traps, syscalls, ports, the **Screen**), read on the language's documentation pages and in the **Workbench**'s Documentation panel. It says what each thing does, where a **Course** teaches; a RISC-V-64 **Project** reads the RISC-V Documentation.
+_Avoid_: reference, manual, help, docs (in prose)
+
+## Documentation entry
+
+One thing the **Documentation** describes, shown, found and linked on its own: an instruction, a directive, a syscall or trap task, a register, an addressing mode, a port, an exception, or one heading's worth of a longer explanation such as the Screen's. The Workbench's Documentation panel, the documentation pages and search all read the same entries. See [ADR 0025](./docs/adr/0025-documentation-is-a-list-of-entries.md).
+_Avoid_: doc item, article, card, topic (a **Topic** is what a Lecture teaches)
+
+## Chapter
+
+A named group of one language's **Documentation entries** that share a kind or a subject: Instructions, Directives, Trap tasks, Registers, the Screen. It is a heading in the Documentation panel and one page of the language's documentation site.
+_Avoid_: section, category, group (a **Module** groups Lectures)
+
+## Lecture section
+
+The part of a **Lecture** under one second-level heading, with any third-level headings inside it, or the opening text before the first one: the unit a search finds in a **Course** and opens the Lecture at.
+_Avoid_: chunk, passage, paragraph
+
+## Search scope
+
+What one search looks through, set by the place it is made from rather than chosen by the reader. For a language, its **Documentation**, its **Language course** and the **General course**, whether the search starts in the **Workbench**, the language's documentation pages or the Language course. On a General course page and on the list of Courses, the General course and every Language course, with no Documentation. In an **Exam**, the Documentation alone, so no **Example** hands a student a finished program.
+_Avoid_: corpus, index, search set, filter
+
 ## Course
 
 A sequence of **Modules** on one subject, listed on the Learn page with its own landing text and metadata (name, description, authors, date, order). Two kinds exist: the **General course** and the **Language courses**. Content only: a Course is a folder of markdown and metadata, never code.

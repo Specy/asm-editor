@@ -13,8 +13,12 @@ import { languageHasScreen } from './languages/peripherals/peripheralSet'
  */
 
 export type ProjectSettingValues = {
-    /** Undo steps the Core keeps; 0 disables the history. A Build argument. */
-    maxHistorySize: number
+    /**
+     * Whether the Core keeps an undo history, of `UNDO_HISTORY_SIZE` steps when it does: what a
+     * Build is given is `undoHistorySize`. It replaced a number of steps on 2026-10-01, and a
+     * Project that had chosen none loads with it off, see `cleanProjectSettings`.
+     */
+    undoEnabled: boolean
     /**
      * Bytes the Screen's undo journal may hold, in megabytes: a clear, a present or a resize journals
      * a whole image, so this has its own budget rather than a step count
@@ -29,6 +33,14 @@ export type ProjectSettingId = keyof ProjectSettingValues
 
 /** What a Project stores: only the Settings somebody decided for it. */
 export type ProjectSettingsDecisions = Partial<ProjectSettingValues>
+
+/** The undo steps a Build keeps when the Project's undo is on. */
+export const UNDO_HISTORY_SIZE = 200
+
+/** The history size a Build is given: the undo steps of a Project whose undo is on, else none. */
+export function undoHistorySize(settings: Pick<ProjectSettingValues, 'undoEnabled'>): number {
+    return settings.undoEnabled ? UNDO_HISTORY_SIZE : 0
+}
 
 export type ProjectSettingDeclaration<T> = {
     id: ProjectSettingId
@@ -45,16 +57,22 @@ export type ProjectSettingDeclaration<T> = {
 const wholeNumber = (value: unknown): value is number =>
     typeof value === 'number' && Number.isFinite(value) && value >= 0
 
+const onOrOff = (value: unknown): value is boolean => typeof value === 'boolean'
+
+/** Any one Setting's declaration, whatever its type. */
+export type AnyProjectSettingDeclaration =
+    ProjectSettingDeclaration<number> | ProjectSettingDeclaration<boolean>
+
 export const PROJECT_SETTINGS: {
     [K in ProjectSettingId]: ProjectSettingDeclaration<ProjectSettingValues[K]>
 } = {
-    maxHistorySize: {
-        id: 'maxHistorySize',
-        name: 'Maximum undo steps, 0 to disable',
-        type: 'number',
-        defaultFor: () => 100,
+    undoEnabled: {
+        id: 'undoEnabled',
+        name: 'Undo enabled',
+        type: 'boolean',
+        defaultFor: () => true,
         appliesTo: () => true,
-        accepts: wholeNumber
+        accepts: onOrOff
     },
     screenHistoryBudgetMb: {
         id: 'screenHistoryBudgetMb',
@@ -78,12 +96,10 @@ export const PROJECT_SETTINGS: {
 export const PROJECT_SETTING_IDS = Object.keys(PROJECT_SETTINGS) as ProjectSettingId[]
 
 /** The declarations that apply to a language, in panel order. */
-export function projectSettingsFor(
-    language: AvailableLanguages
-): ProjectSettingDeclaration<number>[] {
-    return PROJECT_SETTING_IDS.map((id) => PROJECT_SETTINGS[id]).filter((declaration) =>
-        declaration.appliesTo(language)
-    )
+export function projectSettingsFor(language: AvailableLanguages): AnyProjectSettingDeclaration[] {
+    return PROJECT_SETTING_IDS.map(
+        (id): AnyProjectSettingDeclaration => PROJECT_SETTINGS[id]
+    ).filter((declaration) => declaration.appliesTo(language))
 }
 
 export function projectSettingDefault<K extends ProjectSettingId>(
@@ -102,7 +118,9 @@ export function resolveProjectSettings(
     language: AvailableLanguages,
     decisions: ProjectSettingsDecisions | undefined
 ): ProjectSettingValues {
-    const resolved = {} as ProjectSettingValues
+    //written through a plain record: the Settings are of more than one type, which TypeScript
+    //cannot follow across a loop over their ids
+    const resolved: Record<string, unknown> = {}
     for (const id of PROJECT_SETTING_IDS) {
         const decided = decisions?.[id]
         resolved[id] =
@@ -110,7 +128,7 @@ export function resolveProjectSettings(
                 ? decided
                 : PROJECT_SETTINGS[id].defaultFor(language)
     }
-    return resolved
+    return resolved as ProjectSettingValues
 }
 
 /**
@@ -120,7 +138,7 @@ export function resolveProjectSettings(
  * changes after creation).
  */
 export function cleanProjectSettings(raw: unknown): ProjectSettingsDecisions {
-    const decisions: ProjectSettingsDecisions = {}
+    const decisions: Record<string, unknown> = {}
     if (typeof raw !== 'object' || raw === null) return decisions
     const record = raw as Record<string, unknown>
     for (const id of PROJECT_SETTING_IDS) {
@@ -128,7 +146,12 @@ export function cleanProjectSettings(raw: unknown): ProjectSettingsDecisions {
         if (value === undefined) continue
         if (PROJECT_SETTINGS[id].accepts(value)) decisions[id] = value
     }
-    return decisions
+    //undo was a number of steps before it was on or off: a Project that chose none chose it off,
+    //and any other number is what on means now
+    if (decisions.undoEnabled === undefined && record.maxHistorySize === 0) {
+        decisions.undoEnabled = false
+    }
+    return decisions as ProjectSettingsDecisions
 }
 
 /** Whether a Project decided anything about a Setting, which the panel shows beside the value. */

@@ -158,16 +158,16 @@
         }
     }
 
-    /* along the editor's bottom edge, over a fade from the editor's colour, and clear of its
-       scrollbar on the right; the bar lets clicks through between its two ends, and the code
-       scrolls past the last line to come out from under it */
+    /* along the editor's bottom edge, over a fade from the editor's colour, 0.35rem from its sides
+       and bottom; the bar lets clicks through between its two ends, and the code scrolls past
+       the last line to come out from under it */
     .floating-controls {
         position: absolute;
         z-index: 5;
         left: 0;
         right: 0;
         bottom: 0;
-        padding: 1.4rem calc(0.35rem + 14px) 0.35rem 0.35rem;
+        padding: 1.4rem 0.35rem 0.35rem 0.35rem;
         background: linear-gradient(to top, var(--secondary), transparent);
         pointer-events: none;
     }

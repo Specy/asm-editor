@@ -168,6 +168,13 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
      * that is actually running, so they read this field instead of capturing a generation.
      */
     private currentExecution: ExecutionGeneration = this.executionController.capture()
+    /**
+     * Whether the program has ended, by an `exit` syscall or by running off the end of its code,
+     * with nothing undone since. The Core says so only in the result of the call that ended it, and
+     * an exit leaves the program counter on whatever follows the syscall - the first function below
+     * `main`, in most programs - so probing for a next statement alone took an exit for a pause.
+     */
+    private ended = false
 
     constructor(source: BuildInput, options: EmulatorSettings) {
         super(
@@ -321,6 +328,7 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         //unconditionally so this is what actually turns undo off when history is disabled
         mips.setUndoEnabled(normalizeUndoSize(undoSize) > 0)
         mips.initialize(true)
+        this.ended = false
         this.pacer.reset()
         registerHandlers(mips, this.makeHandlers())
         //after `initialize`, so the observers see the program's writes and not the loading of `.data`
@@ -475,7 +483,8 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
 
     _getNextInstruction(): Instruction | null {
         const mips = this.mips
-        if (!mips) return null
+        //an ended program has nothing left to run, even where an exit left it on a statement
+        if (!mips || this.ended) return null
         try {
             return toInstruction(mips.getNextStatement())
         } catch {
@@ -611,11 +620,13 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
     _hasTerminated(): boolean {
         const mips = this.mips
         if (!mips) return false
+        if (this.ended) return true
         try {
-            //legacy parity: termination is derived purely from there being no next statement. The
-            //core's own `terminated` flag must NOT be consulted here because `undo()` does not reset
-            //it, so stepping back out of a finished program would leave the emulator permanently
-            //marked as terminated and every execution control disabled.
+            //otherwise there is nothing left to run when there is no next statement, which also
+            //covers the step that ran the last instruction, before any call has reported the end.
+            //The core's own `terminated` flag must NOT be consulted here because `undo()` does not
+            //reset it, so stepping back out of a finished program would leave the emulator marked
+            //as terminated and every execution control disabled.
             mips.getNextStatement()
             return false
         } catch {
@@ -638,16 +649,18 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
 
     async _step(): Promise<{ terminated: boolean }> {
         const mips = this.requireMips()
+        //the Core would run whatever follows the exit syscall
+        if (this.ended) return { terminated: true }
         this.currentExecution = this.executionController.capture()
         try {
-            await mips.step()
+            this.ended = await mips.step()
         } finally {
             this.devices.flush()
         }
-        //`step()`'s own boolean cannot answer this: it is still `false` for the step that executes
-        //the *last* instruction of the program (only the step after it reports `true`), which would
-        //make the generic layer look for a next instruction, find none and clear the current line
-        //marker. Legacy asked the same question the same way, by probing for a next statement.
+        //`step()`'s own boolean cannot answer this alone: it is still `false` for the step that
+        //executes the *last* instruction of the program (only the step after it reports `true`),
+        //which would make the generic layer look for a next instruction, find none and clear the
+        //current line marker
         return { terminated: this._hasTerminated() }
     }
 
@@ -666,6 +679,8 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
             throw new Error('FileSystem Undo history exhausted')
         }
         mips.undo()
+        //whatever ended the program was the newest thing it did, so it is the first thing undone
+        this.ended = false
         if (pc !== undefined) this.fileSystemSession?.undoAfter(pc)
     }
 
@@ -679,6 +694,8 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
      */
     async _runSlice(request: ExecutionSliceRequest): Promise<ExecutionSlice> {
         const mips = this.requireMips()
+        //the Core would run whatever follows the exit syscall
+        if (this.ended) return { reason: 'terminated', instructions: 0 }
         const breakpoints = calculateBreakpoints(mips, request.breakpoints)
         this.currentExecution = this.executionController.capture()
         try {
@@ -687,11 +704,8 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
                 MIPS_INSTRUCTIONS_PER_MS,
                 this._peripherals.clock,
                 async (limit) => {
-                    const terminated = await mips.simulateWithBreakpointsAndLimit(
-                        breakpoints,
-                        limit
-                    )
-                    if (terminated || this._hasTerminated()) return 'terminated'
+                    this.ended = await mips.simulateWithBreakpointsAndLimit(breakpoints, limit)
+                    if (this._hasTerminated()) return 'terminated'
                     //`simulate*` does not say whether the limit or a breakpoint stopped it; the line
                     //the program is about to execute does, because a run stopped on a breakpoint is
                     //parked on it
@@ -718,7 +732,7 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         this.currentExecution = this.executionController.capture()
         //the testcase input is served by the terminal's scripted source, swapped in by the caller
         try {
-            await mips.simulateWithLimit(toHaltLimit(haltLimit))
+            this.ended = await mips.simulateWithLimit(toHaltLimit(haltLimit))
         } finally {
             this.devices.flush()
         }

@@ -80,6 +80,9 @@ export const RUNNING_PANEL_REFRESH_MS = 16
 export const ANIMATING_PANEL_REFRESH_MS = 250
 
 /** The CPU Register file's id, which is always the first file `createRegisterFiles` builds. */
+/** The steps the History tool shows: the newest of the undo history, however long that is. */
+export const VISIBLE_HISTORY_STEPS = 20
+
 export const CPU_REGISTER_FILE_ID = 'cpu'
 
 /**
@@ -609,14 +612,11 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     protected updateData() {
-        const settings = preferencesStore
         if (!this.getInstance()) return
         this.state.terminated = this._hasTerminated()
         this.state.pc = this._getPc()
         this.state.callStack = this._getCallStack()
-        this.state.latestSteps = this._getUndoHistory(
-            settings.values.maxVisibleHistoryModifications.value
-        )
+        this.state.latestSteps = this._getUndoHistory(VISIBLE_HISTORY_STEPS)
     }
 
     /**
@@ -1184,12 +1184,16 @@ export abstract class GenericEmulator<T, R extends string>
                 console.error(`Register ${register} not found`)
                 continue
             }
-            const registerValue = BigInt(registers[registerIndex])
-            if (registerValue !== value) {
+            //compared as the register's bits: a Testcase may say -1 or 0xFFFFFFFF for the same
+            //value, and a Core may read the register back either way (MARS's are signed ints)
+            const bits = Number(this.state.registers[registerIndex]?.size ?? this._systemSize) * 8
+            const registerValue = BigInt.asUintN(bits, BigInt(registers[registerIndex]))
+            const expected = BigInt.asUintN(bits, value)
+            if (registerValue !== expected) {
                 errors.push({
                     type: 'wrong-register',
                     register,
-                    expected: value,
+                    expected,
                     got: registerValue
                 })
             }
@@ -1202,18 +1206,21 @@ export abstract class GenericEmulator<T, R extends string>
                 got: stdOut
             })
         }
-        for (const value of testcase.expectedMemory) {
+        for (const [index, value] of testcase.expectedMemory.entries()) {
             if (value.type === 'number') {
                 const bytes = new Uint8Array(
                     this._readMemoryBytes(value.address, BigInt(value.bytes))
                 )
                 const num = byteSliceToNum(bytes, this._endianness)
-                if (num !== value.expected) {
+                //memory reads back unsigned, so a negative expectation is compared as its bits
+                const expected = BigInt.asUintN(value.bytes * 8, value.expected)
+                if (num !== expected) {
                     errors.push({
                         type: 'wrong-memory-number',
+                        index,
                         address: value.address,
                         bytes: value.bytes,
-                        expected: value.expected,
+                        expected,
                         got: num
                     })
                 }
@@ -1226,17 +1233,21 @@ export abstract class GenericEmulator<T, R extends string>
                 if (!isMemoryChunkEqual(bytes, expected)) {
                     errors.push({
                         type: 'wrong-memory-chunk',
+                        index,
                         address: value.address,
                         expected: expected,
                         got: Array.from(bytes)
                     })
                 }
             } else if (value.type === 'string-chunk') {
-                const bytes = this._readMemoryBytes(value.address, BigInt(value.expected.length))
+                //as many bytes as the string's UTF-8, which is how a starting string is written
+                const length = new TextEncoder().encode(value.expected).length
+                const bytes = this._readMemoryBytes(value.address, BigInt(length))
                 const str = new TextDecoder().decode(new Uint8Array(bytes))
                 if (str !== value.expected) {
                     errors.push({
                         type: 'wrong-memory-string',
+                        index,
                         address: value.address,
                         expected: value.expected,
                         got: str

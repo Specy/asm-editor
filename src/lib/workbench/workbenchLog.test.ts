@@ -66,6 +66,21 @@ describe('testRunEntry', () => {
         ])
     })
 
+    it('names a Testcase that has a name by it', () => {
+        const named = { ...testcase, name: 'Sum two inputs' }
+        const entry = testRunEntry(
+            [
+                { passed: true, errors: [], testcase: named },
+                { passed: true, errors: [], testcase: { ...testcase, name: '  ' } }
+            ],
+            1
+        )
+        expect(entry.details.map((detail) => detail.text)).toEqual([
+            'Sum two inputs passed',
+            'Testcase 2 passed'
+        ])
+    })
+
     it('is a success only when every Testcase passed', () => {
         expect(testRunEntry([{ passed: true, errors: [], testcase }], 1).tone).toBe('success')
         expect(testRunEntry([], 1).tone).toBe('error')

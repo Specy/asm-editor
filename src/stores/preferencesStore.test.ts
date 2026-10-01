@@ -13,13 +13,13 @@ describe('readStoredPreferences', () => {
             meta: { version: '1.1.9' },
             values: {
                 autoSave: { name: 'Auto save', type: 'boolean', value: false },
-                maxVisibleHistoryModifications: { name: 'x', type: 'number', value: 25 },
+                autoScrollStackTab: { name: 'x', type: 'boolean', value: false },
                 maxHistorySize: { name: 'moved to the project', type: 'number', value: 500 }
             }
         })
         const values = readStoredPreferences(stored)
         expect(values.autoSave.value).toBe(false)
-        expect(values.maxVisibleHistoryModifications.value).toBe(25)
+        expect(values.autoScrollStackTab.value).toBe(false)
         expect(values.useDecimalAsDefault.value).toBe(false)
         expect('maxHistorySize' in values).toBe(false)
     })
@@ -34,10 +34,16 @@ describe('readStoredPreferences', () => {
 
     it('drops the Preferences the Workbench retired', () => {
         const values = readStoredPreferences(
-            JSON.stringify({ showMemory: false, showScreen: false })
+            JSON.stringify({
+                showMemory: false,
+                showScreen: false,
+                maxVisibleHistoryModifications: 25
+            })
         )
         expect('showMemory' in values).toBe(false)
         expect('showScreen' in values).toBe(false)
+        //the History shows a fixed number of steps since undo became on or off
+        expect('maxVisibleHistoryModifications' in values).toBe(false)
     })
 
     it('drops a value of the wrong type and survives junk', () => {

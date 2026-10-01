@@ -59,12 +59,14 @@
 </div>
 
 <style lang="scss">
+    /* the height and padding of a Project Setting's row, so the two kinds read as one list */
     .settings-value {
         justify-content: space-between;
         align-items: center;
         gap: 0.4rem;
-        padding: 0.4rem;
-        padding-left: 1rem;
+        min-height: calc(2rem + 0.4rem);
+        padding: 0.2rem 0.4rem;
+        font-size: 0.9rem;
     }
     .number {
         padding: 0.6rem 1rem;

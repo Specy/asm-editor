@@ -9,6 +9,7 @@ import type { Screen } from '$lib/languages/peripherals/screen/Screen'
 import { RISCVEmulator } from '$lib/languages/RISC-V/RISC-VEmulator.svelte'
 import { X86Emulator } from '$lib/languages/X86/X86Emulator.svelte'
 import { Z80Emulator } from '$lib/languages/Z80/Z80Emulator.svelte'
+import { UNDO_HISTORY_SIZE } from '$lib/projectSettings'
 
 /**
  * What the phase 8 measurements need from an Emulator, and the pieces every measurement file shares:
@@ -23,8 +24,8 @@ export type MeasuredLanguage = 'Z80' | 'M68K' | 'MIPS' | 'RISC-V' | 'X86'
 
 export const MEASURED_LANGUAGES: MeasuredLanguage[] = ['Z80', 'M68K', 'MIPS', 'RISC-V', 'X86']
 
-/** What a Build does in the app: the Project's `maxHistorySize` Setting, whose default is 100. */
-export const HISTORY_SIZE = 100
+/** What a Build does in the app: the undo steps of a Project whose undo is on, its default. */
+export const HISTORY_SIZE = UNDO_HISTORY_SIZE
 
 export type MeasurableEmulator = {
     compile(historySize: number, code?: string): Promise<void>

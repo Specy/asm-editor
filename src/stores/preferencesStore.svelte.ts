@@ -36,7 +36,6 @@ export type PreferenceValues = {
     autoScrollStackTab: PreferenceValue<boolean>
     autoSave: PreferenceValue<boolean>
     showDrawingBuffer: PreferenceValue<boolean>
-    maxVisibleHistoryModifications: PreferenceValue<number>
     showPseudoInstructions: PreferenceValue<boolean>
     panelStyle: PreferenceValue<PanelStyle>
     debugTools: PreferenceValue<DebugToolsPlacement>
@@ -76,7 +75,6 @@ export function defaultPreferences(): PreferenceValues {
             'Show the drawing buffer of a double buffered screen',
             false
         ),
-        maxVisibleHistoryModifications: createValue('Maximum visible history steps', 10),
         //the two variants the redesign brief explored, kept as the person's choice
         //([the design record](../../docs/design/workbench.md), Layout Preferences)
         panelStyle: createChoice<PanelStyle>(

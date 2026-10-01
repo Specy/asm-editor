@@ -11,6 +11,7 @@
     import FaCompress from '~icons/fa-solid/compress'
     import Explorer from '$cmp/specific/project/Explorer.svelte'
     import TestcasesList from '$cmp/specific/project/testcases/TestcasesList.svelte'
+    import TestcasesSummary from '$cmp/specific/project/testcases/TestcasesSummary.svelte'
     import LanguageDocumentation from '$cmp/specific/project/LanguageDocumentation.svelte'
     import AgentPanel from './AgentPanel.svelte'
     import SettingsPanel from './SettingsPanel.svelte'
@@ -33,6 +34,12 @@
     const mounted = $derived(
         context.rail.filter((entry) => !entry.action && ui.opened.has(entry.id))
     )
+
+    /** Run all, which like Test ends a Debug session first: the Testcases run on its Emulator. */
+    function runTestcases() {
+        if (session.debugSession) session.stop()
+        void session.test()
+    }
 
     /**
      * How narrow each panel's content may get: below it the panel scrolls sideways rather than
@@ -59,6 +66,16 @@
 <section class="side-panel" class:framed aria-label={active?.title}>
     <header class="panel-header">
         <span class="panel-title ellipsis">{active?.title ?? ''}</span>
+        {#if active?.id === 'testcases'}
+            <TestcasesSummary
+                testcases={project.testcases}
+                results={session.testcasesResult}
+                onRun={runTestcases}
+                onClear={() => (session.testcasesResult = [])}
+                disabled={session.buildDisabled || session.building || session.running}
+                style="margin-right: 0.3rem"
+            />
+        {/if}
         {#if active?.maximizable && allowMaximize}
             <button
                 class="panel-action"
@@ -88,14 +105,13 @@
     {#each mounted as entry (entry.id)}
         {@const shown = entry.id === ui.activePanel}
         <div class="panel-body" class:shown>
-            <div
-                class="panel-content"
-                class:testcases={entry.id === 'testcases'}
-                style="min-width: {MIN_WIDTHS[entry.id] ?? '16rem'}"
-            >
+            <div class="panel-content" style="min-width: {MIN_WIDTHS[entry.id] ?? '16rem'}">
                 {#if entry.id === 'explorer'}
                     <Explorer
                         name={project.name}
+                        onRename={entry.access === 'readonly'
+                            ? undefined
+                            : (name) => session.rename(name)}
                         files={project.files}
                         entry={project.entry}
                         fileSystem={project.fileSystem}
@@ -119,6 +135,9 @@
                         systemSize={emulator.systemSize}
                         language={project.language}
                         registerNames={emulator.registers.map((r) => r.name)}
+                        registerSizes={Object.fromEntries(
+                            emulator.registers.map((r) => [r.name, Number(r.size)])
+                        )}
                         startingRegisterNames={emulator.startingRegisterNames}
                         hiddenRegistersNames={emulator.hiddenRegisters}
                         style="flex: 1; min-height: 0;"
@@ -213,21 +232,5 @@
         flex-direction: column;
         flex: 1;
         min-height: 0;
-    }
-
-    /* the Testcases' titles are a page's headings; in a panel they head a column, a step above
-       its text. The Interactive editor's window keeps them as they were */
-    .testcases {
-        :global(h1) {
-            font-size: 1.15rem;
-        }
-
-        :global(h2) {
-            font-size: 1.05rem;
-        }
-
-        :global(h3) {
-            font-size: 0.95rem;
-        }
     }
 </style>
