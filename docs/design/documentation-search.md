@@ -23,7 +23,13 @@ hard to reverse are ADRs, and the rest can change.
 
 - **One ranking, with the exact name first.** Documentation entries and Lecture sections share one list
   ordered by relevance; an entry whose name is exactly the query (`MOVE`, `syscall`, `.data`) is
-  always first. A Lecture section may outrank an entry when it answers better ("print a number").
+  always first.
+- **The Documentation counts more than the Courses.** Revised on 2026-10-01 at the owner's request,
+  after the first implementation: a lecture uses many of the words of every topic it touches, so it
+  matched too readily. A Lecture section's score is multiplied by 0.75, so the Documentation comes
+  first wherever it has an answer ("call a function and return" gives `$ra` and `jal`), and a
+  lecture still leads a question the Documentation has no entry for ("what is the stack", "go 64
+  bit"). A flat 0.6 was tried first and dropped every lecture out of such questions.
 - **The same order everywhere.** No place puts its own kind of result first.
 
 ## The Documentation panel
@@ -35,8 +41,10 @@ hover is not to link into the panel; both stay as they are.
 
 - **Compact rows that expand.** Every Documentation entry is one row (its name, operands or number,
   and a one-line summary) under its **Chapter**'s heading, which stays pinned at the top while its
-  rows scroll. A row of Chapter chips at the top jumps between Chapters. Clicking a row expands the
-  full entry in place.
+  rows scroll. Chapter chips at the top, wrapping onto as many lines as they need, jump between
+  Chapters. Clicking a row expands the full entry in place.
+- **Chapters fold.** Clicking a Chapter's heading folds it to the heading and back (added on
+  2026-10-01); a chip unfolds the Chapter it jumps to.
 - **Search filters and reorders the same rows.** With a query, the Chapters give way to the ranked
   results; a result whose name is exactly the query opens already expanded. Clearing the query brings
   the Chapters back.
@@ -60,8 +68,8 @@ These pages may navigate, unlike the Workbench, so their results are places to g
 to read.
 
 - **One palette per page.** Results appear in a palette overlay centred over the page: the search box
-  and the single ranked list below it, ↑ and ↓ to move, Enter to go, Esc to close. On a phone it is a
-  full-screen sheet.
+  and the single ranked list below it, ↑ and ↓ to move, Enter to go, Esc to close. It keeps one height
+  whether or not it has results yet. On a phone it is a full-screen sheet.
 - **Three ways in.** A full-width search box at the top of the landing page (`/documentation/<language>`,
   or the Course's own page), a search box at the top of the sidebar on every page, and Ctrl+K (⌘K on a
   Mac). Both boxes open the palette rather than showing results themselves. The sidebar box replaces

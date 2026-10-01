@@ -1,6 +1,7 @@
 import { getContext, setContext, type Component, type Snippet } from 'svelte'
 import type { WorkbenchSession } from '$lib/workbench/WorkbenchSession.svelte'
 import type { WorkbenchUi } from '$lib/workbench/WorkbenchUi.svelte'
+import type { SearchScope } from '$lib/search/scope'
 import type {
     PanelAccess,
     WorkbenchHostLink,
@@ -32,6 +33,8 @@ export type WorkbenchContext = {
     readonly title: string
     readonly unsaved: boolean
     readonly documentationLinks: boolean
+    /** The Search scope of the Documentation panel and of the AI assistant's search tool. */
+    readonly searchScope: SearchScope
     readonly hostPanels: WorkbenchHostPanel[]
     readonly hostLinks: WorkbenchHostLink[]
     onBack?: () => void

@@ -19,6 +19,7 @@
     import { GENERAL_COURSE_SLUG, type TopicSibling } from '$lib/content/getters'
     import { resolve } from '$app/paths'
     import { lectureAgent } from '../../lectureAgent.svelte'
+    import { courseLanguage } from '$lib/search/scope'
 
     interface Props {
         data: PageData & { content: string }
@@ -129,7 +130,12 @@
             {/if}
         </p>
     {/if}
-    <MarkdownRenderer style="font-size: 1.1rem;" source={data.content} spacing="1.2rem" />
+    <MarkdownRenderer
+        style="font-size: 1.1rem;"
+        source={data.content}
+        spacing="1.2rem"
+        headingIds
+    />
     {#if topicLinks && inGeneralCourse && topicLinks.siblings.length > 0}
         <p class="topic-links">
             Go deeper: this topic in {@render topicList(topicLinks.siblings)}.
@@ -206,6 +212,7 @@
     bind:editorCode
     {emulatorInstance}
     canUpdateLanguage={true}
+    searchPlace={{ language: courseLanguage(data.course.slug), lectures: true }}
     additionalInstructions={`
         The user is reading the lecture "${data.lecture.name}" from the course "${data.course.name}".
         Lecture description: ${data.lecture.description}

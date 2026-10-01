@@ -25,6 +25,11 @@ export class WorkbenchUi {
     drawerOpen = $state(false)
     /** The Settings section to bring into view when Settings is opened for it. */
     settingsSection = $state<SettingsSectionId | null>(null)
+    /**
+     * A request for the Documentation panel to focus its search box (Ctrl+K), with a query when one
+     * is given; each request is a new token, which the panel answers once.
+     */
+    documentationRequest = $state<{ token: number; query?: string } | null>(null)
 
     constructor(viewport: Viewport, access: ActivePanelAccess) {
         this.viewport = viewport
@@ -74,6 +79,20 @@ export class WorkbenchUi {
     toggle(id: string) {
         if (this.activePanel === id) this.close()
         else this.open(id)
+    }
+
+    /**
+     * Ctrl+K: the Documentation panel with its search box focused. It is opened if another panel
+     * is, and left as it is otherwise: neither closed, as a rail toggle would, nor restored from
+     * maximized, as opening would.
+     */
+    searchDocumentation(query?: string) {
+        if (this.activePanel !== 'documentation') {
+            this.opened.add('documentation')
+            this.access.set('documentation')
+        }
+        if (this.viewport.deviceClass === 'phone') this.drawerOpen = true
+        this.documentationRequest = { token: (this.documentationRequest?.token ?? 0) + 1, query }
     }
 
     openSettings(section: SettingsSectionId) {

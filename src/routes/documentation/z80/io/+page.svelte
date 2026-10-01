@@ -1,6 +1,9 @@
 <script lang="ts">
     import Page from '$cmp/shared/layout/Page.svelte'
-    import Z80IoDocumentation from '$cmp/documentation/z80/Z80IoDocumentation.svelte'
+    import ChapterView from '$cmp/documentation/ChapterView.svelte'
+    import { chapters } from '$lib/documentation/z80/z80'
+
+    const chapter = chapters().find((chapter) => chapter.id === 'input-output')!
 </script>
 
 <svelte:head>
@@ -16,5 +19,5 @@
 </svelte:head>
 <Page cropped contentStyle="padding: 1rem; gap: 1rem;">
     <h1>Z80 Input/Output</h1>
-    <Z80IoDocumentation />
+    <ChapterView {chapter} />
 </Page>

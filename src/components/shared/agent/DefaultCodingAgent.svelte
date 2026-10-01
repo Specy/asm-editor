@@ -36,6 +36,8 @@
         type SupportedLanguage
     } from './defaultCodingAgent/types'
     import { createDefaultCodingAgentTools } from './defaultCodingAgent/tools'
+    import { searchForAgent } from './defaultCodingAgent/documentationSearch'
+    import type { AgentSearchPlace } from '$lib/search/scope'
     import {
         DEFAULT_CODING_AGENT_WORKFLOW_DEFINITIONS,
         buildDefaultCodingAgentPrompt
@@ -56,6 +58,12 @@
         workflows?: AgentWorkflow[]
         allowToolList?: AgentToolAllowList
         allowWorkflowList?: AgentWorkflowAllowList
+        /**
+         * Where the agent runs, for its documentation search: the language the place fixes, if
+         * any, and whether the Lectures are in scope (not in an Exam). Nowhere in particular by
+         * default, as on the chat page: the agent then names the language itself.
+         */
+        searchPlace?: AgentSearchPlace
     }
 
     let {
@@ -72,7 +80,8 @@
         tools: externalTools = [],
         workflows = [],
         allowToolList = 'all',
-        allowWorkflowList = 'all'
+        allowWorkflowList = 'all',
+        searchPlace = { language: null, lectures: true }
     }: Props = $props()
 
     let accent = $derived(ThemeStore.get('accent').color)
@@ -101,6 +110,9 @@
             getEditorLanguage: () => editorLanguage,
             setEditorLanguage: (language) => (editorLanguage = language),
             getEmulator: () => emulatorInstance,
+            // read when the tool runs: the agent registers its tools once, by name
+            searchDocumentation: (query, language, limit) =>
+                searchForAgent(searchPlace, query, language, editorLanguage, limit),
 
             getFiles: () => {
                 if (fileSystem) return fileSystem.files

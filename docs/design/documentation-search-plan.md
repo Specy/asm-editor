@@ -511,3 +511,46 @@ interface Chapter {
 - The Chapter chips on a narrow panel: one scrolling row, or wrapped.
 - The vector cache's layout on disk.
 - How a `Mod` shortcut reads on Linux and Windows (`Ctrl+K`) and on macOS (`⌘K`).
+
+## Status, 2026-10-01
+
+All eight phases implemented on `feat/workbench` on 2026-10-01, the M68K, x86 and Z80 Documentation
+entries by three agents in parallel following the MIPS and RISC-V adapters. Browser rows S1 to S10
+in [manual-verification.md](../manual-verification.md).
+
+**Tuned in phase 3** (`RANKING` and the functions beside it in `src/lib/search/engine.ts`), against
+the golden queries of every Search scope:
+
+- **The vector threshold is 0.15.** Right answers measured 0.30 to 0.48 in the spike.
+- **A Lecture section's score is multiplied by 0.75** (`sectionWeight`), so the Documentation comes
+  first where it has an answer; the owner asked for it after the first implementation. 0.6 dropped
+  every lecture out of conceptual questions, and 0.85 still let a lecture lead "shift left" and
+  "call a function and return".
+- **Boosts:** names 3, title 2, context 1.2, text 1, code 0.4.
+- **No fixed hybrid weights.** They follow the query's length: one word is 0.7 text and 0.3 vector,
+  two words are even, three or more are 0.35 text and 0.65 vector. A mnemonic is found by its letters
+  and a question by its meaning.
+- **Typos are forgiven only in a single word of four letters or more.** With a tolerance of 1
+  everywhere, "the" matched MIPS `tne` and `tge`, "an" matched `$a0 - $a3`, and those entries topped
+  every question.
+- **Stop words come out of a question's full-text half.** "and" and "or" are among them; a single
+  word keeps them, so `and` still finds the instruction.
+- **Synonyms join a question's full-text half:** print and display, exit and end, key and keyboard,
+  and a few more. The M68K Documentation says trap task 3 "displays" a number, and a reader asks how
+  to print one.
+
+**What changed from the plan:**
+
+- **File names.** The Vite plugin is `scripts/search-model-plugin.ts`, and the model
+  manifest is `src/lib/search/searchModel.json`, which the plain-node fetch script can read.
+- **Instruction pages still read their data modules.** They show more than an entry holds (the flags
+  grid, the forms and variants tables, the runnable example), so only their `entries()` comes from
+  the entries.
+- **`/all` gained Expand all and Print as PDF.** The old page printed every entry, and a browser of
+  folded rows would have printed nothing.
+- **Fields views gained an `after` list** for what a sample prints or shows, and entries a `codeName`
+  flag for kinds named both ways (M68K addressing modes in words, Z80 operands in code).
+- **Text fixed while moving it:** the Z80 F register is the _low_ half of AF, and the M68K `-(An)`
+  mode decrements. Found but left for the owner: the M68K Assembler features heading says
+  "Immediate" over a sentence about indirect values, and the trap "differences" list names modes 17
+  and 94, but 94 is a task.

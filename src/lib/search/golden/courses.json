@@ -1,0 +1,63 @@
+{
+    "scope": "courses",
+    "queries": [
+        {
+            "query": "what is the stack",
+            "top": 3,
+            "expect": "assembly-basics/think-in-assembly/the-stack#"
+        },
+        {
+            "query": "binary search",
+            "top": 3,
+            "expect": [
+                "m68k/examples/binary-search#",
+                "mips/examples/binary-search#",
+                "risc-v/examples/binary-search#",
+                "x86/examples/binary-search#",
+                "z80/examples/binary-search#"
+            ]
+        },
+        {
+            "query": "bubble sort",
+            "top": 3,
+            "expect": [
+                "m68k/examples/bubble-sort#",
+                "mips/examples/bubble-sort#",
+                "risc-v/examples/bubble-sort#",
+                "x86/examples/bubble-sort#",
+                "z80/examples/bubble-sort#"
+            ]
+        },
+        {
+            "query": "how do subroutines work",
+            "top": 3,
+            "expect": "assembly-basics/think-in-assembly/subroutines#"
+        },
+        {
+            "query": "little endian",
+            "top": 3,
+            "expect": "assembly-basics/introduction/memory#little-endian"
+        },
+        {
+            "query": "interrupts and exceptions",
+            "top": 3,
+            "expect": "assembly-basics/talking-to-the-outside-world/interrupts-and-exceptions#"
+        },
+        {
+            "query": "what is a register",
+            "top": 3,
+            "expect": "assembly-basics/introduction/registers#"
+        },
+        {
+            "query": "fibonacci",
+            "top": 3,
+            "expect": [
+                "m68k/examples/factorial-and-fibonacci#",
+                "mips/examples/factorial-and-fibonacci#",
+                "risc-v/examples/factorial-and-fibonacci#",
+                "x86/examples/factorial-and-fibonacci#",
+                "z80/examples/factorial-and-fibonacci#"
+            ]
+        }
+    ]
+}

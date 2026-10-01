@@ -1502,4 +1502,61 @@ describe('DefaultCodingAgent Tools (Standard Agent Model)', () => {
             expect(prompt).toContain('The program counter and the status flags are never pokeable')
         })
     })
+
+    describe('search_documentation', () => {
+        it('returns what the page search finds, with the language the agent asked for', async () => {
+            const { context } = createTestContext({ 'main.s': '' })
+            const search = vi.fn(async () => ({
+                mode: 'hybrid' as const,
+                searched: 'the MIPS documentation',
+                results: [
+                    {
+                        kind: 'documentation' as const,
+                        title: 'Print integer $v0 = 1',
+                        where: 'MIPS documentation › Syscalls',
+                        summary: 'Takes $a0, integer to print.',
+                        text: 'Service 1.',
+                        href: '/documentation/mips/syscall#service-1'
+                    }
+                ]
+            }))
+            context.searchDocumentation = search
+            const tools = createDefaultCodingAgentTools(context)
+            const result = (await tools.search_documentation.execute({
+                query: 'print a number',
+                language: 'MIPS'
+            })) as unknown as ToolExecutionResult
+            expect(result.success).toBe(true)
+            expect(search).toHaveBeenCalledWith('print a number', 'MIPS', 8)
+            expect((result.results as { title: string }[])[0].title).toBe('Print integer $v0 = 1')
+        })
+
+        it('says so where there is no search, and when the page needs a language', async () => {
+            const { context } = createTestContext({ 'main.s': '' })
+            const tools = createDefaultCodingAgentTools(context)
+            const missing = (await tools.search_documentation.execute({
+                query: 'dbra'
+            })) as unknown as ToolExecutionResult
+            expect(missing.success).toBe(false)
+            expect(missing.errorKind).toBe('unavailable')
+
+            context.searchDocumentation = async () => {
+                throw new Error('This page has no language of its own: say which one to search.')
+            }
+            const withSearch = createDefaultCodingAgentTools(context)
+            const noLanguage = (await withSearch.search_documentation.execute({
+                query: 'dbra'
+            })) as unknown as ToolExecutionResult
+            expect(noLanguage.success).toBe(false)
+            expect(String(noLanguage.error)).toContain('say which one to search')
+        })
+
+        it('tells the prompt when to search', () => {
+            const prompt = buildDefaultCodingAgentPrompt({
+                enabledToolNames: ['search_documentation'],
+                enabledWorkflows: []
+            })
+            expect(prompt).toContain('Use search_documentation before relying on an instruction')
+        })
+    })
 })

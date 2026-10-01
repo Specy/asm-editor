@@ -12,7 +12,8 @@
     import Explorer from '$cmp/specific/project/Explorer.svelte'
     import TestcasesList from '$cmp/specific/project/testcases/TestcasesList.svelte'
     import TestcasesSummary from '$cmp/specific/project/testcases/TestcasesSummary.svelte'
-    import LanguageDocumentation from '$cmp/specific/project/LanguageDocumentation.svelte'
+    import DocumentationBrowser from '$cmp/documentation/browser/DocumentationBrowser.svelte'
+    import { documentationLanguageOf } from '$lib/search/scope'
     import AgentPanel from './AgentPanel.svelte'
     import SettingsPanel from './SettingsPanel.svelte'
     import { useWorkbench } from './workbenchContext'
@@ -104,7 +105,7 @@
     </header>
     {#each mounted as entry (entry.id)}
         {@const shown = entry.id === ui.activePanel}
-        <div class="panel-body" class:shown>
+        <div class="panel-body" class:shown class:gutterless={entry.id === 'explorer'}>
             <div class="panel-content" style="min-width: {MIN_WIDTHS[entry.id] ?? '16rem'}">
                 {#if entry.id === 'explorer'}
                     <Explorer
@@ -143,11 +144,11 @@
                         style="flex: 1; min-height: 0;"
                     />
                 {:else if entry.id === 'documentation'}
-                    <LanguageDocumentation
-                        language={project.language}
+                    <DocumentationBrowser
+                        language={documentationLanguageOf(project.language)}
+                        scope={context.searchScope}
                         disableLinks={!context.documentationLinks}
-                        visible={shown}
-                        fill
+                        request={ui.documentationRequest}
                     />
                 {:else if entry.id === 'agent'}
                     <AgentPanel />
@@ -224,6 +225,12 @@
 
         &.shown {
             display: flex;
+        }
+
+        /* the Explorer seldom has files enough to scroll, so it keeps no room for a scrollbar it
+           would rarely show */
+        &.gutterless {
+            scrollbar-gutter: auto;
         }
     }
 

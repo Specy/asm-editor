@@ -245,10 +245,11 @@
         contain: inline-size;
     }
 
+    /* each section is as tall as what it holds, not as the tallest in its row */
     .tools-row {
         display: flex;
         flex-wrap: wrap;
-        align-items: stretch;
+        align-items: flex-start;
         gap: var(--wb-gap);
 
         /* Lines draws each section's own rule on its right, where Cards has the gap */

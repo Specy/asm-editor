@@ -1,6 +1,9 @@
 <script lang="ts">
-    import RISCVSyscallExplanation from '$cmp/documentation/riscv/RISCVSyscallExplanation.svelte'
     import Page from '$cmp/shared/layout/Page.svelte'
+    import ChapterView from '$cmp/documentation/ChapterView.svelte'
+    import { chapters } from '$lib/documentation/riscv/riscv'
+
+    const chapter = chapters().find((chapter) => chapter.id === 'syscalls')!
 </script>
 
 <svelte:head>
@@ -17,5 +20,5 @@
 
 <Page cropped contentStyle="padding: 1rem; gap: 1rem;">
     <h1>RISC-V Syscalls</h1>
-    <RISCVSyscallExplanation />
+    <ChapterView {chapter} />
 </Page>

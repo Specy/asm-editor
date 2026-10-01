@@ -42,7 +42,12 @@ import { languageDiagnosticToDiagnostic } from '$lib/languages/service/diagnosti
 import { registerProjectNavigation } from '$lib/languages/service/navigation'
 import { zeroBasedLineToMonaco } from '$lib/languages/service/monacoConversions'
 import { preferencesStore } from '$stores/preferencesStore.svelte'
-import { ShortcutAction, shortcutsStore } from '$stores/shortcutsStore'
+import {
+    modShortcutKey,
+    ShortcutAction,
+    shortcutRecording,
+    shortcutsStore
+} from '$stores/shortcutsStore'
 import { toast } from '$stores/toastStore'
 import { serializer } from '$lib/json'
 import { createDebouncer, formatTime } from '$lib/utils'
@@ -84,6 +89,8 @@ export type WorkbenchSessionHost = {
 export type WorkbenchSessionPanels = {
     toggleDocumentation?: () => void
     toggleSettings?: () => void
+    /** Opens the Documentation panel with its search box focused (Ctrl+K). */
+    searchDocumentation?: () => void
 }
 
 /**
@@ -485,13 +492,20 @@ export class WorkbenchSession {
             this.languageAnalysisPending = pending
         })
         const keydown = (e: KeyboardEvent) => this.handleKeyDown(e)
-        const keyup = (e: KeyboardEvent) => this.pressedKeys.delete(e.code)
+        const commandKey = (e: KeyboardEvent) => this.handleCommandKey(e)
+        const keyup = (e: KeyboardEvent) => {
+            this.pressedKeys.delete(e.code)
+            //macOS sends no keyup for a key released while ⌘ is held: let go of ⌘, let go of all
+            if (e.key === 'Meta') this.pressedKeys.clear()
+        }
         const blur = () => this.pressedKeys.clear()
         window.addEventListener('keydown', keydown)
+        window.addEventListener('keydown', commandKey, { capture: true })
         window.addEventListener('keyup', keyup)
         window.addEventListener('blur', blur)
         return () => {
             window.removeEventListener('keydown', keydown)
+            window.removeEventListener('keydown', commandKey, { capture: true })
             window.removeEventListener('keyup', keyup)
             window.removeEventListener('blur', blur)
             unsubscribeLanguageSession()
@@ -901,6 +915,24 @@ export class WorkbenchSession {
 
     // ---- keyboard ------------------------------------------------------------------------------
 
+    /**
+     * A shortcut held with the platform's command key (Ctrl+K, ⌘K) works from anywhere in the
+     * Workbench, the editor and every input included, so it is caught on the way down, before
+     * Monaco, which would take Ctrl+K as the start of one of its chords, and before the browser's
+     * own Ctrl+K. Keys typed into the AI assistant never reach the page: it is another origin's frame.
+     */
+    private handleCommandKey(e: KeyboardEvent) {
+        if (shortcutRecording.active) return
+        const key = modShortcutKey(e)
+        const shortcut = key ? shortcutsStore.get(key) : undefined
+        if (!shortcut) return
+        e.preventDefault()
+        e.stopPropagation()
+        this.pressedKeys.delete(e.code)
+        if (e.repeat && shortcut.type !== ShortcutAction.Step) return
+        this.runShortcut(shortcut.type)
+    }
+
     private handleKeyDown(e: KeyboardEvent) {
         this.pressedKeys.set(e.code, true)
         const code = Array.from(this.pressedKeys.keys()).join('+')
@@ -917,8 +949,16 @@ export class WorkbenchSession {
             if (e.code === 'Escape') target?.blur()
             return
         }
+        if (shortcut) this.runShortcut(shortcut.type)
+    }
+
+    private runShortcut(type: ShortcutAction) {
         const emulator = this.emulator
-        switch (shortcut?.type) {
+        switch (type) {
+            case ShortcutAction.SearchDocumentation: {
+                this.panels.searchDocumentation?.()
+                break
+            }
             case ShortcutAction.ToggleDocs: {
                 this.panels.toggleDocumentation?.()
                 break

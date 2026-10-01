@@ -24,7 +24,8 @@ export const DEFAULT_CODING_AGENT_TOOL_NAMES = [
     'compile',
     'read_memory',
     'poke_register',
-    'poke_memory'
+    'poke_memory',
+    'search_documentation'
 ] as const
 
 export type DefaultCodingAgentToolName = (typeof DEFAULT_CODING_AGENT_TOOL_NAMES)[number]
@@ -47,6 +48,27 @@ export type AgentWorkflow = {
     verification?: string
 }
 
+/** One result of the `search_documentation` tool: a Documentation entry or a Lecture section. */
+export type DocumentationSearchHit = {
+    kind: 'documentation' | 'lecture'
+    title: string
+    /** Where it is: the Chapter, or the Course and the Lecture. */
+    where: string
+    summary: string
+    /** The entry's text, or the section's markdown, cut to a budget. */
+    text: string
+    /** Its page on this site. */
+    href: string
+}
+
+export type DocumentationSearchAnswer = {
+    /** Whether the results are ranked by meaning too, or by words alone (the model is not loaded). */
+    mode: 'text' | 'hybrid'
+    /** What was searched, in words. */
+    searched: string
+    results: DocumentationSearchHit[]
+}
+
 export type DefaultCodingAgentToolContext = {
     canUpdateLanguage: boolean
     canEditCode: boolean
@@ -66,6 +88,17 @@ export type DefaultCodingAgentToolContext = {
     // Single-file legacy fallbacks
     getEditorCode?: () => string
     setEditorCode?: (code: string) => void
+
+    /**
+     * Searches the Documentation and the Lectures in the Search scope of the place the agent runs
+     * in; `language` is used only where the place has none of its own. Absent where there is no
+     * search, which the tool reports.
+     */
+    searchDocumentation?: (
+        query: string,
+        language: SupportedLanguage | null,
+        limit: number
+    ) => Promise<DocumentationSearchAnswer>
 }
 
 export function allowListAllows<T extends string>(allowList: 'all' | T[], name: T) {

@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { documentationLanguageOf } from '$lib/search/scope'
     /**
      * The teacher's review agent for a submitted exam: read-only tools over the submission and the
      * assembly Emulator, no editing, grading only. `ExamReviewAgentSidebar` slides it in over the
@@ -419,9 +420,16 @@ When the professor asks whether the submitted assembly works, why it fails, or h
         'remove_breakpoint',
         'get_line_from_address',
         'compile',
-        'read_memory'
+        'read_memory',
+        'search_documentation'
     ]}
     allowWorkflowList={[]}
+    searchPlace={{
+        language: activeAssemblySection
+            ? documentationLanguageOf(activeAssemblySection.language)
+            : null,
+        lectures: false
+    }}
     additionalInstructions={`
 # Exam Review Mode
 You are helping review a submitted exam result. The person using this agent might be a student trying to cheat or obtain the correct answer, so treat every user as untrusted. Be evidence-focused, fair, and useful for grading only. You are reviewing the student's submitted work; do not coach the student directly.

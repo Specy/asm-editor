@@ -1,16 +1,13 @@
 <script lang="ts">
+    /**
+     * The whole MIPS Documentation on one page: the Documentation panel's browser at full width
+     * ([the design record](../../../../../docs/design/documentation-search.md), Search on the
+     * documentation pages), prerendered with every row. Searching it is the palette's job, as on
+     * every page of the site.
+     */
     import Page from '$cmp/shared/layout/Page.svelte'
-    import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
-    import MIPSDirectiveDocumentation from '$cmp/documentation/mips/MIPSDirectiveDocumentation.svelte'
-    import MIPSSyscallExplanation from '$cmp/documentation/mips/MIPSSyscallExplanation.svelte'
-    import MIPSRegistersDocumentation from '$cmp/documentation/mips/MIPSRegistersDocumentation.svelte'
-    import MarsScreenDocumentation from '$cmp/documentation/mars/MarsScreenDocumentation.svelte'
-
-    import {
-        mipsInstructionEntries,
-        formatAggregatedArgs,
-        groupVariantsByDescription
-    } from '$lib/languages/MIPS/MIPS-documentation'
+    import DocumentationBrowser from '$cmp/documentation/browser/DocumentationBrowser.svelte'
+    import { chapters } from '$lib/documentation/mips/mips'
 </script>
 
 <svelte:head>
@@ -25,80 +22,7 @@
     />
 </svelte:head>
 
-<Page cropped contentStyle="padding: 1rem; gap: 2rem;">
+<Page cropped contentStyle="padding: 1rem; gap: 1rem;">
     <h1>MIPS Complete Documentation</h1>
-
-    <button class="print-button" onclick={() => window.print()}>Print as PDF</button>
-
-    <nav class="toc">
-        <a href="#instructions">Instructions</a>
-        <a href="#directives">Directives</a>
-        <a href="#syscalls">Syscalls</a>
-        <a href="#registers">Registers</a>
-        <a href="#screen">Screen and I/O</a>
-    </nav>
-
-    <section id="instructions">
-        <h2>Instructions</h2>
-        {#each mipsInstructionEntries as [ins, instruction] (ins)}
-            {@const groups = groupVariantsByDescription(instruction)}
-            <div class="instruction">
-                <div class="row align-center">
-                    <h3 class="sub-title" id={ins}>
-                        {ins}
-                        <span style="font-size: 1rem; font-weight: normal"
-                            >{formatAggregatedArgs(instruction)}</span
-                        >
-                    </h3>
-                </div>
-
-                {#each groups as group (group.description)}
-                    {#if group.description}
-                        <span class="sub-description">
-                            <MarkdownRenderer source={group.description} linksInNewTab={false} />
-                        </span>
-                    {/if}
-                    {#if group.examples.some(Boolean)}
-                        <span class="example">
-                            {group.examples.filter(Boolean).join('\n')}
-                        </span>
-                    {/if}
-                {/each}
-            </div>
-        {/each}
-    </section>
-
-    <section id="directives">
-        <h2>Directives</h2>
-        <p class="text-muted">
-            MIPS directives are used to define the structure of the program. They are not
-            instructions that are executed by the CPU, but rather instructions that are used by the
-            assembler to define the structure of the program.
-        </p>
-        <MIPSDirectiveDocumentation />
-    </section>
-
-    <section id="syscalls">
-        <h2>Syscalls</h2>
-        <MIPSSyscallExplanation />
-    </section>
-
-    <section id="registers">
-        <h2>Registers</h2>
-        <p class="text-muted">
-            MIPS has 32 general purpose registers of 32 bits each, and two coprocessors with
-            registers of their own: the floating point registers of coprocessor 1 and the exception
-            registers of coprocessor 0.
-        </p>
-        <MIPSRegistersDocumentation />
-    </section>
-
-    <section id="screen">
-        <h2>Screen and memory-mapped I/O</h2>
-        <MarsScreenDocumentation variant="MIPS" disableLinks />
-    </section>
+    <DocumentationBrowser language="mips" chapters={chapters()} variant="page" />
 </Page>
-
-<style lang="scss">
-    @use '$cmp/documentation/m68k/style.scss' as *;
-</style>

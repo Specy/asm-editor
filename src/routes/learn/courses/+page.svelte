@@ -6,12 +6,20 @@
     import DefaultNavbar from '$cmp/shared/layout/DefaultNavbar.svelte'
     import { resolve } from '$app/paths'
     import { courseAccent } from '$lib/languages/languageColors'
+    import { onMount } from 'svelte'
+    import SearchLauncher from '$cmp/search/SearchLauncher.svelte'
+    import SearchPalette from '$cmp/search/SearchPalette.svelte'
+    import { COURSES_SCOPE } from '$lib/search/scope'
+    import { searchClient } from '$lib/search/searchClient.svelte'
 
     interface Props {
         data: PageData
     }
 
     let { data }: Props = $props()
+
+    // the list of Courses searches every Course, as a General course page does
+    onMount(() => searchClient.preload(COURSES_SCOPE))
 </script>
 
 <DefaultNavbar />
@@ -31,6 +39,7 @@
 
 <Page hasNavbar cropped contentStyle="padding: 1rem;">
     <Header>Courses</Header>
+    <SearchLauncher size="full" placeholder="Search in every course" />
     <p></p>
     <div class="courses">
         {#each data.courses as course (course.slug)}
@@ -55,6 +64,7 @@
         {/each}
     </div>
 </Page>
+<SearchPalette scope={COURSES_SCOPE} placeholder="Search in every course" />
 
 <style>
     .courses {

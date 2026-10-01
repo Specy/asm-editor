@@ -34,6 +34,12 @@
         access?: Partial<Record<BuiltinPanelId, PanelAccess>>
         /** Whether the documentation's links may navigate; the exam turns them off. */
         documentationLinks?: boolean
+        /**
+         * Whether a documentation search looks through the Lectures too. An Exam searches the
+         * Documentation alone, so no Example hands a student a finished program (the **Search
+         * scope**); the AI assistant's search follows it.
+         */
+        searchLectures?: boolean
         hostPanels?: WorkbenchHostPanel[]
         hostLinks?: WorkbenchHostLink[]
         /** The panel open beside the rail, by id; bindable so the host's chrome can open one. */

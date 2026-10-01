@@ -9,7 +9,8 @@ export enum ShortcutAction {
     BuildCode,
     ClearExecution,
     Step,
-    Undo
+    Undo,
+    SearchDocumentation
 }
 type Shortcut = {
     type: ShortcutAction
@@ -34,10 +35,58 @@ const shortcutDefinitions = [
     createShortcut(ShortcutAction.BuildCode, 'ShiftLeft+KeyB', 'Build code', 5),
     createShortcut(ShortcutAction.ClearExecution, 'ShiftLeft+KeyC', 'Clear execution', 6),
     createShortcut(ShortcutAction.Step, 'ShiftLeft+ArrowDown', 'Step', 7),
-    createShortcut(ShortcutAction.Undo, 'ShiftLeft+ArrowUp', 'Undo', 8)
+    createShortcut(ShortcutAction.Undo, 'ShiftLeft+ArrowUp', 'Undo', 8),
+    createShortcut(ShortcutAction.SearchDocumentation, 'Mod+KeyK', 'Search the documentation', 9)
 ]
 
 const definitionsById = new Map(shortcutDefinitions.map((shortcut) => [shortcut.id, shortcut]))
+
+/** Whether the platform's command key is ⌘ (macOS and iOS) rather than Ctrl. */
+export function usesCommandKey(): boolean {
+    if (!browser) return false
+    return /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent)
+}
+
+/**
+ * The key of a shortcut held with the platform's command key, `Mod+KeyK`, or null. `Mod` is ⌘ on
+ * a Mac and Ctrl elsewhere, so one binding works on both, and it is read from the event's
+ * modifier flags rather than from the keys pressed so far: neither the left or right key nor the
+ * order they went down in matters, and macOS sends no keyup for a key released while ⌘ is held.
+ */
+export function modShortcutKey(event: KeyboardEvent): string | null {
+    const mod = usesCommandKey() ? event.metaKey : event.ctrlKey
+    if (!mod || event.altKey) return null
+    if (/^(Control|Meta|Shift|Alt|OS)/.test(event.code)) return null
+    return `Mod+${event.shiftKey ? 'Shift+' : ''}${event.code}`
+}
+
+const KEY_LABELS: Record<string, string> = {
+    ArrowUp: '↑',
+    ArrowDown: '↓',
+    ArrowLeft: '←',
+    ArrowRight: '→'
+}
+
+/** How a key reads: `Mod+KeyK` as Ctrl+K or ⌘K, `ShiftLeft+KeyD` as Shift+D. */
+export function shortcutLabel(key: string): string {
+    const command = usesCommandKey()
+    const parts = key.split('+').map((part) => {
+        if (part === 'Mod') return command ? '⌘' : 'Ctrl'
+        if (/^Key[A-Z]$/.test(part)) return part.slice(3)
+        if (/^Digit\d$/.test(part)) return part.slice(5)
+        if (/^(Shift|Control|Alt|Meta)(Left|Right)$/.test(part)) {
+            return part.replace(/(Left|Right)$/, '').replace('Control', 'Ctrl')
+        }
+        return KEY_LABELS[part] ?? part
+    })
+    return command && parts[0] === '⌘' ? parts.join('') : parts.join('+')
+}
+
+/**
+ * Set while Settings records a key, so that the key being bound does not also run the shortcut it
+ * is currently bound to: the Workbench's command-key listener runs before anything focused sees it.
+ */
+export const shortcutRecording = { active: false }
 
 type StoredSettings = {
     meta: {

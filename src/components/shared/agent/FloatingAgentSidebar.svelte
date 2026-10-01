@@ -9,6 +9,7 @@
     } from './DefaultCodingAgent.svelte'
     import type { Emulator } from '$lib/languages/Emulator'
     import type { FileSystem } from '$lib/languages/peripherals/FileSystem'
+    import type { AgentSearchPlace } from '$lib/search/scope'
     import type { ProjectFiles } from '$lib/projectFiles'
     import type { RegisteredTool } from '@discerns/sdk'
 
@@ -29,6 +30,7 @@
         workflows?: AgentWorkflow[]
         allowToolList?: AgentToolAllowList
         allowWorkflowList?: AgentWorkflowAllowList
+        searchPlace?: AgentSearchPlace
     }
 
     let {
@@ -47,7 +49,8 @@
         tools,
         workflows,
         allowToolList,
-        allowWorkflowList
+        allowWorkflowList,
+        searchPlace
     }: Props = $props()
 </script>
 
@@ -66,6 +69,7 @@
         {workflows}
         {allowToolList}
         {allowWorkflowList}
+        {searchPlace}
         style="border-radius: 0; border: none; box-shadow: none; opacity: 0.82;"
     />
 </AgentSidebarFrame>

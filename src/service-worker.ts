@@ -51,14 +51,34 @@ async function store(cacheName: string, request: Request, response: Response) {
     }
 }
 
-async function respond(request: Request): Promise<Response> {
+// A hit from an older generation is copied into the current one. Otherwise it is
+// dropped with that generation two deploys later and downloaded again although
+// unchanged, and deploys follow every push to main: the search model alone is
+// 35 MiB (ADR 0026).
+async function copyForward(request: Request, response: Response) {
+    try {
+        const cache = await caches.open(IMMUTABLE_CACHE)
+        if (await cache.match(request)) return
+        await cache.put(request, response)
+    } catch {
+        // Storage pressure: the asset was already served, so losing the copy is harmless.
+    }
+}
+
+async function respond(
+    request: Request,
+    waitUntil: (work: Promise<unknown>) => void
+): Promise<Response> {
     const url = new URL(request.url)
 
     if (url.pathname.startsWith(IMMUTABLE_PREFIX)) {
         // Unscoped match, so an asset unchanged since the last deploy is reused
         // from the previous generation instead of being downloaded again.
         const cached = await caches.match(request)
-        if (cached) return cached
+        if (cached) {
+            waitUntil(copyForward(request, cached.clone()))
+            return cached
+        }
         const response = await fetch(request)
         await store(IMMUTABLE_CACHE, request, response)
         return response
@@ -132,5 +152,5 @@ sw.addEventListener('fetch', (event) => {
     if (url.origin !== sw.location.origin) return
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return
 
-    event.respondWith(respond(request))
+    event.respondWith(respond(request, (work) => event.waitUntil(work)))
 })

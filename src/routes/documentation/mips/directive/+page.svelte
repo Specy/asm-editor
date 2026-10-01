@@ -1,6 +1,9 @@
 <script lang="ts">
     import Page from '$cmp/shared/layout/Page.svelte'
-    import MipsDirectiveDocumentation from '$cmp/documentation/mips/MIPSDirectiveDocumentation.svelte'
+    import ChapterView from '$cmp/documentation/ChapterView.svelte'
+    import { chapters } from '$lib/documentation/mips/mips'
+
+    const chapter = chapters().find((chapter) => chapter.id === 'directives')!
 </script>
 
 <svelte:head>
@@ -17,10 +20,5 @@
 
 <Page cropped contentStyle="padding: 1rem; gap: 1rem;">
     <h1>MIPS directives</h1>
-    <p class="text-muted">
-        MIPS directives are used to define the structure of the program. They are not instructions
-        that are executed by the CPU, but rather instructions that are used by the assembler to
-        define the structure of the program.
-    </p>
-    <MipsDirectiveDocumentation />
+    <ChapterView {chapter} />
 </Page>

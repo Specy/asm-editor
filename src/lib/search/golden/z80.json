@@ -1,0 +1,62 @@
+{
+    "scope": "z80",
+    "queries": [
+        {
+            "query": "djnz",
+            "first": "z80/instructions/djnz"
+        },
+        {
+            "query": "ld",
+            "first": "z80/instructions/ld"
+        },
+        {
+            "query": ".db",
+            "first": "z80/directives/defb"
+        },
+        {
+            "query": "af",
+            "first": "z80/registers-and-flags/register-af"
+        },
+        {
+            "query": "zero flag",
+            "top": 1,
+            "expect": "z80/registers-and-flags/flag-z"
+        },
+        {
+            "query": "print a character",
+            "top": 1,
+            "expect": "z80/input-output/char"
+        },
+        {
+            "query": "pen color",
+            "top": 1,
+            "expect": "z80/input-output/screen_pen_color"
+        },
+        {
+            "query": "draw a line",
+            "top": 2,
+            "expect": ["z80/input-output/command-line", "z80/input-output/command-line-to"]
+        },
+        {
+            "query": "clear the screen",
+            "top": 1,
+            "expect": "z80/input-output/command-clear"
+        },
+        {
+            "query": "what time is it",
+            "top": 1,
+            "expect": "z80/input-output/time_now"
+        },
+        {
+            "query": "the trs-80 display",
+            "top": 1,
+            "expect": "z80/input-output/the-trs-80-display"
+        },
+        {
+            "query": "decrement b and jump if not zero",
+            "top": 1,
+            "expect": "z80/instructions/djnz",
+            "meaning": true
+        }
+    ]
+}

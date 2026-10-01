@@ -99,6 +99,7 @@
         {readonly}
         access={{ explorer: 'off', agent: 'off', settings: 'off', testcases: 'readonly' }}
         documentationLinks={false}
+        searchLectures={false}
         {hostPanels}
         bind:activePanel
     >

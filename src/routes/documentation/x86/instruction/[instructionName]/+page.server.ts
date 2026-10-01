@@ -1,5 +1,6 @@
 import { error } from '@sveltejs/kit'
-import type { PageServerLoad } from './$types'
+import type { EntryGenerator, PageServerLoad } from './$types'
+import { chapters } from '$lib/documentation/x86/x86'
 import {
     describeX86Instruction,
     formatX86InstructionSummary,
@@ -30,3 +31,13 @@ export const load = (async ({ params }) => {
         }
     }
 }) satisfies PageServerLoad
+
+/**
+ * Every instruction page, named rather than left for the crawler to find through the sidebar's list
+ * ([the plan](../../../../../../docs/design/documentation-search-plan.md), phase 2c). The extensions
+ * are not among them: they have no page.
+ */
+export const entries: EntryGenerator = () => {
+    const instructions = chapters().find((chapter) => chapter.id === 'instructions')
+    return (instructions?.entries ?? []).map((entry) => ({ instructionName: entry.title }))
+}

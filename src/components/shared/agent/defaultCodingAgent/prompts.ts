@@ -297,6 +297,9 @@ function renderPokeInformation(enabledToolNames: DefaultCodingAgentToolName[]) {
 
 function renderToolSelectionTips(enabledToolNames: DefaultCodingAgentToolName[]) {
     const tips = [
+        hasTool(enabledToolNames, 'search_documentation')
+            ? '- Use search_documentation before relying on an instruction, directive, syscall or trap task you are not sure of: it returns the documentation entries and the lecture sections that match, by name or by a question in words. The emulator information in these instructions stays the authority for service numbers.'
+            : '',
         hasTool(enabledToolNames, 'list_files')
             ? '- Use list_files to see all files in the project, their sizes, line counts, and which file is the entry point.'
             : '',

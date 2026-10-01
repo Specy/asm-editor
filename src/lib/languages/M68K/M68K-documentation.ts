@@ -1782,9 +1782,9 @@ function makeIns(
         description,
         example,
         defaultSize,
-        interactiveExample: {
-            code
-        },
+        //none rather than an empty one, so the instruction page says there is no example instead
+        //of opening an empty editor
+        interactiveExample: code ? { code } : undefined,
         affectsFlags: affectedFlags
     }
 }

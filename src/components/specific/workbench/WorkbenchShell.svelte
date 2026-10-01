@@ -20,6 +20,8 @@
     import FaShareAlt from '~icons/fa-solid/share-alt'
     import FaCog from '~icons/fa-solid/cog'
     import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
+    import { documentationLanguageOf, languageScope } from '$lib/search/scope'
+    import { searchClient } from '$lib/search/searchClient.svelte'
 
     interface Props {
         project: Project
@@ -32,6 +34,7 @@
         unsaved?: boolean
         access?: Partial<Record<BuiltinPanelId, PanelAccess>>
         documentationLinks?: boolean
+        searchLectures?: boolean
         hostPanels?: WorkbenchHostPanel[]
         hostLinks?: WorkbenchHostLink[]
         activePanel?: string | null
@@ -48,6 +51,7 @@
         unsaved = false,
         access = {},
         documentationLinks = true,
+        searchLectures = true,
         hostPanels = [],
         hostLinks = [],
         activePanel = $bindable(null)
@@ -97,10 +101,23 @@
         },
         toggleSettings: () => {
             if (accessOf('settings') !== 'off') ui.toggle('settings')
+        },
+        searchDocumentation: () => {
+            if (accessOf('documentation') !== 'off') ui.searchDocumentation()
         }
     }
 
-    onMount(() => session.mount())
+    /** What the Documentation panel's search, and the AI assistant's, look through. */
+    const searchScope = $derived(
+        languageScope(documentationLanguageOf(project.language), searchLectures)
+    )
+
+    onMount(() => {
+        // The Documentation panel is one click away, so its index and the model start loading
+        // once the Workbench has settled ([ADR 0026](../../../../docs/adr/0026-hybrid-search-in-the-browser-over-a-build-time-index.md)).
+        if (accessOf('documentation') !== 'off') searchClient.preload(searchScope)
+        return session.mount()
+    })
 
     /**
      * The arrangement on screen. Crossing a breakpoint swaps it, and the old one is taken down a
@@ -197,6 +214,9 @@
         },
         get documentationLinks() {
             return documentationLinks
+        },
+        get searchScope() {
+            return searchScope
         },
         get hostPanels() {
             return hostPanels

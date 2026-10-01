@@ -7,6 +7,22 @@ type Version = {
 }
 export const versions: Version[] = [
     {
+        version: '11.1.0',
+        title: 'Search the documentation and the courses',
+        date: new Date('2026-10-01'),
+        changes: [
+            'Search the documentation and the courses by words or by meaning: "print a number" finds the service that prints one and the lecture that explains it',
+            'The documentation panel of the editor lists every instruction, directive, syscall, register and port as a short row that opens in place, with buttons to jump between sections, and shows everything the documentation pages show',
+            'Ctrl+K (⌘K on a Mac) opens the documentation search from anywhere in the editor, and the search window on the documentation pages and in the courses',
+            'Search runs in your browser: the first visit downloads a small model, about 18 MB, which then works offline. A browser set to save data searches by words only',
+            'The AI assistant can look things up in the documentation and the courses',
+            'Each language has a box at the top of its documentation and of its course, and a link to a lecture can now point at one of its sections'
+        ],
+        notes: [
+            'During an exam the documentation panel searches the documentation only, never the courses'
+        ]
+    },
+    {
         version: '11.0.0',
         title: 'New editor layout',
         date: new Date('2026-09-30'),

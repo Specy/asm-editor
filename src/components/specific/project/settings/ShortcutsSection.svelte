@@ -4,7 +4,12 @@
      * recorded from a focused input, which is what keeps the Workbench's own shortcut handler (it
      * ignores keys typed into inputs) from also running the key being bound.
      */
-    import { shortcutsStore } from '$stores/shortcutsStore'
+    import {
+        modShortcutKey,
+        shortcutLabel,
+        shortcutRecording,
+        shortcutsStore
+    } from '$stores/shortcutsStore'
     import Button from '$cmp/shared/button/Button.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import FaCheck from '~icons/fa-solid/check'
@@ -23,8 +28,17 @@
     let selectedId = $state(-1)
     let inputRef: HTMLInputElement | undefined = $state()
     function handleKeydown(event: KeyboardEvent) {
-        if (event.repeat) return
+        if (event.repeat || selectedId === -1) return
         if (event.code === 'Escape') return (selectedId = -1)
+        //a key held with the platform's command key is recorded as `Mod+…`, one binding for Ctrl on
+        //Windows and Linux and ⌘ on a Mac; the browser's own use of it is held back meanwhile
+        const command = modShortcutKey(event)
+        if (command) {
+            event.preventDefault()
+            currentKeys.clear()
+            currentShortcut = command
+            return
+        }
         currentKeys.set(event.code, true)
         setCurrentShortcut()
     }
@@ -51,6 +65,12 @@
             selectedId = -1
         }
     })
+    $effect(() => {
+        shortcutRecording.active = selectedId !== -1
+        return () => {
+            shortcutRecording.active = false
+        }
+    })
 </script>
 
 <div class="shortcuts column" {style}>
@@ -68,7 +88,7 @@
                         selectedId = entry[1].id
                     }}
                 >
-                    {entry[1].id !== selectedId ? entry[0] : currentShortcut}
+                    {shortcutLabel(entry[1].id !== selectedId ? entry[0] : currentShortcut)}
                 </Button>
                 {#if entry[1].id === selectedId}
                     <Button

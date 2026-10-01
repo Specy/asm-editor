@@ -4,7 +4,7 @@
      * store): the Settings panel's sections, the Screen and the Debug tools in the debug column, and
      * the rows of the compact layouts.
      */
-    import { untrack, type Snippet } from 'svelte'
+    import { tick, untrack, type Snippet } from 'svelte'
     import FaAngleRight from '~icons/fa-solid/angle-right'
     import { workbenchLayout } from '$stores/workbenchLayoutStore.svelte'
 
@@ -57,13 +57,42 @@
     //laid out folded once first, so that it has somewhere to slide open from
     let fold: HTMLDivElement | undefined = $state()
     let shown = $state(untrack(() => !collapsed))
+    //whether the body is in the middle of a slide, which keeps a body that scrolls from showing a
+    //scrollbar while its row is too short for it, when it may well fit once the slide is over
+    let sliding = $state(false)
     $effect(() => {
         if (collapsed) {
+            if (untrack(() => shown)) sliding = true
             shown = false
             return
         }
-        if (fold && !untrack(() => shown)) fold.getBoundingClientRect()
+        if (fold && !untrack(() => shown)) {
+            fold.getBoundingClientRect()
+            sliding = true
+        }
         shown = true
+    })
+    //the slide is over once the fold's transitions finish; with none, as with reduced motion, it is
+    //over at once. A slide turned back halfway is followed by the one that turned it
+    let slide = 0
+    $effect(() => {
+        void shown
+        if (!fold || !untrack(() => sliding)) return
+        const current = ++slide
+        const element = fold
+        //the transitions start once the fold's classes change, which can be after this effect
+        void tick()
+            .then(() =>
+                Promise.all(
+                    (element.getAnimations?.() ?? []).map((transition) => transition.finished)
+                )
+            )
+            .then(
+                () => {
+                    if (current === slide) sliding = false
+                },
+                () => {}
+            )
     })
 </script>
 
@@ -92,7 +121,7 @@
         {/if}
     </div>
     {#if mounted}
-        <div class="body-fold" class:shown bind:this={fold}>
+        <div class="body-fold" class:shown class:sliding bind:this={fold}>
             <div class="body-clip">
                 <div class="section-body" style={bodyStyle}>
                     {@render children()}
@@ -235,6 +264,15 @@
         flex-direction: column;
         min-height: 0;
         min-width: 0;
+    }
+
+    /* while it slides the body keeps the height it will have once open and the fold clips it,
+       instead of being squeezed by the row: neither it, through its bodyStyle, nor anything that
+       scrolls inside it, like the History's list, shows a scrollbar that comes and goes and
+       narrows what it holds on the way. A body that fills its column grows with the row as before */
+    .sliding .section-body {
+        flex-shrink: 0;
+        overflow: hidden !important;
     }
 
     .fill .body-fold {

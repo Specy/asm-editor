@@ -3,6 +3,7 @@ import { sveltekit } from '@sveltejs/kit/vite'
 import wasm from 'vite-plugin-wasm'
 import Icons from 'unplugin-icons/vite'
 import { defineConfig } from 'vitest/config'
+import { searchModelPlugin } from './scripts/search-model-plugin.ts'
 //import devtoolsJson from 'vite-plugin-devtools-json';
 export default defineConfig({
     server: {
@@ -14,6 +15,10 @@ export default defineConfig({
             // outside the serving allow list and the 403 page itself reaches
             // `WebAssembly.instantiate`, which reports a bad magic word.
             allow: ['emulators']
+        },
+        watch: {
+            // The search model and the vectors the index build caches; nothing imports them.
+            ignored: ['**/.cache/**']
         }
     },
     optimizeDeps: {
@@ -33,7 +38,8 @@ export default defineConfig({
             scale: 0,
             defaultClass: 'unplugin-icon'
         }),
-        wasm()
+        wasm(),
+        searchModelPlugin()
         /*
          visualizer({
             emitFile: true,
