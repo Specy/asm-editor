@@ -39,10 +39,11 @@ export const LAYOUT_LIMITS = {
 } as const
 
 /** A side panel's width before it is dragged, in pixels (the rem sizes of the plan at 16px). */
+const DEFAULT_READING_PANEL_WIDTH = 448
 export const DEFAULT_PANEL_WIDTHS: Readonly<Record<string, number>> = {
     explorer: 256,
-    testcases: 448,
-    documentation: 448,
+    testcases: DEFAULT_READING_PANEL_WIDTH,
+    documentation: DEFAULT_READING_PANEL_WIDTH,
     agent: 448,
     settings: 416
 }

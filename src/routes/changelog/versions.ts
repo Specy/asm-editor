@@ -7,38 +7,17 @@ type Version = {
 }
 export const versions: Version[] = [
     {
-        version: '11.1.0',
-        title: 'Search the documentation and the courses',
-        date: new Date('2026-10-01'),
-        changes: [
-            'Search the documentation and the courses by words or by meaning: "print a number" finds the service that prints one and the lecture that explains it',
-            'The documentation panel of the editor lists every instruction, directive, syscall, register and port as a short row that opens in place, with buttons to jump between sections, and shows everything the documentation pages show',
-            'Ctrl+K (⌘K on a Mac) opens the documentation search from anywhere in the editor, and the search window on the documentation pages and in the courses',
-            'Search runs in your browser: the first visit downloads a small model, about 18 MB, which then works offline. A browser set to save data searches by words only',
-            'The AI assistant can look things up in the documentation and the courses',
-            'Each language has a box at the top of its documentation and of its course, and a link to a lecture can now point at one of its sections'
-        ],
-        notes: [
-            'During an exam the documentation panel searches the documentation only, never the courses'
-        ]
-    },
-    {
         version: '11.0.0',
         title: 'New editor layout',
         date: new Date('2026-09-30'),
         changes: [
-            'Redesigned the project editor to look like an IDE: a bar of icons opens the files, testcases, documentation, AI assistant and settings beside the code, open files are tabs, and the terminal, a log of builds and tests, and the problems sit under the code',
-            'Building opens a debugger column with the registers, memory and screen; the stack pointer, history and call stack can float as windows or sit in that column',
-            'Every panel can be resized, and the editor remembers sizes and folded sections',
-            'Documentation and testcases can be maximized over the editor to read them',
-            'Testcases are edited in place: each has a name, its registers and memory are tables typed in hex or decimal, and the last run shows what each value really was, beside a Run all button',
-            'Settings now also hold the MARS and RARS display, the keyboard shortcuts and the themes; the separate themes page is gone',
-            'Added a setting to show panels as cards or as edge to edge lines',
-            'Phones and tablets have their own layout, with the build and run buttons always in reach',
-            'Exam sessions use the new editor, with the exercise in a panel beside the code'
+            'Redesigned the project editor to look like more like an IDE',
+            'Redesigned the documentation and testcases. Testcases can now be edited in place.',
+            'Improved the documentation and search experience, now uses semantic search to improve results. You can ask questions in natural language'
         ],
         notes: [
-            'The "Show memory tab" and "Show screen" preferences were removed: memory and the screen are always part of the debugger'
+            'The "Show memory tab" and "Show screen" preferences were removed: memory and the screen are always part of the debugger',
+            'History size setting has been removed, you can now only enable/disable history'
         ]
     },
     {

@@ -362,18 +362,16 @@
             display: flex;
         }
 
-        /* across the whole phone but the gap, for the panel to hold as much as it can */
+        /* fill the phone's workspace below its top strip */
         &.with-rail {
-            top: var(--wb-gap);
-            bottom: var(--wb-gap);
-            left: var(--wb-gap);
-            right: var(--wb-gap);
-            border: var(--wb-card-edge);
-            border-radius: var(--wb-radius);
+            inset: 0;
+            border: none;
+            border-radius: 0;
+            box-shadow: none;
             display: flex;
             visibility: hidden;
             pointer-events: none;
-            transform: translateX(calc(-100% - var(--wb-gap)));
+            transform: translateX(-100%);
             transition:
                 transform 0.2s ease,
                 visibility 0s 0.2s;

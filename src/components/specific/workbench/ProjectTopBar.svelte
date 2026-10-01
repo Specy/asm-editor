@@ -101,7 +101,8 @@
     }
 
     .phone .brand {
-        width: 2.5rem;
+        width: calc(var(--wb-rail-width) + var(--wb-card-inset));
+        border-right: 1px solid var(--wb-line);
     }
 
     .action {
@@ -127,6 +128,10 @@
         width: 2rem;
         padding: 0;
         text-decoration: none;
+    }
+
+    :global(.workbench[data-device='desktop']) .brand {
+        width: calc(var(--wb-rail-width) + var(--wb-gap) + var(--wb-card-inset));
     }
 
     .action:hover {
