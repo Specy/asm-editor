@@ -459,7 +459,8 @@
         justify-content: space-between;
         height: 1.8rem;
         background: color-mix(in srgb, var(--tertiary) 42%, transparent);
-        border-bottom: 1px solid color-mix(in srgb, var(--tertiary) 70%, transparent);
+        border-bottom: 1px solid
+            var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
     }
 
     .section-toggle {

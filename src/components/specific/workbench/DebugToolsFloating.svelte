@@ -13,24 +13,46 @@
     import { workbenchLayout, type FloatingWindowState } from '$stores/workbenchLayoutStore.svelte'
     import { useWorkbench } from './workbenchContext'
 
+    interface Props {
+        headerHeight?: number
+    }
+
+    let { headerHeight = 0 }: Props = $props()
+
     const { session, ui } = useWorkbench()
     const emulator = session.emulator
     const language = $derived(session.project.language)
 
     /**
-     * Where a window starts before it was ever moved: the editor's own places across, and down so
-     * that its 25.6px bar is centred on the file tabs' 36px strip, which starts under the 4px gap
-     * of Cards and at the very top in Lines.
+     * Center the 25.6px window bars on the host's top strip, leaving its navigation actions clear.
+     * Hosts without a strip keep the original positions over the file tabs.
      */
-    const TOP = $derived(ui.panelStyle === 'lines' ? 5 : 9)
+    const TOP = $derived(
+        headerHeight > 0
+            ? Math.max(0, Math.round((headerHeight - 25.6) / 2))
+            : ui.panelStyle === 'lines'
+              ? 5
+              : 9
+    )
     const DEFAULT_LEFT: Record<string, number> = { callstack: 300, history: 500 }
-    /** Where they started under the top bar the desktop no longer has: one left there moves up. */
-    const TOP_UNDER_THE_OLD_BAR = 13
+    const PREVIOUS_TOPS = [5, 9, 13]
 
     function windowOf(id: string, index = 0): FloatingWindowState {
         const stored = workbenchLayout.floating(id)
-        if (stored) return stored.top === TOP_UNDER_THE_OLD_BAR ? { ...stored, top: TOP } : stored
-        return { open: false, left: DEFAULT_LEFT[id] ?? 700 + index * 300, top: TOP }
+        const previousLeft = DEFAULT_LEFT[id] ?? 700 + index * 300
+        const left = previousLeft + (headerHeight > 0 ? 60 : 0)
+        if (stored) {
+            const moveToStrip = headerHeight > 0 && PREVIOUS_TOPS.includes(stored.top)
+            if (moveToStrip || stored.top === 13) {
+                return {
+                    ...stored,
+                    top: TOP,
+                    left: moveToStrip && stored.left === previousLeft ? left : stored.left
+                }
+            }
+            return stored
+        }
+        return { open: false, left, top: TOP }
     }
 
     function update(id: string, index: number, change: Partial<FloatingWindowState>) {

@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { onMount, untrack } from 'svelte'
+    import { onMount, untrack, type Snippet } from 'svelte'
     import type { Project } from '$lib/Project.svelte'
     import type { Emulator } from '$lib/languages/Emulator'
     import { WorkbenchSession } from '$lib/workbench/WorkbenchSession.svelte'
@@ -14,6 +14,7 @@
     import { setWorkbenchContext, type RailEntry } from './workbenchContext'
     import WorkbenchDesktop from './WorkbenchDesktop.svelte'
     import WorkbenchCompact from './WorkbenchCompact.svelte'
+    import DebugToolsFloating from './DebugToolsFloating.svelte'
     import FaFolderOpen from '~icons/fa-solid/folder-open'
     import FaVial from '~icons/fa-solid/vial'
     import FaBook from '~icons/fa-solid/book'
@@ -22,6 +23,7 @@
     import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
     import { documentationLanguageOf, languageScope } from '$lib/search/scope'
     import { searchClient } from '$lib/search/searchClient.svelte'
+    import './workbench.css'
 
     interface Props {
         project: Project
@@ -38,6 +40,7 @@
         hostPanels?: WorkbenchHostPanel[]
         hostLinks?: WorkbenchHostLink[]
         activePanel?: string | null
+        header?: Snippet<[WorkbenchUi]>
     }
 
     let {
@@ -54,7 +57,8 @@
         searchLectures = true,
         hostPanels = [],
         hostLinks = [],
-        activePanel = $bindable(null)
+        activePanel = $bindable(null),
+        header
     }: Props = $props()
 
     function accessOf(id: BuiltinPanelId): PanelAccess {
@@ -93,6 +97,12 @@
     const ui = new WorkbenchUi(viewport, {
         get: () => activePanel,
         set: (id) => (activePanel = id)
+    })
+    let headerHeight = $state(0)
+    let debugged = false
+    const debugToolsBuilt = $derived.by(() => {
+        if (session.debugSession) debugged = true
+        return debugged
     })
 
     session.panels = {
@@ -239,14 +249,39 @@
     class:compact={ui.compact}
     data-device={viewport.deviceClass}
 >
+    {#if header}
+        <div class="header-slot" bind:clientHeight={headerHeight}>
+            {@render header(ui)}
+        </div>
+    {/if}
     {#if arrangement === 'compact'}
-        <WorkbenchCompact />
+        <WorkbenchCompact externalMenu={!!header} />
     {:else if arrangement === 'desktop'}
         <WorkbenchDesktop />
+    {/if}
+    {#if arrangement === 'desktop' && ui.floatingDebugTools && debugToolsBuilt}
+        <div class="floating-tools" class:hidden={!session.debugSession}>
+            <DebugToolsFloating {headerHeight} />
+        </div>
     {/if}
 </div>
 
 <style lang="scss">
+    .header-slot {
+        display: flex;
+        flex-direction: column;
+        flex: none;
+        min-width: 0;
+    }
+
+    .floating-tools {
+        display: contents;
+
+        &.hidden {
+            display: none;
+        }
+    }
+
     /* The two surface styles of the design record's Layout Preferences are custom properties the
        containers read: Cards puts rounded panels on the page background with small gaps, Lines
        puts them edge to edge with 1px dividers. */
@@ -266,7 +301,6 @@
         --wb-section-rule: var(--wb-card-edge);
         /* a tab strip is a shade darker than the panel whose tabs it holds */
         --wb-strip: color-mix(in srgb, var(--background) 65%, var(--secondary));
-        --wb-line: var(--tertiary);
         /* the 1px edge of every card: a border, so the card's content is clipped inside it, its
            corners included, and nothing it holds can paint over it */
         --wb-card-edge: 1px solid var(--wb-line);

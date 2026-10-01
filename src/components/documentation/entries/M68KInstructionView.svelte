@@ -57,7 +57,8 @@
         gap: 0.2rem 0.8rem;
         margin: 0;
         padding-bottom: 0.6rem;
-        border-bottom: 1px solid color-mix(in srgb, var(--tertiary) 70%, transparent);
+        border-bottom: 1px solid
+            var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
         font-size: 0.9rem;
     }
     dt {

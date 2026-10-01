@@ -136,7 +136,7 @@
         padding-bottom: 0.4rem;
         align-items: center;
         padding-left: 0.4rem;
-        border-bottom: 1px solid var(--secondary);
+        border-bottom: 1px solid var(--wb-line, var(--secondary));
     }
     .input-preview {
         padding: 0 1rem;

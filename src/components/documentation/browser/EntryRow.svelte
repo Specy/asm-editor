@@ -71,7 +71,7 @@
         min-width: 0;
     }
     .entry-row + .entry-row {
-        border-top: 1px solid color-mix(in srgb, var(--tertiary) 70%, transparent);
+        border-top: 1px solid var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
     }
     .entry-row.expanded {
         background-color: color-mix(in srgb, var(--tertiary) 45%, transparent);

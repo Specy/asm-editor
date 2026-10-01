@@ -101,7 +101,7 @@
 <style lang="scss">
     .testcases {
         // the colours every part of a Testcase is drawn in, from the theme
-        --tc-line: color-mix(in srgb, var(--tertiary) 75%, transparent);
+        --tc-line: var(--wb-line, color-mix(in srgb, var(--tertiary) 75%, transparent));
         --tc-field: color-mix(in srgb, var(--secondary) 80%, var(--tertiary));
         --tc-table: color-mix(in srgb, var(--secondary) 92%, var(--tertiary));
         --tc-head: color-mix(in srgb, var(--background) 55%, var(--secondary));
@@ -117,6 +117,8 @@
         --tc-string: color-mix(in srgb, #e5c07b 85%, var(--secondary-text));
         display: flex;
         flex-direction: column;
+        min-width: 0;
+        max-width: 100%;
         overflow-y: auto;
         background-color: var(--secondary);
         color: var(--secondary-text);

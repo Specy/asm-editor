@@ -175,7 +175,7 @@
         width: 1.1rem;
         height: 1.1rem;
         border-radius: 0.25rem;
-        border: 1px solid var(--tertiary);
+        border: 1px solid var(--wb-line, var(--tertiary));
     }
     .swatch-name {
         flex: 1;

@@ -184,7 +184,7 @@
         flex-wrap: nowrap;
         overflow: hidden;
         background-color: color-mix(in srgb, var(--background) 85%, var(--secondary));
-        border: 0.1rem solid var(--tertiary);
+        border: 0.1rem solid var(--wb-line, var(--tertiary));
         border-bottom: 0;
         border-radius: 0.5rem 0.5rem 0 0;
 

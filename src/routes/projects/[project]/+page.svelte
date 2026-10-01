@@ -10,8 +10,8 @@
     import { onMount } from 'svelte'
     import { toast } from '$stores/toastStore'
     import Workbench from '$cmp/specific/workbench/Workbench.svelte'
+    import ProjectTopBar from '$cmp/specific/workbench/ProjectTopBar.svelte'
     import ThemeScope from '$cmp/shared/providers/ThemeScope.svelte'
-    import FaDonate from '~icons/fa-solid/heart'
     import { preferencesStore } from '$stores/preferencesStore.svelte'
     import { Monaco } from '$lib/monaco/Monaco'
     import { Prompt } from '$stores/promptStore.svelte'
@@ -279,7 +279,6 @@
                     <Workbench
                         {project}
                         {unsaved}
-                        onBack={() => changePage('/projects')}
                         onSave={async ({ silent }) => {
                             const saved = await save(project, silent)
                             lastSaveFailed = !saved
@@ -288,16 +287,18 @@
                             if (!silent) toast.logPill('Project saved')
                         }}
                         onChange={() => (dirty = true)}
-                        onShare={() => share(project)}
-                        hostLinks={[
-                            {
-                                id: 'donate',
-                                title: 'Donate',
-                                icon: FaDonate,
-                                onClick: () => changePage('/donate')
-                            }
-                        ]}
                     >
+                        {#snippet header(ui)}
+                            <ProjectTopBar
+                                phone={ui.deviceClass === 'phone'}
+                                drawerOpen={ui.drawerOpen}
+                                onToggleMenu={() => (ui.drawerOpen = !ui.drawerOpen)}
+                                onHome={() => changePage('/')}
+                                onBack={() => changePage('/projects')}
+                                onDonate={() => changePage('/donate')}
+                                onShare={() => share(project)}
+                            />
+                        {/snippet}
                         {#snippet loading()}
                             {@render loadingScreen(false)}
                         {/snippet}

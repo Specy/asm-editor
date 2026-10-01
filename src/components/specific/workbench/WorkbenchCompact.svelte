@@ -32,6 +32,12 @@
     import { useWorkbench } from './workbenchContext'
     import type { ScreenHeader } from '$cmp/specific/project/screen/screenHeader'
 
+    interface Props {
+        externalMenu?: boolean
+    }
+
+    let { externalMenu = false }: Props = $props()
+
     const context = useWorkbench()
     const { session, ui } = context
     const emulator = session.emulator
@@ -74,7 +80,9 @@
 </script>
 
 <div class="compact" class:phone>
-    <TopBar variant={phone ? 'phone' : 'tablet'} />
+    {#if !phone || !externalMenu}
+        <TopBar variant={phone ? 'phone' : 'tablet'} />
+    {/if}
     <div class="frame">
         {#if !phone}
             <!-- an open panel joins the rail, one card with it as on a desktop -->
@@ -180,16 +188,16 @@
             class:with-rail={phone}
             class:maximized={panelMaximized}
             class:restoring
+            inert={!panelShown}
+            aria-hidden={!panelShown}
             style:--side-panel-width={`min(${workbenchLayout.panelWidth(ui.activePanel ?? '')}px, calc(100% - var(--wb-rail-width) - 2rem))`}
-            style={phone || panelMaximized
-                ? ''
-                : 'width: var(--side-panel-width)'}
+            style={phone || panelMaximized ? '' : 'width: var(--side-panel-width)'}
             onanimationend={(event) => {
                 if (event.target === event.currentTarget) restoring = false
             }}
         >
             {#if phone}
-                <IconRail withBack framed={false} />
+                <IconRail withBack withSave={externalMenu} framed={false} />
             {/if}
             {#if ui.opened.size > 0}
                 <div class="drawer-panel" class:hidden={!ui.activePanel}>
@@ -362,6 +370,22 @@
             right: var(--wb-gap);
             border: var(--wb-card-edge);
             border-radius: var(--wb-radius);
+            display: flex;
+            visibility: hidden;
+            pointer-events: none;
+            transform: translateX(calc(-100% - var(--wb-gap)));
+            transition:
+                transform 0.2s ease,
+                visibility 0s 0.2s;
+
+            &.shown {
+                visibility: visible;
+                pointer-events: auto;
+                transform: translateX(0);
+                transition:
+                    transform 0.2s ease,
+                    visibility 0s;
+            }
 
             .drawer-panel {
                 border-left: var(--wb-card-edge);
@@ -395,6 +419,14 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
+        .drawer.with-rail {
+            transition: none;
+        }
+
+        .drawer.with-rail.shown {
+            transition: none;
+        }
+
         .drawer.maximized {
             animation: none;
         }
@@ -404,6 +436,7 @@
         display: flex;
         flex: 1;
         min-width: 0;
+        max-width: 100%;
 
         &.hidden {
             display: none;

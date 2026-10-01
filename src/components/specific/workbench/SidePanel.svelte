@@ -33,6 +33,7 @@
     const { session, ui } = context
     const emulator = session.emulator
     const project = session.project
+    const phone = $derived(ui.deviceClass === 'phone')
     const active = $derived(context.rail.find((entry) => entry.id === ui.activePanel))
     const mounted = $derived(
         context.rail.filter((entry) => !entry.action && ui.opened.has(entry.id))
@@ -45,8 +46,8 @@
     }
 
     /**
-     * How narrow each panel's content may get: below it the panel scrolls sideways rather than
-     * squeezing rows into a column of wrapped words.
+     * Minimum widths on larger screens, where narrow panels can scroll sideways. A phone's
+     * drawer lets the content wrap to the available width instead.
      */
     const MIN_WIDTHS: Record<string, string> = {
         explorer: '13rem',
@@ -68,6 +69,7 @@
 
 <section
     class="side-panel"
+    class:phone
     class:framed
     class:maximized={ui.maximized || restoring}
     aria-label={active?.title}
@@ -81,7 +83,9 @@
                 onRun={runTestcases}
                 onClear={() => (session.testcasesResult = [])}
                 disabled={session.buildDisabled || session.building || session.running}
-                style="margin-right: 0.3rem"
+                style={phone
+                    ? 'flex-wrap: wrap; flex-basis: 100%; min-width: 0; order: 1;'
+                    : 'margin-right: 0.3rem'}
             />
         {/if}
         {#if active?.maximizable && allowMaximize}
@@ -103,7 +107,10 @@
             class="panel-action"
             title="Close the panel"
             aria-label="Close the panel"
-            onclick={() => ui.close()}
+            onclick={() => {
+                if (phone) ui.drawerOpen = false
+                else ui.close()
+            }}
         >
             <Icon size={0.9}>
                 <FaTimes />
@@ -113,7 +120,10 @@
     {#each mounted as entry (entry.id)}
         {@const shown = entry.id === ui.activePanel}
         <div class="panel-body" class:shown class:gutterless={entry.id === 'explorer'}>
-            <div class="panel-content" style="min-width: {MIN_WIDTHS[entry.id] ?? '16rem'}">
+            <div
+                class="panel-content"
+                style:min-width={phone ? '0' : (MIN_WIDTHS[entry.id] ?? '16rem')}
+            >
                 {#if entry.id === 'explorer'}
                     <Explorer
                         name={project.name}
@@ -174,7 +184,9 @@
         display: flex;
         flex-direction: column;
         width: 100%;
+        max-width: 100%;
         height: 100%;
+        min-width: 0;
         min-height: 0;
         overflow: hidden;
         background-color: var(--wb-surface);
@@ -193,11 +205,12 @@
         flex: none;
         height: 2.2rem;
         padding: 0 0.3rem 0 0.8rem;
-        border-bottom: 1px solid color-mix(in srgb, var(--tertiary) 70%, transparent);
+        border-bottom: 1px solid var(--wb-line);
     }
 
     .panel-title {
         flex: 1;
+        min-width: 0;
         font-size: 0.72rem;
         font-weight: 600;
         letter-spacing: 0.08em;
@@ -207,6 +220,7 @@
     .panel-action {
         display: grid;
         place-items: center;
+        flex: none;
         width: 1.7rem;
         height: 1.7rem;
         padding: 0.4rem;
@@ -226,6 +240,7 @@
         display: none;
         flex-direction: column;
         flex: 1;
+        min-width: 0;
         min-height: 0;
         overflow: auto;
         scrollbar-gutter: stable;
@@ -252,5 +267,22 @@
         width: 100%;
         max-width: 90ch;
         margin-inline: auto;
+    }
+
+    .phone .panel-header {
+        flex-wrap: wrap;
+        height: auto;
+        min-height: 2.2rem;
+        padding-block: 0.3rem;
+    }
+
+    .phone .panel-content {
+        width: 100%;
+        max-width: 100%;
+        overflow-wrap: anywhere;
+
+        :global(.settings-value) {
+            flex-wrap: wrap;
+        }
     }
 </style>

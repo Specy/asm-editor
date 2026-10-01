@@ -50,7 +50,7 @@
 <style>
     .section-card {
         border-radius: 0.5rem;
-        border: 1px solid color-mix(in srgb, var(--tertiary) 80%, transparent);
+        border: 1px solid var(--wb-line, color-mix(in srgb, var(--tertiary) 80%, transparent));
         min-width: 0;
     }
     .head {

@@ -89,7 +89,7 @@
         background-color: rgba(var(--RGB-tertiary), 0.3);
         //border-top: 0.1rem solid rgba(var(--RGB-accent), 0.5);
         //border-bottom: 0.1rem solid rgba(var(--RGB-accent), 0.5);
-        border-left: solid 1px #404040;
+        border-left: solid 1px var(--wb-line, #404040);
         padding: 0.1rem 0;
         font-size: 1rem;
     }

@@ -14,7 +14,6 @@
     import EditorArea from './EditorArea.svelte'
     import BottomPanel from './BottomPanel.svelte'
     import DebugColumn from './DebugColumn.svelte'
-    import DebugToolsFloating from './DebugToolsFloating.svelte'
     import { useWorkbench } from './workbenchContext'
 
     /** Below this, the editor beside an open panel and the debug column is too narrow to use. */
@@ -42,7 +41,7 @@
         else if (wasMaximized) restoring = true
         wasMaximized = maximized
     })
-    //the debug column and the floating Debug tools are built at the first Build and only hidden
+    //the debug column is built at the first Build and only hidden
     //after a Stop, so the next Build shows them at once instead of building them anew
     let debugged = false
     const debugUiBuilt = $derived.by(() => {
@@ -134,12 +133,6 @@
             </div>
         {/if}
     </div>
-    <!-- the floating Debug tools belong to a Debug session: nothing to show before a Build -->
-    {#if ui.floatingDebugTools && debugUiBuilt}
-        <div class="debug-slot" class:hidden={!session.debugSession}>
-            <DebugToolsFloating />
-        </div>
-    {/if}
 </div>
 
 <style lang="scss">
@@ -199,9 +192,7 @@
             top: var(--wb-gap);
             bottom: var(--wb-gap);
             left: calc(var(--wb-gap) + var(--wb-card-inset) + var(--wb-rail-width));
-            width: calc(
-                100% - 2 * var(--wb-gap) - var(--wb-card-inset) - var(--wb-rail-width)
-            );
+            width: calc(100% - 2 * var(--wb-gap) - var(--wb-card-inset) - var(--wb-rail-width));
             animation: expand-panel-width 0.2s ease;
             overflow: hidden;
             background-color: var(--wb-surface);
@@ -222,9 +213,7 @@
 
     @keyframes restore-panel-width {
         from {
-            width: calc(
-                100% - 2 * var(--wb-gap) - var(--wb-card-inset) - var(--wb-rail-width)
-            );
+            width: calc(100% - 2 * var(--wb-gap) - var(--wb-card-inset) - var(--wb-rail-width));
         }
         to {
             width: var(--side-panel-width);
@@ -241,7 +230,7 @@
         flex: none;
     }
 
-    /* a Debug session's own parts, the column and its splitter or the floating Debug tools: laid
+    /* a Debug session's own parts, the column and its splitter: laid
        out as if the wrapper were not there, and hidden while there is no session */
     .debug-slot {
         display: contents;

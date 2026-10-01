@@ -360,9 +360,7 @@
         {#if variant === 'page'}
             <div class="toolbar">
                 {#if open.size > 0 || unfolded.size > 0}
-                    <button type="button" class="tool" onclick={collapseAll}>
-                        Collapse all
-                    </button>
+                    <button type="button" class="tool" onclick={collapseAll}> Collapse all </button>
                 {:else}
                     <button type="button" class="tool" onclick={() => expandAll()}>
                         Expand all
@@ -418,6 +416,8 @@
         --documentation-spacing: 0.35rem;
         display: flex;
         flex-direction: column;
+        min-width: 0;
+        max-width: 100%;
         min-height: 0;
         height: 100%;
         color: inherit;
@@ -493,7 +493,7 @@
         display: flex;
         flex-direction: column;
         margin-bottom: var(--documentation-spacing);
-        border: 0.1rem solid color-mix(in srgb, var(--tertiary) 70%, transparent);
+        border: 0.1rem solid var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
         border-radius: 0.5rem;
     }
     .chapter-title {
@@ -505,7 +505,8 @@
         background-color: var(--wb-section-header, var(--tertiary));
         color: var(--secondary-text);
         border-radius: 0.4rem 0.4rem 0 0;
-        border-bottom: 1px solid color-mix(in srgb, var(--tertiary) 70%, transparent);
+        border-bottom: 1px solid
+            var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
     }
     .chapter.folded .chapter-title {
         border-radius: 0.4rem;

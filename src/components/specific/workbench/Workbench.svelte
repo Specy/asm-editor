@@ -9,6 +9,7 @@
      */
     import type { Snippet } from 'svelte'
     import type { Project } from '$lib/Project.svelte'
+    import type { WorkbenchUi } from '$lib/workbench/WorkbenchUi.svelte'
     import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
     import { resolveProjectSettings } from '$lib/projectSettings'
     import type {
@@ -44,6 +45,8 @@
         hostLinks?: WorkbenchHostLink[]
         /** The panel open beside the rail, by id; bindable so the host's chrome can open one. */
         activePanel?: string | null
+        /** Host actions above the workspace, with access to its responsive menu state. */
+        header?: Snippet<[WorkbenchUi]>
         loading?: Snippet
     }
 

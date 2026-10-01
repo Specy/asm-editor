@@ -538,7 +538,7 @@
         gap: 0.1rem;
         flex: 1;
         height: 100%;
-        border-left: solid 0.1rem var(--tertiary);
+        border-left: solid 0.1rem var(--wb-line, var(--tertiary));
     }
 
     //a pokeable chunk is the cell it always was, inside a button that carries the click: the styling

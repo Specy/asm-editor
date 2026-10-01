@@ -149,7 +149,7 @@
 
     .outlined {
         background-color: var(--background);
-        border: 1px solid var(--wb-section-header, var(--tertiary));
+        border: 1px solid var(--wb-line, var(--tertiary));
         border-radius: 0.4rem;
     }
 

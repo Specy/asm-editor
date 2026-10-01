@@ -388,7 +388,7 @@
         margin-top: 0.3rem;
         padding-top: 0.3rem;
         font-size: 0.9rem;
-        border-top: var(--tertiary) solid 2px;
+        border-top: var(--wb-line, var(--tertiary)) solid 2px;
     }
 
     .mutation-plain {

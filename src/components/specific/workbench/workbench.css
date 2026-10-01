@@ -1,0 +1,3 @@
+:where(.workbench, .project-top-bar) {
+    --wb-line: color-mix(in srgb, var(--tertiary) 60%, transparent);
+}
