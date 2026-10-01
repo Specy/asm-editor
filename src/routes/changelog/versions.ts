@@ -7,6 +7,20 @@ type Version = {
 }
 export const versions: Version[] = [
     {
+        version: '11.0.0',
+        title: 'New editor layout',
+        date: new Date('2026-09-30'),
+        changes: [
+            'Redesigned the project editor to look like more like an IDE',
+            'Redesigned the documentation and testcases. Testcases can now be edited in place.',
+            'Improved the documentation and search experience, now uses semantic search to improve results. You can ask questions in natural language'
+        ],
+        notes: [
+            'The "Show memory tab" and "Show screen" preferences were removed: memory and the screen are always part of the debugger',
+            'History size setting has been removed, you can now only enable/disable history'
+        ]
+    },
+    {
         version: '10.0.0',
         title: 'Graphics and simulators overhaul',
         date: new Date('2026-09-20'),

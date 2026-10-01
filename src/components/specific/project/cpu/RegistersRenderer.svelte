@@ -26,6 +26,7 @@
         size?: RegisterSize
         style?: string
         gridStyle?: string
+        align?: 'spread' | 'start'
         systemSize: RegisterSize
         /** The Target, passed straight through: it names the widths of the grouping strip. */
         language: AvailableLanguages
@@ -37,6 +38,7 @@
         size = $bindable(RegisterSize.Word),
         style = '',
         gridStyle = '',
+        align = 'spread',
         hiddenRegistersNames = [],
         position = 'top',
         systemSize,
@@ -66,6 +68,7 @@
     {withoutHeader}
     {style}
     {gridStyle}
+    {align}
     bind:size
     onRegisterClick={(register) => dispatcher('registerClick', register)}
 />

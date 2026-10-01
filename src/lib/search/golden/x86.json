@@ -1,0 +1,64 @@
+{
+    "scope": "x86",
+    "queries": [
+        {
+            "query": "mov",
+            "first": "x86/instructions/mov"
+        },
+        {
+            "query": "je",
+            "first": "x86/instructions/je"
+        },
+        {
+            "query": "rax",
+            "first": "x86/registers-and-flags/register-rax"
+        },
+        {
+            "query": "vaddpd",
+            "first": "x86/extensions/avx-512-instructions"
+        },
+        {
+            "query": "%define",
+            "first": "x86/directives/preprocessor-define"
+        },
+        {
+            "query": "db",
+            "first": "x86/directives/db-dw-dd-dq"
+        },
+        {
+            "query": "write syscall",
+            "top": 2,
+            "expect": "x86/syscalls/syscall-write"
+        },
+        {
+            "query": "exit the program",
+            "top": 2,
+            "expect": ["x86/syscalls/syscall-exit_group", "x86/syscalls/syscall-exit"]
+        },
+        {
+            "query": "read a line from the keyboard",
+            "top": 1,
+            "expect": "x86/syscalls/syscall-read"
+        },
+        {
+            "query": "multiply two numbers",
+            "top": 2,
+            "expect": ["x86/instructions/mul", "x86/instructions/imul"],
+            "meaning": true
+        },
+        {
+            "query": "what is the stack",
+            "top": 3,
+            "expect": [
+                "assembly-basics/think-in-assembly/the-stack#",
+                "x86/registers-and-flags/register-rsp"
+            ]
+        },
+        {
+            "query": "zero flag",
+            "top": 5,
+            "expect": "x86/registers-and-flags/flag-zf",
+            "meaning": true
+        }
+    ]
+}

@@ -1,15 +1,13 @@
 <script lang="ts">
+    /**
+     * The whole RISC-V Documentation on one page: the Documentation panel's browser at full width
+     * ([the design record](../../../../../docs/design/documentation-search.md), Search on the
+     * documentation pages), prerendered with every row. Searching it is the palette's job, as on
+     * every page of the site.
+     */
     import Page from '$cmp/shared/layout/Page.svelte'
-    import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
-    import RISCVDirectiveDocumentation from '$cmp/documentation/riscv/RISCVDirectiveDocumentation.svelte'
-    import RISCVSyscallExplanation from '$cmp/documentation/riscv/RISCVSyscallExplanation.svelte'
-    import RISCVRegistersDocumentation from '$cmp/documentation/riscv/RISCVRegistersDocumentation.svelte'
-    import MarsScreenDocumentation from '$cmp/documentation/mars/MarsScreenDocumentation.svelte'
-    import {
-        riscvInstructionEntries,
-        formatAggregatedArgs,
-        groupVariantsByDescription
-    } from '$lib/languages/RISC-V/RISC-V-documentation'
+    import DocumentationBrowser from '$cmp/documentation/browser/DocumentationBrowser.svelte'
+    import { chapters } from '$lib/documentation/riscv/riscv'
 </script>
 
 <svelte:head>
@@ -24,79 +22,7 @@
     />
 </svelte:head>
 
-<Page cropped contentStyle="padding: 1rem; gap: 2rem;">
+<Page cropped contentStyle="padding: 1rem; gap: 1rem;">
     <h1>RISC-V Complete Documentation</h1>
-
-    <button class="print-button" onclick={() => window.print()}>Print as PDF</button>
-
-    <nav class="toc">
-        <a href="#instructions">Instructions</a>
-        <a href="#directives">Directives</a>
-        <a href="#syscalls">Syscalls</a>
-        <a href="#registers">Registers</a>
-        <a href="#screen">Screen and I/O</a>
-    </nav>
-
-    <section id="instructions">
-        <h2>Instructions</h2>
-        {#each riscvInstructionEntries as [ins, instruction] (ins)}
-            {@const groups = groupVariantsByDescription(instruction)}
-            <div class="instruction">
-                <div class="row align-center">
-                    <h3 class="sub-title" id={ins}>
-                        {ins}
-                        <span style="font-size: 1rem; font-weight: normal"
-                            >{formatAggregatedArgs(instruction)}</span
-                        >
-                    </h3>
-                </div>
-
-                {#each groups as group (group.description)}
-                    {#if group.description}
-                        <span class="sub-description">
-                            <MarkdownRenderer source={group.description} linksInNewTab={false} />
-                        </span>
-                    {/if}
-                    {#if group.examples.some(Boolean)}
-                        <span class="example">
-                            {group.examples.filter(Boolean).join('\n')}
-                        </span>
-                    {/if}
-                {/each}
-            </div>
-        {/each}
-    </section>
-
-    <section id="directives">
-        <h2>Directives</h2>
-        <p class="text-muted">
-            RISC-V directives are used to define the structure of the program. They are not
-            instructions that are executed by the CPU, but rather instructions that are used by the
-            assembler to define the structure of the program.
-        </p>
-        <RISCVDirectiveDocumentation />
-    </section>
-
-    <section id="syscalls">
-        <h2>Syscalls</h2>
-        <RISCVSyscallExplanation />
-    </section>
-
-    <section id="registers">
-        <h2>Registers</h2>
-        <p class="text-muted">
-            The 32 general purpose registers, the 32 the floating point extension adds, and the
-            control and status registers the simulator implements.
-        </p>
-        <RISCVRegistersDocumentation disableLinks />
-    </section>
-
-    <section id="screen">
-        <h2>Screen and memory-mapped I/O</h2>
-        <MarsScreenDocumentation variant="RISC-V" disableLinks />
-    </section>
+    <DocumentationBrowser language="risc-v" chapters={chapters()} variant="page" />
 </Page>
-
-<style lang="scss">
-    @use '$cmp/documentation/m68k/style.scss' as *;
-</style>

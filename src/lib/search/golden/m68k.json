@@ -1,0 +1,46 @@
+{
+    "scope": "m68k",
+    "queries": [
+        { "query": "move", "first": "m68k/instructions/move" },
+        { "query": "beq", "first": "m68k/instructions/bcc" },
+        { "query": "move.l", "first": "m68k/instructions/move" },
+        { "query": "dbra", "first": "m68k/instructions/dbra" },
+        { "query": "movea", "first": "m68k/instructions/movea" },
+        { "query": "dc", "first": "m68k/directives/dc" },
+        { "query": "print a number", "top": 1, "expect": "m68k/trap-tasks/task-3" },
+        { "query": "how do I print a number", "top": 3, "expect": "m68k/trap-tasks/task-3" },
+        { "query": "set the pen color", "top": 1, "expect": "m68k/trap-tasks/task-80" },
+        {
+            "query": "post increment",
+            "top": 1,
+            "expect": "m68k/addressing-modes/indirect-post-pre-increment"
+        },
+        {
+            "query": "avoid flicker when drawing",
+            "top": 3,
+            "expect": [
+                "m68k/trap-tasks/task-92",
+                "m68k/talking-to-the-outside-world/screen-keyboard-and-mouse#double-buffering"
+            ],
+            "meaning": true
+        },
+        {
+            "query": "loop a fixed number of times",
+            "top": 3,
+            "expect": [
+                "m68k/think-in-assembly/loops-and-dbra#",
+                "assembly-basics/think-in-assembly/loops#"
+            ],
+            "meaning": true
+        },
+        {
+            "query": "call a subroutine and return",
+            "top": 3,
+            "expect": [
+                "assembly-basics/think-in-assembly/subroutines#",
+                "m68k/instructions/rts",
+                "m68k/think-in-assembly/bsr-rts-link-and-unlk#"
+            ]
+        }
+    ]
+}

@@ -1245,6 +1245,66 @@ function createRemoveBreakpointTool(context: DefaultCodingAgentToolContext) {
     })
 }
 
+/**
+ * Looks things up in the Documentation and the Lectures, the same search the Documentation panel
+ * and the palette run ([the design record](../../../../../docs/design/documentation-search.md), The
+ * agents' search tool). The page decides what is searched: the place's own language where it has
+ * one, and in an Exam the Documentation alone.
+ */
+function createSearchDocumentationTool(context: DefaultCodingAgentToolContext) {
+    return tool({
+        name: 'search_documentation',
+        description:
+            "Searches this language's documentation (instructions, directives, syscalls or trap tasks, registers, ports, the screen) and, outside an exam, the course lectures, by words and by meaning. Use it to check how an instruction, directive or service works before you use it, or to find the lecture that explains a concept.",
+        schema: z.object({
+            query: z
+                .string()
+                .min(1)
+                .describe(
+                    'What to look for: a mnemonic (`dbra`), a directive (`.data`), or a question in words ("print a number", "read a key without waiting").'
+                ),
+            language: z
+                .enum(SUPPORTED_LANGUAGES)
+                .optional()
+                .describe(
+                    'The language to search, only where the page has none of its own (the chat page, a lecture of the general course). Ignored elsewhere.'
+                ),
+            limit: z
+                .number()
+                .int()
+                .min(1)
+                .max(20)
+                .optional()
+                .describe('How many results to return, 8 by default.')
+        }),
+        execute: async ({ query, language, limit }) =>
+            runAgentTool(async (toolRun) => {
+                if (!context.searchDocumentation) {
+                    return toolRun.failure(
+                        'unavailable',
+                        'Documentation search is not available here.',
+                        {
+                            retryable: false
+                        }
+                    )
+                }
+                try {
+                    const answer = await context.searchDocumentation(
+                        query,
+                        language ?? null,
+                        limit ?? 8
+                    )
+                    return toolRun.success(answer)
+                } catch (error) {
+                    return toolRun.failure('unavailable', error, {
+                        retryable: false,
+                        nextAction: 'Pass the language to search in the language argument.'
+                    })
+                }
+            })
+    })
+}
+
 export function createDefaultCodingAgentTools(context: DefaultCodingAgentToolContext) {
     const viewFileTool = createViewFileTool(context)
     const replaceFileContentTool = createReplaceFileContentTool(context)
@@ -1252,8 +1312,10 @@ export function createDefaultCodingAgentTools(context: DefaultCodingAgentToolCon
     const listBreakpointsTool = createListBreakpointsTool(context)
     const setBreakpointTool = createSetBreakpointTool(context)
     const removeBreakpointTool = createRemoveBreakpointTool(context)
+    const searchDocumentationTool = createSearchDocumentationTool(context)
 
     return {
+        search_documentation: searchDocumentationTool,
         view_file: viewFileTool,
         replace_file_content: replaceFileContentTool,
         write_to_file: writeToFileTool,

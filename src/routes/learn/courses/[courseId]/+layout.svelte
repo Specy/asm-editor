@@ -21,6 +21,11 @@
     import { courseTheme } from '$lib/languages/languageColors'
     import ThemeScope from '$cmp/shared/providers/ThemeScope.svelte'
     import { lectureAgent } from './lectureAgent.svelte'
+    import { onMount } from 'svelte'
+    import SearchLauncher from '$cmp/search/SearchLauncher.svelte'
+    import SearchPalette from '$cmp/search/SearchPalette.svelte'
+    import { COURSES_SCOPE, courseLanguage, languageScope } from '$lib/search/scope'
+    import { searchClient } from '$lib/search/searchClient.svelte'
 
     interface Props {
         children?: import('svelte').Snippet
@@ -32,6 +37,21 @@
     let currentLectureName = $derived(`${page.params.moduleId}-${page.params.lectureId}`)
 
     let menuOpen = $state(false)
+
+    /**
+     * A Language course searches its language's Documentation, itself and the General course; the
+     * General course searches every Course ([the design record](../../../../../docs/design/documentation-search.md)).
+     */
+    const scope = $derived.by(() => {
+        const language = courseLanguage(data.course.slug)
+        return language ? languageScope(language) : COURSES_SCOPE
+    })
+    const placeholder = $derived(
+        courseLanguage(data.course.slug)
+            ? `Search ${data.course.name} and its documentation`
+            : 'Search in every course'
+    )
+    onMount(() => searchClient.preload(scope))
 </script>
 
 <!-- A Language course shows its language's colours, the way `/documentation/<language>` does.
@@ -107,6 +127,7 @@
 
     <Sidebar bind:menuOpen menuStyle="gap: 0;">
         <Column padding="1rem" gap="1rem" style="padding-top: 0;">
+            <SearchLauncher {placeholder} />
             <a
                 onclick={() => (menuOpen = false)}
                 href={resolve('/learn/courses/[courseId]', { courseId: data.course.slug })}
@@ -175,6 +196,7 @@
             </Column>
         {/snippet}
     </Sidebar>
+    <SearchPalette {scope} {placeholder} />
 </ThemeScope>
 
 <style lang="scss">

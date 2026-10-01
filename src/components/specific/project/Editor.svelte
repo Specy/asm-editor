@@ -108,6 +108,12 @@
     let viewStateKey = ''
     let hoveredGliphen: number | null = $state(null)
     let destroyed = false
+    /**
+     * The editor this component created. `editor` is bound out to the host, and a host that swaps
+     * one Editor for another shares the binding between them, so teardown disposes this one: going
+     * through the binding could dispose the successor instead.
+     */
+    let ownEditor: monaco.editor.IStandaloneCodeEditor | undefined
     let applyingExternalValue = false
     let overflowWidgets: HTMLDivElement | null = null
     //Plain Maps, not reactive ones: nothing renders from them, and the effect that reconciles the
@@ -182,6 +188,7 @@
             smoothScrolling: true,
             cursorSmoothCaretAnimation: 'on'
         })
+        ownEditor = mountedEditor
         editor = mountedEditor
         toDispose.push(keepHoverReachable(mountedEditor, overflowWidgets))
         const observer = new ResizeObserver(() => {
@@ -292,7 +299,9 @@
     function selectModel(next: EditorSource) {
         const currentEditor = editor
         const currentMonaco = monacoInstance
-        if (!currentEditor || !currentMonaco) return
+        //a host that swaps its content while Monaco is still loading can destroy this component
+        //between the editor's creation and this effect; a disposed editor throws on setModel
+        if (destroyed || !currentEditor || !currentMonaco) return
         const model = resolveEditorModel(modelStore(currentMonaco), next)
         if (currentEditor.getModel() !== model) {
             if (viewStateKey) modelViewStates.set(viewStateKey, currentEditor.saveViewState())
@@ -338,10 +347,11 @@
             disposable?.dispose()
         })
         decorations?.clear()
-        editor?.dispose()
+        ownEditor?.dispose()
+        if (editor === ownEditor) editor = undefined
         overflowWidgets?.remove()
         overflowWidgets = null
-        for (const model of models.values()) model.dispose()
+        for (const model of models.values()) if (!model.isDisposed()) model.dispose()
         models.clear()
         modelViewStates.clear()
     })

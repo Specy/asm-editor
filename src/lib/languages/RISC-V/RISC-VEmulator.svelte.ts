@@ -148,6 +148,13 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
      * that is actually running, so they read this field instead of capturing a generation.
      */
     private currentExecution: ExecutionGeneration = this.executionController.capture()
+    /**
+     * Whether the program has ended, by an `exit` ecall or by running off the end of its code, with
+     * nothing undone since. The Core says so only in the stop reason of the call that ended it, and
+     * an exit leaves the program counter on whatever follows the ecall - the first function below
+     * `main`, in most programs - so probing for a next statement alone took an exit for a pause.
+     */
+    private ended = false
 
     constructor(source: BuildInput, options: EmulatorSettings) {
         const systemSize =
@@ -319,6 +326,7 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         //unconditionally so this is what actually turns undo off when history is disabled
         riscv.setUndoEnabled(normalizeUndoSize(undoSize) > 0)
         riscv.initialize(true)
+        this.ended = false
         this.pacer.reset()
         registerHandlers(riscv, this.makeHandlers())
         //after `initialize`, so the observers see the program's writes and not the loading of `.data`
@@ -476,7 +484,8 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
 
     _getNextInstruction(): Instruction | null {
         const riscv = this.riscv
-        if (!riscv) return null
+        //an ended program has nothing left to run, even where an exit left it on a statement
+        if (!riscv || this.ended) return null
         try {
             return toInstruction(riscv.getNextStatement())
         } catch {
@@ -653,11 +662,13 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
     _hasTerminated(): boolean {
         const riscv = this.riscv
         if (!riscv) return false
+        if (this.ended) return true
         try {
-            //legacy parity: termination is derived purely from there being no next statement. The
-            //core's own `terminated` flag must NOT be consulted here: it stays false after an exit
-            //syscall and, once set by a cliff termination, `undo()` does not reset it, so stepping
-            //back out of a finished program would leave the emulator permanently marked terminated.
+            //otherwise there is nothing left to run when there is no next statement, which also
+            //covers the step that ran the last instruction, before any call has reported the end.
+            //The core's own `terminated` flag must NOT be consulted here: it stays false after an
+            //exit syscall and, once set by a cliff termination, `undo()` does not reset it, so
+            //stepping back out of a finished program would leave the emulator marked terminated.
             riscv.getNextStatement()
             return false
         } catch {
@@ -728,16 +739,16 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
 
     async _step(): Promise<{ terminated: boolean }> {
         const riscv = this.requireRiscV()
+        //the Core would run whatever follows the exit ecall
+        if (this.ended) return { terminated: true }
         this.currentExecution = this.executionController.capture()
         try {
-            await riscv.step()
+            this.ended = isTerminationStopReason(await riscv.step())
         } finally {
             this.devices.flush()
         }
-        //the stop reason cannot answer this: the step that executes the *last* instruction reports
-        //`MAX_STEPS` (only the step after it reports `CLIFF_TERMINATION`), and an `exit` ecall
-        //reports `NORMAL_TERMINATION` while the core still has statements left to run. Legacy asked
-        //the same question the same way, by probing for a next statement after the step.
+        //the stop reason alone cannot answer this: the step that executes the *last* instruction
+        //reports `MAX_STEPS`, and only the step after it reports `CLIFF_TERMINATION`
         return { terminated: this._hasTerminated() }
     }
 
@@ -756,6 +767,8 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
             throw new Error('FileSystem Undo history exhausted')
         }
         riscv.undo()
+        //whatever ended the program was the newest thing it did, so it is the first thing undone
+        this.ended = false
         if (pc !== undefined) this.fileSystemSession?.undoAfter(pc)
     }
 
@@ -769,6 +782,8 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
      */
     async _runSlice(request: ExecutionSliceRequest): Promise<ExecutionSlice> {
         const riscv = this.requireRiscV()
+        //the Core would run whatever follows the exit ecall
+        if (this.ended) return { reason: 'terminated', instructions: 0 }
         const breakpoints = calculateBreakpoints(riscv, request.breakpoints)
         this.currentExecution = this.executionController.capture()
         try {
@@ -781,9 +796,8 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
                         breakpoints,
                         limit
                     )
-                    if (isTerminationStopReason(stopReason) || this._hasTerminated()) {
-                        return 'terminated'
-                    }
+                    this.ended = isTerminationStopReason(stopReason)
+                    if (this._hasTerminated()) return 'terminated'
                     return stopReason === StopReason.BREAKPOINT ? 'breakpoint' : 'ran'
                 }
             )
@@ -799,7 +813,9 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         this.currentExecution = this.executionController.capture()
         //the testcase input is served by the terminal's scripted source, swapped in by the caller
         try {
-            await riscv.simulateWithLimit(toHaltLimit(haltLimit))
+            this.ended = isTerminationStopReason(
+                await riscv.simulateWithLimit(toHaltLimit(haltLimit))
+            )
         } finally {
             this.devices.flush()
         }
@@ -1154,10 +1170,10 @@ function toHaltLimit(limit: number | undefined): number {
  * `PAUSE`/`STOP` (only reachable through core APIs this adapter does not use). `EXCEPTION` is never
  * observed as a value: a runtime exception rejects the pending `step`/`simulate*` promise instead.
  *
- * This is *not* the same question as "is there anything left to execute" (`_hasTerminated`), which
- * is what the emulator reports as terminated and what decides where the current line marker goes:
- * the core still has a next statement after an `exit` ecall, and it reports `MAX_STEPS`, not
- * `CLIFF_TERMINATION`, for the step that executes the last instruction of a program.
+ * The adapter remembers this answer until an Undo, because the core still has a next statement
+ * after an `exit` ecall. It is not the whole of `_hasTerminated`, which is what the emulator reports
+ * as terminated and what decides where the current line marker goes: the core reports `MAX_STEPS`,
+ * not `CLIFF_TERMINATION`, for the step that executes the last instruction of a program.
  */
 function isTerminationStopReason(stopReason: StopReason): boolean {
     return (

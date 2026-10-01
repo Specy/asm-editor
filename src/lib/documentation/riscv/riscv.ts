@@ -1,0 +1,199 @@
+import {
+    formatAggregatedArgs,
+    riscvDirectivesMap,
+    riscvInstructionEntries,
+    riscvRegisterFiles,
+    riscvSyscall
+} from '$lib/languages/RISC-V/RISC-V-documentation'
+import { capitalize } from '$lib/utils'
+import {
+    names,
+    proseEntries,
+    registerRange,
+    summaryOf,
+    type Chapter,
+    type DocumentationEntry
+} from '../entries'
+import { screenEntries } from '../mars/screen'
+import { syscallFields, syscallSummary } from '../mars/syscalls'
+import directivesIntro from './directives.md?raw'
+import registersIntro from './registers.md?raw'
+import syscallsIntro from './syscalls.md?raw'
+
+/**
+ * The RISC-V Documentation, which RISC-V-64 Projects read too: the instruction list is the RV64
+ * one, and an instruction that exists only there says so.
+ */
+
+const BASE = '/documentation/risc-v'
+
+function instructions(): Chapter {
+    const entries = riscvInstructionEntries.map(([mnemonic, variants]): DocumentationEntry => {
+        const descriptions = [...new Set(variants.map((variant) => variant.description))]
+        return {
+            id: `risc-v/instructions/${mnemonic}`,
+            language: 'risc-v',
+            chapter: 'instructions',
+            kind: 'instruction',
+            title: mnemonic,
+            names: names(mnemonic),
+            signature: formatAggregatedArgs(variants),
+            summary: summaryOf(variants[0].description),
+            href: `${BASE}/instruction/${mnemonic}`,
+            anchor: mnemonic,
+            view: { type: 'riscv-instruction', variants },
+            searchText: descriptions.join('\n'),
+            code: [...new Set(variants.map((variant) => variant.example))].join('\n')
+        }
+    })
+    return {
+        id: 'instructions',
+        language: 'risc-v',
+        title: 'Instructions',
+        href: `${BASE}/instruction`,
+        description: 'Every instruction and pseudo-instruction of RV32 and RV64.',
+        entries
+    }
+}
+
+function directives(): Chapter {
+    const href = `${BASE}/directive`
+    const entries: DocumentationEntry[] = [
+        ...proseEntries({
+            language: 'risc-v',
+            chapter: 'directives',
+            chapterHref: href,
+            markdown: directivesIntro
+        }),
+        ...Object.values(riscvDirectivesMap).map((directive): DocumentationEntry => ({
+            id: `risc-v/directives/${directive.name}`,
+            language: 'risc-v',
+            chapter: 'directives',
+            kind: 'directive',
+            title: `.${directive.name}`,
+            names: names(`.${directive.name}`),
+            summary: summaryOf(directive.description),
+            href: `${href}#${directive.name}`,
+            anchor: directive.name,
+            view: { type: 'markdown', markdown: directive.description },
+            searchText: directive.description
+        }))
+    ]
+    return {
+        id: 'directives',
+        language: 'risc-v',
+        title: 'Directives',
+        href,
+        description: 'What the assembler does with the lines that start with a dot.',
+        entries
+    }
+}
+
+function syscalls(): Chapter {
+    const href = `${BASE}/syscall`
+    const entries: DocumentationEntry[] = [
+        ...proseEntries({
+            language: 'risc-v',
+            chapter: 'syscalls',
+            chapterHref: href,
+            markdown: syscallsIntro
+        }),
+        ...Object.values(riscvSyscall).map((syscall): DocumentationEntry => ({
+            id: `risc-v/syscalls/${syscall.code}`,
+            language: 'risc-v',
+            chapter: 'syscalls',
+            kind: 'syscall',
+            title: capitalize(syscall.name),
+            names: names(syscall.name, `syscall ${syscall.code}`, `ecall ${syscall.code}`),
+            signature: `a7 = ${syscall.code}`,
+            summary: syscallSummary(syscall),
+            href: `${href}#service-${syscall.code}`,
+            anchor: `service-${syscall.code}`,
+            view: { type: 'fields', fields: syscallFields(syscall) },
+            searchText: `Service ${syscall.code}. ${syscallSummary(syscall)} ${syscall.result.other ?? ''}`
+        }))
+    ]
+    return {
+        id: 'syscalls',
+        language: 'risc-v',
+        title: 'Syscalls',
+        href,
+        description: 'The services a program asks the simulator for with `ecall`.',
+        entries
+    }
+}
+
+function registerAnchor(file: string, name: string): string {
+    return `${file}-${name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')}`
+}
+
+function registers(): Chapter {
+    const href = `${BASE}/registers`
+    const files = riscvRegisterFiles.flatMap((file) => [
+        {
+            id: `risc-v/registers/${file.id}`,
+            language: 'risc-v',
+            chapter: 'registers',
+            kind: 'prose',
+            title: file.title,
+            names: [],
+            summary: summaryOf(file.intro),
+            href: `${href}#${file.id}`,
+            anchor: file.id,
+            view: { type: 'markdown', markdown: file.intro },
+            searchText: file.intro
+        } satisfies DocumentationEntry,
+        ...file.registers.map((register): DocumentationEntry => ({
+            id: `risc-v/registers/${registerAnchor(file.id, register.name)}`,
+            language: 'risc-v',
+            chapter: 'registers',
+            kind: 'register',
+            title: register.name,
+            names: names(...registerRange(register.name), ...registerRange(register.number)),
+            signature: register.number,
+            summary: summaryOf(register.description),
+            href: `${href}#${registerAnchor(file.id, register.name)}`,
+            anchor: registerAnchor(file.id, register.name),
+            view: { type: 'markdown', markdown: register.description },
+            searchText: `${file.title}. ${register.description}`
+        }))
+    ])
+    return {
+        id: 'registers',
+        language: 'risc-v',
+        title: 'Registers',
+        href,
+        description: 'The general purpose registers, the FPU and the control and status registers.',
+        entries: [
+            ...proseEntries({
+                language: 'risc-v',
+                chapter: 'registers',
+                chapterHref: href,
+                markdown: registersIntro
+            }),
+            ...files
+        ]
+    }
+}
+
+function screen(): Chapter {
+    const href = `${BASE}/screen`
+    return {
+        id: 'screen',
+        language: 'risc-v',
+        title: 'Screen',
+        href,
+        description: 'The bitmap display, the keyboard and console registers, and program time.',
+        entries: screenEntries('RISC-V', 'risc-v', href)
+    }
+}
+
+let cached: Chapter[] | null = null
+
+export function chapters(): Chapter[] {
+    cached ??= [instructions(), directives(), syscalls(), registers(), screen()]
+    return cached
+}

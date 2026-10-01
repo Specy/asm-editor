@@ -1,16 +1,20 @@
 <script lang="ts">
+    import { onMount } from 'svelte'
+    import SearchLauncher from '$cmp/search/SearchLauncher.svelte'
+    import SearchPalette from '$cmp/search/SearchPalette.svelte'
+    import { languageScope } from '$lib/search/scope'
+    import { searchClient } from '$lib/search/searchClient.svelte'
     import Navbar from '$cmp/shared/layout/Navbar.svelte'
     import TogglableSection from '$cmp/shared/layout/TogglableSection.svelte'
     import { page } from '$app/stores'
     import FaBars from '~icons/fa-solid/bars'
 
-    import FuzzySearch from 'fuzzy-search'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import FaTimes from '~icons/fa-solid/times'
     import Row from '$cmp/shared/layout/Row.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
-    import MenuLink from '../m68k/instruction/MenuLink.svelte'
-    import InstructionsMenu from '../m68k/InstructionsMenu.svelte'
+    import MenuLink from '$cmp/documentation/site/MenuLink.svelte'
+    import InstructionsMenu from '$cmp/documentation/site/InstructionsMenu.svelte'
     import { LANGUAGE_THEMES } from '$lib/Config'
     import ThemeScope from '$cmp/shared/providers/ThemeScope.svelte'
     import SparklesIcon from '$cmp/shared/agent/SparklesIcon.svelte'
@@ -32,14 +36,13 @@
         description: variants[0].description
     }))
     let menuOpen = $state(false)
-    let search = $state('')
-    const searcher = new FuzzySearch(instructions, ['name', 'description'], {
-        sort: true
-    })
     let currentInstructionName = $derived($page.params.instructionName ?? '')
-    let filteredInstructions = $derived([
-        ...new Set(searcher.search(search.toLowerCase()).map((i) => i.name))
-    ])
+    const instructionNames = [...new Set(instructions.map((instruction) => instruction.name))]
+
+    // The palette, its two boxes and Ctrl+K: this language's Documentation, its Course and the
+    // General course ([the design record](../../../../docs/design/documentation-search.md))
+    const scope = languageScope('z80')
+    onMount(() => searchClient.preload(scope))
 </script>
 
 <ThemeScope theme={LANGUAGE_THEMES.Z80}>
@@ -75,6 +78,7 @@
     <Sidebar bind:menuOpen>
         <Column gap="1rem" style="overflow-y: auto;">
             <Column gap="1rem" padding="0 1rem">
+                <SearchLauncher placeholder="Search the Z80 docs and courses" />
                 <MenuLink
                     href="/documentation/z80"
                     title="Z80"
@@ -111,10 +115,9 @@
                         Instructions
                     </h2>
                 {/snippet}
-                <input bind:value={search} placeholder="Search" class="instruction-search" />
                 <InstructionsMenu
                     hrefBase="/documentation/z80/instruction"
-                    instructions={filteredInstructions}
+                    instructions={instructionNames}
                     onClick={() => (menuOpen = false)}
                     {currentInstructionName}
                 />
@@ -141,16 +144,10 @@
             </Column>
         {/snippet}
     </Sidebar>
+    <SearchPalette {scope} placeholder="Search the Z80 docs and courses" />
 </ThemeScope>
 
 <style lang="scss">
-    .instruction-search {
-        background-color: var(--tertiary);
-        color: var(--tertiary-text);
-        padding: 0.6rem;
-        border-radius: 0.4rem;
-    }
-
     .icon {
         height: 2.2rem;
         display: flex;

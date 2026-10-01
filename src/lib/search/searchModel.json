@@ -1,0 +1,30 @@
+{
+    "id": "MongoDB/mdbr-leaf-ir",
+    "revision": "4262131b32c3182bd06e67e92ae69d7bd66e0c5c",
+    "license": "apache-2.0",
+    "dims": 256,
+    "maxTokens": 512,
+    "queryPrompt": "Represent this sentence for searching relevant passages: ",
+    "files": {
+        "model": {
+            "path": "onnx/model_quantized.onnx",
+            "size": 220597,
+            "sha256": "8c08cb4ecc00bad721b117a85738c537ceb9b85b3eedc52d9c6906fddaa55718"
+        },
+        "weights": {
+            "path": "onnx/model_quantized.onnx_data",
+            "size": 22954752,
+            "sha256": "e77ea96a124230e23e5bac8e26c3ffe5410154973d8635673fa0220b06c13f8b"
+        },
+        "tokenizer": {
+            "path": "tokenizer.json",
+            "size": 711661,
+            "sha256": "da0e79933b9ed51798a3ae27893d3c5fa4a201126cef75586296df9b4d2c62a0"
+        },
+        "tokenizerConfig": {
+            "path": "tokenizer_config.json",
+            "size": 1529,
+            "sha256": "46ac231e9b955a8af80fc7f23a0ecc65b524f1df84a02c2c82cbca354fb207b4"
+        }
+    }
+}

@@ -22,6 +22,10 @@
     }: Props = $props()
 
     let moving = $state(false)
+    //where the pointer was at the last move: a touch pointer's own movementX and movementY are not
+    //filled in by every browser, so the distance is measured from its positions instead
+    let lastX = 0
+    let lastY = 0
     let bounds: DOMRect = new DOMRect(0, 0, 0, 0)
     const [debouncer] = createDebouncer(100)
     let observer = new ResizeObserver(() =>
@@ -39,12 +43,16 @@
         //button, not pick the window up
         if (e.target instanceof Element && e.target.closest('[data-no-drag]')) return
         moving = true
+        lastX = e.clientX
+        lastY = e.clientY
     }
 
     function onMouseMove(e: PointerEvent) {
         if (moving) {
-            left += e.movementX
-            top += e.movementY
+            left += e.clientX - lastX
+            top += e.clientY - lastY
+            lastX = e.clientX
+            lastY = e.clientY
             if (clampPosition) {
                 top = clamp(top, 6, window.innerHeight - bounds.height - 6)
                 left = clamp(left, 6, window.innerWidth - bounds.width - 6)
@@ -58,13 +66,23 @@
     class="draggable"
     bind:this={ref}
 >
-    <div class="row" onpointerdown={onPointerDown} style="cursor: move; user-select: none;">
+    <!-- `touch-action: none`: a finger on the bar drags the window, where the browser would
+         otherwise take the gesture over for scrolling a moment in and cancel the drag -->
+    <div
+        class="row"
+        onpointerdown={onPointerDown}
+        style="cursor: move; user-select: none; touch-action: none;"
+    >
         {@render header?.()}
     </div>
     {@render children?.()}
 </div>
 
-<svelte:window onpointerup={() => (moving = false)} onpointermove={onMouseMove} />
+<svelte:window
+    onpointerup={() => (moving = false)}
+    onpointercancel={() => (moving = false)}
+    onpointermove={onMouseMove}
+/>
 
 <style>
     .draggable {

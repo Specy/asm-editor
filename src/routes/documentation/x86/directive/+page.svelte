@@ -1,6 +1,9 @@
 <script lang="ts">
     import Page from '$cmp/shared/layout/Page.svelte'
-    import X86DirectiveDocumentation from '$cmp/documentation/x86/X86DirectiveDocumentation.svelte'
+    import ChapterView from '$cmp/documentation/ChapterView.svelte'
+    import { chapters } from '$lib/documentation/x86/x86'
+
+    const chapter = chapters().find((chapter) => chapter.id === 'directives')!
 </script>
 
 <svelte:head>
@@ -16,11 +19,5 @@
 </svelte:head>
 <Page cropped contentStyle="padding: 1rem; gap: 1rem;">
     <h1>x86-64 directives</h1>
-    <p class="text-muted">
-        Directives are not executed by the processor: they tell the assembler where to put code and
-        data, what bytes to emit, which names stand for which values, and when to expand a macro.
-        The list is NASM's own, so it is what this editor accepts rather than what another assembler
-        might.
-    </p>
-    <X86DirectiveDocumentation />
+    <ChapterView {chapter} />
 </Page>

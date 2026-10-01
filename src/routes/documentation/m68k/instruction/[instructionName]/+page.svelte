@@ -22,10 +22,11 @@
     let { data }: Props = $props()
     let ins = $derived(data.props.instruction)
 
-    let component: typeof import('./ClientOnly.svelte').default | undefined = $state.raw()
+    let component: typeof import('$cmp/documentation/site/ClientOnly.svelte').default | undefined =
+        $state.raw()
     onMount(async () => {
         //HUGE HACK TO MAKE SVELTEKIT PRERENDER BECAUSE OF TOP LEVEL AWAIT
-        const imp = await import('./ClientOnly.svelte')
+        const imp = await import('$cmp/documentation/site/ClientOnly.svelte')
         // @ts-ignore -- the dynamic import type omits the generated top-level-await promise
         await imp?.__tla
         // @ts-ignore -- the prerender import shim obscures the component's default export

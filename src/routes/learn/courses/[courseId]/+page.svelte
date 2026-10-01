@@ -7,6 +7,8 @@
     import LecturesMenu from '$cmp/content/LecturesMenu.svelte'
     import Card from '$cmp/shared/layout/Card.svelte'
     import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
+    import SearchLauncher from '$cmp/search/SearchLauncher.svelte'
+    import { courseLanguage } from '$lib/search/scope'
 
     interface Props {
         data: PageData & { content: string }
@@ -28,6 +30,12 @@
     <Header noMargin>
         {data.course.name}
     </Header>
+    <SearchLauncher
+        size="full"
+        placeholder={courseLanguage(data.course.slug)
+            ? `Search ${data.course.name} and its documentation`
+            : 'Search in every course'}
+    />
 
     <Column gap="0.8rem">
         <MarkdownRenderer source={data.content} />

@@ -67,14 +67,27 @@ there but stepping backwards is not usable yet.
 
 ## The full editor
 
-**Open in editor** opens this same program in a project of its own, in a new tab. The four buttons
-are the same and there is more around them:
+**Open in editor** opens this same program in a project of its own, in a new tab. It is laid out
+like the editors programmers use every day: a column of icons down the left opens panels beside
+it, the code sits in the middle with each open file as a tab above it, and what the program prints
+appears under the code. **Build** floats at the bottom left of the code, and once the program is
+built it becomes **Stop**, with **Run**, **Undo** and **Step** beside it. Building also opens a
+column on the right:
 
-- **Memory**, on the right, one page of bytes at a time. Type an address in its box or use the arrows to page through, drag across a few bytes to see the number they make (signed as well as unsigned), and press the text button to read them as characters instead of hexadecimal. The byte the stack pointer is on is marked.
-- **Call stack**, a panel you open along the top of the page: the subroutines the program is inside right now and the address each one returns to. It stays empty until the Subroutines lecture.
-- **History**, next to it: what each of the last instructions changed, register by register and byte by byte, and a click sends the program back to that point.
-- **Stack pointer**, a second memory panel that follows `sp` instead of a fixed address.
-- **Testcases**: starting registers, starting memory and input, and the registers, memory and output you expect at the end. The **Test** button runs the program against all of them and says which passed.
+- **Registers** and **Memory**, side by side. Memory shows one page of bytes at a time. Type an address in its box or use the arrows to page through, drag across a few bytes to see the number they make (signed as well as unsigned), and press the text button to read them as characters instead of hexadecimal. The byte the stack pointer is on is marked.
+- **Stack pointer**, a second memory view that follows `sp` instead of a fixed address.
+- **History**: what each of the last instructions changed, register by register and byte by byte, and a click sends the program back to that point.
+- **Call stack**: the subroutines the program is inside right now and the address each one returns to. It stays empty until the Subroutines lecture.
+
+The last three open from the buttons along the top of the page, as windows you can drag anywhere;
+**Settings**, the gear at the bottom of the icons, can put them in the right-hand column instead.
+
+Under the code, **Terminal** shows what the program writes, **Log** keeps a line for every build,
+test run and program exit, and **Problems** lists what the assembler found wrong, each one a click
+away from its line. **Testcases**, among the icons on the left, holds the starting registers,
+memory and input, and the registers, memory and output you expect at the end. The **Test** button
+at the bottom right of the code runs the program against all of them and says in the Log which
+passed.
 
 Try putting the breakpoint on `move.l d0, d1` instead and running from the top. `d0` reaches
 `0000000A` and `d1` is still `00000000`, because the line that copies it has not run yet.

@@ -10,8 +10,8 @@
     "screenshots": [
         {
             "src": "/images/ASM-editor.webp",
-            "type": "image/png",
-            "sizes": "1607x928"
+            "type": "image/webp",
+            "sizes": "1800x1013"
         }
     ],
     "file_handlers": [

@@ -1,16 +1,8 @@
 <script lang="ts">
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import FaSlidersH from '~icons/fa-solid/sliders-h'
-    import {
-        formatMarsBaseAddress,
-        MARS_BASE_ADDRESS_CHOICES,
-        MARS_DISPLAY_SIZE_CHOICES,
-        MARS_UNIT_SIZE_CHOICES,
-        marsDisplayGeometry,
-        type MarsDisplayOrigin,
-        normalizeMarsDisplay,
-        type ProjectDisplay
-    } from '$lib/languages/mars/marsDisplay'
+    import type { MarsDisplayOrigin, ProjectDisplay } from '$lib/languages/mars/marsDisplay'
+    import DisplayConfigurationForm from './DisplayConfigurationForm.svelte'
 
     /**
      * The bitmap display configuration of the MIPS and RISC-V Screen panel: MARS's and RARS's own
@@ -36,37 +28,26 @@
         baseLabel?: string
         /** Disabled while a program owns the emulator, like the other execution-time controls. */
         disabled?: boolean
+        /**
+         * Given, the button calls it instead of opening the popover: the Workbench shows the form in
+         * its Settings panel.
+         */
+        onOpen?: () => void
     }
 
-    let { display, onChange, origin = 'user', baseLabel, disabled = false }: Props = $props()
+    let {
+        display,
+        onChange,
+        origin = 'user',
+        baseLabel,
+        disabled = false,
+        onOpen
+    }: Props = $props()
 
     const fromDirective = $derived(origin === 'directive')
 
     let open = $state(false)
     let panel: HTMLDivElement | undefined = $state()
-
-    const current = $derived(normalizeMarsDisplay(display))
-    const geometry = $derived(marsDisplayGeometry(current))
-    const baseChoices = $derived(listBaseChoices(current.baseAddress, baseLabel))
-
-    /**
-     * A `base=<label>` resolves to wherever the assembler put that label, which is never one of the
-     * five MARS offers, so the menu grows an entry for it rather than dropping the value.
-     */
-    function listBaseChoices(baseAddress: number, label: string | undefined) {
-        const listed = MARS_BASE_ADDRESS_CHOICES.map((choice) => ({
-            address: choice.address,
-            text: formatMarsBaseAddress(choice.address)
-        }))
-        if (listed.some((choice) => choice.address >>> 0 === baseAddress >>> 0)) return listed
-        const origin = label ? `label ${label}` : 'from the program'
-        const hex = `0x${(baseAddress >>> 0).toString(16).padStart(8, '0')}`
-        return [{ address: baseAddress, text: `${hex} (${origin})` }, ...listed]
-    }
-
-    function change(field: keyof ProjectDisplay, value: string) {
-        onChange({ ...current, [field]: Number(value) })
-    }
 
     function handleWindowPointerDown(event: MouseEvent) {
         if (!open) return
@@ -86,9 +67,9 @@
     <button
         class="display-button"
         title="Bitmap display parameters"
-        aria-expanded={open}
-        {disabled}
-        onclick={() => (open = !open)}
+        aria-expanded={onOpen ? undefined : open}
+        disabled={onOpen ? false : disabled}
+        onclick={() => (onOpen ? onOpen() : (open = !open))}
     >
         <Icon size={0.8}>
             <FaSlidersH />
@@ -100,73 +81,7 @@
     </button>
     {#if open}
         <div class="display-popover">
-            <h3>Bitmap display</h3>
-            {#if fromDirective}
-                <p class="hint source-note">
-                    Set by this program's <code>@screen</code> comment. A change made here rewrites the
-                    comment, so the next Build reads it back.
-                </p>
-            {/if}
-            <label>
-                <span>Unit width in pixels</span>
-                <select
-                    value={String(current.unitWidth)}
-                    onchange={(event) => change('unitWidth', event.currentTarget.value)}
-                >
-                    {#each MARS_UNIT_SIZE_CHOICES as choice (choice)}
-                        <option value={String(choice)}>{choice}</option>
-                    {/each}
-                </select>
-            </label>
-            <label>
-                <span>Unit height in pixels</span>
-                <select
-                    value={String(current.unitHeight)}
-                    onchange={(event) => change('unitHeight', event.currentTarget.value)}
-                >
-                    {#each MARS_UNIT_SIZE_CHOICES as choice (choice)}
-                        <option value={String(choice)}>{choice}</option>
-                    {/each}
-                </select>
-            </label>
-            <label>
-                <span>Display width in pixels</span>
-                <select
-                    value={String(current.width)}
-                    onchange={(event) => change('width', event.currentTarget.value)}
-                >
-                    {#each MARS_DISPLAY_SIZE_CHOICES as choice (choice)}
-                        <option value={String(choice)}>{choice}</option>
-                    {/each}
-                </select>
-            </label>
-            <label>
-                <span>Display height in pixels</span>
-                <select
-                    value={String(current.height)}
-                    onchange={(event) => change('height', event.currentTarget.value)}
-                >
-                    {#each MARS_DISPLAY_SIZE_CHOICES as choice (choice)}
-                        <option value={String(choice)}>{choice}</option>
-                    {/each}
-                </select>
-            </label>
-            <label>
-                <span>Base address for display</span>
-                <select
-                    value={String(current.baseAddress)}
-                    onchange={(event) => change('baseAddress', event.currentTarget.value)}
-                >
-                    {#each baseChoices as choice (choice.address)}
-                        <option value={String(choice.address)}>{choice.text}</option>
-                    {/each}
-                </select>
-            </label>
-            <p class="hint">
-                {geometry.columns} × {geometry.rows} words from {formatMarsBaseAddress(
-                    geometry.baseAddress
-                )}, one word per pixel, its low 24 bits the color.
-            </p>
+            <DisplayConfigurationForm {display} {onChange} {origin} {baseLabel} />
         </div>
     {/if}
 </div>
@@ -182,13 +97,6 @@
         font-weight: bold;
         line-height: 1;
         color: var(--accent);
-    }
-
-    .source-note {
-        code {
-            font-family: FiraCode;
-            color: var(--accent);
-        }
     }
 
     .display-button {
@@ -223,34 +131,5 @@
         background-color: var(--secondary);
         color: var(--secondary-text);
         box-shadow: 0 0.4rem 1rem rgba(0, 0, 0, 0.35);
-    }
-
-    h3 {
-        font-size: 0.95rem;
-        font-weight: bold;
-    }
-
-    label {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.5rem;
-        font-size: 0.8rem;
-    }
-
-    select {
-        background-color: var(--tertiary);
-        color: var(--tertiary-text);
-        border-radius: 0.3rem;
-        padding: 0.2rem 0.3rem;
-        font-family: monospace;
-        font-size: 0.8rem;
-        max-width: 10rem;
-    }
-
-    .hint {
-        font-size: 0.75rem;
-        color: var(--hint);
-        line-height: 1.4;
     }
 </style>

@@ -1,13 +1,17 @@
 <script lang="ts">
+    import { onMount } from 'svelte'
+    import SearchLauncher from '$cmp/search/SearchLauncher.svelte'
+    import SearchPalette from '$cmp/search/SearchPalette.svelte'
+    import { languageScope } from '$lib/search/scope'
+    import { searchClient } from '$lib/search/searchClient.svelte'
     import Navbar from '$cmp/shared/layout/Navbar.svelte'
     import TogglableSection from '$cmp/shared/layout/TogglableSection.svelte'
     import { M68KUncompoundedInstructions } from '$lib/languages/M68K/M68K-documentation'
-    import InstructionsMenu from './InstructionsMenu.svelte'
+    import InstructionsMenu from '$cmp/documentation/site/InstructionsMenu.svelte'
     import { page } from '$app/stores'
     import FaBars from '~icons/fa-solid/bars'
 
-    import FuzzySearch from 'fuzzy-search'
-    import MenuLink from './instruction/MenuLink.svelte'
+    import MenuLink from '$cmp/documentation/site/MenuLink.svelte'
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import FaTimes from '~icons/fa-solid/times'
     import Row from '$cmp/shared/layout/Row.svelte'
@@ -28,12 +32,13 @@
         a.name.localeCompare(b.name)
     )
     let menuOpen = $state(false)
-    let search = $state('')
-    const searcher = new FuzzySearch(instructions, ['name', 'description'], {
-        sort: true
-    })
     let currentInstructionName = $derived($page.params.instructionName ?? '')
-    let filteredInstructions = $derived(searcher.search(search.toLowerCase()))
+    const instructionNames = instructions.map((instruction) => instruction.name)
+
+    // The palette, its two boxes and Ctrl+K: this language's Documentation, its Course and the
+    // General course ([the design record](../../../../docs/design/documentation-search.md))
+    const scope = languageScope('m68k')
+    onMount(() => searchClient.preload(scope))
 </script>
 
 <Navbar style="border-bottom-left-radius: 0;">
@@ -66,6 +71,7 @@
 <Sidebar bind:menuOpen>
     <Column gap="1rem" style="overflow-y: auto;">
         <Column gap="1rem" padding="0 1rem">
+            <SearchLauncher placeholder="Search the M68K docs and courses" />
             <MenuLink href="/documentation/m68k" title="M68K" onClick={() => (menuOpen = false)} />
             <MenuLink
                 href="/documentation/m68k/addressing-mode"
@@ -113,9 +119,8 @@
                     Instructions
                 </h2>
             {/snippet}
-            <input bind:value={search} placeholder="Search" class="instruction-search" />
             <InstructionsMenu
-                instructions={filteredInstructions.map((ins) => ins.name)}
+                instructions={instructionNames}
                 hrefBase="/documentation/m68k/instruction"
                 onClick={() => (menuOpen = false)}
                 {currentInstructionName}
@@ -143,15 +148,9 @@
         </Column>
     {/snippet}
 </Sidebar>
+<SearchPalette {scope} placeholder="Search the M68K docs and courses" />
 
 <style lang="scss">
-    .instruction-search {
-        background-color: var(--tertiary);
-        color: var(--tertiary-text);
-        padding: 0.6rem;
-        border-radius: 0.4rem;
-    }
-
     .icon {
         height: 2.2rem;
         display: flex;

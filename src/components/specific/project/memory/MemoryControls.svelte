@@ -1,4 +1,5 @@
 <script lang="ts">
+    import type { ThemeKeys } from '$stores/themeStore.svelte'
     import Button from '$cmp/shared/button/Button.svelte'
     import FaSearch from '~icons/fa-solid/search'
     import FaAngleLeft from '~icons/fa-solid/angle-left'
@@ -17,6 +18,11 @@
         style?: string
         systemSize: RegisterSize
         onAddressChange: (address: bigint) => void
+        /**
+         * The buttons' colour: the page's own by default, where the controls sit on the page; a
+         * caller that puts them on a card passes the card's, so they read as part of it.
+         */
+        buttonVar?: ThemeKeys
     }
 
     let {
@@ -27,7 +33,8 @@
         inputStyle = '',
         style = '',
         systemSize,
-        onAddressChange
+        onAddressChange,
+        buttonVar = 'primary'
     }: Props = $props()
 
     let hexAddress = $derived(currentAddress.toString(16))
@@ -73,7 +80,7 @@
             onClick={searchAddress}
             hasIcon
             style="padding:0 0.5rem; margin-left: 0.3rem; width:2.2rem; min-height: 1.8rem;"
-            cssVar="primary"
+            cssVar={buttonVar}
             title="Search address"
             active={BigInt(`0x${hexAddress || '0'}`) !== currentAddress}
         >
@@ -86,7 +93,7 @@
             onClick={() => updateAddress(currentAddress - BigInt(bytesPerPage))}
             hasIcon
             style="padding:0 0.5rem; width:2.2rem; min-height: 1.8rem;"
-            cssVar="primary"
+            cssVar={buttonVar}
             title="Previous page"
         >
             <Icon size={1.2}>
@@ -98,7 +105,7 @@
             onClick={() => updateAddress(currentAddress + BigInt(bytesPerPage))}
             hasIcon
             style="padding:0 0.5rem; width:2.2rem; min-height: 1.8rem;"
-            cssVar="primary"
+            cssVar={buttonVar}
             title="Next page"
         >
             <Icon size={1.2}>

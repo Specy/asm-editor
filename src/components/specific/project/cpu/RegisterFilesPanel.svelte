@@ -31,6 +31,8 @@
         withoutHeader?: boolean
         style?: string
         gridStyle?: string
+        /** How a row's value sits beside its name, see `RegisterFileRows`. */
+        align?: 'spread' | 'start'
         /** The width grouping of the hexadecimal Formats, shared by the files that use it. */
         size?: RegisterSize
         onRegisterClick?: (register: Register) => void
@@ -53,6 +55,7 @@
         withoutHeader = false,
         style = '',
         gridStyle = '',
+        align = 'spread',
         size = $bindable(RegisterSize.Word),
         onRegisterClick,
         pokeable = false,
@@ -193,6 +196,7 @@
                 hiddenRegistersNames={file.hiddenRegisters ?? []}
                 {position}
                 gridStyle={gridStyleOf(file)}
+                {align}
                 compact={isCompact(file)}
                 {onRegisterClick}
                 {pokeable}
@@ -211,7 +215,8 @@
         flex-direction: column;
         background-color: var(--secondary);
         color: var(--secondary-text);
-        border-radius: 0.5rem;
+        //a host that squares its panels, the Workbench's Lines, squares this one too
+        border-radius: var(--panel-radius, 0.5rem);
         //the column around it is what has the width, pinned to the CPU file by `registerColumnWidth`
         //so that picking a tab never moves the memory panel beside it: the panel takes that width
         //whichever file it is showing, and the file lays out inside it

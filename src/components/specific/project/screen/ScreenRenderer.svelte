@@ -13,6 +13,7 @@
     import type { Screen } from '$lib/languages/peripherals/screen/Screen'
     import type { Keyboard } from '$lib/languages/peripherals/Keyboard'
     import type { Mouse, MouseButton } from '$lib/languages/peripherals/Mouse'
+    import type { ScreenHeader } from './screenHeader'
 
     /**
      * The Screen panel: the canvas a program's graphical output is painted on, and the only place
@@ -41,6 +42,22 @@
          * pixels and leaves it at 1.
          */
         actualSizeZoom?: number
+        /**
+         * The container draws the header, a folding section that already has a title bar: the
+         * panel then draws none of its own and hands the size and the controls to `onHeader`.
+         */
+        headerless?: boolean
+        /**
+         * Called with what a headerless panel's container shows in its header while the Screen is
+         * in the page, and with `undefined` once it goes to the floating window (whose bar has
+         * them) or away.
+         */
+        onHeader?: (header: ScreenHeader | undefined) => void
+        /**
+         * The panel is at least as tall as the fitted Screen needs to fill its width, for a
+         * container that scrolls rather than squeezing the Screen into the height it has left.
+         */
+        heightFromWidth?: boolean
     }
 
     let {
@@ -50,7 +67,10 @@
         name = 'Screen',
         style = '',
         configuration,
-        actualSizeZoom = 1
+        actualSizeZoom = 1,
+        headerless = false,
+        onHeader,
+        heightFromWidth = false
     }: Props = $props()
 
     const MOUSE_BUTTONS: Record<number, MouseButton> = { 0: 'left', 1: 'middle', 2: 'right' }
@@ -93,6 +113,14 @@
     )
 
     let zoomLabel = $derived(screenZoomLabel(fitToPanel, zoom))
+
+    //the stage's width is the one measurement that does not depend on its height, so the height a
+    //fitted Screen needs to fill it comes from it alone
+    let widthFitHeight = $derived(
+        heightFromWidth && fitToPanel && viewportWidth > 0 && logicalWidth > 0
+            ? Math.floor((viewportWidth * logicalHeight) / logicalWidth)
+            : 0
+    )
 
     /**
      * The debug view of a double buffered Screen: the image the program is drawing on, which it
@@ -283,6 +311,13 @@
     }
 
     $effect(() => {
+        if (!headerless || expanded || !onHeader) return
+        const handTo = onHeader
+        handTo({ info: windowInfo, actions: pageActions })
+        return () => handTo(undefined)
+    })
+
+    $effect(() => {
         //tells the scheduler that somebody is painting this Screen, so its dirty flag is worth
         //shortening a slice for (ADR 0007); a Screen with no panel would stay dirty for ever
         return screen.watch()
@@ -379,6 +414,20 @@
     {@render actions()}
 {/snippet}
 
+<!-- in the page the controls end with the one that takes the Screen out into a window -->
+{#snippet pageActions()}
+    {@render actions()}
+    <button
+        class="screen-action"
+        title="Open the screen in a floating window"
+        onclick={toggleWindow}
+    >
+        <Icon size={0.8}>
+            <FaWindowMaximize />
+        </Icon>
+    </button>
+{/snippet}
+
 <!-- the padding is a frame around the stage rather than padding on it, because the stage is what
      is measured: `clientWidth` counts padding, and fitting to a box that is larger than the box
      the canvas actually has is what used to spill the image into a scrollbar -->
@@ -387,6 +436,7 @@
         <div
             class="screen-stage"
             class:fitting={fitToPanel}
+            style={widthFitHeight > 0 ? `min-height: ${widthFitHeight}px;` : ''}
             bind:clientWidth={viewportWidth}
             bind:clientHeight={viewportHeight}
         >
@@ -443,25 +493,18 @@
     </div>
 {:else}
     <div class="screen-panel" {style}>
-        <div class="screen-header">
-            <Icon size={0.9}>
-                <FaDesktop />
-            </Icon>
-            <span class="screen-name ellipsis">{name}</span>
-            <span class="screen-size">{logicalWidth} × {logicalHeight}</span>
-            <div class="screen-actions">
-                {@render actions()}
-                <button
-                    class="screen-action"
-                    title="Open the screen in a floating window"
-                    onclick={toggleWindow}
-                >
-                    <Icon size={0.8}>
-                        <FaWindowMaximize />
-                    </Icon>
-                </button>
+        {#if !headerless}
+            <div class="screen-header">
+                <Icon size={0.9}>
+                    <FaDesktop />
+                </Icon>
+                <span class="screen-name ellipsis">{name}</span>
+                <span class="screen-size">{logicalWidth} × {logicalHeight}</span>
+                <div class="screen-actions">
+                    {@render pageActions()}
+                </div>
             </div>
-        </div>
+        {/if}
         {@render stage()}
     </div>
 {/if}
@@ -475,7 +518,8 @@
         min-width: 0;
         min-height: 0;
         overflow: hidden;
-        border-radius: 0.5rem;
+        /* a host that squares its panels, the Workbench's Lines, squares this one too */
+        border-radius: var(--panel-radius, 0.5rem);
         background-color: var(--secondary);
         color: var(--secondary-text);
     }

@@ -538,7 +538,8 @@
             'b c c c c';
         background-color: var(--tertiary);
         color: var(--tertiary-text);
-        border-radius: 0.5rem;
+        //a host that squares its panels, the Workbench's Lines, squares this one too
+        border-radius: var(--panel-radius, 0.5rem);
         padding-right: 0.3rem;
         padding-bottom: 0.3rem;
     }

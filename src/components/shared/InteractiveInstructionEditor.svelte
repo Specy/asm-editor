@@ -4,7 +4,7 @@
     import Controls from '$cmp/specific/project/Controls.svelte'
     import { clampBigInt, formatTime } from '$lib/utils'
     import { registerColumnWidth } from '$lib/languages/registerFormats'
-    import { resolveProjectSettings } from '$lib/projectSettings'
+    import { resolveProjectSettings, undoHistorySize } from '$lib/projectSettings'
     import { rewriteScreenDirective } from '$lib/languages/mars/screenDirective'
     import MemoryControls from '$cmp/specific/project/memory/MemoryControls.svelte'
     import MemoryVisualiser from '$cmp/specific/project/memory/MemoryRenderer.svelte'
@@ -159,6 +159,27 @@
     )
     let testcasesVisible = $state(false)
     let testcasesResult: TestcaseResult[] = $state([])
+
+    /** Test, and the Testcases window's Run all. */
+    function runTests() {
+        if (building || running) return
+        running = true
+        setTimeout(async () => {
+            try {
+                testcasesResult = await emulator.test(
+                    $state.snapshot(code),
+                    $state.snapshot(testcases),
+                    TESTCASE_INSTRUCTION_LIMIT,
+                    undoHistorySize(settings)
+                )
+            } catch (e) {
+                console.error(e)
+                toast.error('Error executing tests. ' + getM68kErrorMessage(e))
+            } finally {
+                running = false
+            }
+        }, 50)
+    }
     let editor: monaco.editor.IStandaloneCodeEditor | undefined = $state()
 
     $effect(() => {
@@ -217,7 +238,7 @@
             running = false
             building = true
             emulator.setCode(code)
-            await emulator.compile(settings.maxHistorySize, code)
+            await emulator.compile(undoHistorySize(settings), code)
         } catch (e) {
             console.error(e)
             toast.error('Error compiling code. ' + getM68kErrorMessage(e))
@@ -312,25 +333,7 @@
         on:edit-tests={() => {
             testcasesVisible = !testcasesVisible
         }}
-        on:test={async () => {
-            if (building || running) return
-            running = true
-            setTimeout(async () => {
-                try {
-                    testcasesResult = await emulator.test(
-                        $state.snapshot(code),
-                        $state.snapshot(testcases),
-                        TESTCASE_INSTRUCTION_LIMIT,
-                        settings.maxHistorySize
-                    )
-                } catch (e) {
-                    console.error(e)
-                    toast.error('Error executing tests. ' + getM68kErrorMessage(e))
-                } finally {
-                    running = false
-                }
-            }, 50)
-        }}
+        on:test={runTests}
         on:run={async () => {
             await startRun()
         }}
@@ -549,11 +552,17 @@
             {language}
             editable={!embedded}
             registerNames={emulator.registers.map((r) => r.name)}
+            registerSizes={Object.fromEntries(
+                emulator.registers.map((r) => [r.name, Number(r.size)])
+            )}
             startingRegisterNames={emulator.startingRegisterNames}
             hiddenRegistersNames={emulator.hiddenRegisters}
             bind:visible={testcasesVisible}
             {testcasesResult}
             bind:testcases
+            onRun={runTests}
+            onClear={() => (testcasesResult = [])}
+            runDisabled={building || running || emulator.compilerErrors.length > 0}
         />
     {/if}
 {/snippet}

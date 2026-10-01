@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { flushSync, mount, unmount } from 'svelte'
 import lzstring from 'lz-string'
+import { readFileSync } from 'node:fs'
 import MarkdownRenderer from './MarkdownRenderer.svelte'
+import { splitLecture } from '$lib/content/lectureSections'
 
 //the renderer reaches `$lib/Project.svelte`, which reaches the projects store, which opens its
 //IndexedDB because this project resolves `browser` as true. jsdom has no IndexedDB and Dexie's
@@ -39,10 +41,10 @@ const PLAYGROUND = [
     ''
 ].join('\n')
 
-function render(source: string) {
+function render(source: string, options: Record<string, unknown> = {}) {
     const target = document.createElement('div')
     document.body.appendChild(target)
-    const component = mount(MarkdownRenderer, { target, props: { source } })
+    const component = mount(MarkdownRenderer, { target, props: { source, ...options } })
     flushSync()
     return {
         target,
@@ -150,6 +152,83 @@ describe('playground rendering', () => {
             await new Promise((resolve) => setTimeout(resolve, 50))
             expect(target.querySelector('iframe')).toBeNull()
             expect(target.textContent).toContain('move.l #1, d0')
+        } finally {
+            cleanup()
+        }
+    })
+})
+
+/**
+ * A search result opens a Lecture at a heading, so the ids the renderer gives the headings and the
+ * slugs the index links to have to be the same, and present before mount: the prerendered page is
+ * what the browser scrolls on arrival.
+ */
+describe('heading ids', () => {
+    const lectures = [
+        //headings with inline code, and a numbered exercise list
+        'src/content/m68k/introduction/addressing-modes/index.md',
+        //a `$` register in a heading
+        'src/content/mips/introduction/the-32-registers/index.md',
+        //curly quotes in a heading
+        'src/content/risc-v/introduction/getting-started/index.md',
+        //no second-level heading at all
+        'src/content/assembly-basics/think-in-assembly/loops/index.md'
+    ]
+
+    it.each(lectures)('match the index for %s', (path) => {
+        const source = readFileSync(path, 'utf8')
+        const { target, cleanup } = render(source, { headingIds: true })
+        try {
+            const ids = [...target.querySelectorAll('h2')].map((heading) => heading.id)
+            const slugs = splitLecture(source)
+                .map((section) => section.slug)
+                .filter(Boolean)
+            expect(ids).toEqual(slugs)
+        } finally {
+            cleanup()
+        }
+    })
+
+    it('are left off where nobody asked for them', () => {
+        const { target, cleanup } = render('## A heading\n\nText.\n')
+        try {
+            expect(target.querySelector('h2')?.id).toBe('')
+        } finally {
+            cleanup()
+        }
+    })
+})
+
+describe('playgrounds as plain code', () => {
+    it('shows the code, highlighted, and never an embed', async () => {
+        const { target, cleanup } = render(PLAYGROUND, { playgrounds: 'code' })
+        try {
+            const block = target.querySelector('pre.plain-playground')
+            expect(block?.textContent).toContain('move.l #1, d0')
+            expect(block?.querySelector('.asm-mnemonic')?.textContent).toBe('move.l')
+            expect(target.textContent).not.toContain('expectedRegisters')
+            await new Promise((resolve) => setTimeout(resolve, 100))
+            expect(target.querySelector('iframe')).toBeNull()
+            expect(target.querySelector('pre.plain-playground')).not.toBeNull()
+        } finally {
+            cleanup()
+        }
+    })
+})
+
+describe('links with links disabled', () => {
+    it('keep a link into the Documentation as a mark and drop the rest', () => {
+        const source =
+            'See [MOVEA](/documentation/m68k/instruction/movea) and [the web](https://example.com).'
+        const { target, cleanup } = render(source, { disableLinks: true })
+        try {
+            expect(target.querySelector('a')).toBeNull()
+            const mark = target.querySelector('span.doc-link')
+            expect(mark?.getAttribute('data-doc-href')).toBe(
+                '/documentation/m68k/instruction/movea'
+            )
+            expect(mark?.textContent).toBe('MOVEA')
+            expect(target.textContent).toContain('the web')
         } finally {
             cleanup()
         }

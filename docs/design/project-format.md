@@ -72,6 +72,10 @@ One rule for every part of a Project (code, Settings, Testcases, Display configu
 
 One floating panel behind the cog, with a Preferences section and, when a Project is open, a Project section. Playgrounds show only the Preferences section.
 
+Update on 2026-09-30: the [Workbench redesign](./workbench.md) moves Settings into the Workbench's side panel, with sections for the Project, the Display configuration, Preferences, layout, shortcuts and the theme. No Playground ever got a settings panel; the Interactive editor has none.
+
+Update on 2026-10-01: the Maximum undo steps Setting became **Undo enabled**, a switch that is on by default. A Build keeps 200 undo steps when it is on and none when it is off (`undoHistorySize`). A Project that stored 0 steps loads with it off, and one that stored any other number loads with it on. The Maximum visible history steps Preference is gone, and the History shows the last 20 steps. The Screen's 64 MB undo budget was measured for 100 steps, so the heaviest animation example now fills it before the 200th.
+
 ### Serialization and migration
 
 - **IndexedDB:** Dexie version 2 with an upgrade that rewrites every stored project once: `code` becomes `files["main.<ext>"]` with the `plain` encoding, `entry` is set, `settings` starts empty (existing projects start from the defaults; their old global values are not carried over, which the changelog should say), everything else is kept. The normalizer used for imports and share links also runs on read as a cheap defence.

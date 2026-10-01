@@ -1,4 +1,5 @@
 <script lang="ts">
+    import SearchLauncher from '$cmp/search/SearchLauncher.svelte'
     import NavigationLinkButton from '$cmp/shared/button/NavigationLinkButton.svelte'
     import Page from '$cmp/shared/layout/Page.svelte'
 </script>
@@ -16,6 +17,7 @@
 </svelte:head>
 <Page cropped contentStyle="padding: 1rem; gap: 1rem">
     <h1 style="margin-top: 1rem; gap: 1rem; flex-wrap: wrap" class="row">Z80 Documentation</h1>
+    <SearchLauncher size="full" placeholder="Search the Z80 docs and courses" />
     <p class="intro">
         The Z80 is an 8 bit CPU with 64 KB of memory, a handful of 8 bit registers that pair up into
         16 bit ones, and no memory management of any kind: a program owns the whole address space.

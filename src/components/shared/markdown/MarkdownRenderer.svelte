@@ -21,6 +21,8 @@
         type PlaygroundSettings
     } from '$lib/content/playgrounds'
     import { tokenizeAssembly } from '$lib/content/assemblyHighlight'
+    import { HeadingSlugger } from '$lib/content/headings'
+    import { toString as hastToString } from 'hast-util-to-string'
     import type { AvailableLanguages } from '$lib/Project.svelte'
     let isDark = $derived(ThemeStore.isColorDark(ThemeStore.theme.background.color))
 
@@ -354,9 +356,81 @@
         ]
     }
 
+    /**
+     * Gives every second- and third-level heading its id, the slug that the search index links a
+     * **Lecture section** to ([headings.ts](../../../lib/content/headings.ts)). Synchronous, so the
+     * ids are in the prerendered page: SvelteKit fails the prerender on a `#` link with no target.
+     */
+    const rehypeHeadingIds = () => (tree: Root) => {
+        const slugger = new HeadingSlugger()
+        visit(tree, 'element', (node: Element) => {
+            if (node.tagName !== 'h2' && node.tagName !== 'h3') return
+            node.properties = { ...node.properties, id: slugger.slug(hastToString(node)) }
+        })
+    }
+
+    const headingIdsPlugin: Plugin = {
+        transformers: [
+            {
+                execution: 'sync',
+                type: 'rehype',
+                transform({ processor }) {
+                    processor.use(rehypeHeadingIds)
+                }
+            }
+        ]
+    }
+
+    /**
+     * Playgrounds as plain code, for a Lecture section read inside the Documentation panel, where an
+     * embedded editor with an Emulator of its own does not belong. The marking pass highlights them
+     * and drops their testcases; what makes them a playground's box is then taken off again, and so
+     * is the `language-` class, so that shiki leaves the editor's own colours alone.
+     */
+    const rehypePlainPlaygrounds = () => (tree: Root) => {
+        transformPlaygrounds(tree)
+        visit(tree, 'element', (node: Element) => {
+            if (typeof node.properties?.['data-playground'] !== 'string') return
+            node.properties = { className: ['plain-playground'] }
+            for (const child of node.children) {
+                if (child.type === 'element' && child.tagName === 'code') {
+                    child.properties = { className: ['asm-code'] }
+                }
+            }
+        })
+    }
+
+    const plainPlaygroundsPlugin: Plugin = {
+        transformers: [
+            {
+                execution: 'sync',
+                type: 'rehype',
+                transform({ processor }) {
+                    processor.use(rehypePlainPlaygrounds)
+                }
+            }
+        ]
+    }
+
+    /**
+     * Takes every link out and keeps its text. A link into the Documentation is kept as a mark
+     * instead (`span.doc-link`), which the Documentation panel follows to another of its own
+     * entries: that never leaves the page, so it is allowed where every other link is not, in an
+     * Exam. Anywhere else the mark reads as the plain text it replaced.
+     */
     const rehypeDisableLinksTransformer = () => (tree: Root) => {
         visit(tree, 'element', (node: Element, index?: number, parent?: Parent) => {
             if (node.tagName !== 'a' || typeof index !== 'number' || !parent) return
+            const href = node.properties?.href
+            if (typeof href === 'string' && href.startsWith('/documentation/')) {
+                parent.children.splice(index, 1, {
+                    type: 'element',
+                    tagName: 'span',
+                    properties: { className: ['doc-link'], 'data-doc-href': href },
+                    children: node.children
+                })
+                return
+            }
             parent.children.splice(index, 1, ...node.children)
         })
     }
@@ -466,6 +540,45 @@
             }
         })
     )
+    /** A Lecture: its headings carry the ids a search result opens it at. */
+    const cartaWithHeadingIds = $derived(
+        new Carta({
+            sanitizer: (html) => {
+                return sanitizeMarkdownHtml(html)
+            },
+            extensions: [
+                ext,
+                headingIdsPlugin,
+                customPlaygroundPlugin,
+                code({ theme, langs: ['mips', 'riscv', 'asm'] })
+            ],
+            rehypeOptions: {
+                allowDangerousHtml: true
+            },
+            shikiOptions: {
+                themes: [theme]
+            }
+        })
+    )
+    /** A Lecture section inside the Documentation panel: playgrounds as plain code. */
+    const cartaWithPlainPlaygrounds = $derived(
+        new Carta({
+            sanitizer: (html) => {
+                return sanitizeMarkdownHtml(html)
+            },
+            extensions: [
+                extWithExternalLins,
+                plainPlaygroundsPlugin,
+                code({ theme, langs: ['mips', 'riscv', 'asm'] })
+            ],
+            rehypeOptions: {
+                allowDangerousHtml: true
+            },
+            shikiOptions: {
+                themes: [theme]
+            }
+        })
+    )
 </script>
 
 <script lang="ts">
@@ -485,6 +598,16 @@
          * measure is unchanged either way; only the free space moves.
          */
         centered?: boolean
+        /**
+         * Give the h2 and h3 headings their slugs as ids, as a Lecture does, so a link can open the
+         * page at one of them.
+         */
+        headingIds?: boolean
+        /**
+         * How playground fences render: as embedded editors (`embed`), or as plain highlighted code
+         * (`code`), which is how a Lecture section reads inside the Documentation panel.
+         */
+        playgrounds?: 'embed' | 'code'
     }
 
     let {
@@ -494,16 +617,49 @@
         spacing,
         simpleCode,
         disableLinks,
-        centered = true
+        centered = true,
+        headingIds = false,
+        playgrounds = 'embed'
     }: Props = $props()
 
     const carta = $derived(
-        disableLinks ? cartaWithoutLinks : linksInNewTab ? cartaWithExternalLins : cartaNormal
+        playgrounds === 'code'
+            ? cartaWithPlainPlaygrounds
+            : disableLinks
+              ? cartaWithoutLinks
+              : headingIds
+                ? cartaWithHeadingIds
+                : linksInNewTab
+                  ? cartaWithExternalLins
+                  : cartaNormal
     )
+
+    let wrapper: HTMLDivElement | undefined = $state()
+
+    /**
+     * The browser scrolls to a page's `#heading` on arrival, against the prerendered render. Carta
+     * then renders again on mount (shiki, the playground iframes), which moves things a little, so
+     * the page is scrolled to the heading once more after that, unless the reader has scrolled.
+     */
+    $effect(() => {
+        if (!headingIds || !wrapper || !location.hash) return
+        const target = wrapper
+        const arrivedAt = window.scrollY
+        const observer = new MutationObserver(() => {
+            observer.disconnect()
+            if (Math.abs(window.scrollY - arrivedAt) > 2) return
+            const id = decodeURIComponent(location.hash.slice(1))
+            document.getElementById(id)?.scrollIntoView({ block: 'start' })
+        })
+        observer.observe(target, { childList: true, subtree: true })
+        return () => observer.disconnect()
+    })
 </script>
 
 <div
+    bind:this={wrapper}
     class="_markdown"
+    class:heading-ids={headingIds}
     class:simple-code={simpleCode}
     {style}
     style:--gap={spacing}
@@ -514,7 +670,7 @@
     style:--asm-number={asmPalette.number}
     style:--asm-string={asmPalette.string}
 >
-    {#key source + theme + disableLinks}
+    {#key source + theme + disableLinks + playgrounds + headingIds}
         <Markdown value={source} {carta} />
     {/key}
 </div>
@@ -525,6 +681,12 @@
         flex-direction: column;
         line-height: 1.4;
         letter-spacing: 0.01em;
+    }
+
+    /* a heading opened by its id lands below the fixed navbar rather than under it */
+    .heading-ids :global(h2[id]),
+    .heading-ids :global(h3[id]) {
+        scroll-margin-top: 4.5rem;
     }
 
     :global(pre:has(code)) {
@@ -705,7 +867,8 @@
         font-family: inherit;
     }
 
-    :global(pre.code-playground > code) {
+    :global(pre.code-playground > code),
+    :global(pre.plain-playground > code) {
         font-family: 'Fira Code', monospace;
         /* the editor that replaces this block sets the same size */
         font-size: 1rem;
@@ -714,24 +877,30 @@
 
     /* the editor's own palette, bound above so it follows the reader's theme rather than the
        system's. A token the tokenizer was unsure of has no span and inherits the block's colour. */
-    :global(pre.code-playground .asm-comment) {
+    :global(pre.code-playground .asm-comment),
+    :global(pre.plain-playground .asm-comment) {
         color: var(--asm-comment);
         font-style: italic;
     }
-    :global(pre.code-playground .asm-mnemonic) {
+    :global(pre.code-playground .asm-mnemonic),
+    :global(pre.plain-playground .asm-mnemonic) {
         color: var(--asm-mnemonic);
     }
-    :global(pre.code-playground .asm-directive) {
+    :global(pre.code-playground .asm-directive),
+    :global(pre.plain-playground .asm-directive) {
         color: var(--asm-directive);
     }
-    :global(pre.code-playground .asm-number) {
+    :global(pre.code-playground .asm-number),
+    :global(pre.plain-playground .asm-number) {
         color: var(--asm-number);
     }
-    :global(pre.code-playground .asm-string) {
+    :global(pre.code-playground .asm-string),
+    :global(pre.plain-playground .asm-string) {
         color: var(--asm-string);
     }
     /* the editor underlines a label rather than colouring it */
-    :global(pre.code-playground .asm-label) {
+    :global(pre.code-playground .asm-label),
+    :global(pre.plain-playground .asm-label) {
         text-decoration: underline;
     }
 

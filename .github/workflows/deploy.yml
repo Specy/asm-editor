@@ -18,6 +18,19 @@ jobs:
               with:
                   node-version: 24.6.0
                   cache: npm
+            # The search model and the index's vectors (ADR 0026): the model by its pinned
+            # revision, the vectors from the newest run, since only changed text is embedded again.
+            - name: Cache the search model
+              uses: actions/cache@v4
+              with:
+                  path: .cache/search-model
+                  key: search-model-${{ hashFiles('src/lib/search/searchModel.json') }}
+            - name: Cache the search vectors
+              uses: actions/cache@v4
+              with:
+                  path: .cache/search-vectors
+                  key: search-vectors-${{ github.sha }}
+                  restore-keys: search-vectors-
             - name: Build
               run: npm i && npm run build
             - name: Publish

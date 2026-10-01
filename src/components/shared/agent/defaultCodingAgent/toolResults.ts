@@ -4,6 +4,7 @@ export type AgentToolErrorKind =
     | 'execution_state'
     | 'runtime_error'
     | 'invalid_input'
+    | 'unavailable'
     | 'unknown'
 
 import { snapshotToolResult } from './snapshot.svelte'
