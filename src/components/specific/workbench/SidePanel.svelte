@@ -23,9 +23,11 @@
         allowMaximize?: boolean
         /** A card of its own; a desktop's panel shares one with the rail instead. */
         framed?: boolean
+        /** Keep the centered content width until the panel finishes returning from full width. */
+        restoring?: boolean
     }
 
-    let { allowMaximize = true, framed = true }: Props = $props()
+    let { allowMaximize = true, framed = true, restoring = false }: Props = $props()
 
     const context = useWorkbench()
     const { session, ui } = context
@@ -64,7 +66,12 @@
     }}
 />
 
-<section class="side-panel" class:framed aria-label={active?.title}>
+<section
+    class="side-panel"
+    class:framed
+    class:maximized={ui.maximized || restoring}
+    aria-label={active?.title}
+>
     <header class="panel-header">
         <span class="panel-title ellipsis">{active?.title ?? ''}</span>
         {#if active?.id === 'testcases'}
@@ -239,5 +246,11 @@
         flex-direction: column;
         flex: 1;
         min-height: 0;
+    }
+
+    .maximized .panel-content {
+        width: 100%;
+        max-width: 90ch;
+        margin-inline: auto;
     }
 </style>

@@ -8,6 +8,8 @@
      * and the panel in a drawer from the left. There are no file tabs and no splitters, and the Debug
      * tools are always sections.
      */
+    import { untrack } from 'svelte'
+    import { prefersReducedMotion } from 'svelte/motion'
     import { fade } from 'svelte/transition'
     import FaAngleRight from '~icons/fa-solid/angle-right'
     import MemoryControls from '$cmp/specific/project/memory/MemoryControls.svelte'
@@ -40,6 +42,16 @@
     const bottomOpen = $derived(!workbenchLayout.isCollapsed('compact:bottom', false))
     const firstPanel = $derived(context.rail.find((entry) => !entry.action)?.id)
     const panelShown = $derived(phone ? ui.drawerOpen : !!ui.activePanel)
+    let restoring = $state(false)
+    let wasMaximized = untrack(() => ui.maximized && !phone && !!ui.activePanel)
+    const panelMaximized = $derived(!phone && (ui.maximized || restoring))
+
+    $effect(() => {
+        const maximized = ui.maximized && !phone && !!ui.activePanel
+        if (maximized || !ui.activePanel || phone || prefersReducedMotion.current) restoring = false
+        else if (wasMaximized) restoring = true
+        wasMaximized = maximized
+    })
     //the Screen's size and controls, which its section shows in its own header while it is open
     let screenHeader: ScreenHeader | undefined = $state()
     const screenOpen = $derived(!workbenchLayout.isCollapsed('compact:screen', true))
@@ -154,11 +166,11 @@
                 </div>
             {/if}
         </div>
-        {#if panelShown}
+        {#if panelShown && !panelMaximized}
             <button
                 class="backdrop"
                 aria-label="Close the panel"
-                transition:fade={{ duration: 150 }}
+                transition:fade={{ duration: panelMaximized ? 0 : 150 }}
                 onclick={closeOverlay}
             ></button>
         {/if}
@@ -166,17 +178,22 @@
             class="drawer"
             class:shown={panelShown}
             class:with-rail={phone}
-            class:maximized={ui.maximized && !phone}
-            style={phone || ui.maximized
+            class:maximized={panelMaximized}
+            class:restoring
+            style:--side-panel-width={`min(${workbenchLayout.panelWidth(ui.activePanel ?? '')}px, calc(100% - var(--wb-rail-width) - 2rem))`}
+            style={phone || panelMaximized
                 ? ''
-                : `width: min(${workbenchLayout.panelWidth(ui.activePanel ?? '')}px, calc(100% - var(--wb-rail-width) - 2rem))`}
+                : 'width: var(--side-panel-width)'}
+            onanimationend={(event) => {
+                if (event.target === event.currentTarget) restoring = false
+            }}
         >
             {#if phone}
                 <IconRail withBack framed={false} />
             {/if}
             {#if ui.opened.size > 0}
                 <div class="drawer-panel" class:hidden={!ui.activePanel}>
-                    <SidePanel allowMaximize={!phone} framed={false} />
+                    <SidePanel allowMaximize={!phone} framed={false} {restoring} />
                 </div>
             {/if}
         </div>
@@ -352,7 +369,34 @@
         }
 
         &.maximized {
-            right: 0;
+            width: calc(100% - var(--wb-rail-width));
+            animation: expand-panel-width 0.2s ease;
+            box-shadow: none;
+        }
+
+        &.restoring {
+            animation: restore-panel-width 0.2s ease forwards;
+        }
+    }
+
+    @keyframes expand-panel-width {
+        from {
+            width: var(--side-panel-width);
+        }
+    }
+
+    @keyframes restore-panel-width {
+        from {
+            width: calc(100% - var(--wb-rail-width));
+        }
+        to {
+            width: var(--side-panel-width);
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .drawer.maximized {
+            animation: none;
         }
     }
 

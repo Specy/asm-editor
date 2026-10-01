@@ -6,6 +6,7 @@
      * remembered per person ([the design record](../../../../docs/design/workbench.md)).
      */
     import { untrack } from 'svelte'
+    import { prefersReducedMotion } from 'svelte/motion'
     import Splitter from '$cmp/shared/layout/Splitter.svelte'
     import { LAYOUT_LIMITS, workbenchLayout } from '$stores/workbenchLayoutStore.svelte'
     import IconRail from './IconRail.svelte'
@@ -30,6 +31,17 @@
     const panelId = $derived(ui.activePanel)
     const panelWidth = $derived(panelId ? workbenchLayout.panelWidth(panelId) : 0)
     const hasOpened = $derived(ui.opened.size > 0)
+    let restoring = $state(false)
+    let wasMaximized = untrack(() => ui.maximized && !!panelId)
+    const panelOverlay = $derived(!!panelId && (ui.maximized || restoring))
+
+    // Keep the panel over the editor until its return to the saved width finishes.
+    $effect(() => {
+        const maximized = ui.maximized && !!panelId
+        if (maximized || !panelId || prefersReducedMotion.current) restoring = false
+        else if (wasMaximized) restoring = true
+        wasMaximized = maximized
+    })
     //the debug column and the floating Debug tools are built at the first Build and only hidden
     //after a Stop, so the next Build shows them at once instead of building them anew
     let debugged = false
@@ -63,17 +75,21 @@
                 <IconRail withBack withSave framed={false} />
             </div>
             {#if hasOpened}
-                {#if ui.maximized && panelId}
+                {#if panelOverlay}
                     <!-- keeps the layout underneath as it was while the panel is drawn over it -->
                     <div class="placeholder" style="width: {panelWidth}px"></div>
                 {/if}
                 <div
                     class="side-slot"
                     class:hidden={!panelId}
-                    class:maximized={ui.maximized && !!panelId}
-                    style={ui.maximized ? '' : `width: ${panelWidth}px`}
+                    class:maximized={panelOverlay}
+                    class:restoring
+                    style:--side-panel-width={`${panelWidth}px`}
+                    onanimationend={(event) => {
+                        if (event.target === event.currentTarget) restoring = false
+                    }}
                 >
-                    <SidePanel framed={false} />
+                    <SidePanel framed={false} {restoring} />
                 </div>
             {/if}
         </div>
@@ -168,6 +184,7 @@
     .side-slot {
         display: flex;
         flex: none;
+        width: var(--side-panel-width);
         min-height: 0;
         border-left: var(--wb-card-edge);
 
@@ -181,13 +198,42 @@
             z-index: 11;
             top: var(--wb-gap);
             bottom: var(--wb-gap);
-            right: var(--wb-gap);
             left: calc(var(--wb-gap) + var(--wb-card-inset) + var(--wb-rail-width));
+            width: calc(
+                100% - 2 * var(--wb-gap) - var(--wb-card-inset) - var(--wb-rail-width)
+            );
+            animation: expand-panel-width 0.2s ease;
             overflow: hidden;
             background-color: var(--wb-surface);
             border-radius: 0 var(--wb-radius) var(--wb-radius) 0;
             border: var(--wb-card-edge);
-            box-shadow: 0.5rem 0.5rem 2rem rgb(0 0 0 / 0.4);
+        }
+
+        &.restoring {
+            animation: restore-panel-width 0.2s ease forwards;
+        }
+    }
+
+    @keyframes expand-panel-width {
+        from {
+            width: var(--side-panel-width);
+        }
+    }
+
+    @keyframes restore-panel-width {
+        from {
+            width: calc(
+                100% - 2 * var(--wb-gap) - var(--wb-card-inset) - var(--wb-rail-width)
+            );
+        }
+        to {
+            width: var(--side-panel-width);
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .side-slot.maximized {
+            animation: none;
         }
     }
 
