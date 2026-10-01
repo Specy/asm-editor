@@ -131,7 +131,7 @@
     }
 
     :global(.workbench[data-device='desktop']) .brand {
-        width: calc(var(--wb-rail-width) + var(--wb-gap) + var(--wb-card-inset));
+        width: calc(var(--wb-rail-width) + 2 * var(--wb-gap));
     }
 
     .action:hover {
