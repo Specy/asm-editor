@@ -40,7 +40,6 @@
 <Page hasNavbar cropped contentStyle="padding: 1rem;">
     <Header>Courses</Header>
     <SearchLauncher size="full" placeholder="Search in every course" />
-    <p></p>
     <div class="courses">
         {#each data.courses as course (course.slug)}
             {@const accent = courseAccent(course.slug)}
@@ -72,6 +71,7 @@
         grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
         gap: 1rem;
         width: 100%;
+        margin-top: 1.5rem;
     }
     .courses a {
         display: flex;

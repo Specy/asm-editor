@@ -95,7 +95,9 @@
             </div>
             <BottomPanel
                 open={bottomOpen}
-                style={bottomOpen ? 'height: 12rem; flex: none;' : 'flex: none;'}
+                style={bottomOpen
+                    ? 'height: var(--compact-bottom-height); flex: none;'
+                    : 'flex: none;'}
             >
                 {#snippet actions()}
                     <button
@@ -210,10 +212,6 @@
 
 <style lang="scss">
     .compact {
-        --compact-editor-height: max(
-            14rem,
-            calc(var(--screen-height) - var(--wb-top-height) - 3.6rem - 2.1rem - 10rem)
-        );
         position: relative;
         display: flex;
         flex-direction: column;
@@ -240,7 +238,21 @@
         }
     }
 
+    /* Before a Build the editor, the controls bar and the open bottom panel fill the column exactly,
+       so nothing scrolls while writing; the editor keeps that height after a Build, the Debug
+       session's sections going below it. The column is a size container so the height comes from
+       the room actually left under whatever bars sit above the Workbench, not from guessing them. */
     .scroll {
+        --compact-bottom-height: 12rem;
+        --compact-controls-height: calc(var(--wb-control-height) + 0.7rem);
+        --compact-editor-height: max(
+            14rem,
+            calc(
+                100cqh - 2 *
+                    var(--wb-gap) - var(--compact-controls-height) - var(--compact-bottom-height)
+            )
+        );
+        container-type: size;
         display: flex;
         flex-direction: column;
         gap: var(--wb-gap);
@@ -259,6 +271,7 @@
         top: var(--wb-gap);
         z-index: 4;
         flex: none;
+        height: var(--compact-controls-height);
         padding: 0.35rem 0;
         pointer-events: none;
     }
