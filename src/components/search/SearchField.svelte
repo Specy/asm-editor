@@ -69,6 +69,8 @@
         align-items: center;
         gap: 0.5rem;
         padding: 0.45rem 0.6rem;
+        /* Tall enough for the clear button, so the field does not grow when it appears. */
+        min-height: calc(1.4rem + 0.9rem);
         border-radius: 0.5rem;
         background-color: var(--tertiary);
         color: var(--tertiary-text);
