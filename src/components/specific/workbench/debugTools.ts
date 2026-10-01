@@ -12,14 +12,12 @@ export type DebugTool =
 
 /**
  * How a Debug tool's section shares the debug column's row with the others: the three split it
- * evenly, the Stack pointer never narrower than its memory grid and the History and Call stack
- * down to 10rem, so that all three fit in one row at the width the column takes for the registers
- * and memory, and only wrap when the column is dragged narrower.
+ * evenly, with minimum widths of 15rem for the Stack pointer, 12rem for History and 10rem for the
+ * Call stack. They wrap when the column is dragged too narrow to fit all three.
  */
 export function toolSectionStyle(tool: DebugTool): string {
-    return tool.kind === 'memory'
-        ? 'flex: 1 1 0; min-width: min-content;'
-        : 'flex: 1 1 0; min-width: 10rem;'
+    const minWidth = tool.kind === 'memory' ? '15rem' : tool.kind === 'history' ? '12rem' : '10rem'
+    return `flex: 1 1 0; min-width: ${minWidth};`
 }
 
 export function debugTools(memoryTabs: readonly MemoryTab[]): DebugTool[] {

@@ -64,7 +64,7 @@
         padding-top: 0.1rem;
     }
     .pill {
-        position: absolute;
+        position: fixed;
         left: 50vw;
         top: 0.4rem;
         text-align: center;

@@ -50,24 +50,29 @@ describe.each(Object.entries(goldens))('golden queries %s', (_, golden) => {
         expect(engine.covers(scope)).toBe(true)
     })
 
-    it.each(golden.queries.map((query) => [query.query, query] as const))(
-        'answers %s',
-        { timeout: 60_000 },
-        async (_, query) => {
-            if (query.meaning && !withModel) return
-            const vector = withModel
-                ? (await (await nodeEmbedder()).embed([query.query], 'query'))[0]
-                : null
-            const ids = (await engine.search(query.query, { scope, vector, limit: 10 })).map(idOf)
-            if (query.first) expect(ids[0], ids.join('\n')).toBe(query.first)
-            if (query.expect) {
-                const wanted = Array.isArray(query.expect) ? query.expect : [query.expect]
-                const top = ids.slice(0, query.top ?? 3)
-                expect(
-                    wanted.some((id) => top.includes(id)),
-                    `${wanted.join(' or ')} in\n${top.join('\n')}`
-                ).toBe(true)
+    describe.each(withModel ? ['words', 'hybrid'] : ['words'])('%s', (mode) => {
+        const hybrid = mode === 'hybrid'
+        const queries = golden.queries.filter((query) => !query.meaning || hybrid)
+        it.each(queries.map((query) => [query.query, query] as const))(
+            'answers %s',
+            { timeout: 60_000 },
+            async (_, query) => {
+                const vector = hybrid
+                    ? (await (await nodeEmbedder()).embed([query.query], 'query'))[0]
+                    : null
+                const ids = (await engine.search(query.query, { scope, vector, limit: 10 })).map(
+                    idOf
+                )
+                if (query.first) expect(ids[0], ids.join('\n')).toBe(query.first)
+                if (query.expect) {
+                    const wanted = Array.isArray(query.expect) ? query.expect : [query.expect]
+                    const top = ids.slice(0, query.top ?? 3)
+                    expect(
+                        wanted.some((id) => top.includes(id)),
+                        `${wanted.join(' or ')} in\n${top.join('\n')}`
+                    ).toBe(true)
+                }
             }
-        }
-    )
+        )
+    })
 })

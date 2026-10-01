@@ -260,10 +260,18 @@ export class SearchEngine {
                 embedding: vectors ? Array.from(vectors[ref]) : undefined
             })
             for (const name of entry.names) {
-                const key = normalizeName(name)
-                const list = this.names.get(key) ?? []
-                list.push({ shard: payload.shard, ref })
-                this.names.set(key, list)
+                const normalized = normalizeName(name)
+                // A named syscall, in either order, is as precise as its bare name. Pin it
+                // ahead of the SYSCALL instruction and similarly named calls such as writev.
+                const exactNames = [normalized]
+                if (entry.entryKind === 'syscall') {
+                    exactNames.push(`syscall ${normalized}`, `${normalized} syscall`)
+                }
+                for (const key of exactNames) {
+                    const list = this.names.get(key) ?? []
+                    list.push({ shard: payload.shard, ref })
+                    this.names.set(key, list)
+                }
             }
         })
         const firstWindow = new Set<number>()

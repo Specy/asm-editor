@@ -48,7 +48,9 @@
     .progress {
         height: 4px;
         width: 100%;
-        position: absolute;
+        position: fixed;
+        top: 0;
+        left: 0;
         z-index: 1000;
         overflow: hidden;
         opacity: 0.6;

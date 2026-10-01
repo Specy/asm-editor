@@ -95,8 +95,6 @@
     )
     const activeSectionIndex = $derived(getSectionIndex(activeSectionId))
     const isReviewMode = $derived(!!exam?.submission)
-    //an assembly section's Workbench fills the screen under the header, so the column is bounded
-    const assemblyActive = $derived(activeSection?.type === ExamSectionType.AssemblyCoding)
     const hasInstructions = $derived(!!exam?.instructions.trim() && !isReviewMode)
     const isOnInstructions = $derived(hasInstructions && activeSectionId === '')
     const canGoToPreviousSection = $derived(
@@ -767,10 +765,8 @@
             </div>
         {/if}
 
-        <Column
-            style="flex:1; {assemblyActive ? 'height: var(--screen-height); min-height: 0;' : ''}"
-        >
-            <Card padding="0.6rem" background="secondary">
+        <div class="exam-session">
+            <Card padding="0.6rem" background="secondary" style="flex: none;">
                 <div class="session-header">
                     <div class="header-left">
                         <Header type="h2">{loadedExam.title}</Header>
@@ -851,7 +847,11 @@
             </Card>
 
             {#if isOnInstructions && hasInstructions}
-                <Card padding="1rem" background="secondary" style="margin:0.5rem; flex:1;">
+                <Card
+                    padding="1rem"
+                    background="secondary"
+                    style="margin:0.5rem; flex:1; min-height:0; overflow:auto;"
+                >
                     <Header type="h2">Instructions</Header>
                     <MarkdownRenderer source={loadedExam.instructions} disableLinks />
                     <Row style="justify-content:flex-end; margin-top: auto">
@@ -955,11 +955,20 @@
                     {/if}
                 </Column>
             {/if}
-        </Column>
+        </div>
     {/if}
 </Page>
 
 <style lang="scss">
+    .exam-session {
+        display: flex;
+        flex-direction: column;
+        flex: none;
+        height: var(--screen-height);
+        min-height: 0;
+        overflow: hidden;
+    }
+
     .session-header {
         display: flex;
         justify-content: space-between;
@@ -1047,11 +1056,12 @@
     }
     .non-assembly-layout {
         display: grid;
+        flex: 1;
         padding: 0.5rem;
         grid-template-columns: minmax(14rem, 0.95fr) minmax(0, 1.35fr);
+        grid-template-rows: minmax(0, 1fr);
         gap: 0.8rem;
-        height: 100%;
-        min-height: calc(var(--screen-height) * 0.5);
+        min-height: 0;
     }
 
     .prompt-pane {
@@ -1062,16 +1072,19 @@
     }
 
     .answer-pane {
+        min-height: 0;
         min-width: 0;
         display: flex;
         flex-direction: column;
         gap: 0.6rem;
+        overflow: auto;
     }
 
     .c-editor-wrap {
         display: flex;
         flex-direction: column;
-        height: 100%;
+        flex: 1;
+        min-height: 0;
         position: relative;
         border-radius: 0.5rem;
         overflow: hidden;
@@ -1086,11 +1099,7 @@
 
         .non-assembly-layout {
             grid-template-columns: 1fr;
-            min-height: 0;
-        }
-
-        .c-editor-wrap {
-            min-height: calc(var(--screen-height) * 0.4);
+            grid-template-rows: repeat(2, minmax(0, 1fr));
         }
     }
 </style>

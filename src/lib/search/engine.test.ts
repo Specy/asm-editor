@@ -92,6 +92,52 @@ describe('SearchEngine', () => {
         expect(sized[0].kind === 'entry' && sized[0].entry.names).toEqual(['move'])
     })
 
+    it('matches a syscall name and kind ahead of semantic near matches', async () => {
+        const engine = SearchEngine.create()
+        const entries = [
+            entry('write', 'Writes bytes to a file descriptor.', {
+                id: 'x86/syscalls/syscall-write',
+                language: 'x86',
+                chapter: 'syscalls',
+                chapterTitle: 'Syscalls',
+                entryKind: 'syscall',
+                names: ['write', 'syscall 1']
+            }),
+            entry('writev', 'Writes buffers to a file descriptor.', {
+                id: 'x86/syscalls/syscall-writev',
+                language: 'x86',
+                chapter: 'syscalls',
+                chapterTitle: 'Syscalls',
+                entryKind: 'syscall',
+                names: ['writev', 'syscall 20']
+            }),
+            entry('syscall', 'Invokes a syscall, such as write.', {
+                id: 'x86/instructions/syscall',
+                language: 'x86'
+            })
+        ]
+        await engine.add(
+            createPayload(
+                { shard: 'docs-x86', entries, sections: [], windows: [] },
+                [axis(1), axis(0), axis(0)],
+                'test'
+            )
+        )
+        for (const vector of [axis(0), null]) {
+            for (const query of ['write syscall', 'syscall write', 'syscall 1']) {
+                const results = await engine.search(query, {
+                    scope: languageScope('x86', false),
+                    vector
+                })
+                expect(results[0], query).toMatchObject({
+                    kind: 'entry',
+                    exact: true,
+                    entry: { id: 'x86/syscalls/syscall-write' }
+                })
+            }
+        }
+    })
+
     it('shows a Lecture section once, however many windows match', async () => {
         const engine = await engineWith()
         const results = await engine.search('loops', { scope: languageScope('m68k') })
