@@ -259,7 +259,9 @@
         flex: 1;
         min-width: 0;
         padding: var(--wb-gap);
-        overflow-y: auto;
+        /* always room for the scrollbar: a Build adds the sections below the editor, and the
+           scrollbar arriving with them would narrow everything above */
+        overflow-y: scroll;
         overflow-x: hidden;
         overscroll-behavior: contain;
     }

@@ -138,19 +138,23 @@
             tabindex="-1"
             onclick={(event) => event.stopPropagation()}
         >
-            <SearchField
-                bind:value={query}
-                bind:el={input}
-                {placeholder}
-                label={placeholder}
-                role="combobox"
-                aria-expanded={results.length > 0}
-                aria-controls="palette-results"
-                aria-activedescendant={results.length > 0
-                    ? `palette-option-${selected}`
-                    : undefined}
-                {onkeydown}
-            />
+            <div class="top">
+                <SearchField
+                    bind:value={query}
+                    bind:el={input}
+                    {placeholder}
+                    label={placeholder}
+                    role="combobox"
+                    aria-expanded={results.length > 0}
+                    aria-controls="palette-results"
+                    aria-activedescendant={results.length > 0
+                        ? `palette-option-${selected}`
+                        : undefined}
+                    {onkeydown}
+                />
+                <!-- a phone has no Esc key and no backdrop around the sheet to tap -->
+                <button type="button" class="close" onclick={close}>Cancel</button>
+            </div>
             {#if !query.trim()}
                 <p class="hint">An instruction, a directive, or a question in your own words.</p>
             {:else}
@@ -239,6 +243,24 @@
         color: var(--primary-text);
         box-shadow: 0 1rem 3rem rgb(0 0 0 / 35%);
         outline: none;
+    }
+    .top {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .top > :global(.search-field) {
+        flex: 1;
+    }
+    .close {
+        display: none;
+        flex: none;
+        padding: 0.5rem 0.3rem;
+        border: none;
+        background: transparent;
+        color: var(--accent);
+        font: inherit;
+        cursor: pointer;
     }
     .results {
         display: flex;
@@ -344,6 +366,9 @@
         }
         footer {
             display: none;
+        }
+        .close {
+            display: block;
         }
     }
 </style>
