@@ -14,6 +14,7 @@ It includes many debugging and inspection tools aimed to help you understand ass
 - Code completion and syntax highlighting
 - Run the program or step through it
 - Undo execution and breakpoints
+- Compile self-contained C/C++ into MIPS or RISC-V assembly, compare mapped source lines, and follow them while debugging
 - Built in devices like terminal with input/output interrupts, screen, keyboard and mouse
 - Inspect the value of each register and memory address to see which was changed with each instruction
 - Create new projects and manage them all in the webapp then share it with others through links or project files
@@ -41,6 +42,8 @@ The webapp comes with a [built-in documentation](https://asm-editor.specy.app/do
 ## Projects
 
 Projects are stored locally on your browser, and with the app also working offline, you can create and manage them all in the webapp.
+
+Create a `.c` or `.cpp` File in a MIPS, RISC-V, or RISC-V-64 Project and select **Compile** in the bottom control bar. Compilation sends that File and local headers to Compiler Explorer and requires an internet connection. Define a parameterless `int main()` without standard-library dependencies. The generated assembly becomes the Entry file; use **Build**, **Step**, **Run**, and **Undo** to explore it alongside its source. Matching colored sections connect each source line to its assembly blocks. Editing source or assembly removes the mapping, and replacing manually edited output asks for confirmation. Source maps last for the current session; recompilation restores them after reopening a Project. See the [source-compilation design](docs/design/source-compilation.md) for scope and future extensions.
 
 ## Embed the editor
 

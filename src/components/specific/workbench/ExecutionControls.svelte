@@ -7,7 +7,13 @@
      * edge in the bottom corners of the editor on a desktop, along its bottom edge on a phone, and
      * stuck under it on a tablet.
      */
-    import ExecutionDock from '$cmp/specific/project/ExecutionDock.svelte'
+    import ExecutionDock, { type DockCompilation } from '$cmp/specific/project/ExecutionDock.svelte'
+    import {
+        isCompilationTarget,
+        OPTIMIZATIONS,
+        sourceLanguage,
+        type Optimization
+    } from '$lib/sourceCompilation/records'
     import { useWorkbench } from './workbenchContext'
 
     interface Props {
@@ -19,6 +25,33 @@
 
     const { session } = useWorkbench()
     const emulator = session.emulator
+    const compilation = $derived.by<DockCompilation | undefined>(() => {
+        if (!session.compilablePath) return undefined
+        const supported = isCompilationTarget(session.project.language)
+        return {
+            label: session.compiling
+                ? 'Compiling…'
+                : session.displayedCompilation
+                  ? 'Recompile'
+                  : 'Compile',
+            disabled: session.sourceCompileDisabled,
+            busy: session.compiling,
+            warning: supported
+                ? undefined
+                : `Source compilation is unavailable for ${session.project.language}.`,
+            optimization: supported
+                ? {
+                      value: session.sourceOptimization,
+                      levels: OPTIMIZATIONS,
+                      onChange: (value) => {
+                          session.sourceOptimization = value as Optimization
+                      }
+                  }
+                : undefined,
+            onCompile: () => void session.compileDisplayedSource(),
+            onCancel: () => session.cancelSourceCompilation()
+        }
+    })
 
     function test() {
         if (session.debugSession) session.stop()
@@ -29,6 +62,8 @@
 <ExecutionDock
     {fill}
     {attached}
+    {compilation}
+    compileOnly={!!sourceLanguage(session.displayedPath)}
     debugging={session.debugSession}
     building={session.building}
     running={session.running}

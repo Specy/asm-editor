@@ -10,6 +10,21 @@
         tone?: 'red' | 'green'
         onClick: () => void
     }
+
+    /** Source compilation uses the same tray as assembly Build. */
+    export interface DockCompilation {
+        label: string
+        disabled: boolean
+        busy: boolean
+        warning?: string
+        optimization?: {
+            value: string
+            levels: readonly string[]
+            onChange: (value: string) => void
+        }
+        onCompile: () => void
+        onCancel: () => void
+    }
 </script>
 
 <script lang="ts">
@@ -31,6 +46,8 @@
     import FaStop from '~icons/fa-solid/stop'
     import FaUndo from '~icons/fa-solid/undo'
     import FaFlask from '~icons/fa-solid/flask'
+    import FaCode from '~icons/fa-solid/code'
+    import FaSpinner from '~icons/fa-solid/spinner'
 
     interface Props {
         /** Built: Stop, Run, Undo and Step in place of Build. */
@@ -51,6 +68,9 @@
          */
         attached?: boolean
         actions?: DockAction[]
+        compilation?: DockCompilation
+        /** The displayed File is source, so Compile takes the place of Build. */
+        compileOnly?: boolean
         onBuild: () => void
         onStop: () => void
         onRun: () => void
@@ -72,6 +92,8 @@
         fill = false,
         attached = false,
         actions = [],
+        compilation,
+        compileOnly = false,
         onBuild,
         onStop,
         onRun,
@@ -94,22 +116,72 @@
 >
     <div class="toolbar">
         {#if !debugging}
-            <button
-                type="button"
-                class="tool primary"
-                onclick={onBuild}
-                disabled={buildDisabled || building || running}
-                title="Assemble the program and start debugging it"
-            >
-                <Icon size={1}>
-                    {#if building}
-                        <FaRegClock />
-                    {:else}
-                        <FaWrench />
-                    {/if}
-                </Icon>
-                <span class="label">Build</span>
-            </button>
+            {#if !compileOnly}
+                <button
+                    type="button"
+                    class="tool primary"
+                    onclick={onBuild}
+                    disabled={buildDisabled || building || running}
+                    title="Assemble the program and start debugging it"
+                >
+                    <Icon size={1}>
+                        {#if building}
+                            <FaRegClock />
+                        {:else}
+                            <FaWrench />
+                        {/if}
+                    </Icon>
+                    <span class="label">Build</span>
+                </button>
+            {/if}
+            {#if compilation}
+                <button
+                    type="button"
+                    class="tool compile"
+                    class:primary={compileOnly}
+                    class:emphasis={!compileOnly}
+                    disabled={compilation.disabled}
+                    aria-label={compilation.label}
+                    aria-busy={compilation.busy}
+                    title="Compile source and local headers with Compiler Explorer"
+                    onclick={compilation.onCompile}
+                >
+                    <Icon size={0.9}>
+                        {#if compilation.busy}
+                            <span class="busy-spinner"><FaSpinner /></span>
+                        {:else}
+                            <FaCode />
+                        {/if}
+                    </Icon>
+                    <span class="label">{compilation.label}</span>
+                </button>
+                {#if compilation.warning}
+                    <span class="compile-warning" role="status">{compilation.warning}</span>
+                {:else if compilation.optimization}
+                    <select
+                        class="tool optimization"
+                        aria-label="Optimization"
+                        title="Compiler optimization"
+                        value={compilation.optimization.value}
+                        disabled={compilation.busy || compilation.disabled}
+                        onchange={(event) =>
+                            compilation?.optimization?.onChange(event.currentTarget.value)}
+                    >
+                        {#each compilation.optimization.levels as level (level)}
+                            <option value={level}>-O{level}</option>
+                        {/each}
+                    </select>
+                {/if}
+                {#if compilation.busy}
+                    <button
+                        type="button"
+                        class="tool"
+                        title="Cancel source compilation"
+                        aria-label="Cancel source compilation"
+                        onclick={compilation.onCancel}>Cancel</button
+                    >
+                {/if}
+            {/if}
         {:else}
             <button type="button" class="tool" onclick={onStop} title="End the Debug session">
                 <Icon size={0.8}>
@@ -313,6 +385,32 @@
         margin-left: 0.45rem;
     }
 
+    .optimization {
+        font-size: 0.85rem;
+        border-left: 1px solid var(--dock-line);
+        border-radius: 0;
+        background: var(--tray);
+    }
+
+    .compile-warning {
+        max-width: 17rem;
+        padding: 0 0.45rem;
+        color: var(--hint);
+        font-size: 0.7rem;
+        line-height: 1.2;
+    }
+
+    .busy-spinner {
+        display: flex;
+        animation: compile-spin 1s linear infinite;
+    }
+
+    @keyframes compile-spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
     /* in the compact layouts one tray across the bar, every button an equal share of it, Test and
        the caller's actions with the others behind a divider */
     .fill {
@@ -337,6 +435,10 @@
         .tool {
             flex: 1 1 0;
             min-width: 0;
+        }
+
+        .optimization {
+            flex: 0 0 auto;
         }
     }
 

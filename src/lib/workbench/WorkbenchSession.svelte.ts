@@ -49,6 +49,21 @@ import {
     shortcutsStore
 } from '$stores/shortcutsStore'
 import { toast } from '$stores/toastStore'
+import { Prompt } from '$stores/promptStore.svelte'
+import { compileProjectSource } from '$lib/sourceCompilation/compileProjectSource'
+import { SourceCompilationError } from '$lib/sourceCompilation/compilerExplorer'
+import { colorSourceMap, type SourceMapColoring } from '$lib/sourceCompilation/sourceColoring'
+import {
+    compilationStatus,
+    editorFileLanguage,
+    fileFingerprint,
+    isCompilationTarget,
+    sourceLanguage,
+    type CompilationRecord,
+    type CompilationSourceMap,
+    type Optimization,
+    type SourceLocation
+} from '$lib/sourceCompilation/records'
 import { serializer } from '$lib/json'
 import { createDebouncer, formatTime } from '$lib/utils'
 import {
@@ -125,6 +140,11 @@ export class WorkbenchSession {
 
     running = $state(false)
     building = $state(false)
+    compiling = $state(false)
+    sourceOptimization = $state<Optimization>('0')
+    sourceDiagnostics = $state.raw<Diagnostic[]>([])
+    mappingSelection = $state.raw<SourceLocation | undefined>()
+    private compilationController: AbortController | undefined
     /**
      * A test run is in flight: the Emulator builds and runs every Testcase, and none of those is a
      * program exit or a Build of the person's own. Not reactive: the effects that ask read it at the
@@ -174,8 +194,53 @@ export class WorkbenchSession {
             this.displayedFile?.encoding === 'plain' ? this.displayedFile.content : ''
         )
         this.displayedLanguage = $derived(
-            /\.(?:c|h)$/i.test(this.displayedPath) ? ('c' as const) : this.project.language
+            editorFileLanguage(this.displayedPath, this.project.language)
         )
+        this.displayedCompilation = $derived(
+            this.project.compilations.find((record) => record.outputPath === this.displayedPath)
+        )
+        this.compilablePath = $derived(
+            sourceLanguage(this.displayedPath)
+                ? this.displayedPath
+                : this.displayedCompilation?.sourcePath
+        )
+        this.sourceCompileDisabled = $derived(
+            this.host.readonly ||
+                this.compiling ||
+                this.building ||
+                this.running ||
+                this.fileSystemLocked ||
+                !isCompilationTarget(this.project.language) ||
+                !this.compilablePath ||
+                this.project.files[this.compilablePath]?.encoding !== 'plain'
+        )
+        this.compilationMap = $derived.by<CompilationSourceMap | undefined>(() => {
+            const map = Object.prototype.hasOwnProperty.call(
+                this.project.sourceMaps,
+                this.displayedPath
+            )
+                ? this.project.sourceMaps[this.displayedPath]
+                : undefined
+            return map && map.outputFingerprint === fileFingerprint(this.displayedFile)
+                ? map
+                : undefined
+        })
+        this.compilationNotice = $derived.by(() => {
+            const record = this.displayedCompilation
+            if (!record) return ''
+            const status = compilationStatus(record, this.project.files, this.project.language)
+            if (status.stale)
+                return 'Stale assembly: source or headers changed. Recompile to update this File.'
+            if (status.edited)
+                return 'Assembly edited manually. The Source map was removed; recompilation will replace your edits.'
+            if (!this.compilationMap)
+                return 'Source mapping is not available in this session. Recompile to restore the split view.'
+            return ''
+        })
+        this.mappingColors = $derived.by<SourceMapColoring | undefined>(() => {
+            const map = this.compilationMap
+            return map ? colorSourceMap(map) : undefined
+        })
         this.displayedModelIdentity = $derived.by<ProjectModelIdentity | undefined>(() => {
             if (!this.displayedPath) return undefined
             return this.sourceSelection.sourceKind === 'build'
@@ -216,12 +281,15 @@ export class WorkbenchSession {
         })
         this.activeDiagnostics = $derived(
             this.sourceView === 'live'
-                ? this.liveLanguageDiagnostics
+                ? [...this.liveLanguageDiagnostics, ...this.sourceDiagnostics]
                 : this.emulator.compilerDiagnostics
         )
         this.liveBuildHasErrors = $derived(
             this.languageAnalysis?.diagnostics.some(
-                (diagnostic) => diagnostic.severity === 'error'
+                (diagnostic) =>
+                    diagnostic.severity === 'error' &&
+                    editorFileLanguage(diagnostic.location.path, this.project.language) ===
+                        this.project.language
             ) ?? false
         )
         this.displayedDiagnostics = $derived(
@@ -235,7 +303,10 @@ export class WorkbenchSession {
         this.displayedAnalysisStatus = $derived(this.analysisStatus?.[this.displayedPath])
         this.languageErrorCount = $derived(
             this.languageAnalysis?.diagnostics.filter(
-                (diagnostic) => diagnostic.severity === 'error'
+                (diagnostic) =>
+                    diagnostic.severity === 'error' &&
+                    editorFileLanguage(diagnostic.location.path, this.project.language) ===
+                        this.project.language
             ).length ?? 0
         )
         this.diagnosticCounts = $derived.by(() => {
@@ -280,7 +351,9 @@ export class WorkbenchSession {
             this.host.readonly || this.emulator.terminated || this.emulator.interrupt !== undefined
         )
         this.undoDisabled = $derived(this.host.readonly || this.emulator.interrupt !== undefined)
-        this.buildDisabled = $derived(this.host.readonly || this.liveBuildHasErrors)
+        this.buildDisabled = $derived(
+            this.host.readonly || this.liveBuildHasErrors || this.compiling
+        )
         this.breakpointsEditable = $derived(
             canEditProjectBreakpoints(this.sourceSelection, {
                 readonly: this.host.readonly,
@@ -305,6 +378,25 @@ export class WorkbenchSession {
                 ? this.emulator.line
                 : -1
         )
+        this.executionSourceLocation = $derived(
+            this.compilationMap?.lines[this.highlightedLine] ?? undefined
+        )
+        this.mappedSourcePath = $derived(
+            this.mappingSelection?.path ??
+                this.executionSourceLocation?.path ??
+                this.compilationMap?.sourcePath ??
+                ''
+        )
+        this.mappedAssemblyLines = $derived.by(() => {
+            const selected = this.mappingSelection
+            return selected
+                ? (this.compilationMap?.lines ?? []).flatMap((location, line) =>
+                      location?.path === selected.path && location.line === selected.line
+                          ? [line]
+                          : []
+                  )
+                : []
+        })
         this.editorDisabled = $derived(
             this.host.readonly ||
                 this.running ||
@@ -319,6 +411,26 @@ export class WorkbenchSession {
         this.tabs = initialTabs(start)
         this.previousBuildSources = emulator.buildSources
         this.pc = makeRegister('PC', emulator.pc, emulator.systemSize)
+
+        $effect(() => {
+            const path = this.displayedPath
+            const record = this.project.compilations.find(
+                (item) => item.sourcePath === path || item.outputPath === path
+            )
+            untrack(() => {
+                this.sourceOptimization = record?.optimization ?? '0'
+                this.mappingSelection = undefined
+            })
+        })
+        $effect(() => {
+            const map = this.compilationMap
+            const executionLocation = this.executionSourceLocation
+            untrack(() => {
+                //Keep the selected correspondence through Build's unmapped startup wrapper.
+                //Execution takes over once an instruction has a source location.
+                if (!map || executionLocation) this.mappingSelection = undefined
+            })
+        })
 
         //Testcases are edited in place, so a change is noticed by watching their content; the first
         //run only remembers what was loaded
@@ -406,7 +518,16 @@ export class WorkbenchSession {
     declare readonly debugSession: boolean
     declare readonly displayedFile: ProjectFile | undefined
     declare readonly displayedCode: string
-    declare readonly displayedLanguage: Project['language'] | 'c'
+    declare readonly displayedLanguage: Project['language'] | 'c' | 'cpp'
+    declare readonly displayedCompilation: CompilationRecord | undefined
+    declare readonly compilablePath: string | undefined
+    declare readonly sourceCompileDisabled: boolean
+    declare readonly compilationMap: CompilationSourceMap | undefined
+    declare readonly compilationNotice: string
+    declare readonly mappingColors: SourceMapColoring | undefined
+    declare readonly executionSourceLocation: SourceLocation | undefined
+    declare readonly mappedSourcePath: string
+    declare readonly mappedAssemblyLines: number[]
     declare readonly displayedModelIdentity: ProjectModelIdentity | undefined
     declare readonly displayedModelKey: string
     declare readonly retainedModelKeys: string[]
@@ -485,9 +606,13 @@ export class WorkbenchSession {
             if (snapshot && !pending) {
                 const current = untrack(() => this.sourceInput)
                 this.languageAnalysis = snapshot
-                this.liveLanguageDiagnostics = snapshot.diagnostics.map((diagnostic) =>
-                    languageDiagnosticToDiagnostic(diagnostic, current)
-                )
+                this.liveLanguageDiagnostics = snapshot.diagnostics
+                    .filter(
+                        (diagnostic) =>
+                            editorFileLanguage(diagnostic.location.path, this.project.language) ===
+                            this.project.language
+                    )
+                    .map((diagnostic) => languageDiagnosticToDiagnostic(diagnostic, current))
             }
             this.languageAnalysisPending = pending
         })
@@ -513,6 +638,7 @@ export class WorkbenchSession {
             session.dispose()
             this.languageSession = undefined
             this.emulator.dispose()
+            this.compilationController?.abort()
         }
     }
 
@@ -724,6 +850,7 @@ export class WorkbenchSession {
     }
 
     fileRenamed(from: string, to: string) {
+        this.project.renameCompilationFile(from, to)
         this.moveFileBreakpoints(from, to)
         this.tabs = renameTab(this.tabs, from, to)
         if (this.displayedPath === from) this.selectFile(to)
@@ -768,12 +895,71 @@ export class WorkbenchSession {
 
     // ---- execution -----------------------------------------------------------------------------
 
+    selectMappedAssemblyLine(line: number) {
+        this.mappingSelection = this.compilationMap?.lines[line] ?? undefined
+    }
+
+    selectMappedSourceLine(path: string, line: number) {
+        this.mappingSelection = { path, line }
+        const assemblyLine =
+            this.compilationMap?.lines.findIndex(
+                (location) => location?.path === path && location.line === line
+            ) ?? -1
+        if (assemblyLine >= 0) this.editor?.revealLineInCenter(assemblyLine + 1)
+    }
+
+    cancelSourceCompilation() {
+        this.compilationController?.abort()
+    }
+
+    async compileDisplayedSource() {
+        const path = this.compilablePath
+        if (this.sourceCompileDisabled || !path) return
+        const controller = new AbortController()
+        this.compilationController = controller
+        const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(45_000)])
+        this.compiling = true
+        this.sourceDiagnostics = []
+        try {
+            const result = await compileProjectSource(this.project, path, this.sourceOptimization, {
+                signal,
+                confirm: (question) => {
+                    const pending = Prompt.confirm(question)
+                    const id = Prompt.id
+                    const cancel = () => {
+                        if (Prompt.id === id && Prompt.promise) Prompt.cancel()
+                    }
+                    signal.addEventListener('abort', cancel, { once: true })
+                    return pending.finally(() => signal.removeEventListener('abort', cancel))
+                }
+            })
+            if (!result) return
+            this.sourceDiagnostics = result.diagnostics
+            this.show(liveSource(result.record.outputPath))
+            this.changed()
+        } catch (error) {
+            if (controller.signal.aborted) return
+            if (error instanceof SourceCompilationError) this.sourceDiagnostics = error.diagnostics
+            if (this.sourceDiagnostics.length) this.bottomTab = 'problems'
+            toast.error(
+                signal.aborted
+                    ? 'Source compilation timed out. Try again.'
+                    : error instanceof SourceCompilationError
+                      ? error.message
+                      : 'Could not reach Compiler Explorer. Check your connection and try again.'
+            )
+        } finally {
+            this.compiling = false
+            this.compilationController = undefined
+        }
+    }
+
     private appendLog(draft: LogDraft) {
         this.log = appendLog(this.log, draft, ++this.logId, Date.now())
     }
 
     async build() {
-        if (this.host.readonly || this.building || this.running) return
+        if (this.host.readonly || this.building || this.running || this.compiling) return
         if (this.fileSystemLocked) {
             //The Build button is hidden in this state, but the shortcut is not, and returning here
             //without a word left the key looking broken.
@@ -824,7 +1010,7 @@ export class WorkbenchSession {
      * keeps Step and Undo out of a run they would re-enter the Core inside of.
      */
     async run() {
-        if (this.building || this.running) return
+        if (this.building || this.running || this.compiling) return
         this.running = true
         this.testcasesResult = []
         try {
@@ -887,7 +1073,7 @@ export class WorkbenchSession {
     }
 
     async test() {
-        if (this.building || this.running) return
+        if (this.building || this.running || this.compiling) return
         this.running = true
         //a frame for the buttons to show the run before the Cores take the thread
         await new Promise((resolve) => setTimeout(resolve, 50))

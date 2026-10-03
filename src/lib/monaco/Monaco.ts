@@ -47,7 +47,7 @@ class MonacoLoader {
     }
 
     async registerLanguage(lang: AvailableLanguages | AvailableProgrammingLanguages) {
-        if (lang === 'c') return
+        if (lang === 'c' || lang === 'cpp') return
         if (this.registeredLanguages.has(lang)) return
         const pending = this.registeringLanguages.get(lang)
         if (pending) return pending

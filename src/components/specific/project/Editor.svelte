@@ -25,6 +25,7 @@
     import { zeroBasedLineToMonaco } from '$lib/languages/service/monacoConversions'
     import { setModelBuildArtifacts } from '$lib/monaco/assemblyInsights'
     import { keepHoverReachable } from '$lib/monaco/hoverReachability'
+    import type { EditorLineColoring } from '$lib/monaco/lineColoring'
 
     interface Props {
         disabled?: boolean
@@ -48,6 +49,10 @@
         /** Model identities still owned by the Project; omitted outside the Project File editor. */
         retainedModelKeys?: readonly string[]
         highlightedLine?: number
+        /** Related source/assembly lines selected through a Source map. */
+        mappedLines?: readonly number[]
+        /** Matching source/assembly section backgrounds and gutter markers. */
+        lineColoring?: EditorLineColoring
         hasError?: boolean
         language: AvailableLanguages | AvailableProgrammingLanguages
         diagnostics?: Diagnostic[]
@@ -72,6 +77,8 @@
         modelIdentity,
         retainedModelKeys,
         highlightedLine = -1,
+        mappedLines = [],
+        lineColoring,
         hasError = false,
         language,
         diagnostics = [],
@@ -128,6 +135,7 @@
         /** A change to any Project File's model, including one the editor is not showing. */
         fileChange: { path: string; value: string }
         breakpointPress: number
+        lineSelect: number
     }>()
     let el: HTMLDivElement | null = $state(null)
 
@@ -150,7 +158,7 @@
         const initialModel = createModel(
             loadedMonaco,
             mounted.value,
-            editorLanguage.toLowerCase(),
+            editorLanguage === 'c' ? 'cpp' : editorLanguage.toLowerCase(),
             mounted.identity
         )
         initialModel.setEOL(0)
@@ -204,6 +212,11 @@
         }
 
         toDispose.push(
+            mountedEditor.onDidChangeCursorPosition((event) => {
+                //Model switches and debugger navigation are not a new user source selection.
+                if (applyingExternalValue || event.source === 'api') return
+                dispatcher('lineSelect', event.position.lineNumber - 1)
+            }),
             mountedEditor.onMouseDown((e) => {
                 if (
                     breakpointsEditable &&
@@ -285,7 +298,7 @@
                 const model = createModel(
                     currentMonaco,
                     source.value,
-                    language.toLowerCase(),
+                    language === 'c' ? 'cpp' : language.toLowerCase(),
                     source.identity
                 )
                 model.setEOL(0)
@@ -422,9 +435,47 @@
     })
 
     $effect(() => {
+        const currentEditor = editor
+        const coloring = lineColoring
+        if (!currentEditor || !coloring?.ranges.length) return
+        //The container survives model changes. Monaco replaces its inner view when Build switches
+        //from live assembly to its snapshot, and also resets that view's classes on focus/theme.
+        const root = currentEditor.getContainerDomNode()
+        const scope = `compiled-colors-${currentEditor.getId().replace(/[^a-zA-Z0-9_-]/g, '-')}`
+        root.dataset.sourceMapColorScope = scope
+        const style = document.createElement('style')
+        style.dataset.sourceMapColors = scope
+        const used = new Set(coloring.ranges.map((range) => range.colorIndex))
+        style.textContent = [...used]
+            .map(
+                (index) =>
+                    `[data-source-map-color-scope="${scope}"] .compiled-section-color-${index} { --compiled-section-color: ${coloring.colors[index]}; }`
+            )
+            .join('\n')
+        document.head.appendChild(style)
+        return () => {
+            style.remove()
+            delete root.dataset.sourceMapColorScope
+        }
+    })
+
+    $effect(() => {
         const currentMonaco = monacoInstance
         if (activeModelKey && editor && decorations && currentMonaco) {
             decorations.set([
+                ...(lineColoring?.ranges ?? []).map((range) => ({
+                    range: new currentMonaco.Range(range.startLine + 1, 1, range.endLine + 1, 1),
+                    options: {
+                        className: `compiled-section compiled-section-color-${range.colorIndex}`,
+                        linesDecorationsClassName: `compiled-section-marker compiled-section-color-${range.colorIndex}`,
+                        isWholeLine: true,
+                        zIndex: 0
+                    }
+                })),
+                ...mappedLines.map((line) => ({
+                    range: new currentMonaco.Range(line + 1, 1, line + 1, 1),
+                    options: { className: 'source-mapped-line', isWholeLine: true, zIndex: 1 }
+                })),
                 ...(highlightedLine >= 0
                     ? [
                           {
@@ -437,7 +488,8 @@
                               options: {
                                   className: hasError ? 'error-line' : 'selected-line',
                                   inlineClassName: 'selected-line-text',
-                                  isWholeLine: true
+                                  isWholeLine: true,
+                                  zIndex: 2
                               }
                           }
                       ]
@@ -542,6 +594,16 @@
 <div bind:this={el} class="editor"></div>
 
 <style lang="scss">
+    :global(.compiled-section) {
+        background-color: color-mix(in srgb, var(--compiled-section-color) 18%, transparent);
+    }
+    :global(.compiled-section-marker) {
+        border-left: 3px solid var(--compiled-section-color);
+        margin-left: 2px;
+    }
+    :global(.source-mapped-line) {
+        background-color: color-mix(in srgb, var(--accent) 15%, transparent);
+    }
     :global(.selected-line) {
         background-color: var(--accent);
         color: var(--accent-text);

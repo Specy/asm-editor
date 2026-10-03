@@ -131,6 +131,7 @@
                             ? undefined
                             : (name) => session.rename(name)}
                         files={project.files}
+                        language={project.language}
                         entry={project.entry}
                         fileSystem={project.fileSystem}
                         selectedPath={session.displayedPath}

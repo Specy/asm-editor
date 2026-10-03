@@ -13,6 +13,8 @@
     import { preferencesStore } from '$stores/preferencesStore.svelte'
     import FileTabs from './FileTabs.svelte'
     import ExecutionControls from './ExecutionControls.svelte'
+    import CompilationNotice from './CompilationNotice.svelte'
+    import MappedSourcePane from './MappedSourcePane.svelte'
     import { useWorkbench } from './workbenchContext'
 
     interface Props {
@@ -34,80 +36,94 @@
     {#if tabs}
         <FileTabs />
     {/if}
-    <div class="editor-frame" class:failed={emulator.errors.length > 0}>
-        <Editor
-            source={session.displayedModelIdentity
-                ? {
-                      key: session.displayedModelKey,
-                      value: session.displayedCode,
-                      identity: session.displayedModelIdentity
-                  }
-                : undefined}
-            modelKey={session.displayedModelKey}
-            modelIdentity={session.displayedModelIdentity}
-            retainedModelKeys={session.retainedModelKeys}
-            buildArtifacts={session.sourceView === 'snapshot'
-                ? emulator.buildArtifacts.filter(
-                      (artifact) => artifact.file === session.displayedPath
-                  )
-                : []}
-            viewZones={session.sourceView === 'snapshot' &&
-            preferencesStore.values.showPseudoInstructions.value
-                ? emulator.decorations
-                      .filter(
-                          (decoration) =>
-                              (decoration.file ?? emulator.buildSources?.entry) ===
-                              session.displayedPath
+    <CompilationNotice />
+    <div
+        class="editor-frame"
+        class:failed={emulator.errors.length > 0}
+        class:mapped={!!session.compilationMap}
+    >
+        {#if session.compilationMap}
+            <MappedSourcePane />
+        {/if}
+        <div class="assembly-pane">
+            <Editor
+                source={session.displayedModelIdentity
+                    ? {
+                          key: session.displayedModelKey,
+                          value: session.displayedCode,
+                          identity: session.displayedModelIdentity
+                      }
+                    : undefined}
+                modelKey={session.displayedModelKey}
+                modelIdentity={session.displayedModelIdentity}
+                retainedModelKeys={session.retainedModelKeys}
+                buildArtifacts={session.sourceView === 'snapshot'
+                    ? emulator.buildArtifacts.filter(
+                          (artifact) => artifact.file === session.displayedPath
                       )
-                      .map((decoration) => {
-                          return {
-                              afterLineNumber: decoration.belowLine,
-                              content: BelowLineContent,
-                              props: {
-                                  md: decoration.md,
-                                  note: decoration.note ?? '',
-                                  instructions: decoration.instructions,
-                                  language: session.displayedLanguage.toLowerCase(),
-                                  //`emulator.pc` is read inside the callback, not here: reading it
-                                  //while building this array would rebuild every zone on every
-                                  //step, remounting each component and shifting the layout
-                                  isCurrent: (address: bigint) => emulator.pc === address
+                    : []}
+                viewZones={session.sourceView === 'snapshot' &&
+                preferencesStore.values.showPseudoInstructions.value
+                    ? emulator.decorations
+                          .filter(
+                              (decoration) =>
+                                  (decoration.file ?? emulator.buildSources?.entry) ===
+                                  session.displayedPath
+                          )
+                          .map((decoration) => {
+                              return {
+                                  afterLineNumber: decoration.belowLine,
+                                  content: BelowLineContent,
+                                  props: {
+                                      md: decoration.md,
+                                      note: decoration.note ?? '',
+                                      instructions: decoration.instructions,
+                                      language: session.displayedLanguage.toLowerCase(),
+                                      //`emulator.pc` is read inside the callback, not here: reading it
+                                      //while building this array would rebuild every zone on every
+                                      //step, remounting each component and shifting the layout
+                                      isCurrent: (address: bigint) => emulator.pc === address
+                                  }
                               }
-                          }
-                      })
-                : []}
-            on:fileChange={(event) => session.fileEdited(event.detail.path, event.detail.value)}
-            on:breakpointPress={(event) => session.toggleBreakpoint(event.detail - 1)}
-            bind:editor={session.editor}
-            code={session.displayedCode}
-            breakpoints={session.displayedBreakpoints}
-            breakpointsEditable={session.breakpointsEditable}
-            diagnostics={session.displayedDiagnostics}
-            language={session.displayedLanguage}
-            highlightedLine={session.highlightedLine}
-            disabled={session.editorDisabled}
-            hasError={emulator.errors.length > 0}
-        />
-        {#if session.displayedFile?.encoding === 'base64'}
-            <div class="file-notice">
-                <h2>Binary file</h2>
-                <p>
-                    {session.displayedPath} is preserved as exact bytes and is not editable as text.
-                </p>
-            </div>
-        {:else if !session.displayedFile}
-            <div class="file-notice">
-                <h2>File not found</h2>
-                <p>
-                    {session.displayedPath || 'The configured Entry path'} does not currently name a File.
-                </p>
-            </div>
-        {/if}
-        {#if controls}
-            <div class="floating-controls">
-                <ExecutionControls attached {fill} />
-            </div>
-        {/if}
+                          })
+                    : []}
+                on:fileChange={(event) => session.fileEdited(event.detail.path, event.detail.value)}
+                on:breakpointPress={(event) => session.toggleBreakpoint(event.detail - 1)}
+                bind:editor={session.editor}
+                code={session.displayedCode}
+                breakpoints={session.displayedBreakpoints}
+                breakpointsEditable={session.breakpointsEditable}
+                diagnostics={session.displayedDiagnostics}
+                language={session.displayedLanguage}
+                highlightedLine={session.highlightedLine}
+                mappedLines={session.mappedAssemblyLines}
+                lineColoring={session.mappingColors?.assembly}
+                on:lineSelect={(event) => session.selectMappedAssemblyLine(event.detail)}
+                disabled={session.editorDisabled}
+                hasError={emulator.errors.length > 0}
+            />
+            {#if session.displayedFile?.encoding === 'base64'}
+                <div class="file-notice">
+                    <h2>Binary file</h2>
+                    <p>
+                        {session.displayedPath} is preserved as exact bytes and is not editable as text.
+                    </p>
+                </div>
+            {:else if !session.displayedFile}
+                <div class="file-notice">
+                    <h2>File not found</h2>
+                    <p>
+                        {session.displayedPath || 'The configured Entry path'} does not currently name
+                        a File.
+                    </p>
+                </div>
+            {/if}
+            {#if controls}
+                <div class="floating-controls">
+                    <ExecutionControls attached {fill} />
+                </div>
+            {/if}
+        </div>
     </div>
 </div>
 
@@ -128,6 +144,19 @@
         display: flex;
         flex: 1;
         min-height: 0;
+    }
+
+    .assembly-pane {
+        display: flex;
+        position: relative;
+        flex: 1;
+        min-width: 0;
+        min-height: 0;
+    }
+    @media (max-width: 700px) {
+        .editor-frame.mapped {
+            flex-direction: column;
+        }
     }
 
     /* the shadow Monaco draws under the top edge once the code is scrolled */

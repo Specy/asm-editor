@@ -114,7 +114,27 @@ The language of a text **File**, such as target-specific assembly, C, or plain t
 
 ## Self-contained program
 
-A program compiled from a higher-level **File language** for a **Target** without standard-library dependencies, using the startup and exit support supplied for that Target. Full language runtimes are outside the first source-compilation release.
+A program compiled from a higher-level **File language** for a **Target** without standard-library dependencies, using the startup and exit support supplied for that Target.
+
+## Source compilation
+
+The conversion of a selected higher-level **File** and its project-local headers into **Generated assembly** for the **Project**'s **Target**. Distinct from a Build, which assembles Files into a program for the **Emulator**.
+
+## Generated assembly
+
+An assembly **File** produced by **Source compilation** for the **Project**'s **Target**. Distinct from the machine code produced when a Build assembles it.
+
+## Compilation record
+
+Saved **Project** metadata identifying a **Source compilation**'s input Files and **Generated assembly** by their paths and content fingerprints. It retains the compilation's origin independently of its transient **Source map**.
+
+## Source map
+
+The correspondence between lines of **Generated assembly** and the higher-level **Files** used by its **Source compilation**, held as transient editor data belonging to the **Project**. Distinct from a Core's mapping between assembled instructions and assembly lines.
+
+## Stale assembly
+
+**Generated assembly** whose source File or a project-local header used to compile it has subsequently changed. Its contents remain available, but its Source map has been removed and the editor identifies it as stale.
 
 ## Project archive
 
