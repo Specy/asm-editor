@@ -62,6 +62,7 @@
 <ExecutionDock
     {fill}
     {attached}
+    roundedStart={!!session.compilationMap}
     {compilation}
     compileOnly={!!sourceLanguage(session.displayedPath)}
     debugging={session.debugSession}

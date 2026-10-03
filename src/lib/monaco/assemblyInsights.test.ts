@@ -166,8 +166,8 @@ describe('assembly Build hovers', () => {
                 position(line, 'move', 3) as never,
                 {} as never
             )
-            expect(markdown(result)).toContain('Address `0x1000` — machine code `70 01`')
-            expect(markdown(result)).toContain('Address `0x1002` — machine code `4e 75`')
+            expect(markdown(result)).toContain('Address `0x1000` Machine code `70 01`')
+            expect(markdown(result)).toContain('Address `0x1002` Machine code `4e 75`')
             expect(
                 await provider.provideHover?.(
                     model(line, uri) as never,
@@ -199,7 +199,7 @@ describe('assembly Build hovers', () => {
                 position(line, 'move') as never,
                 {} as never
             )
-            expect(markdown(result)).toContain('Address `0x1002` — machine code `bb`')
+            expect(markdown(result)).toContain('Address `0x1002` Machine code `bb`')
             expect(markdown(result)).not.toContain('0x1000')
         } finally {
             clearCurrent()

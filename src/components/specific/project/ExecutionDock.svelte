@@ -67,6 +67,8 @@
          * them: no shadow, and each tray rounded only at the corner that faces the code.
          */
         attached?: boolean
+        /** Round the start tray's top-left corner when it sits beside another editor. */
+        roundedStart?: boolean
         actions?: DockAction[]
         compilation?: DockCompilation
         /** The displayed File is source, so Compile takes the place of Build. */
@@ -91,6 +93,7 @@
         hasTests = false,
         fill = false,
         attached = false,
+        roundedStart = false,
         actions = [],
         compilation,
         compileOnly = false,
@@ -110,6 +113,7 @@
     class="execution-controls"
     class:fill
     class:attached
+    class:rounded-start={roundedStart}
     class:debugging
     class:with-end={debugging && hasEnd}
     class:with-actions={debugging && actions.length > 0}
@@ -139,7 +143,6 @@
                     type="button"
                     class="tool compile"
                     class:primary={compileOnly}
-                    class:emphasis={!compileOnly}
                     disabled={compilation.disabled}
                     aria-label={compilation.label}
                     aria-busy={compilation.busy}
@@ -158,6 +161,7 @@
                 {#if compilation.warning}
                     <span class="compile-warning" role="status">{compilation.warning}</span>
                 {:else if compilation.optimization}
+                    <div class="divider" aria-hidden="true"></div>
                     <select
                         class="tool optimization"
                         aria-label="Optimization"
@@ -387,8 +391,6 @@
 
     .optimization {
         font-size: 0.85rem;
-        border-left: 1px solid var(--dock-line);
-        border-radius: 0;
         background: var(--tray);
     }
 
@@ -443,10 +445,9 @@
     }
 
     /* tucked into the editor's corners: the trays keep only the edges that face the code, and the
-       host's own frame rounds the outer corners. Slightly raised: a shade lighter than the code,
-       and so well clear of the page around the editor, with a soft shadow over the code */
+       host's own frame rounds the outer corners. A translucent tint blurs the code beneath it. */
     .execution-controls.attached {
-        --tray: var(--execution-tray, color-mix(in srgb, var(--secondary) 72%, var(--tertiary)));
+        --tray: color-mix(in srgb, var(--primary) 80%, transparent);
     }
 
     .attached {
@@ -455,7 +456,16 @@
         .toolbar {
             border-bottom: none;
             border-radius: 0;
+            backdrop-filter: blur(4px);
             box-shadow: 0 -0.1rem 0.6rem rgb(0 0 0 / 0.25);
+        }
+
+        .optimization {
+            background: transparent;
+
+            option {
+                background: var(--background);
+            }
         }
 
         .toolbar:first-child {
@@ -473,7 +483,18 @@
         border: none;
         border-top: 1px solid var(--dock-line);
         border-radius: 0;
+        backdrop-filter: blur(4px);
         box-shadow: 0 -0.1rem 0.6rem rgb(0 0 0 / 0.25);
+    }
+
+    .attached.rounded-start {
+        .toolbar:first-child {
+            border-top-left-radius: 0.6rem;
+        }
+
+        &.fill {
+            border-top-left-radius: 0.6rem;
+        }
     }
 
     /* A narrow bar, beside an open panel and the debug column, in a documentation page or on a

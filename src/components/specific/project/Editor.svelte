@@ -51,7 +51,7 @@
         highlightedLine?: number
         /** Related source/assembly lines selected through a Source map. */
         mappedLines?: readonly number[]
-        /** Matching source/assembly section backgrounds and gutter markers. */
+        /** Matching source/assembly section backgrounds. */
         lineColoring?: EditorLineColoring
         hasError?: boolean
         language: AvailableLanguages | AvailableProgrammingLanguages
@@ -123,6 +123,7 @@
     let ownEditor: monaco.editor.IStandaloneCodeEditor | undefined
     let applyingExternalValue = false
     let overflowWidgets: HTMLDivElement | null = null
+    let viewZoneSelections = $state.raw<{ line: number; domNode: HTMLElement }[]>([])
     //Plain Maps, not reactive ones: nothing renders from them, and the effect that reconciles the
     //models both reads and writes them, which with reactive maps made it re-run on its own writes.
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- see above; no tracked consumer.
@@ -381,9 +382,14 @@
     $effect(() => {
         if (activeModelKey && editor && viewZones.length > 0) {
             const viewZoneEditor = editor
+            const coloring = lineColoring
             let currentViewZones = [] as {
                 id: string
                 domNode: HTMLElement
+                wrapper: HTMLElement
+                marginDomNode?: HTMLElement
+                line: number
+                selection: HTMLElement
                 observer: ResizeObserver
                 component: Record<string, unknown>
             }[]
@@ -391,21 +397,36 @@
             viewZoneEditor.changeViewZones(function (changeAccessor) {
                 viewZones.forEach((zone) => {
                     const domNode = document.createElement('div')
+                    const line = zone.afterLineNumber - 1
+                    const section = coloring?.ranges.find(
+                        (range) => range.startLine <= line && range.endLine >= line
+                    )
+                    let marginDomNode: HTMLElement | undefined
+                    if (section) {
+                        //Expansion rows and their gutter belong to the original assembly section.
+                        domNode.className = `compiled-section compiled-section-zone compiled-section-color-${section.colorIndex}`
+                        marginDomNode = document.createElement('div')
+                        marginDomNode.className = `compiled-section-margin compiled-section-color-${section.colorIndex}`
+                    }
+                    const selection = document.createElement('div')
+                    selection.className = 'view-zone-selection'
                     const wrapper = document.createElement('div')
+                    viewZoneEditor.applyFontInfo(wrapper)
                     const Component = zone.content
                     const props = zone.props
                     const component = mount(Component, {
                         target: wrapper,
                         props
                     })
-                    domNode.appendChild(wrapper)
+                    domNode.append(selection, wrapper)
 
                     const id = changeAccessor.addZone({
                         afterLineNumber: zone.afterLineNumber,
                         get heightInPx() {
                             return wrapper.getBoundingClientRect().height
                         },
-                        domNode
+                        domNode,
+                        marginDomNode
                     })
                     const observer = new ResizeObserver(() => {
                         const height = wrapper.getBoundingClientRect().height
@@ -415,14 +436,35 @@
                         })
                     })
                     observer.observe(wrapper)
-                    currentViewZones.push({ id, domNode, observer, component })
+                    currentViewZones.push({
+                        id,
+                        domNode,
+                        wrapper,
+                        marginDomNode,
+                        line,
+                        selection,
+                        observer,
+                        component
+                    })
                 })
             })
+            const fontOption = monacoInstance?.editor.EditorOption.fontInfo
+            const fontListener = viewZoneEditor.onDidChangeConfiguration((event) => {
+                if (fontOption !== undefined && !event.hasChanged(fontOption)) return
+                currentViewZones.forEach((zone) => viewZoneEditor.applyFontInfo(zone.wrapper))
+            })
+            viewZoneSelections = currentViewZones.map((zone) => ({
+                line: zone.line,
+                domNode: zone.selection
+            }))
             return () => {
+                fontListener.dispose()
+                viewZoneSelections = []
                 currentViewZones.forEach((zone) => {
                     zone.observer.disconnect()
                     void unmount(zone.component)
                     zone.domNode.remove()
+                    zone.marginDomNode?.remove()
                 })
                 if (destroyed) return
                 viewZoneEditor.changeViewZones((changeAccessor) => {
@@ -431,6 +473,13 @@
                     })
                 })
             }
+        }
+    })
+
+    $effect(() => {
+        //Paint selection beneath transparent expansion content without remounting its rows.
+        for (const zone of viewZoneSelections) {
+            zone.domNode.classList.toggle('source-mapped-line', mappedLines.includes(zone.line))
         }
     })
 
@@ -468,7 +517,6 @@
                     options: {
                         className: `compiled-section compiled-section-color-${range.colorIndex}`,
                         marginClassName: `compiled-section-margin compiled-section-color-${range.colorIndex}`,
-                        linesDecorationsClassName: `compiled-section-marker compiled-section-color-${range.colorIndex}`,
                         isWholeLine: true,
                         zIndex: 0
                     }
@@ -598,12 +646,13 @@
     :global(.compiled-section, .compiled-section-margin) {
         background-color: color-mix(in srgb, var(--compiled-section-color) 18%, transparent);
     }
-    :global(.compiled-section-marker) {
-        border-left: 3px solid var(--compiled-section-color);
-        margin-left: 2px;
-    }
     :global(.source-mapped-line) {
         background-color: color-mix(in srgb, var(--accent) 15%, transparent);
+    }
+    :global(.view-zone-selection) {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
     }
     :global(.selected-line) {
         background-color: var(--accent);

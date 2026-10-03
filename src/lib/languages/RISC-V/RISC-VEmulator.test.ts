@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { RISCVEmulator } from '$lib/languages/RISC-V/RISC-VEmulator.svelte'
 import {
     MARS_INTERRUPT_ENABLE_BIT,
@@ -776,6 +776,68 @@ main:
         expect(result?.passed).toBe(true)
         expect(emulator.line).toBe(CALLS_BELOW_EXIT)
     })
+})
+
+describe('RISC-V instruction Undo', () => {
+    const CALLS = `.text
+.globl main
+main:
+    call __asm_editor_main
+    li a7, 93
+    ecall
+fibonacci:
+    addi a0, a0, 1
+    jr ra
+__asm_editor_main:
+    addi sp, sp, -16
+    sw ra, 12(sp)
+    li a0, 5
+    call fibonacci
+    lw ra, 12(sp)
+    addi sp, sp, 16
+    jr ra
+`
+
+    it.each(['RISC-V', 'RISC-V-64'] as const)(
+        'restores each call and return in one Undo on %s',
+        async (language) => {
+            // Force a new clock sample on every step, including jumps. Otherwise this bug depends
+            // on whether two steps happen within the same millisecond.
+            vi.useFakeTimers({ toFake: ['Date'] })
+            let now = 1_700_000_000_000
+            vi.setSystemTime(now)
+            const emulator = RISCVEmulator(CALLS, { language, display: SMALL })
+            const registers = () => emulator.registers.map(({ name, value }) => ({ name, value }))
+            const snapshots: {
+                pc: bigint
+                line: number
+                registers: ReturnType<typeof registers>
+            }[] = []
+            try {
+                await emulator.check()
+                await emulator.compile(200, CALLS)
+                while (!emulator.terminated && snapshots.length < 30) {
+                    snapshots.push({ pc: emulator.pc, line: emulator.line, registers: registers() })
+                    vi.setSystemTime((now += 2))
+                    await emulator.step()
+                    expect(emulator._getUndoHistory(200)).toHaveLength(snapshots.length)
+                }
+                expect(emulator.errors).toEqual([])
+                expect(emulator.terminated).toBe(true)
+                for (const snapshot of snapshots.reverse()) {
+                    expect(emulator.undo(1)).toBe(1)
+                    expect(emulator.pc).toBe(snapshot.pc)
+                    expect(emulator.line).toBe(snapshot.line)
+                    expect(registers()).toEqual(snapshot.registers)
+                }
+                expect(emulator.canUndo).toBe(false)
+                expect(emulator.undo(1)).toBe(0)
+            } finally {
+                emulator.dispose()
+                vi.useRealTimers()
+            }
+        }
+    )
 })
 
 /**

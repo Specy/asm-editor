@@ -53,7 +53,7 @@
     })
 </script>
 
-<div class="below-line-content">
+<div class="below-line-content" class:assembled={!!instructions}>
     {#if instructions}
         <div class="generated-code">
             <!-- The address is deliberately not shown: it repeats for every expanded instruction
@@ -86,12 +86,13 @@
 <style lang="scss">
     .below-line-content {
         position: relative;
-        background-color: rgba(var(--RGB-tertiary), 0.3);
-        //border-top: 0.1rem solid rgba(var(--RGB-accent), 0.5);
-        //border-bottom: 0.1rem solid rgba(var(--RGB-accent), 0.5);
+        background: transparent;
         border-left: solid 1px var(--wb-line, #404040);
         padding: 0.1rem 0;
-        font-size: 1rem;
+    }
+
+    .assembled {
+        border-block: 1px solid var(--wb-line, #404040);
     }
 
     .note {
@@ -107,14 +108,19 @@
     .generated-code {
         //no horizontal padding: column zero of a row has to be column one of the Editor, so the
         //indent carried in the text is what lines an expansion up with its source instruction
-        padding: 0.2rem 0;
+        padding: 0;
         overflow-x: auto;
-        background: var(--secondary);
-        font-family: 'Fira Mono', monospace;
+        background: transparent;
+        font: inherit;
         white-space: pre;
+
+        code {
+            font: inherit;
+        }
 
         > div {
             position: relative;
+            line-height: inherit;
 
             //the marker is drawn over the row rather than inset into it, so being the executing
             //instruction does not shift the text sideways

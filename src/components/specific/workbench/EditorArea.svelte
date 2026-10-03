@@ -77,7 +77,7 @@
                             min={minPaneWidth}
                             max={paneWidth - minPaneWidth}
                             label="Resize source and assembly editors"
-                            style="--splitter-size: 1px; --splitter-line: var(--wb-line);"
+                            style="--splitter-size: 0.25rem; --splitter-line: transparent;"
                             onResize={(width) => {
                                 if (paneWidth > 0) sourceRatio = width / paneWidth
                             }}

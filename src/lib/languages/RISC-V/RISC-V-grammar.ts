@@ -47,7 +47,7 @@ export const RISCVLanguage = <languages.IMonarchLanguage>{
                 'variable.predefined'
             ],
             [
-                /[.a-zA-Z_]\w*/,
+                /[.a-zA-Z_][\w.]*/,
                 {
                     cases: {
                         this: 'variable.predefined',
