@@ -467,6 +467,7 @@
                     range: new currentMonaco.Range(range.startLine + 1, 1, range.endLine + 1, 1),
                     options: {
                         className: `compiled-section compiled-section-color-${range.colorIndex}`,
+                        marginClassName: `compiled-section-margin compiled-section-color-${range.colorIndex}`,
                         linesDecorationsClassName: `compiled-section-marker compiled-section-color-${range.colorIndex}`,
                         isWholeLine: true,
                         zIndex: 0
@@ -594,7 +595,7 @@
 <div bind:this={el} class="editor"></div>
 
 <style lang="scss">
-    :global(.compiled-section) {
+    :global(.compiled-section, .compiled-section-margin) {
         background-color: color-mix(in srgb, var(--compiled-section-color) 18%, transparent);
     }
     :global(.compiled-section-marker) {

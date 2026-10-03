@@ -2,6 +2,17 @@ import type { AvailableLanguages } from './Project.svelte'
 
 export const PAGE_SIZE = 16 * 16
 export const PAGE_ELEMENTS_PER_ROW = Math.sqrt(PAGE_SIZE)
+
+/**
+ * Keep source-map connections this far beyond each editor's top and bottom edges,
+ * measured as a fraction of its viewport height. 0 clips immediately; 0.5 keeps
+ * connections for half a viewport offscreen; 1 keeps them for a full viewport.
+ */
+export const SOURCE_MAP_CONNECTION_OFFSCREEN_RATIO = 0.5
+
+/** Choose 'curved' for smooth ribbons or 'straight' for direct connections. */
+export const SOURCE_MAP_CONNECTION_STYLE: 'curved' | 'straight' = 'curved'
+
 export const MEMORY_SIZE = {
     M68K: 0xffffffn,
     MIPS: 0xffffffffn,

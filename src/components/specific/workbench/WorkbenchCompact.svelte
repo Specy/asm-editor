@@ -12,7 +12,6 @@
      */
     import { untrack } from 'svelte'
     import { prefersReducedMotion } from 'svelte/motion'
-    import { fade } from 'svelte/transition'
     import FaAngleRight from '~icons/fa-solid/angle-right'
     import MemoryControls from '$cmp/specific/project/memory/MemoryControls.svelte'
     import MemoryVisualiser from '$cmp/specific/project/memory/MemoryRenderer.svelte'
@@ -188,12 +187,7 @@
             {/if}
         </div>
         {#if panelShown && !panelMaximized}
-            <button
-                class="backdrop"
-                aria-label="Close the panel"
-                transition:fade={{ duration: panelMaximized ? 0 : 150 }}
-                onclick={closeOverlay}
-            ></button>
+            <button class="backdrop" aria-label="Close the panel" onclick={closeOverlay}></button>
         {/if}
         <div
             class="drawer"
@@ -239,8 +233,12 @@
     }
 
     .rail-slot {
+        /* keep the tablet's rail beside its drawer, above the backdrop */
+        position: relative;
+        z-index: 12;
         display: flex;
         flex: none;
+        margin: var(--wb-gap) 0 var(--wb-gap) var(--wb-gap);
 
         /* the open panel carries on from the rail's right edge, whose rule divides the two */
         &.joined :global(.icon-rail) {
@@ -372,6 +370,7 @@
         inset: 0;
         z-index: 11;
         background-color: rgb(0 0 0 / 0.4);
+        backdrop-filter: blur(1px);
         cursor: default;
     }
 
@@ -380,16 +379,15 @@
     .drawer {
         position: absolute;
         z-index: 12;
-        top: 0;
-        bottom: 0;
-        left: var(--wb-rail-width);
+        top: var(--wb-gap);
+        bottom: var(--wb-gap);
+        left: calc(var(--wb-gap) + var(--wb-rail-width));
         display: none;
         overflow: hidden;
         background-color: var(--wb-surface);
         border: var(--wb-card-edge);
         border-left: none;
         border-radius: 0 var(--wb-radius) var(--wb-radius) 0;
-        box-shadow: 0.5rem 0 2rem rgb(0 0 0 / 0.4);
 
         &.shown {
             display: flex;
@@ -400,7 +398,6 @@
             inset: 0;
             border: none;
             border-radius: 0;
-            box-shadow: none;
             display: flex;
             visibility: hidden;
             pointer-events: none;
@@ -424,9 +421,8 @@
         }
 
         &.maximized {
-            width: calc(100% - var(--wb-rail-width));
+            width: calc(100% - var(--wb-rail-width) - 2 * var(--wb-gap));
             animation: expand-panel-width 0.2s ease;
-            box-shadow: none;
         }
 
         &.restoring {
@@ -442,7 +438,7 @@
 
     @keyframes restore-panel-width {
         from {
-            width: calc(100% - var(--wb-rail-width));
+            width: calc(100% - var(--wb-rail-width) - 2 * var(--wb-gap));
         }
         to {
             width: var(--side-panel-width);

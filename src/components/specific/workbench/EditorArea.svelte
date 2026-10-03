@@ -9,12 +9,15 @@
      * tray across its bottom edge.
      */
     import Editor from '$cmp/specific/project/Editor.svelte'
+    import Splitter from '$cmp/shared/layout/Splitter.svelte'
+    import type monaco from 'monaco-editor'
     import BelowLineContent from '$cmp/specific/project/user-tools/BelowLineContent.svelte'
     import { preferencesStore } from '$stores/preferencesStore.svelte'
     import FileTabs from './FileTabs.svelte'
     import ExecutionControls from './ExecutionControls.svelte'
     import CompilationNotice from './CompilationNotice.svelte'
     import MappedSourcePane from './MappedSourcePane.svelte'
+    import SourceMapConnections from './SourceMapConnections.svelte'
     import { useWorkbench } from './workbenchContext'
 
     interface Props {
@@ -30,6 +33,20 @@
 
     const { session } = useWorkbench()
     const emulator = session.emulator
+    let sourceEditor = $state.raw<monaco.editor.IStandaloneCodeEditor>()
+    let frameWidth = $state(0)
+    let sourceRatio = $state(0.5)
+    const paneWidth = $derived(Math.max(0, frameWidth - 48))
+    const minPaneWidth = $derived(Math.min(160, paneWidth / 2))
+    const sourceWidth = $derived(
+        Math.min(paneWidth - minPaneWidth, Math.max(minPaneWidth, paneWidth * sourceRatio))
+    )
+    const sourceShare = $derived(paneWidth > 0 ? sourceWidth / paneWidth : 0.5)
+    const activeLocation = $derived(
+        session.mappingSelection && session.mappingSelection.line >= 0
+            ? session.mappingSelection
+            : session.executionSourceLocation
+    )
 </script>
 
 <div class="editor-area" {style}>
@@ -39,13 +56,41 @@
     <CompilationNotice />
     <div
         class="editor-frame"
+        bind:clientWidth={frameWidth}
         class:failed={emulator.errors.length > 0}
         class:mapped={!!session.compilationMap}
     >
         {#if session.compilationMap}
-            <MappedSourcePane />
+            <MappedSourcePane bind:editor={sourceEditor} share={sourceShare} />
+            {#if session.mappingColors}
+                <SourceMapConnections
+                    {sourceEditor}
+                    assemblyEditor={session.editor}
+                    sourcePath={session.mappedSourcePath}
+                    coloring={session.mappingColors}
+                    {activeLocation}
+                >
+                    {#snippet divider()}
+                        <Splitter
+                            orientation="vertical"
+                            size={sourceWidth}
+                            min={minPaneWidth}
+                            max={paneWidth - minPaneWidth}
+                            label="Resize source and assembly editors"
+                            style="--splitter-size: 1px; --splitter-line: var(--wb-line);"
+                            onResize={(width) => {
+                                if (paneWidth > 0) sourceRatio = width / paneWidth
+                            }}
+                            onReset={() => (sourceRatio = 0.5)}
+                        />
+                    {/snippet}
+                </SourceMapConnections>
+            {/if}
         {/if}
-        <div class="assembly-pane">
+        <div
+            class="assembly-pane"
+            style:--assembly-share={session.compilationMap ? 1 - sourceShare : 1}
+        >
             <Editor
                 source={session.displayedModelIdentity
                     ? {
@@ -149,7 +194,7 @@
     .assembly-pane {
         display: flex;
         position: relative;
-        flex: 1;
+        flex: var(--assembly-share) 1 0;
         min-width: 0;
         min-height: 0;
     }
@@ -157,11 +202,19 @@
         .editor-frame.mapped {
             flex-direction: column;
         }
+        .assembly-pane {
+            flex: 1;
+        }
     }
 
     /* the shadow Monaco draws under the top edge once the code is scrolled */
     .editor-area :global(.monaco-editor .scroll-decoration) {
         display: none;
+    }
+
+    /* The editor wrappers cast shadows over the ribbons from both sides of the gutter. */
+    .editor-frame.mapped :global(.editor) {
+        box-shadow: none;
     }
 
     /* square under the file tabs: the Interactive editor's rounded corners are the card's here,

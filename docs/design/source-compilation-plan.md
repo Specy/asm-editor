@@ -33,6 +33,14 @@ Scope colors to Monaco's persistent container: Build and Stop replace the inner 
 
 Verified with 10,000 generated colors, compilation-order stability, contiguous ranges, unmapped gaps, and header locations. The 63 affected tests pass, Svelte checking reports zero errors with 32 existing warnings, and targeted ESLint/Prettier checks pass. Isolated Chromium checks confirm matching colors across both panes and header switches, light and dark themes, execution/Undo highlight precedence, cleanup after edit invalidation, and the stacked mobile view. Entry behavior remains unchanged.
 
+## Mapped section connections
+
+Connect matching source and assembly sections with translucent ribbons in a 48-pixel SVG gutter. Choose `'straight'` or `'curved'` using the code constant `SOURCE_MAP_CONNECTION_STYLE` in `src/lib/Config.ts`; default to straight connections. Use colored fills without outlines, and remove the editor wrappers' box shadows in the mapped split view so they do not shade the ribbons from either side. Emphasize the selected or executing mapping, including one-to-many blocks. Each editor scrolls independently; refresh geometry on scroll, layout, model, folding, and view-zone changes. Hide the gutter when the panes stack on narrow screens and remove it when the Source map is invalidated.
+
+Retain connections for sections up to half of their editor's viewport height beyond its top and bottom edges, while clipping the SVG to the gutter. Tune this distance with the code constant `SOURCE_MAP_CONNECTION_OFFSCREEN_RATIO` in `src/lib/Config.ts`: `0` retains only visible sections, `0.5` adds half a viewport, and `1` adds a full viewport. Use actual line positions rather than Monaco's fully visible line list, and exclude completely folded sections. Keep the source scrollbar bridge within the actual code viewport so it does not color the source heading.
+
+Place the existing keyboard-accessible Splitter in the center of the connector gutter. Drag it to adjust the source/assembly width ratio, keeping at least 160 pixels per pane when space allows; double-click to restore equal widths. Preserve the ratio while the editor is mounted and adapt it when the available width changes. Monaco's existing resize observers keep the code and ribbons aligned. The divider disappears with the gutter on stacked screens, which retain equal-height panes. Remove the source pane's redundant side border and draw ribbon ends past the SVG clip boundary to avoid a thin antialiased edge at the assembly join.
+
 ## Implementation sequence
 
 1. Add compilation types, record validation, fingerprints, language detection, presets, Compiler Explorer transport, diagnostics, and Target-specific assembly preparation. Verify against actual API responses.

@@ -5,7 +5,10 @@
     import { useWorkbench } from './workbenchContext'
 
     const { session } = useWorkbench()
-    let editor = $state.raw<monaco.editor.IStandaloneCodeEditor>()
+    let {
+        editor = $bindable(),
+        share = 1
+    }: { editor?: monaco.editor.IStandaloneCodeEditor; share?: number } = $props()
     const path = $derived(session.mappedSourcePath)
     const file = $derived(session.project.files[path])
     const paths = $derived(
@@ -23,7 +26,7 @@
     })
 </script>
 
-<section class="source-pane" aria-label="Mapped source">
+<section class="source-pane" aria-label="Mapped source" style:--source-share={share}>
     <div class="source-heading">
         <label>
             Source
@@ -64,10 +67,9 @@
     .source-pane {
         display: flex;
         flex-direction: column;
-        flex: 1;
+        flex: var(--source-share) 1 0;
         min-width: 0;
         min-height: 0;
-        border-right: 1px solid var(--wb-line);
     }
     .source-heading {
         padding: 0.4rem 0.65rem;
@@ -95,7 +97,7 @@
     }
     @media (max-width: 700px) {
         .source-pane {
-            border-right: 0;
+            flex: 1;
             border-bottom: 1px solid var(--wb-line);
             min-height: 12rem;
         }
