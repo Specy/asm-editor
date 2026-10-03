@@ -16,10 +16,8 @@ function setup() {
     return fixture
 }
 function openSecond(session: ReturnType<typeof editorGroupsFixture>['session'], path: string) {
-    const original = session.groups[0].displayedPath
     const other = session.splitEditor()
     session.selectFile(path, other)
-    if (original !== path) session.closeTab(original, other)
     return other
 }
 function result(fixture: ReturnType<typeof setup>, path = 'main.c') {
@@ -50,6 +48,28 @@ afterEach(() => {
 })
 
 describe('independent editor groups', () => {
+    it('splits a single tab into an empty second pane', () => {
+        const { session } = setup()
+        const left = session.groups[0]
+        const right = session.splitEditor()
+        expect(session.groups).toEqual([left, right])
+        expect(left.tabs.paths).toEqual(['main.c'])
+        expect(left.displayedPath).toBe('main.c')
+        expect(right.tabs.paths).toEqual([])
+        expect(right.displayedPath).toBe('')
+        session.closeGroup(right)
+        expect(session.groups).toEqual([left])
+    })
+    it('moves the shown File to the second pane when splitting several tabs', () => {
+        const { session } = setup()
+        const left = session.groups[0]
+        session.selectFile('other.c', left)
+        const right = session.splitEditor()
+        expect(left.tabs.paths).toEqual(['main.c'])
+        expect(left.displayedPath).toBe('main.c')
+        expect(right.tabs.paths).toEqual(['other.c'])
+        expect(right.displayedPath).toBe('other.c')
+    })
     it('routes source and assembly files to matching panes in reversed order', () => {
         const { session } = setup()
         const left = session.groups[0],
@@ -67,6 +87,7 @@ describe('independent editor groups', () => {
         const { session } = setup()
         const left = session.groups[0],
             right = session.splitEditor()
+        session.selectFile('main.c', right)
         session.selectFile('other.c')
         expect(left.displayedPath).toBe('other.c')
         expect(right.displayedPath).toBe('main.c')

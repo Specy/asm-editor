@@ -646,20 +646,17 @@ export class WorkbenchSession {
         if (changedPath) group.resetOptimization()
     }
 
+    /**
+     * Opens the second pane. With a single tab it starts empty, since showing the same File twice
+     * is rarely wanted; with several tabs the shown File moves over, leaving the rest behind.
+     */
     splitEditor() {
         if (this.groups.length > 1) return this.groups[1]
         const origin = this.groups[0]
-        if (!origin.displayedPath) return origin
+        const path = origin.displayedPath
+        if (!path) return origin
         const other = this.createGroup()
-        this.show(
-            selectProjectFile(
-                origin.sourceSelection,
-                origin.displayedPath,
-                this.buildGeneration,
-                this.existsInBuild(origin.displayedPath)
-            ),
-            other
-        )
+        if (origin.tabs.paths.length > 1) void this.transferTab(path, origin, other)
         return other
     }
 

@@ -100,6 +100,8 @@
             left: 0;
             right: 0;
             height: 2.25rem;
+            box-sizing: border-box;
+            border-bottom: 1px solid var(--wb-line);
             background: var(--wb-strip);
         }
         > :global(*) {
@@ -112,6 +114,11 @@
     }
     .editor-frame.split :global(.editor) {
         box-shadow: none;
+    }
+    //The connector ribbons run slightly under the right editor to hide the join; the left editor
+    //stays below the gutter, whose bridges cover its scrollbar.
+    .editor-frame :global(.connector-gutter + .editor-pane) {
+        z-index: 2;
     }
     .editor-area :global(.monaco-editor),
     .editor-area :global(.monaco-editor .overflow-guard) {

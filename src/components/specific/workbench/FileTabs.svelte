@@ -86,6 +86,14 @@
             onclick={() => session.splitEditor()}><FaColumns /></button
         >
     {/if}
+    {#if session.groups.length > 1 && !group.tabs.paths.length}
+        <button
+            class="group-action"
+            title="Close editor"
+            aria-label="Close editor"
+            onclick={() => session.closeGroup(group)}><FaTimes /></button
+        >
+    {/if}
     {#if liveFile}
         <span class="version" title="The current contents of a File the program created or changed">
             Live file

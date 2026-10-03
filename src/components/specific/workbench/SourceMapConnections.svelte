@@ -55,7 +55,7 @@
         color: string
         path: string
     }
-    type Bridge = Band & { colorIndex: number; color: string }
+    type Bridge = Band & { key: number; colorIndex: number; color: string }
     type Geometry = {
         width: number
         height: number
@@ -153,36 +153,40 @@
             0,
             box.left - (leftBox.left + leftLayout.contentLeft + leftLayout.contentWidth)
         )
-        const width = box.width + inset
+        //Run a few pixels under the right editor, which paints above the gutter. The panes have
+        //fractional widths, so ending exactly at its edge leaves an antialiased 1px seam.
+        const overlap = 0
+        const width = box.width + inset + overlap
         const middle = inset + box.width / 2
         //Let the SVG clip the far edge instead of antialiasing a path boundary at the join.
         const end = width + 1
         const ribbons: Ribbon[] = []
         const bridges: Bridge[] = []
         // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Local deduplication during geometry calculation.
-        const bridged = new Set<string>()
+        const bridged = new Set<number>()
         for (const connection of connections) {
-            const leftBand = connectionBand(
-                left,
-                sourceOnLeft ? connection.source : connection.assembly,
-                leftViewport,
-                leftScroll
-            )
-            const rightBand = connectionBand(
-                right,
-                sourceOnLeft ? connection.assembly : connection.source,
-                rightViewport,
-                rightScroll
-            )
+            const leftRange = sourceOnLeft ? connection.source : connection.assembly
+            const rightRange = sourceOnLeft ? connection.assembly : connection.source
+            const leftBand = connectionBand(left, leftRange, leftViewport, leftScroll)
+            const rightBand = connectionBand(right, rightRange, rightViewport, rightScroll)
             if (!leftBand || !rightBand) continue
             const colorIndex = connection.assembly.colorIndex
-            const bridgeKey = `${colorIndex}:${leftBand.top}:${leftBand.bottom}`
+            //One bridge per left-side range. With assembly on the left, one color can
+            //own several disjoint ranges, so the color alone is not a unique key.
+            const bridgeKey = leftRange.startLine
             if (!bridged.has(bridgeKey)) {
                 bridged.add(bridgeKey)
                 //The scrollbar bridge belongs only to visible source code, not its heading.
                 const top = Math.max(leftBand.top, leftViewport.top)
                 const bottom = Math.min(leftBand.bottom, leftViewport.bottom)
-                if (bottom > top) bridges.push({ top, bottom, colorIndex, color: connection.color })
+                if (bottom > top)
+                    bridges.push({
+                        key: bridgeKey,
+                        top,
+                        bottom,
+                        colorIndex,
+                        color: connection.color
+                    })
             }
             ribbons.push({
                 key: connection.assembly.startLine,
@@ -260,7 +264,7 @@
             geometry.height - geometry.viewportBottom
         )}px 0)"
     >
-        {#each geometry.bridges as bridge (bridge.colorIndex)}
+        {#each geometry.bridges as bridge (bridge.key)}
             <rect
                 class="bridge"
                 class:active={bridge.colorIndex === activeColor}
@@ -307,6 +311,8 @@
             left: 0;
             right: 0;
             height: 2.25rem;
+            box-sizing: border-box;
+            border-bottom: 1px solid var(--wb-line);
             background: var(--wb-strip);
         }
     }

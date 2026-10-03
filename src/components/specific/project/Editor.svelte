@@ -838,6 +838,7 @@
     .editor {
         display: flex;
         position: absolute;
+        inset: 0;
         flex: 1;
         z-index: 2;
         box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
