@@ -73,6 +73,8 @@
         compilation?: DockCompilation
         /** The displayed File is source, so Compile takes the place of Build. */
         compileOnly?: boolean
+        /** Compilation-only docks in another pane share one project execution dock. */
+        showExecution?: boolean
         onBuild: () => void
         onStop: () => void
         onRun: () => void
@@ -97,6 +99,7 @@
         actions = [],
         compilation,
         compileOnly = false,
+        showExecution = true,
         onBuild,
         onStop,
         onRun,
@@ -106,7 +109,7 @@
         onTest
     }: Props = $props()
 
-    const hasEnd = $derived(hasTests || actions.length > 0)
+    const hasEnd = $derived(showExecution && (hasTests || actions.length > 0))
 </script>
 
 <div
@@ -120,7 +123,7 @@
 >
     <div class="toolbar">
         {#if !debugging}
-            {#if !compileOnly}
+            {#if showExecution && !compileOnly}
                 <button
                     type="button"
                     class="tool primary"
@@ -186,7 +189,7 @@
                     >
                 {/if}
             {/if}
-        {:else}
+        {:else if showExecution}
             <button type="button" class="tool" onclick={onStop} title="End the Debug session">
                 <Icon size={0.8}>
                     <FaStop />

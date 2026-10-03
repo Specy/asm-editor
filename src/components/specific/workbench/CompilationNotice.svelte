@@ -1,11 +1,9 @@
 <script lang="ts">
-    import { useWorkbench } from './workbenchContext'
-
-    const { session } = useWorkbench()
+    let { notice }: { notice: string } = $props()
 </script>
 
-{#if session.compilationNotice}
-    <div class="compilation-notice" role="status">{session.compilationNotice}</div>
+{#if notice}
+    <div class="compilation-notice" role="status">{notice}</div>
 {/if}
 
 <style lang="scss">

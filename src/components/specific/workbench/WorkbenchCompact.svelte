@@ -7,10 +7,10 @@
      * editor's bottom edge instead), the bottom panel, then
      * the Debug session's sections. A tablet keeps the rail, with Back and Save in it as on a
      * desktop, and opens panels in a drawer beside it; a phone puts the rail and the panel in a
-     * drawer from the left. There are no file tabs and no splitters, and the Debug
-     * tools are always sections.
+     * drawer from the left. Each editor keeps its file tabs; the Debug tools are sections.
      */
     import { untrack } from 'svelte'
+    import { sourceLanguage } from '$lib/sourceCompilation/records'
     import { prefersReducedMotion } from 'svelte/motion'
     import FaAngleRight from '~icons/fa-solid/angle-right'
     import MemoryControls from '$cmp/specific/project/memory/MemoryControls.svelte'
@@ -62,6 +62,11 @@
     //the Screen's size and controls, which its section shows in its own header while it is open
     let screenHeader: ScreenHeader | undefined = $state()
     const screenOpen = $derived(!workbenchLayout.isCollapsed('compact:screen', true))
+    const executionBar = $derived(
+        session.debugSession ||
+            session.groups.length > 1 ||
+            !sourceLanguage(session.controlsGroup.displayedPath)
+    )
     //the Debug session's sections are built at the first Build and only hidden after a Stop
     let debugged = false
     const debugSectionsBuilt = $derived.by(() => {
@@ -80,7 +85,7 @@
     }
 </script>
 
-<div class="compact" class:phone>
+<div class="compact" class:phone class:no-controls-bar={!executionBar}>
     {#if phone && !externalMenu}
         <TopBar />
     {/if}
@@ -93,14 +98,13 @@
         <div class="scroll">
             <!-- a phone's controls are inside the editor, along its bottom edge -->
             <EditorArea
-                tabs={false}
                 controls={phone}
                 fill={phone}
                 style="height: var(--compact-editor-height); flex: none;"
             />
-            {#if !phone}
+            {#if !phone && executionBar}
                 <div class="controls-bar">
-                    <ExecutionControls fill />
+                    <ExecutionControls fill group={session.controlsGroup} showCompilation={false} />
                 </div>
             {/if}
             <BottomPanel
@@ -276,7 +280,8 @@
     }
 
     /* a phone's controls are inside the editor, so the column has no bar to leave room for */
-    .phone .scroll {
+    .phone .scroll,
+    .no-controls-bar .scroll {
         --compact-controls-height: 0px;
     }
 

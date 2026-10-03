@@ -47,6 +47,7 @@
         entry: string
         fileSystem: FileSystem
         selectedPath: string
+        selectedPaths?: readonly string[]
         locked?: boolean
         diagnosticCounts?: Readonly<Record<string, { errors: number; warnings: number }>>
         analysisStatus?: Readonly<
@@ -56,6 +57,8 @@
         onEntryChange: (path: string) => void
         onRenamed?: (from: string, to: string) => void
         onDeleted?: (path: string) => void
+        onFileDragStart?: (event: DragEvent, path: string) => void
+        onFileDragEnd?: () => void
     }
 
     let {
@@ -67,13 +70,16 @@
         entry,
         fileSystem,
         selectedPath,
+        selectedPaths,
         locked = false,
         diagnosticCounts = {},
         analysisStatus = {},
         onSelect,
         onEntryChange,
         onRenamed,
-        onDeleted
+        onDeleted,
+        onFileDragStart,
+        onFileDragEnd
     }: Props = $props()
 
     const collapsedDirectories = new SvelteSet<string>()
@@ -83,8 +89,8 @@
 
     //the File being shown is always visible in the tree, whoever opened it
     $effect(() => {
-        const path = selectedPath
-        untrack(() => expandParents(path))
+        const paths = selectedPaths ?? [selectedPath]
+        untrack(() => paths.forEach(expandParents))
     })
 
     function basename(path: string): string {
@@ -336,13 +342,18 @@
                 {:else}
                     <div
                         class="tree-row file"
-                        class:selected={row.path === selectedPath}
+                        class:selected={selectedPaths
+                            ? selectedPaths.includes(row.path)
+                            : row.path === selectedPath}
                         class:entry={row.path === entry}
                         class:binary={files[row.path]?.encoding === 'base64'}
                         title={row.path}
                     >
                         <button
                             class="file-select"
+                            draggable={!!onFileDragStart}
+                            ondragstart={(event) => onFileDragStart?.(event, row.path)}
+                            ondragend={() => onFileDragEnd?.()}
                             style:padding-left={`${0.35 + row.depth * 0.85}rem`}
                             onclick={() => onSelect(row.path)}
                         >

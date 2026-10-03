@@ -1,5 +1,4 @@
 import { tick, untrack } from 'svelte'
-import type monaco from 'monaco-editor'
 import type { Project, TestcaseResult } from '$lib/Project.svelte'
 import type { Emulator } from '$lib/languages/Emulator'
 import {
@@ -22,20 +21,14 @@ import {
     normalizeMarsDisplay,
     type ProjectDisplay
 } from '$lib/languages/mars/marsDisplay'
-import type { BuildSources, ProjectFile } from '$lib/projectFiles'
+import type { BuildSources } from '$lib/projectFiles'
 import {
     buildSource,
-    canEditProjectBreakpoints,
-    isCurrentBuildLocation,
     liveSource,
     selectProjectFile,
     type ProjectSourceSelection
 } from '$lib/monaco/projectSourceSelection'
-import {
-    createProjectLanguageSessionId,
-    projectSourceModelKey,
-    type ProjectModelIdentity
-} from '$lib/languages/service/uri'
+import { createProjectLanguageSessionId, projectSourceModelKey } from '$lib/languages/service/uri'
 import { ProjectLanguageSession } from '$lib/languages/service/ProjectLanguageSession'
 import type { ProjectAnalysisSnapshot } from '$lib/languages/service/protocol'
 import { languageDiagnosticToDiagnostic } from '$lib/languages/service/diagnosticBridge'
@@ -54,27 +47,13 @@ import { compileProjectSource } from '$lib/sourceCompilation/compileProjectSourc
 import { SourceCompilationError } from '$lib/sourceCompilation/compilerExplorer'
 import { colorSourceMap, type SourceMapColoring } from '$lib/sourceCompilation/sourceColoring'
 import {
-    compilationStatus,
     editorFileLanguage,
-    fileFingerprint,
-    isCompilationTarget,
-    sourceLanguage,
-    type CompilationRecord,
     type CompilationSourceMap,
-    type Optimization,
     type SourceLocation
 } from '$lib/sourceCompilation/records'
 import { serializer } from '$lib/json'
 import { createDebouncer, formatTime } from '$lib/utils'
-import {
-    closeTab,
-    initialTabs,
-    openTab,
-    renameTab,
-    retainTabs,
-    removeTab,
-    type FileTabs
-} from './fileTabs'
+import { closeTab, initialTabs, openTab, renameTab, retainTabs, removeTab } from './fileTabs'
 import {
     appendLog,
     buildEntry,
@@ -83,6 +62,16 @@ import {
     type LogDraft,
     type LogEntry
 } from './workbenchLog'
+import { EditorGroup } from './EditorGroup.svelte'
+import { EditorModels } from './editorModels'
+import { resolveMappingPair } from './mappingPair'
+import { editorGroupForFile, editorFileKind } from './editorFileRouting'
+import {
+    EDITOR_FILE_DRAG_TYPE,
+    readEditorFileDrag,
+    writeEditorFileDrag,
+    type EditorFileDrag
+} from './editorFileDrag'
 
 /** The tabs of the bottom panel. */
 export type BottomTab = 'terminal' | 'log' | 'problems'
@@ -124,8 +113,32 @@ export class WorkbenchSession {
     panels: WorkbenchSessionPanels = {}
 
     //The source being shown, and the version of it: the live Files or the Build snapshot
-    sourceSelection = $state<ProjectSourceSelection>(liveSource(''))
-    tabs = $state.raw<FileTabs>(initialTabs(''))
+    groups = $state.raw<readonly EditorGroup[]>([])
+    draggedFile = $state.raw<EditorFileDrag | undefined>()
+    executionGroupId = $state('editor-1')
+    editorRatio = $state(0.5)
+    private nextGroupId = 1
+    readonly models: EditorModels
+
+    groupForFile(path: string) {
+        return editorGroupForFile(path, this.groups)
+    }
+    get executionGroup() {
+        return (
+            this.groups.find((group) => group.id === this.executionGroupId) ??
+            this.groups[this.groups.length - 1]
+        )
+    }
+    get controlsGroup() {
+        const assembly = this.groups.filter(
+            (group) => editorFileKind(group.displayedPath) === 'assembly'
+        )
+        return (
+            assembly.find((group) => group.id === this.executionGroupId) ??
+            assembly[assembly.length - 1] ??
+            this.groups[this.groups.length - 1]
+        )
+    }
     buildGeneration = $state(0)
     private previousBuildSources = $state.raw<BuildSources | undefined>(undefined)
     fileSystemLocked = $state(false)
@@ -141,7 +154,7 @@ export class WorkbenchSession {
     running = $state(false)
     building = $state(false)
     compiling = $state(false)
-    sourceOptimization = $state<Optimization>('0')
+    compilingGroupId = $state<string | undefined>()
     sourceDiagnostics = $state.raw<Diagnostic[]>([])
     mappingSelection = $state.raw<SourceLocation | undefined>()
     private compilationController: AbortController | undefined
@@ -152,7 +165,6 @@ export class WorkbenchSession {
      */
     testing = false
     testcasesResult = $state<TestcaseResult[]>([])
-    editor = $state.raw<monaco.editor.IStandaloneCodeEditor | undefined>(undefined)
 
     /** Whether the display on screen came from the program's own `@screen` comment, see `syncDisplay`. */
     displayOrigin = $state<MarsDisplayOrigin>('user')
@@ -173,6 +185,9 @@ export class WorkbenchSession {
         this.project = project
         this.emulator = emulator
         this.host = host
+        const start = project.entry ?? Object.keys(project.files)[0] ?? ''
+        this.groups = [new EditorGroup(this, 'editor-1', start)]
+        this.models = new EditorModels((path, value) => this.fileEdited(path, value))
         this.effectiveSettings = $derived(
             resolveProjectSettings(this.project.language, this.project.settings)
         )
@@ -180,87 +195,22 @@ export class WorkbenchSession {
             files: $state.snapshot(this.project.files),
             entry: this.project.entry
         })
-        this.displayedPath = $derived(this.sourceSelection.path)
-        this.sourceView = $derived<'snapshot' | 'live'>(
-            this.sourceSelection.sourceKind === 'build' ? 'snapshot' : 'live'
-        )
+        this.displayedPath = $derived(this.groups[0].displayedPath)
+        this.sourceView = $derived<'snapshot' | 'live'>(this.groups[0].sourceView)
         this.debugSession = $derived(this.emulator.canExecute)
-        this.displayedFile = $derived.by<ProjectFile | undefined>(() =>
-            this.sourceView === 'snapshot'
-                ? this.emulator.buildSources?.files[this.displayedPath]
-                : this.project.files[this.displayedPath]
-        )
-        this.displayedCode = $derived(
-            this.displayedFile?.encoding === 'plain' ? this.displayedFile.content : ''
-        )
-        this.displayedLanguage = $derived(
-            editorFileLanguage(this.displayedPath, this.project.language)
-        )
-        this.displayedCompilation = $derived(
-            this.project.compilations.find((record) => record.outputPath === this.displayedPath)
-        )
-        this.compilablePath = $derived(
-            sourceLanguage(this.displayedPath)
-                ? this.displayedPath
-                : this.displayedCompilation?.sourcePath
-        )
-        this.sourceCompileDisabled = $derived(
-            this.host.readonly ||
-                this.compiling ||
-                this.building ||
-                this.running ||
-                this.fileSystemLocked ||
-                !isCompilationTarget(this.project.language) ||
-                !this.compilablePath ||
-                this.project.files[this.compilablePath]?.encoding !== 'plain'
-        )
-        this.compilationMap = $derived.by<CompilationSourceMap | undefined>(() => {
-            const map = Object.prototype.hasOwnProperty.call(
+        this.mappingPair = $derived(
+            resolveMappingPair(
+                this.groups,
                 this.project.sourceMaps,
-                this.displayedPath
+                this.project.compilations,
+                this.project.files,
+                this.project.language
             )
-                ? this.project.sourceMaps[this.displayedPath]
-                : undefined
-            return map && map.outputFingerprint === fileFingerprint(this.displayedFile)
-                ? map
-                : undefined
-        })
-        this.compilationNotice = $derived.by(() => {
-            const record = this.displayedCompilation
-            if (!record) return ''
-            const status = compilationStatus(record, this.project.files, this.project.language)
-            if (status.stale)
-                return 'Stale assembly: source or headers changed. Recompile to update this File.'
-            if (status.edited)
-                return 'Assembly edited manually. The Source map was removed; recompilation will replace your edits.'
-            if (!this.compilationMap)
-                return 'Source mapping is not available in this session. Recompile to restore the split view.'
-            return ''
-        })
+        )
         this.mappingColors = $derived.by<SourceMapColoring | undefined>(() => {
-            const map = this.compilationMap
+            const map = this.mappingPair?.map
             return map ? colorSourceMap(map) : undefined
         })
-        this.displayedModelIdentity = $derived.by<ProjectModelIdentity | undefined>(() => {
-            if (!this.displayedPath) return undefined
-            return this.sourceSelection.sourceKind === 'build'
-                ? {
-                      sessionId: this.languageSessionId,
-                      sourceKind: 'build',
-                      buildGeneration: this.sourceSelection.buildGeneration,
-                      path: this.displayedPath
-                  }
-                : {
-                      sessionId: this.languageSessionId,
-                      sourceKind: 'live',
-                      path: this.displayedPath
-                  }
-        })
-        this.displayedModelKey = $derived(
-            this.displayedModelIdentity
-                ? projectSourceModelKey(this.displayedModelIdentity)
-                : 'empty'
-        )
         this.retainedModelKeys = $derived.by(() => {
             const liveKeys = Object.keys(this.project.files).map((path) =>
                 projectSourceModelKey({
@@ -292,15 +242,9 @@ export class WorkbenchSession {
                         this.project.language
             ) ?? false
         )
-        this.displayedDiagnostics = $derived(
-            this.activeDiagnostics.filter(
-                (diagnostic) => !diagnostic.file || diagnostic.file === this.displayedPath
-            )
-        )
         this.analysisStatus = $derived(
             this.sourceView === 'live' ? this.languageAnalysis?.fileStatus : undefined
         )
-        this.displayedAnalysisStatus = $derived(this.analysisStatus?.[this.displayedPath])
         this.languageErrorCount = $derived(
             this.languageAnalysis?.diagnostics.filter(
                 (diagnostic) =>
@@ -354,81 +298,43 @@ export class WorkbenchSession {
         this.buildDisabled = $derived(
             this.host.readonly || this.liveBuildHasErrors || this.compiling
         )
-        this.breakpointsEditable = $derived(
-            canEditProjectBreakpoints(this.sourceSelection, {
-                readonly: this.host.readonly,
-                building: this.building,
-                fileSystemLocked: this.fileSystemLocked
-            })
-        )
-        this.displayedBreakpoints = $derived(
-            (this.sourceView === 'snapshot' || !this.fileSystemLocked
-                ? this.emulator.breakpoints
-                : []
-            )
-                .filter((breakpoint) => breakpoint.file === this.displayedPath)
-                .map((breakpoint) => breakpoint.line)
-        )
-        this.highlightedLine = $derived(
-            isCurrentBuildLocation(
-                this.sourceSelection,
-                this.buildGeneration,
-                this.emulator.currentFile
-            )
-                ? this.emulator.line
-                : -1
-        )
         this.executionSourceLocation = $derived(
-            this.compilationMap?.lines[this.highlightedLine] ?? undefined
+            this.mappingPair?.map.lines[this.mappingPair.assembly.instructionLine] ?? undefined
         )
-        this.mappedSourcePath = $derived(
-            this.mappingSelection?.path ??
-                this.executionSourceLocation?.path ??
-                this.compilationMap?.sourcePath ??
-                ''
-        )
-        this.mappedAssemblyLines = $derived.by(() => {
-            const selected = this.mappingSelection
-            return selected
-                ? (this.compilationMap?.lines ?? []).flatMap((location, line) =>
-                      location?.path === selected.path && location.line === selected.line
-                          ? [line]
-                          : []
-                  )
-                : []
-        })
-        this.editorDisabled = $derived(
-            this.host.readonly ||
-                this.running ||
-                this.building ||
-                this.sourceView === 'snapshot' ||
-                this.displayedFile?.encoding !== 'plain' ||
-                this.fileSystemLocked ||
-                (this.emulator.canExecute && !this.emulator.terminated)
-        )
-        const start = project.entry ?? Object.keys(project.files)[0] ?? ''
-        this.sourceSelection = liveSource(start)
-        this.tabs = initialTabs(start)
         this.previousBuildSources = emulator.buildSources
         this.pc = makeRegister('PC', emulator.pc, emulator.systemSize)
 
+        let previousPairKey = ''
+        let previousPairMap: CompilationSourceMap | undefined
         $effect(() => {
-            const path = this.displayedPath
-            const record = this.project.compilations.find(
-                (item) => item.sourcePath === path || item.outputPath === path
-            )
-            untrack(() => {
-                this.sourceOptimization = record?.optimization ?? '0'
-                this.mappingSelection = undefined
-            })
+            const pair = this.mappingPair
+            const key = pair
+                ? `${pair.source.id}:${pair.source.displayedPath}:${pair.assembly.id}:${pair.assembly.displayedPath}`
+                : ''
+            if (key !== previousPairKey || pair?.map !== previousPairMap) {
+                untrack(() => {
+                    this.mappingSelection = undefined
+                })
+            }
+            previousPairKey = key
+            previousPairMap = pair?.map
         })
         $effect(() => {
-            const map = this.compilationMap
+            const map = this.mappingPair?.map
             const executionLocation = this.executionSourceLocation
             untrack(() => {
                 //Keep the selected correspondence through Build's unmapped startup wrapper.
                 //Execution takes over once an instruction has a source location.
                 if (!map || executionLocation) this.mappingSelection = undefined
+            })
+        })
+
+        $effect(() => {
+            const keys = [...this.retainedModelKeys, ...this.groups.map((group) => group.modelKey)]
+            const files = this.project.files
+            untrack(() => {
+                this.models.retain(keys)
+                this.models.synchronize(files)
             })
         })
 
@@ -516,28 +422,14 @@ export class WorkbenchSession {
     declare readonly sourceView: 'snapshot' | 'live'
     /** Whether a program is built and retained: from a successful Build until Stop. */
     declare readonly debugSession: boolean
-    declare readonly displayedFile: ProjectFile | undefined
-    declare readonly displayedCode: string
-    declare readonly displayedLanguage: Project['language'] | 'c' | 'cpp'
-    declare readonly displayedCompilation: CompilationRecord | undefined
-    declare readonly compilablePath: string | undefined
-    declare readonly sourceCompileDisabled: boolean
-    declare readonly compilationMap: CompilationSourceMap | undefined
-    declare readonly compilationNotice: string
     declare readonly mappingColors: SourceMapColoring | undefined
+    declare readonly mappingPair: ReturnType<typeof resolveMappingPair<EditorGroup>>
     declare readonly executionSourceLocation: SourceLocation | undefined
-    declare readonly mappedSourcePath: string
-    declare readonly mappedAssemblyLines: number[]
-    declare readonly displayedModelIdentity: ProjectModelIdentity | undefined
-    declare readonly displayedModelKey: string
     declare readonly retainedModelKeys: string[]
     declare readonly activeDiagnostics: Diagnostic[]
     declare readonly liveBuildHasErrors: boolean
-    declare readonly displayedDiagnostics: Diagnostic[]
     /** Whether each File is assembled from the Entry file, on the live Files only. */
     declare readonly analysisStatus: ProjectAnalysisSnapshot['fileStatus'] | undefined
-    declare readonly displayedAnalysisStatus:
-        ProjectAnalysisSnapshot['fileStatus'][string] | undefined
     declare readonly languageErrorCount: number
     declare readonly diagnosticCounts: Record<string, { errors: number; warnings: number }>
     /** The worst severity among the Diagnostics, for the colour of the Problems badge. */
@@ -558,11 +450,6 @@ export class WorkbenchSession {
     declare readonly executionDisabled: boolean
     declare readonly undoDisabled: boolean
     declare readonly buildDisabled: boolean
-    declare readonly breakpointsEditable: boolean
-    /** The breakpoint lines of the displayed File, hidden on live contents during a Debug session. */
-    declare readonly displayedBreakpoints: number[]
-    declare readonly highlightedLine: number
-    declare readonly editorDisabled: boolean
 
     // ---- lifecycle -----------------------------------------------------------------------------
 
@@ -570,7 +457,10 @@ export class WorkbenchSession {
     mount(): () => void {
         const unregisterNavigation = registerProjectNavigation(
             this.languageSessionId,
-            async (identity, selection) => {
+            async (identity, selection, originatingEditor) => {
+                const group =
+                    this.groups.find((group) => group.editor === originatingEditor) ??
+                    this.groupForFile(identity.path)
                 if (identity.sourceKind === 'build') {
                     if (
                         identity.buildGeneration !== this.buildGeneration ||
@@ -578,17 +468,17 @@ export class WorkbenchSession {
                     ) {
                         return false
                     }
-                    this.show(buildSource(identity.path, identity.buildGeneration))
+                    this.show(buildSource(identity.path, identity.buildGeneration), group)
                 } else {
                     if (!this.project.files[identity.path]) return false
-                    this.show(liveSource(identity.path))
+                    this.show(liveSource(identity.path), group)
                 }
                 await tick()
                 if (selection) {
                     const lineNumber =
                         'lineNumber' in selection ? selection.lineNumber : selection.startLineNumber
                     const column = 'column' in selection ? selection.column : selection.startColumn
-                    this.revealEditorLine(lineNumber, column)
+                    this.revealEditorLine(lineNumber, column, group)
                 }
                 return true
             }
@@ -639,6 +529,7 @@ export class WorkbenchSession {
             this.languageSession = undefined
             this.emulator.dispose()
             this.compilationController?.abort()
+            this.models.dispose()
         }
     }
 
@@ -748,44 +639,144 @@ export class WorkbenchSession {
     // ---- which File is shown -------------------------------------------------------------------
 
     /** Shows a version of a File, opening its tab. */
-    private show(selection: ProjectSourceSelection) {
-        this.sourceSelection = selection
-        this.tabs = openTab(this.tabs, selection.path)
+    private show(selection: ProjectSourceSelection, group = this.groupForFile(selection.path)) {
+        const changedPath = group.displayedPath !== selection.path
+        group.sourceSelection = selection
+        group.tabs = openTab(group.tabs, selection.path)
+        if (changedPath) group.resetOptimization()
+    }
+
+    splitEditor() {
+        if (this.groups.length > 1) return this.groups[1]
+        const origin = this.groups[0]
+        if (!origin.displayedPath) return origin
+        const other = this.createGroup()
+        this.show(
+            selectProjectFile(
+                origin.sourceSelection,
+                origin.displayedPath,
+                this.buildGeneration,
+                this.existsInBuild(origin.displayedPath)
+            ),
+            other
+        )
+        return other
+    }
+
+    startFileDrag(event: DragEvent, path: string, origin?: EditorGroup) {
+        if (!event.dataTransfer || (!this.project.files[path] && !this.existsInBuild(path))) return
+        const file = {
+            sessionId: this.languageSessionId,
+            path,
+            ...(origin ? { groupId: origin.id } : {})
+        }
+        writeEditorFileDrag(event.dataTransfer, file)
+        this.draggedFile = file
+    }
+
+    endFileDrag() {
+        this.draggedFile = undefined
+    }
+
+    canDropFile(event: DragEvent) {
+        return (
+            !!this.draggedFile &&
+            Array.from(event.dataTransfer?.types ?? []).includes(EDITOR_FILE_DRAG_TYPE)
+        )
+    }
+
+    async dropFile(event: DragEvent, destination: EditorGroup) {
+        if (!event.dataTransfer) return
+        const file = readEditorFileDrag(event.dataTransfer, this.languageSessionId)
+        this.endFileDrag()
+        if (!file || !this.groups.includes(destination)) return
+        if (file.groupId) {
+            const origin = this.groups.find((group) => group.id === file.groupId)
+            if (origin) await this.transferTab(file.path, origin, destination)
+        } else if (this.project.files[file.path]) this.selectFile(file.path, destination)
+    }
+
+    async transferTab(path: string, origin: EditorGroup, destination: EditorGroup) {
+        if (
+            !this.groups.includes(origin) ||
+            !this.groups.includes(destination) ||
+            !origin.tabs.paths.includes(path)
+        )
+            return
+        if (origin === destination) {
+            this.activateTab(path, origin)
+            return
+        }
+        const viewState = origin.displayedPath === path ? origin.editor?.saveViewState() : undefined
+        const selection = selectProjectFile(
+            origin.sourceSelection,
+            path,
+            this.buildGeneration,
+            this.existsInBuild(path)
+        )
+        this.show(selection, destination)
+        this.closeTab(path, origin)
+        await tick()
+        if (viewState && this.groups.includes(destination) && destination.displayedPath === path)
+            destination.editor?.restoreViewState(viewState)
+    }
+
+    private createGroup() {
+        const group = new EditorGroup(this, `editor-${++this.nextGroupId}`)
+        this.groups = [...this.groups, group]
+        return group
+    }
+
+    closeGroup(group: EditorGroup) {
+        if (!this.groups.includes(group)) return
+        if (this.groups.length === 1) {
+            group.tabs = initialTabs('')
+            group.sourceSelection = liveSource('')
+            return
+        }
+        this.groups = this.groups.filter((candidate) => candidate !== group)
+        if (this.executionGroupId === group.id) this.executionGroupId = this.groups[0].id
     }
 
     private existsInBuild(path: string) {
         return this.emulator.buildSources?.files[path] !== undefined
     }
 
-    revealEditorLine(lineNumber: number, column: number) {
-        const editor = this.editor
+    revealEditorLine(lineNumber: number, column: number, group = this.groups[0]) {
+        if (!this.groups.includes(group)) return
+        const editor = group.editor
         if (!editor) return
         editor.revealLineInCenter(lineNumber)
         editor.setPosition({ lineNumber, column })
     }
 
     /** Explorer navigation: changes the File, not which version of the Project is being looked at. */
-    selectFile(path: string) {
+    selectFile(path: string, group = this.groupForFile(path)) {
         this.show(
             selectProjectFile(
-                this.sourceSelection,
+                group.sourceSelection,
                 path,
                 this.buildGeneration,
                 this.existsInBuild(path)
-            )
+            ),
+            group
         )
     }
 
     /** Clicking a tab: the same rule as the Explorer. */
-    activateTab(path: string) {
-        this.selectFile(path)
+    activateTab(path: string, group = this.groupForFile(path)) {
+        this.selectFile(path, group)
     }
 
-    closeTab(path: string) {
-        const next = closeTab(this.tabs, path)
-        if (next === this.tabs) return
-        this.tabs = next
-        if (next.active !== this.displayedPath) this.selectFile(next.active)
+    closeTab(path: string, group = this.groups[0]) {
+        const next = closeTab(group.tabs, path)
+        if (next === group.tabs) return
+        group.tabs = next
+        if (!next.paths.length) {
+            this.closeGroup(group)
+            return
+        }
+        if (next.active !== group.displayedPath) this.selectFile(next.active, group)
     }
 
     private synchronizeBuildGeneration(buildSources: BuildSources | undefined): void {
@@ -799,9 +790,18 @@ export class WorkbenchSession {
         // A compile can reveal its first instruction before Svelte flushes the observer above.
         // Synchronize here as well so the selection and model URI always use the new Build.
         this.synchronizeBuildGeneration(buildSources)
-        this.show(buildSource(file, this.buildGeneration))
+        const group =
+            this.groups.find((group) => group.displayedPath === file) ?? this.executionGroup
+        this.executionGroupId = group.id
+        this.show(buildSource(file, this.buildGeneration), group)
+        //Both file editors retain the exact versions used by this Build.
+        for (const other of this.groups) {
+            if (other !== group && this.existsInBuild(other.displayedPath)) {
+                other.sourceSelection = buildSource(other.displayedPath, this.buildGeneration)
+            }
+        }
         await tick()
-        this.revealEditorLine(zeroBasedLineToMonaco(line), column)
+        this.revealEditorLine(zeroBasedLineToMonaco(line), column, group)
     }
 
     async revealDiagnostic(diagnostic: Diagnostic) {
@@ -810,13 +810,14 @@ export class WorkbenchSession {
             this.emulator.buildSources?.entry ??
             this.project.entry ??
             this.displayedPath
-        if (this.existsInBuild(path)) {
-            await this.revealSourceLocation(path, diagnostic.lineIndex, diagnostic.column)
-            return
-        }
-        this.show(liveSource(path))
+        const group = this.groupForFile(path)
+        const selection =
+            diagnostic.source !== 'Compiler Explorer' && this.existsInBuild(path)
+                ? buildSource(path, this.buildGeneration)
+                : liveSource(path)
+        this.show(selection, group)
         await tick()
-        this.revealEditorLine(zeroBasedLineToMonaco(diagnostic.lineIndex), diagnostic.column)
+        this.revealEditorLine(zeroBasedLineToMonaco(diagnostic.lineIndex), diagnostic.column, group)
     }
 
     revealCurrentInstruction() {
@@ -827,9 +828,10 @@ export class WorkbenchSession {
     /** After Stop: every tab shows the live File again, and tabs of Files that are gone close. */
     returnToLiveFiles() {
         const files = this.project.files
-        const fallback = this.project.entry ?? Object.keys(files)[0] ?? ''
-        this.tabs = retainTabs(this.tabs, (path) => files[path] !== undefined, fallback)
-        this.sourceSelection = liveSource(this.tabs.active)
+        for (const group of this.groups) {
+            group.tabs = retainTabs(group.tabs, (path) => files[path] !== undefined, '')
+            group.sourceSelection = liveSource(group.tabs.active)
+        }
     }
 
     // ---- the Files -----------------------------------------------------------------------------
@@ -852,16 +854,19 @@ export class WorkbenchSession {
     fileRenamed(from: string, to: string) {
         this.project.renameCompilationFile(from, to)
         this.moveFileBreakpoints(from, to)
-        this.tabs = renameTab(this.tabs, from, to)
-        if (this.displayedPath === from) this.selectFile(to)
+        for (const group of this.groups) {
+            group.tabs = renameTab(group.tabs, from, to)
+            if (group.displayedPath === from) this.show(liveSource(to), group)
+        }
     }
 
     fileDeleted(path: string) {
         this.moveFileBreakpoints(path)
-        const fallback = this.project.entry ?? Object.keys(this.project.files)[0] ?? ''
-        const shown = this.displayedPath === path
-        this.tabs = removeTab(this.tabs, path, fallback)
-        if (shown) this.selectFile(this.tabs.active)
+        for (const group of this.groups) {
+            group.tabs = removeTab(group.tabs, path, '')
+            if (group.displayedPath === path) group.sourceSelection = liveSource(group.tabs.active)
+            if (!group.tabs.paths.length && this.groups.length > 1) this.closeGroup(group)
+        }
     }
 
     setEntry(path: string) {
@@ -875,9 +880,16 @@ export class WorkbenchSession {
      * rather than from the editor's active text.
      */
     fileEdited(path: string, nextCode: string) {
-        if (this.sourceView !== 'live') return
+        if (
+            this.host.readonly ||
+            this.fileSystemLocked ||
+            this.running ||
+            this.building ||
+            (this.emulator.canExecute && !this.emulator.terminated)
+        )
+            return
         //A File the Project no longer has is not recreated by typing into a stale model.
-        if (!(path in this.project.files)) return
+        if (this.project.files[path]?.encoding !== 'plain') return
         try {
             this.project.fileSystem.writeText(path, nextCode)
         } catch (error) {
@@ -889,39 +901,49 @@ export class WorkbenchSession {
         }
     }
 
-    toggleBreakpoint(line: number) {
-        this.emulator.toggleBreakpoint(line, this.displayedPath)
+    toggleBreakpoint(line: number, group = this.groups[0]) {
+        this.emulator.toggleBreakpoint(line, group.displayedPath)
     }
 
     // ---- execution -----------------------------------------------------------------------------
 
-    selectMappedAssemblyLine(line: number) {
-        this.mappingSelection = this.compilationMap?.lines[line] ?? undefined
-    }
-
-    selectMappedSourceLine(path: string, line: number) {
-        this.mappingSelection = { path, line }
-        const assemblyLine =
-            this.compilationMap?.lines.findIndex(
-                (location) => location?.path === path && location.line === line
-            ) ?? -1
-        if (assemblyLine >= 0) this.editor?.revealLineInCenter(assemblyLine + 1)
+    selectMappedLine(group: EditorGroup, line: number) {
+        const pair = this.mappingPair
+        if (!pair) return
+        this.mappingSelection =
+            pair.assembly === group
+                ? (pair.map.lines[line] ?? undefined)
+                : { path: group.displayedPath, line }
+        const other = pair.source === group ? pair.assembly : pair.source
+        const location = this.mappingSelection
+        if (!location || location.path !== pair.source.displayedPath) return
+        const mappedLine =
+            other === pair.source
+                ? location.line
+                : pair.map.lines.findIndex(
+                      (item) => item?.path === location.path && item.line === location.line
+                  )
+        if (mappedLine >= 0) other.editor?.revealLineInCenter(mappedLine + 1)
     }
 
     cancelSourceCompilation() {
         this.compilationController?.abort()
     }
 
-    async compileDisplayedSource() {
-        const path = this.compilablePath
-        if (this.sourceCompileDisabled || !path) return
+    async compileDisplayedSource(origin = this.groups[0]) {
+        const path = origin.compilablePath
+        if (origin.sourceCompileDisabled || !path) return
+        const optimization = origin.optimization
+        const recompileOutput = !!origin.displayedCompilation
+        const existingDestination = this.groups.find((group) => group !== origin)
         const controller = new AbortController()
         this.compilationController = controller
         const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(45_000)])
         this.compiling = true
+        this.compilingGroupId = origin.id
         this.sourceDiagnostics = []
         try {
-            const result = await compileProjectSource(this.project, path, this.sourceOptimization, {
+            const result = await compileProjectSource(this.project, path, optimization, {
                 signal,
                 confirm: (question) => {
                     const pending = Prompt.confirm(question)
@@ -935,7 +957,22 @@ export class WorkbenchSession {
             })
             if (!result) return
             this.sourceDiagnostics = result.diagnostics
-            this.show(liveSource(result.record.outputPath))
+            const originStillOpen = this.groups.includes(origin)
+            const destinationClosed =
+                existingDestination && !this.groups.includes(existingDestination)
+            if (!originStillOpen || destinationClosed) {
+                this.show(
+                    liveSource(result.record.outputPath),
+                    this.groupForFile(result.record.outputPath)
+                )
+            } else {
+                const other = existingDestination ?? this.createGroup()
+                const source = recompileOutput ? other : origin
+                const assembly = recompileOutput ? origin : other
+                this.show(liveSource(path), source)
+                this.show(liveSource(result.record.outputPath), assembly)
+                this.executionGroupId = assembly.id
+            }
             this.changed()
         } catch (error) {
             if (controller.signal.aborted) return
@@ -950,6 +987,7 @@ export class WorkbenchSession {
             )
         } finally {
             this.compiling = false
+            this.compilingGroupId = undefined
             this.compilationController = undefined
         }
     }

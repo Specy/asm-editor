@@ -43,6 +43,8 @@ Place the existing keyboard-accessible Splitter at the connector gutter's left e
 
 ## Implementation sequence
 
+The subsequent [independent editor panes implementation](./independent-editor-panes-plan.md) replaces the mapping-dependent layout above: each pane has ordinary Project file tabs and a shared canonical model; mapping colors and connectors depend on the two displayed files. Invalidating a map preserves both panes. The implementation sequence below records the initial compilation release.
+
 1. Add compilation types, record validation, fingerprints, language detection, presets, Compiler Explorer transport, diagnostics, and Target-specific assembly preparation. Verify against actual API responses.
 2. Add saved records and transient maps to Project ownership/serialization, with FileSystem-based invalidation and rename handling.
 3. Integrate the asynchronous Compile action and overwrite protection into the Workbench, expose a small Compile toolbar, and implement the mapped split view using existing Monaco editors.

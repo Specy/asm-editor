@@ -26,6 +26,7 @@
     import { setModelBuildArtifacts } from '$lib/monaco/assemblyInsights'
     import { keepHoverReachable } from '$lib/monaco/hoverReachability'
     import type { EditorLineColoring } from '$lib/monaco/lineColoring'
+    import type { EditorModels } from '$lib/workbench/editorModels'
 
     interface Props {
         disabled?: boolean
@@ -48,6 +49,8 @@
         modelIdentity?: ProjectModelIdentity
         /** Model identities still owned by the Project; omitted outside the Project File editor. */
         retainedModelKeys?: readonly string[]
+        /** A Workbench session owns models shared by its editor groups. */
+        sharedModels?: EditorModels
         highlightedLine?: number
         /** Related source/assembly lines selected through a Source map. */
         mappedLines?: readonly number[]
@@ -76,6 +79,7 @@
         modelKey = 'default',
         modelIdentity,
         retainedModelKeys,
+        sharedModels,
         highlightedLine = -1,
         mappedLines = [],
         lineColoring,
@@ -156,14 +160,22 @@
         await Monaco.registerLanguage(editorLanguage)
         if (destroyed) return
         const mounted = activeSource
-        const initialModel = createModel(
-            loadedMonaco,
-            mounted.value,
-            editorLanguage === 'c' ? 'cpp' : editorLanguage.toLowerCase(),
-            mounted.identity
-        )
-        initialModel.setEOL(0)
-        models.set(mounted.key, initialModel)
+        const initialModel = sharedModels
+            ? sharedModels.resolve(
+                  loadedMonaco,
+                  mounted,
+                  editorLanguage === 'c' ? 'cpp' : editorLanguage.toLowerCase()
+              )
+            : createModel(
+                  loadedMonaco,
+                  mounted.value,
+                  editorLanguage === 'c' ? 'cpp' : editorLanguage.toLowerCase(),
+                  mounted.identity
+              )
+        if (!sharedModels) {
+            initialModel.setEOL(0)
+            models.set(mounted.key, initialModel)
+        }
         viewStateKey = mounted.key
         activeModelKey = mounted.key
         overflowWidgets = document.createElement('div')
@@ -316,7 +328,14 @@
         //a host that swaps its content while Monaco is still loading can destroy this component
         //between the editor's creation and this effect; a disposed editor throws on setModel
         if (destroyed || !currentEditor || !currentMonaco) return
-        const model = resolveEditorModel(modelStore(currentMonaco), next)
+        const model = sharedModels
+            ? sharedModels.resolve(
+                  currentMonaco,
+                  next,
+                  language === 'c' ? 'cpp' : language.toLowerCase()
+              )
+            : resolveEditorModel(modelStore(currentMonaco), next)
+        if (!sharedModels) models.set(next.key, model)
         if (currentEditor.getModel() !== model) {
             if (viewStateKey) modelViewStates.set(viewStateKey, currentEditor.saveViewState())
             applyingExternalValue = true
@@ -337,8 +356,13 @@
     })
 
     $effect(() => {
-        const model = models.get(activeSource.key)
+        if (!activeModelKey) return
+        const model = sharedModels ? editor?.getModel() : models.get(activeSource.key)
         if (!model || model.isDisposed()) return
+        if (sharedModels) {
+            sharedModels.artifacts(activeSource.key, buildArtifacts)
+            return
+        }
         return setModelBuildArtifacts(model.uri.toString(), buildArtifacts)
     })
 
@@ -346,6 +370,10 @@
         if (!retainedModelKeys) return
         const retained = new Set(retainedModelKeys)
         const current = activeSource.key
+        for (const key of modelViewStates.keys()) {
+            if (key !== current && !retained.has(key)) modelViewStates.delete(key)
+        }
+        if (sharedModels) return
         for (const [key, model] of models) {
             if (key === current || retained.has(key)) continue
             model.dispose()
@@ -365,7 +393,8 @@
         if (editor === ownEditor) editor = undefined
         overflowWidgets?.remove()
         overflowWidgets = null
-        for (const model of models.values()) if (!model.isDisposed()) model.dispose()
+        if (!sharedModels)
+            for (const model of models.values()) if (!model.isDisposed()) model.dispose()
         models.clear()
         modelViewStates.clear()
     })

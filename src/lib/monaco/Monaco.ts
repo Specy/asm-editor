@@ -83,8 +83,8 @@ class MonacoLoader {
     private ensureProjectOpener(monacoInstance: MonacoType) {
         if (this.projectOpener) return
         this.projectOpener = monacoInstance.editor.registerEditorOpener({
-            openCodeEditor(_source, resource, selectionOrPosition) {
-                return openProjectResource(resource, selectionOrPosition)
+            openCodeEditor(source, resource, selectionOrPosition) {
+                return openProjectResource(resource, selectionOrPosition, source)
             }
         })
         this.toDispose.push(this.projectOpener)

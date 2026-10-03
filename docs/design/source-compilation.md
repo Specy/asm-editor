@@ -24,13 +24,13 @@ Derive the initial output path by appending the Project Target's assembly extens
 
 ## Source-map invalidation
 
-Changing the compiled source File or a project-local header used by the Source compilation removes its Source map and mapped split view. Keep the Generated assembly File and show a stale warning when it is viewed. The mapped view does not retain an old source snapshot after those inputs change.
+Changing the compiled source File or a project-local header used by the Source compilation removes its Source map, mapped highlights, and connectors. Keep the Generated assembly File, both editor panes, and their tabs, and show a stale warning when the assembly is viewed. See the [independent editor panes plan](./independent-editor-panes-plan.md).
 
-Manual edits to the Generated assembly also remove its Source map and mapped split view, as in the owner's initial proposal. Recompiling over manually edited assembly requires an overwrite confirmation. The origin relationship and manual-edit state must remain identifiable after map removal so that invalidation does not disable that confirmation.
+Manual edits to the Generated assembly also remove its Source map, mapped highlights, and connectors while keeping the editors open. Recompiling over manually edited assembly requires an overwrite confirmation. The origin relationship and manual-edit state must remain identifiable after map removal so that invalidation does not disable that confirmation.
 
 ## Source-map storage
 
-The Source map belongs to the Project's in-memory editor state and is not a File in the program-visible FileSystem. It is excluded from persistence, share links, and Project archives. Reloading or reopening a saved/shared Project therefore provides no mapped split view until Source compilation creates a fresh map.
+The Source map belongs to the Project's in-memory editor state and is not a File in the program-visible FileSystem. It is excluded from persistence, share links, and Project archives. Reloading or reopening a saved/shared Project therefore provides no mapping decorations or connectors until Source compilation creates a fresh map.
 
 Persist a small Compilation record with the Project, including the selected source path, used-header paths, output path, and content fingerprints of the compilation inputs and generated output. This preserves the origin relationship and allows stale-input and manually edited-output detection after reopening, without retaining a Source map or old source snapshots. See [ADR 0028](../adr/0028-persist-compilation-records-with-transient-source-maps.md).
 

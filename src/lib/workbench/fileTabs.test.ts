@@ -33,9 +33,9 @@ describe('closeTab', () => {
         expect(closeTab(three, 'a')).toEqual({ paths: ['b', 'c'], active: 'b' })
     })
 
-    it('never closes the last tab', () => {
+    it('allows an empty group after closing the last tab', () => {
         const one = initialTabs('main.s')
-        expect(closeTab(one, 'main.s')).toBe(one)
+        expect(closeTab(one, 'main.s')).toEqual({ paths: [], active: '' })
     })
 })
 

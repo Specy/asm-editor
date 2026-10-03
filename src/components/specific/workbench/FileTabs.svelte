@@ -1,16 +1,19 @@
 <script lang="ts">
     /**
-     * The open Files, shown on desktop even when there is only one
+     * One editor group's open Files, shown even when there is only one
      * ([the design record](../../../../docs/design/workbench.md), File tabs). The row also carries
-     * what the old editor floated over the code: at its right end, "Live file" while a Debug
+     * "Live file" while a Debug
      * session shows a File's current contents rather than the Build's own, and a dimmed tab for a
      * File the language service does not reach from the Entry file.
      */
     import FaTimes from '~icons/fa-solid/times'
+    import FaColumns from '~icons/fa-solid/columns'
     import { useWorkbench } from './workbenchContext'
+    import type { EditorGroup } from '$lib/workbench/EditorGroup.svelte'
 
     const { session } = useWorkbench()
-    const paths = $derived(session.tabs.paths)
+    let { group }: { group: EditorGroup } = $props()
+    const paths = $derived(group.tabs.paths)
 
     function basename(path: string) {
         const parts = path.split('/')
@@ -29,14 +32,16 @@
         })
     })
 
-    const liveFile = $derived(session.debugSession && session.sourceView !== 'snapshot')
+    const liveFile = $derived(session.debugSession && group.sourceView !== 'snapshot')
 </script>
 
 <div class="file-tabs" role="tablist" aria-label="Open files">
     <div class="tabs">
         {#each paths as path, index (path)}
-            {@const active = path === session.displayedPath}
-            {@const unreached = session.analysisStatus?.[path] === 'not-reachable'}
+            {@const active = path === group.displayedPath}
+            {@const unreached =
+                group.sourceView === 'live' &&
+                session.languageAnalysis?.fileStatus[path] === 'not-reachable'}
             <div
                 class="tab"
                 class:active
@@ -45,11 +50,14 @@
             >
                 <button
                     class="tab-select"
+                    draggable="true"
+                    ondragstart={(event) => session.startFileDrag(event, path, group)}
+                    ondragend={() => session.endFileDrag()}
                     role="tab"
                     aria-selected={active}
-                    onclick={() => session.activateTab(path)}
+                    onclick={() => session.activateTab(path, group)}
                     onauxclick={(event) => {
-                        if (event.button === 1) session.closeTab(path)
+                        if (event.button === 1) session.closeTab(path, group)
                     }}
                 >
                     <span class="ellipsis">{labels[index]}</span>
@@ -57,20 +65,27 @@
                         <span class="entry-mark" title="The Entry file">ENTRY</span>
                     {/if}
                 </button>
-                {#if paths.length > 1}
-                    <button
-                        class="tab-close"
-                        title="Close {labels[index]}"
-                        aria-label="Close {labels[index]}"
-                        onclick={() => session.closeTab(path)}
-                    >
-                        <FaTimes />
-                    </button>
-                {/if}
+                <button
+                    class="tab-close"
+                    title="Close {labels[index]}"
+                    aria-label="Close {labels[index]}"
+                    onclick={() => session.closeTab(path, group)}
+                >
+                    <FaTimes />
+                </button>
             </div>
         {/each}
         <div class="tabs-rest"></div>
     </div>
+    {#if session.groups.length === 1}
+        <button
+            class="group-action"
+            title="Split editor"
+            aria-label="Split editor"
+            disabled={!group.displayedPath}
+            onclick={() => session.splitEditor()}><FaColumns /></button
+        >
+    {/if}
     {#if liveFile}
         <span class="version" title="The current contents of a File the program created or changed">
             Live file
@@ -88,6 +103,15 @@
         flex: none;
         height: 2.25rem;
         background-color: var(--wb-strip);
+    }
+    .group-action {
+        flex: none;
+        width: 1.8rem;
+        padding: 0.5rem;
+        background: transparent;
+        color: var(--secondary-text);
+        cursor: pointer;
+        border-bottom: 1px solid var(--wb-line);
     }
 
     /* the rule under the strip is each part's own bottom border, so the shown tab can leave its
@@ -146,11 +170,14 @@
         gap: 0.4rem;
         height: 100%;
         min-width: 0;
-        padding: 0;
         background: transparent;
         color: inherit;
         font-size: 0.82rem;
         cursor: pointer;
+
+        span {
+            padding: 0 0.1rem;
+        }
     }
 
     .tab-close {

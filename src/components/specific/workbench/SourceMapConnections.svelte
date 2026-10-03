@@ -9,14 +9,22 @@
     interface Props {
         sourceEditor?: monaco.editor.IStandaloneCodeEditor
         assemblyEditor?: monaco.editor.IStandaloneCodeEditor
+        sourceOnLeft?: boolean
         sourcePath: string
         coloring: SourceMapColoring
         activeLocation?: SourceLocation
         divider?: Snippet
     }
 
-    let { sourceEditor, assemblyEditor, sourcePath, coloring, activeLocation, divider }: Props =
-        $props()
+    let {
+        sourceEditor,
+        assemblyEditor,
+        sourceOnLeft = true,
+        sourcePath,
+        coloring,
+        activeLocation,
+        divider
+    }: Props = $props()
     let gutter = $state<HTMLDivElement>()
     let schedule = $state.raw<() => void>()
 
@@ -52,6 +60,8 @@
         width: number
         height: number
         inset: number
+        viewportTop: number
+        viewportBottom: number
         ribbons: Ribbon[]
         bridges: Bridge[]
     }
@@ -59,6 +69,8 @@
         width: 48,
         height: 0,
         inset: 0,
+        viewportTop: 0,
+        viewportBottom: 0,
         ribbons: [],
         bridges: []
     })
@@ -113,7 +125,15 @@
         right: monaco.editor.IStandaloneCodeEditor
     ): Geometry {
         const box = root.getBoundingClientRect()
-        const empty = { width: box.width, height: box.height, inset: 0, ribbons: [], bridges: [] }
+        const empty = {
+            width: box.width,
+            height: box.height,
+            inset: 0,
+            viewportTop: 0,
+            viewportBottom: box.height,
+            ribbons: [],
+            bridges: []
+        }
         if (!box.width || !box.height || !left.getModel() || !right.getModel()) return empty
         //Containers survive Build/Stop model swaps. Every position uses its editor's own viewport.
         const leftBox = left.getContainerDomNode().getBoundingClientRect()
@@ -140,18 +160,28 @@
         const ribbons: Ribbon[] = []
         const bridges: Bridge[] = []
         // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Local deduplication during geometry calculation.
-        const bridged = new Set<number>()
+        const bridged = new Set<string>()
         for (const connection of connections) {
-            const assembly = connectionBand(right, connection.assembly, rightViewport, rightScroll)
-            if (!assembly) continue
-            const source = connectionBand(left, connection.source, leftViewport, leftScroll)
-            if (!source) continue
+            const leftBand = connectionBand(
+                left,
+                sourceOnLeft ? connection.source : connection.assembly,
+                leftViewport,
+                leftScroll
+            )
+            const rightBand = connectionBand(
+                right,
+                sourceOnLeft ? connection.assembly : connection.source,
+                rightViewport,
+                rightScroll
+            )
+            if (!leftBand || !rightBand) continue
             const colorIndex = connection.assembly.colorIndex
-            if (!bridged.has(colorIndex)) {
-                bridged.add(colorIndex)
+            const bridgeKey = `${colorIndex}:${leftBand.top}:${leftBand.bottom}`
+            if (!bridged.has(bridgeKey)) {
+                bridged.add(bridgeKey)
                 //The scrollbar bridge belongs only to visible source code, not its heading.
-                const top = Math.max(source.top, leftViewport.top)
-                const bottom = Math.min(source.bottom, leftViewport.bottom)
+                const top = Math.max(leftBand.top, leftViewport.top)
+                const bottom = Math.min(leftBand.bottom, leftViewport.bottom)
                 if (bottom > top) bridges.push({ top, bottom, colorIndex, color: connection.color })
             }
             ribbons.push({
@@ -161,17 +191,25 @@
                 color: connection.color,
                 path:
                     SOURCE_MAP_CONNECTION_STYLE === 'curved'
-                        ? `M ${inset} ${source.top} C ${middle} ${source.top}, ${middle} ${assembly.top}, ${end} ${assembly.top} L ${end} ${assembly.bottom} C ${middle} ${assembly.bottom}, ${middle} ${source.bottom}, ${inset} ${source.bottom} Z`
-                        : `M ${inset} ${source.top} L ${end} ${assembly.top} L ${end} ${assembly.bottom} L ${inset} ${source.bottom} Z`
+                        ? `M ${inset} ${leftBand.top} C ${middle} ${leftBand.top}, ${middle} ${rightBand.top}, ${end} ${rightBand.top} L ${end} ${rightBand.bottom} C ${middle} ${rightBand.bottom}, ${middle} ${leftBand.bottom}, ${inset} ${leftBand.bottom} Z`
+                        : `M ${inset} ${leftBand.top} L ${end} ${rightBand.top} L ${end} ${rightBand.bottom} L ${inset} ${leftBand.bottom} Z`
             })
         }
-        return { width, height: box.height, inset, ribbons, bridges }
+        return {
+            width,
+            height: box.height,
+            inset,
+            viewportTop: Math.max(leftViewport.top, rightViewport.top),
+            viewportBottom: Math.min(leftViewport.bottom, rightViewport.bottom),
+            ribbons,
+            bridges
+        }
     }
 
     $effect(() => {
         const root = gutter
-        const left = sourceEditor
-        const right = assemblyEditor
+        const left = sourceOnLeft ? sourceEditor : assemblyEditor
+        const right = sourceOnLeft ? assemblyEditor : sourceEditor
         if (!root || !left || !right) return
         let frame = 0
         const refresh = () => {
@@ -217,6 +255,10 @@
         height={geometry.height}
         viewBox="0 0 {geometry.width} {geometry.height}"
         style:left="{-geometry.inset}px"
+        style:clip-path="inset({geometry.viewportTop}px 0 {Math.max(
+            0,
+            geometry.height - geometry.viewportBottom
+        )}px 0)"
     >
         {#each geometry.bridges as bridge (bridge.colorIndex)}
             <rect
@@ -257,6 +299,16 @@
         background: var(--secondary);
         z-index: 1;
         pointer-events: none;
+        //The part beside the file tabs continues the tab strip, not the editors.
+        &::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2.25rem;
+            background: var(--wb-strip);
+        }
     }
     svg {
         position: absolute;
@@ -265,7 +317,8 @@
     }
     .divider {
         position: absolute;
-        top: 0;
+        //Starts below the band beside the file tabs.
+        top: 2.25rem;
         bottom: 0;
         left: 0;
         display: flex;

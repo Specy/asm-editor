@@ -135,6 +135,9 @@
                         entry={project.entry}
                         fileSystem={project.fileSystem}
                         selectedPath={session.displayedPath}
+                        selectedPaths={session.groups.map((group) => group.displayedPath)}
+                        onFileDragStart={(event, path) => session.startFileDrag(event, path)}
+                        onFileDragEnd={() => session.endFileDrag()}
                         locked={session.fileSystemLocked || entry.access === 'readonly'}
                         diagnosticCounts={session.diagnosticCounts}
                         analysisStatus={session.analysisStatus}
