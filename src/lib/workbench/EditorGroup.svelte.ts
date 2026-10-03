@@ -24,6 +24,10 @@ export class EditorGroup {
     editor = $state.raw<monaco.editor.IStandaloneCodeEditor>()
     optimization = $state<Optimization>('0')
 
+    declare readonly displayedPath: string
+    declare readonly sourceView: 'snapshot' | 'live'
+    declare readonly displayedLanguage: ReturnType<typeof editorFileLanguage>
+
     constructor(
         readonly session: WorkbenchSession,
         readonly id: string,
@@ -31,6 +35,13 @@ export class EditorGroup {
     ) {
         this.tabs = initialTabs(path)
         this.sourceSelection = liveSource(path)
+        this.displayedPath = $derived(this.sourceSelection.path)
+        this.sourceView = $derived<'snapshot' | 'live'>(
+            this.sourceSelection.sourceKind === 'build' ? 'snapshot' : 'live'
+        )
+        this.displayedLanguage = $derived(
+            editorFileLanguage(this.displayedPath, this.session.project.language)
+        )
         this.resetOptimization()
     }
 
@@ -43,12 +54,6 @@ export class EditorGroup {
             )?.optimization ?? '0'
     }
 
-    get displayedPath() {
-        return this.sourceSelection.path
-    }
-    get sourceView() {
-        return this.sourceSelection.sourceKind === 'build' ? 'snapshot' : 'live'
-    }
     get displayedFile() {
         return this.sourceView === 'snapshot'
             ? this.session.emulator.buildSources?.files[this.displayedPath]
@@ -56,9 +61,6 @@ export class EditorGroup {
     }
     get displayedCode() {
         return this.displayedFile?.encoding === 'plain' ? this.displayedFile.content : ''
-    }
-    get displayedLanguage() {
-        return editorFileLanguage(this.displayedPath, this.session.project.language)
     }
     get displayedCompilation() {
         return this.session.project.compilations.find(

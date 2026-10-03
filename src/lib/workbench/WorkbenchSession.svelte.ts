@@ -24,6 +24,7 @@ import {
 import type { BuildSources } from '$lib/projectFiles'
 import {
     buildSource,
+    isSameProjectSourceSelection,
     liveSource,
     selectProjectFile,
     type ProjectSourceSelection
@@ -641,7 +642,9 @@ export class WorkbenchSession {
     /** Shows a version of a File, opening its tab. */
     private show(selection: ProjectSourceSelection, group = this.groupForFile(selection.path)) {
         const changedPath = group.displayedPath !== selection.path
-        group.sourceSelection = selection
+        if (!isSameProjectSourceSelection(group.sourceSelection, selection)) {
+            group.sourceSelection = selection
+        }
         group.tabs = openTab(group.tabs, selection.path)
         if (changedPath) group.resetOptimization()
     }
@@ -794,7 +797,10 @@ export class WorkbenchSession {
         //Both file editors retain the exact versions used by this Build.
         for (const other of this.groups) {
             if (other !== group && this.existsInBuild(other.displayedPath)) {
-                other.sourceSelection = buildSource(other.displayedPath, this.buildGeneration)
+                const next = buildSource(other.displayedPath, this.buildGeneration)
+                if (!isSameProjectSourceSelection(other.sourceSelection, next)) {
+                    other.sourceSelection = next
+                }
             }
         }
         await tick()
@@ -827,7 +833,10 @@ export class WorkbenchSession {
         const files = this.project.files
         for (const group of this.groups) {
             group.tabs = retainTabs(group.tabs, (path) => files[path] !== undefined, '')
-            group.sourceSelection = liveSource(group.tabs.active)
+            const next = liveSource(group.tabs.active)
+            if (!isSameProjectSourceSelection(group.sourceSelection, next)) {
+                group.sourceSelection = next
+            }
         }
     }
 
@@ -861,7 +870,12 @@ export class WorkbenchSession {
         this.moveFileBreakpoints(path)
         for (const group of this.groups) {
             group.tabs = removeTab(group.tabs, path, '')
-            if (group.displayedPath === path) group.sourceSelection = liveSource(group.tabs.active)
+            if (group.displayedPath === path) {
+                const next = liveSource(group.tabs.active)
+                if (!isSameProjectSourceSelection(group.sourceSelection, next)) {
+                    group.sourceSelection = next
+                }
+            }
             if (!group.tabs.paths.length && this.groups.length > 1) this.closeGroup(group)
         }
     }
