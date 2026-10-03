@@ -283,29 +283,13 @@
     }
 
     /* The two surface styles of the design record's Layout Preferences are custom properties the
-       containers read: Cards puts rounded panels on the page background with small gaps, Lines
-       puts them edge to edge with 1px dividers. */
+       containers read: Cards, set in workbench.css and shared with the Playgrounds, puts rounded
+       panels on the page background with small gaps, Lines puts them edge to edge with 1px
+       dividers. */
     .workbench {
-        --wb-gap: 0.25rem;
-        --wb-radius: 0.4rem;
         --wb-divider: transparent;
         --wb-rail-width: 3rem;
         --wb-top-height: 2.75rem;
-        /* the height of the execution controls floating over the editor */
-        --wb-control-height: 2.1rem;
-        --wb-surface: var(--secondary);
-        /* a band a shade lighter than the panel, so a section's header reads as one */
-        --wb-section-header: color-mix(in srgb, var(--secondary) 72%, var(--tertiary));
-        /* the rule a section draws under itself and beside its neighbour, and memory beside the
-           registers: the card edge in Cards, a divider in Lines */
-        --wb-section-rule: var(--wb-card-edge);
-        /* a tab strip is a shade darker than the panel whose tabs it holds */
-        --wb-strip: color-mix(in srgb, var(--background) 65%, var(--secondary));
-        /* the 1px edge of every card: a border, so the card's content is clipped inside it, its
-           corners included, and nothing it holds can paint over it */
-        --wb-card-edge: 1px solid var(--wb-line);
-        /* that edge's width, for what is placed against a card from outside it */
-        --wb-card-inset: 1px;
         --splitter-size: var(--wb-gap);
         --splitter-line: transparent;
         position: relative;

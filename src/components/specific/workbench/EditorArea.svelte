@@ -4,8 +4,9 @@
      * and current line, and the notices for a binary or a missing File. The editor fills its panel
      * to the edges: the Build turning into Stop is what says a Debug session is on, so it has none
      * of the Interactive editor's animated border, and only a program stopped on an error gets a
-     * red frame, drawn over the editor's edge rather than around it. On a desktop the execution
-     * controls float over the bottom of the code.
+     * red frame, drawn over the editor's edge rather than around it. On a desktop and a phone
+     * the execution controls sit edge to edge in the bottom corners of the code, on a phone as one
+     * tray across its bottom edge.
      */
     import Editor from '$cmp/specific/project/Editor.svelte'
     import BelowLineContent from '$cmp/specific/project/user-tools/BelowLineContent.svelte'
@@ -16,12 +17,14 @@
 
     interface Props {
         tabs?: boolean
-        /** The execution controls floating over the bottom of the code. */
+        /** The execution controls, edge to edge in the bottom corners of the code. */
         controls?: boolean
+        /** The controls as one tray across the bottom of the code, a phone's. */
+        fill?: boolean
         style?: string
     }
 
-    let { tabs = true, controls = false, style = '' }: Props = $props()
+    let { tabs = true, controls = false, fill = false, style = '' }: Props = $props()
 
     const { session } = useWorkbench()
     const emulator = session.emulator
@@ -102,7 +105,7 @@
         {/if}
         {#if controls}
             <div class="floating-controls">
-                <ExecutionControls />
+                <ExecutionControls attached {fill} />
             </div>
         {/if}
     </div>
@@ -158,17 +161,15 @@
         }
     }
 
-    /* along the editor's bottom edge, over a fade from the editor's colour, 0.35rem from its sides
-       and bottom; the bar lets clicks through between its two ends, and the code scrolls past
-       the last line to come out from under it */
+    /* on the editor's bottom edge, where the panel's own rounding clips the trays' outer corners;
+       the bar lets clicks through between its two ends, and the code scrolls past the last line to
+       come out from under it */
     .floating-controls {
         position: absolute;
         z-index: 5;
         left: 0;
         right: 0;
         bottom: 0;
-        padding: 1.4rem 0.35rem 0.35rem 0.35rem;
-        background: linear-gradient(to top, var(--secondary), transparent);
         pointer-events: none;
     }
 

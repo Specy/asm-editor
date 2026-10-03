@@ -20,6 +20,16 @@ export function toolSectionStyle(tool: DebugTool): string {
     return `flex: 1 1 0; min-width: ${minWidth};`
 }
 
+/**
+ * A Debug tool's section body, at most `maxHeight` tall and scrolling inside: the Stack pointer pads
+ * its own controls and page, which are ruled apart from edge to edge of the section, and the others
+ * are inset by 0.4rem.
+ */
+export function toolBodyStyle(tool: DebugTool, maxHeight: string): string {
+    const padding = tool.kind === 'memory' ? '0' : '0.4rem'
+    return `padding: ${padding}; max-height: ${maxHeight}; overflow: auto;`
+}
+
 export function debugTools(memoryTabs: readonly MemoryTab[]): DebugTool[] {
     return [
         ...memoryTabs.map((tab) => ({

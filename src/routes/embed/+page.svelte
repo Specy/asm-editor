@@ -19,9 +19,7 @@
     import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
     import { createShareLink } from '$lib/utils'
     import { toast } from '$stores/toastStore'
-    import Button from '$cmp/shared/button/Button.svelte'
     import FaExternal from '~icons/fa-solid/external-link-alt'
-    import Icon from '$cmp/shared/layout/Icon.svelte'
     import { serializer } from '$lib/json'
     import { languageHasScreen } from '$lib/languages/peripherals/peripheralSet'
     import ThemeScope from '$cmp/shared/providers/ThemeScope.svelte'
@@ -74,6 +72,16 @@
         code = getCodeFromUrl() ?? BASE_CODE[settings.language]
         testcases = cleanTestcases(getTestsFromUrl())
     })
+
+    function openInEditor() {
+        const project = makeProject({ code, language: settings.language })
+        try {
+            window.open(createShareLink(project), '_blank')
+        } catch (error) {
+            console.error(error)
+            toast.error('This program is too large to open in the editor through a link')
+        }
+    }
 
     function getCodeFromUrl() {
         const searchParams = $page.url.searchParams
@@ -230,34 +238,17 @@
                             initialRegisterFile={settings.registerFile}
                             language={settings.language}
                             forceMemoryRight={true}
-                        >
-                            {#snippet controls()}
-                                {#if settings.openButton}
-                                    <Button
-                                        cssVar="secondary"
-                                        style="gap: 0.5rem; margin-left: auto"
-                                        onClick={() => {
-                                            const project = makeProject({
-                                                code,
-                                                language: settings.language
-                                            })
-                                            try {
-                                                window.open(createShareLink(project), '_blank')
-                                            } catch (error) {
-                                                console.error(error)
-                                                toast.error(
-                                                    'This program is too large to open in the editor through a link'
-                                                )
-                                            }
-                                        }}
-                                    >
-                                        <Icon>
-                                            <FaExternal />
-                                        </Icon> Open in editor
-                                    </Button>
-                                {/if}
-                            {/snippet}
-                        </InteractiveInstructionEditor>
+                            dockActions={settings.openButton
+                                ? [
+                                      {
+                                          label: 'Open in editor',
+                                          title: 'Open this program in the editor, in a new tab',
+                                          icon: FaExternal,
+                                          onClick: openInEditor
+                                      }
+                                  ]
+                                : []}
+                        />
                     {/snippet}
                     {#snippet loading()}
                         <Header>Loading emulator...</Header>

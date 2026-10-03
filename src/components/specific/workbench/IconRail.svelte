@@ -3,8 +3,8 @@
      * The narrow column of icons always beside the Workbench: each opens its panel, and the open
      * one closes it again. Explorer, Testcases and Documentation on top, with the host's own panels;
      * the AI assistant, Share, the host's links and Settings at the bottom. Back is at its top on a
-     * desktop, which has no top bar, and in a phone's drawer. A desktop's Save, shown while the
-     * Project has unsaved changes, heads the bottom group, where appearing moves no other icon.
+     * desktop and a tablet, which have no top bar, and in a phone's drawer. Their Save, shown while
+     * the Project has unsaved changes, heads the bottom group, where appearing moves no other icon.
      */
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import FaAngleLeft from '~icons/fa-solid/angle-left'

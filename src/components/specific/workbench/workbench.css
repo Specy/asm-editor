@@ -1,3 +1,25 @@
-:where(.workbench, .project-top-bar) {
+:where(.workbench, .project-top-bar, .playground) {
     --wb-line: color-mix(in srgb, var(--tertiary) 60%, transparent);
+}
+
+/* the Cards surface style, which the Workbench's Lines overrides, and which a Playground's panels
+   are drawn in so that they look like the Workbench's */
+:where(.workbench, .playground) {
+    --wb-gap: 0.25rem;
+    --wb-radius: 0.4rem;
+    /* the height of the execution controls' tray over the editor */
+    --wb-control-height: 2.6rem;
+    --wb-surface: var(--secondary);
+    /* a band a shade lighter than the panel, so a section's header reads as one */
+    --wb-section-header: color-mix(in srgb, var(--secondary) 72%, var(--tertiary));
+    /* the rule a section draws under itself and beside its neighbour, and memory beside the
+       registers: the card edge in Cards, a divider in Lines */
+    --wb-section-rule: var(--wb-card-edge);
+    /* a tab strip is a shade darker than the panel whose tabs it holds */
+    --wb-strip: color-mix(in srgb, var(--background) 65%, var(--secondary));
+    /* the 1px edge of every card: a border, so the card's content is clipped inside it, its
+       corners included, and nothing it holds can paint over it */
+    --wb-card-edge: 1px solid var(--wb-line);
+    /* that edge's width, for what is placed against a card from outside it */
+    --wb-card-inset: 1px;
 }

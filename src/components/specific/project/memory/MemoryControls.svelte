@@ -79,7 +79,7 @@
         <Button
             onClick={searchAddress}
             hasIcon
-            style="padding:0 0.5rem; margin-left: 0.3rem; width:2.2rem; min-height: 1.8rem;"
+            style="padding: 0; margin-left: 0.3rem; width:1.8rem; min-height: 1.8rem;"
             cssVar={buttonVar}
             title="Search address"
             active={BigInt(`0x${hexAddress || '0'}`) !== currentAddress}
@@ -92,7 +92,7 @@
         <Button
             onClick={() => updateAddress(currentAddress - BigInt(bytesPerPage))}
             hasIcon
-            style="padding:0 0.5rem; width:2.2rem; min-height: 1.8rem;"
+            style="padding: 0; width:1.8rem; min-height: 1.8rem;"
             cssVar={buttonVar}
             title="Previous page"
         >
@@ -104,7 +104,7 @@
         <Button
             onClick={() => updateAddress(currentAddress + BigInt(bytesPerPage))}
             hasIcon
-            style="padding:0 0.5rem; width:2.2rem; min-height: 1.8rem;"
+            style="padding: 0; width:1.8rem; min-height: 1.8rem;"
             cssVar={buttonVar}
             title="Next page"
         >
@@ -120,7 +120,7 @@
         margin-left: 0.5rem;
         padding: 0.3rem 0 0.3rem 0.5rem;
         opacity: 0.6;
-        border-left: solid 1px var(--primary-text);
+        border-left: solid 1px var(--wb-line, var(--tertiary));
     }
     .hex-address-label-no-prefix {
         margin-left: 0;
@@ -137,7 +137,9 @@
         flex: 1;
         display: flex;
         border-radius: 0.4rem;
-        padding: 0.4rem 0.8rem;
+        /* the text has as much room on its right as above and below it, the input's own 0.3rem
+           included */
+        padding: 0.4rem 0.4rem 0.4rem 0.8rem;
         align-items: center;
         font-size: 0.9rem;
         background-color: var(--secondary);
@@ -145,7 +147,7 @@
     }
     .hex-address-input {
         width: 100%;
-        padding: 0.3rem 0.8rem 0.3rem 0;
+        padding: 0.3rem 0.3rem 0.3rem 0;
         font-size: 1rem;
         font-family: monospace;
         color: var(--secondary-text);

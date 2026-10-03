@@ -1,4 +1,5 @@
 import type { AvailableLanguages } from '$lib/Project.svelte'
+import { X86_ASSEMBLER_REGISTERS } from '$lib/languages/X86/generated/x86Tokens'
 
 /**
  * The assembly highlighter for the code block a prerendered lecture carries in place of a
@@ -13,15 +14,18 @@ import type { AvailableLanguages } from '$lib/Project.svelte'
  * instead of the language: what a line is made of, not which mnemonics an architecture has.
  *
  * That is enough for the six languages, because they differ mostly in what a comment starts with
- * and what a `$` means, and because a reader is looking at shapes here rather than reading closely.
- * Anything it is unsure of stays plain, which is the honest answer for a placeholder.
+ * and what a `$` means. The one word list it does keep is each language's registers, since every
+ * assembly listing on a page is coloured by it, and an operand reads as a register or as a name.
+ * Those are rules rather than imports: the lists the editor and the Cores define come with the
+ * Cores themselves, an emulator too many for a lecture page, so the tests hold the rules to them.
+ * Anything it is unsure of stays plain.
  *
  * Plain TypeScript, no runes and no DOM, so the renderer builds the spans and a test can read the
  * tokens directly.
  */
 
 export type AssemblyTokenKind =
-    'comment' | 'string' | 'label' | 'directive' | 'mnemonic' | 'number' | 'plain'
+    'comment' | 'string' | 'label' | 'directive' | 'mnemonic' | 'register' | 'number' | 'plain'
 
 export type AssemblyToken = {
     kind: AssemblyTokenKind
@@ -40,24 +44,83 @@ type Syntax = {
     dollarIsHex: boolean
     /** Whether `%` introduces a binary literal, as M68K's `%1010` does. */
     percentIsBinary: boolean
+    /** Whether an operand, lower-cased, names a register, as the editor colours one. */
+    isRegister: (name: string) => boolean
 }
 
+/** `0`..`31`, the register numbers of the two RISC architectures. */
+const UPTO_31 = '(?:[12]?[0-9]|3[01])'
+
+/**
+ * The integer and floating-point registers by number and by ABI name, `fp` (`s0`) and `pc`
+ * included; a CSR is named in an instruction like any symbol and stays plain.
+ */
+const RISCV_REGISTER = new RegExp(
+    `^(?:x${UPTO_31}|f${UPTO_31}|zero|ra|sp|gp|tp|fp|pc|t[0-6]|a[0-7]|s(?:[0-9]|1[01])|ft(?:[0-9]|1[01])|fa[0-7]|fs(?:[0-9]|1[01]))$`
+)
+
+/** The data and address registers and the special ones, a size suffix (`d0.w`) included. */
+const M68K_REGISTER = /^(?:[da][0-7]|sp|pc|sr|ccr|usp)(?:\.[bwl])?$/
+
+/**
+ * The 8 and 16-bit registers, the undocumented halves of the index registers, and the alternate
+ * set with its apostrophe (`af'`), as the Z80 Core names them.
+ */
+const Z80_REGISTERS = new Set([
+    ...['a', 'f', 'b', 'c', 'd', 'e', 'h', 'l', 'i', 'r'],
+    ...['af', 'bc', 'de', 'hl', 'ix', 'iy', 'sp', 'pc'],
+    ...['ixh', 'ixl', 'iyh', 'iyl'],
+    ...["af'", "bc'", "de'", "hl'"]
+])
+
+const X86_REGISTERS = new Set(X86_ASSEMBLER_REGISTERS)
+
+/** MIPS spells every register with a `$`, by number or by name: `$8`, `$t0`, `$f2`. */
+const isMipsRegister = (name: string) => name.startsWith('$')
+const isRiscvRegister = (name: string) => RISCV_REGISTER.test(name)
+
 const SYNTAX: Record<AvailableLanguages, Syntax> = {
-    M68K: { lineComment: [';'], starComment: true, dollarIsHex: true, percentIsBinary: true },
-    Z80: { lineComment: [';'], starComment: false, dollarIsHex: true, percentIsBinary: false },
-    X86: { lineComment: [';'], starComment: false, dollarIsHex: false, percentIsBinary: false },
-    MIPS: { lineComment: ['#'], starComment: false, dollarIsHex: false, percentIsBinary: false },
+    M68K: {
+        lineComment: [';'],
+        starComment: true,
+        dollarIsHex: true,
+        percentIsBinary: true,
+        isRegister: (name) => M68K_REGISTER.test(name)
+    },
+    Z80: {
+        lineComment: [';'],
+        starComment: false,
+        dollarIsHex: true,
+        percentIsBinary: false,
+        isRegister: (name) => Z80_REGISTERS.has(name)
+    },
+    X86: {
+        lineComment: [';'],
+        starComment: false,
+        dollarIsHex: false,
+        percentIsBinary: false,
+        isRegister: (name) => X86_REGISTERS.has(name)
+    },
+    MIPS: {
+        lineComment: ['#'],
+        starComment: false,
+        dollarIsHex: false,
+        percentIsBinary: false,
+        isRegister: isMipsRegister
+    },
     'RISC-V': {
         lineComment: ['#'],
         starComment: false,
         dollarIsHex: false,
-        percentIsBinary: false
+        percentIsBinary: false,
+        isRegister: isRiscvRegister
     },
     'RISC-V-64': {
         lineComment: ['#'],
         starComment: false,
         dollarIsHex: false,
-        percentIsBinary: false
+        percentIsBinary: false,
+        isRegister: isRiscvRegister
     }
 }
 
@@ -76,10 +139,9 @@ const ASSIGNMENT = /^[ \t]*(equ|eqv|set|=)\b/i
 
 /**
  * The tokens of one line. Statement position decides what a name is: the first one is the
- * instruction unless it is a label, in which case the one after it is. Everything that is not a
- * comment, a string, a name or a number - separators, registers, the operands themselves - stays
- * plain, because telling a register from any other name needs the word lists this deliberately
- * does without.
+ * instruction unless it is a label, in which case the one after it is. A name after it is a
+ * register if the language has one by that name; everything else that is not a comment, a string,
+ * a name or a number - separators, symbols, the rest of the operands - stays plain.
  */
 function tokenizeLine(line: string, syntax: Syntax): AssemblyToken[] {
     const tokens: AssemblyToken[] = []
@@ -133,6 +195,11 @@ function tokenizeLine(line: string, syntax: Syntax): AssemblyToken[] {
         if (isNameStart(char) || (char === '$' && !syntax.dollarIsHex)) {
             let end = cursor + 1
             while (end < line.length && isNameBody(line[end])) end += 1
+            //the Z80's alternate registers carry an apostrophe, which would otherwise open a string
+            //that runs to the end of the line: `ex af, af'`
+            if (line[end] === "'" && syntax.isRegister(line.slice(cursor, end + 1).toLowerCase())) {
+                end += 1
+            }
             const name = line.slice(cursor, end)
             if (line[end] === ':') {
                 push('label', name)
@@ -149,7 +216,7 @@ function tokenizeLine(line: string, syntax: Syntax): AssemblyToken[] {
                     push('mnemonic', name)
                 }
             } else {
-                push('plain', name)
+                push(syntax.isRegister(name.toLowerCase()) ? 'register' : 'plain', name)
             }
             cursor = end
             continue

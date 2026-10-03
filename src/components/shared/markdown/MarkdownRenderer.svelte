@@ -16,6 +16,7 @@
     import {
         isTestcaseFence,
         parsePlaygroundFence,
+        parsePlaygroundLanguage,
         parseTestcaseFence,
         type PlaygroundFence,
         type PlaygroundSettings
@@ -41,14 +42,16 @@
                   mnemonic: '#ff9d00',
                   directive: '#eb939a',
                   number: '#80ffbb',
-                  string: '#3ad900'
+                  string: '#3ad900',
+                  register: '#8673ff'
               }
             : {
                   comment: '#506696',
                   mnemonic: '#473fd8',
                   directive: '#9f3b3b',
                   number: '#006d4c',
-                  string: '#0a7b3e'
+                  string: '#0a7b3e',
+                  register: '#037280'
               }
     )
 
@@ -249,6 +252,24 @@
     }
 
     /**
+     * Colours an ordinary block in one of the editor's languages the way a playground's is, with the
+     * same tokenizer and the editor's palette, so that every assembly listing on a page reads alike
+     * and is coloured in the prerendered file too. Its `language-` class goes, so that shiki, which
+     * is left only the blocks in other languages, does not touch it. Answers whether it was one.
+     */
+    function highlightAssemblyBlock(node: Element, info: string): boolean {
+        const language = parsePlaygroundLanguage(info.split('|')[0])
+        const codeNode = node.children?.find(
+            (child): child is Element => child.type === 'element' && child.tagName === 'code'
+        )
+        if (!language || !codeNode) return false
+        codeNode.properties = { className: ['asm-code'] }
+        codeNode.children = highlightedCode(textOf(codeNode).trimEnd(), language)
+        node.properties = { ...node.properties, className: ['asm-block'] }
+        return true
+    }
+
+    /**
      * Marks every playground fence and drops the `testcase` fences, which are instructions to the
      * embed and to the verification test and are never shown to a reader. The children of a block
      * are rebuilt rather than patched in place, so a testcase and the blank line before it leave
@@ -275,6 +296,14 @@
             }
             //a testcase fence that attached to nothing is still not something a reader should read
             if (info !== undefined && isTestcaseFence(info)) continue
+            if (
+                info !== undefined &&
+                node.type === 'element' &&
+                highlightAssemblyBlock(node, info)
+            ) {
+                result.push(node)
+                continue
+            }
             if (node.type === 'element') transformPlaygrounds(node)
             result.push(node)
         }
@@ -491,11 +520,7 @@
             sanitizer: (html) => {
                 return sanitizeMarkdownHtml(html)
             },
-            extensions: [
-                ext,
-                customPlaygroundPlugin,
-                code({ theme, langs: ['mips', 'riscv', 'asm'] })
-            ],
+            extensions: [ext, customPlaygroundPlugin, code({ theme, langs: ['asm'] })],
             rehypeOptions: {
                 allowDangerousHtml: true
             },
@@ -512,7 +537,7 @@
             extensions: [
                 extWithExternalLins,
                 customPlaygroundPlugin,
-                code({ theme, langs: ['mips', 'riscv', 'asm'] })
+                code({ theme, langs: ['asm'] })
             ],
             rehypeOptions: {
                 allowDangerousHtml: true
@@ -530,7 +555,7 @@
             extensions: [
                 extWithoutLinks,
                 customPlaygroundPlugin,
-                code({ theme, langs: ['mips', 'riscv', 'asm', 'c'] })
+                code({ theme, langs: ['asm', 'c'] })
             ],
             rehypeOptions: {
                 allowDangerousHtml: true
@@ -550,7 +575,7 @@
                 ext,
                 headingIdsPlugin,
                 customPlaygroundPlugin,
-                code({ theme, langs: ['mips', 'riscv', 'asm'] })
+                code({ theme, langs: ['asm'] })
             ],
             rehypeOptions: {
                 allowDangerousHtml: true
@@ -569,7 +594,7 @@
             extensions: [
                 extWithExternalLins,
                 plainPlaygroundsPlugin,
-                code({ theme, langs: ['mips', 'riscv', 'asm'] })
+                code({ theme, langs: ['asm'] })
             ],
             rehypeOptions: {
                 allowDangerousHtml: true
@@ -669,6 +694,7 @@
     style:--asm-directive={asmPalette.directive}
     style:--asm-number={asmPalette.number}
     style:--asm-string={asmPalette.string}
+    style:--asm-register={asmPalette.register}
 >
     {#key source + theme + disableLinks + playgrounds + headingIds}
         <Markdown value={source} {carta} />
@@ -694,7 +720,9 @@
         background: var(--secondary) !important;
         padding: 1rem;
         border-radius: 0.5rem;
-        overflow-x: auto;
+        /* a long listing, a whole game, scrolls inside its block rather than running down the page */
+        max-height: 60vh;
+        overflow: auto;
         max-width: fit-content;
         padding: 0.5rem 1rem;
         min-width: min(100%, 72ch);
@@ -860,6 +888,8 @@
     :global(pre.code-playground) {
         box-sizing: border-box;
         height: 21.4rem;
+        /* the iframe's own height, a tall fence's 80dvh included, and not a code block's 60vh */
+        max-height: none;
         min-width: 0;
         max-width: none;
         padding: 1rem;
@@ -878,29 +908,40 @@
     /* the editor's own palette, bound above so it follows the reader's theme rather than the
        system's. A token the tokenizer was unsure of has no span and inherits the block's colour. */
     :global(pre.code-playground .asm-comment),
-    :global(pre.plain-playground .asm-comment) {
+    :global(pre.plain-playground .asm-comment),
+    :global(pre.asm-block .asm-comment) {
         color: var(--asm-comment);
         font-style: italic;
     }
     :global(pre.code-playground .asm-mnemonic),
-    :global(pre.plain-playground .asm-mnemonic) {
+    :global(pre.plain-playground .asm-mnemonic),
+    :global(pre.asm-block .asm-mnemonic) {
         color: var(--asm-mnemonic);
     }
     :global(pre.code-playground .asm-directive),
-    :global(pre.plain-playground .asm-directive) {
+    :global(pre.plain-playground .asm-directive),
+    :global(pre.asm-block .asm-directive) {
         color: var(--asm-directive);
     }
     :global(pre.code-playground .asm-number),
-    :global(pre.plain-playground .asm-number) {
+    :global(pre.plain-playground .asm-number),
+    :global(pre.asm-block .asm-number) {
         color: var(--asm-number);
     }
     :global(pre.code-playground .asm-string),
-    :global(pre.plain-playground .asm-string) {
+    :global(pre.plain-playground .asm-string),
+    :global(pre.asm-block .asm-string) {
         color: var(--asm-string);
+    }
+    :global(pre.code-playground .asm-register),
+    :global(pre.plain-playground .asm-register),
+    :global(pre.asm-block .asm-register) {
+        color: var(--asm-register);
     }
     /* the editor underlines a label rather than colouring it */
     :global(pre.code-playground .asm-label),
-    :global(pre.plain-playground .asm-label) {
+    :global(pre.plain-playground .asm-label),
+    :global(pre.asm-block .asm-label) {
         text-decoration: underline;
     }
 

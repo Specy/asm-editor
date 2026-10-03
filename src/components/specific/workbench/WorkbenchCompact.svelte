@@ -2,10 +2,12 @@
     /**
      * The Workbench on tablets and phones, after the brief
      * ([the design record](../../../../docs/design/workbench.md), Layout and behaviour). One column
-     * scrolls under the top bar: the editor at a fixed height that a Build does not move, the
-     * execution controls in a bar that stays in reach, the bottom panel, then the Debug session's
-     * sections. A tablet keeps the rail and opens panels in a drawer beside it; a phone puts the rail
-     * and the panel in a drawer from the left. There are no file tabs and no splitters, and the Debug
+     * scrolls, on a phone under the top bar: the editor at a fixed height that a Build does not
+     * move, the execution controls in a bar across it that stays in reach (on a phone along the
+     * editor's bottom edge instead), the bottom panel, then
+     * the Debug session's sections. A tablet keeps the rail, with Back and Save in it as on a
+     * desktop, and opens panels in a drawer beside it; a phone puts the rail and the panel in a
+     * drawer from the left. There are no file tabs and no splitters, and the Debug
      * tools are always sections.
      */
     import { untrack } from 'svelte'
@@ -28,7 +30,7 @@
     import ScreenArea from './ScreenArea.svelte'
     import CollapsibleSection from './CollapsibleSection.svelte'
     import DebugToolContent from './DebugToolContent.svelte'
-    import { debugTools } from './debugTools'
+    import { debugTools, toolBodyStyle } from './debugTools'
     import { useWorkbench } from './workbenchContext'
     import type { ScreenHeader } from '$cmp/specific/project/screen/screenHeader'
 
@@ -80,19 +82,28 @@
 </script>
 
 <div class="compact" class:phone>
-    {#if !phone || !externalMenu}
-        <TopBar variant={phone ? 'phone' : 'tablet'} />
+    {#if phone && !externalMenu}
+        <TopBar />
     {/if}
     <div class="frame">
         {#if !phone}
-            <!-- an open panel joins the rail, one card with it as on a desktop -->
-            <div class="rail-slot" class:joined={panelShown}><IconRail /></div>
+            <!-- an open panel joins the rail, one card with it as on a desktop; with no top bar,
+                 Back and Save are in the rail as on a desktop too -->
+            <div class="rail-slot" class:joined={panelShown}><IconRail withBack withSave /></div>
         {/if}
         <div class="scroll">
-            <EditorArea tabs={false} style="height: var(--compact-editor-height); flex: none;" />
-            <div class="controls-bar">
-                <ExecutionControls fill={phone} />
-            </div>
+            <!-- a phone's controls are inside the editor, along its bottom edge -->
+            <EditorArea
+                tabs={false}
+                controls={phone}
+                fill={phone}
+                style="height: var(--compact-editor-height); flex: none;"
+            />
+            {#if !phone}
+                <div class="controls-bar">
+                    <ExecutionControls fill />
+                </div>
+            {/if}
             <BottomPanel
                 open={bottomOpen}
                 style={bottomOpen
@@ -124,7 +135,7 @@
                                         systemSize={emulator.systemSize}
                                         bytesPerPage={emulator.memory.global.pageSize}
                                         memorySize={MEMORY_SIZE[language]}
-                                        inputStyle="height: 100%"
+                                        inputStyle="height: 100%; padding: 0 0 0 0.6rem;"
                                         currentAddress={emulator.memory.global.address}
                                         onAddressChange={(address) =>
                                             emulator.setGlobalMemoryAddress(address)}
@@ -167,7 +178,7 @@
                                 id="compact:{tool.id}"
                                 title={tool.title}
                                 style="flex: 1 1 16rem; min-width: min(16rem, 100%);"
-                                bodyStyle="padding: 0.4rem; max-height: 22rem; overflow: auto;"
+                                bodyStyle={toolBodyStyle(tool, '22rem')}
                             >
                                 <DebugToolContent {tool} />
                             </CollapsibleSection>
@@ -244,7 +255,7 @@
        the room actually left under whatever bars sit above the Workbench, not from guessing them. */
     .scroll {
         --compact-bottom-height: 12rem;
-        --compact-controls-height: calc(var(--wb-control-height) + 0.7rem);
+        --compact-controls-height: calc(var(--wb-control-height) + 0.4rem);
         --compact-editor-height: max(
             14rem,
             calc(
@@ -266,6 +277,11 @@
         overscroll-behavior: contain;
     }
 
+    /* a phone's controls are inside the editor, so the column has no bar to leave room for */
+    .phone .scroll {
+        --compact-controls-height: 0px;
+    }
+
     /* the execution controls, stuck in reach as the column scrolls: no card of their own, only the
        buttons, whose gaps let the clicks through to what scrolls under them */
     .controls-bar {
@@ -274,8 +290,10 @@
         z-index: 4;
         flex: none;
         height: var(--compact-controls-height);
-        padding: 0.35rem 0;
+        padding: 0.2rem 0;
         pointer-events: none;
+        /* out among the cards rather than over the code */
+        --execution-tray: var(--wb-surface);
     }
 
     .fold {

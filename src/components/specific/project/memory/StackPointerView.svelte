@@ -2,8 +2,9 @@
     import type { ThemeKeys } from '$stores/themeStore.svelte'
     /**
      * A memory tab that follows its own address, the stack pointer's for the one tab there is: the
-     * Stack pointer Debug tool. `MemoryTab` puts it in a draggable window; the Workbench also shows
-     * it as a section of the debug column.
+     * Stack pointer Debug tool, in a draggable window or a section of the debug column. Its address
+     * controls are ruled off from the page under them from edge to edge of whatever holds it, so it
+     * pads its own parts and its host gives it none.
      */
     import MemoryControls from './MemoryControls.svelte'
     import MemoryVisualiser from './MemoryRenderer.svelte'
@@ -48,35 +49,45 @@
 </script>
 
 <div class="tab column" {style}>
-    <MemoryControls
-        {systemSize}
-        bytesPerPage={tab.pageSize}
-        {memorySize}
-        currentAddress={tab.address}
-        inputStyle="width: 6rem;"
-        onAddressChange={async (e) => {
-            onAddressChange?.(e, tab)
-        }}
-        hideLabel
-        buttonVar={controlsVar}
-    />
-    <MemoryVisualiser
-        {systemSize}
-        {endianess}
-        {defaultMemoryValue}
-        bytesPerRow={tab.rowSize}
-        pageSize={tab.pageSize}
-        memory={tab.data}
-        currentAddress={tab.address}
-        {sp}
-        {callStackAddresses}
-        {pokeable}
-        {onPoke}
-    />
+    <div class="controls">
+        <MemoryControls
+            {systemSize}
+            bytesPerPage={tab.pageSize}
+            {memorySize}
+            currentAddress={tab.address}
+            inputStyle="width: 6rem; padding: 0 0 0 0.6rem;"
+            onAddressChange={async (e) => {
+                onAddressChange?.(e, tab)
+            }}
+            hideLabel
+            buttonVar={controlsVar}
+        />
+    </div>
+    <div class="page">
+        <MemoryVisualiser
+            {systemSize}
+            {endianess}
+            {defaultMemoryValue}
+            bytesPerRow={tab.rowSize}
+            pageSize={tab.pageSize}
+            memory={tab.data}
+            currentAddress={tab.address}
+            {sp}
+            {callStackAddresses}
+            {pokeable}
+            {onPoke}
+        />
+    </div>
 </div>
 
 <style lang="scss">
-    .tab {
-        gap: 0.4rem;
+    .controls {
+        display: flex;
+        padding: 0.3rem;
+        border-bottom: 1px solid var(--wb-line, var(--tertiary));
+    }
+
+    .page {
+        padding: 0.3rem;
     }
 </style>

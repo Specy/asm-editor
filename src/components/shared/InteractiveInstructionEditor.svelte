@@ -1,7 +1,7 @@
 <script lang="ts">
     import Editor from '$cmp/specific/project/Editor.svelte'
     import { toast } from '$stores/toastStore'
-    import Controls from '$cmp/specific/project/Controls.svelte'
+    import ExecutionDock, { type DockAction } from '$cmp/specific/project/ExecutionDock.svelte'
     import { clampBigInt, formatTime } from '$lib/utils'
     import { registerColumnWidth } from '$lib/languages/registerFormats'
     import { resolveProjectSettings, undoHistorySize } from '$lib/projectSettings'
@@ -33,11 +33,17 @@
         type MarsDisplayOrigin
     } from '$lib/languages/mars/marsDisplay'
     import { languageHasScreen } from '$lib/languages/peripherals/peripheralSet'
-    import Icon from '$cmp/shared/layout/Icon.svelte'
-    import FaDesktop from '~icons/fa-solid/desktop'
+    import CollapsibleSection from '$cmp/specific/workbench/CollapsibleSection.svelte'
+    import type { ScreenHeader } from '$cmp/specific/project/screen/screenHeader'
+    import '$cmp/specific/workbench/workbench.css'
+    import FaListOl from '~icons/fa-solid/list-ol'
+    import FaExclamationTriangle from '~icons/fa-solid/exclamation-triangle'
+    import { watchViewport } from '$lib/workbench/viewport.svelte'
 
     let running = $state(false)
     let building = $state(false)
+    //a phone gets the dock as one tray across the bottom of the code, as the Workbench's
+    const viewport = watchViewport()
 
     type Layout = 'small' | 'fullscreen'
 
@@ -56,7 +62,6 @@
         embedded?: boolean
         language?: AvailableLanguages
         emulator: Emulator
-        controls?: Snippet
         children?: Snippet
         forceMemoryRight?: boolean
         layout?: Layout
@@ -65,6 +70,11 @@
          * Undefined, and an id this language has not got, open the CPU file.
          */
         initialRegisterFile?: string
+        /**
+         * The caller's own controls, such as a documentation page's "Try in the editor", at the far
+         * end of the execution dock floating over the bottom of the code.
+         */
+        dockActions?: DockAction[]
     }
 
     let {
@@ -81,11 +91,11 @@
         testcases = $bindable([]),
         embedded = false,
         emulator = $bindable(),
-        controls,
         children,
         forceMemoryRight = false,
         layout = 'small',
-        initialRegisterFile = undefined
+        initialRegisterFile = undefined,
+        dockActions = []
     }: Props = $props()
     let showMemory = $derived(showMemoryProp ?? true)
     let showFlags = $derived(showFlagsProp ?? true)
@@ -117,9 +127,11 @@
         displayBaseLabel = configured.baseLabel
         if (configured.origin === 'directive') display = configured.display
     }
-    //the small layout has no room to spare, so the Screen starts folded away behind its toggle
-    //unless the caller asked for it open: a lecture whose program draws wants the drawing visible
-    let screenOpen = $state(openScreen)
+    //the small layout has no room to spare, so the Screen starts folded away in its section unless
+    //the caller asked for it open: a lecture whose program draws wants the drawing visible
+    let screenCollapsed = $state(untrack(() => !openScreen))
+    //the section's header shows the Screen's size and controls, which the panel hands it
+    let screenHeader: ScreenHeader | undefined = $state()
     let groupSize = $state(RegisterSize.Word)
 
     //the Playground's half of the Poke availability rule
@@ -152,11 +164,12 @@
     //empty for a language with a single file, which has no tab to pick and goes on sizing its column
     //by what the column holds, exactly as it always did. `min-width` is set with the width because a
     //`fit-content` minimum would otherwise let the widest file win the argument anyway
-    let registersColumnStyle = $derived(
-        registersColumnWidth
-            ? `width: ${registersColumnWidth}; min-width: ${registersColumnWidth};`
-            : ''
-    )
+    //the column is a card now, whose edges are inside its width
+    let registersColumnStyle = $derived.by(() => {
+        if (!registersColumnWidth) return ''
+        const width = `calc(${registersColumnWidth} + 2 * var(--wb-card-inset))`
+        return `width: ${width}; min-width: ${width};`
+    })
     let testcasesVisible = $state(false)
     let testcasesResult: TestcaseResult[] = $state([])
 
@@ -207,13 +220,14 @@
             ? `Ran in ${formatTime(emulator.executionTime)}`
             : ''
     )
-    let sizes = $derived(
-        `calc(${[
-            showFlags && emulator.statusRegisters?.length > 0 ? '3.5rem' : '0px',
-            showConsole ? '4.5rem' : '0px',
-            showPc ? '2.25rem' : '0px',
-            '1rem'
-        ].join(' + ')})`
+    //an embed is an iframe of a fixed height, which the registers card may not outgrow: it is the
+    //card that is held to what the frame leaves it, the embed's padding and the console under it,
+    //and the Register files that shrink inside it and scroll, whatever the flags and the PC above
+    //them take. A minimum height on the files would win over that and push the frame into scrolling
+    let embeddedRegistersStyle = $derived(
+        embedded
+            ? `max-height: calc(var(--screen-height) - 1rem - ${showConsole ? '4.5rem' : '0px'});`
+            : ''
     )
 
     //the small layout splits the CPU file into two name/value pairs per line, which is what fits
@@ -270,6 +284,60 @@
         }
     }
 
+    async function stepCode() {
+        try {
+            await emulator.step()
+        } catch (e) {
+            console.error(e)
+            toast.error('Error executing code. ' + getM68kErrorMessage(e))
+        }
+    }
+
+    function undoStep() {
+        try {
+            emulator.undo()
+        } catch (e) {
+            console.error(e)
+            toast.error('Error executing undo ' + getM68kErrorMessage(e))
+        }
+    }
+
+    function stopProgram() {
+        emulator.clear()
+        running = false
+        if (layout === 'fullscreen') {
+            testcasesResult = []
+        }
+    }
+
+    //an embedded playground carrying testcases is a lecture's Exercise, and the reader checks it
+    //by pressing Test, so there the button stays next to the Testcases panel
+    const offersTest = $derived(
+        layout === 'fullscreen' || embedded
+            ? testcases.length > 0
+            : testcases.length > 0 && !showTestcases
+    )
+    const allDockActions = $derived<DockAction[]>(
+        showTestcases
+            ? [
+                  ...dockActions,
+                  {
+                      label: 'Testcases',
+                      title: 'Show the Testcases',
+                      icon: testcasesResult.some((r) => !r.passed)
+                          ? FaExclamationTriangle
+                          : FaListOl,
+                      tone: testcasesResult.some((r) => !r.passed)
+                          ? 'red'
+                          : testcasesResult.length > 0
+                            ? 'green'
+                            : undefined,
+                      onClick: () => (testcasesVisible = !testcasesVisible)
+                  }
+              ]
+            : dockActions
+    )
+
     function handleRegisterClick(value: bigint) {
         const clampedSize = value - (value % BigInt(emulator.memory.global.pageSize))
         emulator.setGlobalMemoryAddress(clampBigInt(clampedSize, 0n, MEMORY_SIZE[language]))
@@ -283,13 +351,7 @@
 </script>
 
 {#snippet editorSurface()}
-    <div
-        class="editor-border"
-        class:gradientBorder={layout === 'fullscreen'
-            ? emulator.canExecute && !emulator.terminated
-            : emulator.canExecute}
-        class:redBorder={emulator.errors.length > 0}
-    >
+    <div class="editor-border" class:failed={emulator.errors.length > 0}>
         <Editor
             on:change={handleEditorChange}
             on:breakpointPress={(d) => {
@@ -310,67 +372,45 @@
             disabled={(emulator.canExecute && !emulator.terminated) || !!emulator.compiledCode}
             hasError={emulator.errors.length > 0}
         />
+        <div class="floating-dock">
+            <ExecutionDock
+                attached
+                fill={viewport.deviceClass === 'phone'}
+                debugging={emulator.canExecute || !!emulator.compiledCode}
+                {building}
+                {running}
+                buildDisabled={emulator.compilerErrors.length > 0}
+                executionDisabled={emulator.terminated || emulator.interrupt !== undefined}
+                canUndo={emulator.canUndo}
+                hasTests={offersTest}
+                actions={allDockActions}
+                onBuild={buildCode}
+                onStop={stopProgram}
+                onRun={startRun}
+                onPause={() => emulator.pause()}
+                onUndo={undoStep}
+                onStep={stepCode}
+                onTest={runTests}
+            />
+        </div>
     </div>
 {/snippet}
 
-{#snippet controlsPanel()}
-    <!-- an embedded playground carrying testcases is a lecture's Exercise, and the reader checks it
-         by pressing Test, so there the button stays next to the Testcases panel -->
-    <Controls
-        children={controls}
-        {running}
-        {building}
-        hasTests={layout === 'fullscreen' || embedded
-            ? testcases.length > 0
-            : testcases.length > 0 && !showTestcases}
-        canEditTests={showTestcases}
-        hasErrorsInTests={testcasesResult.some((r) => !r.passed)}
-        hasNoErrorsInTests={testcasesResult.every((r) => r.passed) && testcasesResult.length > 0}
-        executionDisabled={emulator.terminated || emulator.interrupt !== undefined}
-        buildDisabled={emulator.compilerErrors.length > 0}
-        hasCompiled={emulator.canExecute || !!emulator.compiledCode}
-        canUndo={emulator.canUndo}
-        on:edit-tests={() => {
-            testcasesVisible = !testcasesVisible
-        }}
-        on:test={runTests}
-        on:run={async () => {
-            await startRun()
-        }}
-        on:pause={() => {
-            emulator.pause()
-        }}
-        on:build={async () => {
-            await buildCode()
-        }}
-        on:step={async () => {
-            try {
-                await emulator.step()
-            } catch (e) {
-                console.error(e)
-                toast.error('Error executing code. ' + getM68kErrorMessage(e))
-            }
-        }}
-        on:undo={() => {
-            try {
-                emulator.undo()
-            } catch (e) {
-                console.error(e)
-                toast.error('Error executing undo ' + getM68kErrorMessage(e))
-            }
-        }}
-        on:stop={() => {
-            emulator.clear()
-            running = false
-            if (layout === 'fullscreen') {
-                testcasesResult = []
-            }
-        }}
-    />
-{/snippet}
-
 {#snippet smallRegsColumn()}
-    <div class="column data-registers-wrapper">
+    <!-- the Workbench's registers card: the flags inset on top and ruled off from edge to edge, then
+         the PC, then the Register files reaching the card's edges -->
+    <!-- outside an embed the files ask for 15.85rem and no more, from a zero basis, so the row is as
+         tall as the tallest of what sits beside them and they fill it, scrolling inside -->
+    <div class="column card registers-card data-registers-wrapper" style={embeddedRegistersStyle}>
+        {#if emulator.statusRegisters?.length > 0 && showFlags}
+            <div class="inset">
+                <StatusCodesVisualiser statusCodes={emulator.statusRegisters} />
+            </div>
+            <!-- the Register files' own header sets them apart, so only the PC is ruled off -->
+            {#if showPc}
+                <div class="rule"></div>
+            {/if}
+        {/if}
         {#if showPc}
             <RegistersVisualiser
                 systemSize={emulator.systemSize}
@@ -383,11 +423,6 @@
                 position="bottom"
             />
         {/if}
-        {#if emulator.statusRegisters?.length > 0 && showFlags}
-            <div class="data-cpu-status-wrapper">
-                <StatusCodesVisualiser statusCodes={emulator.statusRegisters} style="flex:1" />
-            </div>
-        {/if}
         {#if showRegisters}
             <RegisterFilesPanel
                 systemSize={emulator.systemSize}
@@ -395,7 +430,9 @@
                 size={groupSize}
                 initialFileId={initialRegisterFile}
                 gridStyle={smallRegistersGridStyle}
-                style={`flex: unset; max-height: ${embedded ? `calc(var(--screen-height) - ${sizes})` : '15.85rem'}; min-height: 15.85rem;`}
+                style={embedded
+                    ? 'flex: 1; min-height: 0;'
+                    : 'flex: 1 1 0px; min-height: 15.85rem;'}
                 files={emulator.registerFiles}
                 {pokeable}
                 canPokeRegister={(fileId, name) => emulator.canPokeRegister(fileId, name)}
@@ -409,39 +446,54 @@
 {/snippet}
 
 {#snippet smallMemoryPanel()}
-    <div class="column code-data-memory-controls">
-        <MemoryControls
-            systemSize={emulator.systemSize}
-            bytesPerPage={emulator.memory.global.pageSize}
-            memorySize={MEMORY_SIZE[language]}
-            currentAddress={emulator.memory.global.address}
-            style="flex: unset"
-            inputStyle="width: 6rem; height: 3rem"
-            onAddressChange={async (address) => {
-                emulator.setGlobalMemoryAddress(address)
-            }}
-            hideLabel
-        />
-        <MemoryVisualiser
-            systemSize={emulator.systemSize}
-            endianess={emulator.memory.global.endianess}
-            defaultMemoryValue={DEFAULT_MEMORY_VALUE[language]}
-            bytesPerRow={emulator.memory.global.rowSize}
-            pageSize={emulator.memory.global.pageSize}
-            memory={emulator.memory.global.data}
-            currentAddress={emulator.memory.global.address}
-            sp={emulator.sp}
-            callStackAddresses={makeColorizedLabels(emulator.callStack)}
-            {pokeable}
-            onPoke={pokeMemory}
-        />
+    <div class="column card memory-card code-data-memory-controls">
+        <div class="memory-controls">
+            <MemoryControls
+                buttonVar="secondary"
+                systemSize={emulator.systemSize}
+                bytesPerPage={emulator.memory.global.pageSize}
+                memorySize={MEMORY_SIZE[language]}
+                currentAddress={emulator.memory.global.address}
+                style="flex: unset"
+                inputStyle="width: 6rem; padding: 0 0 0 0.6rem;"
+                onAddressChange={async (address) => {
+                    emulator.setGlobalMemoryAddress(address)
+                }}
+                hideLabel
+            />
+        </div>
+        <div class="memory-page">
+            <MemoryVisualiser
+                style="flex: 1; border-bottom-left-radius: min(var(--panel-radius, 0.5rem), 0.2rem); border-bottom-right-radius: min(var(--panel-radius, 0.5rem), 0.2rem);"
+                systemSize={emulator.systemSize}
+                endianess={emulator.memory.global.endianess}
+                defaultMemoryValue={DEFAULT_MEMORY_VALUE[language]}
+                bytesPerRow={emulator.memory.global.rowSize}
+                pageSize={emulator.memory.global.pageSize}
+                memory={emulator.memory.global.data}
+                currentAddress={emulator.memory.global.address}
+                sp={emulator.sp}
+                callStackAddresses={makeColorizedLabels(emulator.callStack)}
+                {pokeable}
+                onPoke={pokeMemory}
+            />
+        </div>
     </div>
 {/snippet}
 
 {#snippet fullscreenRegsColumn()}
-    <div class="column fullscreen-registers-column" style="gap: 0.4rem; {registersColumnStyle}">
+    <div
+        class="column card registers-card fullscreen-registers-column"
+        style={registersColumnStyle}
+    >
         {#if emulator.statusRegisters && emulator.statusRegisters.length > 0 && showFlags}
-            <StatusCodesVisualiser statusCodes={emulator.statusRegisters} />
+            <div class="inset">
+                <StatusCodesVisualiser statusCodes={emulator.statusRegisters} />
+            </div>
+            <!-- the Register files' own header sets them apart, so only the PC is ruled off -->
+            {#if showPc}
+                <div class="rule"></div>
+            {/if}
         {/if}
         {#if showPc}
             <RegistersVisualiser
@@ -475,43 +527,49 @@
 {/snippet}
 
 {#snippet fullscreenMemoryPanel()}
-    <div class="column" style="gap: 0.4rem">
-        <div class="row" style="gap: 0.4rem">
+    <div class="column card memory-card">
+        <div class="memory-controls">
             <MemoryControls
+                buttonVar="secondary"
                 systemSize={emulator.systemSize}
                 bytesPerPage={emulator.memory.global.pageSize}
                 memorySize={MEMORY_SIZE[language]}
-                inputStyle="height: 100%"
+                inputStyle="height: 100%; padding: 0 0 0 0.6rem;"
                 currentAddress={emulator.memory.global.address}
                 onAddressChange={(e) => {
                     emulator.setGlobalMemoryAddress(e)
                 }}
             />
         </div>
-        <MemoryVisualiser
-            systemSize={emulator.systemSize}
-            endianess={emulator.memory.global.endianess}
-            defaultMemoryValue={DEFAULT_MEMORY_VALUE[language]}
-            bytesPerRow={emulator.memory.global.rowSize}
-            pageSize={emulator.memory.global.pageSize}
-            memory={emulator.memory.global.data}
-            currentAddress={emulator.memory.global.address}
-            sp={emulator.sp}
-            callStackAddresses={makeColorizedLabels(emulator.callStack)}
-            {pokeable}
-            onPoke={pokeMemory}
-        />
+        <div class="memory-page">
+            <MemoryVisualiser
+                style="border-bottom-left-radius: min(var(--panel-radius, 0.5rem), 0.2rem); border-bottom-right-radius: min(var(--panel-radius, 0.5rem), 0.2rem);"
+                systemSize={emulator.systemSize}
+                endianess={emulator.memory.global.endianess}
+                defaultMemoryValue={DEFAULT_MEMORY_VALUE[language]}
+                bytesPerRow={emulator.memory.global.rowSize}
+                pageSize={emulator.memory.global.pageSize}
+                memory={emulator.memory.global.data}
+                currentAddress={emulator.memory.global.address}
+                sp={emulator.sp}
+                callStackAddresses={makeColorizedLabels(emulator.callStack)}
+                {pokeable}
+                onPoke={pokeMemory}
+            />
+        </div>
     </div>
 {/snippet}
 
-{#snippet screenPanel(height: string)}
+{#snippet screenPanel(height: string, headerless = false)}
     <ScreenRenderer
         name={language}
         screen={emulator.peripherals.screen}
         keyboard={emulator.peripherals.keyboard}
         mouse={emulator.peripherals.mouse}
         actualSizeZoom={configurableDisplay ? display.unitWidth : 1}
-        style={`height: ${height}; flex: none;`}
+        style={`height: ${height}; flex: none;${headerless ? ' border-radius: 0;' : ''}`}
+        {headerless}
+        onHeader={headerless ? (header) => (screenHeader = header) : undefined}
     >
         {#snippet configuration()}
             {#if configurableDisplay}
@@ -570,10 +628,9 @@
 {#if layout === 'fullscreen'}
     {@render testcasesEditor()}
 
-    <div class="fullscreen-editor-memory-wrapper">
+    <div class="playground fullscreen-editor-memory-wrapper">
         <div class="fullscreen-editor-wrapper">
             {@render editorSurface()}
-            {@render controlsPanel()}
         </div>
         {#if showRegsColumn || showMemory || showConsole || showScreen || children}
             <div class="fullscreen-right-side">
@@ -594,21 +651,20 @@
                         {/if}
                     </div>
                 {/if}
-                {#if showConsole}
-                    {@render consolePanel()}
-                {/if}
                 {#if showScreen}
                     {@render screenPanel('26rem')}
+                {/if}
+                {#if showConsole}
+                    {@render consolePanel()}
                 {/if}
             </div>
         {/if}
     </div>
 {:else}
-    <div class="editor-wrapper">
+    <div class="playground editor-wrapper">
         <div class="top-row">
             <div class="column editor">
                 {@render editorSurface()}
-                {@render controlsPanel()}
             </div>
 
             {#if showRegsColumn}
@@ -621,6 +677,18 @@
             {/if}
         </div>
 
+        <!-- the Screen comes before the terminal, under the code that draws on it -->
+        {#if showScreen}
+            <CollapsibleSection
+                title="Screen"
+                bind:collapsed={screenCollapsed}
+                info={screenCollapsed ? undefined : screenHeader?.info}
+                actions={screenCollapsed ? undefined : screenHeader?.actions}
+            >
+                {@render screenPanel('20rem', true)}
+            </CollapsibleSection>
+        {/if}
+
         {#if showRegsColumn && showMemory && !forceMemoryRight}
             <div class="bottom-row">
                 {#if showConsole}
@@ -632,99 +700,106 @@
             {@render consolePanel()}
         {/if}
 
-        {#if showScreen}
-            <button class="screen-toggle" onclick={() => (screenOpen = !screenOpen)}>
-                <Icon size={0.9}>
-                    <FaDesktop />
-                </Icon>
-                {screenOpen ? 'Hide screen' : 'Show screen'}
-            </button>
-            {#if screenOpen}
-                {@render screenPanel('20rem')}
-            {/if}
-        {/if}
         {@render testcasesEditor()}
     </div>
 {/if}
 
 <style lang="scss">
+    /* the panels sit apart by the Workbench's gap; the small layout has no room for a Screen
+       that most programs never draw on, so it folds away in a section like the debug column's,
+       and the fullscreen layout shows the panel itself */
     .editor-wrapper {
         display: flex;
         flex-direction: column;
         flex: 1;
-        gap: 0.5rem;
+        gap: var(--wb-gap);
     }
 
     .top-row {
         display: flex;
         flex-wrap: wrap;
-        gap: 0.5rem;
+        gap: var(--wb-gap);
         flex: 1;
     }
 
     .bottom-row {
         display: flex;
         flex-wrap: wrap;
-        gap: 0.5rem;
-    }
-
-    /* the small layout has no room for a Screen that most programs never draw on, so it lives
-       behind this bar; the fullscreen layout shows the panel itself */
-    .screen-toggle {
-        display: flex;
-        gap: 0.4rem;
-        align-items: center;
-        justify-content: center;
-        padding: 0.3rem;
-        border: none;
-        border-radius: 0.4rem;
-        font-family: Rubik;
-        font-size: 0.9rem;
-        color: var(--secondary-text);
-        background-color: var(--secondary);
-        cursor: pointer;
-
-        &:hover {
-            filter: brightness(1.2);
-        }
+        gap: var(--wb-gap);
     }
 
     .editor {
         min-height: 15rem;
         min-width: min(100%, 25rem);
         flex: 1;
-        gap: 0.5rem;
     }
 
+    /* the Workbench's cards: the panel's surface inside a 1px edge, which clips what they hold */
+    .card {
+        background-color: var(--wb-surface);
+        border-radius: var(--wb-radius);
+        border: var(--wb-card-edge);
+        overflow: hidden;
+    }
+
+    /* the Register files meet the card's edges, where a rounded corner would only show a gap */
+    .registers-card {
+        gap: 0.3rem;
+        --panel-radius: 0px;
+
+        .inset {
+            flex: none;
+            min-width: 0;
+            padding: 0.3rem 0.3rem 0;
+        }
+
+        /* a border rather than a 1px fill: at a fractional screen scale a fill can round to two
+           pixels, a border always to one, like the card's edges */
+        .rule {
+            flex: none;
+            height: 0;
+            border-top: 1px solid var(--wb-line);
+        }
+    }
+
+    /* the address controls are ruled off from the page under them, from edge to edge of the card,
+       as in the Workbench's memory card */
+    .memory-card {
+        .memory-controls {
+            display: flex;
+            flex: none;
+            gap: 0.4rem;
+            padding: 0.3rem;
+            border-bottom: 1px solid var(--wb-line);
+        }
+
+        /* the page fills the card, as tall as what sits beside it, its rows sharing the room */
+        .memory-page {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            padding: 0.3rem;
+        }
+    }
+
+    /* 18rem inside the card's edges */
     .data-registers-wrapper {
-        --width: 18rem;
+        --width: calc(18rem + 2 * var(--wb-card-inset));
         max-width: var(--width);
         min-width: var(--width);
         width: var(--width);
-        gap: 0.5rem;
         flex: 1;
     }
 
-    .data-cpu-status-wrapper {
-        width: var(--width);
-        display: flex;
-        gap: 0.5rem;
-    }
-
+    /* and around its padding too */
     .code-data-memory-controls {
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-        max-width: 18rem;
+        max-width: calc(18rem + 0.6rem + 2 * var(--wb-card-inset));
     }
 
     @media (max-width: 720px) {
         .data-registers-wrapper {
             flex: 1;
             max-width: unset;
-            width: unset;
-        }
-        .data-cpu-status-wrapper {
             width: unset;
         }
         .bottom-row {
@@ -735,16 +810,59 @@
         }
     }
 
+    /* the Workbench editor's card: the Build turning into Stop is what says the program is built,
+       so there is no frame around the code while it runs, and only a program stopped on an error
+       gets a red one, drawn over the card's edge */
     .editor-border {
         position: relative;
         display: flex;
         flex: 1;
-        padding: 0.2rem;
-        border-radius: 0.5rem;
+        min-width: 0;
+        min-height: 0;
+        background-color: var(--secondary);
+        border-radius: var(--wb-radius, 0.4rem);
+        border: var(--wb-card-edge, 1px solid color-mix(in srgb, var(--tertiary) 60%, transparent));
+        overflow: hidden;
     }
 
-    .editor-wrapper .editor-border {
-        margin: -0.2rem;
+    /* the shadow Monaco draws under the top edge once the code is scrolled */
+    .editor-border :global(.monaco-editor .scroll-decoration) {
+        display: none;
+    }
+
+    /* the card's corners are the rounded ones; the editor's own would only nick them */
+    .editor-border :global(.monaco-editor),
+    .editor-border :global(.monaco-editor .overflow-guard) {
+        border-radius: 0;
+    }
+
+    .failed::after {
+        position: absolute;
+        z-index: 6;
+        content: '';
+        inset: 0;
+        border: 0.2rem solid var(--red);
+        pointer-events: none;
+        animation: appear 0.3s ease-in;
+    }
+
+    @keyframes appear {
+        from {
+            opacity: 0;
+        }
+        to {
+            opacity: 1;
+        }
+    }
+
+    /* edge to edge in the bottom corners of the code, which the card's rounding clips */
+    .floating-dock {
+        position: absolute;
+        z-index: 5;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        pointer-events: none;
     }
 
     .fullscreen-editor-memory-wrapper {
@@ -760,19 +878,14 @@
         .fullscreen-editor-wrapper {
             flex-direction: column;
             flex: 1;
-            gap: 0.4rem;
 
             @media screen and (max-width: 1000px) {
                 min-height: calc(var(--screen-height) * 0.7);
             }
-
-            .editor-border {
-                margin-left: -0.2rem;
-            }
         }
 
         .fullscreen-memory-wrapper {
-            gap: 0.4rem;
+            gap: var(--wb-gap);
             align-items: flex-start;
 
             @media screen and (max-width: 1000px) {
@@ -789,9 +902,9 @@
     }
 
     .fullscreen-right-side {
-        margin-left: 0.5rem;
+        margin-left: var(--wb-gap);
         width: min-content;
-        gap: 0.4rem;
+        gap: var(--wb-gap);
         max-height: calc(var(--screen-height) - 4.2rem);
         padding-top: 0.2rem;
         display: flex;
@@ -821,52 +934,6 @@
             height: unset !important;
             max-height: unset !important;
             overflow: visible !important;
-        }
-    }
-
-    .gradientBorder,
-    .redBorder {
-        position: relative;
-
-        &::before {
-            position: absolute;
-            content: '';
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-size: 300% 300%;
-            background: linear-gradient(
-                    60deg,
-                    hsl(224, 85%, 66%),
-                    hsl(269, 85%, 66%),
-                    hsl(314, 85%, 66%),
-                    hsl(359, 85%, 66%),
-                    hsl(44, 85%, 66%),
-                    hsl(89, 85%, 66%),
-                    hsl(134, 85%, 66%),
-                    hsl(179, 85%, 66%)
-                )
-                0 50%;
-            border-radius: 0.5rem;
-            animation:
-                moveGradient 5s alternate infinite,
-                appear 0.3s ease-in;
-        }
-
-        @keyframes appear {
-            from {
-                opacity: 0;
-            }
-            to {
-                opacity: 1;
-            }
-        }
-    }
-
-    .redBorder {
-        &::before {
-            background: linear-gradient(60deg, hsl(359, 85%, 66%), hsl(0, 85%, 66%));
         }
     }
 </style>

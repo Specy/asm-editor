@@ -112,6 +112,10 @@ The architecture and supported assembler/runtime environment selected for a **Pr
 
 The language of a text **File**, such as target-specific assembly, C, or plain text, used to interpret and present its source. It is independent of the Project's **Target** and the File's storage encoding; selecting a language does not make a compiler for it available.
 
+## Self-contained program
+
+A program compiled from a higher-level **File language** for a **Target** without standard-library dependencies, using the startup and exit support supplied for that Target. Full language runtimes are outside the first source-compilation release.
+
 ## Project archive
 
 A portable copy of a **Project**, containing all its named **Files**, its **Entry path**, and its configuration and metadata. Distinct from downloading an individual File; it does not contain a running **Debug session**.

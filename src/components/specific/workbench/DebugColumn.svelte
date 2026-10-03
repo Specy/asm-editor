@@ -20,7 +20,7 @@
     import ScreenArea from './ScreenArea.svelte'
     import CollapsibleSection from './CollapsibleSection.svelte'
     import DebugToolContent from './DebugToolContent.svelte'
-    import { debugTools, toolSectionStyle } from './debugTools'
+    import { debugTools, toolBodyStyle, toolSectionStyle } from './debugTools'
     import { useWorkbench } from './workbenchContext'
     import type { ScreenHeader } from '$cmp/specific/project/screen/screenHeader'
 
@@ -84,7 +84,7 @@
                         systemSize={emulator.systemSize}
                         bytesPerPage={emulator.memory.global.pageSize}
                         memorySize={MEMORY_SIZE[language]}
-                        inputStyle="height: 100%"
+                        inputStyle="height: 100%; padding: 0 0 0 0.6rem;"
                         currentAddress={emulator.memory.global.address}
                         onAddressChange={(address) => emulator.setGlobalMemoryAddress(address)}
                     />
@@ -147,7 +147,7 @@
                                 id="debug:{tool.id}"
                                 title={tool.title}
                                 style={toolSectionStyle(tool)}
-                                bodyStyle="padding: 0.4rem; max-height: 24rem; overflow: auto;"
+                                bodyStyle={toolBodyStyle(tool, '24rem')}
                             >
                                 <DebugToolContent {tool} />
                             </CollapsibleSection>
@@ -223,14 +223,14 @@
     .memory {
         min-width: 0;
         border-left: var(--wb-section-rule, none);
-        gap: 0.4rem;
-        padding: 0.3rem;
     }
 
+    /* the address controls are ruled off from the page under them, from edge to edge of the card */
     .memory-grid {
         flex: 1;
         min-height: 0;
         overflow: auto;
+        padding: 0.3rem;
     }
 
     /* grows with what is open in it, the column being the one thing that scrolls. Its width is
@@ -262,5 +262,7 @@
         display: flex;
         flex: none;
         gap: 0.4rem;
+        padding: 0.3rem;
+        border-bottom: 1px solid var(--wb-line);
     }
 </style>

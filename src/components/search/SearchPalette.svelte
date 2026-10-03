@@ -11,6 +11,7 @@
      * live on the scope rather than on the document.
      */
     import { tick, untrack } from 'svelte'
+    import { cubicOut } from 'svelte/easing'
     import FaArrowDown from '~icons/fa-solid/arrow-down'
     import FaArrowUp from '~icons/fa-solid/arrow-up'
     import { goto } from '$app/navigation'
@@ -84,6 +85,35 @@
         return () => clearTimeout(timer)
     })
 
+    function reducedMotion(): boolean {
+        return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    }
+
+    function backdropFade(_node: HTMLElement) {
+        return { duration: 150, easing: cubicOut, css: (t: number) => `opacity: ${t};` }
+    }
+
+    /**
+     * Drops in from just above where it settles and shrinks back into it; on a phone the sheet rises
+     * from just below instead. Reduced motion keeps the fade and drops the movement. Both ways run
+     * the same transition, so reopening while it closes turns it around rather than starting over.
+     */
+    function paletteMotion(_node: HTMLElement) {
+        const still = reducedMotion()
+        const phone = window.matchMedia('(max-width: 600px)').matches
+        return {
+            duration: 160,
+            easing: cubicOut,
+            css: (t: number) => {
+                if (still) return `opacity: ${t};`
+                const u = 1 - t
+                return phone
+                    ? `opacity: ${t}; transform: translateY(${u * 1.5}rem);`
+                    : `opacity: ${t}; transform: translateY(${u * -0.5}rem) scale(${0.97 + 0.03 * t});`
+            }
+        }
+    }
+
     function close() {
         closeSearchPalette()
         opener?.focus?.()
@@ -129,9 +159,10 @@
 
 {#if searchPalette.open}
     <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-    <div class="backdrop" onclick={close}>
+    <div class="backdrop" onclick={close} transition:backdropFade>
         <div
             class="palette"
+            transition:paletteMotion
             role="dialog"
             aria-modal="true"
             aria-label="Search"
@@ -243,6 +274,7 @@
         color: var(--primary-text);
         box-shadow: 0 1rem 3rem rgb(0 0 0 / 35%);
         outline: none;
+        transform-origin: top center;
     }
     .top {
         display: flex;

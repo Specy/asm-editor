@@ -2,7 +2,8 @@
     /**
      * A titled section that folds away, remembering whether it is folded (per person, in the layout
      * store): the Settings panel's sections, the Screen and the Debug tools in the debug column, and
-     * the rows of the compact layouts.
+     * the rows of the compact layouts. A section without an `id` remembers it only for as long as it
+     * lives, like a Playground's Screen, which would otherwise fold on every page at once.
      */
     import { tick, untrack, type Snippet } from 'svelte'
     import FaAngleRight from '~icons/fa-solid/angle-right'
@@ -10,9 +11,11 @@
 
     interface Props {
         /** Where the folded state is remembered. */
-        id: string
+        id?: string
         title: string
         defaultCollapsed?: boolean
+        /** Whether a section without an `id` is folded, bound by a caller that has to know. */
+        collapsed?: boolean
         /** Read-only detail beside the title, like the Screen's size. */
         info?: Snippet
         /** Controls of the section's own at the right of its header. */
@@ -34,6 +37,7 @@
         id,
         title,
         defaultCollapsed = false,
+        collapsed: ownCollapsed = $bindable(defaultCollapsed),
         info,
         actions,
         children,
@@ -44,7 +48,14 @@
         element = $bindable()
     }: Props = $props()
 
-    const collapsed = $derived(workbenchLayout.isCollapsed(id, defaultCollapsed))
+    const collapsed = $derived(
+        id === undefined ? ownCollapsed : workbenchLayout.isCollapsed(id, defaultCollapsed)
+    )
+
+    function toggle() {
+        if (id === undefined) ownCollapsed = !collapsed
+        else workbenchLayout.setCollapsed(id, !collapsed)
+    }
     //the body is built the first time the section opens and only hidden after that, so opening it
     //again shows what is there instead of building it anew
     let opened = false
@@ -105,11 +116,7 @@
     bind:this={element}
 >
     <div class="section-header">
-        <button
-            class="toggle"
-            aria-expanded={!collapsed}
-            onclick={() => workbenchLayout.setCollapsed(id, !collapsed)}
-        >
+        <button class="toggle" aria-expanded={!collapsed} onclick={toggle}>
             <span class="chevron" class:open={!collapsed}><FaAngleRight /></span>
             <span class="ellipsis">{title}</span>
             {#if info}

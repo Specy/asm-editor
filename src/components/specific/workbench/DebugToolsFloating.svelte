@@ -134,11 +134,11 @@
 {/each}
 
 <style lang="scss">
-    /* the Stack pointer window's own body, as the editor drew it */
+    /* the Stack pointer window's own body, as the editor drew it, with no padding: the view pads its
+       own controls and page, ruled apart from edge to edge of the window */
     .window-body {
         background-color: var(--primary);
         color: var(--primary-text);
-        padding: 0.4rem;
         max-width: 16rem;
         border-radius: 0.7rem;
         box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);

@@ -1,54 +1,31 @@
 <script lang="ts">
     /**
-     * The top bar of the compact layouts, on the page's own background: back (as wide as the rail
-     * under it) and the title with Save; on a phone the drawer button instead of back. The
-     * execution controls have their own bar under the editor. A desktop has no top bar: Back and
-     * Save are in its rail and the controls float over the editor.
+     * The top bar of a phone, on the page's own background: the drawer button (as wide as a rail)
+     * and the title with Save. The execution controls have their own bar under the editor. A
+     * desktop and a tablet have no top bar: Back and Save are in their rail.
      */
     import Icon from '$cmp/shared/layout/Icon.svelte'
     import Button from '$cmp/shared/button/Button.svelte'
-    import FaAngleLeft from '~icons/fa-solid/angle-left'
     import FaSave from '~icons/fa-solid/save'
     import FaBars from '~icons/fa-solid/bars'
     import { useWorkbench } from './workbenchContext'
-
-    interface Props {
-        variant: 'tablet' | 'phone'
-    }
-
-    let { variant }: Props = $props()
 
     const context = useWorkbench()
     const { session, ui } = context
 </script>
 
-<header class="top-bar" class:phone={variant === 'phone'}>
-    {#if variant === 'phone'}
-        <button
-            class="icon-button rail-width"
-            title="Open the menu"
-            aria-label="Open the menu"
-            aria-expanded={ui.drawerOpen}
-            onclick={() => (ui.drawerOpen = !ui.drawerOpen)}
-        >
-            <Icon size={1.2}>
-                <FaBars />
-            </Icon>
-        </button>
-    {:else if context.onBack}
-        <button
-            class="icon-button rail-width"
-            title="Go back"
-            aria-label="Go back"
-            onclick={() => context.onBack?.()}
-        >
-            <Icon size={1.4}>
-                <FaAngleLeft />
-            </Icon>
-        </button>
-    {:else}
-        <div class="rail-width"></div>
-    {/if}
+<header class="top-bar">
+    <button
+        class="icon-button rail-width"
+        title="Open the menu"
+        aria-label="Open the menu"
+        aria-expanded={ui.drawerOpen}
+        onclick={() => (ui.drawerOpen = !ui.drawerOpen)}
+    >
+        <Icon size={1.2}>
+            <FaBars />
+        </Icon>
+    </button>
     <h1 class="title ellipsis" title={context.title}>{context.title}</h1>
     {#if context.onSave && context.unsaved}
         <Button
@@ -99,13 +76,9 @@
     }
 
     .title {
-        font-size: 1.15rem;
+        font-size: 1.05rem;
         font-weight: bold;
         min-width: 3rem;
         margin: 0;
-    }
-
-    .phone .title {
-        font-size: 1.05rem;
     }
 </style>

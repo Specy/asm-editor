@@ -4,8 +4,6 @@
     import Header from '$cmp/shared/layout/Header.svelte'
     import EmulatorLoader from '$cmp/shared/providers/EmulatorLoader.svelte'
     import FaExternalLink from '~icons/fa-solid/external-link-alt'
-    import Button from '$cmp/shared/button/Button.svelte'
-    import Icon from '$cmp/shared/layout/Icon.svelte'
     import { createSharePayload } from '$lib/utils'
     import { makeProject } from '$lib/Project.svelte'
     import { goto } from '$app/navigation'
@@ -71,22 +69,15 @@
                 {showConsole}
                 showScreen={false}
                 forceMemoryRight
-            >
-                <!-- The playground's own control row, next to Build and Run, rather than floating
-                     over the page: the reader reaches for it from the same place as the rest. -->
-                {#snippet controls()}
-                    <Button
-                        cssVar="secondary"
-                        style="gap: 0.5rem; margin-left: auto"
-                        onClick={openInEditor}
-                    >
-                        <Icon>
-                            <FaExternalLink />
-                        </Icon>
-                        Try in the editor
-                    </Button>
-                {/snippet}
-            </InteractiveEditor>
+                dockActions={[
+                    {
+                        label: 'Try in the editor',
+                        title: 'Open this example in the editor',
+                        icon: FaExternalLink,
+                        onClick: openInEditor
+                    }
+                ]}
+            />
         {/snippet}
         {#snippet loading()}
             <Header>Loading emulator...</Header>

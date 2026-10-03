@@ -484,8 +484,22 @@
         color: var(--green-text);
     }
 
+    //the value fills its cell, so that in a page stretched taller than its rows need, a
+    //Playground's, it is centred beside its address and a highlighted byte still covers the cell
     .memory-number {
         position: relative;
+        display: flex;
+        flex-direction: column;
+
+        > :global(div:has(> .tooltip-base)) {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+        }
+
+        :global(.tooltip-base) {
+            flex: 1;
+        }
     }
 
     .selection-value {
@@ -553,6 +567,9 @@
         border-radius: 0.3rem;
         grid-template-columns: repeat(var(--bytesPerRow), 1fr);
         grid-template-rows: repeat(var(--bytesPerRow), 1fr);
+        //a page with more rows than bytes in a row, a Playground's, shares a taller panel evenly
+        //between all of them, as the addresses beside them do, and not only between the first
+        grid-auto-rows: 1fr;
     }
 
     .memory-offsets {
