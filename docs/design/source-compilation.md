@@ -36,7 +36,7 @@ Persist a small Compilation record with the Project, including the selected sour
 
 ## Compatibility findings for future Targets
 
-Compiler Explorer's Intel syntax option does not make GCC/Clang output a NASM assembly file; assembler directives and operand notation still differ. The x86 Core already supports GNU as through `GNU_trunk` in [assemblers.ts](../../emulators/x86/blink-js/src/assemblers.ts), while the editor currently selects `NASM_trunk` in [X86Emulator.svelte.ts](../../src/lib/languages/X86/X86Emulator.svelte.ts). Using the existing GNU assembler support is a candidate for future x86 source compilation; no x86 implementation is part of the accepted first release.
+Compiler Explorer's Intel syntax option does not make compiler output a NASM assembly File; assembler directives and operand notation still differ. x86 keeps `NASM_trunk` for Builds and live checking. The Core's package now supplies `@specy/x86/compiler-output`, whose `gcc-intel-v1` profile translates GCC 14.2's x86-64 Intel output to NASM, retaining source locations and reporting unsupported constructs. GNU as is used only to capture stored test references. See [ADR 0032](../adr/0032-x86-translates-compiler-output-to-nasm-in-the-core-package.md) and the [implementation record](./x86-gcc-intel-v1.md). The translator is published in `@specy/x86` 3.0.0. Editor x86 Compile awaits the Runtime library's x86 phase, which owns startup and library linking; it is outside the first runtime release.
 
 ## Accepted editor workflow
 

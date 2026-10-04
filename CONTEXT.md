@@ -159,7 +159,7 @@ The **Project**'s configured path from which a Build begins, `main.<ext>` by def
 
 ## Entry file
 
-The **File** found at a Project's **Entry path**, when it exists, which a Build assembles first. Other Files are reached from it through includes or are not built at all.
+The **File** found at a Project's **Entry path**, when it exists, from which a Build begins. Depending on the Target, other Files are reached through includes or linked as separate units. x86 links every `.asm`, `.s` and `.nasm` File that another unit does not include, so a non-Entry Generated assembly File also participates in the Build.
 _Avoid_: main file, active file, selected file, open file
 
 ## Displayed file

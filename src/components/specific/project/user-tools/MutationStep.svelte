@@ -1,6 +1,5 @@
 <script lang="ts">
     import Icon from '$cmp/shared/layout/Icon.svelte'
-    import { ccrToFlagsArray } from '@specy/s68k'
     import { createEventDispatcher } from 'svelte'
     import FaUndo from '~icons/fa-solid/undo'
     import {
@@ -11,6 +10,7 @@
     } from '$lib/languages/commonLanguageFeatures.svelte'
     import type { AvailableLanguages } from '$lib/Project.svelte'
     import { sizeName } from '$lib/languages/sizeNames'
+    import { statusFlagsFromBits } from '$lib/languages/statusFlagBits'
 
     interface Props {
         step: ExecutionStep
@@ -20,7 +20,8 @@
     }
 
     let { step, flags, language }: Props = $props()
-    let ccr = $derived(ccrToFlagsArray(step.new_ccr.bits).reverse())
+    //each Core records its own status register, so the bits are read with the Target's own layout
+    let ccr = $derived(statusFlagsFromBits(language, step.new_ccr.bits))
 
     /**
      * A Poke is a row of its own ([the design record](../../../../../docs/design/pokes.md)): what
