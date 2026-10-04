@@ -25,6 +25,8 @@
     import { zeroBasedLineToMonaco } from '$lib/languages/service/monacoConversions'
     import { setModelBuildArtifacts } from '$lib/monaco/assemblyInsights'
     import { keepHoverReachable } from '$lib/monaco/hoverReachability'
+    import type { EditorLineColoring } from '$lib/monaco/lineColoring'
+    import type { EditorModels } from '$lib/workbench/editorModels'
 
     interface Props {
         disabled?: boolean
@@ -47,7 +49,13 @@
         modelIdentity?: ProjectModelIdentity
         /** Model identities still owned by the Project; omitted outside the Project File editor. */
         retainedModelKeys?: readonly string[]
+        /** A Workbench session owns models shared by its editor groups. */
+        sharedModels?: EditorModels
         highlightedLine?: number
+        /** Related source/assembly lines selected through a Source map. */
+        mappedLines?: readonly number[]
+        /** Matching source/assembly section backgrounds. */
+        lineColoring?: EditorLineColoring
         hasError?: boolean
         language: AvailableLanguages | AvailableProgrammingLanguages
         diagnostics?: Diagnostic[]
@@ -71,7 +79,10 @@
         modelKey = 'default',
         modelIdentity,
         retainedModelKeys,
+        sharedModels,
         highlightedLine = -1,
+        mappedLines = [],
+        lineColoring,
         hasError = false,
         language,
         diagnostics = [],
@@ -116,6 +127,7 @@
     let ownEditor: monaco.editor.IStandaloneCodeEditor | undefined
     let applyingExternalValue = false
     let overflowWidgets: HTMLDivElement | null = null
+    let viewZoneSelections = $state.raw<{ line: number; domNode: HTMLElement }[]>([])
     //Plain Maps, not reactive ones: nothing renders from them, and the effect that reconciles the
     //models both reads and writes them, which with reactive maps made it re-run on its own writes.
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- see above; no tracked consumer.
@@ -128,6 +140,7 @@
         /** A change to any Project File's model, including one the editor is not showing. */
         fileChange: { path: string; value: string }
         breakpointPress: number
+        lineSelect: number
     }>()
     let el: HTMLDivElement | null = $state(null)
 
@@ -147,14 +160,22 @@
         await Monaco.registerLanguage(editorLanguage)
         if (destroyed) return
         const mounted = activeSource
-        const initialModel = createModel(
-            loadedMonaco,
-            mounted.value,
-            editorLanguage.toLowerCase(),
-            mounted.identity
-        )
-        initialModel.setEOL(0)
-        models.set(mounted.key, initialModel)
+        const initialModel = sharedModels
+            ? sharedModels.resolve(
+                  loadedMonaco,
+                  mounted,
+                  editorLanguage === 'c' ? 'cpp' : editorLanguage.toLowerCase()
+              )
+            : createModel(
+                  loadedMonaco,
+                  mounted.value,
+                  editorLanguage === 'c' ? 'cpp' : editorLanguage.toLowerCase(),
+                  mounted.identity
+              )
+        if (!sharedModels) {
+            initialModel.setEOL(0)
+            models.set(mounted.key, initialModel)
+        }
         viewStateKey = mounted.key
         activeModelKey = mounted.key
         overflowWidgets = document.createElement('div')
@@ -204,6 +225,11 @@
         }
 
         toDispose.push(
+            mountedEditor.onDidChangeCursorPosition((event) => {
+                //Model switches and debugger navigation are not a new user source selection.
+                if (applyingExternalValue || event.source === 'api') return
+                dispatcher('lineSelect', event.position.lineNumber - 1)
+            }),
             mountedEditor.onMouseDown((e) => {
                 if (
                     breakpointsEditable &&
@@ -285,7 +311,7 @@
                 const model = createModel(
                     currentMonaco,
                     source.value,
-                    language.toLowerCase(),
+                    language === 'c' ? 'cpp' : language.toLowerCase(),
                     source.identity
                 )
                 model.setEOL(0)
@@ -302,7 +328,14 @@
         //a host that swaps its content while Monaco is still loading can destroy this component
         //between the editor's creation and this effect; a disposed editor throws on setModel
         if (destroyed || !currentEditor || !currentMonaco) return
-        const model = resolveEditorModel(modelStore(currentMonaco), next)
+        const model = sharedModels
+            ? sharedModels.resolve(
+                  currentMonaco,
+                  next,
+                  language === 'c' ? 'cpp' : language.toLowerCase()
+              )
+            : resolveEditorModel(modelStore(currentMonaco), next)
+        if (!sharedModels) models.set(next.key, model)
         if (currentEditor.getModel() !== model) {
             if (viewStateKey) modelViewStates.set(viewStateKey, currentEditor.saveViewState())
             applyingExternalValue = true
@@ -323,8 +356,13 @@
     })
 
     $effect(() => {
-        const model = models.get(activeSource.key)
+        if (!activeModelKey) return
+        const model = sharedModels ? editor?.getModel() : models.get(activeSource.key)
         if (!model || model.isDisposed()) return
+        if (sharedModels) {
+            sharedModels.artifacts(activeSource.key, buildArtifacts)
+            return
+        }
         return setModelBuildArtifacts(model.uri.toString(), buildArtifacts)
     })
 
@@ -332,6 +370,10 @@
         if (!retainedModelKeys) return
         const retained = new Set(retainedModelKeys)
         const current = activeSource.key
+        for (const key of modelViewStates.keys()) {
+            if (key !== current && !retained.has(key)) modelViewStates.delete(key)
+        }
+        if (sharedModels) return
         for (const [key, model] of models) {
             if (key === current || retained.has(key)) continue
             model.dispose()
@@ -351,7 +393,8 @@
         if (editor === ownEditor) editor = undefined
         overflowWidgets?.remove()
         overflowWidgets = null
-        for (const model of models.values()) if (!model.isDisposed()) model.dispose()
+        if (!sharedModels)
+            for (const model of models.values()) if (!model.isDisposed()) model.dispose()
         models.clear()
         modelViewStates.clear()
     })
@@ -368,9 +411,14 @@
     $effect(() => {
         if (activeModelKey && editor && viewZones.length > 0) {
             const viewZoneEditor = editor
+            const coloring = lineColoring
             let currentViewZones = [] as {
                 id: string
                 domNode: HTMLElement
+                wrapper: HTMLElement
+                marginDomNode?: HTMLElement
+                line: number
+                selection: HTMLElement
                 observer: ResizeObserver
                 component: Record<string, unknown>
             }[]
@@ -378,21 +426,36 @@
             viewZoneEditor.changeViewZones(function (changeAccessor) {
                 viewZones.forEach((zone) => {
                     const domNode = document.createElement('div')
+                    const line = zone.afterLineNumber - 1
+                    const section = coloring?.ranges.find(
+                        (range) => range.startLine <= line && range.endLine >= line
+                    )
+                    let marginDomNode: HTMLElement | undefined
+                    if (section) {
+                        //Expansion rows and their gutter belong to the original assembly section.
+                        domNode.className = `compiled-section compiled-section-zone compiled-section-color-${section.colorIndex}`
+                        marginDomNode = document.createElement('div')
+                        marginDomNode.className = `compiled-section-margin compiled-section-color-${section.colorIndex}`
+                    }
+                    const selection = document.createElement('div')
+                    selection.className = 'view-zone-selection'
                     const wrapper = document.createElement('div')
+                    viewZoneEditor.applyFontInfo(wrapper)
                     const Component = zone.content
                     const props = zone.props
                     const component = mount(Component, {
                         target: wrapper,
                         props
                     })
-                    domNode.appendChild(wrapper)
+                    domNode.append(selection, wrapper)
 
                     const id = changeAccessor.addZone({
                         afterLineNumber: zone.afterLineNumber,
                         get heightInPx() {
                             return wrapper.getBoundingClientRect().height
                         },
-                        domNode
+                        domNode,
+                        marginDomNode
                     })
                     const observer = new ResizeObserver(() => {
                         const height = wrapper.getBoundingClientRect().height
@@ -402,14 +465,35 @@
                         })
                     })
                     observer.observe(wrapper)
-                    currentViewZones.push({ id, domNode, observer, component })
+                    currentViewZones.push({
+                        id,
+                        domNode,
+                        wrapper,
+                        marginDomNode,
+                        line,
+                        selection,
+                        observer,
+                        component
+                    })
                 })
             })
+            const fontOption = monacoInstance?.editor.EditorOption.fontInfo
+            const fontListener = viewZoneEditor.onDidChangeConfiguration((event) => {
+                if (fontOption !== undefined && !event.hasChanged(fontOption)) return
+                currentViewZones.forEach((zone) => viewZoneEditor.applyFontInfo(zone.wrapper))
+            })
+            viewZoneSelections = currentViewZones.map((zone) => ({
+                line: zone.line,
+                domNode: zone.selection
+            }))
             return () => {
+                fontListener.dispose()
+                viewZoneSelections = []
                 currentViewZones.forEach((zone) => {
                     zone.observer.disconnect()
                     void unmount(zone.component)
                     zone.domNode.remove()
+                    zone.marginDomNode?.remove()
                 })
                 if (destroyed) return
                 viewZoneEditor.changeViewZones((changeAccessor) => {
@@ -422,9 +506,54 @@
     })
 
     $effect(() => {
+        //Paint selection beneath transparent expansion content without remounting its rows.
+        for (const zone of viewZoneSelections) {
+            zone.domNode.classList.toggle('source-mapped-line', mappedLines.includes(zone.line))
+        }
+    })
+
+    $effect(() => {
+        const currentEditor = editor
+        const coloring = lineColoring
+        if (!currentEditor || !coloring?.ranges.length) return
+        //The container survives model changes. Monaco replaces its inner view when Build switches
+        //from live assembly to its snapshot, and also resets that view's classes on focus/theme.
+        const root = currentEditor.getContainerDomNode()
+        const scope = `compiled-colors-${currentEditor.getId().replace(/[^a-zA-Z0-9_-]/g, '-')}`
+        root.dataset.sourceMapColorScope = scope
+        const style = document.createElement('style')
+        style.dataset.sourceMapColors = scope
+        const used = new Set(coloring.ranges.map((range) => range.colorIndex))
+        style.textContent = [...used]
+            .map(
+                (index) =>
+                    `[data-source-map-color-scope="${scope}"] .compiled-section-color-${index} { --compiled-section-color: ${coloring.colors[index]}; }`
+            )
+            .join('\n')
+        document.head.appendChild(style)
+        return () => {
+            style.remove()
+            delete root.dataset.sourceMapColorScope
+        }
+    })
+
+    $effect(() => {
         const currentMonaco = monacoInstance
         if (activeModelKey && editor && decorations && currentMonaco) {
             decorations.set([
+                ...(lineColoring?.ranges ?? []).map((range) => ({
+                    range: new currentMonaco.Range(range.startLine + 1, 1, range.endLine + 1, 1),
+                    options: {
+                        className: `compiled-section compiled-section-color-${range.colorIndex}`,
+                        marginClassName: `compiled-section-margin compiled-section-color-${range.colorIndex}`,
+                        isWholeLine: true,
+                        zIndex: 0
+                    }
+                })),
+                ...mappedLines.map((line) => ({
+                    range: new currentMonaco.Range(line + 1, 1, line + 1, 1),
+                    options: { className: 'source-mapped-line', isWholeLine: true, zIndex: 1 }
+                })),
                 ...(highlightedLine >= 0
                     ? [
                           {
@@ -437,7 +566,8 @@
                               options: {
                                   className: hasError ? 'error-line' : 'selected-line',
                                   inlineClassName: 'selected-line-text',
-                                  isWholeLine: true
+                                  isWholeLine: true,
+                                  zIndex: 2
                               }
                           }
                       ]
@@ -542,6 +672,17 @@
 <div bind:this={el} class="editor"></div>
 
 <style lang="scss">
+    :global(.compiled-section, .compiled-section-margin) {
+        background-color: color-mix(in srgb, var(--compiled-section-color) 18%, transparent);
+    }
+    :global(.source-mapped-line) {
+        background-color: color-mix(in srgb, var(--accent) 15%, transparent);
+    }
+    :global(.view-zone-selection) {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+    }
     :global(.selected-line) {
         background-color: var(--accent);
         color: var(--accent-text);
@@ -697,6 +838,7 @@
     .editor {
         display: flex;
         position: absolute;
+        inset: 0;
         flex: 1;
         z-index: 2;
         box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);

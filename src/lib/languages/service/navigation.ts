@@ -3,7 +3,8 @@ import { parseProjectSourceUri, type ProjectModelIdentity } from './uri'
 
 export type ProjectNavigationHandler = (
     identity: ProjectModelIdentity,
-    selection: monaco.IRange | monaco.IPosition | undefined
+    selection: monaco.IRange | monaco.IPosition | undefined,
+    originatingEditor?: monaco.editor.ICodeEditor
 ) => boolean | Promise<boolean>
 
 const handlers = new Map<string, ProjectNavigationHandler>()
@@ -20,9 +21,10 @@ export function registerProjectNavigation(
 
 export function openProjectResource(
     resource: monaco.Uri,
-    selection: monaco.IRange | monaco.IPosition | undefined
+    selection: monaco.IRange | monaco.IPosition | undefined,
+    originatingEditor?: monaco.editor.ICodeEditor
 ): boolean | Promise<boolean> {
     const identity = parseProjectSourceUri(resource)
     if (!identity) return false
-    return handlers.get(identity.sessionId)?.(identity, selection) ?? false
+    return handlers.get(identity.sessionId)?.(identity, selection, originatingEditor) ?? false
 }

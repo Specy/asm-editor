@@ -7,6 +7,7 @@
      * tree away only when `collapsible`, and renames the Project when the host takes `onRename`.
      */
     import FileImporter from '$cmp/shared/fileImporter/FileImporter.svelte'
+    import type { AvailableLanguages } from '$lib/Project.svelte'
     import type { FileSystem } from '$lib/languages/peripherals/FileSystem'
     import { fileBytes, type ProjectFiles } from '$lib/projectFiles'
     import { blobDownloader } from '$lib/utils'
@@ -14,16 +15,18 @@
     import { toast } from '$stores/toastStore'
     import { untrack } from 'svelte'
     import { SvelteSet } from 'svelte/reactivity'
+    import { sourceLanguage, SOURCE_TEMPLATE } from '$lib/sourceCompilation/records'
     import FaAngleRight from '~icons/fa-solid/angle-right'
     import FaDownload from '~icons/fa-solid/download'
-    import FaFile from '~icons/fa-solid/file'
     import FaFlag from '~icons/fa-solid/flag'
     import FaFolder from '~icons/fa-solid/folder'
+    import FaFolderOpen from '~icons/fa-solid/folder-open'
     import FaMinus from '~icons/fa-solid/minus'
     import FaPen from '~icons/fa-solid/pen'
     import FaPlus from '~icons/fa-solid/plus'
     import FaTrash from '~icons/fa-solid/trash'
     import FaUpload from '~icons/fa-solid/upload'
+    import SourceFileIcon from './SourceFileIcon.svelte'
 
     type TreeNode = {
         path: string
@@ -40,9 +43,11 @@
         /** Given, the root row renames the Project, the name it shows. */
         onRename?: (name: string) => void
         files: ProjectFiles
+        language?: AvailableLanguages
         entry: string
         fileSystem: FileSystem
         selectedPath: string
+        selectedPaths?: readonly string[]
         locked?: boolean
         diagnosticCounts?: Readonly<Record<string, { errors: number; warnings: number }>>
         analysisStatus?: Readonly<
@@ -52,6 +57,8 @@
         onEntryChange: (path: string) => void
         onRenamed?: (from: string, to: string) => void
         onDeleted?: (path: string) => void
+        onFileDragStart?: (event: DragEvent, path: string) => void
+        onFileDragEnd?: () => void
     }
 
     let {
@@ -59,16 +66,20 @@
         collapsible = false,
         onRename,
         files,
+        language = 'M68K',
         entry,
         fileSystem,
         selectedPath,
+        selectedPaths,
         locked = false,
         diagnosticCounts = {},
         analysisStatus = {},
         onSelect,
         onEntryChange,
         onRenamed,
-        onDeleted
+        onDeleted,
+        onFileDragStart,
+        onFileDragEnd
     }: Props = $props()
 
     const collapsedDirectories = new SvelteSet<string>()
@@ -78,8 +89,8 @@
 
     //the File being shown is always visible in the tree, whoever opened it
     $effect(() => {
-        const path = selectedPath
-        untrack(() => expandParents(path))
+        const paths = selectedPaths ?? [selectedPath]
+        untrack(() => paths.forEach(expandParents))
     })
 
     function basename(path: string): string {
@@ -169,7 +180,11 @@
         const path = await Prompt.askText('Path for the new text file', true, 'src/new.asm')
         if (!path) return
         try {
-            fileSystem.writeText(path.trim(), '', false)
+            fileSystem.writeText(
+                path.trim(),
+                sourceLanguage(path.trim()) ? SOURCE_TEMPLATE : '',
+                false
+            )
             expandParents(path.trim())
             onSelect(path.trim())
         } catch (error) {
@@ -315,24 +330,39 @@
                         <span class="disclosure" class:expanded={row.expanded}>
                             <FaAngleRight />
                         </span>
-                        <span class="file-icon folder"><FaFolder /></span>
+                        <span class="file-icon folder" aria-hidden="true">
+                            {#if row.expanded}
+                                <FaFolderOpen />
+                            {:else}
+                                <FaFolder />
+                            {/if}
+                        </span>
                         <span class="ellipsis">{row.name}</span>
                     </button>
                 {:else}
                     <div
                         class="tree-row file"
-                        class:selected={row.path === selectedPath}
+                        class:selected={selectedPaths
+                            ? selectedPaths.includes(row.path)
+                            : row.path === selectedPath}
                         class:entry={row.path === entry}
                         class:binary={files[row.path]?.encoding === 'base64'}
                         title={row.path}
                     >
                         <button
                             class="file-select"
+                            draggable={!!onFileDragStart}
+                            ondragstart={(event) => onFileDragStart?.(event, row.path)}
+                            ondragend={() => onFileDragEnd?.()}
                             style:padding-left={`${0.35 + row.depth * 0.85}rem`}
                             onclick={() => onSelect(row.path)}
                         >
                             <span class="disclosure-spacer"></span>
-                            <span class="file-icon"><FaFile /></span>
+                            <SourceFileIcon
+                                path={row.path}
+                                {language}
+                                binary={files[row.path]?.encoding === 'base64'}
+                            />
                             <span class="ellipsis">{row.name}</span>
                             {#if diagnosticCounts[row.path]?.errors}
                                 <span
@@ -597,28 +627,20 @@
 
     .file-icon {
         display: grid;
-        flex: 0 0 0.85rem;
+        flex: 0 0 1rem;
         place-items: center;
-        width: 0.85rem;
-        height: 0.85rem;
+        width: 1rem;
+        height: 1rem;
         color: color-mix(in srgb, var(--accent) 65%, var(--secondary-text));
 
         :global(svg) {
-            width: 0.78rem;
-            height: 0.78rem;
+            width: 0.9rem;
+            height: 0.9rem;
         }
     }
 
     .file-icon.folder {
         color: color-mix(in srgb, #dcb864 78%, var(--secondary-text));
-    }
-
-    .file.binary .file-icon {
-        color: color-mix(in srgb, #b48bdb 78%, var(--secondary-text));
-    }
-
-    .file.entry .file-icon {
-        color: var(--accent);
     }
 
     .ellipsis {

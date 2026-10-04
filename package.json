@@ -45,7 +45,7 @@
         "@huggingface/tokenizers": "0.2.0",
         "@orama/orama": "3.1.18",
         "@specy/mips": "3.6.1",
-        "@specy/risc-v": "3.6.1",
+        "@specy/risc-v": "3.6.2",
         "@specy/s68k": "2.5.0",
         "@specy/x86": "2.7.0",
         "@specy/z80": "1.1.0",

@@ -3,6 +3,7 @@ import {
     buildSource,
     canEditProjectBreakpoints,
     isCurrentBuildLocation,
+    isSameProjectSourceSelection,
     liveSource,
     selectProjectFile,
     sourceModelKey
@@ -54,5 +55,27 @@ describe('Project source selection', () => {
                 fileSystemLocked: true
             })
         ).toBe(false)
+    })
+
+    it('identifies identical source selections', () => {
+        expect(isSameProjectSourceSelection(undefined, undefined)).toBe(true)
+        expect(isSameProjectSourceSelection(liveSource('a.s'), undefined)).toBe(false)
+        expect(isSameProjectSourceSelection(undefined, liveSource('a.s'))).toBe(false)
+
+        const live = liveSource('a.s')
+        expect(isSameProjectSourceSelection(live, live)).toBe(true)
+        expect(isSameProjectSourceSelection(liveSource('a.s'), liveSource('a.s'))).toBe(true)
+        expect(isSameProjectSourceSelection(liveSource('a.s'), liveSource('b.s'))).toBe(false)
+
+        expect(isSameProjectSourceSelection(buildSource('a.s', 1), buildSource('a.s', 1))).toBe(
+            true
+        )
+        expect(isSameProjectSourceSelection(buildSource('a.s', 1), buildSource('a.s', 2))).toBe(
+            false
+        )
+        expect(isSameProjectSourceSelection(buildSource('a.s', 1), buildSource('b.s', 1))).toBe(
+            false
+        )
+        expect(isSameProjectSourceSelection(liveSource('a.s'), buildSource('a.s', 1))).toBe(false)
     })
 })

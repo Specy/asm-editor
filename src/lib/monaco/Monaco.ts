@@ -47,7 +47,7 @@ class MonacoLoader {
     }
 
     async registerLanguage(lang: AvailableLanguages | AvailableProgrammingLanguages) {
-        if (lang === 'c') return
+        if (lang === 'c' || lang === 'cpp') return
         if (this.registeredLanguages.has(lang)) return
         const pending = this.registeringLanguages.get(lang)
         if (pending) return pending
@@ -83,8 +83,8 @@ class MonacoLoader {
     private ensureProjectOpener(monacoInstance: MonacoType) {
         if (this.projectOpener) return
         this.projectOpener = monacoInstance.editor.registerEditorOpener({
-            openCodeEditor(_source, resource, selectionOrPosition) {
-                return openProjectResource(resource, selectionOrPosition)
+            openCodeEditor(source, resource, selectionOrPosition) {
+                return openProjectResource(resource, selectionOrPosition, source)
             }
         })
         this.toDispose.push(this.projectOpener)

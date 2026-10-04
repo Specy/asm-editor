@@ -224,7 +224,7 @@ function buildArtifactMarkdown(artifacts: readonly BuildArtifact[]): string {
     const rows = visible.map((artifact) => {
         const address = formattedAddress(artifact.address)
         return artifact.opcode
-            ? `- Address \`${address}\` — machine code \`${artifact.opcode}\``
+            ? `- Address \`${address}\` Machine code \`${artifact.opcode}\``
             : `- Address \`${address}\``
     })
     if (visible.length < artifacts.length) {

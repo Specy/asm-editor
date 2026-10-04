@@ -1025,12 +1025,9 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
             //`time` (`Simulator.java`), which no program asked for. The countdown between samples
             //is a local of the run loop and starts at one, so a run samples on its first
             //instruction and every 64 instructions after it, while a stepping session, which
-            //enters the loop once per step, samples on every step. The sample also happens after
-            //the instruction has moved the PC, and the entry takes its address from
-            //`BackStepper.pc()`, the program counter less one instruction, so it names the
-            //instruction that just ran only while that instruction did not branch and names the
-            //wrong line after a taken branch. The counters entry avoids that by being handed the
-            //instruction's own address instead (`incrementCounters(backStepping, pc)`).
+            //enters the loop once per step, samples on every step. The Core records both the
+            //sample and the counter decrement against the executed instruction's address, even
+            //when that instruction branched, so they undo with that instruction.
             case BackStepAction.CONTROL_AND_STATUS_REGISTER_BACKDOOR:
                 return null
             case BackStepAction.CONTROL_AND_STATUS_REGISTER_RESTORE: {

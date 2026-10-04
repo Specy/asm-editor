@@ -23,7 +23,7 @@
                 title="Open source location"
             >
                 {diagnostic.file
-                    ? `${diagnostic.file}:${diagnostic.lineIndex + 1}: `
+                    ? `${diagnostic.file}:${diagnostic.lineIndex + 1}${diagnostic.column > 0 ? `:${diagnostic.column}` : ''}: `
                     : ''}{formatDiagnostic(diagnostic)}
             </button>
             {#each diagnostic.related ?? [] as related, relatedIndex (`${index}:${relatedIndex}`)}
@@ -42,7 +42,7 @@
                         })}
                     title="Open related source location"
                 >
-                    ↳ {related.file}:{related.lineIndex + 1}: {related.message}
+                    ↳ {related.file}:{related.lineIndex + 1}:{related.column}: {related.message}
                 </button>
             {/each}
         </div>
@@ -71,6 +71,7 @@
             font: inherit;
             font-size: 0.78rem;
             text-align: left;
+            white-space: pre-wrap;
             cursor: pointer;
         }
 
