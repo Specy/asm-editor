@@ -1,6 +1,15 @@
 import { tick, untrack } from 'svelte'
-import { resolveAssemblyProfile, resolveRuntimeLink } from '$lib/sourceCompilation/assemblyProfile'
+import {
+    resolveAssemblyProfile,
+    resolveRuntimeLink,
+    resolveX86Start
+} from '$lib/sourceCompilation/assemblyProfile'
 import { hasRuntimeLibrary, RUNTIME_NAMESPACE } from '$lib/runtimeAbi'
+import {
+    linksX86StartUnit,
+    X86_START_UNIT_FILES,
+    X86_START_UNIT_PATH
+} from '$lib/languages/X86/x86StartUnit'
 import {
     loadedRuntimeLibrary,
     loadedRuntimeSources,
@@ -11,6 +20,7 @@ import {
 import type { ProjectFile } from '$lib/projectFiles'
 import type { Project, TestcaseResult } from '$lib/Project.svelte'
 import type { Emulator } from '$lib/languages/Emulator'
+import { CompilationFailedError } from '$lib/languages/BaseEmulator.svelte'
 import {
     makeRegister,
     type Diagnostic,
@@ -155,6 +165,9 @@ export class WorkbenchSession {
     runtimeMemberFile(path: string): ProjectFile | undefined {
         const built = this.emulator.buildLibraryFiles?.[path]
         if (built) return built
+        //x86 has no Runtime library yet, only the start unit its compiled programs link
+        if (path === X86_START_UNIT_PATH && this.project.language === 'X86')
+            return linksX86StartUnit(this.sourceInput) ? X86_START_UNIT_FILES[path] : undefined
         const source = parseRuntimeSourcePath(path)
         if (source) {
             const text = loadedRuntimeSources(source.abi)?.[source.source]
@@ -238,6 +251,12 @@ export class WorkbenchSession {
     compiling = $state(false)
     compilingGroupId = $state<string | undefined>()
     sourceDiagnostics = $state.raw<Diagnostic[]>([])
+    /**
+     * What the last Build reported when it failed, and the sources it built. Live checking cannot
+     * see everything a Build can, such as a symbol two x86 Files define, and a failed Build leaves
+     * no snapshot to show them in, so the live view adds them for as long as the sources are those.
+     */
+    private failedBuild = $state.raw<{ sources: BuildSources; diagnostics: Diagnostic[] }>()
     mappingSelection = $state.raw<MappingSelection | undefined>()
     private compilationController: AbortController | undefined
     /**
@@ -278,8 +297,12 @@ export class WorkbenchSession {
                 files: $state.snapshot(this.project.files),
                 entry: this.project.entry
             }
-            if (!hasRuntimeLibrary(this.project.language)) return sources
+            const x86 = this.project.language === 'X86'
+            if (!hasRuntimeLibrary(this.project.language) && !x86) return sources
             try {
+                //x86 has no Runtime library yet: compiled code links the editor's start unit
+                if (x86)
+                    return { ...sources, ...resolveX86Start(sources, this.project.compilations) }
                 return {
                     ...sources,
                     //the profile Setting chooses between RISC-V dialects; MIPS has only MARS's own
@@ -337,9 +360,16 @@ export class WorkbenchSession {
             )
             return [...liveKeys, ...buildKeys]
         })
+        this.liveViewDiagnostics = $derived.by(() => {
+            const live = [...this.liveLanguageDiagnostics, ...this.sourceDiagnostics]
+            //any change to what a Build builds makes what it said about the old sources stale
+            const failed = this.failedBuild
+            if (failed?.sources !== this.sourceInput) return live
+            return [...live, ...buildOnlyDiagnostics(live, failed.diagnostics)]
+        })
         this.activeDiagnostics = $derived(
             this.sourceView === 'live'
-                ? [...this.liveLanguageDiagnostics, ...this.sourceDiagnostics]
+                ? this.liveViewDiagnostics
                 : this.emulator.compilerDiagnostics
         )
         this.liveBuildHasErrors = $derived(
@@ -578,6 +608,8 @@ export class WorkbenchSession {
     /** Palette indices of the selected or executing source lines, which the others dim around. */
     declare readonly activeMappingColors: ReadonlySet<number> | undefined
     declare readonly retainedModelKeys: string[]
+    /** The live view's Diagnostics: live checking's, then Compile's, then a failed Build's own. */
+    declare readonly liveViewDiagnostics: Diagnostic[]
     declare readonly activeDiagnostics: Diagnostic[]
     declare readonly liveBuildHasErrors: boolean
     declare readonly languageErrorCount: number
@@ -1147,6 +1179,7 @@ export class WorkbenchSession {
         this.compiling = true
         this.compilingGroupId = origin.id
         this.sourceDiagnostics = []
+        this.failedBuild = undefined
         try {
             const result = await compileProjectSource(this.project, path, optimization, {
                 signal,
@@ -1219,19 +1252,27 @@ export class WorkbenchSession {
             return
         }
         const started = performance.now()
+        const sources = this.sourceInput
+        this.failedBuild = undefined
+        let failure: Diagnostic[] | undefined
         try {
             this.running = false
             this.building = true
-            await this.emulator.compile(undoHistorySize(this.effectiveSettings), this.sourceInput)
+            await this.emulator.compile(undoHistorySize(this.effectiveSettings), sources)
         } catch (e) {
             console.error(e)
+            //only a compilation failure carries this Build's own findings: any other error leaves the
+            //emulator's list as an earlier Build or check left it
+            if (e instanceof CompilationFailedError) failure = e.diagnostics
             toast.error('Error compiling code. ' + getM68kErrorMessage(e))
         } finally {
             this.building = false
             //also after a failed build: the directive is read before the program is assembled
             this.syncDisplay()
-            const diagnostics = this.emulator.compilerDiagnostics
             const ok = this.emulator.canExecute
+            const diagnostics = ok ? this.emulator.compilerDiagnostics : (failure ?? [])
+            if (!ok && diagnostics.length)
+                this.failedBuild = { sources, diagnostics: $state.snapshot(diagnostics) }
             this.appendLog(
                 buildEntry({
                     ok,
@@ -1441,4 +1482,18 @@ export class WorkbenchSession {
             }
         }
     }
+}
+
+/**
+ * Those of a failed Build's diagnostics the live view does not show already: one on the same File
+ * and line with the same message is the same finding, which live checking made first.
+ */
+function buildOnlyDiagnostics(
+    live: readonly Diagnostic[],
+    build: readonly Diagnostic[]
+): Diagnostic[] {
+    const key = (diagnostic: Diagnostic) =>
+        `${diagnostic.file ?? ''}\0${diagnostic.lineIndex}\0${diagnostic.message}`
+    const shown = new Set(live.map(key))
+    return build.filter((diagnostic) => !shown.has(key(diagnostic)))
 }

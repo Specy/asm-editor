@@ -5,12 +5,15 @@ import { editorGroupsFixture } from './__fixtures__/editorGroups.svelte'
 import { compileProjectSource } from '$lib/sourceCompilation/compileProjectSource'
 import { fileFingerprint } from '$lib/sourceCompilation/records'
 import { fileTransfer } from './__fixtures__/fileTransfer'
+import type { Diagnostic } from '$lib/languages/commonLanguageFeatures.svelte'
+import { X86_START_UNIT } from '$lib/languages/X86/x86StartUnit'
+import { CompilationFailedError } from '$lib/languages/BaseEmulator.svelte'
 
 vi.mock('$lib/sourceCompilation/compileProjectSource', () => ({ compileProjectSource: vi.fn() }))
 
 const disposers: (() => void)[] = []
-function setup() {
-    const fixture = editorGroupsFixture()
+function setup(language?: 'X86') {
+    const fixture = editorGroupsFixture(language)
     disposers.push(fixture.dispose)
     flushSync()
     return fixture
@@ -20,11 +23,15 @@ function openSecond(session: ReturnType<typeof editorGroupsFixture>['session'], 
     session.selectFile(path, other)
     return other
 }
-function result(fixture: ReturnType<typeof setup>, path = 'main.c') {
+function result(
+    fixture: ReturnType<typeof setup>,
+    path = 'main.c',
+    target: 'X86' | 'RISC-V' = 'RISC-V'
+) {
     const record = {
         sourcePath: path,
         outputPath: 'main.s',
-        target: 'RISC-V' as const,
+        target,
         language: 'c' as const,
         compilerId: 'gcc',
         optimization: '0' as const,
@@ -303,6 +310,25 @@ describe('independent editor groups', () => {
         expect(second.recompilationNeeded).toBe(true)
         expect(second.compilationNotice).toContain('Runtime ABI v9')
     })
+    it('offers Recompile for x86 assembly compiled against any Runtime ABI, which x86 lacks', () => {
+        const fixture = setup('X86'),
+            { session } = fixture
+        const second = openSecond(session, 'main.s')
+        const { record, map } = result(fixture, 'main.c', 'X86')
+        flushSync()
+        expect(second.recompilationNeeded).toBe(false)
+        //x86 links every source File, so the Generated assembly starts the Build at the start code
+        expect(session.sourceInput.entrySymbol).toBe('_start')
+        expect(session.sourceInput.assemblyError).toBeUndefined()
+        fixture.project.recordCompilation({ ...record, runtimeAbi: 'v1' }, map)
+        flushSync()
+        expect(second.unsupportedRuntimeAbi).toBe(true)
+        expect(second.recompilationNeeded).toBe(true)
+        expect(second.compilationNotice).toContain('no x86 Runtime library')
+        //and the Build is refused for the same reason
+        expect(session.sourceInput.entrySymbol).toBeUndefined()
+        expect(session.sourceInput.assemblyError).toContain('Recompile main.c')
+    })
     it('offers Recompile in the notice when only the Source map is missing', () => {
         const fixture = setup(),
             { session } = fixture
@@ -395,5 +421,116 @@ describe('independent editor groups', () => {
         await session.compileDisplayedSource(session.groups[0])
         expect(session.groups.map((group) => group.tabs)).toEqual(before)
         expect(session.compiling).toBe(false)
+    })
+})
+
+describe('failed Build diagnostics', () => {
+    function error(file: string, lineIndex: number, message: string): Diagnostic {
+        return {
+            severity: 'error',
+            file,
+            lineIndex,
+            column: 1,
+            line: { line: '', line_index: lineIndex },
+            message,
+            formatted: message
+        }
+    }
+    //a Build whose Core reports these and fails, as one that cannot link does: GenericEmulator
+    //keeps them as its diagnostics and throws them with the failure
+    function failingBuild(fixture: ReturnType<typeof setup>, diagnostics: Diagnostic[]) {
+        fixture.emulator.compile = async () => {
+            fixture.emulator.compilerDiagnostics = diagnostics
+            throw new CompilationFailedError('Build failed', diagnostics)
+        }
+    }
+
+    it('shows what only a failed Build found in the live view, until the Files change', async () => {
+        const fixture = setup(),
+            { session } = fixture
+        const second = openSecond(session, 'main.s')
+        const unresolved = error('main.s', 1, "undefined reference to `printf'")
+        failingBuild(fixture, [unresolved])
+        await session.build()
+        flushSync()
+        expect(session.sourceView).toBe('live')
+        expect(session.bottomTab).toBe('problems')
+        expect(session.activeDiagnostics).toEqual([unresolved])
+        expect(session.diagnosticCounts['main.s']).toEqual({ errors: 1, warnings: 0 })
+        expect(session.worstSeverity).toBe('error')
+        expect(second.displayedDiagnostics).toEqual([unresolved])
+        //what the Build said is about the Files as they were
+        session.fileEdited('main.s', 'nop')
+        flushSync()
+        expect(session.activeDiagnostics).toEqual([])
+        expect(second.displayedDiagnostics).toEqual([])
+    })
+    it('adds nothing live checking already shows', async () => {
+        const fixture = setup(),
+            { session } = fixture
+        //MARS and RARS check live as they build, so a failed Build mostly says the same again
+        const unknown = error('main.s', 0, 'Unknown instruction')
+        const unresolved = error('main.s', 1, "undefined reference to `printf'")
+        session.liveLanguageDiagnostics = [unknown]
+        failingBuild(fixture, [{ ...unknown }, unresolved])
+        await session.build()
+        flushSync()
+        expect(session.activeDiagnostics).toEqual([unknown, unresolved])
+        expect(session.diagnosticCounts['main.s']).toEqual({ errors: 2, warnings: 0 })
+    })
+    it('forgets them once another Build or a Compile starts', async () => {
+        const fixture = setup(),
+            { session } = fixture
+        failingBuild(fixture, [error('main.s', 1, 'first')])
+        await session.build()
+        let duringBuild: Diagnostic[] | undefined
+        fixture.emulator.compile = async () => {
+            duringBuild = session.activeDiagnostics
+            fixture.emulator.compilerDiagnostics = [error('main.s', 0, 'second')]
+            throw new CompilationFailedError('Build failed', [error('main.s', 0, 'second')])
+        }
+        await session.build()
+        expect(duringBuild).toEqual([])
+        expect(session.activeDiagnostics).toEqual([error('main.s', 0, 'second')])
+        vi.mocked(compileProjectSource).mockResolvedValue(undefined)
+        await session.compileDisplayedSource(session.groups[0])
+        expect(session.activeDiagnostics).toEqual([])
+    })
+    it('keeps nothing from a Build that failed without compiling, such as a library that failed to load', async () => {
+        const fixture = setup(),
+            { session } = fixture
+        failingBuild(fixture, [error('main.s', 1, "undefined reference to `printf'")])
+        await session.build()
+        session.fileEdited('main.s', 'nop')
+        flushSync()
+        //the emulator's list still holds the earlier Build's findings, which the edit made stale
+        fixture.emulator.compile = async () => {
+            throw new TypeError('Failed to fetch dynamically imported module')
+        }
+        await session.build()
+        flushSync()
+        expect(session.activeDiagnostics).toEqual([])
+    })
+    it('opens a failed Build diagnostic on the x86 start unit read-only', async () => {
+        const fixture = setup('X86'),
+            { session } = fixture
+        //Generated assembly in the Project, so the Build links the start unit
+        result(fixture, 'main.c', 'X86')
+        //where it lands when the File with the other `_start` is linked first
+        const clash = error(
+            '@runtime/start.asm',
+            33,
+            "multiple definition of `_start'; first defined in main.s, line 1"
+        )
+        failingBuild(fixture, [clash])
+        await session.build()
+        flushSync()
+        expect(session.activeDiagnostics).toEqual([clash])
+        await session.revealDiagnostic(clash)
+        flushSync()
+        const group = session.groups.find((group) => group.displayedPath === '@runtime/start.asm')
+        expect(group?.displayedLibraryMember).toBe(true)
+        expect(group?.displayedFile).toEqual({ encoding: 'plain', content: X86_START_UNIT })
+        expect(group?.displayedDiagnostics).toEqual([clash])
     })
 })

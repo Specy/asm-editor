@@ -8,7 +8,8 @@ import {
     type ProjectSourceSelection
 } from '$lib/monaco/projectSourceSelection'
 import { projectSourceModelKey, type ProjectModelIdentity } from '$lib/languages/service/uri'
-import { isShippedRuntimeAbi, RUNTIME_NAMESPACE } from '$lib/runtimeAbi'
+import { RUNTIME_NAMESPACE } from '$lib/runtimeAbi'
+import { hasRuntimeLibraryFor } from '$lib/sourceRuntime/runtimeLibrary'
 import { assemblyLinesOf } from '$lib/sourceCompilation/mappingSelection'
 import {
     compilationStatus,
@@ -118,7 +119,9 @@ export class EditorGroup {
         const record = this.displayedCompilation
         if (!record) return ''
         if (this.unsupportedRuntimeAbi)
-            return `Compiled against Runtime ABI ${record.runtimeAbi}, which this editor does not provide. Recompile to build it.`
+            return this.session.project.language === 'X86'
+                ? `Compiled against Runtime ABI ${record.runtimeAbi}, but this editor has no x86 Runtime library yet. Recompile to build it.`
+                : `Compiled against Runtime ABI ${record.runtimeAbi}, which this editor does not provide. Recompile to build it.`
         const status = compilationStatus(
             record,
             this.session.project.files,
@@ -147,13 +150,14 @@ export class EditorGroup {
         return !status.stale && !status.edited
     }
     /**
-     * Whether the displayed Generated assembly requires a Runtime ABI this editor does not ship, as
-     * after opening a Project saved by a newer editor: its Build is blocked until it is compiled
-     * again ([ADR 0031](../../../docs/adr/0031-projects-pin-the-runtime-abi-not-its-implementation.md)).
+     * Whether the displayed Generated assembly requires a Runtime ABI whose library this editor
+     * does not ship for the Project's Target: an ABI from a newer editor, or any ABI on x86, which
+     * has no library yet. Its Build is blocked until it is compiled again
+     * ([ADR 0031](../../../docs/adr/0031-projects-pin-the-runtime-abi-not-its-implementation.md)).
      */
     get unsupportedRuntimeAbi() {
         const abi = this.displayedCompilation?.runtimeAbi
-        return abi !== undefined && !isShippedRuntimeAbi(abi)
+        return abi !== undefined && !hasRuntimeLibraryFor(abi, this.session.project.language)
     }
     get recompilationNeeded() {
         const record = this.displayedCompilation
@@ -176,9 +180,7 @@ export class EditorGroup {
     get displayedDiagnostics() {
         const s = this.session
         const diagnostics =
-            this.sourceView === 'live'
-                ? [...s.liveLanguageDiagnostics, ...s.sourceDiagnostics]
-                : s.emulator.compilerDiagnostics
+            this.sourceView === 'live' ? s.liveViewDiagnostics : s.emulator.compilerDiagnostics
         return diagnostics.filter((item) => !item.file || item.file === this.displayedPath)
     }
     get breakpointsEditable() {

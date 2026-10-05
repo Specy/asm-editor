@@ -4,6 +4,8 @@ import { splitAssemblyComment } from '$lib/languages/service/assemblyText'
 export type X86ProjectInput = {
     entry: string
     files: Readonly<Record<string, string | Uint8Array>>
+    /** Units beside the Project's own, which a Core linking it as an archive takes as needed. */
+    library?: Readonly<Record<string, string>>
 }
 
 export type X86SourceLine = { path: string; line: number }
@@ -83,10 +85,11 @@ export function stageLegacyX86ProjectFiles(
 const SOURCE_EXTENSIONS = ['.asm', '.s', '.nasm']
 
 /**
- * The Files the Core assembles separately and links together, which is what makes `global` in one
- * File resolve an `extern` in another. This is the editor's own view of the build, for telling
- * someone which Files are part of their program; NASM still decides what it reads and `ld` still
- * decides what links.
+ * The Files the Core assembles separately, which is what makes `global` in one File resolve an
+ * `extern` in another. The Entry's links into the program, and since `@specy/x86` 4 the others only
+ * when it needs a symbol they define ([ADR 0033](../../../../docs/adr/0033-x86-links-the-entry-and-takes-other-files-as-needed.md)).
+ * This is the editor's own view of the build, for telling someone which Files are part of their
+ * program; NASM still decides what it reads and `ld` still decides what links.
  */
 export function x86TranslationUnits(sources: BuildSources): string[] {
     const others = Object.keys(sources.files)

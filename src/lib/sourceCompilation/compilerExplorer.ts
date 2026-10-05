@@ -14,6 +14,12 @@ import {
 import { isValidFilePath, resolveFilePath, type ProjectFiles } from '$lib/projectFiles'
 import { CURRENT_RUNTIME_ABI } from '$lib/runtimeAbi'
 import { loadRuntimeHeaders } from '$lib/sourceRuntime/runtimeLibrary'
+import type {
+    CompilerLocation,
+    TranslationDiagnostic,
+    TranslationProfile,
+    translateCompilerOutput
+} from '@specy/x86/compiler-output'
 
 const API_ROOT = 'https://godbolt.org/api'
 export const COMPILE_BYTE_LIMIT = 1024 * 1024
@@ -60,11 +66,53 @@ export class SourceCompilationError extends Error {
     }
 }
 
+/**
+ * Runtime ABI v1's freestanding headers, the only ones an x86 program gets until x86 has a Runtime
+ * library. They are written on GCC's predefined macros, so they describe x86-64 as they are.
+ */
+const X86_HEADERS = {
+    c: [
+        'stddef.h',
+        'stdint.h',
+        'stdbool.h',
+        'stdarg.h',
+        'limits.h',
+        'float.h',
+        'iso646.h',
+        'stdnoreturn.h'
+    ],
+    cpp: ['cstddef', 'cstdint', 'climits', 'cfloat', 'cstdarg', 'new']
+}
+const X86_HEADER_NAMES = new Set([...X86_HEADERS.c, ...X86_HEADERS.cpp])
+
+/**
+ * What x86 compilation uses of `@specy/x86/compiler-output`, which only an x86 compilation loads,
+ * so no other Target's users download the translator.
+ */
+export type X86Translator = {
+    readonly GCC_INTEL_V1: TranslationProfile
+    readonly translateCompilerOutput: typeof translateCompilerOutput
+}
+
+/** The flag groups of the translation profile x86 compiles under, which its caller passes in. */
+function x86Flags(profile: TranslationProfile | undefined) {
+    if (!profile) throw new Error('An x86 compilation needs the translation profile of its output.')
+    return profile.flags
+}
+
 export function compilerPreset(
     target: CompilationTarget,
     language: SourceLanguage,
-    compiler: SourceCompiler = defaultSourceCompiler(target)
+    compiler: SourceCompiler = defaultSourceCompiler(target),
+    profile?: TranslationProfile
 ) {
+    //GCC whatever was asked for: the translation of x86 output to NASM is verified on GCC 14.2's
+    //output alone, so x86 offers no other compiler
+    if (target === 'X86')
+        return {
+            id: language === 'cpp' ? 'g142' : 'cg142',
+            architecture: x86Flags(profile).target.join(' ')
+        }
     const ids = {
         MIPS: { c: 'cmipsg1420', cpp: 'mipsg1420' },
         'RISC-V': { c: 'rv32-cgcc1420', cpp: 'rv32-gcc1420' },
@@ -255,17 +303,23 @@ export function compilationInputs(
  * The Compiler Explorer request. A program is hosted: it compiles with `-nostdinc` against the
  * Runtime library's headers, uploaded as `sysroot/include`, so an unsupported header is a clear
  * error and no toolchain header leaks in, and `main` keeps its name and its implicit `return 0`.
+ * An x86 program is freestanding until x86 has a Runtime library: only the library's freestanding
+ * headers are uploaded, and it compiles exactly as the corpus its translation is verified on did,
+ * with the translation profile's flags and `-ffreestanding`, under which GCC still gives `main` its
+ * implicit `return 0`. The profile is the caller's to pass, as it comes with the translator.
  */
 export function createCompilerRequest(
     request: CompilationRequest,
-    sysroot: Readonly<Record<string, string>> = {}
+    sysroot: Readonly<Record<string, string>> = {},
+    profile?: TranslationProfile
 ) {
     const language = sourceLanguage(request.sourcePath)
     const source = request.files[request.sourcePath]
     if (!language || source?.encoding !== 'plain')
         throw new SourceCompilationError('Select a C or C++ text File to compile.')
-    const compiler = request.compiler ?? defaultSourceCompiler(request.target)
-    const preset = compilerPreset(request.target, language, compiler)
+    const x86 = request.target === 'X86' ? x86Flags(profile) : undefined
+    const compiler = x86 ? 'gcc' : (request.compiler ?? defaultSourceCompiler(request.target))
+    const preset = compilerPreset(request.target, language, compiler, profile)
     const directory = request.sourcePath.includes('/')
         ? request.sourcePath.slice(0, request.sourcePath.lastIndexOf('/'))
         : '.'
@@ -279,8 +333,21 @@ export function createCompilerRequest(
         compiler === 'clang'
             ? `-fno-addrsig${sourceAnnotations ? ' -fno-discard-value-names' : ''}`
             : '-fno-section-anchors'
-    const common = `-O${request.optimization} -g1 -fdiagnostics-color=never ${annotations} -fno-stack-protector -fno-pie ${compilerOptions}`
-    const standard = language === 'cpp' ? '-std=c++17 -fno-exceptions -fno-rtti' : '-std=c17'
+    const common = x86
+        ? [
+              `-O${request.optimization}`,
+              '-fdiagnostics-color=never',
+              '-fno-section-anchors',
+              '-ffreestanding',
+              ...x86.translation,
+              ...x86.locations
+          ].join(' ')
+        : `-O${request.optimization} -g1 -fdiagnostics-color=never ${annotations} -fno-stack-protector -fno-pie ${compilerOptions}`
+    const standard = x86
+        ? x86.language[language].join(' ')
+        : language === 'cpp'
+          ? '-std=c++17 -fno-exceptions -fno-rtti'
+          : '-std=c17'
     const userArguments = `${common} -nostdinc -isystem ${SYSROOT_INCLUDE} ${preset.architecture} -iquote ${quote(directory)} -I . ${standard}${language === 'cpp' ? ' -fno-threadsafe-statics -nostdinc++' : ''}`
     const body = {
         source: `#line 1 ${JSON.stringify(request.sourcePath)}\n${source.content}`,
@@ -300,10 +367,12 @@ export function createCompilerRequest(
         },
         files: [
             ...headers.map(([filename, file]) => ({ filename, contents: file.content })),
-            ...Object.entries(sysroot).map(([path, contents]) => ({
-                filename: `${SYSROOT_INCLUDE}/${path}`,
-                contents
-            }))
+            ...Object.entries(sysroot)
+                .filter(([path]) => !x86 || X86_HEADER_NAMES.has(path))
+                .map(([path, contents]) => ({
+                    filename: `${SYSROOT_INCLUDE}/${path}`,
+                    contents
+                }))
         ]
     }
     const json = JSON.stringify(body)
@@ -369,12 +438,124 @@ export function prepareAssembly(lines: readonly AssemblyLine[], request: Compila
                 : null
         )
     }
-    if (!foundMain)
-        throw new SourceCompilationError(
-            'The program must define int main(void) or int main(int argc, char **argv).',
-            [diagnostic('Define an int main() entry point.', request.sourcePath)]
-        )
+    if (!foundMain) throw mainRequired(request)
     return { assembly: text.join('\n') + '\n', lines: [...mapping, null] }
+}
+
+function mainRequired(request: CompilationRequest, found: Diagnostic[] = []) {
+    return new SourceCompilationError(
+        'The program must define int main(void) or int main(int argc, char **argv).',
+        [...found, diagnostic('Define an int main() entry point.', request.sourcePath)]
+    )
+}
+
+/**
+ * Translate GCC's x86 output to NASM, the assembler x86 Builds use, and compose the Source map from
+ * the locations the translation reads from the compiler's own `.file` and `.loc`. What it cannot
+ * translate is an error on the source line it came from, and leaves no output.
+ */
+export function prepareX86Assembly(
+    lines: readonly AssemblyLine[],
+    request: CompilationRequest,
+    translator: X86Translator
+) {
+    const translation = translator.translateCompilerOutput(
+        lines.map((line) => line.text),
+        { profile: translator.GCC_INTEL_V1.id }
+    )
+    const lineCounts = new Map<string, number>()
+    const locate = (location: CompilerLocation | null): SourceLocation | null => {
+        const path = location && projectPath(location.file, request.sourcePath, request.files)
+        if (!path) return null
+        if (!lineCounts.has(path))
+            lineCounts.set(path, request.files[path].content.split('\n').length)
+        return Number.isSafeInteger(location.line) &&
+            location.line > 0 &&
+            location.line <= lineCounts.get(path)!
+            ? { path, line: location.line - 1 }
+            : null
+    }
+    const diagnostics: Diagnostic[] = []
+    for (const item of translation.diagnostics) {
+        const entry = translationDiagnostic(item, request, locate(item.location))
+        //an inline function or an unrolled loop repeats its source line's construct in the output
+        if (
+            !diagnostics.some(
+                (other) =>
+                    other.file === entry.file &&
+                    other.lineIndex === entry.lineIndex &&
+                    other.column === entry.column &&
+                    other.message === entry.message
+            )
+        )
+            diagnostics.push(entry)
+    }
+    if (!translation.ok)
+        throw new SourceCompilationError(
+            'The compiler output uses something x86 cannot run yet.',
+            diagnostics
+        )
+    if (!translation.symbols.defined.some((symbol) => symbol.name === 'main'))
+        throw mainRequired(request, diagnostics)
+    return {
+        assembly: translation.text.endsWith('\n') ? translation.text : translation.text + '\n',
+        lines: [...translation.lines.map((line) => locate(line.location)), null],
+        diagnostics
+    }
+}
+
+/** A translation Diagnostic on the source line it came from, or else on the source File's first. */
+function translationDiagnostic(
+    item: TranslationDiagnostic,
+    request: CompilationRequest,
+    location: SourceLocation | null
+): Diagnostic {
+    //the translator names the construct in its output, which is not what the learner wrote
+    const inline = item.code === 'inline-assembly'
+    const entry = diagnostic(
+        inline ? 'Inline assembly cannot be compiled for x86 yet.' : item.message,
+        location?.path ?? request.sourcePath,
+        location?.line ?? 0,
+        location && item.location!.column > 0 ? item.location!.column : 1,
+        item.severity
+    )
+    entry.code = item.code
+    entry.line.line = request.files[entry.file!].content.split(/\r?\n/)[entry.lineIndex] ?? ''
+    if (inline) {
+        entry.hint =
+            'Write the instructions as a global function in a .asm File of the Project, and call that function instead.'
+        entry.formatted = `${entry.message}\n${entry.hint}`
+    }
+    return entry
+}
+
+/** "a, b and c" */
+function listed(items: readonly string[]) {
+    return items.length > 1
+        ? `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`
+        : items[0]
+}
+
+/**
+ * Explain a standard header the Runtime library has but an x86 program cannot include yet, whose
+ * error alone reads as a misspelt include.
+ */
+function x86HeaderHint(
+    item: Diagnostic,
+    language: SourceLanguage,
+    runtimeHeaders: Readonly<Record<string, string>>
+) {
+    const header = /^(.+): No such file or directory$/.exec(item.message)?.[1]
+    if (
+        item.severity !== 'error' ||
+        !header ||
+        !Object.prototype.hasOwnProperty.call(runtimeHeaders, header) ||
+        X86_HEADER_NAMES.has(header)
+    )
+        return
+    const headers = language === 'cpp' ? [...X86_HEADERS.cpp, ...X86_HEADERS.c] : X86_HEADERS.c
+    item.hint = `x86 programs have no C standard library yet, so they can include only ${listed(headers)}.`
+    item.formatted = `${item.message}\n${item.hint}`
 }
 
 export const compilerExplorerDriver: CompilerDriver = {
@@ -387,7 +568,11 @@ export async function compileSource(
     signal?: AbortSignal,
     fetcher: typeof fetch = fetch
 ): Promise<CompilationResult> {
-    const prepared = createCompilerRequest(request, await loadRuntimeHeaders(CURRENT_RUNTIME_ABI))
+    const runtimeHeaders = await loadRuntimeHeaders(CURRENT_RUNTIME_ABI)
+    //loaded with the first x86 compilation, so it stays out of the bundle every other Target loads
+    const translator =
+        request.target === 'X86' ? await import('@specy/x86/compiler-output') : undefined
+    const prepared = createCompilerRequest(request, runtimeHeaders, translator?.GCC_INTEL_V1)
     const response = await fetcher(`${API_ROOT}/compiler/${prepared.compilerId}/compile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -413,6 +598,8 @@ export async function compileSource(
         Array.isArray(items) ? items : []
     )
     const diagnostics = compilerDiagnostics(messages, request, result.code !== 0)
+    if (request.target === 'X86')
+        for (const item of diagnostics) x86HeaderHint(item, prepared.language, runtimeHeaders)
     if (result.code !== 0 || result.timedOut || result.truncated) {
         throw new SourceCompilationError(
             result.timedOut
@@ -445,7 +632,17 @@ export async function compileSource(
     ) {
         throw new SourceCompilationError('Compiler Explorer returned invalid assembly.')
     }
-    const output = prepareAssembly(result.asm as AssemblyLine[], request)
+    let output: ReturnType<typeof prepareX86Assembly>
+    try {
+        output = translator
+            ? prepareX86Assembly(result.asm as AssemblyLine[], request, translator)
+            : { ...prepareAssembly(result.asm as AssemblyLine[], request), diagnostics: [] }
+    } catch (error) {
+        //the compiler's own warnings still describe the source when its output cannot be used
+        if (error instanceof SourceCompilationError && diagnostics.length)
+            throw new SourceCompilationError(error.message, [...diagnostics, ...error.diagnostics])
+        throw error
+    }
     const outputFingerprint = fileFingerprint({ encoding: 'plain', content: output.assembly })!
     const inputs = { ...compilationInputs(request.sourcePath, request.files) }
     // Header locations supplied by the compiler also establish dependencies, including macro includes.
@@ -454,8 +651,13 @@ export async function compileSource(
     return {
         assembly: output.assembly,
         record: {
-            assemblerProfile: 'gnu-compiler-v1',
-            runtimeAbi: CURRENT_RUNTIME_ABI,
+            //x86 output is NASM, and links the editor's start unit until x86 has a Runtime library
+            ...(request.target === 'X86'
+                ? {}
+                : {
+                      assemblerProfile: 'gnu-compiler-v1' as const,
+                      runtimeAbi: CURRENT_RUNTIME_ABI
+                  }),
             sourcePath: request.sourcePath,
             outputPath: request.outputPath,
             target: request.target,
@@ -466,6 +668,6 @@ export async function compileSource(
             outputFingerprint
         },
         map: { sourcePath: request.sourcePath, outputFingerprint, lines: output.lines },
-        diagnostics
+        diagnostics: [...diagnostics, ...output.diagnostics]
     }
 }

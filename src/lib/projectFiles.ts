@@ -158,7 +158,11 @@ export type BuildSources = Readonly<{
      * ([ADR 0031](../../docs/adr/0031-projects-pin-the-runtime-abi-not-its-implementation.md)).
      */
     runtimeAbi?: `v${number}`
-    /** The global execution starts at instead of `main`: the Runtime library's `_start` for compiled programs. */
+    /**
+     * The global execution starts at instead of `main`: the Runtime library's `_start` for compiled
+     * programs. On x86, where every program starts at `_start`, it asks for the start code that
+     * defines it: the Runtime library's `crt0` once x86 has one, the editor's start unit until then.
+     */
     entrySymbol?: string
 }>
 

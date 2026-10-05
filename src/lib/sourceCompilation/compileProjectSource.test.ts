@@ -1,8 +1,17 @@
 import { describe, expect, it, vi } from 'vitest'
 import { makeProject, normalizeProjectData, projectContentEquals } from '$lib/Project.svelte'
 import { makeProjectFromArchive, projectToArchive } from '$lib/projectArchive'
+import { BASE_CODE } from '$lib/Config'
 import { compileProjectSource } from './compileProjectSource'
-import { fileFingerprint, compilationStatus, cleanCompilationRecords } from './records'
+import {
+    fileFingerprint,
+    compilationStatus,
+    cleanCompilationRecords,
+    defaultSourceCompiler,
+    isCompilationTarget,
+    sourceTemplate,
+    SOURCE_TEMPLATE
+} from './records'
 import {
     SourceCompilationError,
     type CompilationRequest,
@@ -199,5 +208,99 @@ describe('Source compilation lifecycle', () => {
         expect(() =>
             cleanCompilationRecords([{ ...record, inputs: { '../bad': 'no hash' } }])
         ).toThrow('Invalid Compilation')
+    })
+})
+
+describe('x86 Source compilation', () => {
+    function x86Project(files: Record<string, ReturnType<typeof text>> = {}) {
+        return makeProject({
+            language: 'X86',
+            entry: 'main.asm',
+            files: {
+                'main.asm': text(BASE_CODE.X86),
+                'src/main.c': text('int main(void) { return 42; }\n'),
+                ...files
+            }
+        })
+    }
+    function compileX86(request: CompilationRequest) {
+        const assembly = '    global main\nmain:\n    ret\n'
+        const hash = fileFingerprint(text(assembly))!
+        return Promise.resolve<CompilationResult>({
+            assembly,
+            diagnostics: [],
+            record: {
+                sourcePath: request.sourcePath,
+                outputPath: request.outputPath,
+                target: request.target,
+                language: 'c',
+                compilerId: 'cg142',
+                optimization: request.optimization,
+                inputs: {
+                    [request.sourcePath]: fileFingerprint(request.files[request.sourcePath])!
+                },
+                outputFingerprint: hash
+            },
+            map: {
+                sourcePath: request.sourcePath,
+                outputFingerprint: hash,
+                lines: [null, null, { path: request.sourcePath, line: 0 }, null]
+            }
+        })
+    }
+
+    //a hand-written `_start` is live checking's to report, so the warning goes once it is fixed
+    it('leaves the _start of a new Project to live checking', async () => {
+        const p = x86Project()
+        const result = await compileProjectSource(p, 'src/main.c', '0', {
+            compile: (request) => compileX86(request),
+            confirm: vi.fn()
+        })
+        expect(p.entry).toBe('src/main.c.asm')
+        expect(result?.diagnostics).toEqual([])
+    })
+
+    it('records no assembler profile or Runtime ABI, and keeps the record through saving', async () => {
+        const p = x86Project({ 'main.asm': text('') })
+        await compileProjectSource(p, 'src/main.c', '2', {
+            compile: (request) => compileX86(request),
+            confirm: vi.fn()
+        })
+        const [record] = p.compilations
+        expect(record).not.toHaveProperty('assemblerProfile')
+        expect(record).not.toHaveProperty('runtimeAbi')
+        for (const reopened of [
+            makeProject(p.toObject()),
+            makeProjectFromArchive(projectToArchive(p)).project
+        ]) {
+            expect(reopened.compilations).toEqual(p.compilations)
+        }
+        //NASM, which no GNU assembler profile reads
+        expect(() =>
+            cleanCompilationRecords([{ ...record, assemblerProfile: 'gnu-compiler-v1' }])
+        ).toThrow('Unsupported assembler profile')
+        //a later editor's, which blocks the Build until the source is compiled again
+        expect(cleanCompilationRecords([{ ...record, runtimeAbi: 'v1' }])?.[0].runtimeAbi).toBe(
+            'v1'
+        )
+        expect(() => cleanCompilationRecords([{ ...record, target: 'M68K' }])).toThrow(
+            'Invalid Compilation record'
+        )
+    })
+
+    it('compiles for x86 with GCC, from the template of a program without a library', async () => {
+        expect(isCompilationTarget('X86')).toBe(true)
+        expect(defaultSourceCompiler('X86')).toBe('gcc')
+        expect(defaultSourceCompiler('RISC-V')).toBe('clang')
+        expect(sourceTemplate('X86', 'cpp')).toBe(SOURCE_TEMPLATE)
+        expect(isCompilationTarget('M68K')).toBe(false)
+        const p = makeProject({
+            language: 'M68K',
+            entry: 'main.m68k',
+            files: { 'main.m68k': text(''), 'main.c': text('int main(void) { return 0; }') }
+        })
+        await expect(
+            compileProjectSource(p, 'main.c', '0', { compile: vi.fn(), confirm: vi.fn() })
+        ).rejects.toThrow('Source compilation is available for MIPS, RISC-V and x86 Projects.')
     })
 })

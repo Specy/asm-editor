@@ -101,4 +101,79 @@ describe('x86 Project analysis adapter', () => {
             end: { line: 4, column: 24 }
         })
     })
+
+    //compiled code defines main and no _start: the start unit linked with it does, so live
+    //checking has to see it as the Build does or it reports a missing entry point
+    it('checks compiled code with the start code the Build links', async () => {
+        const files = {
+            'main.c.asm': {
+                encoding: 'plain' as const,
+                content: ['global main', 'section .text', 'main:', '  mov eax, 20', '  ret'].join(
+                    '\n'
+                )
+            }
+        }
+        const compiled = await analyzeX86Project(
+            normalizeBuildInput({ entry: 'main.c.asm', files, entrySymbol: '_start' }),
+            'start-unit',
+            1
+        )
+        expect(compiled.diagnostics).toEqual([])
+        //the start unit is checked, but it is not one of the Project's Files
+        expect(Object.keys(compiled.fileStatus)).toEqual(['main.c.asm'])
+
+        const bare = await analyzeX86Project(
+            normalizeBuildInput({ entry: 'main.c.asm', files }),
+            'start-unit',
+            2
+        )
+        expect(bare.diagnostics).toEqual([
+            expect.objectContaining({ message: expect.stringContaining('no `_start`') })
+        ])
+    })
+
+    it('has nothing to say of a hand-written _start beside compiled code', async () => {
+        //a Core that links a Project as an archive leaves main.asm out of a Build of compiled code,
+        //and one that links every File reports the clash when it links: checking links nothing
+        const snapshot = await analyzeX86Project(
+            normalizeBuildInput({
+                entry: 'main.c.asm',
+                entrySymbol: '_start',
+                files: {
+                    'main.asm': {
+                        encoding: 'plain',
+                        content: ['global _start', 'section .text', '_start:', '  ret'].join('\n')
+                    },
+                    'main.c.asm': {
+                        encoding: 'plain',
+                        content: ['global main', 'section .text', 'main:', '  ret'].join('\n')
+                    }
+                }
+            }),
+            'start-beside-compiled',
+            1
+        )
+        expect(snapshot.diagnostics).toEqual([])
+    })
+
+    it('reports sources that cannot be resolved as the one error, as Build does', async () => {
+        const problem = '@runtime/start.asm is inside @runtime/, which the start code reserves.'
+        const snapshot = await analyzeX86Project(
+            normalizeBuildInput({
+                entry: 'main.asm',
+                files: { 'main.asm': { encoding: 'plain', content: 'mov rax, nope nonsense' } },
+                assemblyError: problem
+            }),
+            'unresolved',
+            1
+        )
+        expect(snapshot.diagnostics).toEqual([
+            expect.objectContaining({
+                severity: 'error',
+                message: problem,
+                location: expect.objectContaining({ path: 'main.asm' })
+            })
+        ])
+        expect(snapshot.fileStatus).toEqual({ 'main.asm': 'unknown' })
+    })
 })

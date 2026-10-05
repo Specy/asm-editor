@@ -136,8 +136,9 @@ export abstract class BaseEmulator<R extends string> {
     /**
      * Pauses and resumes the Core's Undo history, so that what runs in between can never be undone:
      * the Runtime library's start code, which a Build runs up to the program's own first
-     * instruction. Resuming leaves the history off when the Build asked for none. An adapter that
-     * links the Runtime library needs it, or its Builds stop at `_start`.
+     * instruction. Resuming leaves the history off when the Build asked for none. Without it, the
+     * start code is recorded like any instruction and GenericEmulator keeps it behind a floor of its
+     * Undo ledger instead.
      */
     _setUndoRecording?(recording: boolean): void
 

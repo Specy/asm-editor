@@ -120,7 +120,7 @@ The language of a text **File**, such as target-specific assembly, C, or plain t
 ## Hosted program
 
 A program compiled from a higher-level **File language** for a **Target** that may use the standard library its **Runtime library** provides. See [ADR 0029](./docs/adr/0029-hosted-programs-link-an-editor-owned-runtime-library.md).
-_Avoid_: Self-contained program (the earlier, library-free boundary of ADR 0027)
+_Avoid_: Self-contained program (the earlier, library-free boundary of ADR 0027, which x86 keeps until it has a **Runtime library**)
 
 ## Runtime library
 
@@ -135,6 +135,11 @@ _Avoid_: runtime version (when the interface, not a release, is meant)
 ## Library member
 
 One assembly unit of a **Runtime library**, usually a single function, which a **Core** adds to a Build only to resolve a global symbol the program uses but does not define. See [ADR 0030](./docs/adr/0030-cores-resolve-runtime-library-members.md).
+
+## Start unit
+
+The editor's own start code for x86 programs compiled from C or C++, until x86 has a **Runtime library**: two read-only NASM Files outside the **Project**, offered to every x86 Build of a Project that holds **Generated assembly** whose **Compilation record** requires no **Runtime ABI**. The linker takes `@runtime/start.asm` for a program without a `_start` of its own: it runs the constructors, calls `main`, runs the static destructors and exits with `main`'s result. It takes `@runtime/support.asm` for what the program uses of it: as weak symbols, what GCC's output calls without the program asking, `memcpy`, `memmove`, `memset`, `memcmp` and the C++ ABI's hooks. The debugger steps through it as it does through **Library member** code. See [the x86 translation plan](./docs/design/x86-compiler-assembly-translation-plan.md), milestone 3a.
+_Avoid_: crt0 (the Runtime library's start code, which takes its place once x86 has one)
 
 ## Source compilation
 
@@ -184,7 +189,7 @@ The **Project**'s configured path from which a Build begins, `main.<ext>` by def
 
 ## Entry file
 
-The **File** found at a Project's **Entry path**, when it exists, from which a Build begins. Depending on the Target, other Files are reached through includes or linked as separate units. x86 links every `.asm`, `.s` and `.nasm` File that another unit does not include, so a non-Entry Generated assembly File also participates in the Build.
+The **File** found at a Project's **Entry path**, when it exists, from which a Build begins. Depending on the Target, other Files are reached through includes or linked as separate units. x86 assembles every `.asm`, `.s` and `.nasm` File that another unit does not include, and links with the Entry's unit only those that define a symbol the program needs, as a linker takes members from an archive ([ADR 0033](./docs/adr/0033-x86-links-the-entry-and-takes-other-files-as-needed.md)).
 _Avoid_: main file, active file, selected file, open file
 
 ## Displayed file

@@ -1,13 +1,13 @@
-import { makeProject } from '$lib/Project.svelte'
+import { makeProject, type AvailableLanguages } from '$lib/Project.svelte'
 import type { BuildSources } from '$lib/projectFiles'
 import type { Emulator } from '$lib/languages/Emulator'
-import type { SourceBreakpoint } from '$lib/languages/commonLanguageFeatures.svelte'
+import type { Diagnostic, SourceBreakpoint } from '$lib/languages/commonLanguageFeatures.svelte'
 import { WorkbenchSession } from '../WorkbenchSession.svelte'
 
 /** Reactive emulator boundary without a Core or a language worker. */
-export function editorGroupsFixture() {
+export function editorGroupsFixture(language: AvailableLanguages = 'RISC-V') {
     const project = makeProject({
-        language: 'RISC-V',
+        language,
         entry: 'main.c',
         files: {
             'main.c': { encoding: 'plain', content: 'int main(void) { return 0; }' },
@@ -27,7 +27,7 @@ export function editorGroupsFixture() {
         buildSources: undefined as BuildSources | undefined,
         currentFile: 'main.s',
         line: 0,
-        compilerDiagnostics: [],
+        compilerDiagnostics: [] as Diagnostic[],
         errors: [],
         breakpoints: [] as SourceBreakpoint[],
         toggleBreakpoint(line: number, file: string) {
@@ -38,6 +38,8 @@ export function editorGroupsFixture() {
             else this.breakpoints.splice(index, 1)
         },
         setSources: (_sources: BuildSources) => {},
+        //a Build that changes nothing; a test that needs one to fail replaces it
+        compile: async (_historySize: number, _sources: BuildSources) => {},
         setBreakpointResolver: (resolver: typeof breakpointResolver) => {
             breakpointResolver = resolver
         },

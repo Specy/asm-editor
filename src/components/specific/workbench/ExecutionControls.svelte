@@ -65,10 +65,14 @@
                 supported && source
                     ? {
                           value: pane.sourceCompiler,
-                          options: [
-                              { value: 'clang', label: 'Clang' },
-                              { value: 'gcc', label: 'GCC' }
-                          ],
+                          //x86's translation to NASM is verified on GCC's output alone
+                          options:
+                              session.project.language === 'X86'
+                                  ? [{ value: 'gcc', label: 'GCC' }]
+                                  : [
+                                        { value: 'clang', label: 'Clang' },
+                                        { value: 'gcc', label: 'GCC' }
+                                    ],
                           onChange: (value) => {
                               pane.sourceCompiler = value as SourceCompiler
                           }

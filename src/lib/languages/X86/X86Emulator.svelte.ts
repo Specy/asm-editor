@@ -46,17 +46,22 @@ import {
 } from '@specy/x86'
 import structuredClone from '@ungap/structured-clone'
 import { x86DiagnosticHint } from './X86-diagnostics'
-import { type BuildInput, type BuildSources } from '$lib/projectFiles'
+import { ProjectFormatError, type BuildInput, type BuildSources } from '$lib/projectFiles'
 import {
     expandLegacyX86Project,
     stageLegacyX86ProjectFiles,
-    toX86Project,
     x86GeneratedLinesFor,
     x86SourceLineAt,
     type X86ProjectDiagnostic,
     type X86ProjectInput,
     type X86SourceLine
 } from './x86Project'
+import {
+    linksX86StartUnit,
+    x86CoreLinksAsArchive,
+    x86CoreProject,
+    X86_START_UNIT_FILES
+} from './x86StartUnit'
 
 /**
  * How many instructions Blink runs in a millisecond, used to turn a slice's time budget into a run
@@ -141,6 +146,10 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
      * the first read every slot is empty, which is what a machine that does not exist yet reports.
      */
     private x87Blanks: boolean[] = new Array(X87_STACK_DEPTH).fill(true)
+    /** How many entries the Build's Undo history holds when full, as `initialize` was told. */
+    private undoSize = 0
+    /** Whether the slice running now handed the program input, which runs the Core more than once. */
+    private inputDuringRun = false
 
     constructor(source: BuildInput, options: EmulatorSettings, core: CoreX86Emulator) {
         super(
@@ -160,6 +169,16 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             }
         )
         this.core = core
+        //GenericEmulator runs a compiled program's start code before the Build stops only when it
+        //can pause the Undo history, so on a Core without these the hooks stay absent and the Build
+        //stops at `_start`. Undo resumes over a history of the size `initialize` gave, so a Build
+        //that asked for no history still has none
+        if (x86CoreSupportsUndoRecording(core)) {
+            this._setUndoRecording = (recording) => {
+                if (this.core === core) core.setUndoEnabled(recording)
+            }
+            this._undoDepth = () => (this.core === core ? core.getUndoDepth() : 0)
+        }
         if (this._emulatorOptions.automaticChecking) void this.semanticCheck()
     }
 
@@ -205,10 +224,13 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     async _checkCode(sources: BuildSources): Promise<Diagnostic[]> {
         if (!this.core && !this.diagnosticCore) return []
+        //what stops the Build stops the check too, and `semanticCheck` reports it the same way
+        if (sources.assemblyError) throw new ProjectFormatError(sources.assemblyError)
         const currentCheck = this.checkCodeQueue.then(async () => {
             const checker = await this.getDiagnosticCore()
             if (hasNativeProjectApi(checker)) {
-                const errors = await checkNativeProject(checker, toX86Project(sources))
+                const project = x86CoreProject(sources, x86CoreLinksAsArchive(checker))
+                const errors = await checkNativeProject(checker, project)
                 return errors.map((error) => mapCoreDiagnosticToProject(sources, error))
             }
             const expanded = expandLegacyX86Project(sources)
@@ -234,22 +256,41 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     }
 
     private async compileSources(sources: BuildSources): Promise<CompileResult> {
+        //sources that could not be resolved, such as Generated assembly that needs a Runtime
+        //library x86 does not have, are reported as GenericEmulator reports any ProjectFormatError
+        if (sources.assemblyError) throw new ProjectFormatError(sources.assemblyError)
         const core = this.requireCore()
-        if (!hasNativeProjectApi(core)) return this.compileLegacyProject(core, sources)
+        const linked = linksX86StartUnit(sources)
+        if (!hasNativeProjectApi(core)) {
+            //the single-buffer path builds the Entry's include unit and nothing beside it
+            if (linked)
+                throw new ProjectFormatError(
+                    'This x86 Core cannot link the start code of compiled programs. Update @specy/x86 to build them.'
+                )
+            return this.compileLegacyProject(core, sources)
+        }
         this.buildLineMap = []
-        const result = await compileNativeProject(core, toX86Project(sources))
+        const result = await compileNativeProject(
+            core,
+            x86CoreProject(sources, x86CoreLinksAsArchive(core))
+        )
         // Carried on both outcomes: a build that succeeded with warnings is the
         // case where they are worth reading.
         const diagnostics = result.diagnostics.map((diagnostic) =>
             coreDiagnosticToDiagnostic(sources, diagnostic)
         )
-        if (!('errors' in result)) return { ok: true, diagnostics }
+        if (!('errors' in result)) {
+            //the start unit is no File of the Project, so the debugger reads it from here
+            this._buildLibraryFiles = linked ? X86_START_UNIT_FILES : undefined
+            return { ok: true, diagnostics }
+        }
         return { ok: false, diagnostics, report: result.report }
     }
 
     _initialize(undoSize: number): void {
         const core = this.requireCore()
         core.initialize(undoSize)
+        this.undoSize = undoSize
         this.updateMemoryAddresses()
     }
 
@@ -436,6 +477,15 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         )
     }
 
+    /**
+     * `max` entries of the history after the newest `skip`, which is how GenericEmulator lists a Step
+     * through the start unit as the one row Undo takes back. The Core lists from the newest entry
+     * only, so the `skip` newer ones are read too; between twenty rows they are few.
+     */
+    _getUndoHistoryRange(skip: number, max: number): ExecutionStep[] {
+        return this._getUndoHistory(skip + max).slice(skip)
+    }
+
     _hasTerminated(): boolean {
         return this.core?.hasTerminated() ?? true
     }
@@ -465,7 +515,9 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             : request.breakpoints.flatMap((breakpoint) =>
                   x86GeneratedLinesFor(this.buildLineMap, breakpoint.file, breakpoint.line)
               )
+        const recordedBefore = recordedEntryCount(this.requireCore())
         const status = await this.runWithInput(budget, breakpoints, request.skipBreakpointAtPc)
+        const instructions = this.executedInSlice(budget, recordedBefore)
         if (status === CoreEmulatorStatus.Running) {
             //still runnable: either the budget ran out or a breakpoint stopped it, and the Core
             //says which — the two are separate stops with a reason of their own. Deciding it from
@@ -474,10 +526,36 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             const stopped = this.requireCore().stopReason
             return {
                 reason: stopped?.kind === 'breakpoint' ? 'breakpoint' : 'budget',
-                instructions: budget
+                instructions
             }
         }
-        return { reason: 'terminated', instructions: budget }
+        return { reason: 'terminated', instructions }
+    }
+
+    /**
+     * How many instructions a slice ran, which GenericEmulator adds to its Undo ledger. A slice that
+     * a breakpoint, the exit, a signal or input ended ran fewer than its budget, and counting the
+     * budget made the Undos after a Run take a Step through the start unit back one instruction at
+     * a time, stopping inside it. While the history records, the Core's count of what it recorded
+     * is exact however the slice ended, and whether or not the history is full. Without a history
+     * the Core's own count of a breakpoint or limit stop is exact for a slice that took no input,
+     * and the budget is the last resort, as on a Core without that count, where it was all there
+     * was: it counted a breakpoint stop within its own batch of 50,000 alone.
+     */
+    private executedInSlice(budget: number, recordedBefore: number | undefined): number {
+        if (recordedBefore === undefined) return budget
+        if (this.undoSize > 0) {
+            const recordedAfter = recordedEntryCount(this.requireCore())
+            if (recordedAfter !== undefined) return Math.max(0, recordedAfter - recordedBefore)
+        }
+        const stopped = this.requireCore().stopReason
+        if (
+            !this.inputDuringRun &&
+            (stopped?.kind === 'breakpoint' || stopped?.kind === 'limit') &&
+            stopped.executedInstructions !== undefined
+        )
+            return Number(stopped.executedInstructions)
+        return budget
     }
 
     async _runTestcase(_testcase: Testcase, haltLimit: number): Promise<void> {
@@ -544,10 +622,12 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     ): Promise<CoreEmulatorStatus> {
         const core = this.requireCore()
         const execution = this.executionController.capture()
+        this.inputDuringRun = false
         let status = await this.executionController.waitFor(execution, () =>
             runX86Core(core, limit, breakpoints, skipBreakpointAtPc)
         )
         while (status === CoreEmulatorStatus.WaitingForInput) {
+            this.inputDuringRun = true
             await this.provideProgramInput(execution)
             status = await this.executionController.waitFor(execution, () =>
                 runX86Core(core, limit, breakpoints, false)
@@ -774,6 +854,38 @@ type CompiledInstructionCore = CoreX86Emulator & {
     getCompiledInstructions(): Array<Instruction & { bytes?: Uint8Array; file?: string }>
 }
 
+type UndoRecordingCore = CoreX86Emulator & {
+    setUndoEnabled(enabled: boolean): void
+    getUndoDepth(): number
+}
+
+/**
+ * Whether a Core can pause its Undo history and say how many entries Undo can reach, named as in
+ * RARS. `@specy/x86` gained both after 3.0.0; without them a Build of a compiled program stops at
+ * `_start`, and a Step that runs through the start code cannot be undone.
+ */
+export function x86CoreSupportsUndoRecording(core: CoreX86Emulator): core is UndoRecordingCore {
+    const candidate = core as Partial<UndoRecordingCore>
+    return (
+        typeof candidate.setUndoEnabled === 'function' &&
+        typeof candidate.getUndoDepth === 'function'
+    )
+}
+
+type RecordedCountCore = CoreX86Emulator & { getRecordedEntryCount(): number }
+
+/**
+ * How many entries the Core's history has recorded, one per instruction and one per Poke, which
+ * never goes back when entries are undone or the history is full; undefined on a Core without the
+ * count, which `@specy/x86` gained after 3.0.0.
+ */
+function recordedEntryCount(core: CoreX86Emulator): number | undefined {
+    const candidate = core as Partial<RecordedCountCore>
+    return typeof candidate.getRecordedEntryCount === 'function'
+        ? candidate.getRecordedEntryCount()
+        : undefined
+}
+
 function hasNativeProjectApi(core: CoreX86Emulator): boolean {
     const candidate = core as Partial<NativeProjectCore>
     return (
@@ -867,7 +979,8 @@ function coreDiagnosticToDiagnostic(
         ? { path: file, line: generatedLine }
         : x86SourceLineAt(lineMap, generatedLine, sources.entry)
     const line = sourceLine(sources, source) || code.split('\n')[generatedLine] || ''
-    const hint = x86DiagnosticHint(diagnostic.warningClass)
+    const hint =
+        x86DiagnosticHint(diagnostic.warningClass) ?? x86LinkHint(diagnostic.error, sources)
     const span = locateDiagnosticSpan(diagnostic.error, line, diagnostic.warningClass)
     return {
         severity: diagnostic.severity ?? 'error',
@@ -884,6 +997,24 @@ function coreDiagnosticToDiagnostic(
         ...(hint ? { hint } : {}),
         formatted: hint ? `${diagnostic.error}\n${hint}` : diagnostic.error
     }
+}
+
+const DUPLICATE_START_HINT =
+    'Compiled C and C++ start in the start code, `@runtime/start.asm`, which defines `_start` and calls `main`, so a File linked with them may not define `_start` too. Remove this one, or move what the program uses from this File into another.'
+const DUPLICATE_MAIN_HINT =
+    'Only one File linked into a program may define `main`. If the program needs something else from this File, move it into a File without `main`.'
+
+/**
+ * What a second `_start` or `main` means ([the plan](../../../../docs/design/x86-compiler-assembly-translation-plan.md),
+ * milestone 3a): a File that defines one too was linked, because the program uses something else it
+ * defines. `ld` only says there are two. Matched on the words `ld` and the Core both use, whatever
+ * line it lands on.
+ */
+function x86LinkHint(message: string, sources: BuildSources): string | undefined {
+    if (message.includes("multiple definition of `main'")) return DUPLICATE_MAIN_HINT
+    if (message.includes("multiple definition of `_start'") && linksX86StartUnit(sources))
+        return DUPLICATE_START_HINT
+    return undefined
 }
 
 function projectDiagnosticToDiagnostic(

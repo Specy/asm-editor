@@ -9,7 +9,8 @@ import {
     type ProjectFiles
 } from '$lib/projectFiles'
 
-export type CompilationTarget = 'MIPS' | 'RISC-V' | 'RISC-V-64'
+export type CompilationTarget = 'MIPS' | 'RISC-V' | 'RISC-V-64' | 'X86'
+const COMPILATION_TARGETS: readonly string[] = ['MIPS', 'RISC-V', 'RISC-V-64', 'X86']
 export type SourceLanguage = 'c' | 'cpp'
 export type SourceCompiler = 'gcc' | 'clang'
 export const OPTIMIZATIONS = ['0', '1', '2', '3', 's'] as const
@@ -20,7 +21,8 @@ export type CompilationRecord = {
     /**
      * The Runtime ABI the Generated assembly was compiled against, which its Builds link whatever
      * the Project Setting says ([ADR 0031](../../../docs/adr/0031-projects-pin-the-runtime-abi-not-its-implementation.md)).
-     * Absent in records written before the Runtime library, whose programs are self-contained.
+     * Absent in records written before the Runtime library, whose programs are self-contained, and
+     * in x86 records until x86 has a Runtime library: their Builds link the editor's start unit.
      */
     runtimeAbi?: `v${number}`
     sourcePath: string
@@ -51,11 +53,12 @@ export function editorFileLanguage(path: string, target: AvailableLanguages) {
 }
 
 export function isCompilationTarget(target: AvailableLanguages): target is CompilationTarget {
-    return target === 'MIPS' || target === 'RISC-V' || target === 'RISC-V-64'
+    return COMPILATION_TARGETS.includes(target)
 }
 
+/** x86 compiles with GCC only: its translation to NASM is verified on GCC 14.2's output alone. */
 export function defaultSourceCompiler(target: AvailableLanguages): SourceCompiler {
-    return isCompilationTarget(target) ? 'clang' : 'gcc'
+    return isCompilationTarget(target) && target !== 'X86' ? 'clang' : 'gcc'
 }
 
 export function generatedAssemblyPath(sourcePath: string, target: AvailableLanguages): string {
@@ -132,6 +135,15 @@ export function cleanCompilationRecords(raw: unknown): CompilationRecord[] | und
         ) {
             throw new ProjectFormatError('Unsupported assembler profile in Compilation record')
         }
+        //x86 Generated assembly is NASM, which no GNU assembler profile reads
+        if (
+            value &&
+            typeof value === 'object' &&
+            value.target === 'X86' &&
+            Object.prototype.hasOwnProperty.call(value, 'assemblerProfile')
+        ) {
+            throw new ProjectFormatError('Unsupported assembler profile in Compilation record')
+        }
         //an ABI this editor does not ship is kept, and blocks the Build with a Recompile action
         if (
             value &&
@@ -148,7 +160,7 @@ export function cleanCompilationRecords(raw: unknown): CompilationRecord[] | und
             !isValidFilePath(value.outputPath) ||
             value.sourcePath === value.outputPath ||
             outputs.has(value.outputPath) ||
-            !['MIPS', 'RISC-V', 'RISC-V-64'].includes(value.target) ||
+            !COMPILATION_TARGETS.includes(value.target) ||
             !['c', 'cpp'].includes(value.language) ||
             typeof value.compilerId !== 'string' ||
             !/^[\w.+-]{1,80}$/.test(value.compilerId) ||

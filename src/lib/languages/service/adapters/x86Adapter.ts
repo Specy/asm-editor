@@ -3,12 +3,12 @@ import type { BuildSources } from '$lib/projectFiles'
 import {
     expandLegacyX86Project,
     stageLegacyX86ProjectFiles,
-    toX86Project,
     x86SourceLineAt,
     x86TranslationUnits,
     type X86ProjectInput,
     type X86SourceLine
 } from '$lib/languages/X86/x86Project'
+import { x86CoreLinksAsArchive, x86CoreProject } from '$lib/languages/X86/x86StartUnit'
 import type { ProjectAnalysisSnapshot, ProjectFileAnalysisStatus } from '../protocol'
 import type { LanguageDiagnostic } from '../sourceModel'
 
@@ -76,12 +76,15 @@ export async function analyzeX86Project(
     sessionId: string,
     revision: number
 ): Promise<ProjectAnalysisSnapshot> {
+    //sources the Build refuses are not checked either: why they cannot be built is the one error
+    if (sources.assemblyError)
+        return unresolvedSnapshot(sources, sources.assemblyError, sessionId, revision)
     checker ??= await createX86Emulator({ mode: 'NASM_trunk' })
     const native = hasNativeProjectApi(checker)
     const expanded = native ? undefined : expandLegacyX86Project(sources)
     if (expanded) stageLegacyX86ProjectFiles(checker.module, expanded)
     const diagnostics = native
-        ? await checkNativeProject(checker, toX86Project(sources))
+        ? await checkNativeProject(checker, x86CoreProject(sources, x86CoreLinksAsArchive(checker)))
         : expanded!.diagnostics.length === 0
           ? await checker.checkCode(expanded!.code)
           : []
@@ -119,6 +122,38 @@ export async function analyzeX86Project(
             ...diagnostics.map((diagnostic) =>
                 x86DiagnosticToLanguageDiagnostic(diagnostic, sources.entry, expanded?.lineMap)
             )
+        ],
+        symbols: [],
+        occurrences: [],
+        fileStatus
+    }
+}
+
+/** The sources' resolution failure as an error on the Entry's first line, and nothing checked. */
+function unresolvedSnapshot(
+    sources: BuildSources,
+    message: string,
+    sessionId: string,
+    revision: number
+): ProjectAnalysisSnapshot {
+    const fileStatus: Record<string, ProjectFileAnalysisStatus> = Object.create(null)
+    for (const [path, file] of Object.entries(sources.files)) {
+        fileStatus[path] = file.encoding === 'plain' ? 'unknown' : 'binary'
+    }
+    return {
+        sessionId,
+        revision,
+        target: 'X86',
+        diagnostics: [
+            {
+                severity: 'error',
+                source: 'nasm-project',
+                location: {
+                    path: sources.entry,
+                    range: { start: { line: 0, column: 0 }, end: { line: 0, column: 1 } }
+                },
+                message
+            }
         ],
         symbols: [],
         occurrences: [],

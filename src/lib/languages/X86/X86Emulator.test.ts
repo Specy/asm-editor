@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { X86_SSE_REGISTERS, X86_X87_REGISTERS } from '@specy/x86'
+import {
+    createX86Emulator,
+    X86Emulator as X86Core,
+    X86_SSE_REGISTERS,
+    X86_X87_REGISTERS
+} from '@specy/x86'
 import {
     type Register,
     type RegisterFile,
     RegisterSize
 } from '$lib/languages/commonLanguageFeatures.svelte'
-import { X86Emulator } from './X86Emulator.svelte'
+import { X86Emulator, x86CoreSupportsUndoRecording } from './X86Emulator.svelte'
+import { x86CoreLinksAsArchive, X86_START_UNIT_FILES, X86_START_UNIT_PATH } from './x86StartUnit'
 
 describe('x86 source set', () => {
     it('builds a %include and reports the included execution location', async () => {
@@ -685,6 +691,450 @@ describe('x86 pokes', () => {
             expect(rax.value).toBe(0x3ff8000000000000n)
             expect([...emulator.readMemoryBytes(address, 2)]).toEqual(memoryBefore)
             expect(emulator.latestSteps.every((step) => step.kind === 'instruction')).toBe(true)
+        } finally {
+            emulator.dispose()
+        }
+    })
+})
+
+//whether the Core links a Project as an archive: the Entry's unit, and from the rest what it needs
+const archiveLinking = await (async () => {
+    const probe = await createX86Emulator({ mode: 'NASM_trunk' })
+    try {
+        return x86CoreLinksAsArchive(probe)
+    } finally {
+        probe.dispose()
+    }
+})()
+
+describe('x86 start unit', () => {
+    //a stand-in for compiled C, which fills a buffer through the start unit's memset and returns
+    //what it reads back: `memset(buffer, 7, 16); return buffer[15] + 13;`
+    const COMPILED_MAIN = [
+        '    global main',
+        '    extern memset',
+        '    section .bss',
+        'buffer: resb 16',
+        '    section .text',
+        'main:',
+        '    lea rdi, [rel buffer]',
+        '    mov esi, 7',
+        '    mov edx, 16',
+        '    call memset',
+        '    movzx eax, byte [rel buffer + 15]',
+        '    add eax, 13',
+        '    ret'
+    ].join('\n')
+    const HAND_WRITTEN_START = [
+        'global _start',
+        'section .text',
+        '_start:',
+        '    mov rax, 60',
+        '    xor rdi, rdi',
+        '    syscall'
+    ].join('\n')
+    const mainLine = (instruction: string) =>
+        COMPILED_MAIN.split('\n').indexOf(`    ${instruction}`)
+    //whether the Core can pause its history, which decides where a Build of compiled code stops
+    const undoRecording = x86CoreSupportsUndoRecording(X86Core.prototype)
+    //whether the Core counts what its history recorded, which a full history's depth cannot say
+    const recordedCount =
+        typeof (X86Core.prototype as { getRecordedEntryCount?: unknown }).getRecordedEntryCount ===
+        'function'
+
+    function compiledSources(files: Record<string, string>, entry = 'main.c.asm') {
+        return {
+            entry,
+            entrySymbol: '_start',
+            files: Object.fromEntries(
+                Object.entries(files).map(([path, content]) => [
+                    path,
+                    { encoding: 'plain' as const, content }
+                ])
+            )
+        }
+    }
+
+    function cpuRegister(emulator: { registerFiles: RegisterFile[] }, name: string): bigint {
+        return registerOf(fileOf(emulator, 'cpu'), name).value
+    }
+
+    it("links the start unit into a compiled program, which exits with main's result", async () => {
+        const sources = compiledSources({ 'main.c.asm': COMPILED_MAIN })
+        const emulator = await X86Emulator(sources, { automaticChecking: false })
+        try {
+            expect(await emulator.check()).toEqual([])
+            await emulator.compile(20, sources)
+            expect(emulator.compilerErrors).toEqual([])
+            //read-only, for the debugger, and never one of the Project's Files
+            expect(emulator.buildLibraryFiles).toEqual(X86_START_UNIT_FILES)
+            expect(Object.isFrozen(emulator.buildLibraryFiles)).toBe(true)
+            expect(emulator.buildSources?.files[X86_START_UNIT_PATH]).toBeUndefined()
+            await emulator.run(100_000)
+            expect(emulator.errors).toEqual([])
+            expect(emulator.terminated).toBe(true)
+            //exit_group leaves main's result where the start code passed it
+            expect(cpuRegister(emulator, 'rdi')).toBe(20n)
+            //nor did running the start code let Blink's launch line through
+            expect(emulator.stdOut).toBe('')
+        } finally {
+            emulator.dispose()
+        }
+    })
+
+    it('adds nothing to a Build that does not ask for start code', async () => {
+        const handWritten = programSources(HAND_WRITTEN_START)
+        const compiled = compiledSources({ 'main.c.asm': COMPILED_MAIN })
+        const bare = { entry: compiled.entry, files: compiled.files }
+        const emulator = await X86Emulator(handWritten, { automaticChecking: false })
+        try {
+            await emulator.compile(20, handWritten)
+            expect(emulator.compilerErrors).toEqual([])
+            expect(emulator.buildLibraryFiles).toBeUndefined()
+            expect(emulator.currentFile).toBe('main.asm')
+            //without the start unit nothing defines _start
+            await expect(emulator.compile(20, bare)).rejects.toThrow()
+            expect(emulator.compilerErrors[0]?.message).toContain('_start')
+            expect(emulator.buildLibraryFiles).toBeUndefined()
+        } finally {
+            emulator.dispose()
+        }
+    })
+
+    it("stops the Build and live checking on the sources' resolution error", async () => {
+        const problem =
+            'main.c.asm was compiled against Runtime ABI v1, and this editor has no x86 Runtime library. Recompile main.c to build it.'
+        const compiled = compiledSources({ 'main.c.asm': COMPILED_MAIN })
+        const sources = { entry: compiled.entry, files: compiled.files, assemblyError: problem }
+        const emulator = await X86Emulator(sources, { automaticChecking: false })
+        try {
+            expect(await emulator.check()).toMatchObject([
+                { severity: 'error', file: 'main.c.asm', message: problem }
+            ])
+            await expect(emulator.compile(20, sources)).rejects.toThrow(problem)
+            expect(emulator.compilerErrors).toMatchObject([{ message: problem }])
+            expect(emulator.canExecute).toBe(false)
+        } finally {
+            emulator.dispose()
+        }
+    })
+
+    it.skipIf(!archiveLinking)(
+        'builds compiled code beside a default main.asm, which only a Build from main.asm runs',
+        async () => {
+            const project = compiledSources({
+                'main.asm': HAND_WRITTEN_START,
+                'main.c.asm': COMPILED_MAIN
+            })
+            const emulator = await X86Emulator(project, { automaticChecking: false })
+            try {
+                expect(await emulator.check()).toEqual([])
+                //the linker takes `_start` from the start code, and nothing from main.asm
+                await emulator.compile(20, project)
+                expect(emulator.compilerErrors).toEqual([])
+                await emulator.run(100_000)
+                expect(emulator.terminated).toBe(true)
+                expect(cpuRegister(emulator, 'rdi')).toBe(20n)
+                //the same Files built from main.asm run the hand-written program instead
+                const handWritten = { ...project, entry: 'main.asm' }
+                await emulator.compile(20, handWritten)
+                expect(emulator.compilerErrors).toEqual([])
+                expect(emulator.currentFile).toBe('main.asm')
+                await emulator.run(100_000)
+                expect(emulator.terminated).toBe(true)
+                expect(cpuRegister(emulator, 'rdi')).toBe(0n)
+            } finally {
+                emulator.dispose()
+            }
+        }
+    )
+
+    it.skipIf(!archiveLinking)(
+        'explains a second _start or main that comes with a File the program uses',
+        async () => {
+            const callsHelper = [
+                '    global main',
+                '    extern helper',
+                '    section .text',
+                'main:',
+                '    call helper',
+                '    mov eax, 7',
+                '    ret'
+            ].join('\n')
+            //main.asm keeps its own `_start` beside a function the compiled code calls, so the
+            //linker takes the File for the function, and its `_start` with it
+            const startAndHelper = [
+                'global _start',
+                'global helper',
+                'section .text',
+                '_start:',
+                '    mov rax, 60',
+                '    xor rdi, rdi',
+                '    syscall',
+                'helper:',
+                '    ret'
+            ].join('\n')
+            const mainAndHelper = [
+                'global main',
+                'global helper',
+                'section .text',
+                'main:',
+                '    mov eax, 1',
+                '    ret',
+                'helper:',
+                '    ret'
+            ].join('\n')
+            const clash = compiledSources({ 'main.asm': startAndHelper, 'main.c.asm': callsHelper })
+            const twoMains = compiledSources(
+                { 'a.c.asm': callsHelper, 'b.c.asm': mainAndHelper },
+                'a.c.asm'
+            )
+            //two hand-written ones have nothing to do with the start code
+            const twoStarts = {
+                entry: 'other.asm',
+                files: {
+                    'main.asm': clash.files['main.asm'],
+                    'other.asm': {
+                        encoding: 'plain' as const,
+                        content: [
+                            'global _start',
+                            'extern helper',
+                            'section .text',
+                            '_start:',
+                            '    call helper',
+                            '    mov rax, 60',
+                            '    xor rdi, rdi',
+                            '    syscall'
+                        ].join('\n')
+                    }
+                }
+            }
+            const emulator = await X86Emulator(clash, { automaticChecking: false })
+            try {
+                await expect(emulator.compile(20, clash)).rejects.toThrow()
+                expect(emulator.compilerErrors).toContainEqual(
+                    expect.objectContaining({
+                        file: 'main.asm',
+                        message: expect.stringContaining("multiple definition of `_start'"),
+                        hint: expect.stringContaining(
+                            '`@runtime/start.asm`, which defines `_start`'
+                        )
+                    })
+                )
+                await expect(emulator.compile(20, twoMains)).rejects.toThrow()
+                expect(emulator.compilerErrors).toContainEqual(
+                    expect.objectContaining({
+                        message: expect.stringContaining("multiple definition of `main'"),
+                        hint: expect.stringContaining('Only one File linked into a program')
+                    })
+                )
+                await expect(emulator.compile(20, twoStarts)).rejects.toThrow()
+                const [error] = emulator.compilerErrors
+                expect(error?.message).toContain("multiple definition of `_start'")
+                expect(error?.hint).toBeUndefined()
+            } finally {
+                emulator.dispose()
+            }
+        }
+    )
+
+    it.skipIf(archiveLinking)(
+        'explains a second _start beside compiled code, and a second main, on a Core that links every File',
+        async () => {
+            const clash = compiledSources({
+                'main.asm': HAND_WRITTEN_START,
+                'main.c.asm': COMPILED_MAIN
+            })
+            const twoMains = compiledSources(
+                { 'a.c.asm': COMPILED_MAIN, 'b.c.asm': COMPILED_MAIN },
+                'a.c.asm'
+            )
+            const emulator = await X86Emulator(clash, { automaticChecking: false })
+            try {
+                await expect(emulator.compile(20, clash)).rejects.toThrow()
+                expect(emulator.compilerErrors).toContainEqual(
+                    expect.objectContaining({
+                        message: expect.stringContaining("multiple definition of `_start'"),
+                        hint: expect.stringContaining(
+                            '`@runtime/start.asm`, which defines `_start`'
+                        )
+                    })
+                )
+                await expect(emulator.compile(20, twoMains)).rejects.toThrow()
+                expect(emulator.compilerErrors).toContainEqual(
+                    expect.objectContaining({
+                        message: expect.stringContaining("multiple definition of `main'"),
+                        hint: expect.stringContaining('Only one File linked into a program')
+                    })
+                )
+            } finally {
+                emulator.dispose()
+            }
+        }
+    )
+
+    it.skipIf(undoRecording)(
+        'runs the start code to main on a Core that cannot pause its history, behind an Undo floor',
+        async () => {
+            const sources = compiledSources({ 'main.c.asm': COMPILED_MAIN })
+            const emulator = await X86Emulator(sources, { automaticChecking: false })
+            try {
+                const hooks = emulator as unknown as Record<string, unknown>
+                expect(hooks._setUndoRecording).toBeUndefined()
+                expect(hooks._undoDepth).toBeUndefined()
+                //the start code is recorded, but the Build stops where the program's own code starts
+                await emulator.compile(20, sources)
+                expect(emulator.currentFile).toBe('main.c.asm')
+                expect(emulator.line).toBe(mainLine('lea rdi, [rel buffer]'))
+                expect(emulator.canUndo).toBe(false)
+                expect(emulator.latestSteps).toEqual([])
+                await emulator.step()
+                expect(emulator.canUndo).toBe(true)
+                expect(emulator.undo()).toBe(1)
+                expect(emulator.line).toBe(mainLine('lea rdi, [rel buffer]'))
+                //and no further: Undo never takes the start code back
+                expect(emulator.canUndo).toBe(false)
+                expect(emulator.undo()).toBe(0)
+                expect(emulator.currentFile).toBe('main.c.asm')
+            } finally {
+                emulator.dispose()
+            }
+        }
+    )
+
+    it.skipIf(!undoRecording)(
+        'runs the start code before the Build stops in main, and never undoes into it',
+        async () => {
+            const sources = compiledSources({ 'main.c.asm': COMPILED_MAIN })
+            const emulator = await X86Emulator(sources, { automaticChecking: false })
+            try {
+                await emulator.compile(100, sources)
+                expect(emulator.compilerErrors).toEqual([])
+                expect(emulator.currentFile).toBe('main.c.asm')
+                expect(emulator.line).toBe(mainLine('lea rdi, [rel buffer]'))
+                expect(emulator.canUndo).toBe(false)
+                //nothing the start code did can be undone, but its call into main is on the stack
+                expect(emulator.callStack.map((frame) => frame.name)).toEqual(['main'])
+                await emulator.step()
+                const buffer = cpuRegister(emulator, 'rdi')
+                await emulator.step()
+                await emulator.step()
+                expect(emulator.line).toBe(mainLine('call memset'))
+                //the Step over the call runs memset in the start unit and stops back in main
+                await emulator.step()
+                expect(emulator.currentFile).toBe('main.c.asm')
+                expect(emulator.line).toBe(mainLine('movzx eax, byte [rel buffer + 15]'))
+                expect([...emulator.readMemoryBytes(buffer, 16)]).toEqual(new Array(16).fill(7))
+                //and one Undo takes all of it back
+                expect(emulator.undo()).toBe(1)
+                expect(emulator.line).toBe(mainLine('call memset'))
+                expect([...emulator.readMemoryBytes(buffer, 16)]).toEqual(new Array(16).fill(0))
+                for (let i = 0; i < 3; i++) await emulator.step()
+                expect(emulator.line).toBe(mainLine('ret'))
+                //returning from main runs the rest of the start code, to the exit
+                await emulator.step()
+                expect(emulator.terminated).toBe(true)
+                expect(cpuRegister(emulator, 'rdi')).toBe(20n)
+                expect(emulator.undo()).toBe(1)
+                expect(emulator.terminated).toBe(false)
+                expect(emulator.currentFile).toBe('main.c.asm')
+                expect(emulator.line).toBe(mainLine('ret'))
+                //back to main's first instruction, and no further: the start code ran unrecorded
+                expect(emulator.undo(100)).toBe(6)
+                expect(emulator.currentFile).toBe('main.c.asm')
+                expect(emulator.line).toBe(mainLine('lea rdi, [rel buffer]'))
+                expect(emulator.canUndo).toBe(false)
+            } finally {
+                emulator.dispose()
+            }
+        }
+    )
+
+    it.skipIf(!undoRecording)(
+        'lists a Step through the start unit as the one History row that one Undo takes back',
+        async () => {
+            const sources = compiledSources({ 'main.c.asm': COMPILED_MAIN })
+            const emulator = await X86Emulator(sources, { automaticChecking: false })
+            try {
+                await emulator.compile(20, sources)
+                //lea, mov, mov, then the call, which runs memset in the start unit
+                for (let i = 0; i < 4; i++) await emulator.step()
+                await emulator.step()
+                expect(emulator.line).toBe(mainLine('add eax, 13'))
+                const rows = emulator.latestSteps
+                expect(rows.some((row) => row.file?.startsWith('@runtime/'))).toBe(false)
+                const call = rows.findIndex((row) => row.line === mainLine('call memset'))
+                expect(rows[call]?.stretch?.instructions).toBeGreaterThan(1)
+                //"Undo to here" on the row before the call is as many Undos as rows above it
+                const target = rows.findIndex((row) => row.line === mainLine('mov edx, 16'))
+                expect(target).toBe(call + 1)
+                expect(emulator.undo(target)).toBe(target)
+                expect(emulator.currentFile).toBe('main.c.asm')
+                expect(emulator.line).toBe(mainLine('call memset'))
+            } finally {
+                emulator.dispose()
+            }
+        }
+    )
+
+    it.skipIf(!undoRecording || !recordedCount)(
+        'counts only what a Run ran before its breakpoint, so Undo takes the earlier Step back whole',
+        async () => {
+            const sources = compiledSources({ 'main.c.asm': COMPILED_MAIN })
+            const emulator = await X86Emulator(sources, { automaticChecking: false })
+            try {
+                await emulator.compile(20, sources)
+                for (let i = 0; i < 4; i++) await emulator.step()
+                expect(emulator.line).toBe(mainLine('movzx eax, byte [rel buffer + 15]'))
+                //one instruction, then the breakpoint: counting the slice's budget instead made the
+                //second Undo take memset back one instruction, stopping inside the start unit
+                emulator.toggleBreakpoint(mainLine('add eax, 13'), 'main.c.asm')
+                await emulator.run(100_000)
+                expect(emulator.line).toBe(mainLine('add eax, 13'))
+                expect(emulator.undo()).toBe(1)
+                expect(emulator.line).toBe(mainLine('movzx eax, byte [rel buffer + 15]'))
+                expect(emulator.undo()).toBe(1)
+                expect(emulator.currentFile).toBe('main.c.asm')
+                expect(emulator.line).toBe(mainLine('call memset'))
+            } finally {
+                emulator.dispose()
+            }
+        }
+    )
+
+    it.skipIf(!undoRecording || !recordedCount)(
+        'counts a Run that leaves the history exactly full, so Undo still takes the earlier Step back whole',
+        async () => {
+            const sources = compiledSources({ 'main.c.asm': COMPILED_MAIN })
+            const emulator = await X86Emulator(sources, { automaticChecking: false })
+            try {
+                //three Steps, the call through memset (seven entries) and the Run to the exit (fourteen)
+                //fill a history of 24 exactly, past which its depth no longer counts a slice
+                await emulator.compile(24, sources)
+                for (let i = 0; i < 4; i++) await emulator.step()
+                expect(emulator.line).toBe(mainLine('movzx eax, byte [rel buffer + 15]'))
+                await emulator.run(100_000)
+                expect(emulator.terminated).toBe(true)
+                expect(emulator.undo(14)).toBe(14)
+                expect(emulator.line).toBe(mainLine('movzx eax, byte [rel buffer + 15]'))
+                expect(emulator.undo()).toBe(1)
+                expect(emulator.currentFile).toBe('main.c.asm')
+                expect(emulator.line).toBe(mainLine('call memset'))
+            } finally {
+                emulator.dispose()
+            }
+        }
+    )
+
+    it.skipIf(!undoRecording)('keeps a Build that asked for no history without one', async () => {
+        const sources = compiledSources({ 'main.c.asm': COMPILED_MAIN })
+        const emulator = await X86Emulator(sources, { automaticChecking: false })
+        try {
+            await emulator.compile(0, sources)
+            expect(emulator.line).toBe(mainLine('lea rdi, [rel buffer]'))
+            await emulator.step()
+            expect(emulator.canUndo).toBe(false)
+            expect(emulator.undo()).toBe(0)
         } finally {
             emulator.dispose()
         }

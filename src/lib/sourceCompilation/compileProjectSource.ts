@@ -33,7 +33,7 @@ export async function compileProjectSource(
     const target = project.language
     if (!isCompilationTarget(target))
         throw new SourceCompilationError(
-            'Source compilation is available for MIPS and RISC-V Projects.'
+            'Source compilation is available for MIPS, RISC-V and x86 Projects.'
         )
     const files = project.fileSystem.snapshot(project.entry).files
     const previous = project.compilations.find(

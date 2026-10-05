@@ -8,7 +8,7 @@ import {
     type BuildSources
 } from '$lib/projectFiles'
 import { cleanProjectSettings, resolveProjectSettings } from '$lib/projectSettings'
-import { resolveAssemblyProfile } from './assemblyProfile'
+import { resolveAssemblyProfile, resolveX86Start } from './assemblyProfile'
 import { cleanCompilationRecords, fileFingerprint, type CompilationRecord } from './records'
 import { analyzeMarsProject } from '$lib/languages/service/adapters/marsAdapter'
 import { RISCVEmulator } from '$lib/languages/RISC-V/RISC-VEmulator.svelte'
@@ -151,5 +151,75 @@ describe('assembler profile ownership', () => {
                 'RISC-V'
             )
         ).toThrow(/profile/)
+    })
+})
+
+describe('x86 start code', () => {
+    const x86Sources: BuildSources = {
+        entry: 'main.asm',
+        files: {
+            'main.asm': text('global _start\n_start:\n    ret'),
+            'main.c': text('int main(void) { return 20; }'),
+            'main.c.asm': text('global main\nmain:\n    mov eax, 20\n    ret')
+        }
+    }
+    const x86Record: CompilationRecord = {
+        sourcePath: 'main.c',
+        outputPath: 'main.c.asm',
+        target: 'X86',
+        language: 'c',
+        compilerId: 'cg142',
+        optimization: '0',
+        inputs: { 'main.c': fileFingerprint(x86Sources.files['main.c'])! },
+        outputFingerprint: fileFingerprint(x86Sources.files['main.c.asm'])!
+    }
+
+    it('starts every Build holding Generated assembly at _start, whatever the Entry', () => {
+        expect(resolveX86Start(x86Sources, [x86Record])).toEqual({ entrySymbol: '_start' })
+        expect(resolveX86Start({ ...x86Sources, entry: 'main.c.asm' }, [x86Record])).toEqual({
+            entrySymbol: '_start'
+        })
+    })
+    it('leaves hand-written programs and removed Generated assembly alone', () => {
+        expect(resolveX86Start(x86Sources, undefined)).toEqual({})
+        expect(resolveX86Start(x86Sources, [{ ...x86Record, outputPath: 'gone.c.asm' }])).toEqual(
+            {}
+        )
+        //only x86 Generated assembly links into an x86 Build
+        expect(resolveX86Start(x86Sources, [{ ...x86Record, target: 'RISC-V' }])).toEqual({})
+    })
+    it('blocks a record that requires a Runtime ABI until its source is compiled again', () => {
+        expect(() => resolveX86Start(x86Sources, [{ ...x86Record, runtimeAbi: 'v1' }])).toThrow(
+            /main\.c\.asm was compiled against Runtime ABI v1, and this editor has no x86 Runtime library\. Recompile main\.c/
+        )
+    })
+    it('blocks a Project File inside the namespace the start code is linked in', () => {
+        const shadowed = {
+            ...x86Sources,
+            files: { ...x86Sources.files, '@runtime/start.asm': text('nop') }
+        }
+        expect(() => resolveX86Start(shadowed, [x86Record])).toThrow(
+            '@runtime/start.asm is inside @runtime/, which the start code of compiled programs reserves'
+        )
+        expect(resolveX86Start(shadowed, undefined)).toEqual({})
+    })
+    it('keeps the requirement through save, reload and archives', () => {
+        const project = makeProject({
+            language: 'X86',
+            entry: x86Sources.entry,
+            files: x86Sources.files,
+            compilations: [x86Record]
+        })
+        for (const reopened of [
+            makeProject(normalizeProjectData(JSON.parse(JSON.stringify(project.toObject())))),
+            makeProjectFromArchive(projectToArchive(project)).project
+        ]) {
+            expect(
+                resolveX86Start(
+                    { files: reopened.files, entry: reopened.entry },
+                    reopened.compilations
+                )
+            ).toEqual({ entrySymbol: '_start' })
+        }
     })
 })

@@ -106,9 +106,10 @@ function isProgramCounterName(register: string): boolean {
 /**
  * One stretch of the newest Core history, newest last. Plain entries undo one at a time; a grouped
  * stretch is a Step that ran through Runtime library code, which Undo takes back as a whole, so it
- * returns to the previous stop as Step left it.
+ * returns to the previous stop as Step left it. A floor is start code that a Core which cannot pause
+ * its history recorded before the program's own first instruction: Undo never takes it back.
  */
-type UndoSegment = { entries: number; grouped: boolean }
+type UndoSegment = { entries: number; grouped: boolean; floor?: true }
 
 /** How many instructions a Step may run through library code before it stops there anyway. */
 const STEP_THROUGH_LIMIT = 50_000_000
@@ -704,6 +705,8 @@ export abstract class GenericEmulator<T, R extends string>
         let skip = 0
         for (let i = this.undoLedger.length - 1; i >= 0 && rows.length < max; i--) {
             const segment = this.undoLedger[i]
+            //the start code, which no Undo reaches, and nothing older
+            if (segment.floor) break
             if (!segment.grouped) {
                 rows.push(
                     ...this._getUndoHistoryRange(skip, Math.min(segment.entries, max - rows.length))
@@ -771,6 +774,7 @@ export abstract class GenericEmulator<T, R extends string>
      */
     private canUndoStep(): boolean {
         const top = this.undoLedger[this.undoLedger.length - 1]
+        if (top?.floor) return false
         if (!top?.grouped) return this._canUndo()
         //a library call the history no longer holds whole is not undone part way: Undo stops here,
         //as it does at the oldest entry the history kept
@@ -798,27 +802,30 @@ export abstract class GenericEmulator<T, R extends string>
      * first instruction: `main`, or a C++ global constructor that runs before it. That is where a
      * Step from `_start` stops, so a Build shows the program's code rather than the library's. The
      * start code runs outside the Undo history, which begins at that first instruction, and nothing
-     * it does before user code is visible: it reads no input and writes no output. With _Step into
-     * Runtime library code_ on, library code is ordinary and the Build stays at `_start`.
+     * it does before user code is visible: it reads no input and writes no output. A Core that cannot
+     * pause its history records the start code like any instruction, and the ledger puts it behind a
+     * floor that Undo never crosses. With _Step into Runtime library code_ on, library code is
+     * ordinary and the Build stays at `_start`.
      */
     private async runStartCode(execution: ExecutionGeneration): Promise<void> {
-        if (
-            this.stepIntoRuntimeLibrary ||
-            !this._setUndoRecording ||
-            !this.inRuntimeLibrary(this._getNextInstruction())
-        )
+        if (this.stepIntoRuntimeLibrary || !this.inRuntimeLibrary(this._getNextInstruction()))
             return
-        this._setUndoRecording(false)
+        const pausable = this._setUndoRecording !== undefined
+        this._setUndoRecording?.(false)
+        let executed = 0
         try {
-            for (let executed = 1; executed <= STEP_THROUGH_LIMIT; executed++) {
+            while (executed < STEP_THROUGH_LIMIT) {
                 const { terminated } = await this._step()
+                executed += 1
                 this.executionController.ensureCurrent(execution)
                 if (terminated || !this.inRuntimeLibrary(this._getNextInstruction())) return
                 if (executed % STEP_THROUGH_YIELD === 0)
                     await this.executionController.waitFor(execution, () => yieldToHost())
             }
         } finally {
-            this._setUndoRecording(true)
+            if (pausable) this._setUndoRecording?.(true)
+            else if (executed > 0)
+                this.undoLedger.push({ entries: executed, grouped: true, floor: true })
         }
     }
 

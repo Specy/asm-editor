@@ -66,8 +66,8 @@
             padding: 0.2rem 0.35rem;
             border: 0;
             border-radius: 0.2rem;
-            color: #181818;
-            background: #d19a3f;
+            color: var(--primary-text);
+            background: color-mix(in srgb, #d19a3f 15%, transparent);
             font: inherit;
             font-size: 0.78rem;
             text-align: left;
@@ -76,8 +76,7 @@
         }
 
         button.error {
-            color: var(--red-text);
-            background: var(--red);
+            background: color-mix(in srgb, var(--red) 15%, transparent);
         }
 
         button.related-location {
