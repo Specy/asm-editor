@@ -1,0 +1,9 @@
+aligned_alloc(8): non-null=1 aligned=1
+aligned_alloc(16): non-null=1 aligned=1
+aligned_alloc(32): non-null=1 aligned=1
+aligned_alloc(64): non-null=1 aligned=1
+aligned_alloc(128): non-null=1 aligned=1
+aligned_alloc(256): non-null=1 aligned=1
+aligned_alloc(4096): non-null=1 aligned=1
+contents intact=1
+malloc after frees non-null=1

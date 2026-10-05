@@ -116,8 +116,30 @@ export abstract class BaseEmulator<R extends string> {
 
     abstract _checkCode(sources: BuildSources): MaybePromise<Diagnostic[]>
 
+    /**
+     * Loads what checking and building these sources needs besides the Files, such as a Runtime
+     * library, before any Core is touched: live checking calls it before it waits for an idle Core
+     * and Build before `_compile`, so `_checkCode` and `_compile` stay synchronous from creating a
+     * Core to assembling it, which the MARS and RARS derived Cores' module globals require.
+     */
+    _prepareBuild?(sources: BuildSources): Promise<void>
+
     /** Restores one CPU instruction and its associated peripheral effects. */
     abstract _undo(): void
+
+    /**
+     * How many entries (instructions or Pokes) the Core's history holds now, for Undo of a Step that
+     * ran through library code: it is undone whole or not at all.
+     */
+    _undoDepth?(): number
+
+    /**
+     * Pauses and resumes the Core's Undo history, so that what runs in between can never be undone:
+     * the Runtime library's start code, which a Build runs up to the program's own first
+     * instruction. Resuming leaves the history off when the Build asked for none. An adapter that
+     * links the Runtime library needs it, or its Builds stop at `_start`.
+     */
+    _setUndoRecording?(recording: boolean): void
 
     /** Preflights both the CPU record and every peripheral effect belonging to it. */
     abstract _canUndo(): boolean
@@ -135,6 +157,9 @@ export abstract class BaseEmulator<R extends string> {
     _getLastInstruction?(): Instruction | null
 
     abstract _getUndoHistory(max: number): ExecutionStep[]
+
+    /** `max` entries of `_getUndoHistory` after the newest `skip`, for a history with library stretches. */
+    _getUndoHistoryRange?(skip: number, max: number): ExecutionStep[]
 
     abstract _getPc(): bigint
 

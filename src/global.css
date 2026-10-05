@@ -152,6 +152,10 @@ button {
     font-family: Rubik;
 }
 
+.context-view.monaco-menu-container {
+    --vscode-cornerRadius-large: 0.4rem;
+}
+
 /* Names a page for crawlers and screen readers where the design has no room for a
    visible heading — the emulator pages are a full-bleed canvas with nowhere to put one. */
 .visually-hidden {

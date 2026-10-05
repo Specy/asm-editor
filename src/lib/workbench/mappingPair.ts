@@ -15,11 +15,17 @@ export function resolveMappingPair<T extends MappingPane>(
     maps: Readonly<Record<string, CompilationSourceMap>>,
     records: readonly CompilationRecord[],
     files: ProjectFiles,
-    target: AvailableLanguages
+    target: AvailableLanguages,
+    /** The Source map of a Runtime library member shown in a pane, which no record owns. */
+    libraryMap?: (path: string) => CompilationSourceMap | undefined
 ): { source: T; assembly: T; map: CompilationSourceMap } | undefined {
     if (panes.length !== 2) return undefined
     for (const assembly of panes) {
         const source = panes.find((pane) => pane !== assembly)!
+        //the library never changes under a Build, so its map is never stale
+        const library = libraryMap?.(assembly.displayedPath)
+        if (library?.lines.some((location) => location?.path === source.displayedPath))
+            return { source, assembly, map: library }
         const map = Object.prototype.hasOwnProperty.call(maps, assembly.displayedPath)
             ? maps[assembly.displayedPath]
             : undefined

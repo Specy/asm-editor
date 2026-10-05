@@ -4,6 +4,7 @@
     import ValueDiff from '$cmp/specific/project/user-tools/ValueDiffer.svelte'
     import MdTextFields from '~icons/ic/baseline-text-fields'
     import FaTimes from '~icons/fa-solid/times'
+    import FaExclamationTriangle from '~icons/fa-solid/exclamation-triangle'
     import { onMount } from 'svelte'
     import {
         findElInTree,
@@ -42,6 +43,13 @@
         endianess: 'big' | 'little'
         systemSize: RegisterSize
         /**
+         * The highest address there is: every address is padded to its digits, so the address
+         * column keeps one width whichever page is shown. Without it they pad to four.
+         */
+        memorySize?: bigint
+        /** The Workbench's narrower page: smaller digits in tighter cells. */
+        dense?: boolean
+        /**
          * Whether the bytes take Pokes ([the design record](../../../../../docs/design/pokes.md)):
          * the page's half of the availability rule, which is the Emulator's `canPoke` and the
          * Project being neither read only nor busy. A panel that passes nothing is read only, and
@@ -63,10 +71,13 @@
         endianess,
         callStackAddresses = [],
         systemSize,
+        memorySize,
+        dense = false,
         pokeable = false,
         onPoke
     }: Props = $props()
     const maxAddresses = systemSize
+    const addressDigits = $derived(memorySize ? memorySize.toString(16).length : 4)
     let selectedAddressesIndexes = $state({
         start: -1,
         len: 0
@@ -183,6 +194,19 @@
     const selectionLength = $derived(
         selectedAddressesIndexes.start === -1 ? 0 : Math.abs(selectedAddressesIndexes.len) + 1
     )
+    /**
+     * The bytes the Core could not read, which hold no value: each is drawn as `??`, the page says
+     * why below the grid, and a selection that covers one reads as nothing and takes no Poke.
+     */
+    const unreadable = $derived(memory.unreadable ?? null)
+    const unreadableCount = $derived(
+        unreadable ? unreadable.mask.reduce((count, byte) => count + byte, 0) : 0
+    )
+    const selectionUnreadable = $derived(
+        unreadable !== null &&
+            selectionLength > 0 &&
+            unreadable.mask.subarray(selectionStart, selectionStart + selectionLength).includes(1)
+    )
     const pokeReading: MemoryReading = $derived(
         type === DisplayType.Hex ? 'hex' : type === DisplayType.Char ? 'char' : 'decimal'
     )
@@ -260,7 +284,7 @@
 
     /** The run being typed into, taken as it stands the moment the typing starts. */
     function anchorPoke() {
-        if (pokeAnchor !== null || selectionLength <= 0) return
+        if (pokeAnchor !== null || selectionLength <= 0 || selectionUnreadable) return
         pokeAnchor = {
             address: currentAddress + BigInt(selectionStart),
             bytes: memory.current.slice(selectionStart, selectionStart + selectionLength)
@@ -295,7 +319,7 @@
     }
 </script>
 
-<div class="memory-grid" style={`--bytesPerRow: ${bytesPerRow}; ${style}`}>
+<div class="memory-grid" class:dense style={`--bytesPerRow: ${bytesPerRow}; ${style}`}>
     <div class="memory-offsets">
         {#each new Array(bytesPerRow).keys() as offset (offset)}
             <div>
@@ -307,7 +331,7 @@
         <Row
             padding="0.25rem"
             gap="0.2rem"
-            style="height:2rem; min-width: 3.8rem; padding-bottom: 0; padding-right: 0.25rem;"
+            style="height:2rem; min-width: var(--address-header-width); padding-bottom: 0; padding-right: 0.25rem;"
         >
             <Button
                 title={type === DisplayType.Hex ? 'Show as character' : 'Show as hex'}
@@ -317,7 +341,7 @@
                 active={type === DisplayType.Char}
                 cssVar="accent2"
             >
-                <Icon size={1}>
+                <Icon size={dense ? 0.8 : 1}>
                     <MdTextFields />
                 </Icon>
             </Button>
@@ -331,7 +355,7 @@
                         selectedAddressesIndexes.len = 0
                     }}
                 >
-                    <Icon size={1}>
+                    <Icon size={dense ? 0.8 : 1}>
                         <FaTimes />
                     </Icon>
                 </Button>
@@ -339,7 +363,7 @@
         </Row>
         {#each visibleAddresses as address (address)}
             <div class="memory-grid-address">
-                {getTextFromValue(address, 4, DisplayType.Hex)}
+                {getTextFromValue(address, addressDigits, DisplayType.Hex)}
             </div>
         {/each}
     </div>
@@ -373,17 +397,21 @@
                     <div
                         class="selection-value"
                         style={`
-								bottom: calc(${i > pageSize - bytesPerRow - 1 ? '1.8rem' : '-2.7rem'} - ${selectionValue.current !== signedSelection ? '1.2rem' : '0.1rem'});
-								left: ${overflowsBy.overflows ? `calc(-${overflowsBy.by} * 1.75rem)` : '0'};
-								min-width: ${selectionValue.len * 1.7}rem;
+								${i > pageSize - bytesPerRow - 1 ? 'bottom' : 'top'}: calc(100% + 0.1rem);
+								left: ${overflowsBy.overflows ? `calc(-${overflowsBy.by} * 100%)` : '0'};
+								min-width: calc(${selectionValue.len} * 100%);
 						`}
                     >
-                        {#if selectionValue.current !== signedSelection}
+                        {#if selectionUnreadable}
+                            <div title={unreadable?.reason}>??</div>
+                        {:else if selectionValue.current !== signedSelection}
                             <div style="user-select: all;">
                                 {signedSelection}
                             </div>
                         {/if}
-                        {#if pokeable && onPoke}
+                        {#if selectionUnreadable}
+                            <!-- nothing to read, and nothing a Poke could be written over -->
+                        {:else if pokeable && onPoke}
                             <!--
                                 the popup is the input while the panel takes Pokes: it holds what
                                 the selection reads as, and its previous-value line is drawn in the
@@ -420,17 +448,32 @@
                         {/if}
                     </div>
                 {/if}
-                <ValueDiff
-                    value={getTextFromValue(BigInt(word), 0, type)}
-                    id={`${id}-${i}`}
-                    diff={getTextFromValue(
-                        BigInt(memory.prevState[i] ?? defaultMemoryValue),
-                        0,
-                        type
-                    )}
-                    hasSoftDiff={word !== defaultMemoryValue}
-                    hoverElementStyle="width: 100%; min-width: fit-content; left: 50%; transform: translateX(-50%);"
-                    style={`padding: 0.3rem; min-width: calc(0.6rem + 2ch); height: calc(2ch + 0.65rem);
+                {#if unreadable?.mask[i]}
+                    <div
+                        class="unreadable-byte"
+                        title={unreadable.reason}
+                        style={inRange(
+                            i,
+                            selectedAddressesIndexes.start,
+                            selectedAddressesIndexes.len
+                        )
+                            ? 'background-color: var(--green); color: var(--green-text);'
+                            : ''}
+                    >
+                        ??
+                    </div>
+                {:else}
+                    <ValueDiff
+                        value={getTextFromValue(BigInt(word), 0, type)}
+                        id={`${id}-${i}`}
+                        diff={getTextFromValue(
+                            BigInt(memory.prevState[i] ?? defaultMemoryValue),
+                            0,
+                            type
+                        )}
+                        hasSoftDiff={word !== defaultMemoryValue}
+                        hoverElementStyle="width: 100%; min-width: fit-content; left: 50%; transform: translateX(-50%);"
+                        style={`padding: 0.3rem var(--cell-pad-x); min-width: calc(var(--cell-pad-x) * 2 + 2ch); height: calc(2ch + 0.65rem);
                     ${
                         currentAddress + BigInt(i) === sp
                             ? ' background-color: var(--accent2); color: var(--accent2-text);'
@@ -451,25 +494,38 @@
                             : ''
                     }
 								`}
-                    hoverElementOffset={BigInt(word) !== signed ? '-2.2rem' : '-1rem'}
-                    monospaced
-                >
-                    {#snippet hoverValue()}
-                        <div>
-                            {#if BigInt(word) !== signed}
-                                <div style="user-select: all;">
-                                    {signed}
+                        hoverElementOffset={BigInt(word) !== signed ? '-2.2rem' : '-1rem'}
+                        monospaced
+                    >
+                        {#snippet hoverValue()}
+                            <div>
+                                {#if BigInt(word) !== signed}
+                                    <div style="user-select: all;">
+                                        {signed}
+                                    </div>
+                                {/if}
+                                <div style="user-select: all">
+                                    {word}
                                 </div>
-                            {/if}
-                            <div style="user-select: all">
-                                {word}
                             </div>
-                        </div>
-                    {/snippet}
-                </ValueDiff>
+                        {/snippet}
+                    </ValueDiff>
+                {/if}
             </div>
         {/each}
     </div>
+    {#if unreadable && unreadableCount > 0}
+        <div class="memory-unreadable" class:partial={unreadableCount < pageSize} role="status">
+            <Icon size={0.9}>
+                <FaExclamationTriangle />
+            </Icon>
+            <span>
+                {unreadableCount === pageSize
+                    ? 'Nothing on this page can be read'
+                    : `${unreadableCount} of ${pageSize} bytes can't be read`}: {unreadable.reason}
+            </span>
+        </div>
+    {/if}
 </div>
 
 <style lang="scss">
@@ -556,6 +612,73 @@
         border-radius: var(--panel-radius, 0.5rem);
         padding-right: 0.3rem;
         padding-bottom: 0.3rem;
+        --cell-pad-x: 0.3rem;
+        --address-header-width: 3.8rem;
+    }
+
+    //the cells' sizes are in `ch` and follow the smaller font, as the addresses' do; the rest is
+    //their padding, and the address column's header, which fits the hex toggle and the selection's
+    //clear button side by side so selecting never widens the column
+    .dense {
+        font-size: 0.875rem;
+        --cell-pad-x: 0.25rem;
+        --address-header-width: 3.1rem;
+
+        .memory-grid-address {
+            padding: 0 0.35rem;
+        }
+    }
+
+    //why the Core refused bytes on this page, floating over the bottom of the bytes rather than
+    //taking a row of its own, so moving to or from such a page never changes the panel's size.
+    //It takes no pointer: the bytes under it stay selectable, and while the pointer is over a
+    //page that still has readable bytes it fades so the row it covers can be read
+    .memory-unreadable {
+        position: absolute;
+        z-index: 1;
+        left: 0.6rem;
+        right: 0.6rem;
+        bottom: 0.6rem;
+        display: flex;
+        gap: 0.4rem;
+        align-items: flex-start;
+        width: fit-content;
+        margin: 0 auto;
+        padding: 0.45rem 0.6rem;
+        border: 1px solid color-mix(in srgb, var(--red) 45%, transparent);
+        border-radius: 0.4rem;
+        background: color-mix(in srgb, var(--tertiary) 65%, transparent);
+        backdrop-filter: blur(6px);
+        box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.25);
+        font-family: sans-serif;
+        font-size: 0.85rem;
+        color: var(--tertiary-text);
+        overflow-wrap: anywhere;
+        pointer-events: none;
+        transition: opacity 0.15s;
+
+        :global(svg) {
+            color: var(--red);
+            flex-shrink: 0;
+            margin-top: 0.1rem;
+        }
+    }
+
+    .memory-grid:has(.memory-numbers:hover) .partial {
+        opacity: 0.12;
+    }
+
+    //a byte the Core could not read, the size of a hex byte so the grid does not move
+    .unreadable-byte {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.3rem var(--cell-pad-x);
+        min-width: calc(var(--cell-pad-x) * 2 + 2ch);
+        height: calc(2ch + 0.65rem);
+        color: var(--hint);
+        cursor: default;
     }
 
     .memory-numbers {

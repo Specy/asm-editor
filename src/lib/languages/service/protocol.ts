@@ -41,6 +41,10 @@ export type ProjectWorkerRequest =
           target: ProjectAnalysisTarget
           entry: string
           files: ProjectFiles
+          assemblerProfile?: import('$lib/assemblerProfiles').AssemblerProfile
+          assemblyError?: string
+          runtimeAbi?: `v${number}`
+          entrySymbol?: string
       }
     | {
           type: 'update'
@@ -48,6 +52,10 @@ export type ProjectWorkerRequest =
           revision: number
           entry: string
           changes: ProjectFileChange[]
+          assemblerProfile?: import('$lib/assemblerProfiles').AssemblerProfile
+          assemblyError?: string
+          runtimeAbi?: `v${number}`
+          entrySymbol?: string
       }
     | { type: 'dispose'; sessionId: string }
 

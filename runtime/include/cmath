@@ -1,0 +1,22 @@
+// Runtime library, ABI v1: <cmath>, the C header <math.h> with its names also in namespace std.
+#ifndef _AED_CMATH
+#define _AED_CMATH
+
+#include <math.h>
+#include <stdlib.h>
+
+extern "C++" {
+namespace std {
+using ::float_t; using ::double_t; using ::fabs; using ::floor; using ::ceil; using ::round; using ::trunc;
+using ::fmod; using ::sqrt; using ::cbrt; using ::hypot; using ::pow; using ::exp; using ::expm1; using ::log; using ::log10;
+using ::log2; using ::sin; using ::cos; using ::tan; using ::asin; using ::acos; using ::atan; using ::atan2;
+using ::sinh; using ::cosh; using ::tanh; using ::frexp; using ::ldexp; using ::scalbn; using ::modf; using ::copysign;
+using ::fmin; using ::fmax; using ::sqrtf; using ::fabsf; using ::floorf; using ::ceilf; using ::roundf;
+using ::truncf; using ::fmodf; using ::sinf; using ::cosf; using ::tanf; using ::expf; using ::logf; using ::powf;
+using ::fpclassify; using ::isfinite; using ::isinf; using ::isnan; using ::isnormal; using ::signbit;
+using ::isgreater; using ::isgreaterequal; using ::isless; using ::islessequal; using ::islessgreater;
+using ::isunordered; using ::abs;
+}
+}
+
+#endif

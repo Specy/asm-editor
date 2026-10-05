@@ -21,12 +21,14 @@ type Fixture = {
     sourcePath: string
     source: string
     headers: Record<string, string>
+    expected?: number
     response: {
         code: number
         asm: { text: string; source?: { file: string; line: number } | null }[]
     }
 }
-// Captured from the public API on 2026-10-03; tests never require network access.
+// Captured from the public API as hosted programs by scripts/runtime/capture-compile-fixtures.mjs;
+// tests never require network access.
 const fixtures = Object.values(
     import.meta.glob<Fixture>('./fixtures/*.json', { eager: true, import: 'default' })
 )
@@ -44,7 +46,8 @@ function requestFor(fixture: Fixture): CompilationRequest {
         outputPath: generatedAssemblyPath(fixture.sourcePath, fixture.target),
         files,
         target: fixture.target,
-        optimization: fixture.optimization
+        optimization: fixture.optimization,
+        compiler: 'gcc'
     }
 }
 
@@ -62,14 +65,19 @@ describe('real Compiler Explorer output', () => {
             expect(result.map.lines.some((location) => location?.path === fixture.sourcePath)).toBe(
                 true
             )
-            expect(result.map.lines.some((location) => location?.path === 'src/values.h')).toBe(
-                true
-            )
-            expect(result.record.inputs['src/values.h']).toBe(
-                fileFingerprint(request.files['src/values.h'])
-            )
+            for (const header of Object.keys(fixture.headers)) {
+                expect(result.map.lines.some((location) => location?.path === header)).toBe(true)
+                expect(result.record.inputs[header]).toBe(fileFingerprint(request.files[header]))
+            }
             expect(result.assembly).not.toContain('.debug_info')
             const sources = {
+                ...(result.record.assemblerProfile
+                    ? { assemblerProfile: result.record.assemblerProfile }
+                    : {}),
+                //a hosted program links the Runtime library and starts at its _start
+                ...(result.record.runtimeAbi
+                    ? { runtimeAbi: result.record.runtimeAbi, entrySymbol: '_start' }
+                    : {}),
                 entry: request.outputPath,
                 files: {
                     ...request.files,
@@ -84,16 +92,17 @@ describe('real Compiler Explorer output', () => {
                 await emulator.check()
                 await emulator.compile(128, sources)
                 expect(emulator.compilerErrors).toEqual([])
-                for (let steps = 0; steps < 16 && !result.map.lines[emulator.line]; steps++)
-                    await emulator.step()
+                //the Build ran the library's _start up to main, the output's own first line
+                expect(emulator.currentFile).toBe(request.outputPath)
                 expect(result.map.lines[emulator.line]?.path).toBe(fixture.sourcePath)
+                expect(emulator.canUndo).toBe(false)
                 await emulator.run(100_000)
                 expect(emulator.errors).toEqual([])
                 expect(emulator.terminated).toBe(true)
                 const resultRegister = emulator.registers.find(
                     (register) => register.name === (fixture.target === 'MIPS' ? '$a0' : 'a0')
                 )
-                expect(Number(resultRegister?.value)).toBe(20)
+                expect(Number(resultRegister?.value)).toBe(fixture.expected ?? 20)
                 await emulator.undo(1)
                 expect(emulator.canUndo).toBe(true)
                 await emulator.step()
@@ -160,8 +169,7 @@ describe('Compiler Explorer failures', () => {
     it('limits submitted text and enforces the main signature without shifting source line numbers', () => {
         const current = request()
         const body = createCompilerRequest(current).body
-        expect(body.source).toContain(`#line 1 "${current.sourcePath}"`)
-        expect(body.source).toContain('int __asm_editor_main(void);')
+        expect(body.source.startsWith(`#line 1 "${current.sourcePath}"\n`)).toBe(true)
         expect(body.options.userArguments).toContain('-iquote')
         expect(() =>
             createCompilerRequest({
@@ -182,7 +190,7 @@ describe('Compiler Explorer failures', () => {
                     new Response(
                         JSON.stringify({
                             code: 0,
-                            asm: [{ text: '__asm_editor_main:', source: { file: 7, line: 1 } }]
+                            asm: [{ text: 'main:', source: { file: 7, line: 1 } }]
                         })
                     )
             )
@@ -201,5 +209,107 @@ describe('Compiler Explorer failures', () => {
         expect(result.diagnostics).toEqual([
             expect.objectContaining({ severity: 'suggestion', file: request().sourcePath })
         ])
+    })
+})
+
+describe('hosted compilation', () => {
+    const hosted = (): CompilationRequest => ({
+        sourcePath: 'src/main.c',
+        outputPath: 'src/main.c.riscv',
+        files: { 'src/main.c': { encoding: 'plain', content: 'int main(void) { return 0; }\n' } },
+        target: 'RISC-V',
+        optimization: '0'
+    })
+
+    it('compiles against the Runtime library headers, without renaming main', () => {
+        const request = createCompilerRequest(hosted(), { 'stdio.h': 'int puts(const char *);' })
+        expect(request.body.source.startsWith('#line 1 "src/main.c"\n')).toBe(true)
+        expect(request.body.source).not.toContain('__asm_editor_main')
+        expect(request.body.options.userArguments).toContain('-nostdinc -isystem sysroot/include')
+        expect(request.body.options.userArguments).not.toContain('-Dmain')
+        expect(request.body.options.userArguments).not.toContain('-ffreestanding')
+        expect(request.body.files).toContainEqual({
+            filename: 'sysroot/include/stdio.h',
+            contents: 'int puts(const char *);'
+        })
+        const cpp = createCompilerRequest(
+            {
+                ...hosted(),
+                sourcePath: 'src/main.cpp',
+                files: { 'src/main.cpp': { encoding: 'plain', content: 'int main() {}\n' } }
+            },
+            {}
+        )
+        expect(cpp.body.options.userArguments).toContain('-fno-threadsafe-statics -nostdinc++')
+    })
+
+    it('keeps sections for the GNU profile, adds no startup code and records the Runtime ABI', async () => {
+        const response = {
+            code: 0,
+            asm: [
+                { text: '.text' },
+                { text: '.globl main' },
+                { text: 'main:', source: { file: null, line: 1, mainsource: true } },
+                { text: 'li a0,0' },
+                { text: 'ret' },
+                { text: '.section .init_array,"aw"' },
+                { text: '.word main' },
+                { text: '.section .debug_info,"",@progbits' },
+                { text: '.word 1' }
+            ]
+        }
+        const result = await compileSource(
+            hosted(),
+            undefined,
+            async () => new Response(JSON.stringify(response))
+        )
+        expect(result.assembly).toBe(
+            '.text\n.globl main\nmain:\nli a0,0\nret\n.section .init_array,"aw"\n.word main\n'
+        )
+        expect(result.map.lines[2]).toEqual({ path: 'src/main.c', line: 0 })
+        expect(result.record).toEqual(
+            expect.objectContaining({ runtimeAbi: 'v1', assemblerProfile: 'gnu-compiler-v1' })
+        )
+        await expect(
+            compileSource(
+                hosted(),
+                undefined,
+                async () => new Response(JSON.stringify({ code: 0, asm: [{ text: 'helper:' }] }))
+            )
+        ).rejects.toThrow('int main(void) or int main(int argc')
+    })
+
+    it('drops MIPS debug sections, their .previous and their labels, and keeps the rest', async () => {
+        const response = {
+            code: 0,
+            asm: [
+                { text: '\t.section .mdebug.abi32' },
+                { text: '\t.previous' },
+                { text: '\t.nan\tlegacy' },
+                { text: '\t.module\tfp=32' },
+                { text: '\t.text' },
+                { text: '$Ltext0:' },
+                { text: '\t.globl\tmain' },
+                { text: 'main:', source: { file: null, line: 1, mainsource: true } },
+                { text: '$LFB0 = .' },
+                { text: '\tslt\t$2,$4,5' },
+                { text: '\tjr\t$31' },
+                { text: '\tnop' },
+                { text: '$LFE0:' },
+                { text: '\t.section\t.debug_info,"",@progbits' },
+                { text: '$Ldebug_info0:' }
+            ]
+        }
+        const result = await compileSource(
+            { ...hosted(), outputPath: 'src/main.c.mips', target: 'MIPS' },
+            undefined,
+            async () => new Response(JSON.stringify(response))
+        )
+        expect(result.assembly).toBe(
+            '\t.nan\tlegacy\n\t.module\tfp=32\n\t.text\n\t.globl\tmain\nmain:\n\tslt\t$2,$4,5\n\tjr\t$31\n\tnop\n'
+        )
+        expect(result.record).toEqual(
+            expect.objectContaining({ runtimeAbi: 'v1', assemblerProfile: 'gnu-compiler-v1' })
+        )
     })
 })

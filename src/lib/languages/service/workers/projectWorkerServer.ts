@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 
-import type { ProjectFile, ProjectFiles } from '$lib/projectFiles'
+import type { ProjectFile, BuildSources } from '$lib/projectFiles'
+import { validateAssemblerProfile } from '$lib/assemblerProfiles'
 import type {
     ProjectAnalysisSnapshot,
     ProjectAnalysisTarget,
@@ -12,12 +13,16 @@ type WorkerSession = {
     revision: number
     target: ProjectAnalysisTarget
     entry: string
+    assemblerProfile?: import('$lib/assemblerProfiles').AssemblerProfile
+    assemblyError?: string
+    runtimeAbi?: `v${number}`
+    entrySymbol?: string
     /** A Map, so a File named `__proto__` is a key like any other rather than a prototype write. */
     files: Map<string, ProjectFile>
 }
 
 type AnalyzeProject = (
-    sources: { entry: string; files: ProjectFiles },
+    sources: BuildSources,
     sessionId: string,
     revision: number,
     target: ProjectAnalysisTarget
@@ -55,6 +60,16 @@ export function startProjectWorker(analyze: AnalyzeProject): void {
                     const target = current.target
                     const sources = {
                         entry: current.entry,
+                        ...(current.assemblyError ? { assemblyError: current.assemblyError } : {}),
+                        ...(current.assemblerProfile !== undefined
+                            ? { assemblerProfile: current.assemblerProfile }
+                            : {}),
+                        ...(current.runtimeAbi !== undefined
+                            ? { runtimeAbi: current.runtimeAbi }
+                            : {}),
+                        ...(current.entrySymbol !== undefined
+                            ? { entrySymbol: current.entrySymbol }
+                            : {}),
                         files: Object.fromEntries(current.files)
                     }
                     try {
@@ -81,6 +96,22 @@ export function startProjectWorker(analyze: AnalyzeProject): void {
 
     workerScope.addEventListener('message', (event: MessageEvent<ProjectWorkerRequest>) => {
         const request = event.data
+        if (
+            request.type !== 'dispose' &&
+            Object.prototype.hasOwnProperty.call(request, 'assemblerProfile')
+        ) {
+            try {
+                validateAssemblerProfile(request.assemblerProfile)
+            } catch (error) {
+                workerScope.postMessage({
+                    type: 'failure',
+                    sessionId: request.sessionId,
+                    revision: request.revision,
+                    message: error instanceof Error ? error.message : String(error)
+                } satisfies ProjectWorkerResponse)
+                return
+            }
+        }
         if (request.type === 'dispose') {
             sessions.delete(request.sessionId)
             pendingSessions.delete(request.sessionId)
@@ -91,6 +122,10 @@ export function startProjectWorker(analyze: AnalyzeProject): void {
                 revision: request.revision,
                 target: request.target,
                 entry: request.entry,
+                assemblerProfile: request.assemblerProfile,
+                assemblyError: request.assemblyError,
+                runtimeAbi: request.runtimeAbi,
+                entrySymbol: request.entrySymbol,
                 files: new Map(Object.entries(request.files))
             })
             scheduleAnalysis(request.sessionId)
@@ -100,6 +135,10 @@ export function startProjectWorker(analyze: AnalyzeProject): void {
         if (!session || request.revision <= session.revision) return
         session.revision = request.revision
         session.entry = request.entry
+        session.assemblerProfile = request.assemblerProfile
+        session.assemblyError = request.assemblyError
+        session.runtimeAbi = request.runtimeAbi
+        session.entrySymbol = request.entrySymbol
         for (const change of request.changes) {
             //A plain object would route a File named `__proto__` into the prototype instead of the
             //map, so it would never be analysed and could never be deleted.

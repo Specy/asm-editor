@@ -12,6 +12,10 @@ import {
 } from './MIPS-documentation'
 import { MIPSNumericRegisterNames } from './MIPS-registers'
 import {
+    runtimeFunctionDocumentation,
+    runtimeFunctionsForModel
+} from '$lib/sourceRuntime/runtimeLanguage'
+import {
     assemblyOperandContext,
     instructionSnippet,
     parseAssemblyLine,
@@ -240,6 +244,20 @@ export function createMIPSCompletion(monaco: MonacoType): monaco.languages.Compl
                     )
                     if (dedupedArgs.find((a) => a.internal_type === 'IDENTIFIER')) {
                         suggestions.push(...labelsSuggestions)
+                        //the Runtime library's functions, when the Build links it
+                        suggestions.push(
+                            ...runtimeFunctionsForModel(model).map((entry) => ({
+                                label: entry.name,
+                                kind: monaco.languages.CompletionItemKind.Function,
+                                insertText: entry.name,
+                                detail: entry.prototype,
+                                documentation: {
+                                    value: runtimeFunctionDocumentation(entry, 'MIPS')
+                                },
+                                sortText: `${1000 - 4}${entry.name}`,
+                                range
+                            }))
+                        )
                     }
                     const onlyRegs = dedupedArgs.filter(
                         (a) =>
@@ -367,6 +385,10 @@ export function createMIPSHoverProvider(monaco: MonacoType): monaco.languages.Ho
                 contents.push({
                     value: register.documentation
                 })
+            }
+            const library = runtimeFunctionsForModel(model).find((entry) => entry.name === word)
+            if (library && !labels.includes(word)) {
+                contents.push({ value: runtimeFunctionDocumentation(library, 'MIPS') })
             }
             const lowerWord = word.toLowerCase()
             if (hasOwnKey(mipsDirectivesMap, lowerWord)) {

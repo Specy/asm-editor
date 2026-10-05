@@ -1,0 +1,16 @@
+// Runtime library, ABI v1: <cstring>, the C header <string.h> with its names also in namespace std.
+#ifndef _AED_CSTRING
+#define _AED_CSTRING
+
+#include <string.h>
+
+extern "C++" {
+namespace std {
+using ::size_t; using ::memcpy; using ::memmove; using ::memset; using ::memcmp; using ::memchr; using ::strlen;
+using ::strcpy; using ::strncpy; using ::strcat; using ::strncat; using ::strcmp; using ::strncmp; using ::strcoll;
+using ::strxfrm; using ::strchr; using ::strrchr; using ::strstr; using ::strspn; using ::strcspn; using ::strpbrk;
+using ::strtok; using ::strerror;
+}
+}
+
+#endif

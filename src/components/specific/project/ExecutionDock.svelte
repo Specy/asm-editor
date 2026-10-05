@@ -22,6 +22,11 @@
             levels: readonly string[]
             onChange: (value: string) => void
         }
+        compiler?: {
+            value: string
+            options: readonly { value: string; label: string }[]
+            onChange: (value: string) => void
+        }
         onCompile: () => void
         onCancel: () => void
     }
@@ -48,6 +53,7 @@
     import FaFlask from '~icons/fa-solid/flask'
     import FaCode from '~icons/fa-solid/code'
     import FaSpinner from '~icons/fa-solid/spinner'
+    import FaFlag from '~icons/fa-solid/flag'
 
     interface Props {
         /** Built: Stop, Run, Undo and Step in place of Build. */
@@ -75,7 +81,14 @@
         compileOnly?: boolean
         /** Compilation-only docks in another pane share one project execution dock. */
         showExecution?: boolean
+        /** Build's label: "Build entry" where the displayed File is not the one it starts from. */
+        buildLabel?: string
         onBuild: () => void
+        /**
+         * Makes the displayed File the Entry path, offered beside Build when it is assembly that
+         * Build would not start from.
+         */
+        onSetEntry?: () => void
         onStop: () => void
         onRun: () => void
         onPause: () => void
@@ -100,7 +113,9 @@
         compilation,
         compileOnly = false,
         showExecution = true,
+        buildLabel = 'Build',
         onBuild,
+        onSetEntry,
         onStop,
         onRun,
         onPause,
@@ -138,8 +153,22 @@
                             <FaWrench />
                         {/if}
                     </Icon>
-                    <span class="label">Build</span>
+                    <span class="label">{buildLabel}</span>
                 </button>
+                {#if onSetEntry}
+                    <button
+                        type="button"
+                        class="tool"
+                        onclick={onSetEntry}
+                        disabled={building || running}
+                        title="Build from this file instead of the current entry file"
+                    >
+                        <Icon size={0.85}>
+                            <FaFlag />
+                        </Icon>
+                        <span class="label">Set file as entry</span>
+                    </button>
+                {/if}
             {/if}
             {#if compilation}
                 <button
@@ -176,6 +205,22 @@
                     >
                         {#each compilation.optimization.levels as level (level)}
                             <option value={level}>-O{level}</option>
+                        {/each}
+                    </select>
+                {/if}
+                {#if compilation.compiler && !compilation.warning}
+                    <div class="divider" aria-hidden="true"></div>
+                    <select
+                        class="tool compiler"
+                        aria-label="Source compiler"
+                        title="Source compiler"
+                        value={compilation.compiler.value}
+                        disabled={compilation.busy || compilation.disabled}
+                        onchange={(event) =>
+                            compilation?.compiler?.onChange(event.currentTarget.value)}
+                    >
+                        {#each compilation.compiler.options as option (option.value)}
+                            <option value={option.value}>{option.label}</option>
                         {/each}
                     </select>
                 {/if}
@@ -392,7 +437,8 @@
         margin-left: 0.45rem;
     }
 
-    .optimization {
+    .optimization,
+    .compiler {
         font-size: 0.85rem;
         background: var(--tray);
     }
@@ -442,7 +488,8 @@
             min-width: 0;
         }
 
-        .optimization {
+        .optimization,
+        .compiler {
             flex: 0 0 auto;
         }
     }
@@ -463,7 +510,8 @@
             box-shadow: 0 -0.1rem 0.6rem rgb(0 0 0 / 0.25);
         }
 
-        .optimization {
+        .optimization,
+        .compiler {
             background: transparent;
 
             option {

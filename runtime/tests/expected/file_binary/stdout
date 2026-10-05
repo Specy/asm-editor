@@ -1,0 +1,7 @@
+wrote 8 2 256
+size=312 expected=312
+read 8 2 256
+equal: 1 1 1
+rec: 7 300 alpha / -9 -2 beta
+fread past end=0 feof=1
+value at index 3=255

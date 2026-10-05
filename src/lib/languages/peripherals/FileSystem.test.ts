@@ -165,4 +165,30 @@ describe('FileSystem', () => {
         run.undoAfter(0)
         expect(fs.files.out).toBeUndefined()
     })
+    it('seeks like lseek, undoes the move, and fills a gap left past the end with zeros', () => {
+        const fs = new FileSystem()
+        fs.writeText('data', 'abcdef')
+        const run = fs.beginSession()
+        const fd = run.performInstruction(4, () => run.open('data', 'read'))
+        expect(run.performInstruction(8, () => run.seek(fd, 2, 0))).toBe(2)
+        expect(new TextDecoder().decode(run.performInstruction(10, () => run.read(fd, 2)))).toBe(
+            'cd'
+        )
+        expect(run.performInstruction(12, () => run.seek(fd, -1, 2))).toBe(5)
+        expect(run.performInstruction(16, () => run.seek(fd, -2, 1))).toBe(3)
+        run.undo(16)
+        expect(new TextDecoder().decode(run.performInstruction(18, () => run.read(fd, 1)))).toBe(
+            'f'
+        )
+        expect(() => run.performInstruction(19, () => run.seek(fd, -10, 1))).toThrow(
+            'Invalid seek position'
+        )
+        expect(() => run.performInstruction(19, () => run.seek(fd, 0, 3))).toThrow(
+            'Invalid seek origin'
+        )
+        const out = run.performInstruction(20, () => run.open('out', 'write'))
+        run.performInstruction(24, () => run.seek(out, 3, 0))
+        run.performInstruction(28, () => run.write(out, new TextEncoder().encode('x')))
+        expect(Array.from(fs.readBytes('out'))).toEqual([0, 0, 0, 120])
+    })
 })

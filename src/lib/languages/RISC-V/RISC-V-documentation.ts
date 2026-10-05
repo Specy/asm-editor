@@ -423,6 +423,63 @@ export const riscvDirectivesMap = {
     }
 }
 
+const gnuDirectiveDescriptions = {
+    word: 'Emit 32-bit little-endian values at the current location, without implicit alignment.',
+    half: 'Emit 16-bit little-endian values without implicit alignment.',
+    dword: 'Emit eight little-endian bytes in RV32 and RV64; symbols use checked, zero-extended addresses.',
+    quad: 'Emit eight little-endian bytes in RV32 and RV64, including resolved expressions.',
+    long: 'Alias for .word.',
+    short: 'Alias for .half.',
+    '2byte': 'Alias for .half; no implicit alignment.',
+    '4byte': 'Alias for .word; no implicit alignment.',
+    '8byte': 'Alias for .quad; no implicit alignment.',
+    align: 'Align to 2^n bytes. Optional byte fill and maximum skip; omitted code fill emits NOPs.',
+    p2align:
+        'Align to 2^n bytes. Optional byte fill and maximum skip; omitted code fill emits NOPs.',
+    balign: 'Align to a power-of-two byte boundary, with optional byte fill and maximum skip.',
+    section:
+        'Select a supported named section, preserving its independent location counter. Validate flags and type.',
+    pushsection: 'Push the current section and select a supported named section.',
+    popsection: 'Restore the section saved by .pushsection.',
+    previous: 'Switch to the previously selected section.',
+    set: 'Define a constant or alias once; reassignment and cycles are errors.',
+    equ: 'Alias for the single-definition .set subset.',
+    option: 'Supports push/pop, nopic, norvc, norelax and relax. No relaxation is performed.',
+    attribute:
+        'Validate the selected ISA width, supported architecture and 16-byte ABI stack alignment.',
+    weak: 'Declare a symbol that must have one definition in this include unit.',
+    local: 'Declare a local symbol.',
+    hidden: 'Mark visibility metadata for this static include unit.',
+    protected: 'Mark visibility metadata for this static include unit.',
+    internal: 'Mark visibility metadata for this static include unit.',
+    type: 'Declare @function, @object or @notype metadata.',
+    size: 'Validate a resolved, nonnegative symbol-size expression.',
+    rodata: 'Select the read-only data section; this classification determines layout, not memory protection.',
+    skip: 'Reserve data bytes, with optional byte fill.',
+    comm: 'Allocate zeroed common storage with checked size and power-of-two byte alignment.',
+    lcomm: 'Allocate zeroed local common storage with checked size and byte alignment.'
+} as const
+
+export function riscvDirectivesForProfile(
+    profile: 'rars' | 'gnu-compiler-v1'
+): Readonly<Record<string, { name: string; description: string }>> {
+    if (profile === 'rars') return riscvDirectivesMap
+    const unsupported = new Set(['eqv', 'macro', 'end_macro', 'extern', 'sbss'])
+    return {
+        ...Object.fromEntries(
+            Object.entries(riscvDirectivesMap).filter(([name]) => !unsupported.has(name))
+        ),
+        ...Object.fromEntries(
+            Object.entries(gnuDirectiveDescriptions).map(([name, description]) => [
+                name,
+                { name, description }
+            ])
+        )
+    }
+}
+
+export const riscvGnuDirectiveNames = Object.keys(gnuDirectiveDescriptions)
+
 export const riscvSyscall = {
     [1]: {
         name: 'print integer',

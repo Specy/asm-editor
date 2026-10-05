@@ -9,3 +9,9 @@ static/native-apps/
 # Generated instruction tables: 1.2 MB of one-line records that Prettier would explode
 # into hundreds of thousands of lines. `scripts/x86-docs-generate.mjs` writes them formatted.
 src/lib/languages/X86/generated/
+
+# The Runtime library's generated members, index and headers: megabytes of assembly text that
+# `scripts/runtime/build.mjs` writes; formatting them would only churn the diff.
+src/lib/sourceRuntime/generated/
+# The Runtime library's C sources and headers, which follow their own (musl's) style.
+/runtime/

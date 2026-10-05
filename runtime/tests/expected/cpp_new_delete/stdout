@@ -1,0 +1,17 @@
+new int = 42
+new double[5]() zeroed: 0 0
+Base(7)
+Derived(seven)
+virtual value = 70
+~Derived(seven)
+~Base(7)
+live after new[] = 10
+live after delete[] = 0
+nothrow new non-null = 1
+Base(9)
+Derived(placed)
+placement at storage = 1
+~Derived(placed)
+~Base(9)
+aligned new: 1
+aligned new[]: 1

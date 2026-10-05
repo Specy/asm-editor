@@ -1,0 +1,6 @@
+plus.txt: [written with w+|]
+r+ reads: written with w+
+plus.txt: [written with w+|appended with a+|]
+rb read 5: 01 02 00 7f ff
+size after ab: 6
+plus.txt: [replaced|]

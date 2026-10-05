@@ -18,13 +18,22 @@ vi.mock('$lib/storage/db', () => ({ db: { getProjects: async () => [] }, id: () 
 const BYTES = [0x11, 0x01, 0x02, 0x33, 0x44, 0x55, 0x66, 0x77]
 const ADDRESS = 0x1000n
 
-function render(options: { pokeable?: boolean; endianess?: 'big' | 'little' } = {}) {
+function render(
+    options: { pokeable?: boolean; endianess?: 'big' | 'little'; unreadable?: number[] } = {}
+) {
     const pokes: { address: bigint; bytes: number[] }[] = []
     const target = document.createElement('div')
     document.body.appendChild(target)
     const memory: DiffedMemory = {
         current: Uint8Array.from(BYTES),
-        prevState: Uint8Array.from(BYTES)
+        prevState: Uint8Array.from(BYTES),
+        unreadable: options.unreadable
+            ? {
+                  address: ADDRESS,
+                  mask: Uint8Array.from(options.unreadable),
+                  reason: 'address out of range'
+              }
+            : null
     }
     const app = mount(MemoryRenderer, {
         target,
@@ -212,6 +221,40 @@ describe('poking memory from the selection popup', () => {
         panel.select(3)
         expect(panel.input()).toBe(null)
         expect(panel.popup()?.textContent).toContain('51')
+        panel.close()
+    })
+})
+
+describe('bytes the Core could not read', () => {
+    it('draws them without a value and says why under the page', () => {
+        const panel = render({ unreadable: [0, 0, 0, 0, 0, 0, 1, 1] })
+        const marked = [...panel.target.querySelectorAll<HTMLElement>('.unreadable-byte')]
+        expect(marked.map((byte) => byte.textContent?.trim())).toEqual(['??', '??'])
+        expect(panel.cells()).toHaveLength(6)
+        const notice = panel.target.querySelector<HTMLElement>('.memory-unreadable')!
+        expect(notice.textContent).toContain("2 of 8 bytes can't be read: address out of range")
+        panel.close()
+    })
+
+    it('says the whole page when none of it can be read', () => {
+        const panel = render({ unreadable: [1, 1, 1, 1, 1, 1, 1, 1] })
+        const notice = panel.target.querySelector<HTMLElement>('.memory-unreadable')!
+        expect(notice.textContent).toContain('Nothing on this page can be read')
+        panel.close()
+    })
+
+    it('shows no notice for a page that was read whole', () => {
+        const panel = render()
+        expect(panel.target.querySelector('.memory-unreadable')).toBeNull()
+        panel.close()
+    })
+
+    it('reads a selection across them as nothing and takes no Poke', () => {
+        //the readable cells are bytes 0, 1, 2, 5, 6 and 7, so the third and fourth span the gap
+        const panel = render({ unreadable: [0, 0, 0, 1, 1, 0, 0, 0] })
+        panel.select(2, 3)
+        expect(panel.popup()!.textContent?.trim()).toBe('??')
+        expect(panel.input()).toBeNull()
         panel.close()
     })
 })

@@ -1,0 +1,59 @@
+// Runtime library, ABI v1: <new>. Compiled with -fno-exceptions: a failed plain new aborts the program instead of throwing.
+#ifndef _AED_NEW
+#define _AED_NEW
+
+#include <stddef.h>
+
+extern "C++" {
+namespace std {
+typedef ::size_t size_t;
+struct nothrow_t { explicit nothrow_t() = default; };
+extern const nothrow_t nothrow;
+enum class align_val_t : size_t {};
+template <class _T> constexpr _T *launder(_T *__p) noexcept { return __builtin_launder(__p); }
+}
+
+/** Allocates size bytes for an object; aborts the program if memory runs out. */
+void *operator new(std::size_t size);
+/** Allocates size bytes for an array; aborts the program if memory runs out. */
+void *operator new[](std::size_t size);
+/** Allocates size bytes for an object, or returns nullptr if memory runs out. */
+void *operator new(std::size_t size, const std::nothrow_t &) noexcept;
+/** Allocates size bytes for an array, or returns nullptr if memory runs out. */
+void *operator new[](std::size_t size, const std::nothrow_t &) noexcept;
+/** Allocates size bytes aligned for an over-aligned object; aborts the program if memory runs out. */
+void *operator new(std::size_t size, std::align_val_t alignment);
+/** Allocates size bytes aligned for an array of over-aligned objects; aborts the program if memory runs out. */
+void *operator new[](std::size_t size, std::align_val_t alignment);
+/** Releases memory from operator new. */
+void operator delete(void *ptr) noexcept;
+/** Releases memory from operator new[]. */
+void operator delete[](void *ptr) noexcept;
+/** Releases memory from operator new; the size is the size that was allocated. */
+void operator delete(void *ptr, std::size_t size) noexcept;
+/** Releases memory from operator new[]; the size is the size that was allocated. */
+void operator delete[](void *ptr, std::size_t size) noexcept;
+/** Releases memory from the nothrow operator new. */
+void operator delete(void *ptr, const std::nothrow_t &) noexcept;
+/** Releases memory from the nothrow operator new[]. */
+void operator delete[](void *ptr, const std::nothrow_t &) noexcept;
+/** Releases memory from the aligned operator new. */
+void operator delete(void *ptr, std::align_val_t alignment) noexcept;
+/** Releases memory from the aligned operator new[]. */
+void operator delete[](void *ptr, std::align_val_t alignment) noexcept;
+/** Releases memory from the aligned operator new; the size is the size that was allocated. */
+void operator delete(void *ptr, std::size_t size, std::align_val_t alignment) noexcept;
+/** Releases memory from the aligned operator new[]; the size is the size that was allocated. */
+void operator delete[](void *ptr, std::size_t size, std::align_val_t alignment) noexcept;
+
+/** Placement new: constructs an object at ptr without allocating. */
+inline void *operator new(std::size_t, void *ptr) noexcept { return ptr; }
+/** Placement new[]: constructs an array at ptr without allocating. */
+inline void *operator new[](std::size_t, void *ptr) noexcept { return ptr; }
+/** Placement delete: does nothing. */
+inline void operator delete(void *, void *) noexcept {}
+/** Placement delete[]: does nothing. */
+inline void operator delete[](void *, void *) noexcept {}
+}
+
+#endif

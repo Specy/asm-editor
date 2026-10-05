@@ -1,0 +1,62 @@
+0                        fabs=0 floor=0 ceil=0 round=0 trunc=0
+-0                       fabs=0 floor=-0 ceil=-0 round=-0 trunc=-0
+0.5                      fabs=0.5 floor=0 ceil=1 round=1 trunc=0
+-0.5                     fabs=0.5 floor=-1 ceil=-0 round=-1 trunc=-0
+1.5                      fabs=1.5 floor=1 ceil=2 round=2 trunc=1
+-1.5                     fabs=1.5 floor=-2 ceil=-1 round=-2 trunc=-1
+2.5                      fabs=2.5 floor=2 ceil=3 round=3 trunc=2
+-2.5                     fabs=2.5 floor=-3 ceil=-2 round=-3 trunc=-2
+2.7000000000000002       fabs=2.7 floor=2 ceil=3 round=3 trunc=2
+-2.7000000000000002      fabs=2.7 floor=-3 ceil=-2 round=-3 trunc=-2
+1000000000000000.5       fabs=1e+15 floor=1000000000000000 ceil=1000000000000001 round=1000000000000001 trunc=1000000000000000
+4503599627370497         fabs=4.5036e+15 floor=4503599627370497 ceil=4503599627370497 round=4503599627370497 trunc=4503599627370497
+1.0000000000000001e+300  fabs=1e+300 floor=1.0000000000000001e+300 ceil=1.0000000000000001e+300 round=1.0000000000000001e+300 trunc=1.0000000000000001e+300
+-1e-300                  fabs=1e-300 floor=-1 ceil=-0 round=-0 trunc=-0
+2.2250738585072014e-308  fabs=2.22507e-308 floor=0 ceil=1 round=0 trunc=0
+4.9406564584124654e-324  fabs=4.94066e-324 floor=0 ceil=1 round=0 trunc=0
+sqrt(0) = 0x0p+0
+sqrt(-0) = -0x0p+0
+sqrt(1) = 0x1p+0
+sqrt(2) = 0x1.6a09e667f3bcdp+0
+sqrt(4) = 0x1p+1
+sqrt(0.25) = 0x1p-1
+sqrt(1e-300) = 0x1.a2fe76a3f9475p-499
+sqrt(2e+300) = 0x1.ba66ec32acb6p+498
+sqrt(3) = 0x1.bb67ae8584caap+0
+sqrt(10) = 0x1.94c583ada5b53p+1
+sqrt(0.1) = 0x1.43d136248490fp-2
+sqrt(1.79769e+308) = 0x1.fffffffffffffp+511
+sqrt(4.94066e-324) = 0x1p-537
+sqrt(1.23457e+08) = 0x1.5b38e373b76fep+13
+sqrt(-1) is nan: 1, sqrt(inf) = inf
+fmod(5.5, 2) = 0x1.8p+0
+fmod(-5.5, 2) = -0x1.8p+0
+fmod(5.5, -2) = 0x1.8p+0
+fmod(1e+300, 3) = 0x0p+0
+fmod(7, 7) = 0x0p+0
+fmod(0.3, 0.1) = 0x1.9999999999998p-4
+fmod(1, inf) = 0x1p+0
+fmod(1, 0) is nan: 1
+frexp(8) = 0x1p-1 * 2^4
+frexp(0.1) = 0x1.999999999999ap-1 * 2^-3
+frexp(-3) = -0x1.8p-1 * 2^2
+frexp(1) = 0x1p-1 * 2^1
+frexp(0) = 0x0p+0 * 2^0
+frexp(1.79769e+308) = 0x1.fffffffffffffp-1 * 2^1024
+frexp(4.94066e-324) = 0x1p-1 * 2^-1073
+ldexp: 6 4.94066e-324 0x1p+1023 inf
+scalbn: 48 0.5 -inf
+modf(-3.75) = -3 + -0.75
+modf(2.5e20) = 2.5e+20 + 0
+modf(inf) = inf + 0
+copysign: -3 3 -0 -inf
+fmin/fmax: 1 2 1 1 -inf -1
+fmin(nan, nan) is nan: 1
+0.5: fabsf=0x1p-1 floorf=0x0p+0 ceilf=0x1p+0 roundf=0x1p+0 truncf=0x0p+0 sqrtf=0x1.6a09e6p-1 fmodf=0x1p-1
+-1.5: fabsf=0x1.8p+0 floorf=-0x1p+1 ceilf=-0x1p+0 roundf=-0x1p+1 truncf=-0x1p+0 sqrtf=0x1.3988e2p+0 fmodf=-0x0p+0
+2.5: fabsf=0x1.4p+1 floorf=0x1p+1 ceilf=0x1.8p+1 roundf=0x1.8p+1 truncf=0x1p+1 sqrtf=0x1.94c584p+0 fmodf=0x1p-2
+-2.7: fabsf=0x1.59999ap+1 floorf=-0x1.8p+1 ceilf=-0x1p+1 roundf=-0x1.8p+1 truncf=-0x1p+1 sqrtf=0x1.a4a6a4p+0 fmodf=-0x1.ccccdp-2
+1e+10: fabsf=0x1.2a05f2p+33 floorf=0x1.2a05f2p+33 ceilf=0x1.2a05f2p+33 roundf=0x1.2a05f2p+33 truncf=0x1.2a05f2p+33 sqrtf=0x1.86ap+16 fmodf=0x1p-2
+3: fabsf=0x1.8p+1 floorf=0x1.8p+1 ceilf=0x1.8p+1 roundf=0x1.8p+1 truncf=0x1.8p+1 sqrtf=0x1.bb67aep+0 fmodf=0x0p+0
+0.1: fabsf=0x1.99999ap-4 floorf=0x0p+0 ceilf=0x1p+0 roundf=0x0p+0 truncf=0x0p+0 sqrtf=0x1.43d136p-2 fmodf=0x1.99999ap-4
+1.67772e+07: fabsf=0x1p+24 floorf=0x1p+24 ceilf=0x1p+24 roundf=0x1p+24 truncf=0x1p+24 sqrtf=0x1p+12 fmodf=0x1p-2

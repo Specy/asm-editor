@@ -12,10 +12,12 @@
         isCompilationTarget,
         OPTIMIZATIONS,
         sourceLanguage,
-        type Optimization
+        type Optimization,
+        type SourceCompiler
     } from '$lib/sourceCompilation/records'
     import { useWorkbench } from './workbenchContext'
     import type { EditorGroup } from '$lib/workbench/EditorGroup.svelte'
+    import { editorFileKind } from '$lib/workbench/editorFileRouting'
 
     interface Props {
         fill?: boolean
@@ -59,9 +61,36 @@
                           }
                       }
                     : undefined,
+            compiler:
+                supported && source
+                    ? {
+                          value: pane.sourceCompiler,
+                          options: [
+                              { value: 'clang', label: 'Clang' },
+                              { value: 'gcc', label: 'GCC' }
+                          ],
+                          onChange: (value) => {
+                              pane.sourceCompiler = value as SourceCompiler
+                          }
+                      }
+                    : undefined,
             onCompile: () => void session.compileDisplayedSource(pane),
             onCancel: () => session.cancelSourceCompilation()
         }
+    })
+
+    //an assembly File of the Project's own that Build would not start from
+    const entryCandidate = $derived.by(() => {
+        const path = pane.displayedPath
+        const file = session.project.files[path]
+        return (
+            !!file &&
+            file.encoding !== 'base64' &&
+            path !== session.project.entry &&
+            editorFileKind(path) === 'assembly' &&
+            !pane.displayedLibraryMember &&
+            !session.fileSystemLocked
+        )
     })
 
     function test() {
@@ -86,7 +115,11 @@
     undoDisabled={session.undoDisabled}
     canUndo={emulator.canUndo}
     hasTests={session.project.testcases.length > 0}
+    buildLabel={pane.displayedPath && pane.displayedPath !== session.project.entry
+        ? 'Build entry'
+        : 'Build'}
     onBuild={() => session.build()}
+    onSetEntry={entryCandidate ? () => session.setEntry(pane.displayedPath) : undefined}
     onStop={() => session.stop()}
     onRun={() => session.run()}
     onPause={() => session.pause()}

@@ -1,0 +1,2 @@
+this line goes to stdout.txt
+and this one

@@ -1,6 +1,7 @@
 import { makeProject } from '$lib/Project.svelte'
 import type { BuildSources } from '$lib/projectFiles'
 import type { Emulator } from '$lib/languages/Emulator'
+import type { SourceBreakpoint } from '$lib/languages/commonLanguageFeatures.svelte'
 import { WorkbenchSession } from '../WorkbenchSession.svelte'
 
 /** Reactive emulator boundary without a Core or a language worker. */
@@ -15,6 +16,8 @@ export function editorGroupsFixture() {
             'other.c': { encoding: 'plain', content: 'int main(void) { return 1; }' }
         }
     })
+    let breakpointResolver:
+        ((breakpoints: readonly SourceBreakpoint[]) => SourceBreakpoint[]) | undefined
     const emulator = $state({
         pc: 0n,
         systemSize: 4,
@@ -26,8 +29,18 @@ export function editorGroupsFixture() {
         line: 0,
         compilerDiagnostics: [],
         errors: [],
-        breakpoints: [],
+        breakpoints: [] as SourceBreakpoint[],
+        toggleBreakpoint(line: number, file: string) {
+            const index = this.breakpoints.findIndex(
+                (item) => item.line === line && item.file === file
+            )
+            if (index === -1) this.breakpoints.push({ file, line })
+            else this.breakpoints.splice(index, 1)
+        },
         setSources: (_sources: BuildSources) => {},
+        setBreakpointResolver: (resolver: typeof breakpointResolver) => {
+            breakpointResolver = resolver
+        },
         clear: () => {}
     })
     let session!: WorkbenchSession
@@ -41,6 +54,8 @@ export function editorGroupsFixture() {
         project,
         emulator,
         session,
+        /** The Breakpoints the Core would run with, as the session resolves them. */
+        coreBreakpoints: () => breakpointResolver?.(emulator.breakpoints) ?? emulator.breakpoints,
         dispose: () => {
             disposeEffects()
             session.models.dispose()

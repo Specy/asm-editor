@@ -1,10 +1,21 @@
 import { tick, untrack } from 'svelte'
+import { resolveAssemblyProfile, resolveRuntimeLink } from '$lib/sourceCompilation/assemblyProfile'
+import { hasRuntimeLibrary, RUNTIME_NAMESPACE } from '$lib/runtimeAbi'
+import {
+    loadedRuntimeLibrary,
+    loadedRuntimeSources,
+    loadRuntimeSources,
+    parseRuntimeSourcePath,
+    runtimeSourcePath
+} from '$lib/sourceRuntime/runtimeLibrary'
+import type { ProjectFile } from '$lib/projectFiles'
 import type { Project, TestcaseResult } from '$lib/Project.svelte'
 import type { Emulator } from '$lib/languages/Emulator'
 import {
     makeRegister,
     type Diagnostic,
-    type RegisterPoke
+    type RegisterPoke,
+    type SourceBreakpoint
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import { TESTCASE_INSTRUCTION_LIMIT } from '$lib/Config'
 import { getM68kErrorMessage } from '$lib/languages/M68K/M68kUtils'
@@ -46,7 +57,23 @@ import { toast } from '$stores/toastStore'
 import { Prompt } from '$stores/promptStore.svelte'
 import { compileProjectSource } from '$lib/sourceCompilation/compileProjectSource'
 import { SourceCompilationError } from '$lib/sourceCompilation/compilerExplorer'
-import { colorSourceMap, type SourceMapColoring } from '$lib/sourceCompilation/sourceColoring'
+import {
+    coreBreakpoints,
+    currentSourceMaps,
+    isSourceBreakpoint,
+    mappedBreakpoints
+} from '$lib/sourceCompilation/sourceBreakpoints'
+import {
+    colorSourceMap,
+    sourceMapColorIndices,
+    type SourceMapColoring
+} from '$lib/sourceCompilation/sourceColoring'
+import {
+    assemblyLinesOf,
+    sameLocations,
+    sourceLocationsOf,
+    type MappingSelection
+} from '$lib/sourceCompilation/mappingSelection'
 import {
     editorFileLanguage,
     type CompilationSourceMap,
@@ -121,6 +148,59 @@ export class WorkbenchSession {
     private nextGroupId = 1
     readonly models: EditorModels
 
+    /**
+     * A Runtime library member as the editor shows it, read-only: the one the running Build linked,
+     * or else the one the live sources would link, once that library has loaded.
+     */
+    runtimeMemberFile(path: string): ProjectFile | undefined {
+        const built = this.emulator.buildLibraryFiles?.[path]
+        if (built) return built
+        const source = parseRuntimeSourcePath(path)
+        if (source) {
+            const text = loadedRuntimeSources(source.abi)?.[source.source]
+            return text === undefined ? undefined : { encoding: 'plain', content: text }
+        }
+        const abi = this.sourceInput.runtimeAbi
+        const content = abi
+            ? loadedRuntimeLibrary(abi, this.project.language)?.members[path]
+            : undefined
+        return content === undefined ? undefined : { encoding: 'plain', content }
+    }
+
+    /** The ABI whose library a Runtime library path belongs to: the Build's, else the live one. */
+    private runtimeAbiFor(path: string): string | undefined {
+        const abi = /^@runtime\/(v\d+)\//.exec(path)?.[1]
+        return abi ?? this.emulator.buildSources?.runtimeAbi ?? this.sourceInput.runtimeAbi
+    }
+
+    /**
+     * Where a library member came from in the library's C source, as a Source map the mapped split
+     * view reads like a Compilation's, or undefined when the member has none (startup code).
+     */
+    runtimeSourceMap(path: string): CompilationSourceMap | undefined {
+        if (!path.startsWith(RUNTIME_NAMESPACE)) return undefined
+        const abi = this.runtimeAbiFor(path)
+        const library = abi ? loadedRuntimeLibrary(abi, this.project.language) : undefined
+        const origin = library?.memberSources[path]
+        if (!abi || !origin) return undefined
+        const source = runtimeSourcePath(abi, origin.source)
+        return {
+            sourcePath: source,
+            outputFingerprint: '',
+            lines: origin.lines.map((line) => (line === null ? null : { path: source, line }))
+        }
+    }
+
+    /** Opens a library member's C source beside it, so the two read as a mapped pair. */
+    async showRuntimeSource(group: EditorGroup) {
+        const map = this.runtimeSourceMap(group.displayedPath)
+        const abi = this.runtimeAbiFor(group.displayedPath)
+        if (!map || !abi) return
+        await loadRuntimeSources(abi)
+        const other = this.groups.find((candidate) => candidate !== group) ?? this.createGroup()
+        this.show(liveSource(map.sourcePath), other)
+    }
+
     groupForFile(path: string) {
         return editorGroupForFile(path, this.groups)
     }
@@ -137,6 +217,7 @@ export class WorkbenchSession {
         return (
             assembly.find((group) => group.id === this.executionGroupId) ??
             assembly[assembly.length - 1] ??
+            [...this.groups].reverse().find((group) => group.displayedPath) ??
             this.groups[this.groups.length - 1]
         )
     }
@@ -157,7 +238,7 @@ export class WorkbenchSession {
     compiling = $state(false)
     compilingGroupId = $state<string | undefined>()
     sourceDiagnostics = $state.raw<Diagnostic[]>([])
-    mappingSelection = $state.raw<SourceLocation | undefined>()
+    mappingSelection = $state.raw<MappingSelection | undefined>()
     private compilationController: AbortController | undefined
     /**
      * A test run is in flight: the Emulator builds and runs every Testcase, and none of those is a
@@ -192,9 +273,34 @@ export class WorkbenchSession {
         this.effectiveSettings = $derived(
             resolveProjectSettings(this.project.language, this.project.settings)
         )
-        this.sourceInput = $derived<BuildSources>({
-            files: $state.snapshot(this.project.files),
-            entry: this.project.entry
+        this.sourceInput = $derived.by<BuildSources>(() => {
+            const sources = {
+                files: $state.snapshot(this.project.files),
+                entry: this.project.entry
+            }
+            if (!hasRuntimeLibrary(this.project.language)) return sources
+            try {
+                return {
+                    ...sources,
+                    //the profile Setting chooses between RISC-V dialects; MIPS has only MARS's own
+                    //and the GNU compiler profile its Generated assembly requires
+                    assemblerProfile: resolveAssemblyProfile(
+                        sources,
+                        this.project.compilations,
+                        this.project.language === 'MIPS' ? undefined : this.project.settings
+                    ),
+                    ...resolveRuntimeLink(
+                        sources,
+                        this.project.compilations,
+                        this.project.settings?.linkRuntimeLibrary
+                    )
+                }
+            } catch (error) {
+                return {
+                    ...sources,
+                    assemblyError: error instanceof Error ? error.message : String(error)
+                }
+            }
         })
         this.displayedPath = $derived(this.groups[0].displayedPath)
         this.sourceView = $derived<'snapshot' | 'live'>(this.groups[0].sourceView)
@@ -205,7 +311,8 @@ export class WorkbenchSession {
                 this.project.sourceMaps,
                 this.project.compilations,
                 this.project.files,
-                this.project.language
+                this.project.language,
+                (path) => this.runtimeSourceMap(path)
             )
         )
         this.mappingColors = $derived.by<SourceMapColoring | undefined>(() => {
@@ -242,9 +349,6 @@ export class WorkbenchSession {
                     editorFileLanguage(diagnostic.location.path, this.project.language) ===
                         this.project.language
             ) ?? false
-        )
-        this.analysisStatus = $derived(
-            this.sourceView === 'live' ? this.languageAnalysis?.fileStatus : undefined
         )
         this.languageErrorCount = $derived(
             this.languageAnalysis?.diagnostics.filter(
@@ -299,9 +403,49 @@ export class WorkbenchSession {
         this.buildDisabled = $derived(
             this.host.readonly || this.liveBuildHasErrors || this.compiling
         )
+        //a Debug session runs the Build's Files, so its Breakpoints expand through the maps that
+        //describe those rather than the live Files
+        const breakpointSourceMaps = $derived(
+            currentSourceMaps(
+                this.project.sourceMaps,
+                this.project.compilations,
+                this.debugSession && this.emulator.buildSources
+                    ? this.emulator.buildSources.files
+                    : this.project.files,
+                this.project.language
+            )
+        )
+        this.mappedBreakpoints = $derived(
+            //fingerprinting the Files is skipped while no Breakpoint is on a source File
+            this.emulator.breakpoints.some((item) =>
+                isSourceBreakpoint(item, this.project.language)
+            )
+                ? mappedBreakpoints(
+                      this.emulator.breakpoints,
+                      breakpointSourceMaps,
+                      this.project.language
+                  )
+                : []
+        )
+        emulator.setBreakpointResolver((breakpoints) =>
+            breakpoints.some((item) => isSourceBreakpoint(item, this.project.language))
+                ? coreBreakpoints(breakpoints, breakpointSourceMaps, this.project.language)
+                : [...breakpoints]
+        )
         this.executionSourceLocation = $derived(
             this.mappingPair?.map.lines[this.mappingPair.assembly.instructionLine] ?? undefined
         )
+        this.activeMappingColors = $derived.by(() => {
+            const coloring = this.mappingColors
+            const execution = this.executionSourceLocation
+            if (!coloring) return undefined
+            const colors = sourceMapColorIndices(
+                coloring,
+                this.mappingSelection ?? (execution ? [execution] : [])
+            )
+            //Nothing to emphasize leaves every section at its default strength.
+            return colors.size ? colors : undefined
+        })
         this.previousBuildSources = emulator.buildSources
         this.pc = makeRegister('PC', emulator.pc, emulator.systemSize)
 
@@ -426,11 +570,16 @@ export class WorkbenchSession {
     declare readonly mappingColors: SourceMapColoring | undefined
     declare readonly mappingPair: ReturnType<typeof resolveMappingPair<EditorGroup>>
     declare readonly executionSourceLocation: SourceLocation | undefined
+    /**
+     * The assembly lines that Breakpoints on C and C++ Files stand for: the first instruction of
+     * each block of Generated assembly mapped to the line. The Core stops on these.
+     */
+    declare readonly mappedBreakpoints: SourceBreakpoint[]
+    /** Palette indices of the selected or executing source lines, which the others dim around. */
+    declare readonly activeMappingColors: ReadonlySet<number> | undefined
     declare readonly retainedModelKeys: string[]
     declare readonly activeDiagnostics: Diagnostic[]
     declare readonly liveBuildHasErrors: boolean
-    /** Whether each File is assembled from the Entry file, on the live Files only. */
-    declare readonly analysisStatus: ProjectAnalysisSnapshot['fileStatus'] | undefined
     declare readonly languageErrorCount: number
     declare readonly diagnosticCounts: Record<string, { errors: number; warnings: number }>
     /** The worst severity among the Diagnostics, for the colour of the Problems badge. */
@@ -465,11 +614,15 @@ export class WorkbenchSession {
                 if (identity.sourceKind === 'build') {
                     if (
                         identity.buildGeneration !== this.buildGeneration ||
-                        !this.emulator.buildSources?.files[identity.path]
+                        !this.existsInBuild(identity.path)
                     ) {
                         return false
                     }
                     this.show(buildSource(identity.path, identity.buildGeneration), group)
+                } else if (identity.path.startsWith(RUNTIME_NAMESPACE)) {
+                    //a Runtime library member, opened read-only from go to definition
+                    if (!this.runtimeMemberFile(identity.path)) return false
+                    this.show(liveSource(identity.path), group)
                 } else {
                     if (!this.project.files[identity.path]) return false
                     this.show(liveSource(identity.path), group)
@@ -646,7 +799,7 @@ export class WorkbenchSession {
             group.sourceSelection = selection
         }
         group.tabs = openTab(group.tabs, selection.path)
-        if (changedPath) group.resetOptimization()
+        if (changedPath) group.resetCompilationOptions()
     }
 
     /**
@@ -696,6 +849,29 @@ export class WorkbenchSession {
         } else if (this.project.files[file.path]) this.selectFile(file.path, destination)
     }
 
+    /**
+     * Whether the File being dragged can open a second pane: there is only one, and the File is
+     * not that pane's last tab, which would leave it empty and closed rather than split.
+     */
+    canSplitWithDrop() {
+        const file = this.draggedFile
+        if (!file || this.groups.length > 1) return false
+        if (!file.groupId) return !!this.project.files[file.path]
+        return this.groups[0].tabs.paths.length > 1
+    }
+
+    /** Drops the dragged File into a new pane on the right of the only one. */
+    async dropFileIntoSplit(event: DragEvent) {
+        if (!event.dataTransfer || !this.canSplitWithDrop()) return this.endFileDrag()
+        const file = readEditorFileDrag(event.dataTransfer, this.languageSessionId)
+        this.endFileDrag()
+        if (!file) return
+        const origin = this.groups[0]
+        const other = this.createGroup()
+        if (file.groupId) await this.transferTab(file.path, origin, other)
+        else this.selectFile(file.path, other)
+    }
+
     async transferTab(path: string, origin: EditorGroup, destination: EditorGroup) {
         if (
             !this.groups.includes(origin) ||
@@ -738,8 +914,12 @@ export class WorkbenchSession {
         if (this.executionGroupId === group.id) this.executionGroupId = this.groups[0].id
     }
 
+    /** Whether the Build has this File: its own, or a Runtime library member it linked. */
     private existsInBuild(path: string) {
-        return this.emulator.buildSources?.files[path] !== undefined
+        return (
+            this.emulator.buildSources?.files[path] !== undefined ||
+            this.emulator.buildLibraryFiles?.[path] !== undefined
+        )
     }
 
     revealEditorLine(lineNumber: number, column: number, group = this.groups[0]) {
@@ -786,7 +966,7 @@ export class WorkbenchSession {
 
     async revealSourceLocation(file: string, line: number, column = 1) {
         const buildSources = this.emulator.buildSources
-        if (!buildSources?.files[file]) return
+        if (!buildSources || !this.existsInBuild(file)) return
         // A compile can reveal its first instruction before Svelte flushes the observer above.
         // Synchronize here as well so the selection and model URI always use the new Build.
         this.synchronizeBuildGeneration(buildSources)
@@ -918,23 +1098,36 @@ export class WorkbenchSession {
 
     // ---- execution -----------------------------------------------------------------------------
 
-    selectMappedLine(group: EditorGroup, line: number) {
+    /** Select the source lines behind any set of lines in either pane of the mapped pair. */
+    selectMappedLines(group: EditorGroup, lines: readonly number[]) {
         const pair = this.mappingPair
-        if (!pair) return
-        this.mappingSelection =
-            pair.assembly === group
-                ? (pair.map.lines[line] ?? undefined)
-                : { path: group.displayedPath, line }
-        const other = pair.source === group ? pair.assembly : pair.source
-        const location = this.mappingSelection
-        if (!location || location.path !== pair.source.displayedPath) return
-        const mappedLine =
+        if (!pair || (group !== pair.source && group !== pair.assembly)) return
+        const locations =
+            group === pair.assembly
+                ? sourceLocationsOf(pair.map, lines)
+                : lines.map((line) => ({ path: group.displayedPath, line }))
+        const selection = locations.length ? locations : undefined
+        //Dragging a selection repeats the same lines; keep the value so nothing recomputes.
+        if (!sameLocations(selection, this.mappingSelection)) this.mappingSelection = selection
+        if (!selection) return
+        const other = group === pair.source ? pair.assembly : pair.source
+        const otherLines =
             other === pair.source
-                ? location.line
-                : pair.map.lines.findIndex(
-                      (item) => item?.path === location.path && item.line === location.line
+                ? selection.flatMap((location) =>
+                      location.path === other.displayedPath ? [location.line] : []
                   )
-        if (mappedLine >= 0) other.editor?.revealLineInCenter(mappedLine + 1)
+                : assemblyLinesOf(pair.map, selection)
+        const editor = other.editor
+        if (!editor || !otherLines.length) return
+        //Leave the other pane alone while any related line is in view, so growing a selection
+        //does not scroll it on every step.
+        const visible = editor.getVisibleRanges()
+        const inView = otherLines.some((line) =>
+            visible.some(
+                (range) => range.startLineNumber <= line + 1 && line + 1 <= range.endLineNumber
+            )
+        )
+        if (!inView) editor.revealLineInCenter(otherLines[0] + 1)
     }
 
     cancelSourceCompilation() {
@@ -945,6 +1138,7 @@ export class WorkbenchSession {
         const path = origin.compilablePath
         if (origin.sourceCompileDisabled || !path) return
         const optimization = origin.optimization
+        const compiler = origin.sourceCompiler
         const recompileOutput = !!origin.displayedCompilation
         const existingDestination = this.groups.find((group) => group !== origin)
         const controller = new AbortController()
@@ -956,6 +1150,8 @@ export class WorkbenchSession {
         try {
             const result = await compileProjectSource(this.project, path, optimization, {
                 signal,
+                sourceAnnotations: preferencesStore.values.sourceAnnotations.value,
+                compiler,
                 confirm: (question) => {
                     const pending = Prompt.confirm(question)
                     const id = Prompt.id
@@ -983,6 +1179,13 @@ export class WorkbenchSession {
                 this.show(liveSource(path), source)
                 this.show(liveSource(result.record.outputPath), assembly)
                 this.executionGroupId = assembly.id
+            }
+            for (const group of this.groups) {
+                if (
+                    group.displayedPath === path ||
+                    group.displayedPath === result.record.outputPath
+                )
+                    group.resetCompilationOptions()
             }
             this.changed()
         } catch (error) {

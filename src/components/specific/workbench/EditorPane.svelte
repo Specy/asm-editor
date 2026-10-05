@@ -5,8 +5,10 @@
     import { sourceLanguage } from '$lib/sourceCompilation/records'
     import type { EditorGroup } from '$lib/workbench/EditorGroup.svelte'
     import FileTabs from './FileTabs.svelte'
+    import LibraryMemberNotice from './LibraryMemberNotice.svelte'
     import CompilationNotice from './CompilationNotice.svelte'
     import ExecutionControls from './ExecutionControls.svelte'
+    import EmptyEditor from './EmptyEditor.svelte'
     import { useWorkbench } from './workbenchContext'
 
     let {
@@ -18,9 +20,24 @@
     const { session } = useWorkbench()
     const emulator = session.emulator
     let dragDepth = $state(0)
+    /**
+     * Whether a drop would open the File in a new pane on the right rather than in this one: over
+     * the right third of the only pane, as in VS Code, which previews the pane it would open.
+     */
+    let splitTarget = $state(false)
     $effect(() => {
-        if (!session.draggedFile) dragDepth = 0
+        if (!session.draggedFile) {
+            dragDepth = 0
+            splitTarget = false
+        }
     })
+    const SPLIT_ZONE = 1 / 3
+
+    function overSplitZone(event: DragEvent) {
+        if (!session.canSplitWithDrop()) return false
+        const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+        return event.clientX > rect.right - rect.width * SPLIT_ZONE
+    }
 
     function enter(event: DragEvent) {
         if (!session.canDropFile(event)) return
@@ -33,16 +50,22 @@
         event.preventDefault()
         event.stopPropagation()
         event.dataTransfer!.dropEffect = session.draggedFile?.groupId ? 'move' : 'copy'
+        splitTarget = overSplitZone(event)
     }
     function leave(event: DragEvent) {
-        if (session.canDropFile(event)) dragDepth = Math.max(0, dragDepth - 1)
+        if (!session.canDropFile(event)) return
+        dragDepth = Math.max(0, dragDepth - 1)
+        if (dragDepth === 0) splitTarget = false
     }
     function drop(event: DragEvent) {
         if (!session.canDropFile(event)) return
         event.preventDefault()
         event.stopPropagation()
         dragDepth = 0
-        void session.dropFile(event, group)
+        const split = overSplitZone(event)
+        splitTarget = false
+        if (split) void session.dropFileIntoSplit(event)
+        else void session.dropFile(event, group)
     }
 </script>
 
@@ -50,15 +73,33 @@
     class="editor-pane"
     style:flex={share}
     aria-label="File editor"
-    class:drop-target={dragDepth > 0}
+    class:drop-target={dragDepth > 0 && !splitTarget}
+    class:split-target={dragDepth > 0 && splitTarget}
     ondragentercapture={enter}
     ondragovercapture={over}
     ondragleavecapture={leave}
     ondropcapture={drop}
 >
     <FileTabs {group} />
-    <CompilationNotice notice={group.compilationNotice} />
+    {#if group.displayedLibraryMember && group.displayedFile}
+        <LibraryMemberNotice
+            path={group.displayedPath}
+            onShowSource={group.libraryMemberSourceAvailable
+                ? () => session.showRuntimeSource(group)
+                : undefined}
+        />
+    {/if}
     <div class="code-area">
+        <CompilationNotice
+            notice={group.compilationNotice}
+            recompile={group.sourceMappingLost
+                ? {
+                      busy: session.compiling && session.compilingGroupId === group.id,
+                      disabled: group.sourceCompileDisabled,
+                      onClick: () => void session.compileDisplayedSource(group)
+                  }
+                : undefined}
+        />
         {#if group.displayedPath}
             <Editor
                 source={group.modelIdentity
@@ -106,22 +147,21 @@
                 bind:editor={group.editor}
                 code={group.displayedCode}
                 breakpoints={group.displayedBreakpoints}
+                mappedBreakpoints={group.displayedMappedBreakpoints}
                 breakpointsEditable={group.breakpointsEditable}
                 diagnostics={group.displayedDiagnostics}
                 language={group.displayedLanguage}
                 highlightedLine={group.highlightedLine}
                 mappedLines={group.mappedLines}
                 lineColoring={group.lineColoring}
-                on:lineSelect={(event) => session.selectMappedLine(group, event.detail)}
+                activeLineColors={group.activeLineColors}
+                on:linesSelect={(event) => session.selectMappedLines(group, event.detail)}
                 disabled={group.editorDisabled}
                 hasError={emulator.errors.length > 0}
             />
         {/if}
         {#if !group.displayedPath}
-            <div class="file-notice">
-                <h2>No open files</h2>
-                <p>Open a file from the Explorer.</p>
-            </div>
+            <EmptyEditor {group} compact={session.groups.length > 1} />
         {:else if group.displayedFile?.encoding === 'base64'}
             <div class="file-notice">
                 <h2>Binary file</h2>
@@ -135,7 +175,7 @@
                 <p>{group.displayedPath} does not currently name a File.</p>
             </div>
         {/if}
-        {#if (controls && session.controlsGroup === group) || ((sourceLanguage(group.displayedPath) || group.recompilationNeeded) && !session.debugSession)}
+        {#if group.displayedPath && ((controls && session.controlsGroup === group) || ((sourceLanguage(group.displayedPath) || group.recompilationNeeded) && !session.debugSession))}
             <div class="floating-controls">
                 <ExecutionControls
                     {group}
@@ -163,6 +203,19 @@
         z-index: 10;
         border: 2px dashed var(--accent);
         background: color-mix(in srgb, var(--accent) 8%, transparent);
+        pointer-events: none;
+    }
+    /* the pane the drop would open, over the right half where it will be */
+    .split-target::after {
+        content: '';
+        position: absolute;
+        top: 1px;
+        bottom: 1px;
+        right: 1px;
+        left: 50%;
+        z-index: 10;
+        border: 2px dashed var(--accent);
+        background: color-mix(in srgb, var(--accent) 16%, transparent);
         pointer-events: none;
     }
     .code-area {

@@ -29,6 +29,7 @@ export type EntryKind =
     | 'port'
     | 'screen-command'
     | 'extension-group'
+    | 'function'
     | 'prose'
 
 /** A labelled value of an entry: a syscall's argument, a port's read side. `value` is markdown. */
@@ -58,6 +59,7 @@ export type EntryView =
 /** Kinds whose names are code (`move`, `.data`, `$t0`), set in the code font; the rest are words. */
 const CODE_NAMED_KINDS = new Set<EntryKind>([
     'instruction',
+    'function',
     'directive',
     'register',
     'flag',

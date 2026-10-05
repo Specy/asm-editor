@@ -103,8 +103,12 @@ export class FileSystem {
         if (!file) throw new FileSystemGuestError(`File not found: ${path}`)
         return fileText(file)
     }
-    snapshot(entry: string): BuildSources {
-        return Object.freeze({ files: cleanFiles(this.files), entry })
+    snapshot(entry: string, assemblerProfile?: BuildSources['assemblerProfile']): BuildSources {
+        return Object.freeze({
+            files: cleanFiles(this.files),
+            entry,
+            ...(assemblerProfile !== undefined ? { assemblerProfile } : {})
+        })
     }
     replace(files: ProjectFiles) {
         this.assertEditable()
@@ -408,6 +412,37 @@ export class FileSystemSession {
                 }
             })
         return bytes.length
+    }
+    /**
+     * Moves a descriptor's position, as lseek does: from the start (0), the current position (1) or
+     * the end (2). A position past the end reads as end of file until a write fills the gap with
+     * zeros; a negative position is a guest error. Returns the new position.
+     */
+    seek(fd: number, offset: number, whence: number): number {
+        const handle = this.handle(fd)
+        if (!Number.isSafeInteger(offset)) throw new FileSystemGuestError('Invalid seek offset')
+        const base =
+            whence === 0
+                ? 0
+                : whence === 1
+                  ? handle.offset
+                  : whence === 2
+                    ? handle.node.bytes.length
+                    : undefined
+        if (base === undefined) throw new FileSystemGuestError(`Invalid seek origin: ${whence}`)
+        const position = base + offset
+        if (position < 0 || position > FILE_BYTE_LIMIT)
+            throw new FileSystemGuestError('Invalid seek position')
+        const previous = handle.offset
+        handle.offset = position
+        if (position !== previous)
+            this.record({
+                bytes: 8,
+                restore: () => {
+                    handle.offset = previous
+                }
+            })
+        return position
     }
     /**
      * Appending is what a program writing a log or an output File does, so the node's buffer grows

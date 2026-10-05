@@ -9,108 +9,147 @@
     },
     "response": {
         "code": 0,
-        "stderr": [],
-        "stdout": [],
         "asm": [
             {
                 "text": "        .section .mdebug.abi32",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .previous",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .nan    legacy",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .module fp=32",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .module oddspreg",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .module arch=mips32",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .text",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "$Ltext0:",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .cfi_sections   .debug_frame",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .file 1 \"/app/example.cpp\"",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .align  2",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "$LFB0 = .",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .file 2 \"src/values.h\"",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .loc 2 1 36",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .cfi_startproc",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .set    nomips16",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .set    nomicromips",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .ent    _ZL5twicei",
-                "source": null
+                "source": null,
+                "labels": [
+                    {
+                        "name": "_ZL5twicei",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 27
+                        }
+                    }
+                ]
             },
             {
                 "text": "        .type   _ZL5twicei, @function",
-                "source": null
+                "source": null,
+                "labels": [
+                    {
+                        "name": "_ZL5twicei",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 27
+                        }
+                    }
+                ]
             },
             {
                 "text": "_ZL5twicei:",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .frame  $fp,8,$31         # vars= 0, regs= 1/0, args= 0, gp= 0",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .mask   0x40000000,-4",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .fmask  0x00000000,0",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .set    noreorder",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .set    nomacro",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        addiu   $sp,$sp,-8",
@@ -119,11 +158,13 @@
                     "line": 1,
                     "mainsource": false,
                     "column": 36
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        .cfi_def_cfa_offset 8",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        sw      $fp,4($sp)",
@@ -132,11 +173,13 @@
                     "line": 1,
                     "mainsource": false,
                     "column": 36
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        .cfi_offset 30, -4",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        move    $fp,$sp",
@@ -145,11 +188,13 @@
                     "line": 1,
                     "mainsource": false,
                     "column": 36
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        .cfi_def_cfa_register 30",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        sw      $4,8($fp)",
@@ -158,11 +203,13 @@
                     "line": 1,
                     "mainsource": false,
                     "column": 36
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        .loc 2 1 53",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        lw      $2,8($fp)",
@@ -171,7 +218,8 @@
                     "line": 1,
                     "mainsource": false,
                     "column": 53
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        sll     $2,$2,1",
@@ -180,11 +228,13 @@
                     "line": 1,
                     "mainsource": false,
                     "column": 53
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        .loc 2 1 56",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        move    $sp,$fp",
@@ -193,11 +243,13 @@
                     "line": 1,
                     "mainsource": false,
                     "column": 56
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        .cfi_def_cfa_register 29",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        lw      $fp,4($sp)",
@@ -206,7 +258,8 @@
                     "line": 1,
                     "mainsource": false,
                     "column": 56
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        addiu   $sp,$sp,8",
@@ -215,15 +268,18 @@
                     "line": 1,
                     "mainsource": false,
                     "column": 56
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        .cfi_restore 30",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .cfi_def_cfa_offset 0",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        jr      $31",
@@ -232,7 +288,8 @@
                     "line": 1,
                     "mainsource": false,
                     "column": 56
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        nop",
@@ -241,171 +298,308 @@
                     "line": 1,
                     "mainsource": false,
                     "column": 56
-                }
+                },
+                "labels": []
             },
             {
                 "text": "",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .set    macro",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .set    reorder",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .end    _ZL5twicei",
-                "source": null
+                "source": null,
+                "labels": [
+                    {
+                        "name": "_ZL5twicei",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 27
+                        }
+                    }
+                ]
             },
             {
                 "text": "        .cfi_endproc",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "$LFE0:",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .size   _ZL5twicei, .-_ZL5twicei",
-                "source": null
+                "source": null,
+                "labels": [
+                    {
+                        "name": "_ZL5twicei",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 27
+                        }
+                    },
+                    {
+                        "name": "_ZL5twicei",
+                        "range": {
+                            "startCol": 31,
+                            "endCol": 41
+                        }
+                    }
+                ]
             },
             {
                 "text": "        .globl  total",
-                "source": null
+                "source": null,
+                "labels": [
+                    {
+                        "name": "total",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 22
+                        }
+                    }
+                ]
             },
             {
                 "text": "        .section        .bss,\"aw\",@nobits",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .align  2",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .type   total, @object",
-                "source": null
+                "source": null,
+                "labels": [
+                    {
+                        "name": "total",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 22
+                        }
+                    }
+                ]
             },
             {
                 "text": "        .size   total, 4",
-                "source": null
+                "source": null,
+                "labels": [
+                    {
+                        "name": "total",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 22
+                        }
+                    }
+                ]
             },
             {
                 "text": "total:",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .space  4",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .globl  values",
-                "source": null
+                "source": null,
+                "labels": [
+                    {
+                        "name": "values",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 23
+                        }
+                    }
+                ]
             },
             {
                 "text": "        .data",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .align  2",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .type   values, @object",
-                "source": null
+                "source": null,
+                "labels": [
+                    {
+                        "name": "values",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 23
+                        }
+                    }
+                ]
             },
             {
                 "text": "        .size   values, 16",
-                "source": null
+                "source": null,
+                "labels": [
+                    {
+                        "name": "values",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 23
+                        }
+                    }
+                ]
             },
             {
                 "text": "values:",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .word   1",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .word   2",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .word   3",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .word   4",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .text",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .align  2",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
-                "text": "        .globl  __asm_editor_main",
-                "source": null
+                "text": "        .globl  main",
+                "source": null,
+                "labels": [
+                    {
+                        "name": "main",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 21
+                        }
+                    }
+                ]
             },
             {
                 "text": "$LFB1 = .",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .file 3 \"src/main.cpp\"",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .loc 3 4 16",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .cfi_startproc",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .set    nomips16",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .set    nomicromips",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
-                "text": "        .ent    __asm_editor_main",
-                "source": null
+                "text": "        .ent    main",
+                "source": null,
+                "labels": [
+                    {
+                        "name": "main",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 21
+                        }
+                    }
+                ]
             },
             {
-                "text": "        .type   __asm_editor_main, @function",
-                "source": null
+                "text": "        .type   main, @function",
+                "source": null,
+                "labels": [
+                    {
+                        "name": "main",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 21
+                        }
+                    }
+                ]
             },
             {
-                "text": "__asm_editor_main:",
-                "source": null
+                "text": "main:",
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .frame  $fp,32,$31      # vars= 8, regs= 2/0, args= 16, gp= 0",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .mask   0xc0000000,-4",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .fmask  0x00000000,0",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .set    noreorder",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .set    nomacro",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        addiu   $sp,$sp,-32",
@@ -414,11 +608,13 @@
                     "line": 4,
                     "mainsource": false,
                     "column": 16
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        .cfi_def_cfa_offset 32",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        sw      $31,28($sp)",
@@ -427,7 +623,8 @@
                     "line": 4,
                     "mainsource": false,
                     "column": 16
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        sw      $fp,24($sp)",
@@ -436,15 +633,18 @@
                     "line": 4,
                     "mainsource": false,
                     "column": 16
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        .cfi_offset 31, -4",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .cfi_offset 30, -8",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        move    $fp,$sp",
@@ -453,15 +653,18 @@
                     "line": 4,
                     "mainsource": false,
                     "column": 16
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        .cfi_def_cfa_register 30",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .loc 3 5 9",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        sw      $0,16($fp)",
@@ -470,15 +673,18 @@
                     "line": 5,
                     "mainsource": false,
                     "column": 9
-                }
+                },
+                "labels": []
             },
             {
                 "text": "$LBB2 = .",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .loc 3 6 14",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        sw      $0,20($fp)",
@@ -487,11 +693,13 @@
                     "line": 6,
                     "mainsource": false,
                     "column": 14
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        .loc 3 6 5",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        b       $L4",
@@ -500,7 +708,16 @@
                     "line": 6,
                     "mainsource": false,
                     "column": 5
-                }
+                },
+                "labels": [
+                    {
+                        "name": "$L4",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 20
+                        }
+                    }
+                ]
             },
             {
                 "text": "        nop",
@@ -509,19 +726,23 @@
                     "line": 6,
                     "mainsource": false,
                     "column": 5
-                }
+                },
+                "labels": []
             },
             {
                 "text": "",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "$L5:",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .loc 3 6 45 discriminator 3",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        lui     $2,%hi(values)",
@@ -530,7 +751,16 @@
                     "line": 6,
                     "mainsource": false,
                     "column": 45
-                }
+                },
+                "labels": [
+                    {
+                        "name": "values",
+                        "range": {
+                            "startCol": 24,
+                            "endCol": 30
+                        }
+                    }
+                ]
             },
             {
                 "text": "        lw      $3,20($fp)",
@@ -539,7 +769,8 @@
                     "line": 6,
                     "mainsource": false,
                     "column": 45
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        sll     $3,$3,2",
@@ -548,7 +779,8 @@
                     "line": 6,
                     "mainsource": false,
                     "column": 45
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        addiu   $2,$2,%lo(values)",
@@ -557,7 +789,16 @@
                     "line": 6,
                     "mainsource": false,
                     "column": 45
-                }
+                },
+                "labels": [
+                    {
+                        "name": "values",
+                        "range": {
+                            "startCol": 27,
+                            "endCol": 33
+                        }
+                    }
+                ]
             },
             {
                 "text": "        addu    $2,$3,$2",
@@ -566,7 +807,8 @@
                     "line": 6,
                     "mainsource": false,
                     "column": 45
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        lw      $2,0($2)",
@@ -575,7 +817,8 @@
                     "line": 6,
                     "mainsource": false,
                     "column": 45
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        move    $4,$2",
@@ -584,7 +827,8 @@
                     "line": 6,
                     "mainsource": false,
                     "column": 45
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        jal     _ZL5twicei",
@@ -593,7 +837,16 @@
                     "line": 6,
                     "mainsource": false,
                     "column": 45
-                }
+                },
+                "labels": [
+                    {
+                        "name": "_ZL5twicei",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 27
+                        }
+                    }
+                ]
             },
             {
                 "text": "        nop",
@@ -602,11 +855,13 @@
                     "line": 6,
                     "mainsource": false,
                     "column": 45
-                }
+                },
+                "labels": []
             },
             {
                 "text": "",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        move    $3,$2",
@@ -615,11 +870,13 @@
                     "line": 6,
                     "mainsource": false,
                     "column": 45
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        .loc 3 6 37 discriminator 3",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        lw      $2,16($fp)",
@@ -628,7 +885,8 @@
                     "line": 6,
                     "mainsource": false,
                     "column": 37
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        addu    $2,$2,$3",
@@ -637,7 +895,8 @@
                     "line": 6,
                     "mainsource": false,
                     "column": 37
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        sw      $2,16($fp)",
@@ -646,11 +905,13 @@
                     "line": 6,
                     "mainsource": false,
                     "column": 37
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        .loc 3 6 5 discriminator 3",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        lw      $2,20($fp)",
@@ -659,7 +920,8 @@
                     "line": 6,
                     "mainsource": false,
                     "column": 5
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        addiu   $2,$2,1",
@@ -668,7 +930,8 @@
                     "line": 6,
                     "mainsource": false,
                     "column": 5
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        sw      $2,20($fp)",
@@ -677,15 +940,18 @@
                     "line": 6,
                     "mainsource": false,
                     "column": 5
-                }
+                },
+                "labels": []
             },
             {
                 "text": "$L4:",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .loc 3 6 23 discriminator 2",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        lw      $2,20($fp)",
@@ -694,7 +960,8 @@
                     "line": 6,
                     "mainsource": false,
                     "column": 23
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        slt     $2,$2,4",
@@ -703,7 +970,8 @@
                     "line": 6,
                     "mainsource": false,
                     "column": 23
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        bne     $2,$0,$L5",
@@ -712,7 +980,16 @@
                     "line": 6,
                     "mainsource": false,
                     "column": 23
-                }
+                },
+                "labels": [
+                    {
+                        "name": "$L5",
+                        "range": {
+                            "startCol": 23,
+                            "endCol": 26
+                        }
+                    }
+                ]
             },
             {
                 "text": "        nop",
@@ -721,19 +998,23 @@
                     "line": 6,
                     "mainsource": false,
                     "column": 23
-                }
+                },
+                "labels": []
             },
             {
                 "text": "",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "$LBE2 = .",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .loc 3 7 11",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        lui     $2,%hi(total)",
@@ -742,7 +1023,16 @@
                     "line": 7,
                     "mainsource": false,
                     "column": 11
-                }
+                },
+                "labels": [
+                    {
+                        "name": "total",
+                        "range": {
+                            "startCol": 24,
+                            "endCol": 29
+                        }
+                    }
+                ]
             },
             {
                 "text": "        lw      $3,16($fp)",
@@ -751,7 +1041,8 @@
                     "line": 7,
                     "mainsource": false,
                     "column": 11
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        sw      $3,%lo(total)($2)",
@@ -760,11 +1051,21 @@
                     "line": 7,
                     "mainsource": false,
                     "column": 11
-                }
+                },
+                "labels": [
+                    {
+                        "name": "total",
+                        "range": {
+                            "startCol": 24,
+                            "endCol": 29
+                        }
+                    }
+                ]
             },
             {
                 "text": "        .loc 3 8 12",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        lui     $2,%hi(total)",
@@ -773,7 +1074,16 @@
                     "line": 8,
                     "mainsource": false,
                     "column": 12
-                }
+                },
+                "labels": [
+                    {
+                        "name": "total",
+                        "range": {
+                            "startCol": 24,
+                            "endCol": 29
+                        }
+                    }
+                ]
             },
             {
                 "text": "        lw      $2,%lo(total)($2)",
@@ -782,11 +1092,21 @@
                     "line": 8,
                     "mainsource": false,
                     "column": 12
-                }
+                },
+                "labels": [
+                    {
+                        "name": "total",
+                        "range": {
+                            "startCol": 24,
+                            "endCol": 29
+                        }
+                    }
+                ]
             },
             {
                 "text": "        .loc 3 9 1",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        move    $sp,$fp",
@@ -795,11 +1115,13 @@
                     "line": 9,
                     "mainsource": false,
                     "column": 1
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        .cfi_def_cfa_register 29",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        lw      $31,28($sp)",
@@ -808,7 +1130,8 @@
                     "line": 9,
                     "mainsource": false,
                     "column": 1
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        lw      $fp,24($sp)",
@@ -817,7 +1140,8 @@
                     "line": 9,
                     "mainsource": false,
                     "column": 1
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        addiu   $sp,$sp,32",
@@ -826,19 +1150,23 @@
                     "line": 9,
                     "mainsource": false,
                     "column": 1
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        .cfi_restore 30",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .cfi_restore 31",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .cfi_def_cfa_offset 0",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        jr      $31",
@@ -847,7 +1175,8 @@
                     "line": 9,
                     "mainsource": false,
                     "column": 1
-                }
+                },
+                "labels": []
             },
             {
                 "text": "        nop",
@@ -856,705 +1185,1093 @@
                     "line": 9,
                     "mainsource": false,
                     "column": 1
-                }
+                },
+                "labels": []
             },
             {
                 "text": "",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .set    macro",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .set    reorder",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
-                "text": "        .end    __asm_editor_main",
-                "source": null
+                "text": "        .end    main",
+                "source": null,
+                "labels": [
+                    {
+                        "name": "main",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 21
+                        }
+                    }
+                ]
             },
             {
                 "text": "        .cfi_endproc",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "$LFE1:",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
-                "text": "        .size   __asm_editor_main, .-__asm_editor_main",
-                "source": null
+                "text": "        .size   main, .-main",
+                "source": null,
+                "labels": [
+                    {
+                        "name": "main",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 21
+                        }
+                    },
+                    {
+                        "name": "main",
+                        "range": {
+                            "startCol": 25,
+                            "endCol": 29
+                        }
+                    }
+                ]
             },
             {
                 "text": "$Letext0:",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .section        .debug_info,\"\",@progbits",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "$Ldebug_info0:",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .4byte  0x5f",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .2byte  0x5",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .byte   0x1",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .byte   0x4",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .4byte  $Ldebug_abbrev0",
-                "source": null
+                "source": null,
+                "labels": [
+                    {
+                        "name": "$Ldebug_abbrev0",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 32
+                        }
+                    }
+                ]
             },
             {
                 "text": "        .uleb128 0x2",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .4byte  $LASF2",
-                "source": null
+                "source": null,
+                "labels": [
+                    {
+                        "name": "$LASF2",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 23
+                        }
+                    }
+                ]
             },
             {
                 "text": "        .byte   0x21",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .4byte  $LASF3",
-                "source": null
+                "source": null,
+                "labels": [
+                    {
+                        "name": "$LASF3",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 23
+                        }
+                    }
+                ]
             },
             {
                 "text": "        .4byte  $LASF4",
-                "source": null
+                "source": null,
+                "labels": [
+                    {
+                        "name": "$LASF4",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 23
+                        }
+                    }
+                ]
             },
             {
                 "text": "        .4byte  $Ltext0",
-                "source": null
+                "source": null,
+                "labels": [
+                    {
+                        "name": "$Ltext0",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 24
+                        }
+                    }
+                ]
             },
             {
                 "text": "        .4byte  $Letext0-$Ltext0",
-                "source": null
+                "source": null,
+                "labels": [
+                    {
+                        "name": "$Letext0",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 25
+                        }
+                    },
+                    {
+                        "name": "$Ltext0",
+                        "range": {
+                            "startCol": 26,
+                            "endCol": 33
+                        }
+                    }
+                ]
             },
             {
                 "text": "        .4byte  $Ldebug_line0",
-                "source": null
+                "source": null,
+                "labels": [
+                    {
+                        "name": "$Ldebug_line0",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 30
+                        }
+                    }
+                ]
             },
             {
                 "text": "        .uleb128 0x1",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .4byte  $LASF0",
-                "source": null
+                "source": null,
+                "labels": [
+                    {
+                        "name": "$LASF0",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 23
+                        }
+                    }
+                ]
             },
             {
                 "text": "        .byte   0x2",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x5",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .byte   0x3",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .4byte  total",
-                "source": null
+                "source": null,
+                "labels": [
+                    {
+                        "name": "total",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 22
+                        }
+                    }
+                ]
             },
             {
                 "text": "        .uleb128 0x1",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .4byte  $LASF1",
-                "source": null
+                "source": null,
+                "labels": [
+                    {
+                        "name": "$LASF1",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 23
+                        }
+                    }
+                ]
             },
             {
                 "text": "        .byte   0x3",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x5",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .byte   0x3",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .4byte  values",
-                "source": null
+                "source": null,
+                "labels": [
+                    {
+                        "name": "values",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 23
+                        }
+                    }
+                ]
             },
             {
                 "text": "        .uleb128 0x3",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .4byte  $LASF5",
-                "source": null
+                "source": null,
+                "labels": [
+                    {
+                        "name": "$LASF5",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 23
+                        }
+                    }
+                ]
             },
             {
                 "text": "        .byte   0x3",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .byte   0x4",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .byte   0x5",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .4byte  $LFB1",
-                "source": null
+                "source": null,
+                "labels": [
+                    {
+                        "name": "$LFB1",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 22
+                        }
+                    }
+                ]
             },
             {
                 "text": "        .4byte  $LFE1-$LFB1",
-                "source": null
+                "source": null,
+                "labels": [
+                    {
+                        "name": "$LFE1",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 22
+                        }
+                    },
+                    {
+                        "name": "$LFB1",
+                        "range": {
+                            "startCol": 23,
+                            "endCol": 28
+                        }
+                    }
+                ]
             },
             {
                 "text": "        .uleb128 0x1",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .byte   0x9c",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x4",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .4byte  $LASF6",
-                "source": null
+                "source": null,
+                "labels": [
+                    {
+                        "name": "$LASF6",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 23
+                        }
+                    }
+                ]
             },
             {
                 "text": "        .byte   0x2",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .byte   0x1",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .byte   0x13",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .4byte  $LFB0",
-                "source": null
+                "source": null,
+                "labels": [
+                    {
+                        "name": "$LFB0",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 22
+                        }
+                    }
+                ]
             },
             {
                 "text": "        .4byte  $LFE0-$LFB0",
-                "source": null
+                "source": null,
+                "labels": [
+                    {
+                        "name": "$LFE0",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 22
+                        }
+                    },
+                    {
+                        "name": "$LFB0",
+                        "range": {
+                            "startCol": 23,
+                            "endCol": 28
+                        }
+                    }
+                ]
             },
             {
                 "text": "        .uleb128 0x1",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .byte   0x9c",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .byte   0",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .section        .debug_abbrev,\"\",@progbits",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "$Ldebug_abbrev0:",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x1",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x34",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .byte   0",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x3",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0xe",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x3a",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x21",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .sleb128 3",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x3b",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0xb",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x39",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x21",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .sleb128 5",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x3f",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x19",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x2",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x18",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .byte   0",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .byte   0",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x2",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x11",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .byte   0x1",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x25",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0xe",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x13",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0xb",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x3",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0xe",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x1b",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0xe",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x11",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x1",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x12",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x6",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x10",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x17",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .byte   0",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .byte   0",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x3",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x2e",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .byte   0",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x3f",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x19",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x3",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0xe",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x3a",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0xb",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x3b",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0xb",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x39",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0xb",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x11",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x1",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x12",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x6",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x40",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x18",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x7c",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x19",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .byte   0",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .byte   0",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x4",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x2e",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .byte   0",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x3",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0xe",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x3a",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0xb",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x3b",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0xb",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x39",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0xb",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x11",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x1",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x12",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x6",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x40",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x18",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x7a",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .uleb128 0x19",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .byte   0",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .byte   0",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .byte   0",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .section        .debug_aranges,\"\",@progbits",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .4byte  0x1c",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .2byte  0x2",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .4byte  $Ldebug_info0",
-                "source": null
+                "source": null,
+                "labels": [
+                    {
+                        "name": "$Ldebug_info0",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 30
+                        }
+                    }
+                ]
             },
             {
                 "text": "        .byte   0x4",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .byte   0",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .2byte  0",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .2byte  0",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .4byte  $Ltext0",
-                "source": null
+                "source": null,
+                "labels": [
+                    {
+                        "name": "$Ltext0",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 24
+                        }
+                    }
+                ]
             },
             {
                 "text": "        .4byte  $Letext0-$Ltext0",
-                "source": null
+                "source": null,
+                "labels": [
+                    {
+                        "name": "$Letext0",
+                        "range": {
+                            "startCol": 17,
+                            "endCol": 25
+                        }
+                    },
+                    {
+                        "name": "$Ltext0",
+                        "range": {
+                            "startCol": 26,
+                            "endCol": 33
+                        }
+                    }
+                ]
             },
             {
                 "text": "        .4byte  0",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .4byte  0",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .section        .debug_line,\"\",@progbits",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "$Ldebug_line0:",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .section        .debug_str,\"MS\",@progbits,1",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "$LASF3:",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .ascii  \"/app/example.cpp\\000\"",
-                "source": null
-            },
-            {
-                "text": "$LASF5:",
-                "source": null
-            },
-            {
-                "text": "        .ascii  \"__asm_editor_main\\000\"",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "$LASF6:",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .ascii  \"twice\\000\"",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "$LASF1:",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .ascii  \"values\\000\"",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "$LASF0:",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .ascii  \"total\\000\"",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "$LASF2:",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
-                "text": "        .ascii  \"GNU C++17 14.2.0 -G 0 -meb -march=mips32 -mabi=32 -mno-a\"",
-                "source": null
+                "text": "        .ascii  \"GNU C++17 14.2.0 -G 0 -mel -march=mips32 -mabi=32 -mno-a\"",
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .ascii  \"bicalls -mfp32 -mhard-float -mllsc -mplt -mips32 -mno-sh\"",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
-                "text": "        .ascii  \"ared -g -g1 -O0 -std=c++17 -ffreestanding -fno-stack-pro\"",
-                "source": null
+                "text": "        .ascii  \"ared -g -g1 -O0 -std=c++17 -fno-stack-protector -fno-sec\"",
+                "source": null,
+                "labels": []
             },
             {
-                "text": "        .ascii  \"tector -fno-pic -fno-delayed-branch -fno-exceptions -fno\"",
-                "source": null
+                "text": "        .ascii  \"tion-anchors -fno-pic -fno-delayed-branch -fno-exception\"",
+                "source": null,
+                "labels": []
             },
             {
-                "text": "        .ascii  \"-rtti\\000\"",
-                "source": null
+                "text": "        .ascii  \"s -fno-rtti -fno-threadsafe-statics\\000\"",
+                "source": null,
+                "labels": []
+            },
+            {
+                "text": "$LASF5:",
+                "source": null,
+                "labels": []
+            },
+            {
+                "text": "        .ascii  \"main\\000\"",
+                "source": null,
+                "labels": []
             },
             {
                 "text": "$LASF4:",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .ascii  \"/app\\000\"",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .ident  \"GCC: (crosstool-NG UNKNOWN) 14.2.0\"",
-                "source": null
+                "source": null,
+                "labels": []
             },
             {
                 "text": "        .section        .note.GNU-stack,\"\",@progbits",
-                "source": null
+                "source": null,
+                "labels": []
             }
         ],
-        "inputFilename": "example.cpp"
-    }
+        "stderr": []
+    },
+    "captured": "2026-10-04",
+    "hosted": true
 }

@@ -1,3 +1,6 @@
+import { isAssemblerProfile } from './assemblerProfiles'
+import { isRuntimeAbiName } from './runtimeAbi'
+
 /** Shared byte and path rules for persistence, assembly, and the FileSystem. */
 export type FileEncoding = 'plain' | 'base64'
 export type ProjectFile = Readonly<{ encoding: FileEncoding; content: string }>
@@ -144,16 +147,70 @@ export function cleanFiles(raw: unknown): ProjectFiles {
     return Object.freeze(files)
 }
 
-export type BuildSources = Readonly<{ files: ProjectFiles; entry: string }>
+export type BuildSources = Readonly<{
+    files: ProjectFiles
+    entry: string
+    assemblerProfile?: import('./assemblerProfiles').AssemblerProfile
+    /** A source-unit resolution failure, carried to live checking and Build as a Diagnostic. */
+    assemblyError?: string
+    /**
+     * The Runtime ABI whose library the Build links, absent when it links none
+     * ([ADR 0031](../../docs/adr/0031-projects-pin-the-runtime-abi-not-its-implementation.md)).
+     */
+    runtimeAbi?: `v${number}`
+    /** The global execution starts at instead of `main`: the Runtime library's `_start` for compiled programs. */
+    entrySymbol?: string
+}>
 
 export type BuildInput = string | BuildSources
 
+export function buildAssemblerProfile(sources: BuildSources) {
+    if (sources.assemblyError) throw new ProjectFormatError(sources.assemblyError)
+    if (!hasOwn(sources, 'assemblerProfile')) return 'rars' as const
+    if (!isAssemblerProfile(sources.assemblerProfile)) {
+        throw new ProjectFormatError(
+            `Unsupported assembler profile: ${String(sources.assemblerProfile)}`
+        )
+    }
+    return sources.assemblerProfile
+}
+
 export function normalizeBuildInput(input: BuildInput): BuildSources {
     if (typeof input !== 'string') {
+        if (hasOwn(input, 'assemblyError') && typeof input.assemblyError !== 'string') {
+            throw new ProjectFormatError('Invalid assembly resolution error')
+        }
         if (!isValidFilePath(input.entry)) {
             throw new ProjectFormatError(`Invalid entry path: ${input.entry}`)
         }
-        return Object.freeze({ files: cleanFiles(input.files), entry: input.entry })
+        if (
+            Object.prototype.hasOwnProperty.call(input, 'assemblerProfile') &&
+            !isAssemblerProfile(input.assemblerProfile)
+        ) {
+            throw new ProjectFormatError(
+                `Unsupported assembler profile: ${String(input.assemblerProfile)}`
+            )
+        }
+        if (hasOwn(input, 'runtimeAbi') && !isRuntimeAbiName(input.runtimeAbi)) {
+            throw new ProjectFormatError(`Invalid Runtime ABI: ${String(input.runtimeAbi)}`)
+        }
+        if (
+            hasOwn(input, 'entrySymbol') &&
+            (typeof input.entrySymbol !== 'string' ||
+                !/^[.$A-Za-z_][.$A-Za-z_0-9]*$/.test(input.entrySymbol))
+        ) {
+            throw new ProjectFormatError(`Invalid entry symbol: ${String(input.entrySymbol)}`)
+        }
+        return Object.freeze({
+            files: cleanFiles(input.files),
+            entry: input.entry,
+            ...(input.assemblyError ? { assemblyError: input.assemblyError } : {}),
+            ...(Object.prototype.hasOwnProperty.call(input, 'assemblerProfile')
+                ? { assemblerProfile: input.assemblerProfile }
+                : {}),
+            ...(hasOwn(input, 'runtimeAbi') ? { runtimeAbi: input.runtimeAbi } : {}),
+            ...(hasOwn(input, 'entrySymbol') ? { entrySymbol: input.entrySymbol } : {})
+        })
     }
     return Object.freeze({
         files: cleanFiles({ main: { encoding: 'plain', content: input } }),
@@ -163,6 +220,7 @@ export function normalizeBuildInput(input: BuildInput): BuildSources {
 
 export function updateEntryText(sources: BuildSources, text: string): BuildSources {
     return Object.freeze({
+        ...sources,
         entry: sources.entry,
         files: cleanFiles({
             ...sources.files,

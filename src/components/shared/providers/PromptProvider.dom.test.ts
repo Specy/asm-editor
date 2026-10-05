@@ -1,3 +1,4 @@
+import 'fake-indexeddb/auto'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { flushSync, mount, tick, unmount } from 'svelte'
 import PromptProvider from './PromptProvider.svelte'

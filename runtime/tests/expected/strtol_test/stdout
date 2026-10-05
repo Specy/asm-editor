@@ -1,0 +1,47 @@
+strtol(123           ,10) = 123 end=+3 errno=0
+strtol(  -456xyz     ,10) = -456 end=+6 errno=0
+strtol(+0            ,10) = 0 end=+2 errno=0
+strtol(0x1f          , 0) = 31 end=+4 errno=0
+strtol(0x1f          ,16) = 31 end=+4 errno=0
+strtol(1f            ,16) = 31 end=+2 errno=0
+strtol(017           , 0) = 15 end=+3 errno=0
+strtol(017           ,10) = 17 end=+3 errno=0
+strtol(0b101         , 0) = 0 end=+1 errno=0
+strtol(101           , 2) = 5 end=+3 errno=0
+strtol(zz            ,36) = 1295 end=+2 errno=0
+strtol(Zz            ,36) = 1295 end=+2 errno=0
+strtol(777           , 8) = 511 end=+3 errno=0
+strtol(8             , 8) = 0 end=+0 errno=0
+strtol(              ,10) = 0 end=+0 errno=0
+strtol(              ,10) = 0 end=+0 errno=0
+strtol(-             ,10) = 0 end=+0 errno=0
+strtol(0x            , 0) = 0 end=+1 errno=0
+strtol(0x            ,16) = 0 end=+1 errno=0
+strtol(0xg           ,16) = 0 end=+1 errno=0
+strtol(2147483647    ,10) = 2147483647 end=+10 errno=0
+strtol(-2147483648   ,10) = -2147483648 end=+11 errno=0
+strtol(12            , 1) = 0 end=+0 errno=22
+strtol(12            ,37) = 0 end=+0 errno=22
+strtoul(4294967295    ,10) = 4294967295 end=+10 errno=0
+strtoul(  +17         , 0) = 17 end=+5 errno=0
+strtoul(0X7fffFFFF    , 0) = 2147483647 end=+10 errno=0
+strtoul(1010          , 2) = 10 end=+4 errno=0
+strtoll(9223372036854775807   ,10) = 9223372036854775807 end=+19 errno=0
+strtoll(-9223372036854775808  ,10) = -9223372036854775808 end=+20 errno=0
+strtoll(9223372036854775808   ,10) = 9223372036854775807 end=+19 errno=34
+strtoll(-9223372036854775809  ,10) = -9223372036854775808 end=+20 errno=34
+strtoll(99999999999999999999999,10) = 9223372036854775807 end=+23 errno=34
+strtoll(0x7fffffffffffffff    , 0) = 9223372036854775807 end=+18 errno=0
+strtoll(-0x8000000000000000   ,16) = -9223372036854775808 end=+19 errno=0
+strtoll(1y2                   ,36) = 2522 end=+3 errno=0
+strtoull(18446744073709551615  ,10) = 18446744073709551615 end=+20 errno=0
+strtoull(18446744073709551616  ,10) = 18446744073709551615 end=+20 errno=34
+strtoull(-1                    ,10) = 18446744073709551615 end=+2 errno=0
+strtoull(0xffffffffffffffff    , 0) = 18446744073709551615 end=+18 errno=0
+strtoull(01777777777777777777777, 0) = 18446744073709551615 end=+23 errno=0
+strtoul("-1") is ULONG_MAX: 1
+strtol overflow: is LONG_MAX=1 errno=34 end=+23
+strtol underflow: is LONG_MIN=1 errno=34
+strtoul overflow: is ULONG_MAX=1 errno=34
+strtoimax=-123456789012 strtoumax=1099511627775
+imaxabs=42 imaxdiv=-3,-2

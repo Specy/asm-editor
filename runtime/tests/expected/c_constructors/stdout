@@ -1,0 +1,5 @@
+constructor 200
+constructor 300 sees ready=1
+main sees ready=1
+atexit handler
+destructor

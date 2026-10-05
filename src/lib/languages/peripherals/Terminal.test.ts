@@ -217,3 +217,73 @@ describe('Screen keyboard input', () => {
         expect(await read).toBe('typed')
     })
 })
+
+describe('standard input', () => {
+    const text = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
+
+    it('hands out one line at a time, keeping what a short read left behind', async () => {
+        const { terminal, execution } = makeTerminal()
+        terminal.useScriptedInput(['12 34', 'next'])
+        expect(text(await terminal.readStandardInput(3, 'q', execution))).toBe('12 ')
+        expect(text(await terminal.readStandardInput(10, 'q', execution))).toBe('34\n')
+        expect(text(await terminal.readStandardInput(10, 'q', execution))).toBe('next\n')
+    })
+
+    it('reads End of input as no bytes once scripted answers run out, without failing', async () => {
+        const { terminal, execution } = makeTerminal()
+        terminal.useScriptedInput(['only'])
+        expect(text(await terminal.readStandardInput(64, 'q', execution))).toBe('only\n')
+        expect((await terminal.readStandardInput(64, 'q', execution)).length).toBe(0)
+        expect((await terminal.readStandardInput(64, 'q', execution)).length).toBe(0)
+        //the educational read syscalls keep their error
+        await expect(terminal.readAsync('q', execution)).rejects.toThrow('does not have any values')
+    })
+
+    it('asks the prompt for a line and echoes it like a terminal', async () => {
+        const { terminal, execution } = makeTerminal()
+        const read = terminal.readStandardInput(64, 'Enter a line', execution)
+        await settle()
+        expect(Prompt.endOfInput).toBe(true)
+        Prompt.answerText('hello')
+        expect(text(await read)).toBe('hello\n')
+        expect(terminal.output).toBe('hello\n')
+    })
+
+    it('takes End of input from the prompt as no bytes', async () => {
+        const { terminal, execution } = makeTerminal()
+        const read = terminal.readStandardInput(64, 'Enter a line', execution)
+        await settle()
+        Prompt.answerEndOfInput()
+        expect((await read).length).toBe(0)
+        expect(terminal.output).toBe('')
+    })
+
+    it('offers End of input only to standard input', async () => {
+        const { terminal, execution } = makeTerminal()
+        const read = terminal.readAsync('Enter a string', execution)
+        await settle()
+        expect(Prompt.endOfInput).toBe(false)
+        Prompt.answerEndOfInput()
+        expect(Prompt.promise).not.toBeNull()
+        Prompt.answerText('still a string')
+        expect(await read).toBe('still a string')
+    })
+
+    it('takes an EOT typed on an empty Screen line as End of input', async () => {
+        const { terminal, keyboard, useKeyboard, execution } = makeTerminal()
+        useKeyboard()
+        keyboard.typeText('\x04')
+        expect((await terminal.readStandardInput(8, 'q', execution)).length).toBe(0)
+        keyboard.typeText('ab\n')
+        expect(text(await terminal.readStandardInput(8, 'q', execution))).toBe('ab\n')
+    })
+
+    it('forgets a partly read line when the Terminal clears', async () => {
+        const { terminal, execution } = makeTerminal()
+        terminal.useScriptedInput(['abcdef', 'second'])
+        await terminal.readStandardInput(2, 'q', execution)
+        terminal.clear()
+        terminal.useScriptedInput(['fresh'])
+        expect(text(await terminal.readStandardInput(64, 'q', execution))).toBe('fresh\n')
+    })
+})

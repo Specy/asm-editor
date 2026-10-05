@@ -129,6 +129,41 @@ describe('independent editor groups', () => {
         expect(left.displayedPath).toBe('main.c')
         expect(right.tabs.paths).toEqual(['main.s', 'value.h'])
     })
+    it('opens a sidebar drop in a new pane on the right of the only one', async () => {
+        const { session } = setup()
+        const left = session.groups[0]
+        const event = { dataTransfer: fileTransfer() } as DragEvent
+        session.startFileDrag(event, 'value.h')
+        expect(session.canSplitWithDrop()).toBe(true)
+        await session.dropFileIntoSplit(event)
+        expect(session.groups[0]).toBe(left)
+        expect(left.tabs.paths).toEqual(['main.c'])
+        expect(session.groups[1].tabs.paths).toEqual(['value.h'])
+        expect(session.groups[1].displayedPath).toBe('value.h')
+        expect(session.draggedFile).toBeUndefined()
+    })
+    it('splits by moving a dragged tab, but never the only tab', async () => {
+        const { session } = setup()
+        const left = session.groups[0]
+        const only = { dataTransfer: fileTransfer() } as DragEvent
+        session.startFileDrag(only, 'main.c', left)
+        expect(session.canSplitWithDrop()).toBe(false)
+        session.endFileDrag()
+        session.selectFile('other.c', left)
+        const event = { dataTransfer: fileTransfer() } as DragEvent
+        session.startFileDrag(event, 'other.c', left)
+        expect(session.canSplitWithDrop()).toBe(true)
+        await session.dropFileIntoSplit(event)
+        expect(left.tabs.paths).toEqual(['main.c'])
+        expect(session.groups[1].tabs.paths).toEqual(['other.c'])
+    })
+    it('does not split a second time once two panes are open', () => {
+        const { session } = setup()
+        openSecond(session, 'main.s')
+        const event = { dataTransfer: fileTransfer() } as DragEvent
+        session.startFileDrag(event, 'value.h')
+        expect(session.canSplitWithDrop()).toBe(false)
+    })
     it('deduplicates a transferred tab and collapses its empty original pane', async () => {
         const { session, project } = setup()
         const left = session.groups[0],
@@ -172,7 +207,7 @@ describe('independent editor groups', () => {
         result(fixture)
         flushSync()
         expect(session.mappingPair?.source).toBe(first)
-        session.selectMappedLine(first, 0)
+        session.selectMappedLines(first, [0])
         expect(second.mappedLines).toEqual([1])
         session.fileEdited('main.c', first.displayedCode + '\n')
         flushSync()
@@ -181,6 +216,110 @@ describe('independent editor groups', () => {
         expect(session.groups).toEqual([first, second])
         expect(second.compilationNotice).toContain('Stale assembly')
     })
+    it('selects every section mapped to a set of lines in either pane', () => {
+        const fixture = setup(),
+            { session } = fixture
+        const first = session.groups[0],
+            second = openSecond(session, 'main.s')
+        const { record, map } = result(fixture)
+        fixture.project.recordCompilation(record, {
+            ...map,
+            lines: [
+                { path: 'main.c', line: 0 },
+                { path: 'main.c', line: 1 },
+                null,
+                { path: 'main.c', line: 0 },
+                { path: 'value.h', line: 0 },
+                { path: 'main.c', line: 2 }
+            ]
+        })
+        flushSync()
+        session.selectMappedLines(first, [0, 1])
+        expect(first.mappedLines).toEqual([0, 1])
+        expect(second.mappedLines).toEqual([0, 1, 3])
+        const colors = session.mappingColors!.indices
+        expect(session.activeMappingColors).toEqual(
+            new Set([colors.get('main.c')!.get(0), colors.get('main.c')!.get(1)])
+        )
+        session.selectMappedLines(second, [2, 3, 4])
+        expect(session.mappingSelection).toEqual([
+            { path: 'main.c', line: 0 },
+            { path: 'value.h', line: 0 }
+        ])
+        expect(first.mappedLines).toEqual([0])
+        expect(second.mappedLines).toEqual([0, 3, 4])
+        expect(session.activeMappingColors).toEqual(
+            new Set([colors.get('main.c')!.get(0), colors.get('value.h')!.get(0)])
+        )
+        session.selectMappedLines(second, [2])
+        expect(session.mappingSelection).toBeUndefined()
+        expect(session.activeMappingColors).toBeUndefined()
+    })
+    it('stops a breakpoint on C source at the first instruction of each mapped block', () => {
+        const fixture = setup(),
+            { session } = fixture
+        const first = session.groups[0],
+            second = openSecond(session, 'main.s')
+        const { record, map } = result(fixture)
+        fixture.project.recordCompilation(record, {
+            ...map,
+            lines: [
+                { path: 'main.c', line: 0 },
+                null,
+                { path: 'main.c', line: 0 },
+                { path: 'value.h', line: 0 },
+                { path: 'main.c', line: 0 },
+                { path: 'main.c', line: 1 }
+            ]
+        })
+        flushSync()
+        expect(first.breakpointsEditable).toBe(true)
+        session.toggleBreakpoint(0, first)
+        session.toggleBreakpoint(4, second)
+        flushSync()
+        expect(first.displayedBreakpoints).toEqual([0])
+        expect(second.displayedBreakpoints).toEqual([4])
+        //line 4 already has its own Breakpoint, so only line 0 shows the mapped one
+        expect(second.displayedMappedBreakpoints).toEqual([0])
+        expect(fixture.coreBreakpoints()).toEqual([
+            { file: 'main.s', line: 4 },
+            { file: 'main.s', line: 0 }
+        ])
+        //editing the source makes the map stale, and a stale map places no Breakpoint
+        session.fileEdited('main.c', 'int main(void) { return 2; }')
+        flushSync()
+        expect(second.displayedMappedBreakpoints).toEqual([])
+        expect(fixture.coreBreakpoints()).toEqual([{ file: 'main.s', line: 4 }])
+    })
+    it('offers Recompile for assembly compiled against a Runtime ABI this editor lacks', () => {
+        const fixture = setup(),
+            { session } = fixture
+        const second = openSecond(session, 'main.s')
+        const { record, map } = result(fixture)
+        expect(second.recompilationNeeded).toBe(false)
+        fixture.project.recordCompilation({ ...record, runtimeAbi: 'v9' }, map)
+        flushSync()
+        expect(second.unsupportedRuntimeAbi).toBe(true)
+        expect(second.recompilationNeeded).toBe(true)
+        expect(second.compilationNotice).toContain('Runtime ABI v9')
+    })
+    it('offers Recompile in the notice when only the Source map is missing', () => {
+        const fixture = setup(),
+            { session } = fixture
+        const second = openSecond(session, 'main.s')
+        const { record, map } = result(fixture)
+        flushSync()
+        expect(second.sourceMappingLost).toBe(false)
+        //a map for other output is no map for this one, as after reopening the Project
+        fixture.project.recordCompilation(record, { ...map, outputFingerprint: 'other' })
+        flushSync()
+        expect(second.sourceMappingLost).toBe(true)
+        expect(second.compilationNotice).toContain('Click here to recompile')
+        session.fileEdited('main.c', 'int main(void) { return 2; }')
+        flushSync()
+        //stale assembly says so instead, and the dock's own Recompile covers it
+        expect(second.sourceMappingLost).toBe(false)
+    })
     it('retains selection and both file identities through an unmapped Build startup', async () => {
         const fixture = setup(),
             { session, emulator, project } = fixture
@@ -188,7 +327,7 @@ describe('independent editor groups', () => {
             second = openSecond(session, 'main.s')
         result(fixture)
         flushSync()
-        session.selectMappedLine(first, 0)
+        session.selectMappedLines(first, [0])
         emulator.buildSources = { files: project.files, entry: 'main.s' }
         emulator.canExecute = true
         await session.revealSourceLocation('main.s', 0)
@@ -196,7 +335,7 @@ describe('independent editor groups', () => {
         expect(session.groups[0]).toBe(first)
         expect(first.sourceView).toBe('snapshot')
         expect(second.sourceView).toBe('snapshot')
-        expect(session.mappingSelection).toEqual({ path: 'main.c', line: 0 })
+        expect(session.mappingSelection).toEqual([{ path: 'main.c', line: 0 }])
         expect(first.mappedLines).toEqual([0])
         expect(first.editorDisabled).toBe(true)
         session.returnToLiveFiles()

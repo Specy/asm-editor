@@ -1,0 +1,11 @@
+malloc(10) non-null=1 aligned8=1
+grown keeps=abcdefghi
+shrunk keeps=abcd
+calloc zero sum=0
+calloc overflow null=1 errno==ENOMEM 1
+malloc huge null=1 errno==ENOMEM 1
+realloc huge null=1 errno==ENOMEM 1 old=still here
+malloc(0) non-null=1
+realloc(NULL)=fresh
+interleaved corrupted bytes=0
+repeated alloc/free ok=1000

@@ -66,6 +66,8 @@
     <div class="page">
         <MemoryVisualiser
             {systemSize}
+            {memorySize}
+            dense
             {endianess}
             {defaultMemoryValue}
             bytesPerRow={tab.rowSize}

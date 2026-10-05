@@ -1,0 +1,8 @@
+RAND_MAX >= 32767: 1
+same seed repeats: 1
+no srand equals srand(1): 1
+different seeds differ: 1
+in range: 1
+consecutive values differ: 1
+roughly uniform mod 4: 1
+dice fair: 1

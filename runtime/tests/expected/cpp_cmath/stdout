@@ -1,0 +1,15 @@
+sqrt(2.0f) is float = 1.41421
+sqrt(2) is double = 1.414213562
+pow(2, 10) is double = 1024
+pow(2.0f, 3.0f) is float = 8
+pow(2.0f, 3) is double = 8
+abs(-2.5) is double = 2.5, abs(-1.5f) is float
+fabs(-3) = 3 floor(2.7f) = 2 ceil(2) = 2 round(2.5) = 3 trunc(-2.5f) = -2
+sin(0) = 0 cos(0) = 1 exp(1) = 2.718282 log(1) = 0 log10(1000) = 3 log2(8.0f) = 3
+atan2(1, 1) = 0.7853981634 hypot(3, 4) = 5 fmod(7, 3) = 1 fmin(1, 2.5) = 1 fmax(1.0f, 2.0f) is float
+frexp(48) = 0.75, frexp(0.75f) is float, ldexp(3, 2) = 12, scalbn(1.0f, 3) = 8
+modf(3.25f) = 3 + 0.25 copysign(2, -1) = -2 cbrt(27.0f) = 3
+isnan 1 0 isinf 1 0 isfinite 1 signbit 1 0 fpclassify zero 1 normal 1
+isgreater 1 isless(1, 2.0f) 1 isunordered 1
+unqualified: 3 9
+M_PI 3.1415926536

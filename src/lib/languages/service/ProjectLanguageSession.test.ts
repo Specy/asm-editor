@@ -40,6 +40,31 @@ function snapshot(revision: number) {
 }
 
 describe('ProjectLanguageSession', () => {
+    it('revises profile-only changes and preserves the profile captured by a Build', () => {
+        worker.requests = []
+        const initial = normalizeBuildInput({
+            entry: 'main.s',
+            files: { 'main.s': { encoding: 'plain', content: 'nop' } },
+            assemblerProfile: 'rars'
+        })
+        const session = new ProjectLanguageSession('profile-session', initial, 'RISC-V')
+        session.setBuild(1, initial)
+        session.update({ ...initial, assemblerProfile: 'gnu-compiler-v1' })
+        worker.receive?.({
+            type: 'failure',
+            sessionId: 'profile-session',
+            revision: 1,
+            message: 'old profile failed'
+        })
+        expect(session.snapshot).toBeUndefined()
+        expect(worker.requests).toMatchObject([
+            { type: 'open', revision: 1, assemblerProfile: 'rars' },
+            { type: 'update', revision: 2, changes: [], assemblerProfile: 'gnu-compiler-v1' }
+        ])
+        expect(session.sourcesFor('build', 1)?.assemblerProfile).toBe('rars')
+        expect(session.sources.assemblerProfile).toBe('gnu-compiler-v1')
+        session.dispose()
+    })
     it('retains the last complete snapshot while a newer revision is pending', () => {
         worker.requests = []
         const initial = normalizeBuildInput({

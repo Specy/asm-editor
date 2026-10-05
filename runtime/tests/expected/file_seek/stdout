@@ -1,0 +1,14 @@
+written, ftell=27
+fseek in writing stream=0 ftell=5
+start ftell=0
+fseek SET 10=0 char=k ftell=11
+fseek CUR 3=0 char=o ftell=15
+fseek CUR -5=0 char=k
+fseek END -3=0 char=y ftell=25
+fseek END 0=0 fgetc=-1 feof=1
+fseek clears EOF=0 feof=0
+fseek bad whence=-1
+fgetpos=0
+read cd then fsetpos=0 char=c
+rewind char=a ftell=1
+ungetc ftell=0 fgetc=a ftell=1

@@ -183,7 +183,7 @@
         font-size: 0.82rem;
         cursor: pointer;
 
-        span {
+        span:not(.entry-mark) {
             padding: 0 0.1rem;
         }
     }

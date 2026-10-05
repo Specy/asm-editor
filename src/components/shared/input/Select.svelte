@@ -20,9 +20,9 @@
      * to the control, flips it above when there is more room there, and caps its height to the space
      * on the side it landed, so it is never larger than the viewport and never extends the page.
      *
-     * Fixed resolves against the viewport unless an ancestor has a `transform`, `filter`,
-     * `perspective`, `contain` or `will-change`, which would make that ancestor its containing block
-     * and leave the list mispositioned. No layout component this is used inside sets one today.
+     * A manual popover puts the list in the browser's top layer, so transformed drawers and
+     * clipped settings sections cannot change its coordinates or cover its options. It stays
+     * in this DOM subtree, keeping the theme and the parent's outside-click handling intact.
      */
     import { tick, type Snippet } from 'svelte'
     import { cubicOut } from 'svelte/easing'
@@ -38,7 +38,10 @@
         value: T
         style?: string
         title?: string
+        /** Accessible name when the surrounding form already renders the visible label. */
+        ariaLabel?: string
         wrapperStyle?: string
+        disabled?: boolean
         onChange?: (value: T) => void
         /** Renders one row. Without it a row is its `key`, which is what a native select shows. */
         item?: Snippet<[SelectOption, { selected: boolean; active: boolean }]>
@@ -49,7 +52,9 @@
         value = $bindable(),
         style = '',
         title = '',
+        ariaLabel,
         wrapperStyle = '',
+        disabled = false,
         onChange,
         item
     }: Props = $props()
@@ -113,9 +118,12 @@
     }
 
     async function openList(startAt = selectedIndex) {
+        if (disabled) return
         open = true
         activeIndex = selectable(startAt) ? startAt : edge(1)
         await tick()
+        if (!open || disabled || !list?.isConnected) return
+        list.showPopover()
         //once with the measured height, since scrollHeight is only knowable after the first render
         place()
         await tick()
@@ -127,6 +135,10 @@
         open = false
         activeIndex = -1
     }
+
+    $effect(() => {
+        if (disabled) closeList()
+    })
 
     /**
      * Grows out of the control and shrinks back into it, from whichever edge it opened against.
@@ -149,7 +161,7 @@
 
     function commit(index: number) {
         //the list is still on screen while it animates away; a click landing then chooses nothing
-        if (!open) return
+        if (!open || disabled) return
         if (!selectable(index)) return
         value = options[index].value
         onChange?.(options[index].value)
@@ -249,6 +261,7 @@
     <button
         bind:this={button}
         type="button"
+        {disabled}
         class="control"
         {style}
         role="combobox"
@@ -256,6 +269,7 @@
         aria-expanded={open}
         aria-controls={listId}
         aria-labelledby={title ? labelId : undefined}
+        aria-label={title ? undefined : ariaLabel}
         aria-activedescendant={open && activeIndex >= 0 ? optionId(activeIndex) : undefined}
         onclick={() => (open ? closeList() : openList())}
         onkeydown={onKeyDown}
@@ -269,8 +283,10 @@
             bind:this={list}
             id={listId}
             class="list"
+            popover="manual"
             role="listbox"
-            aria-labelledby={labelId}
+            aria-labelledby={title ? labelId : undefined}
+            aria-label={title ? undefined : ariaLabel}
             transition:popup
             style="top: {placement.top}px; left: {placement.left}px; width: {placement.width}px; max-height: {placement.maxHeight}px; transform-origin: {placement.openUp
                 ? 'bottom'
@@ -326,8 +342,13 @@
         cursor: pointer;
     }
 
-    .control:hover {
+    .control:hover:not(:disabled) {
         filter: brightness(1.1);
+    }
+
+    .control:disabled {
+        opacity: 0.6;
+        cursor: default;
     }
 
     .control:focus-visible {
@@ -355,6 +376,7 @@
        overflow and grows the document when it opens near the bottom */
     .list {
         position: fixed;
+        inset: auto;
         z-index: 100;
         overflow-y: auto;
         overscroll-behavior: contain;
@@ -362,6 +384,7 @@
         padding: 0.25rem;
         list-style: none;
         border-radius: 0.4rem;
+        border: none;
         background-color: var(--secondary);
         color: var(--secondary-text);
         box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.35);

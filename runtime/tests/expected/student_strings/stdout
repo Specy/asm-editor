@@ -1,0 +1,10 @@
+"A man, a plan, a canal: Panama" palindrome=1
+"Hello" palindrome=0
+"Was it a car or a cat I saw?" palindrome=1
+"" palindrome=1
+"ab" palindrome=0
+reversed words: fox brown quick the
+encrypted: Dwwdfn dw Gdzq, 6 DP!
+decrypted: Attack at Dawn, 6 AM!
+vowels=11
+upper: PROGRAMMING IN C IS EDUCATIONAL

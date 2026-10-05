@@ -91,9 +91,11 @@
                 </div>
                 <div class="memory-grid">
                     <MemoryVisualiser
-                        style="border-bottom-left-radius: min(var(--panel-radius, 0.5rem), 0.2rem); border-bottom-right-radius: min(var(--panel-radius, 0.5rem), 0.2rem);"
+                        style="flex: 1 0 auto; border-bottom-left-radius: min(var(--panel-radius, 0.5rem), 0.2rem); border-bottom-right-radius: min(var(--panel-radius, 0.5rem), 0.2rem);"
                         systemSize={emulator.systemSize}
                         endianess={emulator.memory.global.endianess}
+                        memorySize={MEMORY_SIZE[language]}
+                        dense
                         defaultMemoryValue={DEFAULT_MEMORY_VALUE[language]}
                         bytesPerRow={emulator.memory.global.rowSize}
                         pageSize={emulator.memory.global.pageSize}
@@ -225,8 +227,12 @@
         border-left: var(--wb-section-rule, none);
     }
 
-    /* the address controls are ruled off from the page under them, from edge to edge of the card */
+    /* the address controls are ruled off from the page under them, from edge to edge of the card.
+       The page fills the height left under them, its rows sharing it, and scrolls when that is
+       less than its rows need */
     .memory-grid {
+        display: flex;
+        flex-direction: column;
         flex: 1;
         min-height: 0;
         overflow: auto;

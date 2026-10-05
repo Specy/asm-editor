@@ -77,6 +77,20 @@ export type MemoryTab = {
 export type DiffedMemory = {
     current: Uint8Array
     prevState: Uint8Array
+    /**
+     * The bytes of the page the Core could not read, which the view marks instead of showing a
+     * value. Null, or absent, when the whole page was read.
+     */
+    unreadable?: UnreadableBytes | null
+}
+
+/** What a memory view found it could not read at `address`, one mask entry per byte of the page. */
+export type UnreadableBytes = {
+    address: bigint
+    /** 1 for each byte that could not be read. */
+    mask: Uint8Array
+    /** Why the lowest of those bytes could not be read, as the Core put it. */
+    reason: string
 }
 
 export type RegisterHex = [hi: string, lo: string]
@@ -237,6 +251,11 @@ export type ExecutionStep = {
     file?: string
     /** What a Poke wrote, one entry per register and per run of consecutive memory bytes. */
     writes?: PokeWrite[]
+    /**
+     * Set on the instruction that started a Step through Runtime library code: the library function
+     * it entered and every instruction the Step ran, which one Undo takes back together.
+     */
+    stretch?: { library: string; instructions: number }
 }
 
 /**
@@ -465,6 +484,8 @@ export type BaseEmulatorDerivedState = {
     readonly compilerErrors: Diagnostic[]
     /** Immutable Files and Entry used by the current executable, retained until Stop. */
     readonly buildSources?: BuildSources
+    /** The Runtime library members that executable linked against, read-only, under `@runtime/`. */
+    readonly buildLibraryFiles?: import('$lib/projectFiles').ProjectFiles
 }
 
 export enum InterpreterStatus {
@@ -494,7 +515,8 @@ export function createMemoryTab(
         userPlaced: false,
         data: {
             current: new Uint8Array(pageSize).fill(initialValue),
-            prevState: new Uint8Array(pageSize).fill(initialValue)
+            prevState: new Uint8Array(pageSize).fill(initialValue),
+            unreadable: null
         }
     }
 }
@@ -508,7 +530,8 @@ export function resetMemoryTab(tab: MemoryTab, initialValue: number): MemoryTab 
         ...tab,
         data: {
             current: new Uint8Array(tab.pageSize).fill(initialValue),
-            prevState: new Uint8Array(tab.pageSize).fill(initialValue)
+            prevState: new Uint8Array(tab.pageSize).fill(initialValue),
+            unreadable: null
         }
     }
 }
@@ -575,6 +598,10 @@ export type BaseEmulatorActions = {
     clear: () => void
     setTabMemoryAddress: (address: bigint, tabId: number) => void
     toggleBreakpoint: (line: number, file?: string) => void
+    /** Translates Breakpoints on Files the Core never sees into the ones it runs with. */
+    setBreakpointResolver: (
+        resolver: ((breakpoints: readonly SourceBreakpoint[]) => SourceBreakpoint[]) | undefined
+    ) => void
     /** Returns how many instructions were actually rolled back, which can be fewer than asked. */
     undo: (amount?: number) => number
     /**

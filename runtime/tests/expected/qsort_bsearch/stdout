@@ -1,0 +1,19 @@
+ascending: -50 -7 0 1 3 8 19 42 77 100
+descending: 100 77 42 19 8 3 1 0 -7 -50
+already sorted: 100 77 42 19 8 3 1 0 -7 -50
+after empty and single: 100 77 42 19 8 3 1 0 -7 -50
+strings: apple banana cherry date elderberry fig grape pear
+Linus(21) Ada(36) Alan(41) Barbara(64) Grace(85) 
+large sorted=1
+bsearch 0: found
+  at index 0
+bsearch 1999: found
+  at index 1999
+bsearch 1000: found
+  at index 1000
+bsearch 2000: missing
+bsearch -1: missing
+bsearch 777: found
+  at index 777
+bsearch string: fig
+bsearch empty: missing

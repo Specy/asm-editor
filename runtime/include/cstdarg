@@ -1,0 +1,13 @@
+// Runtime library, ABI v1: <cstdarg>, the C header <stdarg.h> with its names also in namespace std.
+#ifndef _AED_CSTDARG
+#define _AED_CSTDARG
+
+#include <stdarg.h>
+
+extern "C++" {
+namespace std {
+using ::va_list;
+}
+}
+
+#endif

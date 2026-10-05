@@ -46,7 +46,7 @@ A user-requested suspension of forward execution within a **Debug session**, ret
 
 ## Breakpoint
 
-A line of a **File** marked so that a **Debug session** stops there: a Run reaching it stops before the line's instruction executes, with that instruction still to run. The instruction a Run _starts_ on is the exception, and runs whether or not a Breakpoint names it, which is what lets Run continue from the Breakpoint it stopped at; a loop closing on its own Breakpoint still stops on every pass. A line that assembles to no instruction stops nothing, and one that assembles to several is a single Breakpoint, taken where the line is entered. Distinct from a **Pause**, which the user asks for mid-run, and from `simhalt` and the Z80 cliff, which are the program stopping itself. See [ADR 0023](./docs/adr/0023-run-continues-past-the-breakpoint-it-is-parked-on.md).
+A line of a **File** marked so that a **Debug session** stops there: a Run reaching it stops before the line's instruction executes, with that instruction still to run. The instruction a Run _starts_ on is the exception, and runs whether or not a Breakpoint names it, which is what lets Run continue from the Breakpoint it stopped at; a loop closing on its own Breakpoint still stops on every pass. A line that assembles to no instruction stops nothing, and one that assembles to several is a single Breakpoint, taken where the line is entered. A Breakpoint on a line of a C or C++ File stops on the **Generated assembly** compiled from it: on the first instruction of each block mapped to that line by a current **Source map**, where a block ends at an instruction mapped to another line and labels and directives do not end it. A `for` header therefore stops once on entry and once per pass, at its increment, and a stale or missing map places none. Distinct from a **Pause**, which the user asks for mid-run, and from `simhalt` and the Z80 cliff, which are the program stopping itself. See [ADR 0023](./docs/adr/0023-run-continues-past-the-breakpoint-it-is-parked-on.md).
 _Avoid_: break, stop point, halt point
 
 ## Poke
@@ -83,6 +83,11 @@ _Avoid_: drive peripheral
 
 The source of answers to a **Terminal**'s input requests: interactive user input or a **Testcase**'s scripted answers. Interactive character, string and numeric input can come from prompts or the **Keyboard** associated with a **Screen**.
 
+## End of input
+
+The answer an **Input Source** gives a read of standard input (descriptor 0) when it has no more lines: a **Testcase** whose scripted answers are exhausted, or an interactive user pressing Ctrl+D or the End of input button. The read returns 0 bytes; the educational read syscalls never receive it.
+_Avoid_: EOF (for the Terminal-level event)
+
 ## Program time
 
 The passage of time as a program observes it through its environment's wait and time operations. It follows host time; no environment emulates a clock rate. Distinct from a Core's instruction or cycle count, which drives the instruction limit and the Undo history.
@@ -112,13 +117,33 @@ The architecture and supported assembler/runtime environment selected for a **Pr
 
 The language of a text **File**, such as target-specific assembly, C, or plain text, used to interpret and present its source. It is independent of the Project's **Target** and the File's storage encoding; selecting a language does not make a compiler for it available.
 
-## Self-contained program
+## Hosted program
 
-A program compiled from a higher-level **File language** for a **Target** without standard-library dependencies, using the startup and exit support supplied for that Target.
+A program compiled from a higher-level **File language** for a **Target** that may use the standard library its **Runtime library** provides. See [ADR 0029](./docs/adr/0029-hosted-programs-link-an-editor-owned-runtime-library.md).
+_Avoid_: Self-contained program (the earlier, library-free boundary of ADR 0027)
+
+## Runtime library
+
+The editor-owned, versioned C standard library and startup code for a **Target**, with its own headers, whose supported functions are a written list. It reaches the **Terminal** and **FileSystem** through the Target's syscalls.
+_Avoid_: libc (when this specific library is meant), runtime
+
+## Runtime ABI
+
+The named, versioned binary interface of a **Runtime library** (`v1`, …) that a Project's Setting or a **Compilation record** pins: its exported symbols, their signatures and its public struct layouts. Each Runtime ABI has one current implementation, which the editor may update under saved Projects. See [ADR 0031](./docs/adr/0031-projects-pin-the-runtime-abi-not-its-implementation.md).
+_Avoid_: runtime version (when the interface, not a release, is meant)
+
+## Library member
+
+One assembly unit of a **Runtime library**, usually a single function, which a **Core** adds to a Build only to resolve a global symbol the program uses but does not define. See [ADR 0030](./docs/adr/0030-cores-resolve-runtime-library-members.md).
 
 ## Source compilation
 
 The conversion of a selected higher-level **File** and its project-local headers into **Generated assembly** for the **Project**'s **Target**. Distinct from a Build, which assembles Files into a program for the **Emulator**.
+
+## Compiler driver
+
+The replaceable component that performs **Source compilation**, turning source Files and headers into **Generated assembly** and its **Source map** for a Target's compiler preset. Compiler Explorer is the current driver; nothing outside it depends on which compiler service is used.
+_Avoid_: Compiler Explorer (when the role is meant)
 
 ## Generated assembly
 

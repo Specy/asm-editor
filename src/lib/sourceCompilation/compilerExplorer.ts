@@ -1,26 +1,33 @@
 import type { Diagnostic } from '$lib/languages/commonLanguageFeatures.svelte'
 import {
     fileFingerprint,
+    defaultSourceCompiler,
     sourceLanguage,
     type CompilationRecord,
     type CompilationSourceMap,
     type CompilationTarget,
     type Optimization,
     type SourceLanguage,
+    type SourceCompiler,
     type SourceLocation
 } from './records'
 import { isValidFilePath, resolveFilePath, type ProjectFiles } from '$lib/projectFiles'
+import { CURRENT_RUNTIME_ABI } from '$lib/runtimeAbi'
+import { loadRuntimeHeaders } from '$lib/sourceRuntime/runtimeLibrary'
 
 const API_ROOT = 'https://godbolt.org/api'
 export const COMPILE_BYTE_LIMIT = 1024 * 1024
 const ASSEMBLY_BYTE_LIMIT = 4 * 1024 * 1024
-export const MAIN_SYMBOL = '__asm_editor_main'
+/** Where the Runtime library's headers are uploaded; the program sees them as its system headers. */
+export const SYSROOT_INCLUDE = 'sysroot/include'
 export type CompilationRequest = {
     sourcePath: string
     outputPath: string
     files: ProjectFiles
     target: CompilationTarget
     optimization: Optimization
+    sourceAnnotations?: boolean
+    compiler?: SourceCompiler
 }
 export type CompilationResult = {
     assembly: string
@@ -33,6 +40,17 @@ type AssemblyLine = {
     source?: { file?: string | null; line?: number; mainsource?: boolean } | null
 }
 
+/**
+ * The replaceable component that performs Source compilation: Files and headers in, Generated
+ * assembly and its Source map out. Compiler Explorer is the current driver, and nothing outside it
+ * depends on which compiler service is used.
+ */
+export type CompilerDriver = {
+    /** The service named in the Compile tooltip. */
+    name: string
+    compile(request: CompilationRequest, signal?: AbortSignal): Promise<CompilationResult>
+}
+
 export class SourceCompilationError extends Error {
     constructor(
         message: string,
@@ -42,19 +60,33 @@ export class SourceCompilationError extends Error {
     }
 }
 
-export function compilerPreset(target: CompilationTarget, language: SourceLanguage) {
+export function compilerPreset(
+    target: CompilationTarget,
+    language: SourceLanguage,
+    compiler: SourceCompiler = defaultSourceCompiler(target)
+) {
     const ids = {
         MIPS: { c: 'cmipsg1420', cpp: 'mipsg1420' },
         'RISC-V': { c: 'rv32-cgcc1420', cpp: 'rv32-gcc1420' },
         'RISC-V-64': { c: 'rv64-cgcc1420', cpp: 'rv64-gcc1420' }
     }
+    // MARS skips branch delay slots, so the compiler must fill them with nops.
+    const mipsDelaySlots =
+        compiler === 'clang' ? '-mllvm -disable-mips-delay-filler' : '-fno-delayed-branch'
     const architecture =
         target === 'MIPS'
-            ? '-march=mips32 -mabi=32 -mno-abicalls -fno-pic -G0 -fno-delayed-branch -mfp32 -mhard-float -EB'
+            ? // little-endian: MARS memory is, so -EB code read its bytes and halves the wrong way round
+              `-march=mips32 -mabi=32 -mno-abicalls -fno-pic -G0 ${mipsDelaySlots} -mfp32 -mhard-float -EL`
             : target === 'RISC-V'
               ? '-march=rv32imfd -mabi=ilp32d'
               : '-march=rv64imfd -mabi=lp64d'
-    return { id: ids[target][language], architecture }
+    const clangIds = {
+        MIPS: { c: 'mipsel-cclang2110', cpp: 'mipsel-clang2110' },
+        'RISC-V': { c: 'rv32-cclang2110', cpp: 'rv32-clang2110' },
+        'RISC-V-64': { c: 'rv64-cclang2110', cpp: 'rv64-clang2110' }
+    }
+    const id = compiler === 'clang' ? clangIds[target][language] : ids[target][language]
+    return { id, architecture }
 }
 
 function diagnostic(
@@ -92,8 +124,6 @@ function compilerText(text: string) {
         .replace(/(?:\u001b\[|\u009b)[0-?]*[ -/]*[@-~]/g, '')
         .replace(/\u001b[ -/]*[@-~]/g, '')
         .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g, '')
-        .split(MAIN_SYMBOL)
-        .join('main')
         .trim()
     /* eslint-enable no-control-regex */
 }
@@ -221,12 +251,21 @@ export function compilationInputs(
     return Object.fromEntries([...seen].map((path) => [path, fileFingerprint(files[path])!]))
 }
 
-export function createCompilerRequest(request: CompilationRequest) {
+/**
+ * The Compiler Explorer request. A program is hosted: it compiles with `-nostdinc` against the
+ * Runtime library's headers, uploaded as `sysroot/include`, so an unsupported header is a clear
+ * error and no toolchain header leaks in, and `main` keeps its name and its implicit `return 0`.
+ */
+export function createCompilerRequest(
+    request: CompilationRequest,
+    sysroot: Readonly<Record<string, string>> = {}
+) {
     const language = sourceLanguage(request.sourcePath)
     const source = request.files[request.sourcePath]
     if (!language || source?.encoding !== 'plain')
         throw new SourceCompilationError('Select a C or C++ text File to compile.')
-    const preset = compilerPreset(request.target, language)
+    const compiler = request.compiler ?? defaultSourceCompiler(request.target)
+    const preset = compilerPreset(request.target, language, compiler)
     const directory = request.sourcePath.includes('/')
         ? request.sourcePath.slice(0, request.sourcePath.lastIndexOf('/'))
         : '.'
@@ -234,13 +273,20 @@ export function createCompilerRequest(request: CompilationRequest) {
     const headers = Object.entries(request.files).filter(
         ([path, file]) => /\.(h|hpp|hh|hxx|inc)$/i.test(path) && file.encoding === 'plain'
     )
-    const signature =
-        language === 'cpp' ? `extern "C" int ${MAIN_SYMBOL}(void);` : `int ${MAIN_SYMBOL}(void);`
+    const sourceAnnotations = compiler === 'clang' && request.sourceAnnotations
+    const annotations = sourceAnnotations ? '-fverbose-asm' : '-fno-verbose-asm'
+    const compilerOptions =
+        compiler === 'clang'
+            ? `-fno-addrsig${sourceAnnotations ? ' -fno-discard-value-names' : ''}`
+            : '-fno-section-anchors'
+    const common = `-O${request.optimization} -g1 -fdiagnostics-color=never ${annotations} -fno-stack-protector -fno-pie ${compilerOptions}`
+    const standard = language === 'cpp' ? '-std=c++17 -fno-exceptions -fno-rtti' : '-std=c17'
+    const userArguments = `${common} -nostdinc -isystem ${SYSROOT_INCLUDE} ${preset.architecture} -iquote ${quote(directory)} -I . ${standard}${language === 'cpp' ? ' -fno-threadsafe-statics -nostdinc++' : ''}`
     const body = {
-        source: `${signature}\n#line 1 ${JSON.stringify(request.sourcePath)}\n${source.content}`,
+        source: `#line 1 ${JSON.stringify(request.sourcePath)}\n${source.content}`,
         lang: language === 'cpp' ? 'c++' : 'c',
         options: {
-            userArguments: `-O${request.optimization} -g1 -fdiagnostics-color=never -fno-verbose-asm -ffreestanding -fno-stack-protector -fno-pie -fno-section-anchors -Dmain=${MAIN_SYMBOL} ${preset.architecture} -iquote ${quote(directory)} -I . ${language === 'cpp' ? '-std=c++17 -fno-exceptions -fno-rtti' : '-std=c17'}`,
+            userArguments,
             filters: {
                 binary: false,
                 execute: false,
@@ -252,7 +298,13 @@ export function createCompilerRequest(request: CompilationRequest) {
                 libraryCode: false
             }
         },
-        files: headers.map(([filename, file]) => ({ filename, contents: file.content }))
+        files: [
+            ...headers.map(([filename, file]) => ({ filename, contents: file.content })),
+            ...Object.entries(sysroot).map(([path, contents]) => ({
+                filename: `${SYSROOT_INCLUDE}/${path}`,
+                contents
+            }))
+        ]
     }
     const json = JSON.stringify(body)
     if (new TextEncoder().encode(json).length > COMPILE_BYTE_LIMIT)
@@ -262,63 +314,45 @@ export function createCompilerRequest(request: CompilationRequest) {
     return { compilerId: preset.id, language, body, json }
 }
 
-/** Preserve executable sections, remove debug payloads, and compose mappings with startup lines. */
+/** Labels GCC's MIPS output defines only for the debug sections, which are dropped. */
+const MIPS_DEBUG_LABEL = /^\s*(?:\$L|\.L)(?:FB|FE|BB|BE|VL|text|etext|debug)\w*\s*(?::|=)/
+
+/**
+ * Remove debug payloads and compose the Source map. Every other section stays as the compiler
+ * wrote it, for the GNU compiler profile to place and check, and no startup lines are added: the
+ * Runtime library's `_start` calls `main`. Kept in step with `prepare` in
+ * scripts/runtime/build.mjs, which prepares the Library members the same way.
+ */
 export function prepareAssembly(lines: readonly AssemblyLine[], request: CompilationRequest) {
-    const wrapper =
-        request.target === 'MIPS'
-            ? [
-                  '.text',
-                  '.globl main',
-                  'main:',
-                  `    jal ${MAIN_SYMBOL}`,
-                  '    move $a0, $v0',
-                  '    li $v0, 17',
-                  '    syscall'
-              ]
-            : [
-                  '.text',
-                  '.globl main',
-                  'main:',
-                  `    call ${MAIN_SYMBOL}`,
-                  '    li a7, 93',
-                  '    ecall'
-              ]
-    const text = [...wrapper]
-    const mapping: (SourceLocation | null)[] = wrapper.map(() => null)
+    const text: string[] = []
+    const mapping: (SourceLocation | null)[] = []
     let debugSection = false
     let foundMain = false
     const lineCounts = new Map<string, number>()
+    const sourceAnnotations =
+        (request.compiler ?? defaultSourceCompiler(request.target)) === 'clang' &&
+        request.sourceAnnotations
     for (const line of lines) {
-        let code = line.text
-        const section = /^\s*\.section\s+([^\s,]+)/.exec(code)?.[1]
+        const code = line.text
+        const blockComment = sourceAnnotations && /^\s*#\s*%bb\.\d+:\s*#\s*%[\w.]+\s*$/.test(code)
+        const section = /^\s*\.section\s+(?:"([^"]+)"|([^\s,]+))/.exec(code)?.slice(1).find(Boolean)
         if (section) debugSection = /^\.(?:debug|zdebug|mdebug|note|comment|eh_frame)/.test(section)
         else if (/^\s*\.(?:text|data|bss|sdata|sbss|rodata|rdata)\b/.test(code))
             debugSection = false
+        else if (debugSection && /^\s*\.previous\b/.test(code)) {
+            //back to the section before the debug one, where the lines after it belong
+            debugSection = false
+            continue
+        }
         if (
             debugSection ||
             /^\s*\.(?:file|loc|cfi_\w+|ident)\b/.test(code) ||
-            /^\s*(?:\$L|\.L)(?:FB|FE|BB|BE|VL|text|etext|debug)\w*\s*(?::|=)/.test(code) ||
-            /^\s*#/.test(code) ||
+            (request.target === 'MIPS' && MIPS_DEBUG_LABEL.test(code)) ||
+            (/^\s*#/.test(code) && !blockComment) ||
             !code.trim()
         )
             continue
-        if (section) {
-            if (/^\.text(?:\.|$)/.test(section)) code = '.text'
-            else if (/^\.(?:data|sdata|bss|sbss|rodata|srodata|rdata)(?:\.|$)/.test(section))
-                code = '.data'
-            else
-                throw new SourceCompilationError(
-                    `Compiler output requires unsupported section ${section}. Use a self-contained program without runtime initialization or thread-local storage.`
-                )
-        }
-        if (request.target === 'MIPS') {
-            // GNU accepts an immediate operand on slt/sltu; MARS spells that form slti/sltiu.
-            code = code.replace(
-                /^(\s*)slt(u?)\s+([^,]+),([^,]+),\s*(-?\d+)\s*$/,
-                '$1slti$2 $3,$4,$5'
-            )
-        }
-        if (new RegExp(`^\\s*${MAIN_SYMBOL}:`).test(code)) foundMain = true
+        if (/^\s*main:/.test(code)) foundMain = true
         text.push(code)
         const path = projectPath(
             line.source?.file,
@@ -337,10 +371,15 @@ export function prepareAssembly(lines: readonly AssemblyLine[], request: Compila
     }
     if (!foundMain)
         throw new SourceCompilationError(
-            'A self-contained program must define int main(void) (or int main() in C++).',
-            [diagnostic('Define a parameterless int main() entry point.', request.sourcePath)]
+            'The program must define int main(void) or int main(int argc, char **argv).',
+            [diagnostic('Define an int main() entry point.', request.sourcePath)]
         )
     return { assembly: text.join('\n') + '\n', lines: [...mapping, null] }
+}
+
+export const compilerExplorerDriver: CompilerDriver = {
+    name: 'Compiler Explorer',
+    compile: (request, signal) => compileSource(request, signal)
 }
 
 export async function compileSource(
@@ -348,7 +387,7 @@ export async function compileSource(
     signal?: AbortSignal,
     fetcher: typeof fetch = fetch
 ): Promise<CompilationResult> {
-    const prepared = createCompilerRequest(request)
+    const prepared = createCompilerRequest(request, await loadRuntimeHeaders(CURRENT_RUNTIME_ABI))
     const response = await fetcher(`${API_ROOT}/compiler/${prepared.compilerId}/compile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -415,6 +454,8 @@ export async function compileSource(
     return {
         assembly: output.assembly,
         record: {
+            assemblerProfile: 'gnu-compiler-v1',
+            runtimeAbi: CURRENT_RUNTIME_ABI,
             sourcePath: request.sourcePath,
             outputPath: request.outputPath,
             target: request.target,

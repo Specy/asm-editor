@@ -19,6 +19,10 @@ import { screenEntries } from '../mars/screen'
 import { syscallFields, syscallSummary } from '../mars/syscalls'
 import directivesIntro from './directives.md?raw'
 import registersIntro from './registers.md?raw'
+import runtimeIntro from './runtime-library.md?raw'
+import runtimeFunctions from '$lib/sourceRuntime/generated/v1/functions.json'
+import { mipsCallingConvention } from '$lib/sourceRuntime/runtimeLanguage'
+import type { RuntimeFunctionList } from '$lib/sourceRuntime/runtimeLibrary'
 import syscallsIntro from './syscalls.md?raw'
 
 const BASE = '/documentation/mips'
@@ -204,9 +208,57 @@ function screen(): Chapter {
     }
 }
 
+/** The C library a Build links when the Project or its Compilation asks for it. */
+function runtimeLibrary(): Chapter {
+    const href = `${BASE}/runtime-library`
+    const entries: DocumentationEntry[] = [
+        ...proseEntries({
+            language: 'mips',
+            chapter: 'runtime-library',
+            chapterHref: href,
+            markdown: runtimeIntro
+        }),
+        ...(runtimeFunctions as RuntimeFunctionList).functions.map((entry): DocumentationEntry => {
+            const convention = mipsCallingConvention(entry.prototype)
+            return {
+                id: `mips/runtime-library/${entry.name}`,
+                language: 'mips',
+                chapter: 'runtime-library',
+                kind: 'function',
+                title: entry.name,
+                names: names(entry.name),
+                signature: `<${entry.header}>`,
+                summary: summaryOf(entry.doc),
+                href: `${href}#${entry.name}`,
+                anchor: entry.name,
+                view: {
+                    type: 'fields',
+                    markdown: entry.doc,
+                    fields: [
+                        { label: 'Declaration', value: `\`${entry.prototype}\`` },
+                        { label: 'Header', value: `\`<${entry.header}>\`` },
+                        ...(convention ? [{ label: 'From assembly', value: convention }] : [])
+                    ],
+                    example: `jal ${entry.name}`
+                },
+                searchText: `${entry.prototype}. ${entry.doc}`
+            }
+        })
+    ]
+    return {
+        id: 'runtime-library',
+        language: 'mips',
+        title: 'Runtime library',
+        href,
+        description:
+            'The C standard library compiled programs use, which hand-written assembly can call too.',
+        entries
+    }
+}
+
 let cached: Chapter[] | null = null
 
 export function chapters(): Chapter[] {
-    cached ??= [instructions(), directives(), syscalls(), registers(), screen()]
+    cached ??= [instructions(), directives(), syscalls(), registers(), screen(), runtimeLibrary()]
     return cached
 }

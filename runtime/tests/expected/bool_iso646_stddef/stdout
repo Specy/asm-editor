@@ -1,0 +1,7 @@
+bool: 1 0 1 sizeof<=int=1
+iso646: 0 1 1 2 5
+iso646 assign: 6 -1
+ptrdiff=5 size=10 NULL is null=1
+offsetof: kind=0 value aligned=1 after kind=1
+max_align_t at least double: 1
+stopping with 3

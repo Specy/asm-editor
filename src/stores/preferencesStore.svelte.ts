@@ -37,6 +37,8 @@ export type PreferenceValues = {
     autoSave: PreferenceValue<boolean>
     showDrawingBuffer: PreferenceValue<boolean>
     showPseudoInstructions: PreferenceValue<boolean>
+    sourceAnnotations: PreferenceValue<boolean>
+    stepIntoRuntimeLibrary: PreferenceValue<boolean>
     panelStyle: PreferenceValue<PanelStyle>
     debugTools: PreferenceValue<DebugToolsPlacement>
 }
@@ -71,6 +73,9 @@ export function defaultPreferences(): PreferenceValues {
         autoScrollStackTab: createValue('Auto scroll the stack memory tab', true),
         autoSave: createValue('Auto save', true),
         showPseudoInstructions: createValue('Show pseudo instructions', true, 'MIPS'),
+        sourceAnnotations: createValue('Include source annotations when compiling', true),
+        //off: a Step runs through Runtime library code back to the program's own ("Just My Code")
+        stepIntoRuntimeLibrary: createValue('Step into Runtime library code', false),
         showDrawingBuffer: createValue(
             'Show the drawing buffer of a double buffered screen',
             false

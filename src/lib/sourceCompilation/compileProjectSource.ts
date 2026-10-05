@@ -4,19 +4,22 @@ import {
     fileFingerprint,
     generatedAssemblyPath,
     isCompilationTarget,
-    type Optimization
+    type Optimization,
+    type SourceCompiler
 } from './records'
 import {
-    compileSource,
+    compilerExplorerDriver,
     SourceCompilationError,
-    type CompilationRequest,
-    type CompilationResult
+    type CompilerDriver
 } from './compilerExplorer'
 
 type Dependencies = {
-    compile?: (request: CompilationRequest, signal?: AbortSignal) => Promise<CompilationResult>
+    /** The Compiler driver's compile; Compiler Explorer unless a caller supplies another. */
+    compile?: CompilerDriver['compile']
     confirm: (question: string) => Promise<boolean | null>
     signal?: AbortSignal
+    sourceAnnotations?: boolean
+    compiler?: SourceCompiler
 }
 
 /** Remote work never owns live Files. Validate again after every await, then publish synchronously. */
@@ -64,8 +67,16 @@ export async function compileProjectSource(
         }
     }
     dependencies.signal?.throwIfAborted()
-    const result = await (dependencies.compile ?? compileSource)(
-        { sourcePath, outputPath, files, target, optimization },
+    const result = await (dependencies.compile ?? compilerExplorerDriver.compile)(
+        {
+            sourcePath,
+            outputPath,
+            files,
+            target,
+            optimization,
+            sourceAnnotations: dependencies.sourceAnnotations,
+            compiler: dependencies.compiler
+        },
         dependencies.signal
     )
     assertCurrent()

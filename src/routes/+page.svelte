@@ -260,21 +260,31 @@
                 liking.
             </div>
         </MainPageSection>
-        <MainPageSection id="peripherals" imageUrl="/images/ASM-Peripherals.webp" reverse>
+        <MainPageSection id="compile" imageUrl="/images/ASM-Compile.webp" reverse>
+            {#snippet title()}
+                Compile from C/C++
+            {/snippet}
+            <div class="description" class:textShadow={textShadowSecondary}>
+                Write C or C++ and compile it to MIPS or RISC-V assembly with Clang or GCC, at any
+                optimization level. C source lines are mapped to the assembly instructions so you can
+                see how loops, function calls and expressions become assembly.
+            </div>
+        </MainPageSection>
+        <MainPageSection id="peripherals" imageUrl="/images/ASM-Peripherals.webp">
             {#snippet title()}
                 Peripherals
             {/snippet}
-            <div class="description" class:textShadow={textShadowSecondary}>
+            <div class="description" class:textShadow={textShadowPrimary}>
                 Programs can draw on a screen and interact with the user through mouse and keyboard
                 or use the terminal for stdout and stdin. Available for M68K, MIPS, RISC-V and Z80.
                 This can also be used to write simple interactive games and programs.
             </div>
         </MainPageSection>
-        <MainPageSection id="exam">
+        <MainPageSection id="exam" reverse>
             {#snippet title()}
                 Exam
             {/snippet}
-            <div class="description" class:textShadow={textShadowPrimary}>
+            <div class="description" class:textShadow={textShadowSecondary}>
                 Create exams for students with the <a
                     href={resolve('/exam', {})}
                     title="Exam tool"
@@ -288,11 +298,11 @@
                 where the editor is locked down.
             </div>
         </MainPageSection>
-        <MainPageSection id="chat" imageUrl="/images/ASM-AI-Chat.webp" reverse>
+        <MainPageSection id="chat" imageUrl="/images/ASM-AI-Chat.webp">
             {#snippet title()}
                 AI Chat
             {/snippet}
-            <div class="description" class:textShadow={textShadowSecondary}>
+            <div class="description" class:textShadow={textShadowPrimary}>
                 Chat with an AI assistant that can write, run and debug assembly code directly in
                 the browser. Use the <a
                     href={resolve('/chat', {})}
@@ -307,11 +317,11 @@
                 to get help with M68K, MIPS, RISC-V, X86 and Z80 assembly.
             </div>
         </MainPageSection>
-        <MainPageSection id="embed">
+        <MainPageSection id="embed" reverse>
             {#snippet title()}
                 Embed
             {/snippet}
-            <div class="description" class:textShadow={textShadowPrimary}>
+            <div class="description" class:textShadow={textShadowSecondary}>
                 Embed the editor in your website to show and teach how assembly works using the <a
                     href={resolve('/embed', {})}
                     title="Embedder tool"
@@ -324,11 +334,11 @@
                 </a>
             </div>
         </MainPageSection>
-        <MainPageSection id="citation" reverse>
+        <MainPageSection id="citation">
             {#snippet title()}
                 Published research
             {/snippet}
-            <div class="description" class:textShadow={textShadowSecondary}>
+            <div class="description" class:textShadow={textShadowPrimary}>
                 ASM Editor is described in a peer-reviewed paper presented at the 2026 IEEE Global
                 Engineering Education Conference, together with the first-year course it was built
                 for.

@@ -1,4 +1,14 @@
 import { guestFileFailure } from '$lib/languages/peripherals/FileSystem'
+import { makeRiscVCore, type RiscVLink } from './RISC-V-core'
+import {
+    coreLibrary,
+    loadedRuntimeFunctions,
+    loadedRuntimeLibrary,
+    loadRuntimeFunctions,
+    loadRuntimeLibrary,
+    runtimeLibraryHint
+} from '$lib/sourceRuntime/runtimeLibrary'
+import { CURRENT_RUNTIME_ABI, unsupportedRuntimeAbi } from '$lib/runtimeAbi'
 import {
     BackStepAction,
     bigintToHighLow,
@@ -17,8 +27,7 @@ import {
     RISCV_REGISTERS,
     type RISCVAssembleError,
     type RiscvTokenizedLine,
-    StopReason,
-    unimplementedHandler
+    StopReason
 } from '@specy/risc-v'
 import {
     type CompileResult,
@@ -64,11 +73,14 @@ import {
     type TokenSpanIndex
 } from '$lib/languages/mars/tokenSpans'
 import {
+    buildAssemblerProfile,
+    ProjectFormatError,
     sourceText,
     textAssemblyFiles,
     updateEntryText,
     type BuildInput,
-    type BuildSources
+    type BuildSources,
+    type ProjectFiles
 } from '$lib/projectFiles'
 import {
     riscvCsrRegisterName,
@@ -89,6 +101,7 @@ const READ_DOUBLE_QUESTION = 'Enter a double'
 const READ_FLOAT_QUESTION = 'Enter a float'
 const READ_INT_QUESTION = 'Enter an integer'
 const READ_STRING_QUESTION = 'Enter a string'
+const STANDARD_INPUT_QUESTION = 'Enter a line of input'
 
 /**
  * How many instructions the TeaVM compiled Core runs in a millisecond, used to turn a slice's time
@@ -155,6 +168,8 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
      * `main`, in most programs - so probing for a next statement alone took an exit for a pause.
      */
     private ended = false
+    /** Whether this Build keeps an Undo history at all, which `_setUndoRecording` resumes into. */
+    private undoEnabled = false
 
     constructor(source: BuildInput, options: EmulatorSettings) {
         const systemSize =
@@ -236,12 +251,21 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
     _canUndo(): boolean {
         const riscv = this.riscv
         if (!riscv?.canUndo) return false
-        const group = riscv.getUndoGroups()[0]
+        const group = riscv.getUndoGroupsUpTo(1)[0]
         //a Poke belongs to no instruction, so the FileSystem session, whose frames are keyed by a
         //syscall's address, has nothing to say about undoing one
         //([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md))
         if (!group || group.kind === 'poke') return true
         return this.fileSystemSession?.canUndoAfter(group.pc) ?? true
+    }
+
+    /** The Core groups its history by instruction or Poke, so the group count is the depth. */
+    _undoDepth(): number {
+        return this.riscv?.getUndoDepth() ?? 0
+    }
+
+    _setUndoRecording(recording: boolean): void {
+        this.riscv?.setUndoEnabled(recording && this.undoEnabled)
     }
 
     /**
@@ -258,6 +282,46 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         return this.requireRiscV().endPoke()
     }
 
+    /**
+     * Loads the Runtime library a Build links, and the list of library functions that explains an
+     * undefined `printf` in a Build that does not link it, before any Core is created.
+     */
+    async _prepareBuild(sources: BuildSources): Promise<void> {
+        const language = this.is64Bit ? 'RISC-V-64' : 'RISC-V'
+        if (sources.runtimeAbi === undefined) {
+            await loadRuntimeFunctions(CURRENT_RUNTIME_ABI)
+            return
+        }
+        //only a Compilation record's requirement starts at the library's _start (resolveRuntimeLink)
+        const problem = unsupportedRuntimeAbi(sources.runtimeAbi, sources.entrySymbol !== undefined)
+        if (problem) throw new ProjectFormatError(problem)
+        await loadRuntimeLibrary(sources.runtimeAbi, language)
+    }
+
+    /** The library and entry symbol `_prepareBuild` loaded for these sources. */
+    private runtimeLink(sources: BuildSources): RiscVLink {
+        if (sources.runtimeAbi === undefined) return {}
+        const language = this.is64Bit ? 'RISC-V-64' : 'RISC-V'
+        const library = loadedRuntimeLibrary(sources.runtimeAbi, language)
+        if (!library)
+            throw new ProjectFormatError(`The Runtime library ${sources.runtimeAbi} is not loaded`)
+        return {
+            library: coreLibrary(library),
+            ...(sources.entrySymbol ? { entrySymbol: sources.entrySymbol } : {})
+        }
+    }
+
+    /** An undefined library function in a Build without the library says how to turn it on. */
+    private withRuntimeHints(sources: BuildSources, diagnostics: Diagnostic[]): Diagnostic[] {
+        if (sources.runtimeAbi !== undefined) return diagnostics
+        const functions = loadedRuntimeFunctions(CURRENT_RUNTIME_ABI)
+        return diagnostics.map((diagnostic) => {
+            if (diagnostic.severity !== 'error' || diagnostic.hint) return diagnostic
+            const hint = runtimeLibraryHint(diagnostic.message, functions)
+            return hint ? { ...diagnostic, hint } : diagnostic
+        })
+    }
+
     _checkCode(sources: BuildSources): Diagnostic[] {
         //the bitness decides which instructions assemble (`ld` is RV64 only), so pin the module
         //global before creating the throwaway instance, exactly like `_compile` does
@@ -266,15 +330,20 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         const directive = this.readScreenDirective(sources).diagnostics
         RISCV.setIs64Bit(this.is64Bit)
         const files = textAssemblyFiles(sources)
-        const riscv = RISCV.makeRiscVFromFiles(files, sources.entry)
+        const riscv = makeRiscVCore(
+            files,
+            sources.entry,
+            buildAssemblerProfile(sources),
+            this.runtimeLink(sources)
+        )
         const result = riscv.assemble()
         const lines = tokenizedLines(riscv)
         const spans = makeTokenSpanIndex(lines)
-        return [
+        return this.withRuntimeHints(sources, [
             ...directive,
             ...includedScreenDiagnostics(files, sources.entry, lines),
             ...result.errors.map((error) => assembleErrorToDiagnostic(error, spans))
-        ]
+        ])
     }
 
     _compile(sources: BuildSources, undoSize: number): CompileResult {
@@ -294,7 +363,12 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         //interleaved with another instance's creation
         RISCV.setIs64Bit(this.is64Bit)
         const files = textAssemblyFiles(sources)
-        const riscv = RISCV.makeRiscVFromFiles(files, sources.entry)
+        const riscv = makeRiscVCore(
+            files,
+            sources.entry,
+            buildAssemblerProfile(sources),
+            this.runtimeLink(sources)
+        )
         //`assemble()` allocates the backstep ring buffer from the size that `setUndoSize` stored, so
         //the size has to be set *before* assembling: setting it afterwards would only size the next
         //compile's buffer (legacy ordering was setUndoSize -> assemble -> setUndoEnabled)
@@ -302,11 +376,11 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         const result = riscv.assemble()
         const lines = tokenizedLines(riscv)
         const spans = makeTokenSpanIndex(lines)
-        const diagnostics = [
+        const diagnostics = this.withRuntimeHints(sources, [
             ...configured.diagnostics,
             ...includedScreenDiagnostics(files, sources.entry, lines),
             ...result.errors.map((error) => assembleErrorToDiagnostic(error, spans))
-        ]
+        ])
         //`hasErrors` only means "the collection is non-empty", and warnings share that collection,
         //so a warnings-only program would be rejected despite having assembled fine
         if (diagnostics.some((d) => d.severity === 'error')) {
@@ -317,14 +391,41 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
             }
         }
         this.riscv = riscv
+        this._buildLibraryFiles = this.libraryFiles(sources, riscv)
         return { ok: true, diagnostics }
+    }
+
+    /**
+     * The members of the library the Build linked, in the order the Core placed them: read-only
+     * Files the debugger and the Explorer show. The rest of the library stays reachable through go
+     * to definition.
+     */
+    private libraryFiles(sources: BuildSources, riscv: JsRiscV): ProjectFiles | undefined {
+        if (sources.runtimeAbi === undefined) return undefined
+        const language = this.is64Bit ? 'RISC-V-64' : 'RISC-V'
+        const library = loadedRuntimeLibrary(sources.runtimeAbi, language)
+        if (!library) return undefined
+        //a member's every statement names it, and a key keeps the place of its first entry
+        return Object.freeze(
+            Object.fromEntries(
+                riscv
+                    .getCompiledStatements()
+                    .map((statement) => statement.sourcePath)
+                    .filter((path) => Object.prototype.hasOwnProperty.call(library.members, path))
+                    .map((path) => [
+                        path,
+                        { encoding: 'plain' as const, content: library.members[path] }
+                    ])
+            )
+        )
     }
 
     _initialize(undoSize: number): void {
         const riscv = this.requireRiscV()
         //the stack was already sized in `_compile`, `assemble()` engages the backstepper
         //unconditionally so this is what actually turns undo off when history is disabled
-        riscv.setUndoEnabled(normalizeUndoSize(undoSize) > 0)
+        this.undoEnabled = normalizeUndoSize(undoSize) > 0
+        riscv.setUndoEnabled(this.undoEnabled)
         riscv.initialize(true)
         this.ended = false
         this.pacer.reset()
@@ -381,15 +482,23 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
             RISCV.setIs64Bit(this.is64Bit)
             const probeSources = updateEntryText(
                 sources,
-                screenLabelProbeSource(sourceText(sources), label)
+                sources.assemblerProfile === 'gnu-compiler-v1'
+                    ? sourceText(sources)
+                    : screenLabelProbeSource(sourceText(sources), label)
             )
-            const probe = RISCV.makeRiscVFromFiles(
+            const probe = makeRiscVCore(
                 textAssemblyFiles(probeSources),
-                probeSources.entry
+                probeSources.entry,
+                buildAssemblerProfile(probeSources),
+                this.runtimeLink(probeSources)
             )
             const result = probe.assemble()
             //a program that does not assemble has no labels to resolve; its own errors are reported
             if (result.errors.some((error) => !error.isWarning)) return null
+            if (sources.assemblerProfile === 'gnu-compiler-v1') {
+                const address = probe.getAddressOfLabel(label)
+                return address === -1 ? null : address >>> 0
+            }
             return readScreenLabelProbe(probe.readMemoryBytes(SCREEN_LABEL_PROBE_ADDRESS, 4))
         } catch {
             return null
@@ -553,11 +662,14 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
      * nothing has to be skipped before the `max` cut any more.
      */
     _getUndoHistory(max: number): ExecutionStep[] {
+        return this._getUndoHistoryRange(0, max)
+    }
+
+    _getUndoHistoryRange(skip: number, max: number): ExecutionStep[] {
         const riscv = this.riscv
         if (!riscv) return []
         return riscv
-            .getUndoGroups()
-            .slice(0, max)
+            .getUndoGroupsRange(skip, max)
             .map((group) =>
                 group.kind === 'poke'
                     ? this.pokeGroupToStep(group)
@@ -758,7 +870,7 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
 
     _undo(): void {
         const riscv = this.requireRiscV()
-        const group = riscv.getUndoGroups()[0]
+        const group = riscv.getUndoGroupsUpTo(1)[0]
         //the FileSystem session keys its frames by the syscall's address, and a Poke has no
         //instruction identity to undo file operations by, so it is rolled back by the Core alone
         //([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md))
@@ -848,6 +960,21 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
         this.state.interrupt = { type, message: question }
         try {
             return await this._peripherals.terminal.readAsync(question, execution)
+        } finally {
+            this.state.interrupt = undefined
+        }
+    }
+
+    /** A read of descriptor 0: the Terminal's line buffer, a new line, or no bytes at End of input. */
+    private async readStandardInput(length: number): Promise<Uint8Array> {
+        const execution = this.currentExecution
+        this.state.interrupt = { type: 'StandardInput', message: STANDARD_INPUT_QUESTION }
+        try {
+            return await this._peripherals.terminal.readStandardInput(
+                length,
+                STANDARD_INPUT_QUESTION,
+                execution
+            )
         } finally {
             this.state.interrupt = undefined
         }
@@ -956,7 +1083,17 @@ class AsmEditorRISCVEmulator extends GenericEmulator<JsRiscV, RISCVRegisterName>
                     guestFileFailure(error)
                 }
             },
-            stdIn: unimplementedHandler('stdIn'),
+            stdIn: async (_buffer, length) => {
+                const bytes = await this.readStandardInput(length)
+                return [bytes.length, Array.from(bytes)]
+            },
+            seekFile: (descriptor, offset, whence) => {
+                try {
+                    return this.fileSystemSession!.seek(descriptor, offset, whence)
+                } catch (error) {
+                    return guestFileFailure(error)
+                }
+            },
 
             sleep: (milliseconds: number) => this.sleep(milliseconds),
             //syscall 30, elapsed program time. Host time in an interactive run and the virtual clock

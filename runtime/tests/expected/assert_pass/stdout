@@ -1,0 +1,3 @@
+calls after assert=1
+calls after NDEBUG assert=1
+calls after assert again=2

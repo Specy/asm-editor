@@ -26,7 +26,9 @@
     import { setModelBuildArtifacts } from '$lib/monaco/assemblyInsights'
     import { keepHoverReachable } from '$lib/monaco/hoverReachability'
     import type { EditorLineColoring } from '$lib/monaco/lineColoring'
+    import { selectedLines } from '$lib/monaco/selectedLines'
     import type { EditorModels } from '$lib/workbench/editorModels'
+    import { SOURCE_MAP_COLOR_OPACITY, SOURCE_MAP_SECTION_BORDER } from '$lib/Config'
 
     interface Props {
         disabled?: boolean
@@ -56,10 +58,14 @@
         mappedLines?: readonly number[]
         /** Matching source/assembly section backgrounds. */
         lineColoring?: EditorLineColoring
+        /** Palette indices emphasized by the active source/assembly connections; others dim. */
+        activeLineColors?: ReadonlySet<number>
         hasError?: boolean
         language: AvailableLanguages | AvailableProgrammingLanguages
         diagnostics?: Diagnostic[]
         breakpoints?: number[]
+        /** Lines where a Breakpoint set on another File, through a Source map, stops. */
+        mappedBreakpoints?: number[]
         /** Text can be read-only while the Debug session still accepts breakpoint changes. */
         breakpointsEditable?: boolean
         editor?: monaco.editor.IStandaloneCodeEditor
@@ -83,10 +89,12 @@
         highlightedLine = -1,
         mappedLines = [],
         lineColoring,
+        activeLineColors,
         hasError = false,
         language,
         diagnostics = [],
         breakpoints = [],
+        mappedBreakpoints = [],
         breakpointsEditable = true,
         editor = $bindable(),
         viewZones = [],
@@ -140,7 +148,8 @@
         /** A change to any Project File's model, including one the editor is not showing. */
         fileChange: { path: string; value: string }
         breakpointPress: number
-        lineSelect: number
+        /** Zero-based lines covered by the user's selections, a click's single line included. */
+        linesSelect: number[]
     }>()
     let el: HTMLDivElement | null = $state(null)
 
@@ -194,6 +203,8 @@
             //diagnostics still matter: a Debug session, a Build snapshot, an exam. The error pill
             //and the console list keep reporting them there, so the squiggles must agree.
             renderValidationDecorations: 'on',
+            //Context menus need the theme variables and decoration styles from the document.
+            useShadowDOM: false,
             fixedOverflowWidgets: true,
             overflowWidgetsDomNode: overflowWidgets,
             minimap: { enabled: false },
@@ -225,10 +236,10 @@
         }
 
         toDispose.push(
-            mountedEditor.onDidChangeCursorPosition((event) => {
+            mountedEditor.onDidChangeCursorSelection((event) => {
                 //Model switches and debugger navigation are not a new user source selection.
                 if (applyingExternalValue || event.source === 'api') return
-                dispatcher('lineSelect', event.position.lineNumber - 1)
+                dispatcher('linesSelect', selectedLines(mountedEditor.getSelections() ?? []))
             }),
             mountedEditor.onMouseDown((e) => {
                 if (
@@ -400,6 +411,12 @@
     })
 
     let decorations: monaco.editor.IEditorDecorationsCollection | undefined = $state.raw()
+    let sectionLayoutRevision = $state(0)
+
+    $effect(() => {
+        const listener = editor?.onDidChangeHiddenAreas(() => sectionLayoutRevision++)
+        return () => listener?.dispose()
+    })
 
     $effect(() => {
         if (!activeModelKey) return
@@ -424,7 +441,7 @@
             }[]
             currentViewZones = []
             viewZoneEditor.changeViewZones(function (changeAccessor) {
-                viewZones.forEach((zone) => {
+                viewZones.forEach((zone, index) => {
                     const domNode = document.createElement('div')
                     const line = zone.afterLineNumber - 1
                     const section = coloring?.ranges.find(
@@ -436,6 +453,20 @@
                         domNode.className = `compiled-section compiled-section-zone compiled-section-color-${section.colorIndex}`
                         marginDomNode = document.createElement('div')
                         marginDomNode.className = `compiled-section-margin compiled-section-color-${section.colorIndex}`
+                        if (
+                            SOURCE_MAP_SECTION_BORDER.width > 0 &&
+                            line === section.endLine &&
+                            !viewZones
+                                .slice(index + 1)
+                                .some(
+                                    (candidate) =>
+                                        candidate.afterLineNumber === zone.afterLineNumber
+                                )
+                        ) {
+                            //The section ends after its final expansion row, not above it.
+                            domNode.classList.add('compiled-section-border-bottom')
+                            marginDomNode.classList.add('compiled-section-border-bottom')
+                        }
                     }
                     const selection = document.createElement('div')
                     selection.className = 'view-zone-selection'
@@ -507,8 +538,9 @@
 
     $effect(() => {
         //Paint selection beneath transparent expansion content without remounting its rows.
+        const mapped = new Set(mappedLines)
         for (const zone of viewZoneSelections) {
-            zone.domNode.classList.toggle('source-mapped-line', mappedLines.includes(zone.line))
+            zone.domNode.classList.toggle('source-mapped-line', mapped.has(zone.line))
         }
     })
 
@@ -524,11 +556,17 @@
         const style = document.createElement('style')
         style.dataset.sourceMapColors = scope
         const used = new Set(coloring.ranges.map((range) => range.colorIndex))
+        const activeColors = activeLineColors
         style.textContent = [...used]
-            .map(
-                (index) =>
-                    `[data-source-map-color-scope="${scope}"] .compiled-section-color-${index} { --compiled-section-color: ${coloring.colors[index]}; }`
-            )
+            .map((index) => {
+                const opacity =
+                    activeColors === undefined
+                        ? SOURCE_MAP_COLOR_OPACITY.default
+                        : activeColors.has(index)
+                          ? SOURCE_MAP_COLOR_OPACITY.active
+                          : SOURCE_MAP_COLOR_OPACITY.dimmed
+                return `[data-source-map-color-scope="${scope}"] .compiled-section-color-${index} { --compiled-section-color: ${coloring.colors[index]}; --compiled-section-opacity: ${opacity * 100}%; --compiled-section-border-color: color-mix(in srgb, ${coloring.colors[index]} ${opacity * SOURCE_MAP_SECTION_BORDER.opacity * 100}%, transparent); }`
+            })
             .join('\n')
         document.head.appendChild(style)
         return () => {
@@ -539,7 +577,9 @@
 
     $effect(() => {
         const currentMonaco = monacoInstance
-        if (activeModelKey && editor && decorations && currentMonaco) {
+        const currentEditor = editor
+        void sectionLayoutRevision
+        if (activeModelKey && currentEditor && decorations && currentMonaco) {
             decorations.set([
                 ...(lineColoring?.ranges ?? []).map((range) => ({
                     range: new currentMonaco.Range(range.startLine + 1, 1, range.endLine + 1, 1),
@@ -550,6 +590,45 @@
                         zIndex: 0
                     }
                 })),
+                ...(SOURCE_MAP_SECTION_BORDER.width > 0
+                    ? (lineColoring?.ranges ?? []).flatMap((range) => {
+                          let first = range.startLine + 1
+                          let last = range.endLine + 1
+                          //Match the connector's endpoints when section lines are folded.
+                          while (
+                              first <= last &&
+                              currentEditor.getLineHeightForPosition({
+                                  lineNumber: first,
+                                  column: 1
+                              }) === 0
+                          )
+                              first++
+                          while (
+                              last >= first &&
+                              currentEditor.getLineHeightForPosition({
+                                  lineNumber: last,
+                                  column: 1
+                              }) === 0
+                          )
+                              last--
+                          if (first > last) return []
+                          const endpoints = [{ line: first, edge: 'top' }]
+                          if (!viewZones.some((zone) => zone.afterLineNumber === last))
+                              endpoints.push({ line: last, edge: 'bottom' })
+                          return endpoints.map(({ line, edge }) => {
+                              const className = `compiled-section-border-${edge} compiled-section-color-${range.colorIndex}`
+                              return {
+                                  range: new currentMonaco.Range(line, 1, line, 1),
+                                  options: {
+                                      className,
+                                      marginClassName: className,
+                                      isWholeLine: true,
+                                      zIndex: 3
+                                  }
+                              }
+                          })
+                      })
+                    : []),
                 ...mappedLines.map((line) => ({
                     range: new currentMonaco.Range(line + 1, 1, line + 1, 1),
                     options: { className: 'source-mapped-line', isWholeLine: true, zIndex: 1 }
@@ -578,9 +657,19 @@
                         glyphMarginClassName: 'breakpoint-glyph'
                     }
                 })),
+                ...mappedBreakpoints.map((e) => ({
+                    range: new currentMonaco.Range(e + 1, 1, e + 1, 1),
+                    options: {
+                        glyphMarginClassName: 'mapped-breakpoint-glyph',
+                        glyphMarginHoverMessage: {
+                            value: 'Breakpoint set on the source line this instruction compiles from'
+                        }
+                    }
+                })),
                 ...(breakpointsEditable &&
                 hoveredGliphen &&
-                !breakpoints.includes(hoveredGliphen - 1)
+                !breakpoints.includes(hoveredGliphen - 1) &&
+                !mappedBreakpoints.includes(hoveredGliphen - 1)
                     ? [
                           {
                               range: new currentMonaco.Range(hoveredGliphen, 1, hoveredGliphen, 1),
@@ -669,11 +758,36 @@
     {/if}
 </div>
 
-<div bind:this={el} class="editor"></div>
+<div
+    bind:this={el}
+    class="editor"
+    style:--compiled-section-border-width="{Math.max(0, SOURCE_MAP_SECTION_BORDER.width)}px"
+></div>
 
 <style lang="scss">
     :global(.compiled-section, .compiled-section-margin) {
-        background-color: color-mix(in srgb, var(--compiled-section-color) 18%, transparent);
+        background-color: color-mix(
+            in srgb,
+            var(--compiled-section-color) var(--compiled-section-opacity),
+            transparent
+        );
+    }
+    :global(.compiled-section-border-top::before, .compiled-section-border-bottom::after) {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: var(--compiled-section-border-width);
+        background-color: var(--compiled-section-border-color);
+        pointer-events: none;
+    }
+    :global(.compiled-section-border-top::before) {
+        top: 0;
+        transform: translateY(-50%);
+    }
+    :global(.compiled-section-border-bottom::after) {
+        bottom: 0;
+        transform: translateY(50%);
     }
     :global(.source-mapped-line) {
         background-color: color-mix(in srgb, var(--accent) 15%, transparent);
@@ -833,6 +947,17 @@
 
     :global(.hovered-glyph) {
         background-color: var(--accent2) !important;
+    }
+
+    :global(.mapped-breakpoint-glyph) {
+        width: calc(22px - 0.6rem) !important;
+        height: calc(22px - 0.6rem) !important;
+        margin-top: 0.3rem;
+        margin-left: 0.6rem;
+        cursor: pointer;
+        box-sizing: border-box;
+        border: 0.15rem solid var(--accent);
+        border-radius: 1rem;
     }
 
     .editor {

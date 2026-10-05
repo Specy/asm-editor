@@ -1159,6 +1159,60 @@ describe('reset', () => {
     })
 })
 
+describe('memory views', () => {
+    /** Fake memory that cannot be read from `limit` up, failing a whole read as the MARS Cores do. */
+    function limitMemory(emulator: FakeEmulator, limit: bigint) {
+        emulator._readMemoryBytes = (address, length) => {
+            if (address + length > limit) throw new Error('address out of range')
+            return new Uint8Array(Number(length)).fill(7)
+        }
+    }
+
+    it('shows what it cannot read in the view, not as an error of the program', async () => {
+        const emulator = new FakeEmulator()
+        await emulator.compile(0, undefined)
+        limitMemory(emulator, 0x1010n)
+        const [stack] = emulator.memory.tabs
+        emulator.setTabMemoryAddress(0x1000n, stack.id)
+
+        const view = emulator.memory.tabs[0]
+        expect(view.address).toBe(0x1000n)
+        expect(view.data.current[15]).toBe(7)
+        expect(view.data.unreadable?.mask.indexOf(1)).toBe(16)
+        expect(view.data.unreadable?.reason).toContain('address out of range')
+        expect(emulator.errors).toEqual([])
+    })
+
+    it('keeps refreshing the other views while one of them cannot be read', async () => {
+        const emulator = new FakeEmulator()
+        await emulator.compile(0, undefined)
+        limitMemory(emulator, 0x2000n)
+        //the global view is read first, so a failure in it used to leave the Stack tab stale
+        emulator.setGlobalMemoryAddress(0x3000n)
+        emulator._readMemoryBytes = (address, length) => {
+            if (address + length > 0x2000n) throw new Error('address out of range')
+            return new Uint8Array(Number(length)).fill(9)
+        }
+
+        emulator.refreshPanels(true)
+        expect(emulator.memory.global.data.unreadable?.mask.every((byte) => byte === 1)).toBe(
+            true
+        )
+        expect(emulator.memory.tabs[0].data.current[0]).toBe(9)
+        expect(emulator.errors).toEqual([])
+    })
+
+    it('reads it whole again once it points somewhere readable', async () => {
+        const emulator = new FakeEmulator()
+        await emulator.compile(0, undefined)
+        limitMemory(emulator, 0x2000n)
+        emulator.setGlobalMemoryAddress(0x3000n)
+        expect(emulator.memory.global.data.unreadable).not.toBeNull()
+        emulator.setGlobalMemoryAddress(0x1000n)
+        expect(emulator.memory.global.data.unreadable).toBeNull()
+    })
+})
+
 describe('testcase run configuration', () => {
     it('selects scripted input and virtual time together, and restores them', async () => {
         const emulator = new FakeEmulator()

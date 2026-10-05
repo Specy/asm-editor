@@ -1,0 +1,13 @@
+// Runtime library, ABI v1: <cstddef>, the C header <stddef.h> with its names also in namespace std.
+#ifndef _AED_CSTDDEF
+#define _AED_CSTDDEF
+
+#include <stddef.h>
+
+extern "C++" {
+namespace std {
+using ::size_t; using ::ptrdiff_t; using ::max_align_t; using ::nullptr_t;
+}
+}
+
+#endif

@@ -1,4 +1,11 @@
 import type { AvailableLanguages } from './Project.svelte'
+import { isAssemblerProfile } from './assemblerProfiles'
+import {
+    hasRuntimeLibrary,
+    isRuntimeLibrarySetting,
+    type RuntimeLibrarySetting
+} from './runtimeAbi'
+import { ProjectFormatError } from './projectFiles'
 import { languageHasScreen } from './languages/peripherals/peripheralSet'
 
 /**
@@ -13,6 +20,14 @@ import { languageHasScreen } from './languages/peripherals/peripheralSet'
  */
 
 export type ProjectSettingValues = {
+    riscvAssemblerProfile: import('./assemblerProfiles').AssemblerProfile
+    /**
+     * Whether a Build links the Runtime library, and which Runtime ABI: off by default for
+     * hand-written assembly, so a call to a function the program has not written yet stays an
+     * error. A Compilation record requires its own ABI for its Generated assembly whatever this
+     * says ([ADR 0031](../../docs/adr/0031-projects-pin-the-runtime-abi-not-its-implementation.md)).
+     */
+    linkRuntimeLibrary: RuntimeLibrarySetting
     /**
      * Whether the Core keeps an undo history, of `UNDO_HISTORY_SIZE` steps when it does: what a
      * Build is given is `undoHistorySize`. It replaced a number of steps on 2026-10-01, and a
@@ -34,8 +49,14 @@ export type ProjectSettingId = keyof ProjectSettingValues
 /** What a Project stores: only the Settings somebody decided for it. */
 export type ProjectSettingsDecisions = Partial<ProjectSettingValues>
 
-/** The undo steps a Build keeps when the Project's undo is on. */
-export const UNDO_HISTORY_SIZE = 200
+/**
+ * The undo history a Build keeps when the Project's undo is on, in the Core's back steps (an
+ * instruction records one to three). Large enough that a Step over a Runtime library call, such as
+ * a `printf` of a double or a `qsort` of a few hundred values, can be undone as a whole. The Cores
+ * allocate it as it fills, so a short program pays nothing: measured on 2026-10-04 at about 150
+ * bytes per back step, the whole history is about 30 MB, reached after roughly 100,000 instructions.
+ */
+export const UNDO_HISTORY_SIZE = 200_000
 
 /** The history size a Build is given: the undo steps of a Project whose undo is on, else none. */
 export function undoHistorySize(settings: Pick<ProjectSettingValues, 'undoEnabled'>): number {
@@ -46,7 +67,8 @@ export type ProjectSettingDeclaration<T> = {
     id: ProjectSettingId
     /** The label the panel shows. */
     name: string
-    type: T extends number ? 'number' : 'boolean'
+    type: T extends number ? 'number' : T extends boolean ? 'boolean' : 'enum'
+    options?: readonly { value: T; label: string }[]
     /** The app's default, which may depend on the language. */
     defaultFor: (language: AvailableLanguages) => T
     appliesTo: (language: AvailableLanguages) => boolean
@@ -61,11 +83,38 @@ const onOrOff = (value: unknown): value is boolean => typeof value === 'boolean'
 
 /** Any one Setting's declaration, whatever its type. */
 export type AnyProjectSettingDeclaration =
-    ProjectSettingDeclaration<number> | ProjectSettingDeclaration<boolean>
+    | ProjectSettingDeclaration<number>
+    | ProjectSettingDeclaration<boolean>
+    | ProjectSettingDeclaration<import('./assemblerProfiles').AssemblerProfile>
+    | ProjectSettingDeclaration<RuntimeLibrarySetting>
 
 export const PROJECT_SETTINGS: {
     [K in ProjectSettingId]: ProjectSettingDeclaration<ProjectSettingValues[K]>
 } = {
+    riscvAssemblerProfile: {
+        id: 'riscvAssemblerProfile',
+        name: 'RISC-V assembly profile',
+        type: 'enum',
+        defaultFor: () => 'rars',
+        appliesTo: (language) => language === 'RISC-V' || language === 'RISC-V-64',
+        accepts: isAssemblerProfile,
+        options: [
+            { value: 'rars', label: 'RARS' },
+            { value: 'gnu-compiler-v1', label: 'GNU compiler v1' }
+        ]
+    },
+    linkRuntimeLibrary: {
+        id: 'linkRuntimeLibrary',
+        name: 'Link Runtime library',
+        type: 'enum',
+        defaultFor: () => 'off',
+        appliesTo: hasRuntimeLibrary,
+        accepts: isRuntimeLibrarySetting,
+        options: [
+            { value: 'off', label: 'Off' },
+            { value: 'v1', label: 'Runtime ABI v1' }
+        ]
+    },
     undoEnabled: {
         id: 'undoEnabled',
         name: 'Undo enabled',
@@ -118,6 +167,7 @@ export function resolveProjectSettings(
     language: AvailableLanguages,
     decisions: ProjectSettingsDecisions | undefined
 ): ProjectSettingValues {
+    validateProfileSetting(decisions)
     //written through a plain record: the Settings are of more than one type, which TypeScript
     //cannot follow across a loop over their ids
     const resolved: Record<string, unknown> = {}
@@ -138,6 +188,7 @@ export function resolveProjectSettings(
  * changes after creation).
  */
 export function cleanProjectSettings(raw: unknown): ProjectSettingsDecisions {
+    validateProfileSetting(raw)
     const decisions: Record<string, unknown> = {}
     if (typeof raw !== 'object' || raw === null) return decisions
     const record = raw as Record<string, unknown>
@@ -152,6 +203,17 @@ export function cleanProjectSettings(raw: unknown): ProjectSettingsDecisions {
         decisions.undoEnabled = false
     }
     return decisions as ProjectSettingsDecisions
+}
+
+function validateProfileSetting(raw: unknown) {
+    if (
+        raw &&
+        typeof raw === 'object' &&
+        Object.prototype.hasOwnProperty.call(raw, 'riscvAssemblerProfile') &&
+        !isAssemblerProfile((raw as Record<string, unknown>).riscvAssemblerProfile)
+    ) {
+        throw new ProjectFormatError('Unsupported RISC-V assembler profile in Project Settings')
+    }
 }
 
 /** Whether a Project decided anything about a Setting, which the panel shows beside the value. */

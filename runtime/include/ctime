@@ -1,0 +1,14 @@
+// Runtime library, ABI v1: <ctime>, the C header <time.h> with its names also in namespace std.
+#ifndef _AED_CTIME
+#define _AED_CTIME
+
+#include <time.h>
+
+extern "C++" {
+namespace std {
+using ::size_t; using ::time_t; using ::clock_t; using ::tm; using ::time; using ::clock; using ::difftime;
+using ::mktime; using ::gmtime; using ::localtime; using ::asctime; using ::ctime;
+}
+}
+
+#endif

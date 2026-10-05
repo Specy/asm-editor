@@ -1,10 +1,14 @@
 <script lang="ts">
     import type monaco from 'monaco-editor'
     import type { Snippet } from 'svelte'
-    import { SOURCE_MAP_CONNECTION_OFFSCREEN_RATIO, SOURCE_MAP_CONNECTION_STYLE } from '$lib/Config'
+    import {
+        SOURCE_MAP_COLOR_OPACITY,
+        SOURCE_MAP_CONNECTION_OFFSCREEN_RATIO,
+        SOURCE_MAP_CONNECTION_STYLE,
+        SOURCE_MAP_SECTION_BORDER
+    } from '$lib/Config'
     import type { ColoredLineRange } from '$lib/monaco/lineColoring'
     import type { SourceMapColoring } from '$lib/sourceCompilation/sourceColoring'
-    import type { SourceLocation } from '$lib/sourceCompilation/records'
 
     interface Props {
         sourceEditor?: monaco.editor.IStandaloneCodeEditor
@@ -12,7 +16,8 @@
         sourceOnLeft?: boolean
         sourcePath: string
         coloring: SourceMapColoring
-        activeLocation?: SourceLocation
+        /** Palette indices of the emphasized connections; the others dim. */
+        activeColors?: ReadonlySet<number>
         divider?: Snippet
     }
 
@@ -22,7 +27,7 @@
         sourceOnLeft = true,
         sourcePath,
         coloring,
-        activeLocation,
+        activeColors,
         divider
     }: Props = $props()
     let gutter = $state<HTMLDivElement>()
@@ -39,13 +44,9 @@
                 : []
         })
     })
-    const activeColor = $derived(
-        activeLocation?.path === sourcePath
-            ? coloring.source
-                  .get(sourcePath)
-                  ?.ranges.find((range) => range.startLine === activeLocation?.line)?.colorIndex
-            : undefined
-    )
+    const isActive = (colorIndex: number) => activeColors?.has(colorIndex) ?? false
+    const isDimmed = (colorIndex: number) =>
+        activeColors !== undefined && !activeColors.has(colorIndex)
 
     type Band = { top: number; bottom: number }
     type Ribbon = {
@@ -54,8 +55,9 @@
         colorIndex: number
         color: string
         path: string
+        borderPath: string
     }
-    type Bridge = Band & { key: number; colorIndex: number; color: string }
+    type Bridge = Band & { key: number; colorIndex: number; color: string; borderPath: string }
     type Geometry = {
         width: number
         height: number
@@ -76,7 +78,7 @@
     })
     const orderedRibbons = $derived(
         [...geometry.ribbons].sort(
-            (a, b) => Number(a.colorIndex === activeColor) - Number(b.colorIndex === activeColor)
+            (a, b) => Number(isActive(a.colorIndex)) - Number(isActive(b.colorIndex))
         )
     )
 
@@ -117,6 +119,14 @@
         const top = Math.max(retainedTop, lineTop(first))
         const bottom = Math.min(retainedBottom, lineBottom(last))
         return bottom > top ? { top, bottom } : undefined
+    }
+
+    function straightEdge(fromX: number, fromY: number, toX: number, toY: number): string {
+        const distance = toX - fromX
+        const bend = Math.sign(distance) * Math.min(6, Math.abs(distance) / 4)
+        const rise = ((toY - fromY) * bend) / (2 * (distance - bend))
+        //Short quadratic bends meet the editors horizontally and join the straight middle smoothly.
+        return `Q ${fromX + bend / 2} ${fromY}, ${fromX + bend} ${fromY + rise} L ${toX - bend} ${toY - rise} Q ${toX - bend / 2} ${toY}, ${toX} ${toY}`
     }
 
     function measure(
@@ -185,7 +195,8 @@
                         top,
                         bottom,
                         colorIndex,
-                        color: connection.color
+                        color: connection.color,
+                        borderPath: `M 0 ${leftBand.top} H ${inset} M 0 ${leftBand.bottom} H ${inset}`
                     })
             }
             ribbons.push({
@@ -193,10 +204,14 @@
                 sourceLine: connection.source.startLine,
                 colorIndex,
                 color: connection.color,
+                borderPath:
+                    SOURCE_MAP_CONNECTION_STYLE === 'curved'
+                        ? `M ${inset} ${leftBand.top} C ${middle} ${leftBand.top}, ${middle} ${rightBand.top}, ${end} ${rightBand.top} M ${inset} ${leftBand.bottom} C ${middle} ${leftBand.bottom}, ${middle} ${rightBand.bottom}, ${end} ${rightBand.bottom}`
+                        : `M ${inset} ${leftBand.top} ${straightEdge(inset, leftBand.top, end, rightBand.top)} M ${inset} ${leftBand.bottom} ${straightEdge(inset, leftBand.bottom, end, rightBand.bottom)}`,
                 path:
                     SOURCE_MAP_CONNECTION_STYLE === 'curved'
                         ? `M ${inset} ${leftBand.top} C ${middle} ${leftBand.top}, ${middle} ${rightBand.top}, ${end} ${rightBand.top} L ${end} ${rightBand.bottom} C ${middle} ${rightBand.bottom}, ${middle} ${leftBand.bottom}, ${inset} ${leftBand.bottom} Z`
-                        : `M ${inset} ${leftBand.top} L ${end} ${rightBand.top} L ${end} ${rightBand.bottom} L ${inset} ${leftBand.bottom} Z`
+                        : `M ${inset} ${leftBand.top} ${straightEdge(inset, leftBand.top, end, rightBand.top)} L ${end} ${rightBand.bottom} ${straightEdge(end, rightBand.bottom, inset, leftBand.bottom)} Z`
             })
         }
         return {
@@ -252,7 +267,15 @@
     })
 </script>
 
-<div class="connector-gutter" bind:this={gutter}>
+<div
+    class="connector-gutter"
+    bind:this={gutter}
+    style:--source-map-opacity={SOURCE_MAP_COLOR_OPACITY.default}
+    style:--source-map-active-opacity={SOURCE_MAP_COLOR_OPACITY.active}
+    style:--source-map-dimmed-opacity={SOURCE_MAP_COLOR_OPACITY.dimmed}
+    style:--source-map-border-width="{Math.max(0, SOURCE_MAP_SECTION_BORDER.width)}px"
+    style:--source-map-border-opacity={SOURCE_MAP_SECTION_BORDER.opacity}
+>
     <svg
         aria-hidden="true"
         width={geometry.width}
@@ -267,8 +290,8 @@
         {#each geometry.bridges as bridge (bridge.key)}
             <rect
                 class="bridge"
-                class:active={bridge.colorIndex === activeColor}
-                class:dimmed={activeColor !== undefined && bridge.colorIndex !== activeColor}
+                class:active={isActive(bridge.colorIndex)}
+                class:dimmed={isDimmed(bridge.colorIndex)}
                 style:color={bridge.color}
                 x="0"
                 y={bridge.top}
@@ -279,14 +302,25 @@
         {#each orderedRibbons as ribbon (ribbon.key)}
             <path
                 class="ribbon"
-                class:active={ribbon.colorIndex === activeColor}
-                class:dimmed={activeColor !== undefined && ribbon.colorIndex !== activeColor}
+                class:active={isActive(ribbon.colorIndex)}
+                class:dimmed={isDimmed(ribbon.colorIndex)}
                 style:color={ribbon.color}
                 data-source-line={ribbon.sourceLine + 1}
                 data-assembly-line={ribbon.key + 1}
                 d={ribbon.path}
             />
         {/each}
+        {#if SOURCE_MAP_SECTION_BORDER.width > 0}
+            {#each [...geometry.bridges, ...orderedRibbons] as section (`${'path' in section ? 'ribbon' : 'bridge'}-${section.key}`)}
+                <path
+                    class="section-border"
+                    class:active={isActive(section.colorIndex)}
+                    class:dimmed={isDimmed(section.colorIndex)}
+                    style:color={section.color}
+                    d={section.borderPath}
+                />
+            {/each}
+        {/if}
     </svg>
     {#if divider}
         <div class="divider">
@@ -338,25 +372,35 @@
     .ribbon,
     .bridge {
         fill: currentColor;
-        fill-opacity: 0.18;
+        fill-opacity: var(--source-map-opacity);
         stroke: none;
-        transition: fill-opacity 120ms ease;
         &.active {
-            fill-opacity: 0.24;
+            fill-opacity: var(--source-map-active-opacity);
         }
         &.dimmed {
-            fill-opacity: 0.045;
+            fill-opacity: var(--source-map-dimmed-opacity);
+        }
+    }
+    .section-border {
+        fill: none;
+        stroke: currentColor;
+        stroke-width: var(--source-map-border-width);
+        stroke-opacity: calc(var(--source-map-opacity) * var(--source-map-border-opacity));
+        vector-effect: non-scaling-stroke;
+        &.active {
+            stroke-opacity: calc(
+                var(--source-map-active-opacity) * var(--source-map-border-opacity)
+            );
+        }
+        &.dimmed {
+            stroke-opacity: calc(
+                var(--source-map-dimmed-opacity) * var(--source-map-border-opacity)
+            );
         }
     }
     @media (max-width: 700px) {
         .connector-gutter {
             display: none;
-        }
-    }
-    @media (prefers-reduced-motion: reduce) {
-        .ribbon,
-        .bridge {
-            transition: none;
         }
     }
 </style>

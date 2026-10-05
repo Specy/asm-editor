@@ -1,0 +1,7 @@
+// Runtime library, ABI v1: <climits>, the C header <limits.h> with its names also in namespace std.
+#ifndef _AED_CLIMITS
+#define _AED_CLIMITS
+
+#include <limits.h>
+
+#endif

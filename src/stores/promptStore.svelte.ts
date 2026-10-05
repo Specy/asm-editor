@@ -2,6 +2,11 @@ export enum PromptType {
     Text,
     Confirm
 }
+/**
+ * The answer to a line prompt that offered End of input, when the user chose it instead of typing a
+ * line: a read of standard input then returns no bytes, as Ctrl+D on an empty line does in a tty.
+ */
+export const END_OF_INPUT = Symbol('End of input')
 type Prompt = {
     promise: Promise<PromptResult> | null
     id: number
@@ -10,8 +15,10 @@ type Prompt = {
     type: PromptType
     resolve: ((value: PromptResult) => void) | null
     cancellable: boolean
+    /** Whether the text prompt offers End of input, which only reads of standard input accept. */
+    endOfInput: boolean
 }
-type PromptResult = string | boolean | null
+type PromptResult = string | boolean | null | typeof END_OF_INPUT
 
 function createPromptStore() {
     const prompt = $state<Prompt>({
@@ -21,7 +28,8 @@ function createPromptStore() {
         placeholder: '',
         type: PromptType.Text,
         resolve: null,
-        cancellable: true
+        cancellable: true,
+        endOfInput: false
     })
     function ask(
         question: string,
@@ -34,6 +42,7 @@ function createPromptStore() {
         prompt.placeholder = placeholder
         prompt.type = type
         prompt.cancellable = cancellable
+        prompt.endOfInput = false
         prompt.id = prompt.id + 1
         const promise = new Promise<PromptResult>((resolve) => {
             prompt.resolve = resolve
@@ -54,6 +63,25 @@ function createPromptStore() {
     ): Promise<string | null> {
         const result = await ask(question, PromptType.Text, cancellable, placeholder)
         return typeof result === 'string' ? result : null
+    }
+
+    /**
+     * A line for standard input: the typed text, null when cancelled, or END_OF_INPUT when the user
+     * ends the input instead.
+     */
+    async function askLine(
+        question: string,
+        cancellable = true
+    ): Promise<string | null | typeof END_OF_INPUT> {
+        const pending = ask(question, PromptType.Text, cancellable)
+        prompt.endOfInput = true
+        const result = await pending
+        return typeof result === 'string' || result === END_OF_INPUT ? result : null
+    }
+
+    function answerEndOfInput() {
+        if (prompt.type !== PromptType.Text || !prompt.endOfInput) return
+        settle(END_OF_INPUT)
     }
 
     function answerText(value: string) {
@@ -82,6 +110,7 @@ function createPromptStore() {
         prompt.question = ''
         prompt.placeholder = ''
         prompt.cancellable = true
+        prompt.endOfInput = false
     }
     return {
         get question() {
@@ -96,6 +125,9 @@ function createPromptStore() {
         get cancellable() {
             return prompt.cancellable
         },
+        get endOfInput() {
+            return prompt.endOfInput
+        },
         get id() {
             return prompt.id
         },
@@ -104,7 +136,9 @@ function createPromptStore() {
         },
         confirm,
         askText,
+        askLine,
         answerText,
+        answerEndOfInput,
         answerConfirm,
         cancel
     }

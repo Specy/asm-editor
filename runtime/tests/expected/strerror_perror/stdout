@@ -1,0 +1,6 @@
+ENOENT: No such file or directory
+EINVAL: Invalid argument
+EBADF: Bad file descriptor
+EACCES: Permission denied
+EEXIST: File exists
+values: EDOM=33 ERANGE=34 ENOENT=2 EINVAL=22 EBADF=9 ENOMEM=12 EIO=5 ENOSPC=28 EOVERFLOW=75 EILSEQ=84

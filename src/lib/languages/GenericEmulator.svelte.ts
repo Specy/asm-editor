@@ -10,15 +10,20 @@ import {
     createMemoryTab,
     resetMemoryTab,
     type EmulatorSettings,
+    type ExecutionStep,
     InterpreterStatus,
     makeGenericDiagnostic,
     makeRegister,
+    type MemoryTab,
     numbersOfSizeToSlice,
     type RegisterFile,
     type RegisterPoke,
     type RegisterSize,
-    resolveRegisterFileLayout
+    resolveRegisterFileLayout,
+    type SourceBreakpoint,
+    type UnreadableBytes
 } from '$lib/languages/commonLanguageFeatures.svelte'
+import { type MemoryPage, readMemoryPage } from '$lib/languages/memoryPage'
 import { Terminal } from '$lib/languages/peripherals/Terminal.svelte'
 import {
     createInjectedPeripherals,
@@ -38,6 +43,7 @@ import { PAGE_ELEMENTS_PER_ROW, PAGE_SIZE } from '$lib/Config'
 import { createDebouncer } from '$lib/utils'
 import { preferencesStore } from '$stores/preferencesStore.svelte'
 import { projectSettingDefault } from '$lib/projectSettings'
+import { RUNTIME_NAMESPACE } from '$lib/runtimeAbi'
 import {
     byteSliceToNum,
     isMemoryChunkEqual,
@@ -52,7 +58,8 @@ import {
     sourceText,
     updateEntryText,
     type BuildInput,
-    type BuildSources
+    type BuildSources,
+    type ProjectFiles
 } from '$lib/projectFiles'
 import { FileSystem, type FileSystemSession } from '$lib/languages/peripherals/FileSystem'
 
@@ -96,8 +103,27 @@ function isProgramCounterName(register: string): boolean {
     return PROGRAM_COUNTER_NAMES.includes(register.toLowerCase())
 }
 
+/**
+ * One stretch of the newest Core history, newest last. Plain entries undo one at a time; a grouped
+ * stretch is a Step that ran through Runtime library code, which Undo takes back as a whole, so it
+ * returns to the previous stop as Step left it.
+ */
+type UndoSegment = { entries: number; grouped: boolean }
+
+/** How many instructions a Step may run through library code before it stops there anyway. */
+const STEP_THROUGH_LIMIT = 50_000_000
+/** How often a Step running through library code hands the host a turn. */
+const STEP_THROUGH_YIELD = 2_000
+
 function buildSourcesEqual(left: BuildSources, right: BuildSources): boolean {
-    if (left.entry !== right.entry) return false
+    if (
+        left.entry !== right.entry ||
+        left.assemblerProfile !== right.assemblerProfile ||
+        left.assemblyError !== right.assemblyError ||
+        left.runtimeAbi !== right.runtimeAbi ||
+        left.entrySymbol !== right.entrySymbol
+    )
+        return false
     const leftPaths = Object.keys(left.files)
     const rightPaths = Object.keys(right.files)
     if (leftPaths.length !== rightPaths.length) return false
@@ -150,8 +176,25 @@ export abstract class GenericEmulator<T, R extends string>
      */
     private pauseRequested = false
     private runInFlight = false
+    /** Turns the Breakpoints the user set into the ones the Core runs with, see `setBreakpointResolver`. */
+    private breakpointResolver?: (breakpoints: readonly SourceBreakpoint[]) => SourceBreakpoint[]
     protected fileSystemSession: FileSystemSession | null = null
     private _buildSources: BuildSources | undefined = $state()
+    /**
+     * The Runtime library members the Build linked against, as read-only Files under `@runtime/`
+     * for the debugger to open. They are never part of the Project or its FileSystem.
+     */
+    protected _buildLibraryFiles: ProjectFiles | undefined = $state.raw()
+    /** What Undo takes back next, newest last; see `UndoSegment`. */
+    private undoLedger: UndoSegment[] = []
+    /**
+     * Whether Step stops in Runtime library code like any other, the Preference of that name. Off by
+     * default: a Step that lands in a Library member runs on until the program is back in user code
+     * ("Just My Code").
+     */
+    get stepIntoRuntimeLibrary(): boolean {
+        return preferencesStore.values.stepIntoRuntimeLibrary?.value === true
+    }
     /** Number of core operations currently in flight, see `duringCoreOperation`. */
     private coreOperations = 0
     /**
@@ -344,6 +387,8 @@ export abstract class GenericEmulator<T, R extends string>
     protected async semanticCheck() {
         const checkId = ++this.semanticCheckId
         try {
+            //before the idle wait, so nothing is awaited between it and the throwaway assembly
+            await this._prepareBuild?.($state.snapshot(this._sources))
             //`_checkCode` assembles a throwaway core, which for the MARS/RARS derived cores would
             //hijack a run that is still in flight (see `duringCoreOperation`), so wait it out. A
             //check that a newer one superseded in the meantime is dropped instead of assembling.
@@ -534,26 +579,54 @@ export abstract class GenericEmulator<T, R extends string>
         this.state.sp = this._getSp()
     }
 
+    /**
+     * Every memory view read again. A byte a view cannot read is that view's to show, marked in its
+     * page with the reason, and never an error of the program: the address is the user's choice, and
+     * a run must not stop, or the terminal fill up, because a view points somewhere unmapped.
+     */
     protected updateMemory() {
         if (!this.getInstance()) return
-        try {
-            const temp = this.state.memory.global.data.current
-            const memory = this._readMemoryBytes(
-                this.state.memory.global.address,
-                BigInt(this.state.memory.global.pageSize)
-            )
-            this.state.memory.global.data.current = new Uint8Array(memory)
-            this.state.memory.global.data.prevState = temp
-            this.state.memory.tabs.forEach((tab) => {
-                const temp = tab.data.current
-                const memory = this._readMemoryBytes(tab.address, BigInt(tab.pageSize))
-                tab.data.current = new Uint8Array(memory)
-                tab.data.prevState = temp
-            })
-        } catch (e) {
-            console.error(e)
-            this.addError(this._stringifyError(e))
+        for (const view of [this.state.memory.global, ...this.state.memory.tabs]) {
+            const page = this.readMemoryPage(view.address, view.pageSize, view.data.unreadable)
+            const temp = view.data.current
+            view.data.current = page.bytes
+            view.data.prevState = temp
+            view.data.unreadable = page.unreadable
         }
+    }
+
+    /** A view's page as `readMemoryPage` reads it, around the bytes the Core refuses. */
+    private readMemoryPage(
+        address: bigint,
+        pageSize: number,
+        previous: UnreadableBytes | null = null
+    ): MemoryPage {
+        return readMemoryPage(
+            (at, length) => this._readMemoryBytes(at, BigInt(length)),
+            address,
+            pageSize,
+            this._emulatorOptions.initialMemoryValue,
+            //the view already says it could not read, so the reason is the Core's message alone
+            (e) => this._stringifyError(e).replace(/^Error: /, ''),
+            previous
+        )
+    }
+
+    /** A view moved to an address the user chose: what it held before is not a previous state. */
+    private placeMemoryView(view: MemoryTab, address: bigint): void {
+        const page: MemoryPage = this.getInstance()
+            ? this.readMemoryPage(address, view.pageSize)
+            : {
+                  bytes: new Uint8Array(view.pageSize).fill(
+                      this._emulatorOptions.initialMemoryValue
+                  ),
+                  unreadable: null
+              }
+        view.address = address
+        view.userPlaced = true
+        view.data.current = page.bytes
+        view.data.prevState = page.bytes
+        view.data.unreadable = page.unreadable
     }
 
     protected async requestInput(question: string, execution: ExecutionGeneration) {
@@ -616,7 +689,43 @@ export abstract class GenericEmulator<T, R extends string>
         this.state.terminated = this._hasTerminated()
         this.state.pc = this._getPc()
         this.state.callStack = this._getCallStack()
-        this.state.latestSteps = this._getUndoHistory(VISIBLE_HISTORY_STEPS)
+        this.state.latestSteps = this.visibleHistory(VISIBLE_HISTORY_STEPS)
+    }
+
+    /**
+     * The newest steps of the history as Undo takes them back: a Step that ran through library code
+     * is one row, the instruction that called into the library, with the library function and how
+     * many instructions the Step ran, so "Undo to here" on row N is N Undos.
+     */
+    private visibleHistory(max: number): ExecutionStep[] {
+        if (!this._getUndoHistoryRange || !this.undoLedger.some((segment) => segment.grouped))
+            return this._getUndoHistory(max)
+        const rows: ExecutionStep[] = []
+        let skip = 0
+        for (let i = this.undoLedger.length - 1; i >= 0 && rows.length < max; i--) {
+            const segment = this.undoLedger[i]
+            if (!segment.grouped) {
+                rows.push(
+                    ...this._getUndoHistoryRange(skip, Math.min(segment.entries, max - rows.length))
+                )
+            } else {
+                //newest first: the first library instruction, then the call that reached it
+                const [entered, call] = this._getUndoHistoryRange(skip + segment.entries - 2, 2)
+                if (!call) break
+                rows.push({
+                    ...call,
+                    stretch: {
+                        library:
+                            entered?.file
+                                ?.slice(entered.file.lastIndexOf('/') + 1)
+                                .replace(/\.s$/, '') ?? 'library',
+                        instructions: segment.entries
+                    }
+                })
+            }
+            skip += segment.entries
+        }
+        return rows
     }
 
     /**
@@ -661,7 +770,56 @@ export abstract class GenericEmulator<T, R extends string>
      * older drawing has been evicted. Memory-backed framebuffers rely on the CPU history alone.
      */
     private canUndoStep(): boolean {
-        return this._canUndo()
+        const top = this.undoLedger[this.undoLedger.length - 1]
+        if (!top?.grouped) return this._canUndo()
+        //a library call the history no longer holds whole is not undone part way: Undo stops here,
+        //as it does at the oldest entry the history kept
+        return this._canUndo() && (this._undoDepth?.() ?? 0) >= top.entries
+    }
+
+    /** Records instructions or Pokes the Core just added to its history. */
+    private recordHistory(entries: number, grouped = false): void {
+        if (entries <= 0) return
+        const top = this.undoLedger[this.undoLedger.length - 1]
+        if (!grouped && top && !top.grouped) top.entries += entries
+        else this.undoLedger.push({ entries, grouped })
+        //only the newest stretches can ever be undone; a run that alternates library Steps and
+        //plain ones for hours must not grow this without bound
+        if (this.undoLedger.length > 100_000) this.undoLedger.splice(0, 50_000)
+    }
+
+    /** Whether an instruction belongs to a Runtime library member. */
+    private inRuntimeLibrary(instruction: { file?: string } | null | undefined): boolean {
+        return !!instruction?.file?.startsWith(RUNTIME_NAMESPACE)
+    }
+
+    /**
+     * Runs a program that starts in the Runtime library, a compiled one at `_start`, up to its own
+     * first instruction: `main`, or a C++ global constructor that runs before it. That is where a
+     * Step from `_start` stops, so a Build shows the program's code rather than the library's. The
+     * start code runs outside the Undo history, which begins at that first instruction, and nothing
+     * it does before user code is visible: it reads no input and writes no output. With _Step into
+     * Runtime library code_ on, library code is ordinary and the Build stays at `_start`.
+     */
+    private async runStartCode(execution: ExecutionGeneration): Promise<void> {
+        if (
+            this.stepIntoRuntimeLibrary ||
+            !this._setUndoRecording ||
+            !this.inRuntimeLibrary(this._getNextInstruction())
+        )
+            return
+        this._setUndoRecording(false)
+        try {
+            for (let executed = 1; executed <= STEP_THROUGH_LIMIT; executed++) {
+                const { terminated } = await this._step()
+                this.executionController.ensureCurrent(execution)
+                if (terminated || !this.inRuntimeLibrary(this._getNextInstruction())) return
+                if (executed % STEP_THROUGH_YIELD === 0)
+                    await this.executionController.waitFor(execution, () => yieldToHost())
+            }
+        } finally {
+            this._setUndoRecording(true)
+        }
     }
 
     /**
@@ -698,6 +856,8 @@ export abstract class GenericEmulator<T, R extends string>
         this.fileSystemSession?.stop()
         this.fileSystemSession = null
         this._buildSources = undefined
+        this._buildLibraryFiles = undefined
+        this.undoLedger = []
         this.pauseRequested = false
         //a new program is a new speed, and the estimates in the adapters are where it starts again
         this.speedCorrection = 1
@@ -747,14 +907,20 @@ export abstract class GenericEmulator<T, R extends string>
         //Build must cancel an active run/input wait before queuing for its Core lock.
         if (this.coreOperations > 0) this.clear()
         return this.duringCoreOperation(() =>
-            this.compileInternal(historySize, sourceOverride, this._peripherals.fileSystem)
+            this.compileInternal(historySize, sourceOverride, this._peripherals.fileSystem, true)
         )
     }
 
+    /**
+     * `stopInUserCode` is the Build a Debug session starts from, which stops where a Step from the
+     * program's start would (`runStartCode`). A Testcase starts at the first instruction instead:
+     * its starting registers and instruction limit apply from there, as they always have.
+     */
     private async compileInternal(
         historySize: number,
         sourceOverride: BuildInput | undefined,
-        fileSystem: FileSystem
+        fileSystem: FileSystem,
+        stopInUserCode = false
     ): Promise<void> {
         this.clear()
         //A Build supersedes live checking the same way a newer check supersedes an older one: the
@@ -771,6 +937,8 @@ export abstract class GenericEmulator<T, R extends string>
                     ? $state.snapshot(this._sources)
                     : normalizeBuildInput(sourceOverride)
             entry = sources.entry
+            await this._prepareBuild?.(sources)
+            this.executionController.ensureCurrent(execution)
             const result = await this._compile(sources, historySize)
             this.executionController.ensureCurrent(execution)
             if (!result.ok) {
@@ -791,6 +959,16 @@ export abstract class GenericEmulator<T, R extends string>
             this.addDecorations()
             this.state.canExecute = true
             this.state.canUndo = false
+            if (stopInUserCode) {
+                try {
+                    await this.runStartCode(execution)
+                } catch (e) {
+                    if (!this.executionController.isCurrent(execution)) throw e
+                    //the program was built, and failed before its own code as a Step would show
+                    this.reportRuntimeFailure(e)
+                    return
+                }
+            }
             const instruction = this._getNextInstruction()
             this.state.line = instruction?.lineNumber ?? -1
             this.state.currentFile = instruction?.file ?? sources.entry
@@ -916,7 +1094,10 @@ export abstract class GenericEmulator<T, R extends string>
                 //estimate of `timeBudgetMs` and never has to know how long the run has been going
                 instructionBudget: remaining,
                 timeBudgetMs: targetMs,
-                breakpoints: this.state.breakpoints,
+                //resolved per slice, like the list it replaces, so a Breakpoint toggled mid-Run
+                //takes effect at the next slice
+                breakpoints:
+                    this.breakpointResolver?.(this.state.breakpoints) ?? this.state.breakpoints,
                 skipBreakpointAtPc: firstSlice,
                 runInstructionLimit: haltLimit,
                 speedCorrection: this.speedCorrection
@@ -930,6 +1111,7 @@ export abstract class GenericEmulator<T, R extends string>
             )
             this.executionController.ensureCurrent(execution)
             const progress = Math.max(0, slice.instructions)
+            this.recordHistory(progress)
             remaining -= progress
             if (slice.reason === 'wait') {
                 //a wait is not execution: it costs no instructions and the run continues after it.
@@ -1138,38 +1320,13 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     setGlobalMemoryAddress(address: bigint): void {
-        try {
-            const bytes = this.getInstance()
-                ? this._readMemoryBytes(address, BigInt(this.state.memory.global.pageSize))
-                : new Uint8Array(this.state.memory.global.pageSize).fill(
-                      this._emulatorOptions.initialMemoryValue
-                  )
-            this.state.memory.global.address = address
-            this.state.memory.global.userPlaced = true
-            this.state.memory.global.data.current = bytes
-            // Reset prevState as we don't know what the previous state was.
-            this.state.memory.global.data.prevState = this.state.memory.global.data.current
-        } catch (e) {
-            console.error(e)
-            this.addError(this._stringifyError(e))
-        }
+        this.placeMemoryView(this.state.memory.global, address)
     }
 
     setTabMemoryAddress(address: bigint, tabId: number): void {
-        try {
-            const tab = this.state.memory.tabs.find((e) => e.id == tabId)
-            if (!tab) return
-            const bytes = this.getInstance()
-                ? this._readMemoryBytes(address, BigInt(tab.pageSize))
-                : new Uint8Array(tab.pageSize).fill(this._emulatorOptions.initialMemoryValue)
-            tab.address = address
-            tab.userPlaced = true
-            tab.data.current = bytes
-            tab.data.prevState = tab.data.current
-        } catch (e) {
-            console.error(e)
-            this.addError(this._stringifyError(e))
-        }
+        const tab = this.state.memory.tabs.find((e) => e.id == tabId)
+        if (!tab) return
+        this.placeMemoryView(tab, address)
     }
 
     async validateTestcase(testcase: Testcase) {
@@ -1275,8 +1432,30 @@ export abstract class GenericEmulator<T, R extends string>
         try {
             if (!this.getInstance()) throw new Error('Interpreter not initialized')
             attemptedInstruction = this._getNextInstruction()
-            const result = await this._step()
+            let result = await this._step()
             this.executionController.ensureCurrent(execution)
+            let executed = 1
+            //Just My Code: a Step that lands in a Library member runs on until the program is back
+            //in user code, stopping early for the end of the program, an error or input (input
+            //waits inside `_step` and resumes here). The library's callbacks into user code, such
+            //as a qsort comparator, are user code, so the Step stops in them
+            try {
+                while (
+                    !result.terminated &&
+                    !this.stepIntoRuntimeLibrary &&
+                    executed < STEP_THROUGH_LIMIT &&
+                    this.inRuntimeLibrary(this._getNextInstruction())
+                ) {
+                    attemptedInstruction = this._getNextInstruction()
+                    result = await this._step()
+                    this.executionController.ensureCurrent(execution)
+                    executed += 1
+                    if (executed % STEP_THROUGH_YIELD === 0)
+                        await this.executionController.waitFor(execution, () => yieldToHost())
+                }
+            } finally {
+                this.recordHistory(executed, executed > 1)
+            }
             this.state.terminated = result.terminated
             if (result.terminated) {
                 this.selectLastExecuted(attemptedInstruction?.lineNumber ?? -1)
@@ -1431,6 +1610,16 @@ export abstract class GenericEmulator<T, R extends string>
         return results
     }
 
+    /**
+     * Breakpoints can be set on Files the Core never sees, such as the C source of Generated
+     * assembly; the host that knows their Source maps translates them to assembly lines here.
+     */
+    setBreakpointResolver(
+        resolver: ((breakpoints: readonly SourceBreakpoint[]) => SourceBreakpoint[]) | undefined
+    ): void {
+        this.breakpointResolver = resolver
+    }
+
     toggleBreakpoint(line: number, file = this._buildSources?.entry ?? this._sources.entry): void {
         const index = this.state.breakpoints.findIndex(
             (breakpoint) => breakpoint.line === line && breakpoint.file === file
@@ -1455,9 +1644,18 @@ export abstract class GenericEmulator<T, R extends string>
             const undoCount = Math.max(0, Math.floor(amount ?? 1))
             let undone = 0
             for (; undone < undoCount && this.canUndoStep(); undone++) {
-                //the Core owns the instruction boundary, so it rolls back first and the Screen
-                //follows it (ADR 0005)
-                this._undo()
+                //one Undo takes back what one Step did: a stretch of library code goes as a whole
+                const top = this.undoLedger[this.undoLedger.length - 1]
+                const entries = top?.grouped ? top.entries : 1
+                for (let i = 0; i < entries; i++) {
+                    //an inverse a peripheral evicted under its budget ends the rollback where it is
+                    if (i > 0 && !this._canUndo()) break
+                    //the Core owns the instruction boundary, so it rolls back first and the Screen
+                    //follows it (ADR 0005)
+                    this._undo()
+                }
+                if (top?.grouped) this.undoLedger.pop()
+                else if (top && --top.entries <= 0) this.undoLedger.pop()
             }
             //an image that lives in Core memory was restored by the rollback itself, so the Screen
             //re-reads it instead of having journaled it. Once for the whole rollback: the re-read is
@@ -1598,6 +1796,7 @@ export abstract class GenericEmulator<T, R extends string>
                 //setter that threw leaves whatever the writes before it changed, which the Core
                 //recorded and the next Undo would revert
                 recorded = this._endPoke()
+                if (recorded) this.recordHistory(1)
                 this.refreshAfterPoke()
             }
             return recorded
@@ -1625,6 +1824,7 @@ export abstract class GenericEmulator<T, R extends string>
                 this._writeMemoryBytes(address, bytes)
             } finally {
                 recorded = this._endPoke()
+                if (recorded) this.recordHistory(1)
                 //an image that lives in Core memory is re-read rather than journaled, exactly as
                 //after an Undo ([ADR 0005](../../../docs/adr/0005-restore-screen-state-on-undo.md),
                 //[ADR 0020](../../../docs/adr/0020-mirror-the-trs80-display-in-guest-memory.md)),
@@ -1691,6 +1891,10 @@ export abstract class GenericEmulator<T, R extends string>
 
     get buildSources() {
         return this._buildSources
+    }
+
+    get buildLibraryFiles() {
+        return this._buildLibraryFiles
     }
 
     /** The Entry path of the sources currently set, which a single-source host never names itself. */

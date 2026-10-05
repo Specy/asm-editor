@@ -226,6 +226,15 @@
                     </button>
                 </span>
             </div>
+            {#if step.stretch}
+                <!-- a Step that ran through the Runtime library: one Undo takes all of it back -->
+                <div
+                    class="stretch"
+                    title="One Undo takes back the call and the library code it ran"
+                >
+                    Called {step.stretch.library}: {step.stretch.instructions.toLocaleString()} instructions
+                </div>
+            {/if}
             {#if flags.length !== 0}
                 <div class="row space-between">
                     <span> CCR </span>
@@ -243,7 +252,7 @@
         {/if}
     </div>
 
-    {#if step.kind !== 'poke' && step.mutations.length !== 0}
+    {#if step.kind !== 'poke' && !step.stretch && step.mutations.length !== 0}
         <div class="column mutations">
             {#each step.mutations as mutation, i (i)}
                 {#if isWrite(mutation) && hasValues(mutation)}
@@ -277,6 +286,11 @@
 </div>
 
 <style lang="scss">
+    .stretch {
+        font-size: 0.8rem;
+        opacity: 0.85;
+        overflow-wrap: anywhere;
+    }
     .undo-to-here {
         position: absolute;
         top: 0;

@@ -21,6 +21,7 @@
         hideStatus?: boolean
         el?: HTMLInputElement
         autoComplete?: FullAutoFill
+        onkeydown?: (event: KeyboardEvent) => void
     }
 
     let {
@@ -34,7 +35,8 @@
         hideStatus = true,
         autoComplete,
         wrapperStyle,
-        el = $bindable()
+        el = $bindable(),
+        onkeydown
     }: Props = $props()
     onMount(() => {
         if (focus) el?.focus()
@@ -62,6 +64,7 @@
             onchange={bubble('change')}
             bind:this={el}
             onblur={bubble('blur')}
+            {onkeydown}
             placeholder={placeholder ?? title.toUpperCase()}
             style={hideStatus ? 'border:none;' : '' + value === '' ? ' border: none;' : ''}
         />

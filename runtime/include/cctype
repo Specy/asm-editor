@@ -1,0 +1,14 @@
+// Runtime library, ABI v1: <cctype>, the C header <ctype.h> with its names also in namespace std.
+#ifndef _AED_CCTYPE
+#define _AED_CCTYPE
+
+#include <ctype.h>
+
+extern "C++" {
+namespace std {
+using ::isalnum; using ::isalpha; using ::isblank; using ::iscntrl; using ::isdigit; using ::isgraph; using ::islower;
+using ::isprint; using ::ispunct; using ::isspace; using ::isupper; using ::isxdigit; using ::tolower; using ::toupper;
+}
+}
+
+#endif

@@ -147,6 +147,8 @@
                                 <MemoryVisualiser
                                     systemSize={emulator.systemSize}
                                     endianess={emulator.memory.global.endianess}
+                                    memorySize={MEMORY_SIZE[language]}
+                                    dense
                                     defaultMemoryValue={DEFAULT_MEMORY_VALUE[language]}
                                     bytesPerRow={emulator.memory.global.rowSize}
                                     pageSize={emulator.memory.global.pageSize}

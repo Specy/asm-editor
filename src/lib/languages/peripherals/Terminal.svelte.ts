@@ -1,4 +1,4 @@
-import { Prompt } from '$stores/promptStore.svelte'
+import { END_OF_INPUT, Prompt } from '$stores/promptStore.svelte'
 import type { ExecutionController, ExecutionGeneration } from '$lib/languages/ExecutionController'
 
 export type TerminalInputSource =
@@ -46,6 +46,9 @@ const DIALOG_NOT_AVAILABLE_ERROR = 'Message dialogs are not available while runn
 
 const BACKSPACE = '\b'
 const LINE_FEED = '\n'
+/** EOT, which a typed or pasted Ctrl+D delivers: End of input on an empty standard-input line. */
+const END_OF_TRANSMISSION = '\x04'
+const utf8 = new TextEncoder()
 const TAB = '\t'
 const SPACE = ' '
 
@@ -62,6 +65,11 @@ export class Terminal {
     private _keyboardInput: { keyboard: TerminalKeyboard; echo?: TerminalEcho } | null = null
     //an array, not a Set: nothing here is reactive state, and a Set in a rune module is a lint error
     private pendingReads: PendingRead[] = []
+    /**
+     * The bytes of the current standard-input line the program has not read yet, kept like a tty's
+     * line buffer: `scanf("%d")` followed by `fgets` sees the newline the number left behind.
+     */
+    private standardInput: Uint8Array = new Uint8Array(0)
 
     constructor(options: TerminalOptions) {
         this.executionController = options.executionController
@@ -91,15 +99,18 @@ export class Terminal {
     clear(): void {
         this.cancelPendingInput()
         this._output = ''
+        this.standardInput = new Uint8Array(0)
     }
 
     useInteractiveInput(): void {
         this._inputSource = { type: 'interactive' }
+        this.standardInput = new Uint8Array(0)
     }
 
     useScriptedInput(values: string[]): void {
         this.cancelPendingInput()
         this._inputSource = { type: 'scripted', values: [...values] }
+        this.standardInput = new Uint8Array(0)
     }
 
     /**
@@ -139,12 +150,54 @@ export class Terminal {
         for (const read of pending) read.cancel()
     }
 
+    /**
+     * A read of standard input (descriptor 0): the bytes left over from the current line, or else one
+     * new line from the Input Source with its newline, never more than `length` bytes. No bytes is
+     * End of input: a Testcase whose scripted answers are exhausted, or an interactive user choosing
+     * End of input. The educational read syscalls never see End of input; they keep their errors.
+     */
+    async readStandardInput(
+        length: number,
+        question: string,
+        execution: ExecutionGeneration
+    ): Promise<Uint8Array> {
+        if (length <= 0) return new Uint8Array(0)
+        if (this.standardInput.length === 0) {
+            const line = await this.readStandardInputLine(question, execution)
+            if (line === END_OF_INPUT) return new Uint8Array(0)
+            this.standardInput = utf8.encode(line + LINE_FEED)
+        }
+        const bytes = this.standardInput.slice(0, length)
+        this.standardInput = this.standardInput.slice(bytes.length)
+        return bytes
+    }
+
+    private async readStandardInputLine(
+        question: string,
+        execution: ExecutionGeneration
+    ): Promise<string | typeof END_OF_INPUT> {
+        const source = this._inputSource
+        if (source.type === 'scripted') return source.values.shift() ?? END_OF_INPUT
+        const input = this._keyboardInput
+        if (input !== null) return await this.readLineFromKeyboard(input, execution, true)
+        const value = await this.executionController.waitForPrompt(execution, () =>
+            Prompt.askLine(question, true)
+        )
+        if (value === null) throw new Error(INPUT_CANCELLED_ERROR)
+        if (value === END_OF_INPUT) return END_OF_INPUT
+        this.write(`${value}\n`)
+        return value
+    }
+
     async readAsync(question: string, execution: ExecutionGeneration): Promise<string> {
         const scripted = this.readScriptedInput()
         if (scripted !== null) return scripted
         const input = this._keyboardInput
         //a line read waits for Enter whichever interactive source answers it (ADR 0009)
-        if (input !== null) return await this.readLineFromKeyboard(input, execution)
+        if (input !== null) {
+            const line = await this.readLineFromKeyboard(input, execution, false)
+            return line === END_OF_INPUT ? '' : line
+        }
         const value = await this.executionController.waitForPrompt(execution, () =>
             Prompt.askText(question, true)
         )
@@ -199,12 +252,14 @@ export class Terminal {
     /**
      * Collects typed characters until Enter, echoing them like a tty. Backspace edits the line and
      * erases what it echoed; the other control characters are not text and are dropped, so a program
-     * reading a line never receives an escape or a bell.
+     * reading a line never receives an escape or a bell. A standard-input read also takes an EOT on
+     * an empty line as End of input.
      */
     private async readLineFromKeyboard(
         input: { keyboard: TerminalKeyboard; echo?: TerminalEcho },
-        execution: ExecutionGeneration
-    ): Promise<string> {
+        execution: ExecutionGeneration,
+        acceptEndOfInput: boolean
+    ): Promise<string | typeof END_OF_INPUT> {
         const line: string[] = []
         for (;;) {
             const character = input.keyboard.readCharacter()
@@ -212,6 +267,8 @@ export class Terminal {
                 await this.waitForTypedInput(input.keyboard, execution)
                 continue
             }
+            if (acceptEndOfInput && character === END_OF_TRANSMISSION && line.length === 0)
+                return END_OF_INPUT
             if (character === LINE_FEED) {
                 this.echo(input, LINE_FEED)
                 return line.join('')

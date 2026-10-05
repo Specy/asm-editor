@@ -28,6 +28,7 @@ function compile(request: CompilationRequest): Promise<CompilationResult> {
         assembly,
         diagnostics: [],
         record: {
+            assemblerProfile: 'gnu-compiler-v1',
             sourcePath: request.sourcePath,
             outputPath: request.outputPath,
             target: request.target,

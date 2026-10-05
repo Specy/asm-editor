@@ -127,9 +127,6 @@
                 {#if entry.id === 'explorer'}
                     <Explorer
                         name={project.name}
-                        onRename={entry.access === 'readonly'
-                            ? undefined
-                            : (name) => session.rename(name)}
                         files={project.files}
                         language={project.language}
                         entry={project.entry}
@@ -140,7 +137,6 @@
                         onFileDragEnd={() => session.endFileDrag()}
                         locked={session.fileSystemLocked || entry.access === 'readonly'}
                         diagnosticCounts={session.diagnosticCounts}
-                        analysisStatus={session.analysisStatus}
                         onSelect={(path) => {
                             session.selectFile(path)
                             if (ui.deviceClass === 'phone') ui.drawerOpen = false
@@ -148,6 +144,7 @@
                         onEntryChange={(path) => session.setEntry(path)}
                         onRenamed={(from, to) => session.fileRenamed(from, to)}
                         onDeleted={(path) => session.fileDeleted(path)}
+                        libraryFiles={Object.keys(emulator.buildLibraryFiles ?? {})}
                     />
                 {:else if entry.id === 'testcases'}
                     <TestcasesList

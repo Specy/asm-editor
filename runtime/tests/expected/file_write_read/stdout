@@ -1,0 +1,23 @@
+fprintf=21
+fputs=1
+fputc=76
+putc=51
+fwrite=15
+ftell=53
+fclose=0
+fgetc=l getc=i
+fgets: ne 1: fprintf 3.14
+fgets: line 2: fputs
+fgets: L3
+fgets: line 4: fwrite
+feof=1 ferror=0
+fgetc at end=-1
+after rewind feof=0
+fread=53 feof=1
+line 1: fprintf 3.14
+line 2: fputs
+L3
+line 4: fwrite
+fscanf=3 [line] [1:] [fprintf]
+after truncation: short
+empty: fgetc=-1 feof=1

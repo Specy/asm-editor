@@ -1,4 +1,6 @@
 import type { AvailableLanguages } from '$lib/Project.svelte'
+import { isAssemblerProfile, type AssemblerProfile } from '$lib/assemblerProfiles'
+import { hasRuntimeLibrary, isRuntimeAbiName } from '$lib/runtimeAbi'
 import { LANGUAGE_EXTENSIONS } from '$lib/Config'
 import {
     isValidFilePath,
@@ -9,10 +11,18 @@ import {
 
 export type CompilationTarget = 'MIPS' | 'RISC-V' | 'RISC-V-64'
 export type SourceLanguage = 'c' | 'cpp'
+export type SourceCompiler = 'gcc' | 'clang'
 export const OPTIMIZATIONS = ['0', '1', '2', '3', 's'] as const
 export type Optimization = (typeof OPTIMIZATIONS)[number]
 export type SourceLocation = { path: string; line: number }
 export type CompilationRecord = {
+    assemblerProfile?: AssemblerProfile
+    /**
+     * The Runtime ABI the Generated assembly was compiled against, which its Builds link whatever
+     * the Project Setting says ([ADR 0031](../../../docs/adr/0031-projects-pin-the-runtime-abi-not-its-implementation.md)).
+     * Absent in records written before the Runtime library, whose programs are self-contained.
+     */
+    runtimeAbi?: `v${number}`
     sourcePath: string
     outputPath: string
     target: CompilationTarget
@@ -44,11 +54,22 @@ export function isCompilationTarget(target: AvailableLanguages): target is Compi
     return target === 'MIPS' || target === 'RISC-V' || target === 'RISC-V-64'
 }
 
+export function defaultSourceCompiler(target: AvailableLanguages): SourceCompiler {
+    return isCompilationTarget(target) ? 'clang' : 'gcc'
+}
+
 export function generatedAssemblyPath(sourcePath: string, target: AvailableLanguages): string {
     return `${sourcePath}.${LANGUAGE_EXTENSIONS[target]}`
 }
 
 export const SOURCE_TEMPLATE = 'int main(void) {\n    int result = 6 * 7;\n    return result;\n}\n'
+/** The starting text of a new C or C++ File: a hosted Target's program can print. */
+export function sourceTemplate(target: AvailableLanguages, language: SourceLanguage): string {
+    if (!hasRuntimeLibrary(target)) return SOURCE_TEMPLATE
+    return language === 'cpp'
+        ? '#include <cstdio>\n\nint main() {\n    int result = 6 * 7;\n    std::printf("The answer is %d\\n", result);\n    return 0;\n}\n'
+        : '#include <stdio.h>\n\nint main(void) {\n    int result = 6 * 7;\n    printf("The answer is %d\\n", result);\n    return 0;\n}\n'
+}
 
 /** A deterministic 128-bit content fingerprint, for change detection, not authentication. */
 export function contentFingerprint(text: string): string {
@@ -104,6 +125,23 @@ export function cleanCompilationRecords(raw: unknown): CompilationRecord[] | und
         typeof value === 'string' && /^[a-f0-9]{32}$/.test(value)
     const records = raw.map((value): CompilationRecord => {
         if (
+            value &&
+            typeof value === 'object' &&
+            Object.prototype.hasOwnProperty.call(value, 'assemblerProfile') &&
+            !isAssemblerProfile(value.assemblerProfile)
+        ) {
+            throw new ProjectFormatError('Unsupported assembler profile in Compilation record')
+        }
+        //an ABI this editor does not ship is kept, and blocks the Build with a Recompile action
+        if (
+            value &&
+            typeof value === 'object' &&
+            Object.prototype.hasOwnProperty.call(value, 'runtimeAbi') &&
+            !isRuntimeAbiName(value.runtimeAbi)
+        ) {
+            throw new ProjectFormatError('Invalid Runtime ABI in Compilation record')
+        }
+        if (
             !value ||
             typeof value !== 'object' ||
             !isValidFilePath(value.sourcePath) ||
@@ -132,6 +170,12 @@ export function cleanCompilationRecords(raw: unknown): CompilationRecord[] | und
         }
         outputs.add(value.outputPath)
         return {
+            ...(Object.prototype.hasOwnProperty.call(value, 'assemblerProfile')
+                ? { assemblerProfile: value.assemblerProfile }
+                : {}),
+            ...(Object.prototype.hasOwnProperty.call(value, 'runtimeAbi')
+                ? { runtimeAbi: value.runtimeAbi }
+                : {}),
             sourcePath: value.sourcePath,
             outputPath: value.outputPath,
             target: value.target,

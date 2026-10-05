@@ -1,4 +1,5 @@
 <script lang="ts">
+    import Select from '$cmp/shared/input/Select.svelte'
     /**
      * MARS's and RARS's five bitmap display parameters, with their choice lists: the form of the
      * Screen header's Display popover and of the Workbench's Display section. `disabled` makes it a
@@ -42,6 +43,14 @@
     const current = $derived(normalizeMarsDisplay(display))
     const geometry = $derived(marsDisplayGeometry(current))
     const baseChoices = $derived(listBaseChoices(current.baseAddress, baseLabel))
+    const dimensions = [
+        { field: 'unitWidth', title: 'Unit width in pixels', choices: MARS_UNIT_SIZE_CHOICES },
+        { field: 'unitHeight', title: 'Unit height in pixels', choices: MARS_UNIT_SIZE_CHOICES },
+        { field: 'width', title: 'Display width in pixels', choices: MARS_DISPLAY_SIZE_CHOICES },
+        { field: 'height', title: 'Display height in pixels', choices: MARS_DISPLAY_SIZE_CHOICES }
+    ] as const
+    const selectStyle =
+        'padding: 0.4rem 0.6rem; background: var(--tertiary); color: var(--tertiary-text)'
 
     /**
      * A `base=<label>` resolves to wherever the assembler put that label, which is never one of the
@@ -58,8 +67,8 @@
         return [{ address: baseAddress, text: `${hex} (${origin})` }, ...listed]
     }
 
-    function change(field: keyof ProjectDisplay, value: string) {
-        onChange({ ...current, [field]: Number(value) })
+    function change(field: keyof ProjectDisplay, value: number) {
+        onChange({ ...current, [field]: value })
     }
 </script>
 
@@ -73,66 +82,32 @@
             so the next Build reads it back.
         </p>
     {/if}
-    <label>
-        <span>Unit width in pixels</span>
-        <select
-            {disabled}
-            value={String(current.unitWidth)}
-            onchange={(event) => change('unitWidth', event.currentTarget.value)}
-        >
-            {#each MARS_UNIT_SIZE_CHOICES as choice (choice)}
-                <option value={String(choice)}>{choice}</option>
-            {/each}
-        </select>
-    </label>
-    <label>
-        <span>Unit height in pixels</span>
-        <select
-            {disabled}
-            value={String(current.unitHeight)}
-            onchange={(event) => change('unitHeight', event.currentTarget.value)}
-        >
-            {#each MARS_UNIT_SIZE_CHOICES as choice (choice)}
-                <option value={String(choice)}>{choice}</option>
-            {/each}
-        </select>
-    </label>
-    <label>
-        <span>Display width in pixels</span>
-        <select
-            {disabled}
-            value={String(current.width)}
-            onchange={(event) => change('width', event.currentTarget.value)}
-        >
-            {#each MARS_DISPLAY_SIZE_CHOICES as choice (choice)}
-                <option value={String(choice)}>{choice}</option>
-            {/each}
-        </select>
-    </label>
-    <label>
-        <span>Display height in pixels</span>
-        <select
-            {disabled}
-            value={String(current.height)}
-            onchange={(event) => change('height', event.currentTarget.value)}
-        >
-            {#each MARS_DISPLAY_SIZE_CHOICES as choice (choice)}
-                <option value={String(choice)}>{choice}</option>
-            {/each}
-        </select>
-    </label>
-    <label>
+    {#each dimensions as dimension (dimension.field)}
+        <div class="display-setting">
+            <span>{dimension.title}</span>
+            <Select
+                {disabled}
+                options={dimension.choices.map((choice) => ({ key: choice, value: choice }))}
+                value={current[dimension.field]}
+                ariaLabel={dimension.title}
+                style={selectStyle}
+                wrapperStyle="min-width: 5rem; max-width: 10rem"
+                onChange={(value) => change(dimension.field, value)}
+            />
+        </div>
+    {/each}
+    <div class="display-setting">
         <span>Base address for display</span>
-        <select
+        <Select
             {disabled}
-            value={String(current.baseAddress)}
-            onchange={(event) => change('baseAddress', event.currentTarget.value)}
-        >
-            {#each baseChoices as choice (choice.address)}
-                <option value={String(choice.address)}>{choice.text}</option>
-            {/each}
-        </select>
-    </label>
+            options={baseChoices.map((choice) => ({ key: choice.text, value: choice.address }))}
+            value={current.baseAddress}
+            ariaLabel="Base address for display"
+            style={selectStyle}
+            wrapperStyle="min-width: 5rem; max-width: 10rem"
+            onChange={(value) => change('baseAddress', value)}
+        />
+    </div>
     <p class="hint">
         {geometry.columns} × {geometry.rows} words from {formatMarsBaseAddress(
             geometry.baseAddress
@@ -158,27 +133,12 @@
         font-weight: bold;
     }
 
-    label {
+    .display-setting {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 0.5rem;
         font-size: 0.8rem;
-    }
-
-    select {
-        background-color: var(--tertiary);
-        color: var(--tertiary-text);
-        border-radius: 0.3rem;
-        padding: 0.2rem 0.3rem;
-        font-family: monospace;
-        font-size: 0.8rem;
-        max-width: 10rem;
-    }
-
-    select:disabled {
-        opacity: 0.6;
-        cursor: default;
     }
 
     .hint {
@@ -191,7 +151,7 @@
     .panel {
         gap: 0.2rem;
 
-        label {
+        .display-setting {
             padding: 0.2rem 0.4rem;
             font-size: 0.9rem;
         }

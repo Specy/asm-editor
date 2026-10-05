@@ -19,7 +19,6 @@
         Math.min(paneWidth - minPaneWidth, Math.max(minPaneWidth, paneWidth * session.editorRatio))
     )
     const leftShare = $derived(paneWidth > 0 ? leftWidth / paneWidth : 0.5)
-    const activeLocation = $derived(session.mappingSelection ?? session.executionSourceLocation)
 </script>
 
 {#snippet divider()}
@@ -53,7 +52,7 @@
                         sourceOnLeft={session.mappingPair.source === session.groups[0]}
                         sourcePath={session.mappingPair.source.displayedPath}
                         coloring={session.mappingColors}
-                        {activeLocation}
+                        activeColors={session.activeMappingColors}
                         {divider}
                     />
                 {:else}

@@ -84,4 +84,25 @@ describe('mapping between displayed editor files', () => {
             )?.map
         ).toBe(otherMap)
     })
+    it('pairs a Runtime library member with its C source through the library map alone', () => {
+        const member = { displayedPath: '@runtime/v1/stdio/puts.s', displayedFile: text('puts:\nret') }
+        const source = {
+            displayedPath: '@runtime/v1/src/stdio/puts.c',
+            displayedFile: text('int puts(const char *s) {}')
+        }
+        const libraryMap: CompilationSourceMap = {
+            sourcePath: source.displayedPath,
+            outputFingerprint: '',
+            lines: [{ path: source.displayedPath, line: 0 }, null]
+        }
+        const lookup = (path: string) => (path === member.displayedPath ? libraryMap : undefined)
+        expect(resolveMappingPair([source, member], {}, [], files, 'RISC-V', lookup)).toEqual({
+            source,
+            assembly: member,
+            map: libraryMap
+        })
+        expect(
+            resolveMappingPair([pane('main.c'), member], {}, [], files, 'RISC-V', lookup)
+        ).toBeUndefined()
+    })
 })
