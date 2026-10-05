@@ -118,6 +118,8 @@ async function check(target, programs) {
     } catch {
         return { target, ok: false, report: `HTTP ${response.status}: ${text.slice(0, 500)}` }
     }
+    // Compiler Explorer colours its build output; strip the ANSI escape codes.
+    // eslint-disable-next-line no-control-regex
     const strip = (lines) => (lines ?? []).map((l) => l.text.replace(/\x1b\[[0-9;]*[mK]/g, '')).join('\n')
     const steps = json.buildsteps ?? []
     const failed = steps.filter((s) => s.code !== 0)

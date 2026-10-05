@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 // Recaptures the editor's Compiler Explorer fixtures (src/lib/sourceCompilation/fixtures): the same
-// request the editor sends, compiled against the Runtime library's headers. Each fixture keeps its
-// source, headers and expected result; only `response` changes.
+// request the editor sends, compiled against the Runtime library's headers, or for x86, which has
+// no Runtime library yet, against its freestanding ones alone. Each fixture keeps its source,
+// headers and expected result; only `response` changes.
 //
-//   node scripts/runtime/capture-compile-fixtures.mjs [--target MIPS,RISC-V,RISC-V-64]
+//   node scripts/runtime/capture-compile-fixtures.mjs [--target MIPS,RISC-V,RISC-V-64,X86]
 //
 // Kept in step with createCompilerRequest in src/lib/sourceCompilation/compilerExplorer.ts.
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { GCC_INTEL_V1 } from '@specy/x86/compiler-output'
 
 const repository = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const fixtures = join(repository, 'src', 'lib', 'sourceCompilation', 'fixtures')
@@ -20,8 +22,13 @@ const PRESETS = {
         c: 'cmipsg1420',
         cpp: 'mipsg1420',
         flags: '-march=mips32 -mabi=32 -mno-abicalls -fno-pic -G0 -fno-delayed-branch -mfp32 -mhard-float -EL'
-    }
+    },
+    X86: { c: 'cg142', cpp: 'g142', flags: GCC_INTEL_V1.flags.target.join(' ') }
 }
+const X86_HEADERS = [
+    'stddef.h', 'stdint.h', 'stdbool.h', 'stdarg.h', 'limits.h', 'float.h', 'iso646.h', 'stdnoreturn.h',
+    'cstddef', 'cstdint', 'climits', 'cfloat', 'cstdarg', 'new'
+]
 const option = process.argv.indexOf('--target')
 const targets = option === -1 ? Object.keys(PRESETS) : process.argv[option + 1].split(',')
 
@@ -41,10 +48,19 @@ for (const name of readdirSync(fixtures).filter((name) => name.endsWith('.json')
     const fixture = JSON.parse(readFileSync(path, 'utf8'))
     if (!targets.includes(fixture.target)) continue
     const preset = PRESETS[fixture.target]
+    const x86 = fixture.target === 'X86'
     const language = fixture.sourcePath.endsWith('.c') ? 'c' : 'cpp'
     const directory = fixture.sourcePath.includes('/') ? dirname(fixture.sourcePath) : '.'
-    const common = `-O${fixture.optimization} -g1 -fdiagnostics-color=never -fno-verbose-asm -fno-stack-protector -fno-pie -fno-section-anchors`
-    const standard = language === 'cpp' ? '-std=c++17 -fno-exceptions -fno-rtti' : '-std=c17'
+    const profile = GCC_INTEL_V1.flags
+    const common = x86
+        ? [`-O${fixture.optimization}`, '-fdiagnostics-color=never', '-fno-section-anchors', '-ffreestanding', ...profile.translation, ...profile.locations].join(' ')
+        : `-O${fixture.optimization} -g1 -fdiagnostics-color=never -fno-verbose-asm -fno-stack-protector -fno-pie -fno-section-anchors`
+    const standard = x86
+        ? profile.language[language].join(' ')
+        : language === 'cpp' ? '-std=c++17 -fno-exceptions -fno-rtti' : '-std=c17'
+    const headers = x86
+        ? sysroot.filter(({ filename }) => X86_HEADERS.includes(filename.slice('sysroot/include/'.length)))
+        : sysroot
     const userArguments = `${common} -nostdinc -isystem sysroot/include ${preset.flags} -iquote '${directory}' -I . ${standard}${language === 'cpp' ? ' -fno-threadsafe-statics -nostdinc++' : ''}`
     const body = {
         source: `#line 1 ${JSON.stringify(fixture.sourcePath)}\n${fixture.source}`,
@@ -56,7 +72,7 @@ for (const name of readdirSync(fixtures).filter((name) => name.endsWith('.json')
                 commentOnly: false, trim: false, demangle: false, libraryCode: false
             }
         },
-        files: [...Object.entries(fixture.headers).map(([filename, contents]) => ({ filename, contents })), ...sysroot]
+        files: [...Object.entries(fixture.headers).map(([filename, contents]) => ({ filename, contents })), ...headers]
     }
     const reply = await fetch(`https://godbolt.org/api/compiler/${preset[language]}/compile`, {
         method: 'POST',
@@ -71,7 +87,8 @@ for (const name of readdirSync(fixtures).filter((name) => name.endsWith('.json')
     }
     fixture.response = { code: response.code, asm: response.asm, stderr: response.stderr ?? [] }
     fixture.captured = new Date().toISOString().slice(0, 10)
-    fixture.hosted = true
+    //an x86 program links the editor's start unit rather than a Runtime library
+    fixture.hosted = !x86
     writeFileSync(path, JSON.stringify(fixture, null, 4) + '\n')
     console.log(`captured ${name}`)
     await new Promise((resolve) => setTimeout(resolve, 300))

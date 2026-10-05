@@ -902,7 +902,7 @@
                                                 ? 'Select all that apply'
                                                 : 'Select one option'}
                                         </Header>
-                                        {#each mcSection.options as option}
+                                        {#each mcSection.options as option (option.id)}
                                             <label class="option-row">
                                                 <input
                                                     disabled={examDisabled}

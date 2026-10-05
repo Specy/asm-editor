@@ -23,7 +23,7 @@
         {#if stack.length === 0}
             <div class="row" style="justify-content: center; padding: 0.4rem">Call stack empty</div>
         {/if}
-        {#each [...stack].reverse() as label, i}
+        {#each [...stack].reverse() as label, i (stack.length - 1 - i)}
             <Row gap="0.1rem">
                 <button
                     class:noHover={label.name === ''}
