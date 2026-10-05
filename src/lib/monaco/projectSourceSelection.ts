@@ -41,12 +41,6 @@ export function selectProjectFile(
     return liveSource(path)
 }
 
-export function sourceModelKey(selection: ProjectSourceSelection, liveIdentity: string): string {
-    return selection.sourceKind === 'build'
-        ? `snapshot:${selection.buildGeneration}:${selection.path}`
-        : liveIdentity
-}
-
 export function isCurrentBuildLocation(
     selection: ProjectSourceSelection,
     currentBuildGeneration: number,

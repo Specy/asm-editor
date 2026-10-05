@@ -1,26 +1,15 @@
 import { createX86Emulator, type MonacoError } from '@specy/x86'
 import type { BuildSources } from '$lib/projectFiles'
-import {
-    expandLegacyX86Project,
-    stageLegacyX86ProjectFiles,
-    x86SourceLineAt,
-    x86TranslationUnits,
-    type X86ProjectInput,
-    type X86SourceLine
-} from '$lib/languages/X86/x86Project'
-import { x86CoreLinksAsArchive, x86CoreProject } from '$lib/languages/X86/x86StartUnit'
+import { x86ReachableFiles } from '$lib/languages/X86/x86Project'
+import { x86CoreProject } from '$lib/languages/X86/x86StartUnit'
 import type { ProjectAnalysisSnapshot, ProjectFileAnalysisStatus } from '../protocol'
 import type { LanguageDiagnostic } from '../sourceModel'
 
 export function x86DiagnosticToLanguageDiagnostic(
     error: MonacoError,
-    entry: string,
-    lineMap: readonly X86SourceLine[] = []
+    entry: string
 ): LanguageDiagnostic {
-    const file = coreSourceFile(error)
-    const source = file
-        ? { path: file, line: error.lineIndex }
-        : x86SourceLineAt(lineMap, error.lineIndex, entry)
+    const source = { path: error.file || entry, line: error.lineIndex }
     const column = Math.max(0, error.column - 1)
     //NASM reports no column at all, so the Core finds the name the message quotes in the line and
     //hands back its extent; a range here is zero based where the Core's `endColumn` is one based
@@ -46,31 +35,6 @@ export function x86DiagnosticToLanguageDiagnostic(
 let checker: Awaited<ReturnType<typeof createX86Emulator>> | undefined
 
 /** Runs NASM against the Core's virtual Project filesystem. */
-/**
- * The Files the build assembles: every translation unit, plus everything each of them includes.
- * `undefined` when the Entry's own walk could not resolve all of it, which is the case where
- * nothing honest can be said about the rest.
- *
- * Only the Entry's walk decides that. The other units are assembled whether or not the editor can
- * follow their includes, so their walks can only add Files, never take the answer away.
- */
-function tryReachableX86Files(sources: BuildSources): Set<string> | undefined {
-    try {
-        const entryWalk = expandLegacyX86Project(sources)
-        if (entryWalk.diagnostics.length) return undefined
-        const reached = new Set(entryWalk.reached)
-        for (const path of x86TranslationUnits(sources)) {
-            if (reached.has(path)) continue
-            for (const file of expandLegacyX86Project({ ...sources, entry: path }).reached) {
-                reached.add(file)
-            }
-        }
-        return reached
-    } catch {
-        return undefined
-    }
-}
-
 export async function analyzeX86Project(
     sources: BuildSources,
     sessionId: string,
@@ -80,20 +44,9 @@ export async function analyzeX86Project(
     if (sources.assemblyError)
         return unresolvedSnapshot(sources, sources.assemblyError, sessionId, revision)
     checker ??= await createX86Emulator({ mode: 'NASM_trunk' })
-    const native = hasNativeProjectApi(checker)
-    const expanded = native ? undefined : expandLegacyX86Project(sources)
-    if (expanded) stageLegacyX86ProjectFiles(checker.module, expanded)
-    const diagnostics = native
-        ? await checkNativeProject(checker, x86CoreProject(sources, x86CoreLinksAsArchive(checker)))
-        : expanded!.diagnostics.length === 0
-          ? await checker.checkCode(expanded!.code)
-          : []
-    //NASM resolves `%include`/`incbin` itself and reports no reached set, so reachability comes from
-    //the project's own include walk even on the native path — used for this and nothing else, with
-    //resolution still left to NASM. A walk that could not follow every include says nothing rather
-    //than marking a File the Core may well have assembled as unreachable.
-    const reachability = native ? tryReachableX86Files(sources) : expanded!.reached
-    const reached = reachability
+    const diagnostics = await checker.checkProject(x86CoreProject(sources))
+    // NASM reports no reached set, so the editor follows literal includes for file-status hints.
+    const reached = x86ReachableFiles(sources)
     const fileStatus: Record<string, ProjectFileAnalysisStatus> = Object.create(null)
     for (const [path, file] of Object.entries(sources.files)) {
         if (file.encoding !== 'plain') fileStatus[path] = 'binary'
@@ -106,23 +59,9 @@ export async function analyzeX86Project(
         sessionId,
         revision,
         target: 'X86',
-        diagnostics: [
-            ...(expanded?.diagnostics.map((diagnostic) => ({
-                severity: 'error' as const,
-                source: 'nasm-project',
-                location: {
-                    path: diagnostic.path,
-                    range: {
-                        start: { line: diagnostic.line, column: diagnostic.column },
-                        end: { line: diagnostic.line, column: diagnostic.column + 1 }
-                    }
-                },
-                message: diagnostic.message
-            })) ?? []),
-            ...diagnostics.map((diagnostic) =>
-                x86DiagnosticToLanguageDiagnostic(diagnostic, sources.entry, expanded?.lineMap)
-            )
-        ],
+        diagnostics: diagnostics.map((diagnostic) =>
+            x86DiagnosticToLanguageDiagnostic(diagnostic, sources.entry)
+        ),
         symbols: [],
         occurrences: [],
         fileStatus
@@ -159,25 +98,4 @@ function unresolvedSnapshot(
         occurrences: [],
         fileStatus
     }
-}
-
-type X86Checker = Awaited<ReturnType<typeof createX86Emulator>>
-type NativeProjectChecker = X86Checker & {
-    checkProject(project: X86ProjectInput): Promise<Array<MonacoError & { file?: string }>>
-}
-
-function hasNativeProjectApi(core: X86Checker): boolean {
-    return typeof (core as Partial<NativeProjectChecker>).checkProject === 'function'
-}
-
-function checkNativeProject(
-    core: X86Checker,
-    project: X86ProjectInput
-): Promise<Array<MonacoError & { file?: string }>> {
-    return (core as NativeProjectChecker).checkProject(project)
-}
-
-function coreSourceFile(value: unknown): string | undefined {
-    if (!value || typeof value !== 'object' || !('file' in value)) return undefined
-    return typeof value.file === 'string' ? value.file : undefined
 }

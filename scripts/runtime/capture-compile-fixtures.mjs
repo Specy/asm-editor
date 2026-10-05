@@ -26,8 +26,20 @@ const PRESETS = {
     X86: { c: 'cg142', cpp: 'g142', flags: GCC_INTEL_V1.flags.target.join(' ') }
 }
 const X86_HEADERS = [
-    'stddef.h', 'stdint.h', 'stdbool.h', 'stdarg.h', 'limits.h', 'float.h', 'iso646.h', 'stdnoreturn.h',
-    'cstddef', 'cstdint', 'climits', 'cfloat', 'cstdarg', 'new'
+    'stddef.h',
+    'stdint.h',
+    'stdbool.h',
+    'stdarg.h',
+    'limits.h',
+    'float.h',
+    'iso646.h',
+    'stdnoreturn.h',
+    'cstddef',
+    'cstdint',
+    'climits',
+    'cfloat',
+    'cstdarg',
+    'new'
 ]
 const option = process.argv.indexOf('--target')
 const targets = option === -1 ? Object.keys(PRESETS) : process.argv[option + 1].split(',')
@@ -43,7 +55,9 @@ const sysroot = walk(include).map((path) => ({
     contents: readFileSync(path, 'utf8')
 }))
 
-for (const name of readdirSync(fixtures).filter((name) => name.endsWith('.json')).sort()) {
+for (const name of readdirSync(fixtures)
+    .filter((name) => name.endsWith('.json'))
+    .sort()) {
     const path = join(fixtures, name)
     const fixture = JSON.parse(readFileSync(path, 'utf8'))
     if (!targets.includes(fixture.target)) continue
@@ -53,13 +67,24 @@ for (const name of readdirSync(fixtures).filter((name) => name.endsWith('.json')
     const directory = fixture.sourcePath.includes('/') ? dirname(fixture.sourcePath) : '.'
     const profile = GCC_INTEL_V1.flags
     const common = x86
-        ? [`-O${fixture.optimization}`, '-fdiagnostics-color=never', '-fno-section-anchors', '-ffreestanding', ...profile.translation, ...profile.locations].join(' ')
+        ? [
+              `-O${fixture.optimization}`,
+              '-fdiagnostics-color=never',
+              '-fno-section-anchors',
+              '-ffreestanding',
+              ...profile.translation,
+              ...profile.locations
+          ].join(' ')
         : `-O${fixture.optimization} -g1 -fdiagnostics-color=never -fno-verbose-asm -fno-stack-protector -fno-pie -fno-section-anchors`
     const standard = x86
         ? profile.language[language].join(' ')
-        : language === 'cpp' ? '-std=c++17 -fno-exceptions -fno-rtti' : '-std=c17'
+        : language === 'cpp'
+          ? '-std=c++17 -fno-exceptions -fno-rtti'
+          : '-std=c17'
     const headers = x86
-        ? sysroot.filter(({ filename }) => X86_HEADERS.includes(filename.slice('sysroot/include/'.length)))
+        ? sysroot.filter(({ filename }) =>
+              X86_HEADERS.includes(filename.slice('sysroot/include/'.length))
+          )
         : sysroot
     const userArguments = `${common} -nostdinc -isystem sysroot/include ${preset.flags} -iquote '${directory}' -I . ${standard}${language === 'cpp' ? ' -fno-threadsafe-statics -nostdinc++' : ''}`
     const body = {
@@ -68,11 +93,23 @@ for (const name of readdirSync(fixtures).filter((name) => name.endsWith('.json')
         options: {
             userArguments,
             filters: {
-                binary: false, execute: false, labels: false, directives: false,
-                commentOnly: false, trim: false, demangle: false, libraryCode: false
+                binary: false,
+                execute: false,
+                labels: false,
+                directives: false,
+                commentOnly: false,
+                trim: false,
+                demangle: false,
+                libraryCode: false
             }
         },
-        files: [...Object.entries(fixture.headers).map(([filename, contents]) => ({ filename, contents })), ...headers]
+        files: [
+            ...Object.entries(fixture.headers).map(([filename, contents]) => ({
+                filename,
+                contents
+            })),
+            ...headers
+        ]
     }
     const reply = await fetch(`https://godbolt.org/api/compiler/${preset[language]}/compile`, {
         method: 'POST',

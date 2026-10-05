@@ -1042,7 +1042,7 @@
         background-color: var(--secondary);
         color: var(--secondary-text);
         padding: 0.8rem;
-        font-family: 'Fira Mono', monospace;
+        font-family: 'Fira Code', monospace;
         resize: vertical;
     }
 

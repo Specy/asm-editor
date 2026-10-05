@@ -60,7 +60,7 @@
         overflow: auto;
         scrollbar-gutter: stable;
         padding: 0.3rem 0.6rem;
-        font-family: FiraCode, monospace;
+        font-family: 'Fira Code', monospace;
         font-size: 0.82rem;
         line-height: 1.55;
     }

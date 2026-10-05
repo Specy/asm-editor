@@ -334,8 +334,18 @@ async function buildTarget(target, functions) {
     )
     // GCC refers to these weakly from vtables, so only the library saying it supplies them pulls
     // their member.
-    const resolveWeak = ['__cxa_pure_virtual', '__cxa_deleted_virtual'].filter((name) => index[name])
-    return { abi: ABI, target, compiler: settings.compilers.c, members, index, resolveWeak, memberSources }
+    const resolveWeak = ['__cxa_pure_virtual', '__cxa_deleted_virtual'].filter(
+        (name) => index[name]
+    )
+    return {
+        abi: ABI,
+        target,
+        compiler: settings.compilers.c,
+        members,
+        index,
+        resolveWeak,
+        memberSources
+    }
 }
 
 /** Sizes and offsets of the public structs, read back from a compiled table. */
@@ -363,7 +373,12 @@ async function layouts(target) {
             if (source[end] === ')') depth--
             end++
         } while (depth > 0 && end < source.length)
-        names.push(source.slice(at + 'LAYOUT('.length, end - 1).replace(/\s+/g, ' ').trim())
+        names.push(
+            source
+                .slice(at + 'LAYOUT('.length, end - 1)
+                .replace(/\s+/g, ' ')
+                .trim()
+        )
     }
     if (names.length !== values.length)
         throw new Error(

@@ -133,8 +133,8 @@ describe('x86 Project analysis adapter', () => {
     })
 
     it('has nothing to say of a hand-written _start beside compiled code', async () => {
-        //a Core that links a Project as an archive leaves main.asm out of a Build of compiled code,
-        //and one that links every File reports the clash when it links: checking links nothing
+        // The archive linker leaves main.asm out of a Build of compiled code;
+        // checking only assembles the units and does not link them.
         const snapshot = await analyzeX86Project(
             normalizeBuildInput({
                 entry: 'main.c.asm',

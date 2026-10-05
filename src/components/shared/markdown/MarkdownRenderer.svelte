@@ -764,6 +764,7 @@
     }
 
     :global(._markdown code:not(pre code)) {
+        font-family: 'Fira Code', monospace;
         background: var(--secondary);
         padding: 0.2rem 0.4rem;
         border-radius: 0.3rem;

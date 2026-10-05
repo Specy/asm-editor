@@ -6,8 +6,7 @@ import {
     makeProjectFromArchive,
     projectArchiveName,
     projectDownload,
-    projectToArchive,
-    projectToSingleSource
+    projectToArchive
 } from '$lib/projectArchive'
 import { bytesFile, fileBytes, ProjectFormatError } from '$lib/projectFiles'
 
@@ -112,41 +111,6 @@ describe('Project archives', () => {
 
     it('creates a safe dedicated filename', () => {
         expect(projectArchiveName(' My / Project ')).toBe('My___Project.asmproj')
-    })
-
-    it("exports the raw Entry when it is the Project's only File", () => {
-        const project = makeProject({
-            language: 'MIPS',
-            entry: 'src/lesson.mips',
-            files: {
-                'src/lesson.mips': { encoding: 'plain', content: 'li $v0, 10\n' }
-            }
-        })
-        const source = projectToSingleSource(project)
-        expect(source?.fileName).toBe('lesson.mips')
-        expect(new TextDecoder().decode(source?.bytes)).toBe('li $v0, 10\n')
-    })
-
-    it('does not offer a lossy source export for multi-file, binary or missing-Entry Projects', () => {
-        expect(
-            projectToSingleSource(
-                makeProject({
-                    files: {
-                        'main.m68k': { encoding: 'plain', content: '' },
-                        'lib.m68k': { encoding: 'plain', content: '' }
-                    }
-                })
-            )
-        ).toBeNull()
-        expect(
-            projectToSingleSource(
-                makeProject({
-                    entry: 'main.m68k',
-                    files: { 'main.m68k': { encoding: 'base64', content: 'AA==' } }
-                })
-            )
-        ).toBeNull()
-        expect(projectToSingleSource(makeProject({ files: {}, entry: 'main.m68k' }))).toBeNull()
     })
 })
 

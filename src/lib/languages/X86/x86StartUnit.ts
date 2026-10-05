@@ -1,6 +1,7 @@
 import type { BuildSources, ProjectFiles } from '$lib/projectFiles'
 import { RUNTIME_ENTRY_SYMBOL } from '$lib/runtimeAbi'
-import { toX86Project, type X86ProjectInput } from './x86Project'
+import type { X86Project } from '@specy/x86'
+import { toX86Project } from './x86Project'
 import START_UNIT from './start.asm?raw'
 import SUPPORT_UNIT from './support.asm?raw'
 
@@ -44,29 +45,17 @@ export function linksX86StartUnit(sources: BuildSources): boolean {
 }
 
 /**
- * Whether a Core links a Project as a toolchain links objects and a static library: the Entry's
- * unit always, every other unit only for a symbol the program needs. `@specy/x86` does since 4.0.0,
- * which also takes the library units this offers; an older one links every unit of the Project.
- */
-export function x86CoreLinksAsArchive(core: object): boolean {
-    return (core as { projectLinking?: unknown }).projectLinking === 'archive'
-}
-
-/**
  * The Core's Project for these sources: their Files, and the start code when they ask for it. A
  * Core that links a Project as an archive takes the start code as library units, ahead of the
  * Project's own, so it supplies `_start` to a program without one, and a default Project's
- * `main.asm`, which defines its own, stays out of a Build whose Entry is compiled code. An older
- * Core links every unit, so the start code joins the Files.
+ * `main.asm`, which defines its own, stays out of a Build whose Entry is compiled code.
  */
-export function x86CoreProject(sources: BuildSources, archiveLinking: boolean): X86ProjectInput {
+export function x86CoreProject(sources: BuildSources): X86Project {
     const project = toX86Project(sources)
     if (!linksX86StartUnit(sources)) return project
     const units = {
         [X86_START_UNIT_PATH]: X86_START_UNIT,
         [X86_SUPPORT_UNIT_PATH]: X86_SUPPORT_UNIT
     }
-    return archiveLinking
-        ? { ...project, library: units }
-        : { ...project, files: { ...project.files, ...units } }
+    return { ...project, library: units }
 }

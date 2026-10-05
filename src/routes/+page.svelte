@@ -266,8 +266,8 @@
             {/snippet}
             <div class="description" class:textShadow={textShadowSecondary}>
                 Write C or C++ and compile it to MIPS or RISC-V assembly with Clang or GCC, at any
-                optimization level. C source lines are mapped to the assembly instructions so you can
-                see how loops, function calls and expressions become assembly.
+                optimization level. C source lines are mapped to the assembly instructions so you
+                can see how loops, function calls and expressions become assembly.
             </div>
         </MainPageSection>
         <MainPageSection id="peripherals" imageUrl="/images/ASM-Peripherals.webp">
@@ -395,7 +395,7 @@
     .sections-wrapper {
         padding: 3rem 0;
         padding-bottom: 0;
-        font-family: FiraCode, monospace;
+        font-family: 'Fira Code', monospace;
         background-color: var(--primary);
         color: var(--primary-text);
     }

@@ -34,7 +34,7 @@
         gap: 0.2rem;
     }
     .flag {
-        font-family: FiraCode;
+        font-family: 'Fira Code', monospace;
         font-size: 0.75rem;
         padding: 0 0.3rem;
         border-radius: 0.3rem;

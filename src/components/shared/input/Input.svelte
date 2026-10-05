@@ -1,7 +1,4 @@
 <script lang="ts">
-    import { createBubbler } from 'svelte/legacy'
-
-    const bubble = createBubbler()
     import FaExclamationCircle from '~icons/fa-solid/exclamation-circle'
     import FaCheckCircle from '~icons/fa-solid/check-circle'
     import FaRegCircle from '~icons/fa-regular/circle'
@@ -41,10 +38,6 @@
     onMount(() => {
         if (focus) el?.focus()
     })
-    // @ts-expect-error Legacy action node
-    const setType = (node) => {
-        node.type = type
-    }
     $effect(() => {
         if (value === '') status = ''
     })
@@ -60,10 +53,8 @@
             autocomplete={autoComplete}
             bind:value
             class="form-input"
-            use:setType
-            onchange={bubble('change')}
+            {type}
             bind:this={el}
-            onblur={bubble('blur')}
             {onkeydown}
             placeholder={placeholder ?? title.toUpperCase()}
             style={hideStatus ? 'border:none;' : '' + value === '' ? ' border: none;' : ''}

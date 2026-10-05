@@ -159,10 +159,6 @@ export async function getCourseContent(courseSlug: string) {
     return await fs.readFile(`src/content/${courseSlug}/index.md`, 'utf-8')
 }
 
-export async function getModuleContent(courseSlug: string, moduleSlug: string) {
-    return await fs.readFile(`src/content/${courseSlug}/${moduleSlug}/index.md`, 'utf-8')
-}
-
 /**
  * The Course every other Course mirrors, and the only one whose Lectures are an overview rather than
  * a deep dive: the wording of a topic link depends on which side of it a reader is standing on.

@@ -13,7 +13,7 @@
 [submodule "emulators/x86"]
 	path = emulators/x86
 	url = https://github.com/Specy/x86-js.git
-	branch = libblink
+	branch = main
 [submodule "emulators/z80"]
 	path = emulators/z80
 	url = https://github.com/Specy/trs80.git

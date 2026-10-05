@@ -1195,9 +1195,7 @@ describe('memory views', () => {
         }
 
         emulator.refreshPanels(true)
-        expect(emulator.memory.global.data.unreadable?.mask.every((byte) => byte === 1)).toBe(
-            true
-        )
+        expect(emulator.memory.global.data.unreadable?.mask.every((byte) => byte === 1)).toBe(true)
         expect(emulator.memory.tabs[0].data.current[0]).toBe(9)
         expect(emulator.errors).toEqual([])
     })

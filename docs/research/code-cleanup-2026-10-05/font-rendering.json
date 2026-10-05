@@ -1,0 +1,252 @@
+[
+    {
+        "variant": "before",
+        "label": "x86 instruction summary",
+        "family": "FiraCode",
+        "width": 860.8125,
+        "text": "add r/m8, reg8 | add r/m16, reg16 | add r/m32, reg32 | add r/m64, reg64 | add re",
+        "fonts": [
+            {
+                "familyName": "Fira Code Medium",
+                "postScriptName": "FiraCode-Medium",
+                "isCustomFont": true,
+                "glyphCount": 849
+            }
+        ],
+        "metrics": {
+            "bodyWidth": 1440,
+            "viewport": 1440,
+            "loaded": [
+                {
+                    "family": "FiraCode",
+                    "status": "loaded"
+                }
+            ]
+        }
+    },
+    {
+        "variant": "before",
+        "label": "x86 inline code",
+        "family": "monospace",
+        "width": 45.09375,
+        "text": "ADD",
+        "fonts": [
+            {
+                "familyName": "DejaVu Sans Mono",
+                "postScriptName": "DejaVuSansMono",
+                "isCustomFont": false,
+                "glyphCount": 3
+            }
+        ],
+        "metrics": {
+            "bodyWidth": 1440,
+            "viewport": 1440,
+            "loaded": [
+                {
+                    "family": "FiraCode",
+                    "status": "loaded"
+                }
+            ]
+        }
+    },
+    {
+        "variant": "before",
+        "label": "z80 instruction forms",
+        "family": "FiraCode",
+        "width": 260.390625,
+        "text": "add hl,bc ",
+        "fonts": [
+            {
+                "familyName": "Fira Code Medium",
+                "postScriptName": "FiraCode-Medium",
+                "isCustomFont": true,
+                "glyphCount": 9
+            }
+        ],
+        "metrics": {
+            "bodyWidth": 1440,
+            "viewport": 1440,
+            "loaded": [
+                {
+                    "family": "FiraCode",
+                    "status": "loaded"
+                }
+            ]
+        }
+    },
+    {
+        "variant": "before",
+        "label": "Markdown editor font",
+        "family": "\"Fira Code\", monospace",
+        "width": 116.53125,
+        "text": "mov rax, 60",
+        "fonts": [
+            {
+                "familyName": "DejaVu Sans Mono",
+                "postScriptName": "DejaVuSansMono",
+                "isCustomFont": false,
+                "glyphCount": 11
+            }
+        ],
+        "metrics": {
+            "bodyWidth": 1440,
+            "viewport": 1440,
+            "loaded": [
+                {
+                    "family": "FiraCode",
+                    "status": "unloaded"
+                }
+            ]
+        }
+    },
+    {
+        "variant": "before",
+        "label": "phone instruction summary",
+        "family": "FiraCode",
+        "width": 358,
+        "text": "add rr,rr' | add r,r' | add r | add r,(rr) | add (rr) | add r,nn | add nn | add ",
+        "fonts": [
+            {
+                "familyName": "Fira Code Medium",
+                "postScriptName": "FiraCode-Medium",
+                "isCustomFont": true,
+                "glyphCount": 101
+            }
+        ],
+        "metrics": {
+            "bodyWidth": 390,
+            "viewport": 390,
+            "loaded": [
+                {
+                    "family": "FiraCode",
+                    "status": "loaded"
+                }
+            ]
+        }
+    },
+    {
+        "variant": "after",
+        "label": "x86 instruction summary",
+        "family": "\"Fira Code\", monospace",
+        "width": 860.8125,
+        "text": "add r/m8, reg8 | add r/m16, reg16 | add r/m32, reg32 | add r/m64, reg64 | add re",
+        "fonts": [
+            {
+                "familyName": "Fira Code Medium",
+                "postScriptName": "FiraCode-Medium",
+                "isCustomFont": true,
+                "glyphCount": 849
+            }
+        ],
+        "metrics": {
+            "bodyWidth": 1440,
+            "viewport": 1440,
+            "loaded": [
+                {
+                    "family": "Fira Code",
+                    "status": "loaded"
+                }
+            ]
+        }
+    },
+    {
+        "variant": "after",
+        "label": "x86 inline code",
+        "family": "\"Fira Code\", monospace",
+        "width": 45.796875,
+        "text": "ADD",
+        "fonts": [
+            {
+                "familyName": "Fira Code Medium",
+                "postScriptName": "FiraCode-Medium",
+                "isCustomFont": true,
+                "glyphCount": 3
+            }
+        ],
+        "metrics": {
+            "bodyWidth": 1440,
+            "viewport": 1440,
+            "loaded": [
+                {
+                    "family": "Fira Code",
+                    "status": "loaded"
+                }
+            ]
+        }
+    },
+    {
+        "variant": "after",
+        "label": "z80 instruction forms",
+        "family": "\"Fira Code\", monospace",
+        "width": 260.28125,
+        "text": "add hl,bc ",
+        "fonts": [
+            {
+                "familyName": "Fira Code Medium",
+                "postScriptName": "FiraCode-Medium",
+                "isCustomFont": true,
+                "glyphCount": 9
+            }
+        ],
+        "metrics": {
+            "bodyWidth": 1440,
+            "viewport": 1440,
+            "loaded": [
+                {
+                    "family": "Fira Code",
+                    "status": "loaded"
+                }
+            ]
+        }
+    },
+    {
+        "variant": "after",
+        "label": "Markdown editor font",
+        "family": "\"Fira Code\", monospace",
+        "width": 119.109375,
+        "text": "mov rax, 60",
+        "fonts": [
+            {
+                "familyName": "Fira Code Medium",
+                "postScriptName": "FiraCode-Medium",
+                "isCustomFont": true,
+                "glyphCount": 11
+            }
+        ],
+        "metrics": {
+            "bodyWidth": 1440,
+            "viewport": 1440,
+            "loaded": [
+                {
+                    "family": "Fira Code",
+                    "status": "loaded"
+                }
+            ]
+        }
+    },
+    {
+        "variant": "after",
+        "label": "phone instruction summary",
+        "family": "\"Fira Code\", monospace",
+        "width": 358,
+        "text": "add rr,rr' | add r,r' | add r | add r,(rr) | add (rr) | add r,nn | add nn | add ",
+        "fonts": [
+            {
+                "familyName": "Fira Code Medium",
+                "postScriptName": "FiraCode-Medium",
+                "isCustomFont": true,
+                "glyphCount": 101
+            }
+        ],
+        "metrics": {
+            "bodyWidth": 390,
+            "viewport": 390,
+            "loaded": [
+                {
+                    "family": "Fira Code",
+                    "status": "loaded"
+                }
+            ]
+        }
+    }
+]

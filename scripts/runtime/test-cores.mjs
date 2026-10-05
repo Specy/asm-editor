@@ -28,19 +28,28 @@ const TARGETS = {
     riscv32: {
         core: 'risc-v',
         width: 32,
-        compilers: { gcc: { c: 'rv32-cgcc1420', cpp: 'rv32-gcc1420' }, clang: { c: 'rv32-cclang2110', cpp: 'rv32-clang2110' } },
+        compilers: {
+            gcc: { c: 'rv32-cgcc1420', cpp: 'rv32-gcc1420' },
+            clang: { c: 'rv32-cclang2110', cpp: 'rv32-clang2110' }
+        },
         flags: () => '-march=rv32imfd -mabi=ilp32d'
     },
     riscv64: {
         core: 'risc-v',
         width: 64,
-        compilers: { gcc: { c: 'rv64-cgcc1420', cpp: 'rv64-gcc1420' }, clang: { c: 'rv64-cclang2110', cpp: 'rv64-clang2110' } },
+        compilers: {
+            gcc: { c: 'rv64-cgcc1420', cpp: 'rv64-gcc1420' },
+            clang: { c: 'rv64-cclang2110', cpp: 'rv64-clang2110' }
+        },
         flags: () => '-march=rv64imfd -mabi=lp64d'
     },
     mips: {
         core: 'mips',
         width: 32,
-        compilers: { gcc: { c: 'cmipsg1420', cpp: 'mipsg1420' }, clang: { c: 'mipsel-cclang2110', cpp: 'mipsel-clang2110' } },
+        compilers: {
+            gcc: { c: 'cmipsg1420', cpp: 'mipsg1420' },
+            clang: { c: 'mipsel-cclang2110', cpp: 'mipsel-clang2110' }
+        },
         // MARS skips branch delay slots, so the compiler must leave a nop in each
         flags: (compiler) =>
             `-march=mips32 -mabi=32 -mno-abicalls -fno-pic -G0 ${compiler === 'clang' ? '-mllvm -disable-mips-delay-filler' : '-fno-delayed-branch'} -mfp32 -mhard-float -EL`
@@ -63,10 +72,12 @@ const read = (path) => readFileSync(path, 'utf8')
 const sha = (text) => createHash('sha256').update(text).digest('hex')
 function walk(directory) {
     if (!existsSync(directory)) return []
-    return readdirSync(directory).sort().flatMap((name) => {
-        const path = join(directory, name)
-        return statSync(path).isDirectory() ? walk(path) : [path]
-    })
+    return readdirSync(directory)
+        .sort()
+        .flatMap((name) => {
+            const path = join(directory, name)
+            return statSync(path).isDirectory() ? walk(path) : [path]
+        })
 }
 
 /** The editor's compile request for a hosted program (createCompilerRequest in compilerExplorer.ts). */
@@ -83,11 +94,20 @@ function request(target, name, source, language, optimization, headers) {
             options: {
                 userArguments,
                 filters: {
-                    binary: false, execute: false, labels: false, directives: false,
-                    commentOnly: false, trim: false, demangle: false, libraryCode: false
+                    binary: false,
+                    execute: false,
+                    labels: false,
+                    directives: false,
+                    commentOnly: false,
+                    trim: false,
+                    demangle: false,
+                    libraryCode: false
                 }
             },
-            files: Object.entries(headers).map(([path, contents]) => ({ filename: `sysroot/include/${path}`, contents }))
+            files: Object.entries(headers).map(([path, contents]) => ({
+                filename: `sysroot/include/${path}`,
+                contents
+            }))
         }
     }
 }
@@ -102,11 +122,14 @@ async function compile(target, prepared) {
         const wait = lastRequest + 250 - Date.now()
         if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait))
         lastRequest = Date.now()
-        const reply = await fetch(`https://godbolt.org/api/compiler/${prepared.compilerId}/compile`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-            body: json
-        })
+        const reply = await fetch(
+            `https://godbolt.org/api/compiler/${prepared.compilerId}/compile`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                body: json
+            }
+        )
         if ((reply.status === 429 || reply.status >= 500) && attempt < 6) {
             await new Promise((resolve) => setTimeout(resolve, 2000 * 2 ** attempt))
             continue
@@ -131,8 +154,18 @@ function prepare(lines, target) {
             debug = false
             continue
         }
-        if (debug || /^\s*\.(?:file|loc|cfi_\w+|ident)\b/.test(code) || /^\s*#/.test(code) || !code.trim()) continue
-        if (TARGETS[target].core === 'mips' && /^\s*(?:\$L|\.L)(?:FB|FE|BB|BE|VL|text|etext|debug)\w*\s*(?::|=)/.test(code)) continue
+        if (
+            debug ||
+            /^\s*\.(?:file|loc|cfi_\w+|ident)\b/.test(code) ||
+            /^\s*#/.test(code) ||
+            !code.trim()
+        )
+            continue
+        if (
+            TARGETS[target].core === 'mips' &&
+            /^\s*(?:\$L|\.L)(?:FB|FE|BB|BE|VL|text|etext|debug)\w*\s*(?::|=)/.test(code)
+        )
+            continue
         text.push(code)
     }
     return text.join('\n') + '\n'
@@ -142,10 +175,17 @@ function prepare(lines, target) {
 function makeCore(cores, target, entry, text, library) {
     const options = {
         assemblerProfile: 'gnu-compiler-v1',
-        libraries: [{ members: library.members, index: library.index, resolveWeak: library.resolveWeak ?? [] }],
+        libraries: [
+            {
+                members: library.members,
+                index: library.index,
+                resolveWeak: library.resolveWeak ?? []
+            }
+        ],
         entrySymbol: '_start'
     }
-    if (TARGETS[target].core === 'mips') return cores.MIPS.makeMipsFromFiles({ [entry]: text }, entry, options)
+    if (TARGETS[target].core === 'mips')
+        return cores.MIPS.makeMipsFromFiles({ [entry]: text }, entry, options)
     cores.RISCV.setIs64Bit(TARGETS[target].width === 64)
     return cores.RISCV.makeRiscVFromFiles({ [entry]: text }, entry, options)
 }
@@ -159,7 +199,8 @@ function bytesOf(buffer) {
             : Array.isArray(first) || ArrayBuffer.isView(first)
               ? first
               : buffer
-    if (ArrayBuffer.isView(value)) return new Uint8Array(value.buffer, value.byteOffset, value.byteLength).slice()
+    if (ArrayBuffer.isView(value))
+        return new Uint8Array(value.buffer, value.byteOffset, value.byteLength).slice()
     return Uint8Array.from(value, (byte) => Number(byte) & 0xff)
 }
 
@@ -168,10 +209,17 @@ function bytesOf(buffer) {
  * at a time, End of input when the lines run out), output collected, and a FileSystem in memory.
  */
 function environment(stdinText, inputFiles) {
-    const lines = stdinText === null ? [] : stdinText.split('\n').slice(0, -1).map((line) => `${line}\n`)
+    const lines =
+        stdinText === null
+            ? []
+            : stdinText
+                  .split('\n')
+                  .slice(0, -1)
+                  .map((line) => `${line}\n`)
     let pending = new Uint8Array(0)
     const encoder = new TextEncoder()
-    const stdout = [], stderr = []
+    const stdout = [],
+        stderr = []
     const files = new Map(Object.entries(inputFiles))
     const handles = new Map()
     const handlers = {
@@ -218,7 +266,8 @@ function environment(stdinText, inputFiles) {
         seekFile: (fd, offset, whence) => {
             const handle = handles.get(fd)
             if (!handle) return -1
-            const base = whence === 0 ? 0 : whence === 1 ? handle.offset : files.get(handle.path).length
+            const base =
+                whence === 0 ? 0 : whence === 1 ? handle.offset : files.get(handle.path).length
             if (base + offset < 0) return -1
             handle.offset = base + offset
             return handle.offset
@@ -230,17 +279,25 @@ function environment(stdinText, inputFiles) {
 }
 
 function firstDifference(expected, actual) {
-    const a = Buffer.from(expected), b = Buffer.from(actual)
+    const a = Buffer.from(expected),
+        b = Buffer.from(actual)
     let i = 0
     while (i < a.length && i < b.length && a[i] === b[i]) i++
-    const show = (buffer) => JSON.stringify(buffer.subarray(Math.max(0, i - 20), i + 40).toString('utf8'))
+    const show = (buffer) =>
+        JSON.stringify(buffer.subarray(Math.max(0, i - 20), i + 40).toString('utf8'))
     return `at byte ${i}: expected ${show(a)}, got ${show(b)}`
 }
 
 async function main() {
     const cores = {
-        RISCV: (await import(join(repository, 'emulators', 'risc-v', 'rarsjs', 'ts', 'dist', 'index.mjs'))).RISCV,
-        MIPS: (await import(join(repository, 'emulators', 'mips', 'marsjs', 'ts', 'dist', 'index.mjs'))).MIPS
+        RISCV: (
+            await import(
+                join(repository, 'emulators', 'risc-v', 'rarsjs', 'ts', 'dist', 'index.mjs')
+            )
+        ).RISCV,
+        MIPS: (
+            await import(join(repository, 'emulators', 'mips', 'marsjs', 'ts', 'dist', 'index.mjs'))
+        ).MIPS
     }
     // The headers as they are now, the same ones the build uploads as the sysroot.
     const include = join(runtime, 'include')
@@ -249,7 +306,11 @@ async function main() {
     )
     const programs = readdirSync(corpus)
         .filter((name) => /\.(c|cpp)$/.test(name))
-        .map((file) => ({ file, name: file.replace(/\.(c|cpp)$/, ''), language: file.endsWith('.cpp') ? 'cpp' : 'c' }))
+        .map((file) => ({
+            file,
+            name: file.replace(/\.(c|cpp)$/, ''),
+            language: file.endsWith('.cpp') ? 'cpp' : 'c'
+        }))
         .filter((program) => !only || only.includes(program.name))
     let passed = 0
     const failures = []
@@ -261,29 +322,63 @@ async function main() {
                 const label = `${target} ${compiler} -O${optimization} ${program.name}`
                 try {
                     const source = read(join(corpus, program.file))
-                    const response = await compile(target, request(target, program.file, source, program.language, optimization, headers))
+                    const response = await compile(
+                        target,
+                        request(
+                            target,
+                            program.file,
+                            source,
+                            program.language,
+                            optimization,
+                            headers
+                        )
+                    )
                     if (response.code !== 0)
-                        throw new Error(`does not compile:\n${(response.stderr ?? []).map((line) => line.text).join('\n')}`)
+                        throw new Error(
+                            `does not compile:\n${(response.stderr ?? []).map((line) => line.text).join('\n')}`
+                        )
                     const entry = `${program.file}.s`
-                    const core = makeCore(cores, target, entry, prepare(response.asm, target), library)
+                    const core = makeCore(
+                        cores,
+                        target,
+                        entry,
+                        prepare(response.asm, target),
+                        library
+                    )
                     core.setUndoSize(1)
                     const assembled = core.assemble()
                     const errors = assembled.errors.filter((error) => !error.isWarning)
                     if (errors.length)
-                        throw new Error(`does not assemble:\n${errors.slice(0, 8).map((error) => `${error.sourcePath}:${error.sourceLine}: ${error.message}`).join('\n')}`)
+                        throw new Error(
+                            `does not assemble:\n${errors
+                                .slice(0, 8)
+                                .map(
+                                    (error) =>
+                                        `${error.sourcePath}:${error.sourceLine}: ${error.message}`
+                                )
+                                .join('\n')}`
+                        )
                     core.setUndoEnabled(false)
                     core.initialize(true)
                     const stdinPath = join(corpus, `${program.name}.in`)
                     const inputFiles = Object.fromEntries(
                         walk(join(corpus, `${program.name}.files`)).map((path) => [
-                            relative(join(corpus, `${program.name}.files`), path).split('\\').join('/'),
+                            relative(join(corpus, `${program.name}.files`), path)
+                                .split('\\')
+                                .join('/'),
                             new Uint8Array(readFileSync(path))
                         ])
                     )
-                    const world = environment(existsSync(stdinPath) ? read(stdinPath) : null, inputFiles)
-                    for (const [name, handler] of Object.entries(world.handlers)) core.registerHandler(name, handler)
+                    const world = environment(
+                        existsSync(stdinPath) ? read(stdinPath) : null,
+                        inputFiles
+                    )
+                    for (const [name, handler] of Object.entries(world.handlers))
+                        core.registerHandler(name, handler)
                     // A stress program can ask for more: `core-instruction-limit: N` in a comment.
-                    const limit = Number(/core-instruction-limit:\s*(\d+)/.exec(source)?.[1] ?? INSTRUCTION_LIMIT)
+                    const limit = Number(
+                        /core-instruction-limit:\s*(\d+)/.exec(source)?.[1] ?? INSTRUCTION_LIMIT
+                    )
                     const reason = await core.simulateWithLimit(limit)
                     let status
                     if (settings.core === 'mips') {
@@ -292,30 +387,47 @@ async function main() {
                         status = core.getRegistersValues()[4] & 0xff
                     } else {
                         // 3 is NORMAL_TERMINATION, 4 running off the end of the program
-                        if (reason !== 3 && reason !== 4) throw new Error(`did not finish (stop reason ${reason})`)
-                        status = Number(BigInt.asUintN(8, BigInt(core.getRegistersValuesLong()[10])))
+                        if (reason !== 3 && reason !== 4)
+                            throw new Error(`did not finish (stop reason ${reason})`)
+                        status = Number(
+                            BigInt.asUintN(8, BigInt(core.getRegistersValuesLong()[10]))
+                        )
                     }
                     const expected = join(expectedDirectory, program.name)
                     const problems = []
                     const expectedStdout = readFileSync(join(expected, 'stdout'))
                     const expectedStderr = readFileSync(join(expected, 'stderr'))
                     const expectedStatus = Number(read(join(expected, 'status')).trim())
-                    if (!expectedStdout.equals(Buffer.from(world.stdout))) problems.push(`stdout ${firstDifference(expectedStdout, world.stdout)}`)
-                    if (!expectedStderr.equals(Buffer.from(world.stderr))) problems.push(`stderr ${firstDifference(expectedStderr, world.stderr)}`)
-                    if (expectedStatus !== status) problems.push(`exit status: expected ${expectedStatus}, got ${status}`)
+                    if (!expectedStdout.equals(Buffer.from(world.stdout)))
+                        problems.push(`stdout ${firstDifference(expectedStdout, world.stdout)}`)
+                    if (!expectedStderr.equals(Buffer.from(world.stderr)))
+                        problems.push(`stderr ${firstDifference(expectedStderr, world.stderr)}`)
+                    if (expectedStatus !== status)
+                        problems.push(`exit status: expected ${expectedStatus}, got ${status}`)
                     const expectedFiles = Object.fromEntries(
-                        walk(join(expected, 'files')).map((path) => [relative(join(expected, 'files'), path).split('\\').join('/'), readFileSync(path)])
+                        walk(join(expected, 'files')).map((path) => [
+                            relative(join(expected, 'files'), path).split('\\').join('/'),
+                            readFileSync(path)
+                        ])
                     )
-                    for (const path of new Set([...Object.keys(expectedFiles), ...world.files.keys()])) {
+                    for (const path of new Set([
+                        ...Object.keys(expectedFiles),
+                        ...world.files.keys()
+                    ])) {
                         if (!expectedFiles[path]) problems.push(`File ${path}: unexpected`)
                         else if (!world.files.has(path)) problems.push(`File ${path}: missing`)
-                        else if (!expectedFiles[path].equals(Buffer.from(world.files.get(path)))) problems.push(`File ${path}: ${firstDifference(expectedFiles[path], world.files.get(path))}`)
+                        else if (!expectedFiles[path].equals(Buffer.from(world.files.get(path))))
+                            problems.push(
+                                `File ${path}: ${firstDifference(expectedFiles[path], world.files.get(path))}`
+                            )
                     }
                     if (problems.length) throw new Error(problems.join('\n'))
                     passed++
                 } catch (error) {
                     failures.push(`${label}: ${error.message}`)
-                    console.log(`FAIL ${label}\n  ${String(error.message).split('\n').join('\n  ')}`)
+                    console.log(
+                        `FAIL ${label}\n  ${String(error.message).split('\n').join('\n  ')}`
+                    )
                 }
             }
         }

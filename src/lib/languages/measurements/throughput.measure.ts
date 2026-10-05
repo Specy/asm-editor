@@ -18,9 +18,9 @@ import {
  * under five percent of compute-only throughput). The same number sets each adapter's
  * `*_INSTRUCTIONS_PER_MS`, which is how a slice's time budget becomes an instruction budget.
  *
- * "Without yields" is one slice big enough for the whole run, which is what the scheduler did before
- * ADR 0007; "with yields" is `run()`, the real path, which slices, yields to the host between slices
- * and re-enters the Core each time. Both execute the same instruction count of the same tight loop,
+ * "Without yields" re-enters capped adapter slices immediately; "with yields" is `run()`, the real
+ * path, which yields to the host between slices and re-enters the Core each time. Both execute
+ * the same instruction count of the same tight loop,
  * built the way the project page builds a program (the shipped undo history size).
  */
 
@@ -41,7 +41,7 @@ async function measure(language: MeasuredLanguage): Promise<Result> {
     const code = COMPUTE_LOOP[language]
     const result: Result = { language, instructions: 0, unsliced: [], sliced: [], note: '' }
 
-    //warm up the Core and the assembler, then size the run from what one probe slice cost
+    //warm up the Core and the assembler, then size the run from what the probe cost
     const probe = await buildProgram(language, code)
     if (probe.errors.length > 0) {
         result.note = `did not assemble: ${probe.errors.join('; ')}`
@@ -111,7 +111,7 @@ describe('compute-only throughput', () => {
             [
                 'Core',
                 'Instructions',
-                'Instructions/s, one slice',
+                'Instructions/s, without scheduler yields',
                 'Instructions/s, sliced and yielding',
                 'Cost of yielding',
                 'Measured instructions/ms'

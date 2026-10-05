@@ -79,8 +79,6 @@ export const x86InstructionMap = new Map<string, X86Instruction>(
     X86_INSTRUCTIONS.map((instruction) => [instruction.name, instruction])
 )
 
-export const x86InstructionNames = X86_INSTRUCTIONS.map((instruction) => instruction.name)
-
 /** Every instruction, grouped under the heading NASM files it under, in the table's own order. */
 export const x86InstructionsBySection = X86_INSTRUCTIONS.reduce((sections, instruction) => {
     const section = instruction.section || 'Uncategorised'
@@ -602,10 +600,6 @@ export const X86_PREFIX_DOCS: X86TokenDoc[] = [
 
 export const x86SyscallMap = new Map<string, X86Syscall>(
     X86_SYSCALLS.map((syscall) => [syscall.name, syscall])
-)
-
-export const x86SyscallsByNumber = new Map<number, X86Syscall>(
-    X86_SYSCALLS.map((syscall) => [syscall.number, syscall])
 )
 
 /**

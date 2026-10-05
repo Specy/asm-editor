@@ -13,12 +13,6 @@ export const PHONE_QUERY = `(max-width: ${PHONE_MAX_WIDTH}px)`
 export const TABLET_QUERY = `(max-width: ${TABLET_MAX_WIDTH}px)`
 export const HOVER_QUERY = '(hover: hover)'
 
-export function deviceClassFor(width: number): DeviceClass {
-    if (width <= PHONE_MAX_WIDTH) return 'phone'
-    if (width <= TABLET_MAX_WIDTH) return 'tablet'
-    return 'desktop'
-}
-
 /**
  * Whether the Debug tools can be floating windows. They are desktop only, and a desktop-wide screen
  * whose pointer cannot hover (an iPad in landscape) cannot use them either: today's windows are

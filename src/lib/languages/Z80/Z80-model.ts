@@ -448,13 +448,6 @@ export const Z80_COLORS = {
 
 export type Z80ColorName = keyof typeof Z80_COLORS
 
-/** How a color byte is laid out, for the documentation page's color table. */
-export const Z80_COLOR_FIELDS = [
-    { name: 'red', bits: 3, mask: 0xe0, shift: 5 },
-    { name: 'green', bits: 3, mask: 0x1c, shift: 2 },
-    { name: 'blue', bits: 2, mask: 0x03, shift: 0 }
-]
-
 /**
  * Human descriptions of every port, for the I/O documentation page, the hover provider and the
  * coding agent's prompt. Examples are runnable in the interactive editor: `exampleInput` is the

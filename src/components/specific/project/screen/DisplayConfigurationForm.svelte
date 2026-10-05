@@ -123,7 +123,7 @@
     }
     .source-note {
         code {
-            font-family: FiraCode;
+            font-family: 'Fira Code', monospace;
             color: var(--accent);
         }
     }

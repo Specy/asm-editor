@@ -54,12 +54,6 @@ export function shardsOf(scope: SearchScope): ShardId[] {
     return shards
 }
 
-export function scopeKey(scope: SearchScope): string {
-    return scope.kind === 'courses'
-        ? 'courses'
-        : `${scope.language}:${scope.lectures ? 'all' : 'docs'}`
-}
-
 export function isShardId(value: string): value is ShardId {
     return (ALL_SHARDS as string[]).includes(value)
 }

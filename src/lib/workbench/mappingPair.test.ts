@@ -85,7 +85,10 @@ describe('mapping between displayed editor files', () => {
         ).toBe(otherMap)
     })
     it('pairs a Runtime library member with its C source through the library map alone', () => {
-        const member = { displayedPath: '@runtime/v1/stdio/puts.s', displayedFile: text('puts:\nret') }
+        const member = {
+            displayedPath: '@runtime/v1/stdio/puts.s',
+            displayedFile: text('puts:\nret')
+        }
         const source = {
             displayedPath: '@runtime/v1/src/stdio/puts.c',
             displayedFile: text('int puts(const char *s) {}')

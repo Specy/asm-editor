@@ -37,7 +37,6 @@ class MonacoLoader {
         const monacoInstance = await loading
         monacoInstance.editor.defineTheme('custom-theme', generateTheme())
         this.monaco = monacoInstance
-        // @ts-ignore add worker
         self.MonacoEnvironment = {
             getWorker: function (_moduleId: unknown, _label: string) {
                 return new editorWorker()
@@ -88,11 +87,6 @@ class MonacoLoader {
             }
         })
         this.toDispose.push(this.projectOpener)
-    }
-
-    setTheme = (theme: string) => {
-        if (!this.monaco) return
-        this.monaco.editor.setTheme(theme)
     }
 
     setCustomTheme = (theme: monaco.editor.IStandaloneThemeData) => {

@@ -259,8 +259,6 @@ export const branchConditions = [
     'hs',
     'lo'
 ]
-
-export const branchConditionsMap = new Map<string, string>(branchConditions.map((c) => [c, c]))
 export const branchConditionsDescriptions = new Map<string, string>([
     ['hi', 'Unsigned higher'],
     ['ls', 'Unsigned lower or same'],
@@ -306,7 +304,6 @@ const setConditionsDescriptions = new Map<string, string>([
     ...branchConditionsDescriptions.entries()
 ])
 export const directions = ['l', 'r']
-export const directionsMap = new Map<string, string>(directions.map((d) => [d, d]))
 export const directionsDescriptions = new Map<string, string>([
     ['l', 'Left'],
     ['r', 'Right']

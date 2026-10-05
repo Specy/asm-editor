@@ -84,7 +84,7 @@
         background-color: color-mix(in srgb, var(--secondary), var(--tertiary) 20%);
     }
     .mono {
-        font-family: FiraCode;
+        font-family: 'Fira Code', monospace;
         white-space: nowrap;
     }
     .since {

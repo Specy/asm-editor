@@ -38,7 +38,6 @@ import {
     type MonacoError as CoreMonacoError,
     type MutationOperation as CoreMutationOperation,
     type PokeWrite as CorePokeWrite,
-    type X86CompileResult,
     type X86CompilationDiagnostic,
     type X86Emulator as CoreX86Emulator,
     type X86FpuState,
@@ -47,29 +46,23 @@ import {
 import structuredClone from '@ungap/structured-clone'
 import { x86DiagnosticHint } from './X86-diagnostics'
 import { ProjectFormatError, type BuildInput, type BuildSources } from '$lib/projectFiles'
-import {
-    expandLegacyX86Project,
-    stageLegacyX86ProjectFiles,
-    x86GeneratedLinesFor,
-    x86SourceLineAt,
-    type X86ProjectDiagnostic,
-    type X86ProjectInput,
-    type X86SourceLine
-} from './x86Project'
-import {
-    linksX86StartUnit,
-    x86CoreLinksAsArchive,
-    x86CoreProject,
-    X86_START_UNIT_FILES
-} from './x86StartUnit'
+import { linksX86StartUnit, x86CoreProject, X86_START_UNIT_FILES } from './x86StartUnit'
 
 /**
- * How many instructions Blink runs in a millisecond, used to turn a slice's time budget into a run
- * limit. Measured in phase 8 on a compute-only loop under node: about 11, two hundred times slower
- * than the estimate this replaces, which held the host for nine tenths of a second per slice and
- * answered Stop seventeen seconds after it was pressed.
+ * Initial instructions/ms for the scheduler's adaptive estimate. Chromium measurements with
+ * @specy/x86 4.0.0 and the default Undo history found roughly 1,800–2,400 instructions/ms
+ * ([the results](../../../../docs/research/code-cleanup-2026-10-05/followup-results.md)).
  */
-const X86_INSTRUCTIONS_PER_MS = 10
+const X86_INSTRUCTIONS_PER_MS = 2_000
+
+/**
+ * A slice returns to GenericEmulator before the Core starts another native batch, so Pause is
+ * honored there and the app owns the host yield. Undo recording is slower: its smaller cap keeps
+ * Stop and Pause under 100 ms in the measured 4× CPU slowdown. Without history, one full native
+ * batch still fits that target. The time estimate can reduce either cap on slower programs.
+ */
+const X86_MAX_SLICE_INSTRUCTIONS_WITH_UNDO = 20_000
+const X86_MAX_SLICE_INSTRUCTIONS_WITHOUT_UNDO = 50_000
 
 /**
  * The Register files x86 holds beside the general registers
@@ -133,7 +126,6 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     private diagnosticCore: CoreX86Emulator | null = null
     private compileQueue: Promise<void> = Promise.resolve()
     private checkCodeQueue: Promise<void> = Promise.resolve()
-    private buildLineMap: X86SourceLine[] = []
     /**
      * True from the start of a Build until the program is first asked to run, which is the window
      * `isProgramOutput` discards output in. It closes at the run rather than at the end of the
@@ -169,16 +161,12 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             }
         )
         this.core = core
-        //GenericEmulator runs a compiled program's start code before the Build stops only when it
-        //can pause the Undo history, so on a Core without these the hooks stay absent and the Build
-        //stops at `_start`. Undo resumes over a history of the size `initialize` gave, so a Build
-        //that asked for no history still has none
-        if (x86CoreSupportsUndoRecording(core)) {
-            this._setUndoRecording = (recording) => {
-                if (this.core === core) core.setUndoEnabled(recording)
-            }
-            this._undoDepth = () => (this.core === core ? core.getUndoDepth() : 0)
+        // Pause history while GenericEmulator runs compiled startup code. A Build that asked
+        // for no history still records none when recording resumes.
+        this._setUndoRecording = (recording) => {
+            if (this.core === core) core.setUndoEnabled(recording)
         }
+        this._undoDepth = () => (this.core === core ? core.getUndoDepth() : 0)
         if (this._emulatorOptions.automaticChecking) void this.semanticCheck()
     }
 
@@ -228,22 +216,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         if (sources.assemblyError) throw new ProjectFormatError(sources.assemblyError)
         const currentCheck = this.checkCodeQueue.then(async () => {
             const checker = await this.getDiagnosticCore()
-            if (hasNativeProjectApi(checker)) {
-                const project = x86CoreProject(sources, x86CoreLinksAsArchive(checker))
-                const errors = await checkNativeProject(checker, project)
-                return errors.map((error) => mapCoreDiagnosticToProject(sources, error))
-            }
-            const expanded = expandLegacyX86Project(sources)
-            if (expanded.diagnostics.length > 0) {
-                return expanded.diagnostics.map((diagnostic) =>
-                    projectDiagnosticToDiagnostic(sources, diagnostic)
-                )
-            }
-            stageLegacyX86ProjectFiles(checker.module, expanded)
-            const errors = await checker.checkCode(expanded.code)
-            return errors.map((error) =>
-                mapCoreDiagnosticToProject(sources, error, expanded.lineMap)
-            )
+            const errors = await checker.checkProject(x86CoreProject(sources))
+            return errors.map((error) => mapCoreDiagnosticToProject(sources, error))
         })
         this.checkCodeQueue = currentCheck.catch(() => undefined).then(() => undefined)
         return currentCheck
@@ -261,19 +235,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         if (sources.assemblyError) throw new ProjectFormatError(sources.assemblyError)
         const core = this.requireCore()
         const linked = linksX86StartUnit(sources)
-        if (!hasNativeProjectApi(core)) {
-            //the single-buffer path builds the Entry's include unit and nothing beside it
-            if (linked)
-                throw new ProjectFormatError(
-                    'This x86 Core cannot link the start code of compiled programs. Update @specy/x86 to build them.'
-                )
-            return this.compileLegacyProject(core, sources)
-        }
-        this.buildLineMap = []
-        const result = await compileNativeProject(
-            core,
-            x86CoreProject(sources, x86CoreLinksAsArchive(core))
-        )
+        const result = await core.compileProject(x86CoreProject(sources))
         // Carried on both outcomes: a build that succeeded with warnings is the
         // case where they are worth reading.
         const diagnostics = result.diagnostics.map((diagnostic) =>
@@ -304,12 +266,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     _getCallStack(): StackFrame[] {
         const entry = this.buildSources?.entry ?? this._sources.entry
         return (
-            this.core?.getCallStack().map((frame) => {
-                const file = coreSourceFile(frame)
-                if (file) return { ...frame, file }
-                const source = x86SourceLineAt(this.buildLineMap, frame.line, entry)
-                return { ...frame, line: source.line, file: source.path }
-            }) ?? []
+            this.core?.getCallStack().map((frame) => ({ ...frame, file: frame.file || entry })) ??
+            []
         )
     }
 
@@ -325,11 +283,11 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     protected _getBuildArtifacts(): BuildArtifact[] {
         const core = this.core
-        if (!core || !hasCompiledInstructionApi(core)) return []
+        if (!core) return []
         const fallback = this.buildSources?.entry ?? this._sources.entry
         return core.getCompiledInstructions().flatMap((instruction) => {
-            const file = coreSourceFile(instruction) ?? fallback
-            const bytes = coreInstructionBytes(instruction)
+            const file = instruction.file || fallback
+            const bytes = instruction.bytes ?? new Uint8Array()
             if (instruction.lineNumber < 0 || bytes.length === 0) return []
             return [
                 {
@@ -351,34 +309,18 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     _getInstructionAt(address: bigint): Instruction | null {
         const instruction = this.core?.getInstructionAt(address)
         if (!instruction) return null
-        const file = coreSourceFile(instruction)
-        if (file) return { ...instruction, file }
-        const source = x86SourceLineAt(
-            this.buildLineMap,
-            instruction.lineNumber,
-            this.buildSources?.entry ?? this._sources.entry
-        )
         return {
             ...instruction,
-            lineNumber: source.line,
-            file: source.path
+            file: instruction.file || this.buildSources?.entry || this._sources.entry
         }
     }
 
     _getNextInstruction(): Instruction | null {
         const instruction = this.core?.getNextInstruction()
         if (!instruction) return null
-        const file = coreSourceFile(instruction)
-        if (file) return { ...instruction, file }
-        const source = x86SourceLineAt(
-            this.buildLineMap,
-            instruction.lineNumber,
-            this.buildSources?.entry ?? this._sources.entry
-        )
         return {
             ...instruction,
-            lineNumber: source.line,
-            file: source.path
+            file: instruction.file || this.buildSources?.entry || this._sources.entry
         }
     }
 
@@ -469,10 +411,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
                 //one off the pc the machine is parked on, and the History row draws no PC line for
                 //it ([the design record](../../../../docs/design/pokes.md))
                 if (mapped.kind === 'poke') return { ...mapped, line: -1, file: undefined }
-                const file = coreSourceFile(step)
-                if (file) return { ...mapped, file }
-                const source = x86SourceLineAt(this.buildLineMap, mapped.line, entry)
-                return { ...mapped, line: source.line, file: source.path }
+                return { ...mapped, file: step.file || entry }
             }) ?? []
         )
     }
@@ -509,13 +448,14 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
      */
     async _runSlice(request: ExecutionSliceRequest): Promise<ExecutionSlice> {
         this.beforeFirstRun = false
-        const budget = sliceInstructionBudget(request, X86_INSTRUCTIONS_PER_MS)
-        const breakpoints = hasNativeProjectApi(this.requireCore())
-            ? request.breakpoints.map(({ file, line }) => ({ path: file, line }))
-            : request.breakpoints.flatMap((breakpoint) =>
-                  x86GeneratedLinesFor(this.buildLineMap, breakpoint.file, breakpoint.line)
-              )
-        const recordedBefore = recordedEntryCount(this.requireCore())
+        const budget = Math.min(
+            this.undoSize > 0
+                ? X86_MAX_SLICE_INSTRUCTIONS_WITH_UNDO
+                : X86_MAX_SLICE_INSTRUCTIONS_WITHOUT_UNDO,
+            sliceInstructionBudget(request, X86_INSTRUCTIONS_PER_MS)
+        )
+        const breakpoints = request.breakpoints.map(({ file, line }) => ({ path: file, line }))
+        const recordedBefore = this.requireCore().getRecordedEntryCount()
         const status = await this.runWithInput(budget, breakpoints, request.skipBreakpointAtPc)
         const instructions = this.executedInSlice(budget, recordedBefore)
         if (status === CoreEmulatorStatus.Running) {
@@ -539,14 +479,11 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
      * a time, stopping inside it. While the history records, the Core's count of what it recorded
      * is exact however the slice ended, and whether or not the history is full. Without a history
      * the Core's own count of a breakpoint or limit stop is exact for a slice that took no input,
-     * and the budget is the last resort, as on a Core without that count, where it was all there
-     * was: it counted a breakpoint stop within its own batch of 50,000 alone.
+     * and the budget is the last resort for other stops without history.
      */
-    private executedInSlice(budget: number, recordedBefore: number | undefined): number {
-        if (recordedBefore === undefined) return budget
+    private executedInSlice(budget: number, recordedBefore: number): number {
         if (this.undoSize > 0) {
-            const recordedAfter = recordedEntryCount(this.requireCore())
-            if (recordedAfter !== undefined) return Math.max(0, recordedAfter - recordedBefore)
+            return Math.max(0, this.requireCore().getRecordedEntryCount() - recordedBefore)
         }
         const stopped = this.requireCore().stopReason
         if (
@@ -617,20 +554,20 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
      */
     private async runWithInput(
         limit: number | undefined,
-        breakpoints: Array<number | { path: string; line: number }>,
+        breakpoints: Array<{ path: string; line: number }>,
         skipBreakpointAtPc = false
     ): Promise<CoreEmulatorStatus> {
         const core = this.requireCore()
         const execution = this.executionController.capture()
         this.inputDuringRun = false
         let status = await this.executionController.waitFor(execution, () =>
-            runX86Core(core, limit, breakpoints, skipBreakpointAtPc)
+            core.run(limit, breakpoints, { skipBreakpointAtPc })
         )
         while (status === CoreEmulatorStatus.WaitingForInput) {
             this.inputDuringRun = true
             await this.provideProgramInput(execution)
             status = await this.executionController.waitFor(execution, () =>
-                runX86Core(core, limit, breakpoints, false)
+                core.run(limit, breakpoints, { skipBreakpointAtPc: false })
             )
         }
         return status
@@ -651,33 +588,6 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     private requireCore(): CoreX86Emulator {
         if (!this.core) throw new Error('Interpreter not initialized')
         return this.core
-    }
-
-    private async compileLegacyProject(
-        core: CoreX86Emulator,
-        sources: BuildSources
-    ): Promise<CompileResult> {
-        const expanded = expandLegacyX86Project(sources)
-        this.buildLineMap = expanded.lineMap
-        if (expanded.diagnostics.length > 0) {
-            return {
-                ok: false,
-                diagnostics: expanded.diagnostics.map((diagnostic) =>
-                    projectDiagnosticToDiagnostic(sources, diagnostic)
-                ),
-                report: 'NASM Project expansion failed'
-            }
-        }
-        stageLegacyX86ProjectFiles(core.module, expanded)
-        const result = await core.compile(expanded.code)
-        if (!('errors' in result)) return { ok: true }
-        return {
-            ok: false,
-            diagnostics: result.errors.map((error) =>
-                coreDiagnosticToDiagnostic(sources, error, expanded.code, expanded.lineMap)
-            ),
-            report: result.report
-        }
     }
 
     private updateMemoryAddresses(): void {
@@ -845,112 +755,13 @@ function toLocalStatus(status: CoreEmulatorStatus): EmulatorStatus {
     return EmulatorStatus.Running
 }
 
-type NativeProjectCore = CoreX86Emulator & {
-    compileProject(project: X86ProjectInput): Promise<X86CompileResult>
-    checkProject(project: X86ProjectInput): Promise<Array<CoreMonacoError & { file?: string }>>
-}
-
-type CompiledInstructionCore = CoreX86Emulator & {
-    getCompiledInstructions(): Array<Instruction & { bytes?: Uint8Array; file?: string }>
-}
-
-type UndoRecordingCore = CoreX86Emulator & {
-    setUndoEnabled(enabled: boolean): void
-    getUndoDepth(): number
-}
-
-/**
- * Whether a Core can pause its Undo history and say how many entries Undo can reach, named as in
- * RARS. `@specy/x86` gained both after 3.0.0; without them a Build of a compiled program stops at
- * `_start`, and a Step that runs through the start code cannot be undone.
- */
-export function x86CoreSupportsUndoRecording(core: CoreX86Emulator): core is UndoRecordingCore {
-    const candidate = core as Partial<UndoRecordingCore>
-    return (
-        typeof candidate.setUndoEnabled === 'function' &&
-        typeof candidate.getUndoDepth === 'function'
-    )
-}
-
-type RecordedCountCore = CoreX86Emulator & { getRecordedEntryCount(): number }
-
-/**
- * How many entries the Core's history has recorded, one per instruction and one per Poke, which
- * never goes back when entries are undone or the history is full; undefined on a Core without the
- * count, which `@specy/x86` gained after 3.0.0.
- */
-function recordedEntryCount(core: CoreX86Emulator): number | undefined {
-    const candidate = core as Partial<RecordedCountCore>
-    return typeof candidate.getRecordedEntryCount === 'function'
-        ? candidate.getRecordedEntryCount()
-        : undefined
-}
-
-function hasNativeProjectApi(core: CoreX86Emulator): boolean {
-    const candidate = core as Partial<NativeProjectCore>
-    return (
-        typeof candidate.compileProject === 'function' &&
-        typeof candidate.checkProject === 'function'
-    )
-}
-
-function compileNativeProject(
-    core: CoreX86Emulator,
-    project: X86ProjectInput
-): Promise<X86CompileResult> {
-    return (core as NativeProjectCore).compileProject(project)
-}
-
-function checkNativeProject(
-    core: CoreX86Emulator,
-    project: X86ProjectInput
-): Promise<Array<CoreMonacoError & { file?: string }>> {
-    return (core as NativeProjectCore).checkProject(project)
-}
-
-function coreSourceFile(value: unknown): string | undefined {
-    if (!value || typeof value !== 'object' || !('file' in value)) return undefined
-    return typeof value.file === 'string' ? value.file : undefined
-}
-
-function hasCompiledInstructionApi(core: CoreX86Emulator): core is CompiledInstructionCore {
-    return typeof (core as Partial<CompiledInstructionCore>).getCompiledInstructions === 'function'
-}
-
-function coreInstructionBytes(value: unknown): Uint8Array {
-    if (!value || typeof value !== 'object' || !('bytes' in value)) return new Uint8Array()
-    return value.bytes instanceof Uint8Array ? value.bytes : new Uint8Array()
-}
-
-function runX86Core(
-    core: CoreX86Emulator,
-    limit: number | undefined,
-    breakpoints: Array<number | { path: string; line: number }>,
-    skipBreakpointAtPc: boolean
-): Promise<CoreEmulatorStatus> {
-    return (
-        core.run as (
-            limit?: number,
-            breakpoints?: Array<number | { path: string; line: number }>,
-            options?: { skipBreakpointAtPc?: boolean }
-        ) => Promise<CoreEmulatorStatus>
-    )(limit, breakpoints, { skipBreakpointAtPc })
-}
-
 function sourceLine(sources: BuildSources, source: { path: string; line: number }): string {
     const file = sources.files[source.path]
     return file?.encoding === 'plain' ? (file.content.split(/\r?\n/)[source.line] ?? '') : ''
 }
 
-function mapCoreDiagnosticToProject(
-    sources: BuildSources,
-    error: CoreMonacoError,
-    lineMap: readonly X86SourceLine[] = []
-): Diagnostic {
-    const file = coreSourceFile(error)
-    const source = file
-        ? { path: file, line: error.lineIndex }
-        : x86SourceLineAt(lineMap, error.lineIndex, sources.entry)
+function mapCoreDiagnosticToProject(sources: BuildSources, error: CoreMonacoError): Diagnostic {
+    const source = { path: error.file || sources.entry, line: error.lineIndex }
     const line = sourceLine(sources, source)
     const hint = x86DiagnosticHint(error.code)
     return {
@@ -969,16 +780,13 @@ function mapCoreDiagnosticToProject(
 
 function coreDiagnosticToDiagnostic(
     sources: BuildSources,
-    diagnostic: X86CompilationDiagnostic,
-    code = '',
-    lineMap: readonly X86SourceLine[] = []
+    diagnostic: X86CompilationDiagnostic
 ): Diagnostic {
-    const generatedLine = Math.max(0, diagnostic.line - 1)
-    const file = coreSourceFile(diagnostic)
-    const source = file
-        ? { path: file, line: generatedLine }
-        : x86SourceLineAt(lineMap, generatedLine, sources.entry)
-    const line = sourceLine(sources, source) || code.split('\n')[generatedLine] || ''
+    const source = {
+        path: diagnostic.file || sources.entry,
+        line: Math.max(0, diagnostic.line - 1)
+    }
+    const line = sourceLine(sources, source)
     const hint =
         x86DiagnosticHint(diagnostic.warningClass) ?? x86LinkHint(diagnostic.error, sources)
     const span = locateDiagnosticSpan(diagnostic.error, line, diagnostic.warningClass)
@@ -1017,23 +825,6 @@ function x86LinkHint(message: string, sources: BuildSources): string | undefined
     return undefined
 }
 
-function projectDiagnosticToDiagnostic(
-    sources: BuildSources,
-    diagnostic: X86ProjectDiagnostic
-): Diagnostic {
-    const source = { path: diagnostic.path, line: diagnostic.line }
-    const line = sourceLine(sources, source)
-    return {
-        severity: 'error',
-        file: diagnostic.path,
-        lineIndex: diagnostic.line,
-        column: diagnostic.column + 1,
-        line: { line, line_index: diagnostic.line },
-        message: diagnostic.message,
-        formatted: diagnostic.message
-    }
-}
-
 function mapExecutionStep(step: CoreExecutionStep): ExecutionStep {
     return {
         kind: step.kind,
@@ -1042,7 +833,7 @@ function mapExecutionStep(step: CoreExecutionStep): ExecutionStep {
         old_ccr: { ...step.old_ccr },
         new_ccr: { ...step.new_ccr },
         line: step.line,
-        file: coreSourceFile(step),
+        file: step.file,
         ...(step.writes ? { writes: step.writes.map(mapPokeWrite) } : {})
     }
 }

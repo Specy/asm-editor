@@ -34,7 +34,7 @@
         overflow: auto;
         scrollbar-gutter: stable;
         padding: 0.3rem 0.6rem;
-        font-family: FiraCode, monospace;
+        font-family: 'Fira Code', monospace;
     }
 
     .empty {

@@ -91,22 +91,6 @@ export function isSingleSourceProject(project: Project | ProjectData): boolean {
     return project.files[project.entry]?.encoding === 'plain'
 }
 
-export type SingleSourceExport = {
-    fileName: string
-    bytes: Uint8Array<ArrayBuffer>
-}
-
-/** A raw source download for interoperability, available only when nothing would be omitted. */
-export function projectToSingleSource(project: Project | ProjectData): SingleSourceExport | null {
-    const snapshot = snapshotOf(project)
-    if (!isSingleSourceProject(snapshot)) return null
-    const file = snapshot.files[snapshot.entry]
-    return {
-        fileName: snapshot.entry.slice(snapshot.entry.lastIndexOf('/') + 1),
-        bytes: new Uint8Array(fileBytes(file))
-    }
-}
-
 export type ProjectDownload = {
     /** `source` is the commented-metadata text file; `archive` the ZIP. */
     kind: 'source' | 'archive'

@@ -5,8 +5,7 @@ import {
     isCurrentBuildLocation,
     isSameProjectSourceSelection,
     liveSource,
-    selectProjectFile,
-    sourceModelKey
+    selectProjectFile
 } from './projectSourceSelection'
 
 describe('Project source selection', () => {
@@ -26,11 +25,6 @@ describe('Project source selection', () => {
         expect(selectProjectFile(buildSource('a.m68k', 4), 'created.bin', 4, false)).toEqual(
             liveSource('created.bin')
         )
-    })
-
-    it('keeps live and Build model identities distinct', () => {
-        expect(sourceModelKey(liveSource('a.m68k'), 'live:7:a.m68k')).toBe('live:7:a.m68k')
-        expect(sourceModelKey(buildSource('a.m68k', 4), 'live:7:a.m68k')).toBe('snapshot:4:a.m68k')
     })
 
     it('matches a current instruction only to its exact Build generation and File', () => {

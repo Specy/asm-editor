@@ -42,7 +42,7 @@
         cursor: pointer;
         text-align: left;
         background-color: transparent;
-        font-family: FiraCode;
+        font-family: 'Fira Code', monospace;
         color: var(--secondary-text);
         font-weight: bold;
         align-items: center;

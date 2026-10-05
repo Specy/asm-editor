@@ -585,7 +585,7 @@
         color: var(--tertiary-text);
         border: solid 0.1rem var(--border-color-dark);
         border-radius: 0.5rem;
-        font-family: 'Fira Mono', monospace;
+        font-family: 'Fira Code', monospace;
         font-size: 0.95rem;
         padding: 0.8rem;
         resize: vertical;
