@@ -243,7 +243,7 @@ describe('syscalls', () => {
         expect(x86SyscallMap.get('write')).toMatchObject({ number: 1, blocking: true })
         expect(x86SyscallMap.get('exit')).toMatchObject({ number: 60, arity: 1 })
         expect(x86SyscallMap.get('exit_group')?.number).toBe(231)
-        expect(X86_SYSCALLS.length).toBeGreaterThan(150)
+        expect(X86_SYSCALLS.length).toBeGreaterThan(100)
     })
 
     it('describe the ones a program starts with', () => {
@@ -263,10 +263,17 @@ describe('syscalls', () => {
     })
 
     it('names the arguments of the calls blink answers outside its traced table', () => {
-        // `exit` and `clock_gettime` never reach the dispatch table, so their argument types are
-        // written down here rather than read from a trace signature.
+        // `exit`, `clock_gettime` and `time` never reach the dispatch table, so their argument
+        // types are written down here rather than read from a trace signature.
         expect(x86SyscallArgs(x86SyscallMap.get('exit')!)).toEqual(['status'])
         expect(x86SyscallArgs(x86SyscallMap.get('clock_gettime')!)).toEqual(['clock', 'timespec'])
+        expect(x86SyscallMap.get('time')).toMatchObject({ number: 201, arity: 1 })
+        expect(x86SyscallArgs(x86SyscallMap.get('time')!)).toEqual([
+            'buffer (written by the kernel)'
+        ])
+        // How a signal handler returns: no arguments, and a description in place of a bare count.
+        expect(x86SyscallMap.get('rt_sigreturn')).toMatchObject({ number: 15, arity: 0 })
+        expect(describeX86Syscall('rt_sigreturn')).toContain('signal handler')
     })
 })
 

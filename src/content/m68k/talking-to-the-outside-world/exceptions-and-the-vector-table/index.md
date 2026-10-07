@@ -131,9 +131,8 @@ end:
 nothing: dc.b 'nothing was typed', 0
 ```
 
-Press Run, click the console input box, and type a character within about ten seconds: the loop
-catches it and prints it back. If you leave the input empty, the ten passes run out and it prints
-`nothing was typed`.
+Press Run, click the console, and type a character within about ten seconds: the loop catches it
+and prints it back. If you type nothing, the ten passes run out and it prints `nothing was typed`.
 
 ```testcase
 { "input": ["k"], "expectedOutput": "k" }

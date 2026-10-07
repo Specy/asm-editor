@@ -26,7 +26,7 @@ A program that calls the library this way keeps its own start and its own addres
 
 ## Standard input {#standard-input}
 
-Reading standard input (`scanf`, `fgets`, `getchar`) asks for one line at a time and keeps what the program did not read for the next call, as a terminal does. Choosing _End of input_ in the prompt, or pressing Ctrl+D on an empty line, ends standard input: the read returns end of file. In a Testcase, standard input ends when its scripted answers run out.
+Reading standard input (`scanf`, `fgets`, `getchar`) waits for a line typed in the console and keeps what the program did not read for the next call, as a terminal does. Pressing Ctrl+D, or the console's _End of input_ button, on an empty line ends standard input: the read returns end of file. In a Testcase, standard input ends when its scripted answers run out.
 
 ## Reading the library {#reading-the-library}
 

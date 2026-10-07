@@ -84,7 +84,7 @@ function walk(directory) {
 function request(target, name, source, language, optimization, headers) {
     const settings = TARGETS[target]
     const compilerOptions = compiler === 'clang' ? '-fno-addrsig' : '-fno-section-anchors'
-    const userArguments = `-O${optimization} -g1 -fdiagnostics-color=never -fno-verbose-asm -fno-stack-protector -fno-pie ${compilerOptions} -nostdinc -isystem sysroot/include ${settings.flags(compiler)} -iquote '.' -I . ${language === 'cpp' ? '-std=c++17 -fno-exceptions -fno-rtti -fno-threadsafe-statics -nostdinc++' : '-std=c17'}`
+    const userArguments = `-O${optimization} -g1 -fdiagnostics-color=never -fno-verbose-asm -fno-stack-protector -fno-pie ${compilerOptions} -nostdinc -isystem sysroot/include ${settings.flags(compiler)} -iquote '.' -iquote . ${language === 'cpp' ? '-std=c++17 -fno-exceptions -fno-rtti -fno-threadsafe-statics -nostdinc++' : '-std=c17'}`
     return {
         compilerId: settings.compilers[compiler][language],
         body: {
@@ -190,20 +190,6 @@ function makeCore(cores, target, entry, text, library) {
     return cores.RISCV.makeRiscVFromFiles({ [entry]: text }, entry, options)
 }
 
-/** A Java byte[] as the Core hands it to a handler (handlerBytes in the editor's adapters). */
-function bytesOf(buffer) {
-    const first = Array.isArray(buffer) && buffer.length === 1 ? buffer[0] : undefined
-    const value =
-        first && typeof first === 'object' && 'data' in first && ArrayBuffer.isView(first.data)
-            ? first.data
-            : Array.isArray(first) || ArrayBuffer.isView(first)
-              ? first
-              : buffer
-    if (ArrayBuffer.isView(value))
-        return new Uint8Array(value.buffer, value.byteOffset, value.byteLength).slice()
-    return Uint8Array.from(value, (byte) => Number(byte) & 0xff)
-}
-
 /**
  * The editor's peripherals, reduced to what the library uses: the Terminal's standard input (a line
  * at a time, End of input when the lines run out), output collected, and a FileSystem in memory.
@@ -223,7 +209,7 @@ function environment(stdinText, inputFiles) {
     const files = new Map(Object.entries(inputFiles))
     const handles = new Map()
     const handlers = {
-        stdIn: (_buffer, length) => {
+        stdIn: (length) => {
             if (pending.length === 0) {
                 if (lines.length === 0) return [0, []]
                 pending = encoder.encode(lines.shift())
@@ -232,8 +218,8 @@ function environment(stdinText, inputFiles) {
             pending = pending.slice(bytes.length)
             return [bytes.length, Array.from(bytes)]
         },
-        stdOut: (buffer) => stdout.push(...bytesOf(buffer)),
-        stdErr: (buffer) => stderr.push(...bytesOf(buffer)),
+        stdOut: (buffer) => stdout.push(...buffer),
+        stdErr: (buffer) => stderr.push(...buffer),
         openFile: (path, flags, append) => {
             const mode = flags === 0 ? 'read' : append ? 'append' : 'write'
             if (mode === 'read' && !files.has(path)) return -1
@@ -243,7 +229,7 @@ function environment(stdinText, inputFiles) {
             handles.set(fd, { path, offset: 0, mode })
             return fd
         },
-        readFile: (fd, _destination, length) => {
+        readFile: (fd, length) => {
             const handle = handles.get(fd)
             if (!handle || handle.mode !== 'read') return [-1, []]
             const bytes = files.get(handle.path).slice(handle.offset, handle.offset + length)
@@ -252,8 +238,8 @@ function environment(stdinText, inputFiles) {
         },
         writeFile: (fd, buffer) => {
             const handle = handles.get(fd)
-            if (!handle || handle.mode === 'read') throw new Error(`write to descriptor ${fd}`)
-            const bytes = bytesOf(buffer)
+            if (!handle || handle.mode === 'read') return -1
+            const bytes = Uint8Array.from(buffer)
             const old = files.get(handle.path)
             const start = handle.mode === 'append' ? old.length : handle.offset
             const next = new Uint8Array(Math.max(old.length, start + bytes.length))
@@ -261,6 +247,7 @@ function environment(stdinText, inputFiles) {
             next.set(bytes, start)
             files.set(handle.path, next)
             handle.offset = start + bytes.length
+            return bytes.length
         },
         closeFile: (fd) => void handles.delete(fd),
         seekFile: (fd, offset, whence) => {
@@ -290,6 +277,7 @@ function firstDifference(expected, actual) {
 
 async function main() {
     const cores = {
+        StopReason: (await import('@specy/mips')).StopReason,
         RISCV: (
             await import(
                 join(repository, 'emulators', 'risc-v', 'rarsjs', 'ts', 'dist', 'index.mjs')
@@ -315,7 +303,6 @@ async function main() {
     let passed = 0
     const failures = []
     for (const target of targets) {
-        const settings = TARGETS[target]
         const library = JSON.parse(read(join(generated, `${target}.json`)))
         for (const optimization of optimizations) {
             for (const program of programs) {
@@ -380,19 +367,14 @@ async function main() {
                         /core-instruction-limit:\s*(\d+)/.exec(source)?.[1] ?? INSTRUCTION_LIMIT
                     )
                     const reason = await core.simulateWithLimit(limit)
-                    let status
-                    if (settings.core === 'mips') {
-                        if (!core.terminated) throw new Error('did not finish')
-                        // exit's status is in $a0
-                        status = core.getRegistersValues()[4] & 0xff
-                    } else {
-                        // 3 is NORMAL_TERMINATION, 4 running off the end of the program
-                        if (reason !== 3 && reason !== 4)
-                            throw new Error(`did not finish (stop reason ${reason})`)
-                        status = Number(
-                            BigInt.asUintN(8, BigInt(core.getRegistersValuesLong()[10]))
-                        )
-                    }
+                    if (
+                        !core.terminated ||
+                        (reason !== cores.StopReason.NORMAL_TERMINATION &&
+                            reason !== cores.StopReason.CLIFF_TERMINATION)
+                    )
+                        throw new Error(`did not finish (stop reason ${reason})`)
+                    // The Core reports the exit service's status, separately from argument registers.
+                    const status = core.exitCode & 0xff
                     const expected = join(expectedDirectory, program.name)
                     const problems = []
                     const expectedStdout = readFileSync(join(expected, 'stdout'))

@@ -2,6 +2,8 @@ import { error } from '@sveltejs/kit'
 import type { EntryGenerator, PageServerLoad } from './$types'
 import { chapters } from '$lib/documentation/riscv/riscv'
 import { riscvInstructionMap } from '$lib/languages/RISC-V/RISC-V-documentation'
+import { riscvInstructionContent } from '$lib/documentation/riscv/instructionContent'
+import { instructionDescription } from '$lib/documentation/instructions/content'
 
 export const load = (async ({ params }) => {
     const instruction = riscvInstructionMap.get(params.instructionName)
@@ -11,6 +13,11 @@ export const load = (async ({ params }) => {
     return {
         props: {
             instruction,
+            content: riscvInstructionContent[params.instructionName],
+            description: instructionDescription(
+                riscvInstructionContent[params.instructionName],
+                instruction[0].description
+            ),
             name: params.instructionName
         }
     }

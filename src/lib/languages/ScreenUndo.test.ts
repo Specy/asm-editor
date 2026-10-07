@@ -3,6 +3,9 @@ import { M68KEmulator } from './M68K/M68KEmulator.svelte'
 import { Z80Emulator } from './Z80/Z80Emulator.svelte'
 import { MIPSEmulator } from './MIPS/MIPSEmulator.svelte'
 import { RISCVEmulator } from './RISC-V/RISC-VEmulator.svelte'
+import { FileSystem } from './peripherals/FileSystem'
+import { fileText } from '$lib/projectFiles'
+import { CPU_REGISTER_FILE_ID } from './GenericEmulator.svelte'
 
 const display = { unitWidth: 8, unitHeight: 8, width: 64, height: 64, baseAddress: 0x10010000 }
 const programs = [
@@ -341,3 +344,112 @@ it('restores Z80 drawing coordinates before drawing again after undo', async () 
         emulator.dispose()
     }
 })
+
+it('restores M68K drawing and Files at their own instruction boundaries', async () => {
+    //a Step of the Core is one id for both journals: the Screen's records and the FileSystem's
+    //frames are popped by the Undo of the trap that made them, and by no other
+    //([ADR 0015](../../../docs/adr/0015-restore-file-operations-on-undo.md))
+    const program = programs[0]
+    const code = [
+        ...program.setup,
+        program.draw,
+        '    lea name,a1',
+        '    move.b #52,d0',
+        '    trap #15',
+        '    move.l d1,d7',
+        '    lea text,a1',
+        '    move.l #2,d2',
+        '    move.l d7,d1',
+        '    move.b #54,d0',
+        '    trap #15',
+        'finish: nop',
+        ...program.end,
+        "name: dc.b 'log.txt',0",
+        "text: dc.b 'hi'"
+    ].join('\n')
+    const fileSystem = new FileSystem()
+    const emulator = M68KEmulator(code, { peripherals: { fileSystem } })
+    const log = () => {
+        const file = fileSystem.files['log.txt']
+        return file === undefined ? undefined : fileText(file)
+    }
+    try {
+        await emulator.compile(100, code)
+        emulator.toggleBreakpoint(code.split('\n').findIndex((line) => line.startsWith('finish:')))
+        await emulator.run(1000)
+        expect(emulator.errors).toEqual([])
+        expect(pixel(emulator)).toBe(0xff0000)
+        expect(log()).toBe('hi')
+        //the write's trap: the File empties, the drawing stays
+        emulator.undo(1)
+        expect(log()).toBe('')
+        expect(pixel(emulator)).toBe(0xff0000)
+        //back through the open's trap, which created the File
+        emulator.undo(6)
+        expect(log()).toBeUndefined()
+        expect(pixel(emulator)).toBe(0xff0000)
+        //and through the drawing's
+        emulator.undo(3)
+        expect(pixel(emulator)).toBe(0)
+        expect(log()).toBeUndefined()
+        await emulator.run(1000)
+        expect(pixel(emulator)).toBe(0xff0000)
+        expect(log()).toBe('hi')
+    } finally {
+        emulator.dispose()
+    }
+})
+
+it.each(['Screen', 'FileSystem'])(
+    'preflights both M68K journals when the %s budget is exhausted',
+    async (exhausted) => {
+        const code = [
+            '    org $1000',
+            '    lea name,a1',
+            '    move.b #52,d0',
+            '    trap #15',
+            ...programs[0].setup.slice(1),
+            programs[0].draw,
+            ...programs[0].end,
+            "name: dc.b 'log.txt',0"
+        ].join('\n')
+        const fileSystem = new FileSystem()
+        const emulator = M68KEmulator(code, {
+            peripherals: { fileSystem },
+            screenHistoryBudgetMb: exhausted === 'Screen' ? 0 : 16,
+            fileSystemHistoryBudgetMb: exhausted === 'FileSystem' ? 0 : 16
+        })
+        try {
+            await emulator.compile(100, code)
+            await emulator.run(1000)
+            expect(emulator.errors).toEqual([])
+            expect(pixel(emulator)).toBe(0xff0000)
+            for (let steps = 0; emulator.canUndo && steps < 40; steps++) emulator.undo(1)
+            expect(emulator.canUndo).toBe(false)
+            const pc = emulator._getPc()
+            const registers = emulator._getRegisterValues()
+            const pixels = [...emulator.peripherals.screen.visiblePixels]
+            const files = structuredClone(fileSystem.files)
+            expect(emulator.undo(1)).toBe(0)
+            expect(() => emulator._undo()).toThrow(`${exhausted} Undo history exhausted`)
+            expect(emulator._getPc()).toBe(pc)
+            expect(emulator._getRegisterValues()).toEqual(registers)
+            expect([...emulator.peripherals.screen.visiblePixels]).toEqual(pixels)
+            expect(fileSystem.files).toEqual(files)
+            expect(fileText(fileSystem.files['log.txt'])).toBe('')
+            //A Poke is still reversible above the blocked instruction and has no File/Screen effects.
+            expect(
+                emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'D7', value: 0x99n }])
+            ).toBe(true)
+            expect(emulator.canUndo).toBe(true)
+            expect(emulator.undo(1)).toBe(1)
+            expect(emulator.canUndo).toBe(false)
+            expect(emulator._getPc()).toBe(pc)
+            expect(emulator._getRegisterValues()).toEqual(registers)
+            expect([...emulator.peripherals.screen.visiblePixels]).toEqual(pixels)
+            expect(fileSystem.files).toEqual(files)
+        } finally {
+            emulator.dispose()
+        }
+    }
+)

@@ -5,6 +5,7 @@ import type { X86Instruction } from '$lib/languages/X86/X86-documentation'
 import type { Z80InstructionVariant } from '$lib/languages/Z80/Z80-documentation'
 import { splitLecture } from '$lib/content/lectureSections'
 import type { DocumentationLanguage } from '$lib/search/scope'
+import type { InstructionContent } from './instructions/content'
 
 /**
  * The **Documentation** as a list of **Documentation entries** grouped in **Chapters**
@@ -96,6 +97,8 @@ export type DocumentationEntry = {
     /** Its id on its Chapter's page. */
     anchor: string
     view: EntryView
+    /** Architecture-neutral authored content for an instruction, shared with its own page. */
+    instructionContent?: InstructionContent
     /** Markdown the index reads besides the title and the summary. */
     searchText: string
     /** Example code the index reads, with a lower weight than text. */

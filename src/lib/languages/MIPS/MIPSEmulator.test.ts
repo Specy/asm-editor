@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { MIPSEmulator } from '$lib/languages/MIPS/MIPSEmulator.svelte'
+import { Prompt, PromptType } from '$stores/promptStore.svelte'
 import {
     MARS_INTERRUPT_ENABLE_BIT,
     MARS_READY_BIT,
@@ -564,6 +565,228 @@ describe('MIPS memory-mapped keyboard and display', () => {
     })
 })
 
+/**
+ * Reads typed in the Terminal through its Line discipline, and MARS's dialogs, which stay modal
+ * ([ADR 0036](../../../../docs/adr/0036-programs-read-input-typed-in-the-terminal.md)). A console on
+ * the page is what input is typed into; the tests attach one and type through the Terminal.
+ */
+describe('MIPS input typed in the Terminal', () => {
+    beforeEach(() => Prompt.cancel())
+
+    async function built(code: string) {
+        const emulator = await build(code)
+        emulator.peripherals.terminal.attachConsole()
+        return emulator
+    }
+
+    function valueOf(emulator: Emulator, name: string): bigint | undefined {
+        return emulator.registers.find((register) => register.name === name)?.value
+    }
+
+    /** Lets a run that is waiting on a dialog or a read get there. */
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 20))
+
+    it('reads a character on one keystroke, Enter giving 10', async () => {
+        const emulator = await built(
+            `        .text
+main:
+        li      $v0, 12
+        syscall
+        move    $s0, $v0
+        li      $v0, 12
+        syscall
+        move    $s1, $v0
+` + EXIT
+        )
+        const terminal = emulator.peripherals.terminal
+        terminal.insertText('x')
+        terminal.pressEnter()
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(valueOf(emulator, '$s0')).toBe(BigInt('x'.charCodeAt(0)))
+        expect(valueOf(emulator, '$s1')).toBe(10n)
+        expect(emulator.stdOut).toBe('x\n')
+    })
+
+    it('reads an integer from a line edited until Enter, ignoring Ctrl+D', async () => {
+        const emulator = await built(
+            `        .text
+main:
+        li      $v0, 5
+        syscall
+        move    $s0, $v0
+` + EXIT
+        )
+        const terminal = emulator.peripherals.terminal
+        const running = emulator.run(INSTRUCTION_LIMIT)
+        await settle()
+        expect(terminal.pendingRead?.kind).toBe('line')
+        terminal.sendEndOfInput()
+        terminal.insertText('43')
+        terminal.pressBackspace()
+        terminal.insertText('2')
+        terminal.pressEnter()
+        await running
+        expect(emulator.errors).toEqual([])
+        expect(valueOf(emulator, '$s0')).toBe(42n)
+        expect(emulator.stdOut).toBe('42\n')
+    })
+
+    it('reads End of input from standard input as no bytes', async () => {
+        const emulator = await built(
+            `        .data
+buffer: .space  16
+        .text
+main:
+        li      $v0, 14
+        li      $a0, 0
+        la      $a1, buffer
+        li      $a2, 16
+        syscall
+        move    $s0, $v0
+` + EXIT
+        )
+        const terminal = emulator.peripherals.terminal
+        const running = emulator.run(INSTRUCTION_LIMIT)
+        await settle()
+        expect(terminal.pendingRead?.endOfInput).toBe(true)
+        terminal.sendEndOfInput()
+        await running
+        expect(emulator.errors).toEqual([])
+        expect(valueOf(emulator, '$s0')).toBe(0n)
+    })
+
+    it('decodes standard output as UTF-8, a character split across two writes included', async () => {
+        const emulator = await run(
+            `        .data
+bytes:  .byte   0xc3, 0xa9
+        .text
+main:
+        li      $v0, 15
+        li      $a0, 1
+        la      $a1, bytes
+        li      $a2, 1
+        syscall
+        li      $v0, 15
+        li      $a0, 1
+        la      $a1, bytes
+        addiu   $a1, $a1, 1
+        li      $a2, 1
+        syscall
+` + EXIT
+        )
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('é')
+    })
+
+    it('answers the confirm dialog with Cancel, which MARS gives as 2', async () => {
+        const emulator = await built(
+            `        .data
+question: .asciiz "Sure?"
+        .text
+main:
+        li      $v0, 50
+        la      $a0, question
+        syscall
+        move    $s0, $a0
+` + EXIT
+        )
+        const running = emulator.run(INSTRUCTION_LIMIT)
+        await settle()
+        expect(Prompt.type).toBe(PromptType.Confirm)
+        expect(Prompt.offersCancel).toBe(true)
+        Prompt.cancel()
+        await running
+        expect(emulator.errors).toEqual([])
+        expect(valueOf(emulator, '$s0')).toBe(2n)
+    })
+
+    it('waits on a message dialog until it is dismissed', async () => {
+        const emulator = await built(
+            `        .data
+message: .asciiz "Done"
+        .text
+main:
+        li      $v0, 55
+        la      $a0, message
+        li      $a1, 1
+        syscall
+        li      $v0, 1
+        li      $a0, 7
+        syscall
+` + EXIT
+        )
+        const running = emulator.run(INSTRUCTION_LIMIT)
+        await settle()
+        expect(Prompt.type).toBe(PromptType.Alert)
+        expect(Prompt.question).toBe('Done')
+        //the print after the dialog has not run yet
+        expect(emulator.stdOut).toBe('')
+        Prompt.answerAlert()
+        await running
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('7')
+    })
+
+    it('answers an input dialog without echoing it and returns Cancel to the program', async () => {
+        const program =
+            `        .data
+message: .asciiz "Name?"
+buffer: .space  16
+        .text
+main:
+        li      $v0, 54
+        la      $a0, message
+        la      $a1, buffer
+        li      $a2, 16
+        syscall
+        move    $s0, $a1
+        la      $t0, buffer
+        lbu     $s1, 0($t0)
+` + EXIT
+        const emulator = await built(program)
+        const running = emulator.run(INSTRUCTION_LIMIT)
+        await settle()
+        expect(Prompt.question).toBe('Name?')
+        Prompt.answerText('Ada')
+        await running
+        expect(emulator.errors).toEqual([])
+        expect(valueOf(emulator, '$s0')).toBe(0n)
+        expect(valueOf(emulator, '$s1')).toBe(BigInt('A'.charCodeAt(0)))
+        expect(emulator.stdOut).toBe('')
+        const cancelled = await built(program)
+        const stopped = cancelled.run(INSTRUCTION_LIMIT)
+        await settle()
+        Prompt.cancel()
+        await stopped
+        expect(cancelled.errors).toEqual([])
+        expect(valueOf(cancelled, '$s0')).toBe(-2n)
+        expect(valueOf(cancelled, '$s1')).toBe(0n)
+        expect(cancelled.stdOut).toBe('')
+    })
+
+    it('answers the receiver register from a Testcase’s scripted input', async () => {
+        const emulator = await build(
+            `        .text
+main:
+        li      $s0, ${MARS_RECEIVER_CONTROL | 0}
+        li      $s2, 3
+loop:   lw      $t0, 0($s0)
+        andi    $t0, $t0, 1
+        beqz    $t0, loop
+        lw      $a0, 4($s0)
+        li      $v0, 11
+        syscall
+        addiu   $s2, $s2, -1
+        bnez    $s2, loop
+` + EXIT
+        )
+        await emulator.runTestcase({ ...SCREEN_TESTCASE, input: ['ab'] }, INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('ab\n')
+    })
+})
+
 describe('MIPS program time', () => {
     it('answers syscall 30 from the clock and sleeps through syscall 32', async () => {
         const emulator = await run(
@@ -897,6 +1120,68 @@ main:
         )
         expect(result?.passed).toBe(true)
         expect(emulator.line).toBe(CALLS_BELOW_EXIT)
+    })
+
+    /** The last instruction is a syscall, but not an exit: the program runs past it. */
+    const RUNS_PAST_THE_END = `        .text
+main:
+        li      $v0, 1
+        li      $a0, 42
+        syscall
+`
+
+    it('says the program exited, wherever the exit sits and whichever exit it is', async () => {
+        expect((await run(CALLS_BELOW)).termination).toEqual({ kind: 'exit', code: 0 })
+        expect((await run(`        .text\nmain:\n` + EXIT)).termination).toEqual({
+            kind: 'exit',
+            code: 0
+        })
+        const exit2 = await run(`        .text
+main:
+        li      $a0, 3
+        li      $v0, 17
+        syscall
+`)
+        expect(exit2.termination).toEqual({ kind: 'exit', code: 3 })
+    })
+
+    it('says a program that runs past its last instruction ended there, by a Run or a Step', async () => {
+        const ran = await run(RUNS_PAST_THE_END)
+        expect(ran.terminated).toBe(true)
+        expect(ran.termination).toEqual({ kind: 'end' })
+        const stepped = await build(RUNS_PAST_THE_END)
+        for (let steps = 0; !stepped.terminated && steps < 10; steps++) await stepped.step()
+        expect(stepped.termination).toEqual({ kind: 'end' })
+    })
+
+    it('forgets how the program ended when Undo takes the exit back', async () => {
+        const emulator = await build(CALLS_BELOW)
+        for (let steps = 0; !emulator.terminated && steps < 20; steps++) await emulator.step()
+        expect(emulator.termination).toEqual({ kind: 'exit', code: 0 })
+        expect(emulator.undo(1)).toBe(1)
+        expect(emulator.termination).toBeUndefined()
+        await emulator.step()
+        expect(emulator.termination).toEqual({ kind: 'exit', code: 0 })
+    })
+
+    it('ends the program on a runtime error, until Undo takes it back', async () => {
+        const emulator = await build(
+            `        .text
+main:
+        li      $t0, 1
+        lw      $t1, 0($t0)
+` + EXIT
+        )
+        expect(await emulator.run(INSTRUCTION_LIMIT)).toBe(
+            InterpreterStatus.TerminatedWithException
+        )
+        //the Core would carry on past the failed load; the program is over all the same
+        expect(emulator.terminated).toBe(true)
+        expect(emulator.termination).toEqual({ kind: 'error', message: emulator.errors[0] })
+        expect(emulator.errors[0]).toContain('fetch address not aligned')
+        expect(emulator.undo(1)).toBe(1)
+        expect(emulator.terminated).toBe(false)
+        expect(emulator.termination).toBeUndefined()
     })
 })
 

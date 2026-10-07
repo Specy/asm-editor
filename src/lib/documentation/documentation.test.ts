@@ -62,3 +62,25 @@ describe('the instruction Chapters', { timeout: 60_000 }, () => {
         }
     })
 })
+
+describe.each(['mips', 'risc-v', 'x86'] as const)('%s C documentation', (language) => {
+    it('exposes a searchable chapter with compilation, services and debugging guidance', async () => {
+        const chapter = (await documentationFor(language)).find((entry) => entry.id === 'using-c')
+        expect(chapter?.href).toBe(`/documentation/${language}/using-c`)
+        expect(chapter?.entries.map((entry) => entry.anchor)).toEqual(
+            language === 'x86'
+                ? ['overview', 'compiling', 'libraries', 'following-execution']
+                : [
+                      'overview',
+                      'compiling',
+                      'libraries',
+                      'screen-and-devices',
+                      'following-execution'
+                  ]
+        )
+        expect(chapter?.entries.every((entry) => entry.searchText.length > 0)).toBe(true)
+        expect(
+            chapter?.entries.find((entry) => entry.anchor === 'libraries')?.searchText
+        ).toContain('<sim.h>')
+    })
+})

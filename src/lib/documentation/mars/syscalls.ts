@@ -1,16 +1,17 @@
 import { capitalize } from '$lib/utils'
 import { summaryOf, type EntryField } from '../entries'
+import { simPrototype, type MarsSyscall } from './syscallBinding'
 
 /**
- * A MARS or RARS service, as `MIPS-documentation.ts` and `RISC-V-documentation.ts` both describe
- * them: the same services under the same numbers, only the registers differ. Kept here rather than
- * in either adapter, so that neither language's pages load the other's Core.
+ * How a MARS or RARS service reads on its Documentation entry. The services themselves are data in
+ * `mipsSyscalls.ts` and `riscvSyscalls.ts`, kept out of the adapters so that neither language's
+ * pages load the other's Core.
  */
-export type MarsSyscall = {
-    name: string
-    code: number
-    arguments: { name: string; description: string }[]
-    result: { arguments?: { name: string; description: string }[]; other?: string }
+export type { MarsSyscall }
+
+/** The services a Documentation lists: those its Core offers, in the order of their numbers. */
+export function documented(syscalls: Record<number, MarsSyscall>): MarsSyscall[] {
+    return Object.values(syscalls).filter((syscall) => syscall.implemented)
 }
 
 export function syscallFields(syscall: MarsSyscall): EntryField[] {
@@ -24,6 +25,8 @@ export function syscallFields(syscall: MarsSyscall): EntryField[] {
     if (syscall.result.other && syscall.result.other !== 'N/A') {
         fields.push({ label: 'Note', value: syscall.result.other })
     }
+    //the Environment library's function for the service, as `<sim.h>` declares it
+    fields.push({ label: 'From C', value: `\`${simPrototype(syscall.binding)}\`` })
     return fields
 }
 

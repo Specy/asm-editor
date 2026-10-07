@@ -1,0 +1,40 @@
+{
+    "program": "screen-too-large",
+    "target": "RISC-V-64",
+    "compiler": "clang",
+    "optimization": "0",
+    "sourcePath": "src/main.c",
+    "source": "#include <sim.h>\n\nSIM_SCREEN(screen, 1024, 1024, 1);\n\nint main(void) {\n    screen[0] = sim_rgb(255, 255, 255);\n    return 0;\n}\n",
+    "compilerId": "rv64-cclang2110",
+    "userArguments": "-O0 -g1 -fdiagnostics-color=never -fno-verbose-asm -fno-stack-protector -fno-pie -fno-addrsig -nostdinc -isystem sysroot/include -march=rv64imfd -mabi=lp64d -iquote 'src' -iquote . -std=c17",
+    "captured": "2026-10-06",
+    "response": {
+        "code": 1,
+        "stderr": [
+            {
+                "text": "src/main.c:3:1: error: static assertion failed due to requirement '(1024) / (1) * ((1024) / (1)) * 4 <= 4128768': SIM_SCREEN: the grid does not fit in the 4128768 bytes of static data a RISC-V-64 program has, which its other global variables and constants share; use a larger unit or a smaller display"
+            },
+            { "text": "    3 | SIM_SCREEN(screen, 1024, 1024, 1);" },
+            { "text": "      | ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" },
+            { "text": "sysroot/include/sim.h:416:25: note: expanded from macro 'SIM_SCREEN'" },
+            {
+                "text": "  416 |     __SIM_STATIC_ASSERT((width) / (unit) * ((height) / (unit)) * 4 <= 4128768, \\"
+            },
+            {
+                "text": "      |                         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+            },
+            { "text": "src/main.c:3:1: note: expression evaluates to '4194304 <= 4128768'" },
+            { "text": "    3 | SIM_SCREEN(screen, 1024, 1024, 1);" },
+            { "text": "      | ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" },
+            { "text": "sysroot/include/sim.h:416:68: note: expanded from macro 'SIM_SCREEN'" },
+            {
+                "text": "  416 |     __SIM_STATIC_ASSERT((width) / (unit) * ((height) / (unit)) * 4 <= 4128768, \\"
+            },
+            {
+                "text": "      |                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~"
+            },
+            { "text": "1 error generated." }
+        ],
+        "lines": [["<Compilation failed>"]]
+    }
+}

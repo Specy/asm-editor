@@ -8,6 +8,11 @@ import { fileTransfer } from './__fixtures__/fileTransfer'
 import type { Diagnostic } from '$lib/languages/commonLanguageFeatures.svelte'
 import { X86_START_UNIT } from '$lib/languages/X86/x86StartUnit'
 import { CompilationFailedError } from '$lib/languages/BaseEmulator.svelte'
+import {
+    ENVIRONMENT_HEADER_PATH,
+    loadedEnvironmentHeader,
+    loadEnvironmentHeader
+} from '$lib/sourceRuntime/environmentLibrary'
 
 vi.mock('$lib/sourceCompilation/compileProjectSource', () => ({ compileProjectSource: vi.fn() }))
 
@@ -533,4 +538,57 @@ describe('failed Build diagnostics', () => {
         expect(group?.displayedFile).toEqual({ encoding: 'plain', content: X86_START_UNIT })
         expect(group?.displayedDiagnostics).toEqual([clash])
     })
+})
+
+describe('<sim.h> in the Workbench', () => {
+    it.each(['RISC-V', 'X86'] as const)(
+        'follows Step into the %s header and back, read-only, and stops on its Breakpoints',
+        async (target) => {
+            await loadEnvironmentHeader(target)
+            const fixture = setup(target === 'X86' ? 'X86' : undefined),
+                { session, emulator, project } = fixture
+            const source = session.groups[0],
+                assembly = openSecond(session, 'main.s')
+            const { record, map } = result(fixture, 'main.c', target)
+            //main.s's second instruction is an inlined sim_ function's, from line 28 of the header
+            project.recordCompilation(record, {
+                ...map,
+                lines: [
+                    { path: 'main.c', line: 0 },
+                    { path: ENVIRONMENT_HEADER_PATH, line: 27 }
+                ]
+            })
+            emulator.buildSources = { files: project.files, entry: 'main.s' }
+            emulator.canExecute = true
+            await session.revealSourceLocation('main.s', 0)
+            flushSync()
+            expect(source.displayedPath).toBe('main.c')
+            expect(source.highlightedLine).toBe(0)
+            expect(assembly.instructionLine).toBe(0)
+
+            emulator.line = 1
+            await session.revealSourceLocation('main.s', 1)
+            flushSync()
+            expect(source.displayedPath).toBe(ENVIRONMENT_HEADER_PATH)
+            expect(source.displayedCode).toBe(loadedEnvironmentHeader(target))
+            expect(source.highlightedLine).toBe(27)
+            expect(source.editorDisabled).toBe(true)
+            expect(session.mappingPair).toMatchObject({ source, assembly })
+            //a Breakpoint in it stops on the instruction it contributed, during the Debug session too
+            expect(source.breakpointsEditable).toBe(true)
+            session.toggleBreakpoint(27, source)
+            flushSync()
+            expect(source.displayedBreakpoints).toEqual([27])
+            expect(assembly.displayedMappedBreakpoints).toEqual([1])
+            expect(fixture.coreBreakpoints()).toEqual([{ file: 'main.s', line: 1 }])
+
+            emulator.line = 0
+            await session.revealSourceLocation('main.s', 0)
+            flushSync()
+            expect(source.displayedPath).toBe('main.c')
+            expect(source.sourceView).toBe('snapshot')
+            expect(source.highlightedLine).toBe(0)
+            expect(source.tabs.paths).toEqual(['main.c', ENVIRONMENT_HEADER_PATH])
+        }
+    )
 })

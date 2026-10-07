@@ -196,6 +196,7 @@ export type Testcase = {
 }
 
 export type TestcaseValidationError =
+    | { type: 'runtime-error'; message: string }
     | {
           type: 'wrong-register'
           register: string

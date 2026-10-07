@@ -14,12 +14,13 @@
 
     interface Props {
         step: ExecutionStep
+        canUndoToHere?: boolean
         flags: string[]
         /** The Target, which names the width a written mutation reports (`sizeNames.ts`). */
         language: AvailableLanguages
     }
 
-    let { step, flags, language }: Props = $props()
+    let { step, flags, language, canUndoToHere = true }: Props = $props()
     //each Core records its own status register, so the bits are read with the Target's own layout
     let ccr = $derived(statusFlagsFromBits(language, step.new_ccr.bits))
 
@@ -180,7 +181,10 @@
 <div class="column step">
     <div class="step-header column">
         <button
-            title="Undo to here"
+            title={canUndoToHere && step.undoable !== false
+                ? 'Undo to here'
+                : 'Undo stops before effects that are not recorded'}
+            disabled={!canUndoToHere || step.undoable === false}
             class="undo-to-here"
             onclick={() => {
                 dispatcher('undo')
@@ -226,11 +230,16 @@
                     </button>
                 </span>
             </div>
+            {#if step.undoable === false}
+                <div class="stretch">Undo stops here: effects are not recorded.</div>
+            {/if}
             {#if step.stretch}
                 <!-- a Step that ran through the Runtime library: one Undo takes all of it back -->
                 <div
                     class="stretch"
-                    title="One Undo takes back the call and the library code it ran"
+                    title={step.undoable === false
+                        ? 'This call includes effects Undo cannot restore'
+                        : 'One Undo takes back the call and the library code it ran'}
                 >
                     Called {step.stretch.library}: {step.stretch.instructions.toLocaleString()} instructions
                 </div>
@@ -340,7 +349,7 @@
         position: relative;
 
         &:hover:not(:has(.go-to-line:hover)) {
-            .undo-to-here {
+            .undo-to-here:not(:disabled) {
                 opacity: 1;
                 cursor: pointer;
                 pointer-events: all;

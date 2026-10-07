@@ -72,7 +72,12 @@ The Peripheral representing pointing input for a program interacting with the **
 
 ## Terminal
 
-The Peripheral owning program output (stdout) and user input requests. Cores reach it in their own dialect: syscalls for M68K, MIPS, RISC-V and x86, **Console port** reads and writes for the Z80. Input requests go through its current **Input Source**; output accumulates as the text the UI displays. Interactive answers are echoed into the output like a tty; scripted answers are not, like piped stdin.
+The Peripheral owning program output (stdout) and user input requests. Cores reach it in their own dialect: syscalls for M68K, MIPS, RISC-V and x86, **Console port** reads and writes for the Z80. Input requests go through its current **Input Source**; output accumulates as the text the UI displays. Interactive input is typed in the Terminal itself, after the output, and its **Line discipline** decides what each read receives ([ADR 0036](./docs/adr/0036-programs-read-input-typed-in-the-terminal.md)). Interactive answers are echoed into the output like a tty; scripted answers are not, like piped stdin.
+
+## Line discipline
+
+The **Terminal**'s rules for turning typed keys into what a program's read receives: a line read edits a line until Enter, a character read returns on a single keystroke with Enter giving the **Reference environment**'s code, and Ctrl+D gives **End of input** to standard input. It also decides the echo. It belongs to the editor, not to a Core or to the component that draws the Terminal.
+_Avoid_: tty driver, input mode, canonical mode (except when contrasting line reads with character reads in a Linux context)
 
 ## FileSystem
 
@@ -81,7 +86,7 @@ _Avoid_: drive peripheral
 
 ## Input Source
 
-The source of answers to a **Terminal**'s input requests: interactive user input or a **Testcase**'s scripted answers. Interactive character, string and numeric input can come from prompts or the **Keyboard** associated with a **Screen**.
+The source of answers to a **Terminal**'s input requests: interactive user input or a **Testcase**'s scripted answers. Interactive character, string and numeric input can come from the **Terminal** or the **Keyboard** associated with a **Screen**.
 
 ## End of input
 
@@ -94,7 +99,12 @@ The passage of time as a program observes it through its environment's wait and 
 
 ## Time Source
 
-Where a program's **Program time** comes from: host time in an interactive run, or a virtual clock in a **Testcase**'s scripted run, which starts at zero and advances only through the program's waits. Selected for the whole run together with the **Input Source**.
+Where a program's **Program time** comes from: host time in an interactive run, or a virtual clock in a **Testcase**'s scripted run, which starts at zero and advances only through the program's waits. Selected for the whole run together with the **Input Source** and the **Random source**.
+
+## Random source
+
+Where a program's random services get their starting state: host randomness in an interactive run, or a fixed seed in a **Testcase**'s scripted run, so its numbers are the same on every run. A program that seeds a generator itself gets that seed's sequence either way. Selected for the whole run together with the **Input Source** and the **Time Source**. See [ADR 0037](./docs/adr/0037-testcases-run-on-a-seeded-random-source.md).
+_Avoid_: RNG, entropy source, random seed (when the source, not one seed, is meant)
 
 ## Port map
 
@@ -131,6 +141,16 @@ _Avoid_: libc (when this specific library is meant), runtime
 
 The named, versioned binary interface of a **Runtime library** (`v1`, …) that a Project's Setting or a **Compilation record** pins: its exported symbols, their signatures and its public struct layouts. Each Runtime ABI has one current implementation, which the editor may update under saved Projects. See [ADR 0031](./docs/adr/0031-projects-pin-the-runtime-abi-not-its-implementation.md).
 _Avoid_: runtime version (when the interface, not a release, is meant)
+
+## Reference environment
+
+The real simulator or operating system whose behaviour a **Target**'s services match: EASy68K for M68K, MARS for MIPS, RARS for RISC-V, a Linux process on a tty for x86, and the **Port map** itself for the Z80, which has no real counterpart. A service departs from it only through a documented deviation that helps a learner. See [ADR 0035](./docs/adr/0035-environments-match-their-reference.md).
+_Avoid_: real world, upstream (when the behaviour, not the source code, is meant)
+
+## Environment library
+
+The editor's C interface, `<sim.h>` with `sim_`-prefixed functions shared by every **Target**, to the services a Target's simulator environment offers, one function for each service its **Documentation** lists (every syscall, including those the **Runtime library** also covers, such as printing an integer or sbrk) and functions for its memory-mapped devices, such as the bitmap display and the keyboard registers. Its names cannot clash with the C or C++ standard library, and any C or C++ source can include it. Distinct from the **Runtime library**, which is the C standard library and reaches the same services only privately.
+_Avoid_: hardware library, syscall library, platform library (none of these services is hardware, and "platform contract" names the Runtime library's internal layer)
 
 ## Library member
 
@@ -221,7 +241,7 @@ _Avoid_: inspectors, trackers, user tools, floating panels
 
 ## Log
 
-The **Workbench**'s record of what it did for the person: each Build with its result, each test run with the outcome of every **Testcase**, and each program exit with its running time. Distinct from the **Terminal**, which holds what the program itself wrote, and from the **Diagnostics**, which are listed on their own.
+The **Workbench**'s record of what it did for the person: each Build with its result, each test run with the outcome of every **Testcase**, and each program exit with its running time and how it ended (its exit code, or the signal or runtime error that ended it). Distinct from the **Terminal**, which holds what the program itself wrote, and from the **Diagnostics**, which are listed on their own.
 _Avoid_: output, build output, console
 
 ## Settings
@@ -245,7 +265,7 @@ A Project handed to a student under a track, a password and a time limit, with a
 
 ## Testcase
 
-A declarative check run against a program: starting registers/memory/input and expected registers/memory/output, with memory expectations interpreted in the Emulator's endianness. Each Testcase runs independently with a scripted **Input Source**, a virtual **Time Source**, and its own writable **FileSystem** initialized from the same starting Files as the other cases in that test run.
+A declarative check run against a program: starting registers/memory/input and expected registers/memory/output, with memory expectations interpreted in the Emulator's endianness. Each Testcase runs independently with a scripted **Input Source**, a virtual **Time Source**, a seeded **Random source**, and its own writable **FileSystem** initialized from the same starting Files as the other cases in that test run.
 
 ## Documentation
 
@@ -261,6 +281,10 @@ _Avoid_: doc item, article, card, topic (a **Topic** is what a Lecture teaches)
 
 A named group of one language's **Documentation entries** that share a kind or a subject: Instructions, Directives, Trap tasks, Registers, the Screen. It is a heading in the Documentation panel and one page of the language's documentation site.
 _Avoid_: section, category, group (a **Module** groups Lectures)
+
+## Instruction example
+
+A small runnable program attached to an instruction's **Documentation entry**, focused on that instruction with only the supporting code needed to demonstrate it and all register and memory setup visible in its source. It can show variations and quirks within the same program, with faulting variations commented out for the reader to enable; distinct from a **Language course**'s **Example**.
 
 ## Lecture section
 
@@ -300,7 +324,7 @@ _Avoid_: specific course, single course, deep dive
 
 ## Example
 
-A complete, verified program that closes a **Language course**: one **Lecture** in its Examples Module, placed by what the reader needs to know before it. The same ladder of Examples exists in every Language course, program for program (the snake game in M68K is the snake game in RISC-V), so a reader can compare how each language does the same thing. A rung is missing only where the environment cannot run it: x86 has nineteen of the twenty five, having neither a Screen nor a way to read the console.
+A complete, verified program that closes a **Language course**: one **Lecture** in its Examples Module, placed by what the reader needs to know before it. The same ladder of Examples exists in every Language course, program for program (the snake game in M68K is the snake game in RISC-V), so a reader can compare how each language does the same thing. A rung is missing only where the environment cannot run it: x86 has nineteen of the twenty five and no Screen, though it can read standard input from the Terminal.
 _Avoid_: demo, sample, snippet
 
 ## Exercise

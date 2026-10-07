@@ -167,6 +167,8 @@ async function compile(target, path, files) {
 const DEBUG_SECTION = /^\.(?:debug|zdebug|mdebug|note|comment|eh_frame)/
 /** Labels GCC's MIPS output defines only for the debug sections, which are dropped. */
 const MIPS_DEBUG_LABEL = /^\s*(?:\$L|\.L)(?:FB|FE|BB|BE|VL|text|etext|debug)\w*\s*(?::|=)/
+/** The one comment kept: a `@screen` directive, which `<sim.h>`'s `SIM_SCREEN` writes. */
+const SCREEN_DIRECTIVE = /^\s*#+[ \t]*@screen\b/i
 /**
  * The editor's preparation of hosted compiler output (prepareAssembly in compilerExplorer.ts):
  * debug material out, every other section kept.
@@ -189,7 +191,7 @@ function prepare(lines, target) {
             debug ||
             /^\s*\.(?:file|loc|cfi_\w+|ident)\b/.test(code) ||
             (TARGETS[target].core === 'mips' && MIPS_DEBUG_LABEL.test(code)) ||
-            /^\s*#/.test(code) ||
+            (/^\s*#/.test(code) && !SCREEN_DIRECTIVE.test(code)) ||
             !code.trim()
         )
             continue

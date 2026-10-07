@@ -1,0 +1,25 @@
+{
+    "program": "header-diagnostic",
+    "target": "MIPS",
+    "compiler": "clang",
+    "optimization": "0",
+    "sourcePath": "src/main.c",
+    "source": "static void sim_print_int(int value) {\n    (void)value;\n}\n#include <sim.h>\n\nint main(void) {\n    sim_print_int(7);\n    return 0;\n}\n",
+    "compilerId": "mipsel-cclang2110",
+    "userArguments": "-O0 -g1 -fdiagnostics-color=never -fno-verbose-asm -fno-stack-protector -fno-pie -fno-addrsig -nostdinc -isystem sysroot/include -march=mips32 -mabi=32 -mno-abicalls -fno-pic -G0 -mllvm -disable-mips-delay-filler -mfp32 -mhard-float -EL -iquote 'src' -iquote . -std=c17",
+    "captured": "2026-10-06",
+    "response": {
+        "code": 1,
+        "stderr": [
+            { "text": "In file included from src/main.c:4:" },
+            { "text": "sysroot/include/sim.h:27:20: error: redefinition of 'sim_print_int'" },
+            { "text": "   27 | static inline void sim_print_int(int value) {" },
+            { "text": "      |                    ^" },
+            { "text": "src/main.c:1:13: note: previous definition is here" },
+            { "text": "    1 | static void sim_print_int(int value) {" },
+            { "text": "      |             ^" },
+            { "text": "1 error generated." }
+        ],
+        "lines": [["<Compilation failed>"]]
+    }
+}

@@ -268,6 +268,21 @@ function taskEntry(task: M68KTrapDoc, href: string): DocumentationEntry {
 }
 
 /**
+ * The tasks that are not supported, one line per reason: neighbouring tasks that share one, such as
+ * the eight sound tasks, are listed together before it.
+ */
+function rejectedTaskList(): string {
+    const lines: { tasks: string[]; reason: string }[] = []
+    for (const task of M68K_REJECTED_TRAP_TASKS) {
+        const named = `\`${task.task}\` ${task.title}`
+        const last = lines[lines.length - 1]
+        if (last?.reason === task.reason) last.tasks.push(named)
+        else lines.push({ tasks: [named], reason: task.reason })
+    }
+    return lines.map((line) => `- ${line.tasks.join(', ')} — ${line.reason}`).join('\n')
+}
+
+/**
  * The Chapter in the page's order: the introduction, then each group of tasks after its own
  * introduction (the colors beside the graphics tasks, the key codes beside the keyboard ones), then
  * the tasks that are not supported and the differences from EASy68K.
@@ -281,9 +296,7 @@ function trapTasks(): Chapter {
             '| --- | ---- |',
             ...M68K_KEY_CODE_DOCS.map((key) => `| ${key.name} | \`${hexByte(key.code)}\` |`)
         ].join('\n'),
-        unsupportedTasks: M68K_REJECTED_TRAP_TASKS.map(
-            (task) => `- \`${task.task}\` ${task.title} — ${task.reason}`
-        ).join('\n')
+        unsupportedTasks: rejectedTaskList()
     })
     const sections = new Map(
         prose('trap-tasks', href, markdown).map((entry) => [entry.anchor, entry])
@@ -316,7 +329,7 @@ function trapTasks(): Chapter {
         title: 'Trap tasks',
         href,
         description:
-            'The tasks of `trap #15`, the one system call: text, graphics, the keyboard and mouse, and time.',
+            'The tasks of `trap #15`, the one system call: text, graphics, the keyboard and mouse, time and files.',
         entries
     }
 }

@@ -10,6 +10,7 @@ import {
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import { renderRegister } from '$lib/languages/registerFormats'
 import { sizeName } from '$lib/languages/sizeNames'
+import { terminationSummary } from '$lib/languages/termination'
 import type { AvailableLanguages } from '$lib/Project.svelte'
 import { unsignedBigIntToSigned } from '$lib/utils'
 
@@ -149,6 +150,7 @@ export function formatHexBytes(bytes: number[]) {
 function formatPokeStep(step: ExecutionStep) {
     return {
         kind: 'poke' as const,
+        ...(step.undoable === undefined ? {} : { undoable: step.undoable }),
         writes: (step.writes ?? []).map((write) =>
             write.type === 'register'
                 ? {
@@ -184,6 +186,7 @@ export function formatLatestSteps(
         const code = resolve(step.file)
         return {
             kind: step.kind,
+            ...(step.undoable === undefined ? {} : { undoable: step.undoable }),
             file: step.file ?? null,
             line: formatSourceLine(code, step.line, step.file).line,
             pc: formatNumber(step.pc),
@@ -397,6 +400,15 @@ export function formatEmulatorState(
 
     return {
         terminated: emulator.terminated,
+        //how it ended, as the Log says it: "Ran in 3ms, exited with code 0", "Segmentation fault
+        //(signal 11)", "Stopped by an error" (the error itself is in the errors the tools list)
+        ended: emulator.terminated
+            ? terminationSummary(emulator.termination, emulator.executionTime, {
+                  errorMessage: false
+              })
+            : undefined,
+        //and as data, which also tells an exit from a program that ran past its last instruction
+        termination: emulator.termination,
         currentInterrupt: emulator.interrupt,
         currentFile: currentFile || undefined,
         stdOut: formattedStdout,

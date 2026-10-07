@@ -1,6 +1,7 @@
 import { numberToByteSlice } from '$cmp/specific/project/memory/memoryTabUtils'
 import type { MarsDisplayConfiguration, ProjectDisplay } from '$lib/languages/mars/marsDisplay'
 import type { InjectedPeripheralOptions } from '$lib/languages/peripherals/peripheralSet'
+import type { Termination } from '$lib/languages/termination'
 import type { AvailableLanguages, Testcase, TestcaseResult } from '$lib/Project.svelte'
 import { unsignedBigIntToSigned } from '$lib/utils'
 import type { BuildInput, BuildSources } from '$lib/projectFiles'
@@ -239,6 +240,8 @@ export function makeRegister(name: string, v: bigint | number, _size: RegisterSi
  */
 export type ExecutionStep = {
     kind: 'instruction' | 'poke'
+    /** False for a visible native History barrier whose effects are not journaled. */
+    undoable?: boolean
     mutations: MutationOperation[]
     pc: number
     old_ccr: {
@@ -452,6 +455,12 @@ export type BaseEmulatorState = {
     errors: string[]
     compilerDiagnostics: Diagnostic[]
     terminated: boolean
+    /**
+     * How the program ended, while `terminated` is true: an exit with its status, an end past the
+     * last instruction, a signal or a runtime error. Undefined while it runs, and after an Undo
+     * that takes the end back.
+     */
+    termination?: Termination
     latestSteps: ExecutionStep[]
     callStack: StackFrame[]
     line: number
@@ -565,7 +574,7 @@ export type EmulatorSettings = {
     stackAddress?: bigint
     initialMemoryValue?: number
     /**
-     * The Screen, Keyboard, Mouse and clock the Emulator runs on
+     * The Screen, Keyboard, Mouse, clock and Random source the Emulator runs on
      * ([ADR 0004](../../../docs/adr/0004-inject-screens-at-emulator-boundary.md)). The GUI creates
      * them so it can bind its widgets to the very instances the Core uses; anything left out is
      * built from the language defaults, which is what every caller that does not care gets.

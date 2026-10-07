@@ -41,6 +41,13 @@ import directivesProse from './directives.md?raw'
 import extensionsProse from './extensions.md?raw'
 import registersProse from './registers.md?raw'
 import syscallsProse from './syscalls.md?raw'
+import usingCProse from './using-c.md?raw'
+import {
+    x86SimBinding,
+    x86SimPrototype,
+    X86_SIM_EXCEPTIONS,
+    X86_SYSCALL_ARGUMENT_REGISTERS
+} from './syscallBinding'
 
 /**
  * The x86-64 Documentation. The integer instruction set has a page per instruction; every other
@@ -471,7 +478,17 @@ function registersAndFlags(): Chapter {
 // --- syscalls -----------------------------------------------------------------------------------
 
 /** The registers a syscall reads its arguments from, in the order the kernel reads them. */
-const ARGUMENT_REGISTERS = ['rdi', 'rsi', 'rdx', 'r10', 'r8', 'r9']
+const ARGUMENT_REGISTERS: readonly string[] = X86_SYSCALL_ARGUMENT_REGISTERS
+
+/**
+ * The Environment library's function for a call, as `<sim.h>` declares it, or why it has none.
+ */
+function fromC(syscall: X86Syscall): string | undefined {
+    const binding = x86SimBinding(syscall)
+    if (binding) return `\`${x86SimPrototype(binding)}\``
+    const reason = X86_SIM_EXCEPTIONS[syscall.name]
+    return reason ? `None in \`<sim.h>\`: ${reason}.` : undefined
+}
 
 /**
  * A row's line for a call nothing describes: what it reads, from which register. It is plain text
@@ -500,6 +517,12 @@ function syscallEntry(syscall: X86Syscall, href: string): DocumentationEntry {
     if (syscall.blocking) {
         fields.push({ label: 'Waits', value: 'This call can wait for the outside world.' })
     }
+    //searched as MIPS's and RISC-V's are, without the C prototype
+    const searchText = [description, ...fields.map((field) => `${field.label}: ${field.value}`)]
+        .filter(Boolean)
+        .join('\n')
+    const prototype = fromC(syscall)
+    if (prototype) fields.push({ label: 'From C', value: prototype })
     const anchor = `syscall-${syscall.name}`
     return {
         id: `x86/syscalls/${anchor}`,
@@ -515,9 +538,7 @@ function syscallEntry(syscall: X86Syscall, href: string): DocumentationEntry {
         href: `${href}#${anchor}`,
         anchor,
         view: { type: 'fields', markdown: description || undefined, fields },
-        searchText: [description, ...fields.map((field) => `${field.label}: ${field.value}`)]
-            .filter(Boolean)
-            .join('\n')
+        searchText
     }
 }
 
@@ -549,10 +570,36 @@ function syscalls(): Chapter {
     }
 }
 
+function usingC(): Chapter {
+    const href = `${BASE}/using-c`
+    return {
+        id: 'using-c',
+        language: 'x86',
+        title: 'Using C and C++',
+        href,
+        description:
+            'Compile freestanding C or C++, call Linux services through <sim.h>, and debug the generated NASM assembly.',
+        entries: proseEntries({
+            language: 'x86',
+            chapter: 'using-c',
+            chapterHref: href,
+            markdown: usingCProse,
+            openingTitle: 'Using C and C++'
+        })
+    }
+}
+
 let cached: Chapter[] | null = null
 
 /** The x86 Documentation's Chapters, in the order the complete documentation page has them. */
 export function chapters(): Chapter[] {
-    cached ??= [instructions(), extensions(), directives(), registersAndFlags(), syscalls()]
+    cached ??= [
+        instructions(),
+        extensions(),
+        directives(),
+        registersAndFlags(),
+        syscalls(),
+        usingC()
+    ]
     return cached
 }

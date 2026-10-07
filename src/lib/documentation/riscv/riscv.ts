@@ -15,14 +15,17 @@ import {
     type DocumentationEntry
 } from '../entries'
 import { screenEntries } from '../mars/screen'
-import { syscallFields, syscallSummary } from '../mars/syscalls'
+import { documented, syscallFields, syscallSummary } from '../mars/syscalls'
 import directivesIntro from './directives.md?raw'
 import runtimeIntro from './runtime-library.md?raw'
+import usingCIntro from './using-c.md?raw'
 import runtimeFunctions from '$lib/sourceRuntime/generated/v1/functions.json'
 import { riscvCallingConvention } from '$lib/sourceRuntime/runtimeLanguage'
 import type { RuntimeFunctionList } from '$lib/sourceRuntime/runtimeLibrary'
 import registersIntro from './registers.md?raw'
 import syscallsIntro from './syscalls.md?raw'
+import { riscvInstructionContent } from './instructionContent'
+import { withInstructionContent } from '../instructions/resolve'
 
 /**
  * The RISC-V Documentation, which RISC-V-64 Projects read too: the instruction list is the RV64
@@ -34,21 +37,24 @@ const BASE = '/documentation/risc-v'
 function instructions(): Chapter {
     const entries = riscvInstructionEntries.map(([mnemonic, variants]): DocumentationEntry => {
         const descriptions = [...new Set(variants.map((variant) => variant.description))]
-        return {
-            id: `risc-v/instructions/${mnemonic}`,
-            language: 'risc-v',
-            chapter: 'instructions',
-            kind: 'instruction',
-            title: mnemonic,
-            names: names(mnemonic),
-            signature: formatAggregatedArgs(variants),
-            summary: summaryOf(variants[0].description),
-            href: `${BASE}/instruction/${mnemonic}`,
-            anchor: mnemonic,
-            view: { type: 'riscv-instruction', variants },
-            searchText: descriptions.join('\n'),
-            code: [...new Set(variants.map((variant) => variant.example))].join('\n')
-        }
+        return withInstructionContent(
+            {
+                id: `risc-v/instructions/${mnemonic}`,
+                language: 'risc-v',
+                chapter: 'instructions',
+                kind: 'instruction',
+                title: mnemonic,
+                names: names(mnemonic),
+                signature: formatAggregatedArgs(variants),
+                summary: summaryOf(variants[0].description),
+                href: `${BASE}/instruction/${mnemonic}`,
+                anchor: mnemonic,
+                view: { type: 'riscv-instruction', variants },
+                searchText: descriptions.join('\n'),
+                code: [...new Set(variants.map((variant) => variant.example))].join('\n')
+            },
+            riscvInstructionContent[mnemonic]
+        )
     })
     return {
         id: 'instructions',
@@ -102,7 +108,7 @@ function syscalls(): Chapter {
             chapterHref: href,
             markdown: syscallsIntro
         }),
-        ...Object.values(riscvSyscall).map((syscall): DocumentationEntry => ({
+        ...documented(riscvSyscall).map((syscall): DocumentationEntry => ({
             id: `risc-v/syscalls/${syscall.code}`,
             language: 'risc-v',
             chapter: 'syscalls',
@@ -243,9 +249,36 @@ function runtimeLibrary(): Chapter {
     }
 }
 
+function usingC(): Chapter {
+    const href = `${BASE}/using-c`
+    return {
+        id: 'using-c',
+        language: 'risc-v',
+        title: 'Using C and C++',
+        href,
+        description:
+            'Compile C or C++ for RV32 and RV64, call simulator services through <sim.h>, and debug the generated assembly.',
+        entries: proseEntries({
+            language: 'risc-v',
+            chapter: 'using-c',
+            chapterHref: href,
+            markdown: usingCIntro,
+            openingTitle: 'Using C and C++'
+        })
+    }
+}
+
 let cached: Chapter[] | null = null
 
 export function chapters(): Chapter[] {
-    cached ??= [instructions(), directives(), syscalls(), registers(), screen(), runtimeLibrary()]
+    cached ??= [
+        instructions(),
+        directives(),
+        syscalls(),
+        registers(),
+        screen(),
+        runtimeLibrary(),
+        usingC()
+    ]
     return cached
 }

@@ -1,12 +1,13 @@
 import type { TestcaseResult, TestcaseValidationError } from '$lib/Project.svelte'
+import { terminationSummary, type Termination } from '$lib/languages/termination'
 import { testcaseLabel } from '$lib/testcases'
 import { formatTime } from '$lib/utils'
 
 /**
  * The **Log** ([CONTEXT.md](../../../CONTEXT.md)): the Workbench's record of what it did for the
  * person. Each Build with its result, each test run with the outcome of every Testcase, each
- * program exit with its running time. What the program itself wrote is the Terminal's, and the
- * Diagnostics are listed on their own, so neither is repeated here.
+ * program exit with its running time and how it ended. What the program itself wrote is the
+ * Terminal's, and the Diagnostics are listed on their own, so neither is repeated here.
  */
 
 export type LogTone = 'info' | 'success' | 'warning' | 'error'
@@ -71,6 +72,8 @@ function hex(value: bigint | number) {
 /** One mismatch of a Testcase in a line, the way the Testcases panel says it at length. */
 export function describeTestcaseError(error: TestcaseValidationError): string {
     switch (error.type) {
+        case 'runtime-error':
+            return error.message
         case 'wrong-register':
             return `register ${error.register} is ${hex(error.got)}, expected ${hex(error.expected)}`
         case 'wrong-memory-number':
@@ -108,26 +111,36 @@ export function testRunEntry(results: readonly TestcaseResult[], durationMs: num
 }
 
 export type ExitReport = {
-    /** The Emulator's measured running time in milliseconds, negative when unknown. */
+    /**
+     * The Emulator's measured running time in milliseconds, negative when unknown: a Run measures
+     * one, and a program a Step ended has none.
+     */
     executionTimeMs: number
-    /** The Emulator's runtime errors, when the program stopped because of one. */
-    errors: readonly string[]
+    /** How the program ended, as the Emulator reports it. */
+    termination?: Termination
 }
 
+/**
+ * "Ran in 12ms, exited with code 3", or for a program a Step ended "Exited with code 3"; a signal
+ * or an error that ended it is an error of the run, and an exit with a status other than 0 is the
+ * program saying it failed.
+ */
 export function exitEntry(report: ExitReport): LogDraft {
-    const ran =
-        report.executionTimeMs >= 0
-            ? `Ran in ${formatTime(report.executionTimeMs)}`
-            : 'Program ended'
-    if (report.errors.length > 0) {
-        return {
-            kind: 'exit',
-            tone: 'error',
-            text: `${ran}, stopped by an error: ${report.errors[report.errors.length - 1]}`,
-            details: []
-        }
+    const termination = report.termination
+    const tone: LogTone =
+        termination?.kind === 'error' || termination?.kind === 'signal'
+            ? 'error'
+            : termination?.kind === 'exit' &&
+                termination.code !== undefined &&
+                termination.code !== 0
+              ? 'warning'
+              : 'info'
+    return {
+        kind: 'exit',
+        tone,
+        text: terminationSummary(termination, report.executionTimeMs),
+        details: []
     }
-    return { kind: 'exit', tone: 'info', text: ran, details: [] }
 }
 
 /** The log with one more entry, dropping the oldest past `limit`. */

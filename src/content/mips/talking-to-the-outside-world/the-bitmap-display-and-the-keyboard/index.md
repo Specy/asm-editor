@@ -144,8 +144,9 @@ When Ready is 1, it loads receiver data. If another character is already queued,
 moves into receiver data and Ready stays 1; otherwise Ready becomes 0. The queue preserves the order
 in which the keys were typed.
 
-Click the Screen before typing. A visible focus ring shows that it owns the keyboard; keys typed
-while another part of the page has focus do not enter this receiver queue.
+Click the Screen before typing. A visible focus ring shows that it owns the keyboard. Keys typed in
+the console reach the receiver too, after any typed on the Screen; keys typed anywhere else on the
+page do not.
 
 ```mips|playground|open-screen|console|no-registers
 .eqv RECEIVER_CONTROL 0xffff0000
@@ -194,9 +195,10 @@ Keep bit 1 of both control registers clear in this lesson. It requests interrupt
 the Playground does not support; the run stops if a program tries to set it. Poll Ready bit 0
 instead.
 
-Automated testcases cannot type into the Screen. A `runFor` testcase such as the one above only runs
-up to that instruction budget and checks that no runtime error occurred. It does not verify the
-keyboard interaction or the rendered Screen image, so try those parts interactively.
+A testcase types its input lines into the receiver, one character at a time, each line followed by a
+newline (10). A `runFor` testcase without input, such as the one above, only runs up to that
+instruction budget and checks that no runtime error occurred. No testcase checks the rendered Screen
+image, so try that part interactively.
 
 ## Optional application: a moving dot
 

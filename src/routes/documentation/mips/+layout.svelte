@@ -94,6 +94,11 @@
                     title="Syscalls"
                     onClick={() => (menuOpen = false)}
                 />
+                <MenuLink
+                    href="/documentation/mips/using-c"
+                    title="Using C and C++"
+                    onClick={() => (menuOpen = false)}
+                />
 
                 <MenuLink
                     href="/documentation/mips/registers"

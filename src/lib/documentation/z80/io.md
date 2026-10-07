@@ -4,6 +4,8 @@ A Z80 has no system calls. Programs reach the outside world with `in` and `out`,
 
 The emulator connects the ports below to the terminal, the screen, the keyboard, the mouse and the clock. Every other port behaves like an empty bus: writes are dropped and reads answer `0xFF`. Reading a connected port with nothing to read pauses the program until there is something, so `in` never fails, it only waits.
 
+The character port `0x10` reads a Terminal line one byte at a time, ending it with newline `0x0A` when you press Enter. Once the program uses a Screen, Keyboard or Mouse port, character input comes from the focused Screen one keystroke at a time; Enter still gives the character port `0x0A`. The last-key ports report the EASy68K Enter **key code** `0x0D`. Click the Screen to focus it before typing.
+
 ## Screen commands
 
 Written to the command port, `0x27`. One write runs one operation on the coordinates and colors already set.

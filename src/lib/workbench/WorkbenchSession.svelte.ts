@@ -17,6 +17,10 @@ import {
     parseRuntimeSourcePath,
     runtimeSourcePath
 } from '$lib/sourceRuntime/runtimeLibrary'
+import {
+    isEnvironmentHeaderPath,
+    loadedEnvironmentHeader
+} from '$lib/sourceRuntime/environmentLibrary'
 import type { ProjectFile } from '$lib/projectFiles'
 import type { Project, TestcaseResult } from '$lib/Project.svelte'
 import type { Emulator } from '$lib/languages/Emulator'
@@ -90,7 +94,8 @@ import {
     type SourceLocation
 } from '$lib/sourceCompilation/records'
 import { serializer } from '$lib/json'
-import { createDebouncer, formatTime } from '$lib/utils'
+import { createDebouncer } from '$lib/utils'
+import { terminationSummary } from '$lib/languages/termination'
 import { closeTab, initialTabs, openTab, renameTab, retainTabs, removeTab } from './fileTabs'
 import {
     appendLog,
@@ -170,7 +175,11 @@ export class WorkbenchSession {
             return linksX86StartUnit(this.sourceInput) ? X86_START_UNIT_FILES[path] : undefined
         const source = parseRuntimeSourcePath(path)
         if (source) {
-            const text = loadedRuntimeSources(source.abi)?.[source.source]
+            //`<sim.h>`, which compiling for this Target loaded, or one of the library's C sources
+            const text =
+                source.kind === 'environment'
+                    ? loadedEnvironmentHeader(this.project.language)
+                    : loadedRuntimeSources(source.abi)?.[source.source]
             return text === undefined ? undefined : { encoding: 'plain', content: text }
         }
         const abi = this.sourceInput.runtimeAbi
@@ -416,14 +425,12 @@ export class WorkbenchSession {
             !this.host.readonly && !this.running && !this.building && this.emulator.canPoke
         )
         this.errorStrings = $derived(this.emulator.errors.join('\n'))
-        this.terminalText = $derived(
-            this.errorStrings
-                ? `${this.errorStrings}\n${this.emulator.stdOut}`
-                : this.emulator.stdOut
-        )
+        //the Log's wording, without an error's message, which the Terminal tab shows itself
         this.runInfo = $derived(
-            this.emulator.terminated && this.emulator.executionTime >= 0
-                ? `Ran in ${formatTime(this.emulator.executionTime)}`
+            this.emulator.terminated
+                ? terminationSummary(this.emulator.termination, this.emulator.executionTime, {
+                      errorMessage: false
+                  })
                 : ''
         )
         this.executionDisabled = $derived(
@@ -569,7 +576,8 @@ export class WorkbenchSession {
             this.pc.setSize(this.emulator.systemSize)
         })
 
-        //each exit of the program goes in the Log with its running time
+        //each exit of the program goes in the Log with its running time and how it ended, whether
+        //a Run, a Step or a runtime error ended it
         let wasTerminated = untrack(() => this.emulator.terminated)
         $effect(() => {
             const terminated = this.emulator.terminated && this.emulator.canExecute
@@ -578,7 +586,7 @@ export class WorkbenchSession {
                     this.appendLog(
                         exitEntry({
                             executionTimeMs: this.emulator.executionTime,
-                            errors: this.emulator.errors
+                            termination: this.emulator.termination
                         })
                     )
                 )
@@ -625,9 +633,8 @@ export class WorkbenchSession {
     //a read-only Project takes no Pokes, and neither does one whose Core is building or running.
     //The Emulator owns the other half
     declare readonly pokeable: boolean
+    /** The Emulator's runtime errors, which the Terminal tab shows before what the program wrote. */
     declare readonly errorStrings: string
-    /** The Terminal's text: the Emulator's runtime errors, then what the program wrote. */
-    declare readonly terminalText: string
     declare readonly runInfo: string
     declare readonly executionDisabled: boolean
     declare readonly undoDisabled: boolean
@@ -1017,6 +1024,24 @@ export class WorkbenchSession {
         }
         await tick()
         this.revealEditorLine(zeroBasedLineToMonaco(line), column, group)
+        this.followExecutionSource()
+    }
+
+    /**
+     * The mapped pair's source pane follows the current instruction to the File it was compiled
+     * from, as a debugger shows an inlined function's source: into `<sim.h>` for the instructions an
+     * inlined `sim_` function contributed, and back to the caller's File after them.
+     */
+    private followExecutionSource() {
+        const pair = this.mappingPair
+        const location = this.executionSourceLocation
+        if (!pair || !location || location.path === pair.source.displayedPath) return
+        if (isEnvironmentHeaderPath(location.path)) {
+            if (this.runtimeMemberFile(location.path))
+                this.show(liveSource(location.path), pair.source)
+        } else if (this.existsInBuild(location.path)) {
+            this.show(buildSource(location.path, this.buildGeneration), pair.source)
+        }
     }
 
     async revealDiagnostic(diagnostic: Diagnostic) {

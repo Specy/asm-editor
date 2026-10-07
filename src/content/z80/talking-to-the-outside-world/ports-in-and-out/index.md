@@ -116,8 +116,8 @@ For this `out`, the address bus contains `b:c`, while the data byte is `l`. Port
 ## Reading
 
 `in a, (0x11)` waits for a line of input, parses it as a decimal number and places its low byte in
-`a`. Press Run, type a number in the input box under the console, and press Enter. If no input is
-ready, the instruction pauses until a line arrives.
+`a`. Press Run, type a number in the console, and press Enter. If no input is ready, the
+instruction pauses until a line arrives.
 
 ```z80|playground|console|no-flags
     .org 0x8000

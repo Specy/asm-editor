@@ -65,13 +65,14 @@ export function generatedAssemblyPath(sourcePath: string, target: AvailableLangu
     return `${sourcePath}.${LANGUAGE_EXTENSIONS[target]}`
 }
 
-export const SOURCE_TEMPLATE = 'int main(void) {\n    int result = 6 * 7;\n    return result;\n}\n'
+export const SOURCE_TEMPLATE =
+    '#include <sim.h>\n\nint main(void) {\n    int result = 6 * 7;\n    return result;\n}\n'
 /** The starting text of a new C or C++ File: a hosted Target's program can print. */
 export function sourceTemplate(target: AvailableLanguages, language: SourceLanguage): string {
     if (!hasRuntimeLibrary(target)) return SOURCE_TEMPLATE
     return language === 'cpp'
-        ? '#include <cstdio>\n\nint main() {\n    int result = 6 * 7;\n    std::printf("The answer is %d\\n", result);\n    return 0;\n}\n'
-        : '#include <stdio.h>\n\nint main(void) {\n    int result = 6 * 7;\n    printf("The answer is %d\\n", result);\n    return 0;\n}\n'
+        ? '#include <cstdio>\n#include <sim.h>\n\nint main() {\n    int result = 6 * 7;\n    std::printf("The answer is %d\\n", result);\n    return 0;\n}\n'
+        : '#include <stdio.h>\n#include <sim.h>\n\nint main(void) {\n    int result = 6 * 7;\n    printf("The answer is %d\\n", result);\n    return 0;\n}\n'
 }
 
 /** A deterministic 128-bit content fingerprint, for change detection, not authentication. */

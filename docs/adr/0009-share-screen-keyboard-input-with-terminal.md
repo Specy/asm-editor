@@ -2,6 +2,8 @@
 
 Graphical programs will satisfy ordinary character, string and numeric input requests from the **Keyboard**'s pending typed-input buffer, shared with keyboard availability polls, while the **Terminal** remains the abstraction serving those reads. This preserves the relationship between EASy68K's task 7 availability check and task 5 or 2 reads described in its [input documentation](https://acorn.huininga.nl/pub/projects/CiscOS/_emulators/EASy68Ksource/EASy68K_Help/textio.htm), so a successful poll and the subsequent read refer to the same pending input. Programs without graphical input can retain the existing Terminal prompts.
 
+Note, 2026-10-06: the Terminal's reads no longer use a prompt. They are typed at a caret in the Terminal's console and answered by its Line discipline, which also reads the Screen keyboard in graphical use ([ADR 0036](./0036-programs-read-input-typed-in-the-terminal.md)); a read on the Screen keyboard still waits for the focused Screen, and the console only says so.
+
 ## Input-source lifetime
 
 The input source is selected through the injected peripheral configuration and remains fixed for the run. Screen focus determines where new keystrokes go; losing focus does not switch a pending or subsequent read to a Terminal prompt. For example, a program waiting for Screen keyboard input continues waiting while the user edits code and can receive the answer after the Screen is focused again.

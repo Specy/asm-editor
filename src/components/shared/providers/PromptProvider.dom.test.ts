@@ -5,12 +5,12 @@ import PromptProvider from './PromptProvider.svelte'
 import { Prompt } from '$stores/promptStore.svelte'
 
 /**
- * Who has the keyboard while a program asks for input. A program that reads twice in a row — the
- * two numbers of EASy68K's task 18, a MARS `read_int` loop — answers one prompt and asks the next
- * one in the same turn, before the form of the first has finished leaving. Svelte keeps the element
- * it was about to remove instead of building a new one, so the input's own mount-time focus never
- * runs again and the second prompt was left with the focus wherever the answer put it: on the Ok
- * button when that is what the user clicked.
+ * Who has the keyboard while a dialog asks for text. A program that opens two input dialogs in a
+ * row — MARS's service 51 for each of two numbers — answers one prompt and asks the next one in the
+ * same turn, before the form of the first has finished leaving. Svelte keeps the element it was
+ * about to remove instead of building a new one, so the input's own mount-time focus never runs
+ * again and the second prompt was left with the focus wherever the answer put it: on the Ok button
+ * when that is what the user clicked. (A program's own reads are typed in the Terminal, ADR 0036.)
  */
 
 /** jsdom has no Web Animations API, and the form leaves through a Svelte transition. */
@@ -76,6 +76,20 @@ async function settled() {
 }
 
 describe('the input prompt', () => {
+    it('shows a suggested path as a placeholder and clears it for the next prompt', async () => {
+        render()
+        const file = Prompt.askText('Save File', true, 'scores.txt')
+        await settled()
+        expect(input()?.placeholder).toBe('scores.txt')
+        expect(input()?.value).toBe('')
+        Prompt.cancel()
+        expect(await file).toBeNull()
+        const next = Prompt.askText('Number?')
+        await settled()
+        expect(input()?.placeholder).toBe('')
+        Prompt.answerText('12')
+        expect(await next).toBe('12')
+    })
     it('focuses the input of the prompt being asked', async () => {
         render()
         const asked = Prompt.askText('first')
@@ -127,5 +141,68 @@ describe('the input prompt', () => {
 
         Prompt.answerText('2')
         expect(await second).toBe('2')
+    })
+})
+
+function buttons(): HTMLButtonElement[] {
+    return [...document.querySelectorAll('button')]
+}
+
+function button(label: string): HTMLButtonElement {
+    const found = buttons().find((candidate) => candidate.textContent?.trim() === label)
+    if (!found) throw new Error(`the prompt has no ${label} button`)
+    return found
+}
+
+/** The dialogs a MARS or RARS program opens, beside the app's own questions. */
+describe('the dialogs of a program', () => {
+    it('offers Cancel on a confirm only when asked, so the app keeps its Yes and No', async () => {
+        render()
+        const appConfirm = Prompt.confirm('Delete the file?')
+        await settled()
+        expect(buttons().map((candidate) => candidate.textContent?.trim())).toEqual(['No', 'Yes'])
+        Prompt.answerConfirm(true)
+        expect(await appConfirm).toBe(true)
+
+        const dialog = Prompt.confirmOrCancel('Sure?')
+        await settled()
+        expect(buttons().map((candidate) => candidate.textContent?.trim())).toEqual([
+            'Cancel',
+            'No',
+            'Yes'
+        ])
+        button('Cancel').click()
+        expect(await dialog).toBeNull()
+    })
+
+    it('answers Yes and No on a confirm that offers Cancel', async () => {
+        render()
+        const dialog = Prompt.confirmOrCancel('Sure?')
+        await settled()
+        button('No').click()
+        expect(await dialog).toBe(false)
+    })
+
+    it('shows a message with an Ok that takes the keyboard and dismisses it', async () => {
+        render()
+        let dismissed = false
+        const shown = Prompt.alert('Done').then(() => (dismissed = true))
+        await settled()
+        expect(document.querySelector('.prompt-text')?.textContent?.trim()).toBe('Done')
+        expect(input()).toBeNull()
+        expect(document.activeElement).toBe(button('Ok'))
+        expect(dismissed).toBe(false)
+        button('Ok').click()
+        await shown
+        expect(dismissed).toBe(true)
+    })
+
+    it('dismisses a message on Enter, which submits its form', async () => {
+        render()
+        const shown = Prompt.alert('Done')
+        await settled()
+        document.querySelector('form')?.requestSubmit()
+        await shown
+        expect(Prompt.promise).toBeNull()
     })
 })

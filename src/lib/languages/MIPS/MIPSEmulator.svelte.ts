@@ -1,4 +1,3 @@
-import { guestFileFailure } from '$lib/languages/peripherals/FileSystem'
 import { makeMipsCore, type MipsLink } from './MIPS-core'
 import {
     coreLibrary,
@@ -11,8 +10,7 @@ import {
 import { CURRENT_RUNTIME_ABI, unsupportedRuntimeAbi } from '$lib/runtimeAbi'
 import {
     BackStepAction,
-    ConfirmResult,
-    type HandlerMapFns,
+    isRuntimeError,
     type JsBackStep,
     type JsInstructionUndoGroup,
     type JsMips,
@@ -23,7 +21,8 @@ import {
     MIPS_COPROCESSOR0_REGISTER_NUMBERS,
     type MipsTokenizedLine,
     registerHandlers,
-    type RegisterName
+    type RegisterName,
+    StopReason
 } from '@specy/mips'
 import {
     type CompileResult,
@@ -45,11 +44,19 @@ import {
     type StackFrame
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import { GenericEmulator } from '$lib/languages/GenericEmulator.svelte'
+import type { Termination } from '$lib/languages/termination'
 import { type ExecutionSlice, type ExecutionSliceRequest } from '$lib/languages/ExecutionSlice'
 import { MarsSlicePacer } from '$lib/languages/mars/marsSlice'
-import type { ExecutionGeneration } from '$lib/languages/ExecutionController'
 import type { Testcase } from '$lib/Project.svelte'
 import { MarsDevices } from '$lib/languages/mars/MarsDevices'
+import {
+    exitStepText,
+    MarsHandlers,
+    marsRuntimeErrorMessage,
+    normalizeUndoSize,
+    randomStreamStepText,
+    toHaltLimit
+} from '$lib/languages/mars/marsHandlers'
 import {
     type MarsDisplayConfiguration,
     type MarsDisplayOrigin,
@@ -92,13 +99,6 @@ export {
     type MIPSRegisterName
 } from './MIPS-registers'
 
-const READ_CHAR_QUESTION = 'Enter a character'
-const READ_DOUBLE_QUESTION = 'Enter a double'
-const READ_FLOAT_QUESTION = 'Enter a float'
-const READ_INT_QUESTION = 'Enter an integer'
-const READ_STRING_QUESTION = 'Enter a string'
-const STANDARD_INPUT_QUESTION = 'Enter a line of input'
-
 /**
  * How many instructions the TeaVM compiled Core runs in a millisecond, used to turn a slice's time
  * budget into a halt limit. Measured on a compute-only loop under node, built with the shipped undo
@@ -121,9 +121,6 @@ const MIPS_INSTRUCTIONS_PER_MS = 11_022
  * call overhead measured there puts at half a percent of throughput.
  */
 const MIPS_CHUNK_TARGET_MS = 1
-
-const INVALID_CHARACTER_ERROR = 'Invalid character'
-const INVALID_NUMBER_ERROR = 'Invalid number'
 
 /** The compare flags `c.cond.s` writes, numbered as MARS's Coproc 1 tab labels them. */
 const MIPS_CONDITION_FLAG_NAMES = ['0', '1', '2', '3', '4', '5', '6', '7']
@@ -166,6 +163,11 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
      * assembled Core, because the peripherals it drives live as long as the Emulator does.
      */
     private readonly devices: MarsDevices
+    /**
+     * The syscall handlers, which RISC-V shares (`marsHandlers.ts`). Built once like the devices and
+     * registered on each freshly assembled Core.
+     */
+    private readonly handlers: MarsHandlers
     /** The chunking of a slice, which is what keeps a sleeping program's slice short (`marsSlice.ts`). */
     private readonly pacer = new MarsSlicePacer(MIPS_CHUNK_TARGET_MS)
     /** MARS's five display parameters, from the project and changed from the Screen panel. */
@@ -175,18 +177,11 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
     /** The label such a directive named for its base address, for the Screen panel to show. */
     private displayBaseLabel: string | undefined
     /**
-     * The generation the currently running `_run`/`_step`/`_runTestcase` belongs to. The IO handlers
-     * are registered once (at `_initialize`) but every async read has to be tied to the execution
-     * that is actually running, so they read this field instead of capturing a generation.
+     * Where the last Core call failed, from its `RuntimeError`: the Core has moved its program
+     * counter past the instruction by then, so neither the next statement nor the history names
+     * it. Null while the program has not failed since the last call, Undo or Build.
      */
-    private currentExecution: ExecutionGeneration = this.executionController.capture()
-    /**
-     * Whether the program has ended, by an `exit` syscall or by running off the end of its code,
-     * with nothing undone since. The Core says so only in the result of the call that ended it, and
-     * an exit leaves the program counter on whatever follows the syscall - the first function below
-     * `main`, in most programs - so probing for a next statement alone took an exit for a pause.
-     */
-    private ended = false
+    private failedAt: number | null = null
     /** Whether this Build keeps an Undo history at all, which `_setUndoRecording` resumes into. */
     private undoEnabled = false
 
@@ -218,6 +213,17 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
             terminal: this._peripherals.terminal
         })
         this.devices.setDisplay(this.display)
+        this.handlers = new MarsHandlers({
+            peripherals: this._peripherals,
+            executionController: this.executionController,
+            devices: this.devices,
+            //`clear()` replaces `state`, so each call looks it up instead of capturing it
+            setInterrupt: (interrupt) => {
+                this.state.interrupt = interrupt
+            },
+            fileSystem: () => this.fileSystemSession,
+            instructionSerial: () => this.requireMips().getCurrentInstructionSerial()
+        })
     }
 
     /**
@@ -259,11 +265,11 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         const mips = this.mips
         if (!mips?.canUndo) return false
         const group = mips.getUndoGroupsUpTo(1)[0]
-        //a Poke belongs to no instruction, so the FileSystem session, whose frames are keyed by a
-        //syscall's address, has nothing to say about undoing one
+        //a Poke belongs to no instruction, so the FileSystem session, whose frames are keyed by an
+        //instruction serial, has nothing to say about undoing one
         //([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md))
         if (!group || group.kind === 'poke') return true
-        return this.fileSystemSession?.canUndoAfter(group.pc) ?? true
+        return this.fileSystemSession?.canUndoAfter(group.serial) ?? true
     }
 
     /** The Core groups its history by instruction or Poke, so the group count is the depth. */
@@ -424,10 +430,11 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         //unconditionally so this is what actually turns undo off when history is disabled
         this.undoEnabled = normalizeUndoSize(undoSize) > 0
         mips.setUndoEnabled(this.undoEnabled)
+        //a new run: not exited, exit code 0, and the random generators forgotten
         mips.initialize(true)
-        this.ended = false
+        this.failedAt = null
         this.pacer.reset()
-        registerHandlers(mips, this.makeHandlers())
+        registerHandlers(mips, this.handlers.makeHandlerMap())
         //after `initialize`, so the observers see the program's writes and not the loading of `.data`
         this.devices.attach(mips, this.display)
     }
@@ -586,16 +593,17 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         return toInstruction(this.statementAtAddress(Number(address)))
     }
 
+    /** None once the program has ended, even where an exit left it on a statement. */
     _getNextInstruction(): Instruction | null {
-        const mips = this.mips
-        //an ended program has nothing left to run, even where an exit left it on a statement
-        if (!mips || this.ended) return null
-        try {
-            return toInstruction(mips.getNextStatement())
-        } catch {
-            //the core throws instead of returning null once there is no statement left to run
-            return null
-        }
+        return toInstruction(this.mips?.getNextStatement())
+    }
+
+    /**
+     * The instruction a failed Core call stopped on, which its `RuntimeError` named. Otherwise none,
+     * and the newest entry of the history is the last instruction that ran.
+     */
+    _getLastInstruction(): Instruction | null {
+        return this.failedAt === null ? null : toInstruction(this.statementAtAddress(this.failedAt))
     }
 
     _getPc(): bigint {
@@ -725,21 +733,26 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         }
     }
 
+    /**
+     * Whether an exit service has run or the program has run off the end of its code, which the
+     * Core reads from the program's state, so that it is right after Undo too. A runtime failure
+     * does not end the program here: `GenericEmulator` keeps that from the rejection.
+     */
     _hasTerminated(): boolean {
+        return this.mips?.terminated ?? false
+    }
+
+    /**
+     * How the program ended: exit (10) with code 0 or exit2 (17) with `$a0`, which the Log shows
+     * although MARS's GUI ignores it, or running off the end of the code. Both leave `terminated`
+     * set, and the stop reason of the call that ended the program tells them apart.
+     */
+    _getTermination(): Termination | undefined {
         const mips = this.mips
-        if (!mips) return false
-        if (this.ended) return true
-        try {
-            //otherwise there is nothing left to run when there is no next statement, which also
-            //covers the step that ran the last instruction, before any call has reported the end.
-            //The core's own `terminated` flag must NOT be consulted here because `undo()` does not
-            //reset it, so stepping back out of a finished program would leave the emulator marked
-            //as terminated and every execution control disabled.
-            mips.getNextStatement()
-            return false
-        } catch {
-            return true
-        }
+        if (!mips?.terminated) return undefined
+        return mips.getStopReason() === StopReason.NORMAL_TERMINATION
+            ? { kind: 'exit', code: mips.exitCode }
+            : { kind: 'end' }
     }
 
     _readMemoryBytes(address: bigint, length: bigint): Uint8Array {
@@ -755,41 +768,54 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
         this.requireMips().setRegisterValue(name, Number(value))
     }
 
+    /**
+     * One instruction. The step that runs an exit, or the program's last instruction, says so in its
+     * stop reason, and an exited program runs nothing more until Undo.
+     */
     async _step(): Promise<{ terminated: boolean }> {
         const mips = this.requireMips()
-        //the Core would run whatever follows the exit syscall
-        if (this.ended) return { terminated: true }
-        this.currentExecution = this.executionController.capture()
-        try {
-            this.ended = await mips.step()
-        } finally {
-            this.devices.flush()
-        }
-        //`step()`'s own boolean cannot answer this alone: it is still `false` for the step that
-        //executes the *last* instruction of the program (only the step after it reports `true`),
-        //which would make the generic layer look for a next instruction, find none and clear the
-        //current line marker
-        return { terminated: this._hasTerminated() }
+        this.handlers.beginExecution()
+        const stop = await this.coreCall(() => mips.step())
+        return { terminated: endsProgram(stop) }
     }
 
+    /** A `RuntimeError` in MARS's words and at the line it names; anything else as it says. */
     _stringifyError(error: unknown, _line?: number): string {
-        return getMIPSErrorMessage(error)
+        if (isRuntimeError(error)) return marsRuntimeErrorMessage(error)
+        return error instanceof Error ? error.message : String(error)
     }
 
     _undo(): void {
         const mips = this.requireMips()
         const group = mips.getUndoGroupsUpTo(1)[0]
-        //the FileSystem session keys its frames by the syscall's address, and a Poke has no
+        //the FileSystem session keys its frames by the instruction serial, and a Poke has no
         //instruction identity to undo file operations by, so it is rolled back by the Core alone
         //([ADR 0022](../../../../docs/adr/0022-core-native-poke-records.md))
-        const pc = group?.kind === 'instruction' ? group.pc : undefined
-        if (pc !== undefined && !(this.fileSystemSession?.canUndoAfter(pc) ?? true)) {
+        const serial = group?.kind === 'instruction' ? group.serial : undefined
+        if (serial !== undefined && !(this.fileSystemSession?.canUndoAfter(serial) ?? true)) {
             throw new Error('FileSystem Undo history exhausted')
         }
+        //an exit and a failure were the newest things the program did, so they are the first
+        //undone: the Core puts the exit back itself
         mips.undo()
-        //whatever ended the program was the newest thing it did, so it is the first thing undone
-        this.ended = false
-        if (pc !== undefined) this.fileSystemSession?.undoAfter(pc)
+        this.failedAt = null
+        if (serial !== undefined) this.fileSystemSession?.undoAfter(serial)
+    }
+
+    /**
+     * Core calls that run the program, a step, a slice or a Testcase, which bring the bitmap
+     * display up to date however they end and remember where a failure stopped them.
+     */
+    private async coreCall<T>(run: () => Promise<T>): Promise<T> {
+        this.failedAt = null
+        try {
+            return await run()
+        } catch (error) {
+            if (isRuntimeError(error)) this.failedAt = error.address
+            throw error
+        } finally {
+            this.devices.flush()
+        }
     }
 
     /**
@@ -799,231 +825,36 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
      * keeps the slice of a sleeping program, and the pause it holds off, to about one sleep
      * (`marsSlice.ts`). The Core reports no instruction count, so a chunk that came back still
      * runnable ran its whole limit, which is exact for the compute-only case the budget exists for.
+     *
+     * The bitmap display catches up once per slice rather than once per stored word, which is what
+     * keeps the observer cheap; a program that sleeps flushes from the handler too.
      */
     async _runSlice(request: ExecutionSliceRequest): Promise<ExecutionSlice> {
         const mips = this.requireMips()
-        //the Core would run whatever follows the exit syscall
-        if (this.ended) return { reason: 'terminated', instructions: 0 }
+        //an exited program runs nothing more, which the Core would only say again
+        if (mips.terminated) return { reason: 'terminated', instructions: 0 }
         const breakpoints = calculateBreakpoints(mips, request.breakpoints)
-        this.currentExecution = this.executionController.capture()
-        try {
-            return await this.pacer.run(
+        this.handlers.beginExecution()
+        return this.coreCall(() =>
+            this.pacer.run(
                 request,
                 MIPS_INSTRUCTIONS_PER_MS,
                 this._peripherals.clock,
                 async (limit) => {
-                    this.ended = await mips.simulateWithBreakpointsAndLimit(breakpoints, limit)
-                    if (this._hasTerminated()) return 'terminated'
-                    //`simulate*` does not say whether the limit or a breakpoint stopped it; the line
-                    //the program is about to execute does, because a run stopped on a breakpoint is
-                    //parked on it
-                    const instruction = this._getNextInstruction()
-                    return instruction &&
-                        request.breakpoints.some(
-                            (breakpoint) =>
-                                breakpoint.file === instruction.file &&
-                                breakpoint.line === instruction.lineNumber
-                        )
-                        ? 'breakpoint'
-                        : 'ran'
+                    const stop = await mips.simulateWithBreakpointsAndLimit(breakpoints, limit)
+                    if (endsProgram(stop)) return 'terminated'
+                    return stop === StopReason.BREAKPOINT ? 'breakpoint' : 'ran'
                 }
             )
-        } finally {
-            //the bitmap display catches up once per slice rather than once per stored word, which is
-            //what keeps the observer cheap; a program that sleeps flushes from the handler too
-            this.devices.flush()
-        }
+        )
     }
 
     async _runTestcase(_testcase: Testcase, haltLimit: number): Promise<void> {
         const mips = this.requireMips()
-        this.currentExecution = this.executionController.capture()
-        //the testcase input is served by the terminal's scripted source, swapped in by the caller
-        try {
-            this.ended = await mips.simulateWithLimit(toHaltLimit(haltLimit))
-        } finally {
-            this.devices.flush()
-        }
-    }
-
-    /**
-     * Syscall 32. Program time passes without the Core blocking the host: the handler's promise is
-     * what suspends the pending `simulate` call, and the clock resolves it — immediately, on a
-     * virtual clock, so a Testcase never sleeps
-     * ([ADR 0010](../../../docs/adr/0010-program-time-without-clock-pacing.md)).
-     *
-     * The Screen catches up first: an animation draws a frame and then sleeps, and the frame has to
-     * be on screen while the program waits, not at the end of the slice several frames later.
-     */
-    private async sleep(milliseconds: number): Promise<void> {
-        const execution = this.currentExecution
-        this.devices.flush()
-        //read the clock at the point of use: a Testcase swaps a virtual one in and the injected one back
-        const clock = this._peripherals.clock
-        await this.executionController.waitFor(execution, () => clock.wait(milliseconds))
-    }
-
-    /**
-     * The core suspends the pending `step`/`simulate*` call for as long as an IO handler's promise
-     * is unsettled, so every input syscall goes through the terminal's async source. `type` mirrors
-     * the handler name so the UI can tell which syscall is waiting.
-     */
-    /** A read of descriptor 0: the Terminal's line buffer, a new line, or no bytes at End of input. */
-    private async readStandardInput(length: number): Promise<Uint8Array> {
-        const execution = this.currentExecution
-        this.state.interrupt = { type: 'StandardInput', message: STANDARD_INPUT_QUESTION }
-        try {
-            return await this._peripherals.terminal.readStandardInput(
-                length,
-                STANDARD_INPUT_QUESTION,
-                execution
-            )
-        } finally {
-            this.state.interrupt = undefined
-        }
-    }
-
-    private async read(type: string, question: string): Promise<string> {
-        const execution = this.currentExecution
-        this.state.interrupt = { type, message: question }
-        try {
-            return await this._peripherals.terminal.readAsync(question, execution)
-        } finally {
-            this.state.interrupt = undefined
-        }
-    }
-
-    private async readNumber(type: string, question: string): Promise<number> {
-        const answer = await this.read(type, question)
-        const value = Number(answer)
-        if (Number.isNaN(value)) throw new Error(INVALID_NUMBER_ERROR)
-        return value
-    }
-
-    private async readCharacter(type: string, question: string): Promise<string> {
-        const answer = await this.read(type, question)
-        if (answer.length !== 1) throw new Error(INVALID_CHARACTER_ERROR)
-        return answer
-    }
-
-    private async confirm(type: string, question: string): Promise<ConfirmResult> {
-        const execution = this.currentExecution
-        this.state.interrupt = { type, message: question }
-        try {
-            const answer = await this._peripherals.terminal.confirmAsync(question, execution)
-            return answer ? ConfirmResult.YES : ConfirmResult.NO
-        } finally {
-            this.state.interrupt = undefined
-        }
-    }
-
-    private makeHandlers(): HandlerMapFns {
-        const terminal = this._peripherals.terminal
-        const instructionOperation = <T>(operation: () => T): T => {
-            const files = this.fileSystemSession
-            if (!files) throw new Error('FileSystem is not running')
-            //MARS advances PC before it invokes a syscall handler; the Core's backstep record is
-            //keyed by the address of the syscall itself. Every handler is wrapped, not just the ones
-            //that touch a File, so a frame exists for each step that could have created one.
-            return files.performInstruction(this.requireMips().programCounter - 4, operation)
-        }
-        const handlers: HandlerMapFns = {
-            readChar: () => this.readCharacter('ReadChar', READ_CHAR_QUESTION),
-            readDouble: () => this.readNumber('ReadDouble', READ_DOUBLE_QUESTION),
-            readFloat: () => this.readNumber('ReadFloat', READ_FLOAT_QUESTION),
-            readInt: () => this.readNumber('ReadInt', READ_INT_QUESTION),
-            readString: () => this.read('ReadString', READ_STRING_QUESTION),
-
-            askDouble: (message: string) => this.readNumber('AskDouble', message),
-            askFloat: (message: string) => this.readNumber('AskFloat', message),
-            askInt: (message: string) => this.readNumber('AskInt', message),
-            askString: (message: string) => this.read('AskString', message),
-
-            confirm: (message: string) => this.confirm('Confirm', message),
-            inputDialog: (message: string) => this.read('InputDialog', message),
-            //output only, so it stays synchronous like the legacy emulator did. The terminal throws
-            //instead of blocking when a scripted (testcase) run hits it, matching legacy which
-            //registered `unimplementedHandler('outputDialog')` for testcases
-            outputDialog: (message: string) => terminal.alertSync(message),
-
-            printChar: (char: string) => terminal.write(char),
-            printDouble: (value: number) => terminal.write(String(value)),
-            printFloat: (value: number) => terminal.write(String(value)),
-            printInt: (value: number) => terminal.write(String(value)),
-            printString: (value: string) => terminal.write(value),
-            log: (message: string) => terminal.write(message),
-            logLine: (message: string) => terminal.write(`${message}\n`),
-            stdOut: (buffer: number[]) => terminal.write(decodeBuffer(buffer)),
-            stdErr: (buffer: number[]) => terminal.write(decodeBuffer(buffer)),
-
-            //MARS reports a failed file operation through the syscall's return value so the
-            //program can branch on it. Letting a FileSystem error reach the Core instead ends the
-            //run at the syscall, which no program can handle. Only `open` and `read` have a value
-            //to carry the failure; a stale `close` is ignored the way MARS ignores it, and a
-            //failed `write` has nowhere to report, so it surfaces as a run error and the program
-            //carries on rather than dying mid-instruction.
-            readFile: (descriptor, _destination, length) => {
-                try {
-                    const bytes = this.fileSystemSession!.read(descriptor, length)
-                    //0 is end of file; -1 is reserved for a read that failed.
-                    return [bytes.length, Array.from(bytes)]
-                } catch (error) {
-                    return [guestFileFailure(error), []]
-                }
-            },
-            writeFile: (descriptor, buffer) => {
-                try {
-                    this.fileSystemSession!.write(descriptor, handlerBytes(buffer))
-                } catch (error) {
-                    guestFileFailure(error)
-                }
-            },
-            openFile: (path, flags, append) => {
-                try {
-                    return this.fileSystemSession!.open(
-                        path,
-                        flags === 0 ? 'read' : append ? 'append' : 'write'
-                    )
-                } catch (error) {
-                    return guestFileFailure(error)
-                }
-            },
-            closeFile: (descriptor) => {
-                try {
-                    this.fileSystemSession!.close(descriptor)
-                } catch (error) {
-                    //A descriptor the program never had, or closed already: not an error.
-                    guestFileFailure(error)
-                }
-            },
-            stdIn: async (_buffer, length) => {
-                const bytes = await this.readStandardInput(length)
-                return [bytes.length, Array.from(bytes)]
-            },
-            seekFile: (descriptor, offset, whence) => {
-                try {
-                    return this.fileSystemSession!.seek(descriptor, offset, whence)
-                } catch (error) {
-                    return guestFileFailure(error)
-                }
-            },
-
-            sleep: (milliseconds: number) => this.sleep(milliseconds),
-            //syscall 30, elapsed program time. Host time in an interactive run and the virtual clock
-            //of a Testcase, which starts at zero so elapsed-time output is reproducible (ADR 0010)
-            time: () => this._peripherals.clock.now()
-        }
-        //The same syscall address can select a different service on a later iteration. Empty
-        //markers for non-file handlers keep an older File diff from being paired only by equal PC.
-        return Object.fromEntries(
-            Object.entries(handlers).map(([name, handler]) => [
-                name,
-                (...args: unknown[]) =>
-                    instructionOperation(() =>
-                        (handler as (...parameters: unknown[]) => unknown)(...args)
-                    )
-            ])
-        ) as HandlerMapFns
+        this.handlers.beginExecution()
+        //the testcase input is served by the terminal's scripted source, swapped in by the caller;
+        //how the run ended is read from the Core afterwards
+        await this.coreCall(() => mips.simulateWithLimit(toHaltLimit(haltLimit)))
     }
 
     private statementAtAddress(address: number): JsProgramStatement | null {
@@ -1040,44 +871,15 @@ class AsmEditorMIPSEmulator extends GenericEmulator<JsMips, MIPSRegisterName> {
     }
 }
 
-function getMIPSErrorMessage(error: unknown) {
-    return String(error)
-}
-
 /**
- * The undo depth comes from a user setting, so it can be any number (or NaN). `0` means "no
- * history at all", which the core expresses as `setUndoEnabled(false)` rather than a zero sized
- * stack (a zero length backstep array makes the core throw on the first executed instruction).
+ * Whether a run call's stop reason ends the program: an exit service ran, or the call ran the
+ * program's last instruction. A breakpoint, the instruction limit and a single step leave it
+ * runnable, and a runtime failure rejects the call instead.
  */
-function normalizeUndoSize(undoSize: number): number {
-    return Number.isFinite(undoSize) ? Math.max(0, Math.floor(undoSize)) : 0
+function endsProgram(stop: StopReason): boolean {
+    return stop === StopReason.NORMAL_TERMINATION || stop === StopReason.CLIFF_TERMINATION
 }
 
-function toHaltLimit(limit: number | undefined): number {
-    return !limit || limit <= 0 ? Number.MAX_SAFE_INTEGER : limit
-}
-
-function decodeBuffer(buffer: number[]): string {
-    return new TextDecoder().decode(handlerBytes(buffer))
-}
-
-/** TeaVM currently exposes a Java byte[] as either the promised array or one nested typed array. */
-function handlerBytes(buffer: unknown): Uint8Array {
-    const first = Array.isArray(buffer) && buffer.length === 1 ? buffer[0] : undefined
-    const value =
-        first && typeof first === 'object' && 'data' in first && ArrayBuffer.isView(first.data)
-            ? first.data
-            : Array.isArray(first) || ArrayBuffer.isView(first)
-              ? first
-              : buffer
-    if (ArrayBuffer.isView(value)) {
-        return new Uint8Array(value.buffer, value.byteOffset, value.byteLength).slice()
-    }
-    if (Array.isArray(value)) return Uint8Array.from(value, (byte) => Number(byte) & 0xff)
-    throw new Error('Core returned an invalid byte buffer')
-}
-
-/** @specy/mips 3.0 currently unboxes returned read bytes as TeaVM Byte objects. */
 function isMIPSNumericRegisterName(register: string): register is RegisterName {
     return MIPSNumericRegisterNames.some((candidate) => candidate === register)
 }
@@ -1267,6 +1069,13 @@ function backstepToMutation(step: JsBackStep): MutationOperation {
             value: `CP1 condition flag ${step.param1} restore: set`
         }
     }
+    if (step.action === BackStepAction.EXIT_RESTORE) {
+        //`newValue` is the code the exit set: 0 for exit, `$a0` for exit2
+        return { type: 'Other', value: exitStepText(step.newValue) }
+    }
+    if (step.action === BackStepAction.RANDOM_STREAM_RESTORE) {
+        return { type: 'Other', value: randomStreamStepText(step.param1) }
+    }
     return {
         type: 'Other',
         value: backStepActionMap[step.action]
@@ -1285,9 +1094,12 @@ const backStepActionMap = {
     [BackStepAction.DO_NOTHING]: 'Do nothing',
     [BackStepAction.REGISTER_RESTORE]: 'Register restore',
     [BackStepAction.PC_RESTORE]: 'PC restore',
-    //a Poke is read out of its group's `writes` and never through a back step, but the map has to
-    //stay exhaustive over the Core's actions
-    [BackStepAction.POKE]: 'Poke'
+    //a Poke is read out of its group's `writes` and never through a back step, and an exit and a
+    //random draw have words of their own in `backstepToMutation`, but the map has to stay
+    //exhaustive over the Core's actions
+    [BackStepAction.POKE]: 'Poke',
+    [BackStepAction.EXIT_RESTORE]: 'Exit restore',
+    [BackStepAction.RANDOM_STREAM_RESTORE]: 'Random generator restore'
 } satisfies Record<BackStepAction, string>
 
 /**
@@ -1349,6 +1161,8 @@ function getMemoryBackstepSize(action: BackStepAction): RegisterSize | undefined
         case BackStepAction.COPROC1_CONDITION_SET:
         case BackStepAction.DO_NOTHING:
         case BackStepAction.POKE:
+        case BackStepAction.EXIT_RESTORE:
+        case BackStepAction.RANDOM_STREAM_RESTORE:
             return undefined
     }
     const exhaustiveAction: never = action

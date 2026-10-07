@@ -373,26 +373,29 @@ answers with, is on the [trap tasks page](/documentation/m68k/traps).
 | Task | Description   |
 |:------:|-------------------------------------------------------------------------------------------------------|
 | 0      | Print string pointed by a1 with length read in d1.w, null terminated with max of 255, then prints a new line.      |
-| 1      | Print string pointed by a1 with length read in d1.w.      |
-| 2      | Read string from keyboard, writes the string at address of a1 and overrides the value of d1 with the length of the string.       |
+| 1      | Print string pointed by a1 with length read in d1.w, null terminated with max of 255.      |
+| 2      | Read a line, writes its first 79 characters at the address of a1 with a null and their count to d1.l.       |
 | 3      | Print signed number at d1.  |
-| 4      | Read number, writes to d1.   |
-| 5      | Read character, writes to d1.|
+| 4      | Read a line and convert it to a number in d1.l, as C's atoi does: \`12abc\` is 12, a line with no number is 0.   |
+| 5      | Read one key into d1.b, without waiting for Enter; Enter is $0D.|
 | 6      | Print character at d1.       |
 | 7      | Check for keyboard input, writes 1 or 0 to d1.b.  |
 | 8      | Get the time in hundredths of a second since the run started, writes to d1.      |
 | 9      | Terminate.     |
 | 11     | Set or get the text cursor, or clear the screen with d1.w = $FF00.  |
+| 12     | Turn the echo of what is typed off with d1.b = 0, on with anything else.  |
 | 13     | Prints null terminated string pointed by a1 then prints new line, errors if string is longer than 16kb, to prevent infinite loops.   |
 | 14     | Prints null terminated string pointed by a1, errors if string is longer than 16kb, to prevent infinite loops.       |
-| 15     | Prints unsigned number at d1 in base (from 2 to 36) specified in d2.b  |
+| 15     | Prints unsigned number at d1 in base (from 2 to 36) specified in d2.b, in upper case  |
+| 16     | Hide (d1.b = 0) or show (1) the input prompt, turn the line feed after Enter off (2) or on (3).  |
 | 17     | Prints the null terminated string at a1, then the signed number in d1.  |
 | 18     | Prints the null terminated string at a1, then reads a number into d1.  |
 | 19     | Reads the state of up to four keys given in d1.l, or the last keys pressed and released with d1.l = 0.  |
-| 20     | Print the signed number in d1 right justified in a field d2.b columns wide.  |
+| 20     | Print the signed number in d1 right justified in a field d2.b columns wide; a negative d2.b left justifies it.  |
 | 23     | Delay for the number of hundredths of a second in d1.  |
 | 24     | Enable or disable the simulator shortcut keys; accepted and ignored.  |
 | 33     | Set or get the screen size, or set the window mode.  |
+| 50-59  | Files: close all, open, create, read, write, position, close, delete, the file dialog and whether a file exists.  |
 | 61     | Read the mouse: flags in d0, y:x in d1.  |
 | 80-96  | Graphics: colors, pixels, lines, rectangles, ellipses, flood fill, drawing modes, double buffering, text and the pen position.  |
 `.trim(),

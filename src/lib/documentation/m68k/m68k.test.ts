@@ -63,8 +63,8 @@ describe('the M68K Documentation', () => {
             //the explanation's two sections, then the 16 codes
             'condition-codes': 18,
             'shift-directions': 1,
-            //the introduction, 4 groups, the colors, the key codes, 39 tasks and the 2 closing sections
-            'trap-tasks': 48,
+            //the introduction, 5 groups, the colors, the key codes, 51 tasks and the 2 closing sections
+            'trap-tasks': 61,
             exceptions: 4,
             directives: 18,
             'assembler-features': 1
@@ -100,7 +100,7 @@ describe('the M68K Documentation', () => {
     })
 
     it('has every trap task at the anchor the page has always given it', () => {
-        expect(M68K_TRAP_DOCS).toHaveLength(39)
+        expect(M68K_TRAP_DOCS).toHaveLength(51)
         for (const task of M68K_TRAP_DOCS) {
             const found = entry('trap-tasks', `task-${task.task}`)
             expect(found.kind).toBe('trap-task')
@@ -110,7 +110,15 @@ describe('the M68K Documentation', () => {
     })
 
     it('keeps the trap page anchors of the groups and the closing sections', () => {
-        for (const anchor of ['text', 'graphics', 'input', 'time', 'unsupported', 'differences']) {
+        for (const anchor of [
+            'text',
+            'graphics',
+            'input',
+            'time',
+            'files',
+            'unsupported',
+            'differences'
+        ]) {
             expect(entry('trap-tasks', anchor).kind).toBe('prose')
         }
     })
@@ -167,6 +175,17 @@ describe('the M68K Documentation', () => {
         for (const chapter of chapters()) {
             for (const entry of chapter.entries) expect(entry.summary, entry.id).not.toMatch(/^>/)
         }
+    })
+
+    it('groups rejected tasks by reason and distinguishes timing and Audio gaps', () => {
+        const text = markdownOf(entry('trap-tasks', 'unsupported')).join('\n')
+        const lines = text.split('\n')
+        expect(lines.find((line) => line.includes('`30`'))).toContain('`31`')
+        expect(lines.find((line) => line.includes('`30`'))).toContain('timing model')
+        expect(lines.find((line) => line.includes('`70`'))).toContain('`77`')
+        expect(lines.find((line) => line.includes('`70`'))).toContain('Audio Peripheral')
+        expect(text).not.toMatch(/`(?:12|16|5[0-9])`/)
+        expect(markdownOf(entry('trap-tasks', 'differences')).join('\n')).toContain('Windows-1252')
     })
 
     it('links only to pages that exist', () => {

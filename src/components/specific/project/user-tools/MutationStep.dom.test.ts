@@ -253,3 +253,30 @@ describe('the flags of an instruction row', () => {
         target.remove()
     })
 })
+
+describe('irreversible History rows', () => {
+    it('retains the row and explains why its grouped call cannot be undone', async () => {
+        const target = document.createElement('div')
+        document.body.appendChild(target)
+        const step: ExecutionStep = {
+            kind: 'instruction',
+            undoable: false,
+            mutations: [],
+            pc: 4096,
+            line: 3,
+            old_ccr: { bits: 0 },
+            new_ccr: { bits: 0 },
+            stretch: { library: 'read', instructions: 8 }
+        }
+        const app = mount(MutationStep, { target, props: { step, flags: [], language: 'X86' } })
+        flushSync()
+        try {
+            expect(target.textContent).toContain('Called read: 8 instructions')
+            expect(target.textContent).toContain('Undo stops here: effects are not recorded.')
+            expect(target.querySelector<HTMLButtonElement>('.undo-to-here')?.disabled).toBe(true)
+        } finally {
+            await unmount(app)
+            target.remove()
+        }
+    })
+})

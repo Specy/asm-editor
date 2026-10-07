@@ -28,6 +28,7 @@ import {
     type StackFrame
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import { GenericEmulator } from '$lib/languages/GenericEmulator.svelte'
+import type { Termination } from '$lib/languages/termination'
 import {
     type ExecutionSlice,
     type ExecutionSliceRequest,
@@ -251,6 +252,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         const device = new Z80Device({
             write: (text) => peripherals.terminal.write(text),
             hasInput: () => peripherals.terminal.hasPendingInput(),
+            readBufferedByte: () => peripherals.terminal.readBufferedByte(),
             //the clock is swapped for a virtual one during a testcase, so it is read per call
             timeHundredths: () => this._peripherals.clock.nowHundredths(),
             screen: peripherals.screen,
@@ -262,11 +264,11 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
                     device.echo(text)
                 )
         })
-        //a run starts with the prompt every Z80 program has always had; the device switches the
-        //Terminal over the first time the program touches the Screen, the Keyboard or the Mouse,
-        //which is what "in graphical use" means for a language whose console is just more ports
+        //a run starts reading what is typed in the Terminal; the device switches it over the first
+        //time the program touches the Screen, the Keyboard or the Mouse, which is what "in graphical
+        //use" means for a language whose console is just more ports
         //([ADR 0009](../../../../docs/adr/0009-share-screen-keyboard-input-with-terminal.md))
-        peripherals.terminal.usePromptInput()
+        peripherals.terminal.useTerminalInput()
         const screenInstructions = new ScreenInstructionHistory(
             peripherals.screen,
             normalizeUndoSize(undoSize)
@@ -397,6 +399,20 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         if (machine.stopReason === StopReason.WAITING_FOR_INTERRUPT) return true
         //the cliff: the PC left the assembled code, which is where the other languages stop too
         return this.sourceMap?.addressToLocation(machine.z80.regs.pc) === undefined
+    }
+
+    /**
+     * `halt` and a top-level `ret` are the program stopping itself, an `ei` + `halt` that waits for
+     * an interrupt nothing raises included; the cliff is running past the assembled code. A Z80
+     * program has no exit status.
+     */
+    _getTermination(): Termination | undefined {
+        const machine = this.machine
+        if (!machine || !this._hasTerminated()) return undefined
+        if (machine.isTerminated() || machine.stopReason === StopReason.WAITING_FOR_INTERRUPT) {
+            return { kind: 'exit' }
+        }
+        return { kind: 'end' }
     }
 
     /**
@@ -688,7 +704,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
     /**
      * Runs until the machine stops for a reason other than input, refilling the console device
      * whenever an `in` could not be served. Every await goes through `execution` so that a Stop or a
-     * recompile while the prompt is open cannot resume a run that no longer exists.
+     * recompile while a read is waiting cannot resume a run that no longer exists.
      */
     private async runWithInput(
         execution: ExecutionGeneration,
@@ -745,9 +761,10 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
     /**
      * Asks the Terminal for input and hands it to the device. The `in` that could not be served was
      * rolled back by the machine, so resuming re-executes it and the device answers it then. The
-     * character port takes one keystroke at a time once the Screen's Keyboard is the source
-     * (ADR 0009); every other case is the line the port has always read (ADR 0002), which is also
-     * what a testcase's scripted input is made of.
+     * character port reads a byte: the Terminal's line, a byte at a time and ending with a line
+     * feed, which is the line the port has always read (ADR 0002) and what a testcase's scripted
+     * input is made of, or a single keystroke once the Screen's Keyboard is the source (ADR 0009).
+     * The numeric ports read a whole line each.
      *
      * The whole read is one journal record: the echo draws a glyph per typed character, and all of
      * them belong to the single `in` the machine is about to re-execute, which is the one step Undo
@@ -756,27 +773,22 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
     private async provideInput(execution: ExecutionGeneration): Promise<void> {
         const machine = this.requireMachine()
         const device = this.requireDevice()
-        const terminal = this._peripherals.terminal
         const screen = this._peripherals.screen
         const port = machine.pendingInputPort ?? 0
         const question = device.inputQuestion(port)
         this.pendingEchoBefore ??= screen.history.sequence
         screen.beginCompoundOperation()
         try {
-            if (
-                Z80Device.isCharacterPort(port) &&
-                terminal.inputSource === 'interactive' &&
-                terminal.interactiveSource === 'keyboard'
-            ) {
-                const character = await this.requestCharacter(question, execution)
+            if (Z80Device.isCharacterPort(port)) {
+                const byte = await this.requestByte(question, execution)
                 this.executionController.ensureCurrent(execution)
-                device.provideCharacter(character)
+                device.provideCharacter(byte)
                 return
             }
             const value = await this.requestInput(question, execution)
             this.executionController.ensureCurrent(execution)
             //throws for a line that does not parse as the number the port asked for, stopping the run
-            device.provideInput(port, value)
+            device.provideNumber(port, value)
         } finally {
             screen.endCompoundOperation()
         }

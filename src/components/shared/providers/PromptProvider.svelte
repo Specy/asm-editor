@@ -14,17 +14,20 @@
     let value = $state('')
     let currentId = $state(0)
     let inputEl = $state<HTMLInputElement | undefined>()
+    let alertOkEl = $state<HTMLButtonElement | undefined>()
     $effect(() => {
         if (Prompt.id !== currentId) {
             currentId = Prompt.id
             value = ''
             //every prompt takes the keyboard, not just the ones that arrive with the form off the
-            //screen. A program that asks twice in a row — EASy68K's task 18 for each of two numbers —
-            //asks again before this form has finished leaving, and Svelte keeps the element it was
-            //about to remove rather than building a new one: the input's own mount-time focus never
-            //runs again, and the answer the user clicked Ok for leaves the focus on that button.
-            //After a tick, so the element of the prompt now being asked is the one focused.
-            tick().then(() => inputEl?.focus())
+            //screen. A program that opens two input dialogs in a row — MARS's service 51 for each of
+            //two numbers — asks again before this form has finished leaving, and Svelte keeps the
+            //element it was about to remove rather than building a new one: the input's own
+            //mount-time focus never runs again, and the answer the user clicked Ok for leaves the
+            //focus on that button.
+            //After a tick, so the element of the prompt now being asked is the one focused. A
+            //message has no input, so its Ok takes the keyboard and Enter dismisses it
+            tick().then(() => (Prompt.type === PromptType.Alert ? alertOkEl : inputEl)?.focus())
         }
     })
 </script>
@@ -38,6 +41,7 @@
         onsubmit={(e) => {
             e.preventDefault()
             if (Prompt.type === PromptType.Text) Prompt.answerText(value)
+            else if (Prompt.type === PromptType.Alert) Prompt.answerAlert()
         }}
     >
         <div class="prompt-text">
@@ -48,23 +52,9 @@
                 focus
                 bind:value
                 bind:el={inputEl}
+                placeholder={Prompt.placeholder}
                 hideStatus
                 style="border: 1px solid var(--tray-line);"
-                onkeydown={(e) => {
-                    //Ctrl+D on an empty line ends standard input, as it does in a terminal; with
-                    //text typed it does nothing, so a stray shortcut never throws a half-typed
-                    //line away
-                    if (
-                        Prompt.endOfInput &&
-                        e.ctrlKey &&
-                        !e.altKey &&
-                        !e.metaKey &&
-                        e.key.toLowerCase() === 'd'
-                    ) {
-                        e.preventDefault()
-                        if (value === '') Prompt.answerEndOfInput()
-                    }
-                }}
             />
         {/if}
 
@@ -76,18 +66,23 @@
                         >Cancel</button
                     >
                 {/if}
-                {#if Prompt.endOfInput}
-                    <button
-                        type="button"
-                        class="tool"
-                        title="End the program's standard input (Ctrl+D on an empty line)"
-                        onclick={() => Prompt.answerEndOfInput()}>End of input</button
-                    >
-                {/if}
                 <button type="button" class="tool primary" onclick={() => Prompt.answerText(value)}
                     >Ok</button
                 >
+            {:else if Prompt.type === PromptType.Alert}
+                <button
+                    type="button"
+                    class="tool primary"
+                    bind:this={alertOkEl}
+                    onclick={() => Prompt.answerAlert()}>Ok</button
+                >
             {:else}
+                <!-- MARS's confirm dialog answers Cancel too; the app's own confirms do not offer it -->
+                {#if Prompt.offersCancel}
+                    <button type="button" class="tool" onclick={() => Prompt.cancel()}
+                        >Cancel</button
+                    >
+                {/if}
                 <button type="button" class="tool" onclick={() => Prompt.answerConfirm(false)}
                     >No</button
                 >

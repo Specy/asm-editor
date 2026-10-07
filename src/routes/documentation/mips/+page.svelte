@@ -34,6 +34,9 @@
         <NavigationLinkButton href="/documentation/mips/screen">
             <div>Screen and I/O</div>
         </NavigationLinkButton>
+        <NavigationLinkButton href="/documentation/mips/using-c">
+            <div>Using C and C++</div>
+        </NavigationLinkButton>
         <NavigationLinkButton href="/documentation/mips/all">
             <div>Complete Documentation</div>
         </NavigationLinkButton>

@@ -68,7 +68,7 @@ const accepted = readNasmNames()
 const conditions = readConditionCodes()
 const table = readNasmTable()
 const tokens = readNasmTokens()
-const syscalls = readBlinkSyscalls()
+const syscalls = await readBlinkSyscalls()
 const insref = parseInsref(
     await cached('insref.src', { fetch: flag('--fetch') }),
     accepted,

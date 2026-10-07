@@ -1,0 +1,8 @@
+# call saves the next instruction address (0x0040000c) in ra. link_marker is that skipped instruction; t2 ends at 1.
+.text
+li t2, 0
+call done
+link_marker:
+addi t2, t2, 100
+done:
+addi t2, t2, 1

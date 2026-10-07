@@ -5,6 +5,7 @@ import {
     type CompilationSourceMap
 } from '$lib/sourceCompilation/records'
 import type { ProjectFile, ProjectFiles } from '$lib/projectFiles'
+import { isEnvironmentHeaderPath } from '$lib/sourceRuntime/environmentLibrary'
 import type { AvailableLanguages } from '$lib/Project.svelte'
 
 export type MappingPane = { displayedPath: string; displayedFile: ProjectFile | undefined }
@@ -40,7 +41,16 @@ export function resolveMappingPair<T extends MappingPane>(
         if (
             status.stale ||
             status.edited ||
-            fileFingerprint(assembly.displayedFile) !== map.outputFingerprint ||
+            fileFingerprint(assembly.displayedFile) !== map.outputFingerprint
+        )
+            continue
+        //`<sim.h>` is the editor's, uploaded with the compilation and never a record's input, and
+        //what is shown of it is the text this session uploaded
+        if (isEnvironmentHeaderPath(source.displayedPath)) {
+            if (source.displayedFile) return { source, assembly, map }
+            continue
+        }
+        if (
             !record.inputs[source.displayedPath] ||
             fileFingerprint(source.displayedFile) !== record.inputs[source.displayedPath]
         )

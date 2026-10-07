@@ -56,6 +56,11 @@ export type Z80DeviceHost = {
      * ([ADR 0009](../../../../docs/adr/0009-share-screen-keyboard-input-with-terminal.md)).
      */
     hasInput: () => boolean
+    /**
+     * The next byte of the line the Terminal is handing the character port, without waiting, or
+     * undefined when it has none left. The Terminal keeps the line; the device only asks for it.
+     */
+    readBufferedByte: () => number | undefined
     /** Hundredths of a second since the run started, from the ProgramClock in use. */
     timeHundredths: () => number
     screen: Screen
@@ -69,8 +74,8 @@ export type Z80DeviceHost = {
     /**
      * Called the first time the program touches a Screen, Keyboard or Mouse port, which is what
      * makes a run graphical: from there on the Terminal answers its reads from the Screen's Keyboard
-     * instead of from a prompt (ADR 0009). Programs that only ever print keep the prompt they always
-     * had.
+     * instead of from what is typed in the Terminal (ADR 0009). Programs that only ever print keep
+     * reading the Terminal.
      */
     onGraphicalUse?: () => void
 }
@@ -97,21 +102,18 @@ const READ_LINE_QUESTION = 'Enter a line of text'
 const READ_NUMBER_QUESTION = 'Enter a number'
 const READ_HEX_QUESTION = 'Enter a hexadecimal number'
 
-/**
- * A character the terminal cannot deliver as a single byte (anything outside Latin-1, which is what
- * a `.byte` of Z80 memory can hold) is handed to the program as a question mark instead of being
- * silently split into surrogate halves.
- */
-const UNREPRESENTABLE_CHARACTER = 0x3f
-
 const PORT_NAME_BY_NUMBER = new Map<number, Z80PortName>(
     Object.entries(Z80_PORTS).map(([name, port]) => [port, name as Z80PortName])
 )
 
 export class Z80Device {
     private readonly host: Z80DeviceHost
-    /** Bytes of the current input line still to be handed to the character port, in order. */
-    private readonly characterInput: number[] = []
+    /**
+     * The byte the Terminal read for the `in` on the character port that had to wait for it. The
+     * machine rolls that `in` back and re-executes it once the byte is here, and this is its answer;
+     * the rest of the line stays in the Terminal, which the next `in`s read without waiting.
+     */
+    private pendingCharacter: number | undefined
     /**
      * The byte parsed out of the last line typed for a numeric port. The numeric ports need a whole
      * line per read, so the `in` that asked for it is rolled back by the machine and re-executed
@@ -191,8 +193,11 @@ export class Z80Device {
         const screen = this.host.screen
         const parameter = parameterOf(busAddress)
         switch (name) {
-            case 'CHAR':
-                return this.characterInput.shift()
+            case 'CHAR': {
+                const pending = this.pendingCharacter
+                this.pendingCharacter = undefined
+                return pending ?? this.host.readBufferedByte()
+            }
             case 'NUMBER':
             case 'SIGNED':
             case 'HEX':
@@ -329,7 +334,7 @@ export class Z80Device {
         }
     }
 
-    /** The prompt to show for the port an `in` is waiting on. */
+    /** What the port an `in` is waiting on asks for, in words, for the read the Terminal shows. */
     inputQuestion(busAddress: number): string {
         switch (Z80Device.portNameOf(busAddress)) {
             case 'CHAR':
@@ -342,30 +347,22 @@ export class Z80Device {
     }
 
     /**
-     * Hands the device the line that was typed for the port an `in` is waiting on. Throws when the
-     * line does not parse, which stops the program with that message.
+     * Hands the device the line that was typed for the numeric port an `in` is waiting on. Throws
+     * when the line does not parse, which stops the program with that message.
      */
-    provideInput(busAddress: number, line: string): void {
-        switch (Z80Device.portNameOf(busAddress)) {
-            case 'CHAR':
-                this.bufferLine(line)
-                return
-            case 'HEX':
-                this.pendingNumber = parseHexByte(line)
-                return
-            default:
-                //every other console port reads decimal; a port that never waits never gets here
-                this.pendingNumber = parseDecimalByte(line)
-                return
-        }
+    provideNumber(busAddress: number, line: string): void {
+        //every console port but hexadecimal reads decimal; a port that never waits never gets here
+        this.pendingNumber =
+            Z80Device.portNameOf(busAddress) === 'HEX' ? parseHexByte(line) : parseDecimalByte(line)
     }
 
     /**
-     * Hands the character port one keystroke, the Screen keyboard's answer to a character read
-     * (ADR 0009). Unlike a line, it carries no trailing newline: the Enter key types one of its own.
+     * Hands the character port the byte the Terminal read for the `in` waiting on it: the first of a
+     * line, which ends with a line feed so a program can read until 0x0A, or a single keystroke in
+     * graphical use (ADR 0009), where Enter is its own line feed.
      */
-    provideCharacter(character: string): void {
-        this.characterInput.push(byteOf(character))
+    provideCharacter(byte: number): void {
+        this.pendingCharacter = byte & 0xff
     }
 
     /**
@@ -389,7 +386,7 @@ export class Z80Device {
 
     /** Drops everything buffered, for a machine that is being restarted. */
     reset(): void {
-        this.characterInput.length = 0
+        this.pendingCharacter = undefined
         this.pendingNumber = undefined
         this.x = 0
         this.y = 0
@@ -511,7 +508,7 @@ export class Z80Device {
         if (this.graphical) return
         //not with the memory-mapped display on: moving console reads to the Screen's Keyboard comes
         //with an echo at the text cursor, and cell mode has no text cursor to echo at, so the user
-        //would type into a Screen that shows nothing back. The prompt is the only visible way to
+        //would type into a Screen that shows nothing back. The Terminal is the only visible way to
         //answer a console read there. A program that draws with commands first and only then asks
         //for the display keeps the Screen input it already switched to: the source is fixed for a
         //run, by ADR 0009, and cell mode is not a reason to move it back
@@ -520,15 +517,6 @@ export class Z80Device {
         if (group !== 'screen' && group !== 'keyboard' && group !== 'mouse') return
         this.graphical = true
         this.host.onGraphicalUse?.()
-    }
-
-    /**
-     * The character port hands out one byte at a time and the line always ends with a newline, so a
-     * program can read until it sees 0x0A instead of having to be told how long the line is.
-     */
-    private bufferLine(line: string): void {
-        for (const character of line) this.characterInput.push(byteOf(character))
-        this.characterInput.push(0x0a)
     }
 }
 
@@ -548,11 +536,6 @@ function parameterOf(busAddress: number): number {
 /** A size byte of 0 means 256: the only size of a byte-addressed Screen that a byte cannot hold. */
 function sizeOf(size: number): number {
     return size === 0 ? Z80_SCREEN_MAX_SIZE : size
-}
-
-function byteOf(character: string): number {
-    const code = character.codePointAt(0) ?? UNREPRESENTABLE_CHARACTER
-    return code > 0xff ? UNREPRESENTABLE_CHARACTER : code
 }
 
 /**

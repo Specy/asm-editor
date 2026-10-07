@@ -1,3 +1,5 @@
+import { describeInvalidTrapArgument, describeUnsupportedTrapTask } from './M68K-traps'
+
 export function getM68kErrorMessage(error: unknown, lineNumber?: number): string {
     const prepend = lineNumber ? `Error at line ${lineNumber}:` : ''
     if (!isRecord(error)) {
@@ -40,6 +42,35 @@ export function getM68kErrorMessage(error: unknown, lineNumber?: number): string
             return `${prepend} Overflow exception: TRAPV ran while the overflow flag was set`
         case 'IllegalInstruction':
             return `${prepend} Illegal instruction exception`
+        //a `trap #15` task the Core does not carry out, or one given a value it cannot take: the
+        //Core names the task and the register, the trap table says which task it is and why
+        case 'UnsupportedTrapTask':
+            if (isRecord(error.value) && typeof error.value.task === 'number') {
+                return `${prepend} ${describeUnsupportedTrapTask(error.value.task)}`
+            }
+            break
+        case 'InvalidTrapArgument':
+            if (
+                isRecord(error.value) &&
+                typeof error.value.task === 'number' &&
+                typeof error.value.reason === 'string'
+            ) {
+                return `${prepend} ${describeInvalidTrapArgument(error.value.task, error.value.reason)}`
+            }
+            break
+        //the editor's own mistakes in answering the Core, never the program's
+        case 'NoPendingInterrupt':
+            return `${prepend} The editor answered a trap #15 task that was not waiting for an answer`
+        case 'InvalidAnswer':
+            if (isRecord(error.value)) {
+                return `${prepend} The editor's answer to ${error.value.interrupt} was refused: ${error.value.reason}`
+            }
+            break
+        case 'InvalidArgument':
+            if (typeof error.value === 'string') {
+                return `${prepend} Invalid argument: ${error.value}`
+            }
+            break
     }
     if (typeof error.message === 'string') {
         if (error.message === 'unreachable') {

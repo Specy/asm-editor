@@ -1,0 +1,101 @@
+/* Instruction previews, lecture listings and Markdown previews share the editor's typography. */
+pre.code-block {
+    display: flex;
+    align-items: flex-start;
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    max-height: 60vh;
+    margin: 0;
+    padding: 0.4rem 1rem;
+    border: var(--wb-card-edge, 1px solid color-mix(in srgb, var(--tertiary) 60%, transparent));
+    border-radius: var(--wb-radius, 0.4rem);
+    background: var(--secondary) !important;
+    color: var(--secondary-text) !important;
+    box-shadow: none;
+    overflow: auto;
+    white-space: pre;
+    font-family: inherit;
+    letter-spacing: 0;
+    tab-size: 4;
+}
+
+pre.code-block > code,
+pre.code-block > .code-gutter {
+    font-family: var(--example-font-family, 'Fira Code', monospace);
+    font-size: var(--example-font-size, 16px);
+    line-height: var(--example-line-height, 22px);
+    font-weight: normal;
+    font-variant-ligatures: none;
+}
+
+pre.code-block > code {
+    display: block;
+    flex: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: inherit;
+    text-shadow: none;
+    white-space: pre;
+}
+
+pre.code-block > .code-gutter {
+    display: var(--code-block-gutter-display, block);
+    order: -1;
+    flex: none;
+    box-sizing: border-box;
+    min-width: 0;
+    width: max-content;
+    margin-left: 0;
+    padding-left: 0;
+    padding-right: 0.75rem;
+    color: var(--hint);
+    text-align: right;
+    user-select: none;
+}
+
+/* Editor placeholders reserve Monaco's glyph margin and decoration space. */
+.code-gutter-spacing pre.code-block > .code-gutter,
+pre.code-block.code-gutter-spacing > .code-gutter {
+    min-width: calc(3ch + var(--example-line-height, 22px) + 26px);
+    margin-left: -1rem;
+    padding-left: var(--example-line-height, 22px);
+    padding-right: 26px;
+}
+
+pre.code-block.code-block-fill {
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+    padding-top: 0;
+    padding-bottom: 2.6rem;
+    border: 0;
+    border-radius: 0;
+}
+
+pre.code-block .asm-comment {
+    color: var(--asm-comment);
+    font-style: italic;
+}
+pre.code-block .asm-mnemonic {
+    color: var(--asm-mnemonic);
+}
+pre.code-block .asm-directive {
+    color: var(--asm-directive);
+}
+pre.code-block .asm-number {
+    color: var(--asm-number);
+}
+pre.code-block .asm-string {
+    color: var(--asm-string);
+}
+pre.code-block .asm-register {
+    color: var(--asm-register);
+}
+pre.code-block .asm-label {
+    text-decoration: underline;
+}

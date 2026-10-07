@@ -31,9 +31,9 @@ answer: dc.b 10, 'The sum is ', 0
 { "input": ["17", "25"] }
 ```
 
-Select **Build**, then **Run**. At `First number: `, type `17` in the input box under the console
-and press Enter. The program continues to `Second number: ` and waits again. Type `25` and press
-Enter; it prints `The sum is 42`.
+Select **Build**, then **Run**. At `First number: `, type `17` in the console, where the caret
+waits, and press Enter. The program continues to `Second number: ` and waits again. Type `25` and
+press Enter; it prints `The sum is 42`.
 
 The first task 18 returns `17` in `d1.l`. `move.l d1, d2` keeps a copy because the next task 18
 puts its answer, `25`, in `d1.l`. Then `add.l d1, d2` adds that second answer directly to the

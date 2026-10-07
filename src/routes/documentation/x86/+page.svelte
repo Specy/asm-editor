@@ -50,6 +50,9 @@
         <NavigationLinkButton href="/documentation/x86/syscall">
             <div>Syscalls</div>
         </NavigationLinkButton>
+        <NavigationLinkButton href="/documentation/x86/using-c">
+            <div>Using C and C++</div>
+        </NavigationLinkButton>
         <NavigationLinkButton href="/documentation/x86/all">
             <div>Complete Documentation</div>
         </NavigationLinkButton>

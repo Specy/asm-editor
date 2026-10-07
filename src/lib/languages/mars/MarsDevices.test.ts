@@ -1,19 +1,23 @@
 import { describe, expect, it } from 'vitest'
+import { ExecutionController } from '$lib/languages/ExecutionController'
 import { Keyboard } from '$lib/languages/peripherals/Keyboard'
 import { Screen } from '$lib/languages/peripherals/screen/Screen'
+import { Terminal } from '$lib/languages/peripherals/Terminal.svelte'
 import {
     MARS_READY_BIT,
     MARS_RECEIVER_CONTROL,
     MARS_RECEIVER_DATA,
+    MARS_TRANSMITTER_DATA,
     MarsDevices,
     type MarsCore
 } from '$lib/languages/mars/MarsDevices'
 import { DEFAULT_PROJECT_DISPLAY } from '$lib/languages/mars/marsDisplay'
 
 /**
- * The memory-mapped devices against a fake Core, for the behavior that depends on the run rather
- * than on the program: the receiver register is loaded from the Keyboard only while the user is the
- * one running the program
+ * The memory-mapped devices against a fake Core and the real Terminal, for the behavior that
+ * depends on the run rather than on the program: the receiver register reads its keystrokes through
+ * the Terminal, which answers a Testcase's scripted lines and otherwise what the user types, and
+ * never live Screen input during a scripted run
  * ([ADR 0009](../../../../docs/adr/0009-share-screen-keyboard-input-with-terminal.md)). The
  * register semantics a program sees are covered end to end against the real Cores in
  * `MIPSEmulator.test.ts` and `RISC-VEmulator.test.ts`.
@@ -22,33 +26,34 @@ import { DEFAULT_PROJECT_DISPLAY } from '$lib/languages/mars/marsDisplay'
 /** A small grid, so `attach` reads back 64 words instead of 128 KB. */
 const SMALL = { ...DEFAULT_PROJECT_DISPLAY, width: 64, height: 64, unitWidth: 8, unitHeight: 8 }
 
-type ReadObserver = (address: number, value: number) => void
+type AccessObserver = (address: number, value: number) => void
+
+function makeTerminal() {
+    const executionController = new ExecutionController(() => {})
+    return {
+        terminal: new Terminal({ executionController }),
+        execution: executionController.capture()
+    }
+}
 
 function makeDevices() {
     const words = new Map<number, number>()
-    const reads = new Map<number, ReadObserver>()
+    const reads = new Map<number, AccessObserver>()
+    const writes = new Map<number, AccessObserver>()
     let nextHandle = 1
     const core: MarsCore = {
         readMemoryBytes: () => [0, 0, 0, 0],
         setPeripheralWord: (address, value) => words.set(address >>> 0, value),
         addMemoryWriteObserver: () => nextHandle++,
-        addMemoryAccessObserver: (address, onRead) => {
+        addMemoryAccessObserver: (address, onRead, onWrite) => {
             if (onRead) reads.set(address >>> 0, onRead)
+            if (onWrite) writes.set(address >>> 0, onWrite)
             return nextHandle++
         },
         removeMemoryObserver: () => {}
     }
     const keyboard = new Keyboard({ holdIntervalMs: 0 })
-    const terminal = {
-        output: '',
-        inputSource: 'interactive' as 'interactive' | 'scripted',
-        write(text: string) {
-            this.output += text
-        },
-        clear() {
-            this.output = ''
-        }
-    }
+    const { terminal, execution } = makeTerminal()
     const devices = new MarsDevices({
         screen: new Screen({ width: 64, height: 64 }),
         keyboard,
@@ -59,10 +64,14 @@ function makeDevices() {
         devices,
         keyboard,
         terminal,
+        execution,
         /** What the device last stored in a register, which is what a program's `lw` would read. */
         wordAt: (address: number) => words.get(address >>> 0) ?? 0,
         /** The program reading the data register, which is what frees it for the next character. */
-        readData: () => reads.get(MARS_RECEIVER_DATA >>> 0)?.(MARS_RECEIVER_DATA, 0)
+        readData: () => reads.get(MARS_RECEIVER_DATA >>> 0)?.(MARS_RECEIVER_DATA, 0),
+        /** The program storing a character in the transmitter data register. */
+        transmit: (value: number) =>
+            writes.get(MARS_TRANSMITTER_DATA >>> 0)?.(MARS_TRANSMITTER_DATA, value)
     }
 }
 
@@ -78,7 +87,7 @@ describe('the MARS receiver register', () => {
         const { keyboard, terminal, wordAt } = makeDevices()
         //a Testcase selects the scripted Input Source for the whole run (ADR 0009): a keystroke the
         //user aims at the Screen panel while it runs is not the program's input
-        terminal.inputSource = 'scripted'
+        terminal.useScriptedInput([])
         keyboard.typeText('A')
         expect(wordAt(MARS_RECEIVER_CONTROL)).toBe(0)
         expect(wordAt(MARS_RECEIVER_DATA)).toBe(0)
@@ -88,14 +97,85 @@ describe('the MARS receiver register', () => {
 
     it('picks the queue back up once the run is the user’s again', () => {
         const { keyboard, terminal, readData, wordAt } = makeDevices()
-        terminal.inputSource = 'scripted'
+        terminal.useScriptedInput([])
         keyboard.typeText('AB')
-        terminal.inputSource = 'interactive'
+        terminal.useInteractiveInput()
         keyboard.typeText('C')
         expect(wordAt(MARS_RECEIVER_DATA)).toBe('A'.charCodeAt(0))
         readData()
         expect(wordAt(MARS_RECEIVER_DATA)).toBe('B'.charCodeAt(0))
         expect(wordAt(MARS_RECEIVER_CONTROL)).toBe(MARS_READY_BIT)
+    })
+
+    it('answers scripted input a byte at a time, each line ending with a newline', () => {
+        //as EASy68K's task 7 and the Z80's key port answer it, rather than leaving a Testcase of a
+        //keyboard-driven program nothing to type
+        const { terminal, readData, wordAt } = makeDevices()
+        terminal.useScriptedInput(['hi'])
+        const received: number[] = []
+        while (wordAt(MARS_RECEIVER_CONTROL) === MARS_READY_BIT) {
+            received.push(wordAt(MARS_RECEIVER_DATA))
+            readData()
+        }
+        expect(String.fromCharCode(...received)).toBe('hi\n')
+    })
+
+    it('shows a scripted keystroke without taking it from a read syscall that wants the line', async () => {
+        const { terminal, execution, wordAt } = makeDevices()
+        terminal.useScriptedInput(['42'])
+        expect(wordAt(MARS_RECEIVER_DATA)).toBe('4'.charCodeAt(0))
+        //the program never read the register, so the whole line is still the read syscall's
+        expect(await terminal.readAsync('q', execution)).toBe('42')
+        expect(wordAt(MARS_RECEIVER_CONTROL)).toBe(0)
+    })
+
+    it('takes what is typed in the Terminal, after what is typed on the Screen', () => {
+        const { keyboard, terminal, readData, wordAt } = makeDevices()
+        terminal.insertText('t')
+        expect(wordAt(MARS_RECEIVER_DATA)).toBe('t'.charCodeAt(0))
+        keyboard.typeText('s')
+        expect(wordAt(MARS_RECEIVER_DATA)).toBe('s'.charCodeAt(0))
+        readData()
+        expect(wordAt(MARS_RECEIVER_DATA)).toBe('t'.charCodeAt(0))
+        readData()
+        expect(wordAt(MARS_RECEIVER_CONTROL)).toBe(0)
+    })
+
+    it('does not take a keystroke from a read waiting on the same queue', async () => {
+        const { terminal, execution, wordAt } = makeDevices()
+        terminal.attachConsole()
+        const read = terminal.readAsync('q', execution)
+        terminal.insertText('x')
+        //the register shows the keystroke, but only reading it would take it
+        terminal.pressEnter()
+        expect(await read).toBe('x')
+        expect(wordAt(MARS_RECEIVER_CONTROL)).toBe(0)
+    })
+})
+
+describe('the MARS transmitter register', () => {
+    it('clears the output on a form feed, and only the output', async () => {
+        const { terminal, execution, transmit } = makeDevices()
+        terminal.useScriptedInput(['abc'])
+        //a short read of standard input leaves the rest of its line with the Terminal
+        expect(await terminal.readStandardInput(1, 'q', execution)).toEqual(Uint8Array.of(0x61))
+        transmit(0x41)
+        transmit(12)
+        transmit(0x42)
+        expect(terminal.output).toBe('B')
+        const rest = await terminal.readStandardInput(8, 'q', execution)
+        expect(new TextDecoder().decode(rest)).toBe('bc\n')
+    })
+
+    it('leaves a read in progress waiting through a form feed', async () => {
+        const { terminal, execution, transmit } = makeDevices()
+        terminal.attachConsole()
+        const read = terminal.readAsync('q', execution)
+        terminal.insertText('o')
+        transmit(12)
+        terminal.insertText('k')
+        terminal.pressEnter()
+        expect(await read).toBe('ok')
     })
 })
 
@@ -147,11 +227,7 @@ function makeFramebuffer(display = FOUR_BLOCKS) {
     const devices = new MarsDevices({
         screen,
         keyboard: new Keyboard({ holdIntervalMs: 0 }),
-        terminal: {
-            inputSource: 'interactive' as const,
-            write() {},
-            clear() {}
-        }
+        terminal: makeTerminal().terminal
     })
     devices.attach(core, display)
     reads.length = 0

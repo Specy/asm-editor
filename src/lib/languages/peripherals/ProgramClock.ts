@@ -117,7 +117,8 @@ export class ProgramClock {
      * The program-requested wait of ADR 0010: the run loop awaits it and resumes the program after
      * it, without blocking the GUI.
      */
-    wait(ms: number): Promise<void> {
+    wait(ms: number, signal?: AbortSignal): Promise<void> {
+        if (signal?.aborted) return Promise.reject(signal.reason ?? new Error('Wait aborted'))
         const duration = Number.isFinite(ms) ? Math.max(0, ms) : 0
         if (this.isVirtual) {
             this.elapsed += duration
@@ -126,7 +127,7 @@ export class ProgramClock {
         return this.schedule((resume) => {
             const timer = setTimeout(resume, duration)
             return () => clearTimeout(timer)
-        })
+        }, signal)
     }
 
     /** A wait in hundredths of a second, the unit of EASy68K's task 23. */
@@ -174,17 +175,26 @@ export class ProgramClock {
         this.start()
     }
 
-    private schedule(arm: (resume: () => void) => () => void): Promise<void> {
-        return new Promise<void>((resolve) => {
+    private schedule(arm: (resume: () => void) => () => void, signal?: AbortSignal): Promise<void> {
+        return new Promise<void>((resolve, reject) => {
             const armedAt = this.hostTime()
             const wait: PendingWait = { disarm: () => {}, settle: () => {} }
+            const abort = () => {
+                wait.disarm()
+                signal?.removeEventListener('abort', abort)
+                if (this.pending.has(wait)) this._waitedMs += this.hostTime() - armedAt
+                this.pending.delete(wait)
+                reject(signal?.reason ?? new Error('Wait aborted'))
+            }
             wait.settle = () => {
+                signal?.removeEventListener('abort', abort)
                 if (this.pending.has(wait)) this._waitedMs += this.hostTime() - armedAt
                 this.pending.delete(wait)
                 resolve()
             }
             this.pending.add(wait)
             wait.disarm = arm(() => wait.settle())
+            signal?.addEventListener('abort', abort, { once: true })
         })
     }
 }

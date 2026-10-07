@@ -29,6 +29,7 @@
             {language}
             flags={statusRegisterNames}
             {step}
+            canUndoToHere={steps.slice(0, i + 1).every((row) => row.undoable !== false)}
             on:undo={() => {
                 dispatch('undo', i)
             }}

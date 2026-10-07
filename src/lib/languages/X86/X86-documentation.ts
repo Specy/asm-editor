@@ -17,6 +17,7 @@ import {
     type X86Instruction,
     type X86InstructionForm
 } from './generated/x86Instructions'
+import { X86_SIM_ARGUMENT_OVERRIDES } from '../../documentation/x86/syscallBinding'
 import { X86_DESCRIPTIONS } from './generated/x86Descriptions'
 import { X86_SYSCALLS, type X86Syscall } from './generated/x86Syscalls'
 import {
@@ -617,14 +618,16 @@ export const X86_SYSCALL_DESCRIPTIONS: Record<string, string> = {
     exit: 'Ends the program with the status in `rdi`. It never returns, and a program that reaches the end of its code without calling it runs into whatever bytes follow.',
     exit_group:
         'Ends every thread of the program with the status in `rdi`. For a program with one thread it is `exit`.',
-    brk: 'Moves the end of the data segment to the address in `rdi`, which is the oldest way to ask for more memory. Called with 0 it returns where the segment currently ends.',
     mmap: 'Maps memory: the length in `rsi`, the protection in `rdx`, the flags in `r10`. An anonymous private mapping is how a program asks for a block of memory it can write to.',
     munmap: 'Unmaps the mapping of `rsi` bytes at the address in `rdi`.',
     nanosleep: 'Sleeps for the interval at `rdi`, a pair of seconds and nanoseconds.',
     getpid: 'Returns the process id.',
     fstat: 'Fills the structure at `rsi` with what is known about the descriptor in `rdi`, including its size.',
     clock_gettime: 'Writes the time of the clock named in `rdi` into the structure at `rsi`.',
-    ioctl: 'Asks a device the descriptor in `rdi` refers to for something outside the ordinary read and write interface, chosen by the request in `rsi`.'
+    time: 'Returns the current time in whole seconds since 1 January 1970 (UTC), and also stores it at the address in `rdi` unless `rdi` is 0.',
+    ioctl: 'Asks a device the descriptor in `rdi` refers to for something outside the ordinary read and write interface, chosen by the request in `rsi`.',
+    rt_sigreturn:
+        'Returns from a signal handler: restores the registers and the signal mask saved when the signal arrived, and carries on where the program was interrupted. A handler does not make this call itself: it returns into the restorer registered with `rt_sigaction`, and the restorer makes it.'
 }
 
 /** The calls the syscall page leads with, in the order a program meets them. */
@@ -637,7 +640,6 @@ export const X86_COMMON_SYSCALLS = [
     'close',
     'lseek',
     'fstat',
-    'brk',
     'mmap',
     'munmap',
     'nanosleep',
@@ -657,14 +659,23 @@ export function describeX86Syscall(name: string): string {
 const X86_SYSCALL_ARGS: Record<string, string[]> = {
     exit: ['status'],
     exit_group: ['status'],
-    clock_gettime: ['clock', 'timespec']
+    clock_gettime: ['clock', 'timespec'],
+    time: ['buffer (written by the kernel)']
 }
 
 /** What each argument of a call is, in register order: rdi, rsi, rdx, r10, r8, r9. */
 export function x86SyscallArgs(syscall: X86Syscall): string[] {
     const written = X86_SYSCALL_ARGS[syscall.name]
     if (written) return written
-    if (syscall.args.length > 0) return syscall.args
+    if (syscall.args.length > 0)
+        return syscall.args.map((label, index) => {
+            const override = X86_SIM_ARGUMENT_OVERRIDES[syscall.name]?.[index]
+            return override
+                ? override.type === 'long'
+                    ? override.name
+                    : `${override.name} (${override.type === 'const void *' ? 'read by' : 'written by'} the kernel)`
+                : label
+        })
     // Untraced and unwritten: say how many it takes rather than inventing names for them.
     return Array.from({ length: syscall.arity }, (_, index) => `arg${index + 1}`)
 }

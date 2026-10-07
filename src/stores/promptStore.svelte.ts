@@ -1,12 +1,9 @@
 export enum PromptType {
     Text,
-    Confirm
+    Confirm,
+    /** A message with a single Ok, MARS's and RARS's message dialogs. */
+    Alert
 }
-/**
- * The answer to a line prompt that offered End of input, when the user chose it instead of typing a
- * line: a read of standard input then returns no bytes, as Ctrl+D on an empty line does in a tty.
- */
-export const END_OF_INPUT = Symbol('End of input')
 type Prompt = {
     promise: Promise<PromptResult> | null
     id: number
@@ -15,10 +12,13 @@ type Prompt = {
     type: PromptType
     resolve: ((value: PromptResult) => void) | null
     cancellable: boolean
-    /** Whether the text prompt offers End of input, which only reads of standard input accept. */
-    endOfInput: boolean
+    /**
+     * Whether a confirm offers Cancel beside No and Yes, as MARS's confirm dialog does. The app's
+     * own confirms are yes-or-no questions and leave it off.
+     */
+    offersCancel: boolean
 }
-type PromptResult = string | boolean | null | typeof END_OF_INPUT
+type PromptResult = string | boolean | null
 
 function createPromptStore() {
     const prompt = $state<Prompt>({
@@ -29,7 +29,7 @@ function createPromptStore() {
         type: PromptType.Text,
         resolve: null,
         cancellable: true,
-        endOfInput: false
+        offersCancel: false
     })
     function ask(
         question: string,
@@ -42,7 +42,7 @@ function createPromptStore() {
         prompt.placeholder = placeholder
         prompt.type = type
         prompt.cancellable = cancellable
-        prompt.endOfInput = false
+        prompt.offersCancel = false
         prompt.id = prompt.id + 1
         const promise = new Promise<PromptResult>((resolve) => {
             prompt.resolve = resolve
@@ -56,6 +56,22 @@ function createPromptStore() {
         return typeof result === 'boolean' ? result : null
     }
 
+    /**
+     * A question answered Yes, No or Cancel, MARS's and RARS's confirm dialog: true, false, or null
+     * for Cancel, which is also what a prompt that something else dismissed answers.
+     */
+    async function confirmOrCancel(question: string): Promise<boolean | null> {
+        const pending = ask(question, PromptType.Confirm, true)
+        prompt.offersCancel = true
+        const result = await pending
+        return typeof result === 'boolean' ? result : null
+    }
+
+    /** A message dismissed with Ok, awaited until it is, or until another prompt replaces it. */
+    async function alert(message: string): Promise<void> {
+        await ask(message, PromptType.Alert, true)
+    }
+
     async function askText(
         question: string,
         cancellable = true,
@@ -63,25 +79,6 @@ function createPromptStore() {
     ): Promise<string | null> {
         const result = await ask(question, PromptType.Text, cancellable, placeholder)
         return typeof result === 'string' ? result : null
-    }
-
-    /**
-     * A line for standard input: the typed text, null when cancelled, or END_OF_INPUT when the user
-     * ends the input instead.
-     */
-    async function askLine(
-        question: string,
-        cancellable = true
-    ): Promise<string | null | typeof END_OF_INPUT> {
-        const pending = ask(question, PromptType.Text, cancellable)
-        prompt.endOfInput = true
-        const result = await pending
-        return typeof result === 'string' || result === END_OF_INPUT ? result : null
-    }
-
-    function answerEndOfInput() {
-        if (prompt.type !== PromptType.Text || !prompt.endOfInput) return
-        settle(END_OF_INPUT)
     }
 
     function answerText(value: string) {
@@ -92,6 +89,11 @@ function createPromptStore() {
     function answerConfirm(value: boolean) {
         if (prompt.type !== PromptType.Confirm) return
         settle(value)
+    }
+
+    function answerAlert() {
+        if (prompt.type !== PromptType.Alert) return
+        settle(true)
     }
 
     function cancel() {
@@ -110,7 +112,7 @@ function createPromptStore() {
         prompt.question = ''
         prompt.placeholder = ''
         prompt.cancellable = true
-        prompt.endOfInput = false
+        prompt.offersCancel = false
     }
     return {
         get question() {
@@ -125,8 +127,8 @@ function createPromptStore() {
         get cancellable() {
             return prompt.cancellable
         },
-        get endOfInput() {
-            return prompt.endOfInput
+        get offersCancel() {
+            return prompt.offersCancel
         },
         get id() {
             return prompt.id
@@ -135,11 +137,12 @@ function createPromptStore() {
             return prompt.promise
         },
         confirm,
+        confirmOrCancel,
+        alert,
         askText,
-        askLine,
         answerText,
-        answerEndOfInput,
         answerConfirm,
+        answerAlert,
         cancel
     }
 }

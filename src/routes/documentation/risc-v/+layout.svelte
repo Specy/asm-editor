@@ -94,6 +94,11 @@
                     title="Syscalls"
                     onClick={() => (menuOpen = false)}
                 />
+                <MenuLink
+                    href="/documentation/risc-v/using-c"
+                    title="Using C and C++"
+                    onClick={() => (menuOpen = false)}
+                />
 
                 <MenuLink
                     href="/documentation/risc-v/registers"

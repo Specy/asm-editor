@@ -20,7 +20,7 @@ export default defineConfig({
         }
     },
     optimizeDeps: {
-        exclude: ['@specy/s68k', '@specy/x86', '@battlefieldduck/xterm-svelte']
+        exclude: ['@specy/s68k', '@specy/x86']
     },
     build: {
         sourcemap: true

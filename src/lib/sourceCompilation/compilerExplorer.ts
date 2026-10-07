@@ -14,6 +14,11 @@ import {
 import { isValidFilePath, resolveFilePath, type ProjectFiles } from '$lib/projectFiles'
 import { CURRENT_RUNTIME_ABI } from '$lib/runtimeAbi'
 import { loadRuntimeHeaders } from '$lib/sourceRuntime/runtimeLibrary'
+import {
+    ENVIRONMENT_HEADER,
+    ENVIRONMENT_HEADER_PATH,
+    loadEnvironmentHeader
+} from '$lib/sourceRuntime/environmentLibrary'
 import type {
     CompilerLocation,
     TranslationDiagnostic,
@@ -26,6 +31,11 @@ export const COMPILE_BYTE_LIMIT = 1024 * 1024
 const ASSEMBLY_BYTE_LIMIT = 4 * 1024 * 1024
 /** Where the Runtime library's headers are uploaded; the program sees them as its system headers. */
 export const SYSROOT_INCLUDE = 'sysroot/include'
+/**
+ * Sources a compilation reads that are no Project File, by the path the editor shows them at:
+ * `<sim.h>` as `@runtime/include/sim.h`. A Source map may name them, a Compilation record never.
+ */
+export type ReadOnlySources = Readonly<Record<string, string>>
 export type CompilationRequest = {
     sourcePath: string
     outputPath: string
@@ -67,8 +77,9 @@ export class SourceCompilationError extends Error {
 }
 
 /**
- * Runtime ABI v1's freestanding headers, the only ones an x86 program gets until x86 has a Runtime
- * library. They are written on GCC's predefined macros, so they describe x86-64 as they are.
+ * Runtime ABI v1's freestanding headers, the only ones of the library an x86 program gets until x86
+ * has a Runtime library. They are written on GCC's predefined macros, so they describe x86-64 as
+ * they are. `<sim.h>`, the Environment library, comes with them.
  */
 const X86_HEADERS = {
     c: [
@@ -83,7 +94,7 @@ const X86_HEADERS = {
     ],
     cpp: ['cstddef', 'cstdint', 'climits', 'cfloat', 'cstdarg', 'new']
 }
-const X86_HEADER_NAMES = new Set([...X86_HEADERS.c, ...X86_HEADERS.cpp])
+const X86_HEADER_NAMES = new Set([...X86_HEADERS.c, ...X86_HEADERS.cpp, ENVIRONMENT_HEADER])
 
 /**
  * What x86 compilation uses of `@specy/x86/compiler-output`, which only an x86 compilation loads,
@@ -156,12 +167,34 @@ function diagnostic(
     }
 }
 
-function projectPath(path: unknown, sourcePath: string, files: ProjectFiles, mainsource = false) {
+/**
+ * The editor's path for a file the compiler names: the source, a Project header, `<sim.h>` when the
+ * compilation uploaded it, or undefined for anything else, such as the Runtime library's headers.
+ */
+function projectPath(
+    path: unknown,
+    sourcePath: string,
+    files: ProjectFiles,
+    mainsource = false,
+    readOnly: ReadOnlySources = {}
+) {
     if (path === undefined || path === null || path === '' || mainsource) return sourcePath
     if (typeof path !== 'string') return undefined
     if (/^\/?(?:app\/)?example\.(?:c|cpp|cc|cxx)$/.test(path)) return sourcePath
     const relative = path.replace(/^\/app\//, '').replace(/^\.\//, '')
+    if (
+        relative === `${SYSROOT_INCLUDE}/${ENVIRONMENT_HEADER}` &&
+        readOnly[ENVIRONMENT_HEADER_PATH] !== undefined
+    )
+        return ENVIRONMENT_HEADER_PATH
     return isValidFilePath(relative) && files[relative] ? relative : undefined
+}
+
+/** The text of a file `projectPath` named: a Project File's, or a read-only source's. */
+function mappedText(path: string, files: ProjectFiles, readOnly: ReadOnlySources) {
+    return Object.prototype.hasOwnProperty.call(files, path)
+        ? files[path].content
+        : (readOnly[path] ?? '')
 }
 
 /** Compiler output is terminal text; Monaco and the Problems panel need plain text. */
@@ -179,7 +212,8 @@ function compilerText(text: string) {
 function compilerDiagnostics(
     messages: unknown[],
     request: CompilationRequest,
-    failed: boolean
+    failed: boolean,
+    readOnly: ReadOnlySources = {}
 ): Diagnostic[] {
     const diagnostics: Diagnostic[] = []
     const unlocated: string[] = []
@@ -196,6 +230,9 @@ function compilerDiagnostics(
             'tag' in item && item.tag && typeof item.tag === 'object' && !Array.isArray(item.tag)
                 ? (item.tag as Record<string, unknown>)
                 : undefined
+        //GCC first names the includes that led to a header's diagnostic: context, whose
+        //`file:line:` would otherwise read as a diagnostic of its own, on the wrong File
+        if (/^(?:In file included from|from)\s/.test(text)) continue
         const location = /^(.*?):(\d+)(?::(\d+))?:\s*(.*)$/.exec(text)
         const description =
             typeof tag?.text === 'string' ? compilerText(tag.text) : (location?.[4] ?? text)
@@ -213,9 +250,15 @@ function compilerDiagnostics(
                 unlocated.push(text)
             continue
         }
+        //one in `<sim.h>` lands on the header, which the editor shows read-only
         const path =
-            projectPath(tag?.file ?? location?.[1], request.sourcePath, request.files) ??
-            request.sourcePath
+            projectPath(
+                tag?.file ?? location?.[1],
+                request.sourcePath,
+                request.files,
+                false,
+                readOnly
+            ) ?? request.sourcePath
         const line = positive(tag?.line, positive(location?.[2], 1)) - 1
         const column = positive(tag?.column, positive(location?.[3], 1))
         const severity: Diagnostic['severity'] = level
@@ -236,7 +279,7 @@ function compilerDiagnostics(
             ]
         } else {
             const entry = diagnostic(message, path, line, column, severity)
-            entry.line.line = request.files[path]?.content.split(/\r?\n/)[line] ?? ''
+            entry.line.line = mappedText(path, request.files, readOnly).split(/\r?\n/)[line] ?? ''
             diagnostics.push(entry)
         }
     }
@@ -258,7 +301,11 @@ function compilerDiagnostics(
     return diagnostics
 }
 
-/** Track quoted local includes recursively; computed includes conservatively depend on all headers. */
+/**
+ * Track quoted local includes recursively; computed includes conservatively depend on all headers.
+ * An angle-bracket include never reads a Project File, as the request searches the Project only
+ * for quoted ones.
+ */
 export function compilationInputs(
     sourcePath: string,
     files: ProjectFiles
@@ -276,7 +323,8 @@ export function compilationInputs(
             .replace(/\/\*[\s\S]*?\*\//g, (s) => s.replace(/[^\n]/g, ' '))
             .replace(/\/\/[^\n]*/g, '')
         for (const match of text.matchAll(/^\s*#\s*include\s+([^\n]+)/gm)) {
-            const include = /^["<]([^">]+)[">]/.exec(match[1])
+            if (match[1].startsWith('<')) continue
+            const include = /^"([^"]+)"/.exec(match[1])
             if (!include) {
                 for (const header of headers) visit(header)
                 continue
@@ -303,10 +351,14 @@ export function compilationInputs(
  * The Compiler Explorer request. A program is hosted: it compiles with `-nostdinc` against the
  * Runtime library's headers, uploaded as `sysroot/include`, so an unsupported header is a clear
  * error and no toolchain header leaks in, and `main` keeps its name and its implicit `return 0`.
+ * The caller adds the Target's `<sim.h>` to the sysroot (`compileSource` does).
+ * Project Files are found by quoted includes only (`-iquote`, from the source's directory and from
+ * the Project root), so a Project's `stdio.h` or `sim.h` never shadows `<stdio.h>` or `<sim.h>`.
  * An x86 program is freestanding until x86 has a Runtime library: only the library's freestanding
- * headers are uploaded, and it compiles exactly as the corpus its translation is verified on did,
- * with the translation profile's flags and `-ffreestanding`, under which GCC still gives `main` its
- * implicit `return 0`. The profile is the caller's to pass, as it comes with the translator.
+ * headers and `<sim.h>` are uploaded, and it compiles exactly as the corpus its translation is
+ * verified on did, with the translation profile's flags and `-ffreestanding`, under which GCC
+ * still gives `main` its implicit `return 0`. The profile is the caller's to pass, as it comes with
+ * the translator.
  */
 export function createCompilerRequest(
     request: CompilationRequest,
@@ -348,7 +400,7 @@ export function createCompilerRequest(
         : language === 'cpp'
           ? '-std=c++17 -fno-exceptions -fno-rtti'
           : '-std=c17'
-    const userArguments = `${common} -nostdinc -isystem ${SYSROOT_INCLUDE} ${preset.architecture} -iquote ${quote(directory)} -I . ${standard}${language === 'cpp' ? ' -fno-threadsafe-statics -nostdinc++' : ''}`
+    const userArguments = `${common} -nostdinc -isystem ${SYSROOT_INCLUDE} ${preset.architecture} -iquote ${quote(directory)} -iquote . ${standard}${language === 'cpp' ? ' -fno-threadsafe-statics -nostdinc++' : ''}`
     const body = {
         source: `#line 1 ${JSON.stringify(request.sourcePath)}\n${source.content}`,
         lang: language === 'cpp' ? 'c++' : 'c',
@@ -385,6 +437,30 @@ export function createCompilerRequest(
 
 /** Labels GCC's MIPS output defines only for the debug sections, which are dropped. */
 const MIPS_DEBUG_LABEL = /^\s*(?:\$L|\.L)(?:FB|FE|BB|BE|VL|text|etext|debug)\w*\s*(?::|=)/
+/**
+ * The one comment the output keeps: the `@screen` directive `SIM_SCREEN` writes through a file-scope
+ * `__asm__`, which a Build reads to configure the bitmap display, as it reads an assembly example's.
+ * The `#APP` and `#NO_APP` markers around it go with every other comment.
+ */
+const SCREEN_DIRECTIVE = /^\s*#+[ \t]*@screen\b/i
+
+/**
+ * A code line without a trailing comment that reads as an `@screen` directive. Clang's source
+ * annotations name a symbol after its directives, `.type screen,@object  # @screen`, which a Build
+ * would take for a second directive, or for the only one in a program with a global named `screen`;
+ * the directive itself is always a line of its own. A `#` inside a string literal is no comment.
+ */
+function withoutScreenAnnotation(code: string) {
+    let quoted = false
+    for (let index = 0; index < code.length; index++) {
+        const character = code[index]
+        if (quoted && character === '\\') index++
+        else if (character === '"') quoted = !quoted
+        else if (!quoted && character === '#')
+            return SCREEN_DIRECTIVE.test(code.slice(index)) ? code.slice(0, index).trimEnd() : code
+    }
+    return code
+}
 
 /**
  * Remove debug payloads and compose the Source map. Every other section stays as the compiler
@@ -392,7 +468,11 @@ const MIPS_DEBUG_LABEL = /^\s*(?:\$L|\.L)(?:FB|FE|BB|BE|VL|text|etext|debug)\w*\
  * Runtime library's `_start` calls `main`. Kept in step with `prepare` in
  * scripts/runtime/build.mjs, which prepares the Library members the same way.
  */
-export function prepareAssembly(lines: readonly AssemblyLine[], request: CompilationRequest) {
+export function prepareAssembly(
+    lines: readonly AssemblyLine[],
+    request: CompilationRequest,
+    readOnly: ReadOnlySources = {}
+) {
     const text: string[] = []
     const mapping: (SourceLocation | null)[] = []
     let debugSection = false
@@ -417,21 +497,22 @@ export function prepareAssembly(lines: readonly AssemblyLine[], request: Compila
             debugSection ||
             /^\s*\.(?:file|loc|cfi_\w+|ident)\b/.test(code) ||
             (request.target === 'MIPS' && MIPS_DEBUG_LABEL.test(code)) ||
-            (/^\s*#/.test(code) && !blockComment) ||
+            (/^\s*#/.test(code) && !blockComment && !SCREEN_DIRECTIVE.test(code)) ||
             !code.trim()
         )
             continue
         if (/^\s*main:/.test(code)) foundMain = true
-        text.push(code)
+        text.push(/^\s*#/.test(code) ? code : withoutScreenAnnotation(code))
         const path = projectPath(
             line.source?.file,
             request.sourcePath,
             request.files,
-            line.source?.mainsource
+            line.source?.mainsource,
+            readOnly
         )
         const number = line.source?.line
         if (path && !lineCounts.has(path))
-            lineCounts.set(path, request.files[path].content.split('\n').length)
+            lineCounts.set(path, mappedText(path, request.files, readOnly).split('\n').length)
         mapping.push(
             path && Number.isSafeInteger(number) && number! > 0 && number! <= lineCounts.get(path)!
                 ? { path, line: number! - 1 }
@@ -457,7 +538,8 @@ function mainRequired(request: CompilationRequest, found: Diagnostic[] = []) {
 export function prepareX86Assembly(
     lines: readonly AssemblyLine[],
     request: CompilationRequest,
-    translator: X86Translator
+    translator: X86Translator,
+    readOnly: ReadOnlySources = {}
 ) {
     const translation = translator.translateCompilerOutput(
         lines.map((line) => line.text),
@@ -465,10 +547,12 @@ export function prepareX86Assembly(
     )
     const lineCounts = new Map<string, number>()
     const locate = (location: CompilerLocation | null): SourceLocation | null => {
-        const path = location && projectPath(location.file, request.sourcePath, request.files)
+        const path =
+            location &&
+            projectPath(location.file, request.sourcePath, request.files, false, readOnly)
         if (!path) return null
         if (!lineCounts.has(path))
-            lineCounts.set(path, request.files[path].content.split('\n').length)
+            lineCounts.set(path, mappedText(path, request.files, readOnly).split('\n').length)
         return Number.isSafeInteger(location.line) &&
             location.line > 0 &&
             location.line <= lineCounts.get(path)!
@@ -477,7 +561,7 @@ export function prepareX86Assembly(
     }
     const diagnostics: Diagnostic[] = []
     for (const item of translation.diagnostics) {
-        const entry = translationDiagnostic(item, request, locate(item.location))
+        const entry = translationDiagnostic(item, request, locate(item.location), readOnly)
         //an inline function or an unrolled loop repeats its source line's construct in the output
         if (
             !diagnostics.some(
@@ -504,23 +588,27 @@ export function prepareX86Assembly(
     }
 }
 
-/** A translation Diagnostic on the source line it came from, or else on the source File's first. */
+/**
+ * A translation Diagnostic on the source line it came from, or else on the source File's first.
+ * Inline assembly is the learner's own text, which the translator quotes with what it cannot read.
+ */
 function translationDiagnostic(
     item: TranslationDiagnostic,
     request: CompilationRequest,
-    location: SourceLocation | null
+    location: SourceLocation | null,
+    readOnly: ReadOnlySources
 ): Diagnostic {
-    //the translator names the construct in its output, which is not what the learner wrote
     const inline = item.code === 'inline-assembly'
     const entry = diagnostic(
-        inline ? 'Inline assembly cannot be compiled for x86 yet.' : item.message,
+        item.message,
         location?.path ?? request.sourcePath,
         location?.line ?? 0,
         location && item.location!.column > 0 ? item.location!.column : 1,
         item.severity
     )
     entry.code = item.code
-    entry.line.line = request.files[entry.file!].content.split(/\r?\n/)[entry.lineIndex] ?? ''
+    entry.line.line =
+        mappedText(entry.file!, request.files, readOnly).split(/\r?\n/)[entry.lineIndex] ?? ''
     if (inline) {
         entry.hint =
             'Write the instructions as a global function in a .asm File of the Project, and call that function instead.'
@@ -538,7 +626,7 @@ function listed(items: readonly string[]) {
 
 /**
  * Explain a standard header the Runtime library has but an x86 program cannot include yet, whose
- * error alone reads as a misspelt include.
+ * error alone reads as a misspelt include, and point to `<sim.h>` for what the missing library does.
  */
 function x86HeaderHint(
     item: Diagnostic,
@@ -554,7 +642,7 @@ function x86HeaderHint(
     )
         return
     const headers = language === 'cpp' ? [...X86_HEADERS.cpp, ...X86_HEADERS.c] : X86_HEADERS.c
-    item.hint = `x86 programs have no C standard library yet, so they can include only ${listed(headers)}.`
+    item.hint = `x86 programs have no C standard library yet, so they can include only ${listed([...headers, ENVIRONMENT_HEADER])}. <${ENVIRONMENT_HEADER}> has a function for each Linux system call: sim_write(1, text, length) prints.`
     item.formatted = `${item.message}\n${item.hint}`
 }
 
@@ -569,10 +657,18 @@ export async function compileSource(
     fetcher: typeof fetch = fetch
 ): Promise<CompilationResult> {
     const runtimeHeaders = await loadRuntimeHeaders(CURRENT_RUNTIME_ABI)
+    //the Target's own `<sim.h>`, beside the library's headers but kept out of their ABI's set
+    const environment = await loadEnvironmentHeader(request.target)
+    const sysroot =
+        environment === undefined
+            ? runtimeHeaders
+            : { ...runtimeHeaders, [ENVIRONMENT_HEADER]: environment }
+    const readOnly: ReadOnlySources =
+        environment === undefined ? {} : { [ENVIRONMENT_HEADER_PATH]: environment }
     //loaded with the first x86 compilation, so it stays out of the bundle every other Target loads
     const translator =
         request.target === 'X86' ? await import('@specy/x86/compiler-output') : undefined
-    const prepared = createCompilerRequest(request, runtimeHeaders, translator?.GCC_INTEL_V1)
+    const prepared = createCompilerRequest(request, sysroot, translator?.GCC_INTEL_V1)
     const response = await fetcher(`${API_ROOT}/compiler/${prepared.compilerId}/compile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -597,7 +693,7 @@ export async function compileSource(
     const messages = [result.stderr, result.stdout].flatMap((items) =>
         Array.isArray(items) ? items : []
     )
-    const diagnostics = compilerDiagnostics(messages, request, result.code !== 0)
+    const diagnostics = compilerDiagnostics(messages, request, result.code !== 0, readOnly)
     if (request.target === 'X86')
         for (const item of diagnostics) x86HeaderHint(item, prepared.language, runtimeHeaders)
     if (result.code !== 0 || result.timedOut || result.truncated) {
@@ -635,8 +731,11 @@ export async function compileSource(
     let output: ReturnType<typeof prepareX86Assembly>
     try {
         output = translator
-            ? prepareX86Assembly(result.asm as AssemblyLine[], request, translator)
-            : { ...prepareAssembly(result.asm as AssemblyLine[], request), diagnostics: [] }
+            ? prepareX86Assembly(result.asm as AssemblyLine[], request, translator, readOnly)
+            : {
+                  ...prepareAssembly(result.asm as AssemblyLine[], request, readOnly),
+                  diagnostics: []
+              }
     } catch (error) {
         //the compiler's own warnings still describe the source when its output cannot be used
         if (error instanceof SourceCompilationError && diagnostics.length)
@@ -646,8 +745,10 @@ export async function compileSource(
     const outputFingerprint = fileFingerprint({ encoding: 'plain', content: output.assembly })!
     const inputs = { ...compilationInputs(request.sourcePath, request.files) }
     // Header locations supplied by the compiler also establish dependencies, including macro includes.
+    // `<sim.h>` is the editor's, not the Project's, so it is no input and has no fingerprint.
     for (const line of output.lines)
-        if (line) inputs[line.path] = fileFingerprint(request.files[line.path])!
+        if (line && Object.prototype.hasOwnProperty.call(request.files, line.path))
+            inputs[line.path] = fileFingerprint(request.files[line.path])!
     return {
         assembly: output.assembly,
         record: {

@@ -69,6 +69,11 @@
         /** Text can be read-only while the Debug session still accepts breakpoint changes. */
         breakpointsEditable?: boolean
         editor?: monaco.editor.IStandaloneCodeEditor
+        /** A preview host can keep its static source and Monaco's typography identical. */
+        fontOptions?: Pick<
+            monaco.editor.IStandaloneEditorConstructionOptions,
+            'fontFamily' | 'fontSize' | 'lineHeight'
+        >
         viewZones?: {
             afterLineNumber: number
             content: Component<ViewZoneProps>
@@ -97,6 +102,7 @@
         mappedBreakpoints = [],
         breakpointsEditable = true,
         editor = $bindable(),
+        fontOptions,
         viewZones = [],
         buildArtifacts = []
     }: Props = $props()
@@ -217,6 +223,7 @@
             lineNumbersMinChars: 3,
             cursorBlinking: 'phase',
             fontSize: 16,
+            ...fontOptions,
             smoothScrolling: true,
             cursorSmoothCaretAnimation: 'on'
         })

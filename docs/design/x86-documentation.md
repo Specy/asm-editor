@@ -203,7 +203,7 @@ committed modules under `src/lib/languages/X86/generated/`:
 | `x86Instructions.ts` | 2642 instructions, 8165 operand shapes, each with the oldest processor that has it, its extension and its notes    | `insns.xda`, `insnsn.c`, `iflags.ph`, Opcodes summaries                            |
 | `x86Mnemonics.ts`    | the names alone, so highlighting does not pull the table                                                           | `insnsn.c`                                                                         |
 | `x86Descriptions.ts` | 586 descriptions, converted to markdown                                                                            | `insref.src`                                                                       |
-| `x86Syscalls.ts`     | 181 syscalls with numbers, arity and argument types                                                                | `syscall.c`, `strace.h`                                                            |
+| `x86Syscalls.ts`     | 138 syscalls with canonical numbers, names and arities exported by the built Core                                  | `getImplementedSyscalls()`, `syscall.c`, `strace.h`                                |
 | `x86Tokens.ts`       | directives, standard macros, preprocessor directives, prefixes, size specifiers, 344 register names, flag meanings | `directiv.dat`, `standard.mac`, `pptok.dat`, `tokens.dat`, `regs.dat`, `iflags.ph` |
 
 [`X86-documentation.ts`](../../src/lib/languages/X86/X86-documentation.ts) is the curated layer on
@@ -213,7 +213,7 @@ and the editor use.
 
 ### What the join needed beyond the plan
 
-Four things the study did not predict, each now covered by a test:
+Five things the study did not predict, each now covered by a test:
 
 1. **Templates can be infix, and they can collide.** `CMPccXADD` puts its condition in the middle,
    and `CCMPscc` spells it `scc`. Worse, expanding a template by prefix match hands `Jcc` every name
@@ -232,6 +232,12 @@ Four things the study did not predict, each now covered by a test:
    `clock_gettime` never reach the traced table, so they were missing entirely: `exit` most of all,
    which every program calls. They are read from the case arms instead, and their argument names are
    written in the curated layer because a trace signature is the only place the others declare theirs.
+5. **The built Core exports its actual list** (adopted for 5.0.0). `getImplementedSyscalls()`
+   reads the WASM dispatch table, including calls handled outside the traced arms. Its numbers,
+   canonical Linux names and arities decide membership; the strace source supplies labels only.
+   The earlier configuration evaluator is retired from the generator's authority path. Unknown
+   source guards therefore cannot misidentify the compiled list. Linux pointer arguments that
+   strace prints only as numbers have explicit C binding overrides, including mixed `ioctl`.
 
 ### Coverage as built
 

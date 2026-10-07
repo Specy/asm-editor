@@ -1,10 +1,15 @@
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { GCC_INTEL_V1 } from '@specy/x86/compiler-output'
+import { GCC_INTEL_V1, translateCompilerOutput } from '@specy/x86/compiler-output'
 import { MIPSEmulator } from '$lib/languages/MIPS/MIPSEmulator.svelte'
 import { RISCVEmulator } from '$lib/languages/RISC-V/RISC-VEmulator.svelte'
 import { X86Emulator } from '$lib/languages/X86/X86Emulator.svelte'
 import { loadRuntimeHeaders } from '$lib/sourceRuntime/runtimeLibrary'
 import {
+    compilationInputs,
     compilerPreset,
     compileSource,
     createCompilerRequest,
@@ -36,6 +41,29 @@ type Fixture = {
 const fixtures = Object.values(
     import.meta.glob<Fixture>('./fixtures/*.json', { eager: true, import: 'default' })
 )
+
+const HOST_GCC = (() => {
+    try {
+        execFileSync('gcc', ['--version'], { stdio: 'ignore' })
+        return true
+    } catch {
+        return false
+    }
+})()
+
+/** A request's include-path flags, unquoted, for a host preprocessor to search the same way. */
+function includeFlags(userArguments: string): string[] {
+    const words = [...userArguments.matchAll(/'([^']*)'|(\S+)/g)].map(
+        (match) => match[1] ?? match[2]
+    )
+    return words.flatMap((word, index) =>
+        word === '-nostdinc'
+            ? [word]
+            : ['-isystem', '-iquote', '-I'].includes(word)
+              ? [word, words[index + 1]]
+              : []
+    )
+}
 
 function requestFor(fixture: Fixture): CompilationRequest {
     const files: ProjectFiles = Object.fromEntries([
@@ -278,6 +306,85 @@ describe('hosted compilation', () => {
         expect(cpp.body.options.userArguments).toContain('-fno-threadsafe-statics -nostdinc++')
     })
 
+    // A quoted include searches the -iquote directories, an angle-bracket one only the -I and
+    // -isystem ones. With the Project root under -iquote, a Project File named stdio.h or sim.h no
+    // longer shadows the system header, as it did under -I .
+    it('lets quoted includes alone find Project Files', () => {
+        for (const sourcePath of ['src/main.c', 'main.c']) {
+            const request = createCompilerRequest(
+                {
+                    ...hosted(),
+                    sourcePath,
+                    files: { [sourcePath]: { encoding: 'plain', content: 'int main(void) {}\n' } }
+                },
+                { 'stdio.h': 'int puts(const char *);' }
+            )
+            const flags = request.body.options.userArguments
+            const directory = sourcePath.includes('/') ? "'src'" : "'.'"
+            expect(flags).toContain('-nostdinc -isystem sysroot/include')
+            expect(flags).toContain(`-iquote ${directory} -iquote . `)
+            expect(flags.split(' ').filter((flag) => flag.startsWith('-I'))).toEqual([])
+        }
+    })
+
+    // The include search is the preprocessor's and the same on every target, so the host's GCC
+    // checks it on the request as sent, laid out as Compiler Explorer lays it out: the source as
+    // example.c at the root, every uploaded file at its name.
+    it.skipIf(!HOST_GCC)('finds the system header before a Project File of the same name', () => {
+        const text = (content: string) => ({ encoding: 'plain' as const, content })
+        const request = createCompilerRequest(
+            {
+                ...hosted(),
+                files: {
+                    'src/main.c': text(
+                        '#include <stdio.h>\n#include "value.h"\nconst char *which = WHICH;\nint value = VALUE;\n'
+                    ),
+                    'src/value.h': text('#define VALUE 42\n'),
+                    'stdio.h': text('#define WHICH "project"\n')
+                }
+            },
+            { 'stdio.h': '#define WHICH "sysroot"\n' }
+        )
+        const directory = mkdtempSync(join(tmpdir(), 'asm-editor-include-'))
+        try {
+            writeFileSync(join(directory, 'example.c'), request.body.source)
+            for (const file of request.body.files) {
+                mkdirSync(dirname(join(directory, file.filename)), { recursive: true })
+                writeFileSync(join(directory, file.filename), file.contents)
+            }
+            const output = execFileSync(
+                'gcc',
+                ['-E', '-P', ...includeFlags(request.body.options.userArguments), 'example.c'],
+                { cwd: directory, encoding: 'utf8' }
+            )
+            expect(output).toContain('which = "sysroot"')
+            expect(output).toContain('value = 42')
+        } finally {
+            rmSync(directory, { recursive: true, force: true })
+        }
+    })
+
+    it('records the Project headers quoted includes reach, and no system header', () => {
+        const text = (content: string) => ({ encoding: 'plain' as const, content })
+        const files: ProjectFiles = {
+            'src/main.c': text(
+                '#include <stdio.h>\n#include <sim.h>\n#include "value.h"\n#include "util/shared.h"\nint main(void) {}\n'
+            ),
+            'src/value.h': text('#define VALUE 1\n'),
+            'util/shared.h': text('#include "config.h"\n'),
+            'config.h': text('#define CONFIG 1\n'),
+            //named like system headers, which an angle-bracket include never reads from the Project
+            'stdio.h': text('#error shadowed\n'),
+            'sim.h': text('#error shadowed\n')
+        }
+        expect(Object.keys(compilationInputs('src/main.c', files)).sort()).toEqual([
+            'config.h',
+            'src/main.c',
+            'src/value.h',
+            'util/shared.h'
+        ])
+    })
+
     it('keeps sections for the GNU profile, adds no startup code and records the Runtime ABI', async () => {
         const response = {
             code: 0,
@@ -404,7 +511,7 @@ describe('x86 compilation', () => {
         expect(c.compilerId).toBe('cg142')
         expect(c.body.source).toBe('#line 1 "src/main.c"\nint main(void) { return 0; }\n')
         expect(c.body.options.userArguments).toBe(
-            "-O2 -fdiagnostics-color=never -fno-section-anchors -ffreestanding -masm=intel -fno-pie -fno-stack-protector -fcf-protection=none -fno-verbose-asm -g1 -nostdinc -isystem sysroot/include -march=x86-64 -mtune=generic -iquote 'src' -I . -std=c17"
+            "-O2 -fdiagnostics-color=never -fno-section-anchors -ffreestanding -masm=intel -fno-pie -fno-stack-protector -fcf-protection=none -fno-verbose-asm -g1 -nostdinc -isystem sysroot/include -march=x86-64 -mtune=generic -iquote 'src' -iquote . -std=c17"
         )
         //the translation reads GCC's raw output, its .file and .loc directives included
         expect(Object.values(c.body.options.filters).every((filter) => filter === false)).toBe(true)
@@ -422,8 +529,25 @@ describe('x86 compilation', () => {
         )
         expect(cpp.compilerId).toBe('g142')
         expect(cpp.body.options.userArguments).toBe(
-            "-O2 -fdiagnostics-color=never -fno-section-anchors -ffreestanding -masm=intel -fno-pie -fno-stack-protector -fcf-protection=none -fno-verbose-asm -g1 -nostdinc -isystem sysroot/include -march=x86-64 -mtune=generic -iquote 'src' -I . -std=c++17 -fno-exceptions -fno-rtti -fno-threadsafe-statics -nostdinc++"
+            "-O2 -fdiagnostics-color=never -fno-section-anchors -ffreestanding -masm=intel -fno-pie -fno-stack-protector -fcf-protection=none -fno-verbose-asm -g1 -nostdinc -isystem sysroot/include -march=x86-64 -mtune=generic -iquote 'src' -iquote . -std=c++17 -fno-exceptions -fno-rtti -fno-threadsafe-statics -nostdinc++"
         )
+    })
+
+    it('uploads <sim.h> with them', async () => {
+        const headers = await loadRuntimeHeaders('v1')
+        const environment = '#ifndef SIM_H\n#define SIM_H\n#endif\n'
+        const c = createCompilerRequest(x86(), { ...headers, 'sim.h': environment }, GCC_INTEL_V1)
+        expect(c.body.files.map((file) => file.filename).sort()).toEqual(
+            [
+                'src/values.h',
+                'sysroot/include/sim.h',
+                ...FREESTANDING.map((name) => `sysroot/include/${name}`)
+            ].sort()
+        )
+        expect(c.body.files).toContainEqual({
+            filename: 'sysroot/include/sim.h',
+            contents: environment
+        })
     })
 
     it('compiles with GCC whatever compiler is asked for', () => {
@@ -502,9 +626,9 @@ describe('x86 compilation', () => {
         }
     })
 
-    it('rejects inline assembly on the line of its asm statement', async () => {
+    it('rejects inline assembly it cannot translate on the line of its asm statement, in its own words', async () => {
         const source =
-            'int main(void) {\n    int x = 1;\n    __asm__ volatile ("nop");\n    return x;\n}\n'
+            'int main(void) {\n    int x = 1;\n    __asm__ volatile ("movl $1, %%eax" : : : "eax");\n    return x;\n}\n'
         //GCC's output for it at -O0, as Compiler Explorer returned it
         const response = output(
             '\t.globl\tmain',
@@ -519,7 +643,7 @@ describe('x86 compilation', () => {
             '\t.loc 1 3 5',
             '#APP',
             '# 3 "src/main.c" 1',
-            '\tnop',
+            '\tmovl $1, %eax',
             '# 0 "" 2',
             '\t.loc 1 4 12',
             '#NO_APP',
@@ -528,6 +652,12 @@ describe('x86 compilation', () => {
             '\tpop\trbp',
             '\tret'
         )
+        // The bounded Intel subset identifies AT&T syntax specifically.
+        const [rejection] = translateCompilerOutput(
+            response.asm.map((line) => line.text),
+            { profile: GCC_INTEL_V1.id }
+        ).diagnostics
+        expect(rejection.message).toMatch(/AT&T syntax/)
         const error = await failure(x86(source), response)
         expect(error.message).toBe('The compiler output uses something x86 cannot run yet.')
         expect(error.diagnostics).toEqual([
@@ -538,11 +668,46 @@ describe('x86 compilation', () => {
                 column: 5,
                 code: 'inline-assembly',
                 source: 'Compiler Explorer',
-                message: 'Inline assembly cannot be compiled for x86 yet.',
+                message: rejection.message,
                 hint: expect.stringContaining('in a .asm File of the Project'),
-                line: { line: '    __asm__ volatile ("nop");', line_index: 2 }
+                line: {
+                    line: '    __asm__ volatile ("movl $1, %%eax" : : : "eax");',
+                    line_index: 2
+                }
             })
         ])
+    })
+
+    it('translates inline assembly written as GCC writes Intel syntax', async () => {
+        const source = 'int main(void) {\n    __asm__ volatile ("nop");\n    return 0;\n}\n'
+        const result = await compileSource(
+            x86(source),
+            undefined,
+            respond(
+                output(
+                    '\t.globl\tmain',
+                    '\t.type\tmain, @function',
+                    'main:',
+                    '\t.file 1 "src/main.c"',
+                    '\t.loc 1 2 5',
+                    '#APP',
+                    '# 2 "src/main.c" 1',
+                    '\tnop',
+                    '# 0 "" 2',
+                    '\t.loc 1 3 12',
+                    '#NO_APP',
+                    '\txor\teax, eax',
+                    '\t.loc 1 4 1',
+                    '\tret'
+                )
+            )
+        )
+        const lines = result.assembly.split('\n')
+        expect(result.diagnostics).toEqual([])
+        expect(result.map.lines[lines.indexOf('    nop')]).toEqual({
+            path: 'src/main.c',
+            line: 1
+        })
     })
 
     it('puts what does not translate on its source line, or else the first, and keeps warnings', async () => {
@@ -630,13 +795,13 @@ describe('x86 compilation', () => {
             lineIndex: 0,
             column: 10,
             message: 'stdio.h: No such file or directory',
-            hint: 'x86 programs have no C standard library yet, so they can include only stddef.h, stdint.h, stdbool.h, stdarg.h, limits.h, float.h, iso646.h and stdnoreturn.h.'
+            hint: 'x86 programs have no C standard library yet, so they can include only stddef.h, stdint.h, stdbool.h, stdarg.h, limits.h, float.h, iso646.h, stdnoreturn.h and sim.h. <sim.h> has a function for each Linux system call: sim_write(1, text, length) prints.'
         })
         expect(c.formatted).toBe(`${c.message}\n${c.hint}`)
         const cpp = x86('#include <cstdio>\n', 'src/main.cpp')
         const [header] = (await failure(cpp, missing('cstdio', 'src/main.cpp'))).diagnostics
         expect(header.hint).toBe(
-            'x86 programs have no C standard library yet, so they can include only cstddef, cstdint, climits, cfloat, cstdarg, new, stddef.h, stdint.h, stdbool.h, stdarg.h, limits.h, float.h, iso646.h and stdnoreturn.h.'
+            'x86 programs have no C standard library yet, so they can include only cstddef, cstdint, climits, cfloat, cstdarg, new, stddef.h, stdint.h, stdbool.h, stdarg.h, limits.h, float.h, iso646.h, stdnoreturn.h and sim.h. <sim.h> has a function for each Linux system call: sim_write(1, text, length) prints.'
         )
         //a header no Runtime library has is an ordinary error, as on every Target
         const [vector] = (await failure(cpp, missing('vector', 'src/main.cpp'))).diagnostics

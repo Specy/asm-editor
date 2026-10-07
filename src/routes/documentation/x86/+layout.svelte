@@ -100,6 +100,11 @@
                     onClick={() => (menuOpen = false)}
                 />
                 <MenuLink
+                    href="/documentation/x86/using-c"
+                    title="Using C and C++"
+                    onClick={() => (menuOpen = false)}
+                />
+                <MenuLink
                     href="/documentation/x86/all"
                     title="Complete documentation"
                     onClick={() => (menuOpen = false)}

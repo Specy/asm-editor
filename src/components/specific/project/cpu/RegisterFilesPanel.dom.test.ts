@@ -6,6 +6,7 @@ import {
     type RegisterFile,
     type RegisterFileDescriptor,
     type RegisterPoke,
+    type RegisterFormat,
     RegisterSize,
     resolveRegisterFileLayout
 } from '$lib/languages/commonLanguageFeatures.svelte'
@@ -32,7 +33,7 @@ function makeFile(descriptor: RegisterFileDescriptor, values: [string, bigint][]
     }
 }
 
-function render() {
+function render(options: { initialFileId?: string; initialFormat?: RegisterFormat } = {}) {
     const pokes: { fileId: string; writes: RegisterPoke[] }[] = []
     const target = document.createElement('div')
     document.body.appendChild(target)
@@ -62,6 +63,7 @@ function render() {
             files: [cpu, fpu],
             systemSize: RegisterSize.Long,
             language: 'MIPS' as const,
+            ...options,
             pokeable: true,
             onPoke: (fileId: string, writes: RegisterPoke[]) => pokes.push({ fileId, writes })
         }
@@ -80,6 +82,10 @@ function render() {
         pokes,
         click,
         chunks: () => buttons('.chunk-button'),
+        selected: (label: string) =>
+            buttons('.segmented-control-button')
+                .find((candidate) => candidate.textContent?.trim() === label)
+                ?.getAttribute('aria-pressed'),
         input: () => target.querySelector<HTMLInputElement>('.chunk-input'),
         openFirstChunk: () => {
             buttons('.chunk-button')[0].click()
@@ -99,6 +105,23 @@ function type(input: HTMLInputElement, text: string) {
 }
 
 describe('the Register file panel around an open chunk input', () => {
+    it("opens the example's requested Format and retains the reader's subsequent selection", () => {
+        const panel = render({ initialFileId: 'fpu', initialFormat: 'double' })
+        expect(panel.selected('FPU')).toBe('true')
+        expect(panel.selected('Double')).toBe('true')
+        panel.click('Hex')
+        panel.click('CPU')
+        panel.click('FPU')
+        expect(panel.selected('Hex')).toBe('true')
+        panel.close()
+    })
+
+    it("uses the file's default when the suggested Format is unsupported", () => {
+        const panel = render({ initialFileId: 'fpu', initialFormat: 'single' })
+        expect(panel.selected('Hex')).toBe('true')
+        panel.close()
+    })
+
     it('closes the input when the file picks another Format', () => {
         const panel = render()
         panel.click('FPU')

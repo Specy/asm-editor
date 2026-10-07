@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Testcase, TestcaseResult } from '$lib/Project.svelte'
+import type { Termination } from '$lib/languages/termination'
 import { appendLog, buildEntry, exitEntry, testRunEntry, type LogDraft } from './workbenchLog'
 
 const testcase: Testcase = {
@@ -88,18 +89,59 @@ describe('testRunEntry', () => {
 })
 
 describe('exitEntry', () => {
-    it('reports the running time', () => {
-        expect(exitEntry({ executionTimeMs: 12, errors: [] })).toMatchObject({
+    it('reports the running time of a program that ended', () => {
+        expect(exitEntry({ executionTimeMs: 12, termination: { kind: 'end' } })).toMatchObject({
             kind: 'exit',
             tone: 'info',
             text: 'Ran in 12ms'
         })
+        //an exit with no status says no more than an end
+        expect(exitEntry({ executionTimeMs: 12, termination: { kind: 'exit' } }).text).toBe(
+            'Ran in 12ms'
+        )
+    })
+
+    it('says the status a program exited with', () => {
+        expect(
+            exitEntry({ executionTimeMs: 12, termination: { kind: 'exit', code: 0 } })
+        ).toMatchObject({ tone: 'info', text: 'Ran in 12ms, exited with code 0' })
+        //a status other than 0 is the program saying it failed
+        expect(
+            exitEntry({ executionTimeMs: 1500, termination: { kind: 'exit', code: 3 } })
+        ).toMatchObject({ tone: 'warning', text: 'Ran in 1.500s, exited with code 3' })
+    })
+
+    it('names the signal that ended a program as a shell does', () => {
+        const entry = exitEntry({
+            executionTimeMs: 4,
+            termination: {
+                kind: 'signal',
+                number: 11,
+                name: 'SIGSEGV',
+                description: 'Segmentation fault'
+            }
+        })
+        expect(entry).toMatchObject({
+            tone: 'error',
+            text: 'Ran in 4ms, Segmentation fault (signal 11)'
+        })
     })
 
     it('names the error a program stopped on', () => {
-        expect(exitEntry({ executionTimeMs: -1, errors: ['Invalid access'] }).text).toBe(
-            'Program ended, stopped by an error: Invalid access'
+        expect(
+            exitEntry({ executionTimeMs: 7, termination: { kind: 'error', message: 'Bad load' } })
+        ).toMatchObject({ tone: 'error', text: 'Ran in 7ms, stopped by an error: Bad load' })
+    })
+
+    it('reports a program a Step ended without a running time', () => {
+        const ended = (termination: Termination) =>
+            exitEntry({ executionTimeMs: -1, termination }).text
+        expect(ended({ kind: 'exit', code: 1 })).toBe('Exited with code 1')
+        expect(ended({ kind: 'end' })).toBe('Program ended')
+        expect(ended({ kind: 'error', message: 'Invalid access' })).toBe(
+            'Stopped by an error: Invalid access'
         )
+        expect(exitEntry({ executionTimeMs: -1 }).text).toBe('Program ended')
     })
 })
 

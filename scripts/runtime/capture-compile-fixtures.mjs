@@ -41,6 +41,13 @@ const X86_HEADERS = [
     'cstdarg',
     'new'
 ]
+/** The Environment library's header each Target's compile uploads as `sysroot/include/sim.h`. */
+const SIM_HEADERS = {
+    MIPS: 'mips.h',
+    'RISC-V': 'riscv32.h',
+    'RISC-V-64': 'riscv64.h',
+    X86: 'x86_64.h'
+}
 const option = process.argv.indexOf('--target')
 const targets = option === -1 ? Object.keys(PRESETS) : process.argv[option + 1].split(',')
 
@@ -81,12 +88,26 @@ for (const name of readdirSync(fixtures)
         : language === 'cpp'
           ? '-std=c++17 -fno-exceptions -fno-rtti'
           : '-std=c17'
-    const headers = x86
-        ? sysroot.filter(({ filename }) =>
-              X86_HEADERS.includes(filename.slice('sysroot/include/'.length))
-          )
-        : sysroot
-    const userArguments = `${common} -nostdinc -isystem sysroot/include ${preset.flags} -iquote '${directory}' -I . ${standard}${language === 'cpp' ? ' -fno-threadsafe-statics -nostdinc++' : ''}`
+    //and the Target's own <sim.h>
+    const headers = [
+        ...(x86
+            ? sysroot.filter(({ filename }) =>
+                  X86_HEADERS.includes(filename.slice('sysroot/include/'.length))
+              )
+            : sysroot),
+        {
+            filename: 'sysroot/include/sim.h',
+            contents: readFileSync(
+                join(
+                    repository,
+                    'src/lib/sourceRuntime/generated/sim',
+                    SIM_HEADERS[fixture.target]
+                ),
+                'utf8'
+            )
+        }
+    ]
+    const userArguments = `${common} -nostdinc -isystem sysroot/include ${preset.flags} -iquote '${directory}' -iquote . ${standard}${language === 'cpp' ? ' -fno-threadsafe-statics -nostdinc++' : ''}`
     const body = {
         source: `#line 1 ${JSON.stringify(fixture.sourcePath)}\n${fixture.source}`,
         lang: language === 'cpp' ? 'c++' : 'c',

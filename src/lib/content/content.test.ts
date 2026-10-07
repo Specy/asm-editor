@@ -218,6 +218,8 @@ function describeErrors(errors: TestcaseValidationError[]): string {
     return errors
         .map((error) => {
             switch (error.type) {
+                case 'runtime-error':
+                    return `runtime error: ${error.message}`
                 case 'wrong-register':
                     return `${error.register} is ${error.got}, expected ${error.expected}`
                 case 'wrong-output':

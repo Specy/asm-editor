@@ -10,6 +10,7 @@ import {
 import { projectSourceModelKey, type ProjectModelIdentity } from '$lib/languages/service/uri'
 import { RUNTIME_NAMESPACE } from '$lib/runtimeAbi'
 import { hasRuntimeLibraryFor } from '$lib/sourceRuntime/runtimeLibrary'
+import { isEnvironmentHeaderPath } from '$lib/sourceRuntime/environmentLibrary'
 import { assemblyLinesOf } from '$lib/sourceCompilation/mappingSelection'
 import {
     compilationStatus,
@@ -67,6 +68,13 @@ export class EditorGroup {
     /** Whether the displayed File is a Runtime library member, which no Project owns. */
     get displayedLibraryMember() {
         return this.displayedPath.startsWith(RUNTIME_NAMESPACE)
+    }
+    /**
+     * Whether the displayed File is `<sim.h>`: read-only like a library member, but its functions
+     * are compiled into the program's own Generated assembly, so Breakpoints stop in them.
+     */
+    get displayedEnvironmentHeader() {
+        return isEnvironmentHeaderPath(this.displayedPath)
     }
     /** Whether the displayed library member's C source can open beside it and is not open yet. */
     get libraryMemberSourceAvailable() {
@@ -185,6 +193,9 @@ export class EditorGroup {
     }
     get breakpointsEditable() {
         const s = this.session
+        //`<sim.h>` reads the same in every Build, so like a Build's own File it takes Breakpoints
+        //during a Debug session
+        if (this.displayedEnvironmentHeader) return !s.host.readonly && !s.building
         return (
             //a C or C++ File's Breakpoints stop on its Generated assembly; the library's C source
             //is not the user's code, and Step does not stop in it
@@ -199,7 +210,11 @@ export class EditorGroup {
     }
     get displayedBreakpoints() {
         const s = this.session
-        return (this.sourceView === 'snapshot' || !s.fileSystemLocked ? s.emulator.breakpoints : [])
+        return (
+            this.sourceView === 'snapshot' || !s.fileSystemLocked || this.displayedEnvironmentHeader
+                ? s.emulator.breakpoints
+                : []
+        )
             .filter((item) => item.file === this.displayedPath)
             .map((item) => item.line)
     }

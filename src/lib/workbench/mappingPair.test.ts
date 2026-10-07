@@ -4,6 +4,7 @@ import {
     type CompilationRecord,
     type CompilationSourceMap
 } from '$lib/sourceCompilation/records'
+import { ENVIRONMENT_HEADER_PATH } from '$lib/sourceRuntime/environmentLibrary'
 import { resolveMappingPair } from './mappingPair'
 
 const text = (content: string) => ({ encoding: 'plain' as const, content })
@@ -106,6 +107,43 @@ describe('mapping between displayed editor files', () => {
         })
         expect(
             resolveMappingPair([pane('main.c'), member], {}, [], files, 'RISC-V', lookup)
+        ).toBeUndefined()
+    })
+    it('pairs Generated assembly with <sim.h>, which no record names as an input', () => {
+        const header = {
+            displayedPath: ENVIRONMENT_HEADER_PATH,
+            displayedFile: text('static inline void sim_print_int(int value) {')
+        }
+        const assembly = pane('main.s')
+        const mapped = {
+            ...map,
+            lines: [{ path: 'main.c', line: 0 }, { path: ENVIRONMENT_HEADER_PATH, line: 0 }, null]
+        }
+        const maps = { 'main.s': mapped }
+        expect(resolveMappingPair([header, assembly], maps, [record], files, 'RISC-V')).toEqual({
+            source: header,
+            assembly,
+            map: mapped
+        })
+        //not loaded in this session, so there is nothing to show
+        expect(
+            resolveMappingPair(
+                [{ ...header, displayedFile: undefined }, assembly],
+                maps,
+                [record],
+                files,
+                'RISC-V'
+            )
+        ).toBeUndefined()
+        //a stale compilation pairs nothing, the header included
+        expect(
+            resolveMappingPair(
+                [header, assembly],
+                maps,
+                [record],
+                { ...files, 'main.c': text('changed') },
+                'RISC-V'
+            )
         ).toBeUndefined()
     })
 })

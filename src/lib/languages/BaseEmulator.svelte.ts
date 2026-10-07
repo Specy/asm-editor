@@ -7,6 +7,7 @@ import {
     type StackFrame
 } from '$lib/languages/commonLanguageFeatures.svelte'
 import type { ExecutionSlice, ExecutionSliceRequest } from '$lib/languages/ExecutionSlice'
+import type { Termination } from '$lib/languages/termination'
 import type { Testcase } from '$lib/Project.svelte'
 import type { BuildSources } from '$lib/projectFiles'
 
@@ -133,6 +134,9 @@ export abstract class BaseEmulator<R extends string> {
      */
     _undoDepth?(): number
 
+    /** Monotone completed guest/tool instruction count; callers measure guest deltas. */
+    _getInstructionsExecuted?(): bigint
+
     /**
      * Pauses and resumes the Core's Undo history, so that what runs in between can never be undone:
      * the Runtime library's start code, which a Build runs up to the program's own first
@@ -141,6 +145,15 @@ export abstract class BaseEmulator<R extends string> {
      * Undo ledger instead.
      */
     _setUndoRecording?(recording: boolean): void
+
+    /** Runs after the fresh FileSystem session exists, before any guest inspection or presets. */
+    _beginExecutionSession?(): void
+
+    /** Detaches native execution before the host ends its FileSystem capability. */
+    _clearExecution?(): void
+
+    /** Preflights a complete grouped rollback before changing any CPU or peripheral state. */
+    _canUndoSteps?(count: number): boolean
 
     /** Preflights both the CPU record and every peripheral effect belonging to it. */
     abstract _canUndo(): boolean
@@ -224,6 +237,13 @@ export abstract class BaseEmulator<R extends string> {
     abstract _endPoke(): boolean
 
     abstract _hasTerminated(): boolean
+
+    /**
+     * How the program ended, read from the Core, while `_hasTerminated()` answers true; undefined
+     * while it has not ended. A runtime error is not reported here: the Core throws it, and
+     * `GenericEmulator` records it as the termination from what was thrown.
+     */
+    abstract _getTermination(): Termination | undefined
 
     /**
      * Runs one scheduling slice ([ADR 0007](../../../docs/adr/0007-generic-emulator-run-scheduling.md)):

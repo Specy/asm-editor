@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { X86_SSE_REGISTERS, X86_X87_REGISTERS } from '@specy/x86'
+import { Prompt } from '$stores/promptStore.svelte'
 import {
     type Register,
     type RegisterFile,
@@ -157,6 +158,62 @@ describe('x86 scheduled instruction limits', () => {
             }
         }
     )
+})
+
+describe('x86 termination', () => {
+    async function ended(body: string[], history = 20) {
+        const code = ['bits 64', 'global _start', 'section .text', '_start:', ...body].join('\n')
+        const emulator = await X86Emulator(code, { automaticChecking: false })
+        await emulator.compile(history, code)
+        await emulator.run(10_000)
+        return emulator
+    }
+
+    it('says the status a program exited with, masked as Linux masks it', async () => {
+        const exit = await ended(['    mov rax, 60', '    mov rdi, 3', '    syscall'])
+        try {
+            expect(exit.terminated).toBe(true)
+            expect(exit.termination).toEqual({ kind: 'exit', code: 3 })
+        } finally {
+            exit.dispose()
+        }
+        const group = await ended(['    mov rax, 231', '    mov rdi, -1', '    syscall'])
+        try {
+            expect(group.termination).toEqual({ kind: 'exit', code: 255 })
+        } finally {
+            group.dispose()
+        }
+    })
+
+    it('names the signal that ended a program', async () => {
+        const emulator = await ended(['    mov rax, [0]'])
+        try {
+            expect(emulator.terminated).toBe(true)
+            expect(emulator.errors).toEqual([])
+            expect(emulator.termination).toEqual({
+                kind: 'signal',
+                number: 11,
+                name: 'SIGSEGV',
+                description: 'Segmentation fault'
+            })
+        } finally {
+            emulator.dispose()
+        }
+    })
+
+    it('forgets how the program ended when Undo takes the exit back', async () => {
+        const emulator = await ended(['    mov rdi, 7', '    mov rax, 60', '    syscall'])
+        try {
+            expect(emulator.termination).toEqual({ kind: 'exit', code: 7 })
+            expect(emulator.undo(1)).toBe(1)
+            expect(emulator.terminated).toBe(false)
+            expect(emulator.termination).toBeUndefined()
+            await emulator.step()
+            expect(emulator.termination).toEqual({ kind: 'exit', code: 7 })
+        } finally {
+            emulator.dispose()
+        }
+    })
 })
 
 describe('x86 register files', () => {
@@ -509,6 +566,187 @@ describe('x86 breakpoints', () => {
 
             await emulator.run(100_000)
             expect(emulator.terminated).toBe(true)
+        } finally {
+            emulator.dispose()
+        }
+    })
+})
+
+/**
+ * Standard input as a tty gives it, through the Terminal's Line discipline
+ * ([ADR 0036](../../../../docs/adr/0036-programs-read-input-typed-in-the-terminal.md)): a read takes
+ * at most the bytes it asked for and the Terminal keeps the rest of the line for the next one, and
+ * End of input reads as 0. Output is decoded as UTF-8 as it streams, a byte at a time.
+ */
+describe('x86 standard input and output', () => {
+    beforeEach(() => Prompt.cancel())
+
+    /** `read(0, buffer, size)`, then `write(1, buffer, what was read)`, the count left in `save`. */
+    function readAndEcho(size: number, save: string): string[] {
+        return [
+            '    mov rax, 0',
+            '    mov rdi, 0',
+            '    mov rsi, buffer',
+            `    mov rdx, ${size}`,
+            '    syscall',
+            `    mov ${save}, rax`,
+            '    mov rdx, rax',
+            '    mov rax, 1',
+            '    mov rdi, 1',
+            '    mov rsi, buffer',
+            '    syscall'
+        ]
+    }
+
+    const EXIT = ['    mov rax, 60', '    xor rdi, rdi', '    syscall']
+
+    function program(body: string[], data: string[] = []): string {
+        return [
+            'bits 64',
+            'global _start',
+            'section .data',
+            ...data,
+            'section .bss',
+            'buffer: resb 16',
+            'section .text',
+            '_start:',
+            ...body,
+            ...EXIT
+        ].join('\n')
+    }
+
+    function cpuRegister(emulator: { registerFiles: RegisterFile[] }, name: string): bigint {
+        return registerOf(fileOf(emulator, 'cpu'), name).value
+    }
+
+    it('keeps what a short read left of the line for the next read, then reads End of input', async () => {
+        const sources = programSources(
+            program([
+                ...readAndEcho(3, 'r12'),
+                ...readAndEcho(16, 'r13'),
+                ...readAndEcho(16, 'r14')
+            ])
+        )
+        const emulator = await X86Emulator(sources, { automaticChecking: false })
+        try {
+            await emulator.compile(20, sources)
+            expect(emulator.errors).toEqual([])
+            emulator.peripherals.terminal.useScriptedInput(['hello'])
+            await emulator.run(1_000_000)
+            expect(emulator.errors).toEqual([])
+            expect(emulator.terminated).toBe(true)
+            //the scripted answers are exhausted by the third read, which is End of input for it
+            expect([12, 13, 14].map((index) => cpuRegister(emulator, `r${index}`))).toEqual([
+                3n,
+                3n,
+                0n
+            ])
+            expect(emulator.stdOut).toBe('hello\n')
+        } finally {
+            emulator.dispose()
+        }
+    })
+
+    it('serves a read the same way when it is stepped through', async () => {
+        const sources = programSources(
+            program([...readAndEcho(3, 'r12'), ...readAndEcho(16, 'r13')])
+        )
+        const emulator = await X86Emulator(sources, { automaticChecking: false })
+        try {
+            await emulator.compile(20, sources)
+            emulator.peripherals.terminal.useScriptedInput(['hello'])
+            for (let steps = 0; steps < 100 && !emulator.terminated; steps++) {
+                await emulator.step()
+            }
+            expect(emulator.errors).toEqual([])
+            expect(emulator.terminated).toBe(true)
+            expect([cpuRegister(emulator, 'r12'), cpuRegister(emulator, 'r13')]).toEqual([3n, 3n])
+            expect(emulator.stdOut).toBe('hello\n')
+        } finally {
+            emulator.dispose()
+        }
+    })
+
+    it('reads End of input typed in the Terminal as 0', async () => {
+        const sources = programSources(program(readAndEcho(16, 'r12')))
+        const emulator = await X86Emulator(sources, { automaticChecking: false })
+        try {
+            await emulator.compile(20, sources)
+            const terminal = emulator.peripherals.terminal
+            terminal.attachConsole()
+            const running = emulator.run(1_000_000)
+            await new Promise((resolve) => setTimeout(resolve, 20))
+            expect(terminal.pendingRead?.kind).toBe('standard-input')
+            terminal.sendEndOfInput()
+            await running
+            expect(emulator.errors).toEqual([])
+            expect(emulator.terminated).toBe(true)
+            expect(cpuRegister(emulator, 'r12')).toBe(0n)
+        } finally {
+            emulator.dispose()
+        }
+    })
+
+    it('hands a typed line over a byte at a time, a UTF-8 character split between reads', async () => {
+        const sources = programSources(
+            program([...readAndEcho(1, 'r12'), ...readAndEcho(16, 'r13')])
+        )
+        const emulator = await X86Emulator(sources, { automaticChecking: false })
+        try {
+            await emulator.compile(20, sources)
+            const terminal = emulator.peripherals.terminal
+            terminal.attachConsole()
+            terminal.insertText('é\n')
+            await emulator.run(1_000_000)
+            expect(emulator.errors).toEqual([])
+            expect(cpuRegister(emulator, 'r12')).toBe(1n)
+            expect(cpuRegister(emulator, 'r13')).toBe(2n)
+            //the echo of the typed line, then the program writing back the same three bytes
+            expect(emulator.stdOut).toBe('é\né\n')
+        } finally {
+            emulator.dispose()
+        }
+    })
+
+    it('asks for nothing on a read of no bytes', async () => {
+        const sources = programSources(program(readAndEcho(0, 'r12')))
+        const emulator = await X86Emulator(sources, { automaticChecking: false })
+        try {
+            await emulator.compile(20, sources)
+            //nothing typed and no scripted input: a read that asked would wait here for ever
+            await emulator.run(1_000_000)
+            expect(emulator.peripherals.terminal.pendingRead).toBeNull()
+            expect(emulator.terminated).toBe(true)
+            expect(cpuRegister(emulator, 'r12')).toBe(0n)
+        } finally {
+            emulator.dispose()
+        }
+    })
+
+    it('decodes output as UTF-8 as it streams', async () => {
+        const sources = programSources(
+            program(
+                [
+                    '    mov rax, 1',
+                    '    mov rdi, 1',
+                    '    mov rsi, text',
+                    '    mov rdx, 1',
+                    '    syscall',
+                    '    mov rax, 1',
+                    '    mov rdi, 1',
+                    '    mov rsi, text + 1',
+                    '    mov rdx, 4',
+                    '    syscall'
+                ],
+                ['text: db 0xc3, 0xa9, 0xe2, 0x82, 0xac']
+            )
+        )
+        const emulator = await X86Emulator(sources, { automaticChecking: false })
+        try {
+            await emulator.compile(20, sources)
+            await emulator.run(1_000_000)
+            expect(emulator.errors).toEqual([])
+            expect(emulator.stdOut).toBe('é€')
         } finally {
             emulator.dispose()
         }

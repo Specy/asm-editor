@@ -15,6 +15,7 @@
     import MarkdownRenderer from '$cmp/shared/markdown/MarkdownRenderer.svelte'
     import Column from '$cmp/shared/layout/Column.svelte'
     import Row from '$cmp/shared/layout/Row.svelte'
+    import InstructionPreview from '$cmp/documentation/site/InstructionPreview.svelte'
     interface Props {
         data: PageData
     }
@@ -139,22 +140,11 @@
         {@const SvelteComponent_1 = component}
         <SvelteComponent_1 bind:code instructionKey={ins.name} language="M68K" />
     {:else}
-        <div class="loading">Loading...</div>
+        <InstructionPreview {code} language="M68K" />
     {/if}
 </Page>
 
 <style lang="scss">
-    .loading {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        flex: 1;
-        background-color: var(--secondary);
-        color: var(--secondary-text);
-        font-size: 2rem;
-        border-radius: 0.5rem;
-        min-height: 19.75rem;
-    }
     .instruction-info {
         display: flex;
         gap: 1rem;

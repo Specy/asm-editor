@@ -47,6 +47,7 @@
     const hasScreen = $derived(languageHasScreen(language))
     const tools = $derived(debugTools(emulator.memory.tabs))
     const bottomOpen = $derived(!workbenchLayout.isCollapsed('compact:bottom', false))
+    const readWaiting = $derived(emulator.peripherals.terminal.pendingRead?.source === 'terminal')
     const firstPanel = $derived(context.rail.find((entry) => !entry.action)?.id)
     const panelShown = $derived(phone ? ui.drawerOpen : !!ui.activePanel)
     let restoring = $state(false)
@@ -72,6 +73,15 @@
     const debugSectionsBuilt = $derived.by(() => {
         if (session.debugSession) debugged = true
         return debugged
+    })
+
+    //a read unfolds the bottom panel, whose Terminal tab the panel itself picks (the plan's
+    //decision 10), so that there is a console to type the answer in
+    $effect(() => {
+        if (!readWaiting) return
+        untrack(() => {
+            if (!bottomOpen) workbenchLayout.setCollapsed('compact:bottom', false)
+        })
     })
 
     //a phone's drawer always shows a panel beside its rail: the last one, or the first there is

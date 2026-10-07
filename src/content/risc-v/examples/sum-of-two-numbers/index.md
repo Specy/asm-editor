@@ -1,6 +1,5 @@
 This program asks for two numbers and prints their sum. Press Run. At the first prompt, type a
-decimal integer in the box below the console and press Enter. The program pauses at that `ecall`
-until then.
+decimal integer in the console and press Enter. The program pauses at that `ecall` until then.
 
 Service 5 turns the text you entered into an integer and places that result in `a0`.
 

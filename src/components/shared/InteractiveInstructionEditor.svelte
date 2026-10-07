@@ -2,7 +2,8 @@
     import Editor from '$cmp/specific/project/Editor.svelte'
     import { toast } from '$stores/toastStore'
     import ExecutionDock, { type DockAction } from '$cmp/specific/project/ExecutionDock.svelte'
-    import { clampBigInt, formatTime } from '$lib/utils'
+    import { clampBigInt } from '$lib/utils'
+    import { terminationSummary } from '$lib/languages/termination'
     import { registerColumnWidth } from '$lib/languages/registerFormats'
     import { resolveProjectSettings, undoHistorySize } from '$lib/projectSettings'
     import { rewriteScreenDirective } from '$lib/languages/mars/screenDirective'
@@ -24,6 +25,7 @@
         makeColorizedLabels,
         makeRegister,
         type RegisterPoke,
+        type RegisterFormat,
         RegisterSize
     } from '$lib/languages/commonLanguageFeatures.svelte'
     import ScreenRenderer from '$cmp/specific/project/screen/ScreenRenderer.svelte'
@@ -70,6 +72,12 @@
          * Undefined, and an id this language has not got, open the CPU file.
          */
         initialRegisterFile?: string
+        /** The initial file's reading, so a floating-point example starts with visible numbers. */
+        initialRegisterFormat?: RegisterFormat
+        fontOptions?: Pick<
+            monaco.editor.IStandaloneEditorConstructionOptions,
+            'fontFamily' | 'fontSize' | 'lineHeight'
+        >
         /**
          * The caller's own controls, such as a documentation page's "Try in the editor", at the far
          * end of the execution dock floating over the bottom of the code.
@@ -95,12 +103,18 @@
         forceMemoryRight = false,
         layout = 'small',
         initialRegisterFile = undefined,
+        initialRegisterFormat = undefined,
+        fontOptions,
         dockActions = []
     }: Props = $props()
     let showMemory = $derived(showMemoryProp ?? true)
     let showFlags = $derived(showFlagsProp ?? true)
     let showRegisters = $derived(showRegistersProp ?? true)
-    let showConsole = $derived(showConsoleProp ?? layout === 'fullscreen')
+    //a read in a host that hides the console opens it, and it stays open for the rest of the page
+    //(the plan's decision 10, docs/design/environment-library-plan.md): there is nowhere else to
+    //type the answer
+    let consoleRevealed = $state(false)
+    let showConsole = $derived((showConsoleProp ?? layout === 'fullscreen') || consoleRevealed)
     let showTestcases = $derived(showTestcasesProp ?? false)
     let showPc = $derived(showPcProp ?? layout === 'fullscreen')
     //A shared editor only shows the Screen when its caller asks for it. Documentation playgrounds
@@ -215,11 +229,21 @@
     })
 
     let errorStrings = $derived(emulator.errors.join('\n'))
+    //the Log's wording, without an error's message, which the console shows above it
     let info = $derived(
-        emulator.terminated && emulator.executionTime >= 0
-            ? `Ran in ${formatTime(emulator.executionTime)}`
+        emulator.terminated
+            ? terminationSummary(emulator.termination, emulator.executionTime, {
+                  errorMessage: false
+              })
             : ''
     )
+    const readWaiting = $derived(emulator.peripherals.terminal.pendingRead?.source === 'terminal')
+    $effect(() => {
+        if (!readWaiting) return
+        untrack(() => {
+            if (!emulator.peripherals.terminal.consoleAttached) consoleRevealed = true
+        })
+    })
     //an embed is an iframe of a fixed height, which the registers card may not outgrow: it is the
     //card that is held to what the frame leaves it, the embed's padding and the console under it,
     //and the Register files that shrink inside it and scroll, whatever the flags and the PC above
@@ -368,6 +392,7 @@
                 .map((breakpoint) => breakpoint.line)}
             diagnostics={emulator.compilerDiagnostics}
             {language}
+            {fontOptions}
             highlightedLine={emulator.line}
             disabled={(emulator.canExecute && !emulator.terminated) || !!emulator.compiledCode}
             hasError={emulator.errors.length > 0}
@@ -429,6 +454,7 @@
                 {language}
                 size={groupSize}
                 initialFileId={initialRegisterFile}
+                initialFormat={initialRegisterFormat}
                 gridStyle={smallRegistersGridStyle}
                 style={embedded
                     ? 'flex: 1; min-height: 0;'
@@ -513,6 +539,7 @@
                 {language}
                 size={groupSize}
                 initialFileId={initialRegisterFile}
+                initialFormat={initialRegisterFormat}
                 style="flex: 1; min-height: 0;"
                 files={emulator.registerFiles}
                 {pokeable}
@@ -598,8 +625,11 @@
 {#snippet consolePanel()}
     <StdOutRenderer
         {info}
-        stdOut={errorStrings ? `${errorStrings}\n${emulator.stdOut}` : emulator.stdOut}
+        terminal={emulator.peripherals.terminal}
+        errors={errorStrings}
         diagnostics={emulator.compilerDiagnostics}
+        interactive={emulator.canExecute && !emulator.terminated}
+        escapes={language === 'X86'}
     />
 {/snippet}
 

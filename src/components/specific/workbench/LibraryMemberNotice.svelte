@@ -1,5 +1,6 @@
 <script lang="ts">
     import { X86_START_UNIT_PATH, X86_SUPPORT_UNIT_PATH } from '$lib/languages/X86/x86StartUnit'
+    import { isEnvironmentHeaderPath } from '$lib/sourceRuntime/environmentLibrary'
 
     /**
      * Above a Runtime library member: what it is, and its C source beside it. The library is not
@@ -20,6 +21,9 @@
         {#if path === X86_START_UNIT_PATH || path === X86_SUPPORT_UNIT_PATH}
             <!-- x86 has no Runtime library yet: this is the start code compiled programs link -->
             Start code of compiled programs, read-only.
+        {:else if isEnvironmentHeaderPath(path)}
+            <!-- compiled into the program's own Generated assembly, so it is no library code -->
+            Environment library, &lt;sim.h&gt;, read-only.
         {:else}
             {path.endsWith('.s') ? 'Runtime library code' : 'Runtime library source'}, read-only.
         {/if}

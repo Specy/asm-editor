@@ -1,5 +1,6 @@
 import type { AvailableLanguages } from '$lib/Project.svelte'
 import { isShippedRuntimeAbi } from '$lib/runtimeAbi'
+import { ENVIRONMENT_HEADER_PATH } from './environmentLibrary'
 
 /** One public function of the Runtime library, as its header declares and documents it. */
 export type RuntimeFunction = {
@@ -181,10 +182,18 @@ export function runtimeSourcePath(abi: string, source: string): string {
     return `@runtime/${abi}/${source}`
 }
 
-/** The ABI and library-relative path of a C source shown under `@runtime/`, or undefined. */
-export function parseRuntimeSourcePath(path: string): { abi: string; source: string } | undefined {
+/**
+ * A read-only C source the editor shows under `@runtime/`: one of an ABI's library sources, or the
+ * Environment library's header, which belongs to no ABI.
+ */
+export type RuntimeSourcePath =
+    { kind: 'library'; abi: string; source: string } | { kind: 'environment' }
+
+/** What a path under `@runtime/` names among the C sources, or undefined for anything else. */
+export function parseRuntimeSourcePath(path: string): RuntimeSourcePath | undefined {
+    if (path === ENVIRONMENT_HEADER_PATH) return { kind: 'environment' }
     const match = /^@runtime\/(v\d+)\/(src\/.+)$/.exec(path)
-    return match ? { abi: match[1], source: match[2] } : undefined
+    return match ? { kind: 'library', abi: match[1], source: match[2] } : undefined
 }
 
 /** What the Core links: members and index. */

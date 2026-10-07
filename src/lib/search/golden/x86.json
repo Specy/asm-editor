@@ -59,6 +59,21 @@
             "top": 5,
             "expect": "x86/registers-and-flags/flag-zf",
             "meaning": true
+        },
+        {
+            "query": "freestanding environment library",
+            "top": 5,
+            "expect": "x86/using-c/libraries"
+        },
+        {
+            "query": "following execution source map",
+            "top": 5,
+            "expect": "x86/using-c/following-execution"
+        },
+        {
+            "query": "getrandom syscall",
+            "top": 5,
+            "expect": "x86/syscalls/syscall-getrandom"
         }
     ]
 }

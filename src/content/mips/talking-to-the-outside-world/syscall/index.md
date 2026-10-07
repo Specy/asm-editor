@@ -108,7 +108,7 @@ main:
 }
 ```
 
-Press Run, type a number in the input box and press Enter. The program pauses at service 5 until the
+Press Run, type a number in the console and press Enter. The program pauses at service 5 until the
 input arrives, then continues from the instruction after `syscall`.
 
 Notice what happened to `$v0`: it held the service number 5 before `syscall`, and the read service

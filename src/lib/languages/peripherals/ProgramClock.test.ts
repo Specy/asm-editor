@@ -132,3 +132,25 @@ describe('host mode', () => {
         expect(clock.now()).toBe(0)
     })
 })
+
+describe('abortable waits', () => {
+    it('disarms a host wait on its own AbortSignal without cancelling other waits', async () => {
+        vi.useFakeTimers()
+        try {
+            const clock = new ProgramClock()
+            const controller = new AbortController()
+            const aborted = clock.wait(1000, controller.signal).catch((error: unknown) => error)
+            const other = clock.wait(20)
+            expect(clock.pendingWaits).toBe(2)
+            controller.abort(new Error('input woke the wait'))
+            expect(((await aborted) as Error).message).toBe('input woke the wait')
+            expect(clock.pendingWaits).toBe(1)
+            await vi.advanceTimersByTimeAsync(20)
+            await other
+            expect(clock.pendingWaits).toBe(0)
+            expect(vi.getTimerCount()).toBe(0)
+        } finally {
+            vi.useRealTimers()
+        }
+    })
+})

@@ -24,6 +24,15 @@
 </script>
 
 <div class="entry-body">
+    {#if entry.instructionContent?.description}
+        <MarkdownRenderer
+            source={entry.instructionContent.description}
+            linksInNewTab
+            {disableLinks}
+            centered={false}
+            simpleCode
+        />
+    {/if}
     {#if view.type === 'markdown'}
         <MarkdownRenderer
             source={view.markdown}
@@ -88,6 +97,12 @@
         <X86InstructionView instruction={view.instruction} {disableLinks} />
     {:else if view.type === 'z80-instruction'}
         <Z80InstructionView variants={view.variants} {disableLinks} />
+    {/if}
+    {#if entry.instructionContent?.example}
+        <CodeSample
+            code={entry.instructionContent.example.code}
+            language={entry.instructionContent.example.target}
+        />
     {/if}
 </div>
 

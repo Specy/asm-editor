@@ -1,0 +1,50 @@
+/* Shared minimum height for the prerendered source and interactive editor.
+   Interactive panels retain their responsive widths after hydration. */
+.instruction-example {
+    --instruction-row-min-height: 20rem;
+    display: flex;
+    flex-direction: column;
+    gap: var(--wb-gap, 0.25rem);
+    width: 100%;
+    min-width: 0;
+}
+
+.instruction-example .top-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--wb-gap, 0.25rem);
+}
+
+.instruction-example .top-row > .editor {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: min(100%, 25rem);
+    min-height: var(--instruction-row-min-height);
+}
+
+.instruction-example .top-row > .data-registers-wrapper {
+    box-sizing: border-box;
+    flex: 1;
+    width: calc(18rem + 2px);
+    min-width: min(100%, calc(18rem + 2px));
+    max-width: calc(18rem + 2px);
+    min-height: var(--instruction-row-min-height);
+}
+
+.instruction-example .top-row > .code-data-memory-controls {
+    box-sizing: border-box;
+    flex: 1;
+    width: calc(18.6rem + 2px);
+    min-width: min(100%, calc(18.6rem + 2px));
+    max-width: calc(18.6rem + 2px);
+    min-height: var(--instruction-row-min-height);
+}
+
+@media (max-width: 720px) {
+    .instruction-example .top-row > .data-registers-wrapper,
+    .instruction-example .top-row > .code-data-memory-controls {
+        width: auto;
+        max-width: none;
+    }
+}

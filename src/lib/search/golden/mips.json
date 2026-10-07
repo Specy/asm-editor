@@ -1,20 +1,67 @@
 {
     "scope": "mips",
     "queries": [
-        { "query": "add", "first": "mips/instructions/add" },
-        { "query": "lw", "first": "mips/instructions/lw" },
-        { "query": ".data", "first": "mips/directives/data" },
-        { "query": "data", "first": "mips/directives/data" },
-        { "query": "$t3", "first": "mips/registers/$t0 - $t7" },
-        { "query": "printf", "first": "mips/runtime-library/printf" },
-        { "query": "malloc", "first": "mips/runtime-library/malloc" },
-        { "query": "qsort", "first": "mips/runtime-library/qsort" },
-        { "query": "print an integer", "top": 1, "expect": "mips/syscalls/1" },
-        { "query": "how do I print a number", "top": 3, "expect": "mips/syscalls/1" },
-        { "query": "read a string from the keyboard", "top": 3, "expect": "mips/syscalls/8" },
-        { "query": "exit the program", "top": 3, "expect": "mips/syscalls/10" },
-        { "query": "sleep for a second", "top": 3, "expect": "mips/syscalls/32" },
-        { "query": "bitmap display", "first": "mips/screen/bitmap-display" },
+        {
+            "query": "add",
+            "first": "mips/instructions/add"
+        },
+        {
+            "query": "lw",
+            "first": "mips/instructions/lw"
+        },
+        {
+            "query": ".data",
+            "first": "mips/directives/data"
+        },
+        {
+            "query": "data",
+            "first": "mips/directives/data"
+        },
+        {
+            "query": "$t3",
+            "first": "mips/registers/$t0 - $t7"
+        },
+        {
+            "query": "printf",
+            "first": "mips/runtime-library/printf"
+        },
+        {
+            "query": "malloc",
+            "first": "mips/runtime-library/malloc"
+        },
+        {
+            "query": "qsort",
+            "first": "mips/runtime-library/qsort"
+        },
+        {
+            "query": "print an integer",
+            "top": 1,
+            "expect": "mips/syscalls/1"
+        },
+        {
+            "query": "how do I print a number",
+            "top": 3,
+            "expect": "mips/syscalls/1"
+        },
+        {
+            "query": "read a string from the keyboard",
+            "top": 3,
+            "expect": "mips/syscalls/8"
+        },
+        {
+            "query": "exit the program",
+            "top": 3,
+            "expect": "mips/syscalls/10"
+        },
+        {
+            "query": "sleep for a second",
+            "top": 3,
+            "expect": "mips/syscalls/32"
+        },
+        {
+            "query": "bitmap display",
+            "first": "mips/screen/bitmap-display"
+        },
         {
             "query": "divide and get the remainder",
             "top": 3,
@@ -44,6 +91,21 @@
                 "mips/registers/$ra"
             ],
             "meaning": true
+        },
+        {
+            "query": "libraries and simulator services",
+            "top": 5,
+            "expect": "mips/using-c/libraries"
+        },
+        {
+            "query": "screen and device registers",
+            "top": 5,
+            "expect": "mips/using-c/screen-and-devices"
+        },
+        {
+            "query": "seed random generator service 40",
+            "top": 5,
+            "expect": "mips/syscalls/40"
         }
     ]
 }

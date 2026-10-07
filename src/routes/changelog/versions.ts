@@ -11,9 +11,10 @@ export const versions: Version[] = [
         title: 'Compile from C/C++',
         date: new Date('2026-10-05'),
         changes: [
-            'Added compilation of C and C++ to MIPS and RISC-V assembly with Clang or GCC, at every optimization level. Compiled programs link a C library, so printf, scanf, malloc and the other standard functions work with the terminal',
+            'Added compilation of C and C++ to X86, MIPS and RISC-V assembly with Clang or GCC, at every optimization level.',
             'Each C/C++ line is colored and connected to the assembly instructions it produced, and selecting a line highlights its instructions',
-            'Breakpoints, stepping and undo follow the C/C++ source while debugging the generated assembly'
+            'Breakpoints, stepping and undo follow the C/C++ source while debugging the generated assembly',
+            'C/C++ code can use a subset of the standard C/C++ library functions (printf, scanf, malloc, etc.) plus a custom library that allows you to use the simulator\'s low level syscalls'
         ]
     },
     {
