@@ -115,8 +115,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         output: 'D1.L = number',
         description:
             'Reads a line and converts it by skipping leading spaces, reading an optional sign, then taking digits up to the first other character. `12abc` is 12, and a line with no number, an empty one included, is 0, never an error.',
-        deviation:
-            'A number too long for 32 bits keeps its low 32 bits.'
+        deviation: 'A number too long for 32 bits keeps its low 32 bits.'
     },
     {
         task: 5,
@@ -194,8 +193,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         input: 'D1.L = number, D2.B = base (2 to 36)',
         description:
             'Displays D1.L as an unsigned number in the base in D2.B, using upper case digits past 9: 255 in base 16 is `FF`.',
-        deviation:
-            'A base outside 2 to 36 stops the program with an error naming D2.B.'
+        deviation: 'A base outside 2 to 36 stops the program with an error naming D2.B.'
     },
     {
         task: 16,
@@ -204,8 +202,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         input: 'D1.B = 0 to hide the input prompt, 1 to show it, 2 to turn the line feed after Enter off, 3 to turn it on',
         description:
             'Controls the prompt shown while input is waiting and whether a key read of Enter adds a line feed. The waiting prompt appears as a caret and question in the console; the screen does not draw a flashing cursor. Without the line feed, Enter takes the screen text cursor back to the start of its line. Line and number reads always start a new line when Enter ends them, even with echo or line-feed settings off. Both settings are on when a program starts, and Undo restores the previous setting.',
-        deviation:
-            'Any other D1.B value stops the program with an error naming the value.'
+        deviation: 'Any other D1.B value stops the program with an error naming the value.'
     },
     {
         task: 17,
@@ -336,7 +333,8 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         output: 'D0.W = 0, or 2 when there is no File there',
         description:
             'Removes the File at the path from the Project. A file the program still has open stays readable and writable through its number until it is closed.',
-        deviation: 'A file can be deleted while it is open and remains readable through its file number until closed.'
+        deviation:
+            'A file can be deleted while it is open and remains readable through its file number until closed.'
     },
     {
         task: 58,

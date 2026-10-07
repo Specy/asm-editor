@@ -27,7 +27,8 @@ export function syscallFields(syscall: MarsSyscall): EntryField[] {
     const outputs = syscall.result.arguments ?? []
     const outputMemory = syscall.binding.parameters.filter(
         (parameter) =>
-            parameter.out && syscall.arguments.some((argument) => argument.name === parameter.register)
+            parameter.out &&
+            syscall.arguments.some((argument) => argument.name === parameter.register)
     )
     if (outputs.length > 0 || outputMemory.length > 0) {
         fields.push({
